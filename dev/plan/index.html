@@ -2957,11 +2957,6 @@ Each has inline ✓ markers per item.</p>
 <td>ⓘ Proposed, 2026-10-10, decisions recorded 2026-10-12. Q1182 built the ledger store and moved the scale-set budget onto it; four protocol and kill-shape facts the rest rests on are unmeasured</td>
 </tr>
 <tr>
-<td><a href="q1184-proxy-failure-attribution/">q1184-proxy-failure-attribution.md</a></td>
-<td>Building the proxy failure attribution design in four phases: the proxy binary's attributed listeners, buffer and mTLS read endpoint; the API and GMC wiring; the AGC's pull and join; and the Calico enforcement measurement</td>
-<td>🚧 Phases 1 and 2 shipped, phase 3 in review, phase 4 open (<a href="../queue/Q1184/">Q1184</a>)</td>
-</tr>
-<tr>
 <td><a href="q501-cancel-relay/">q501-cancel-relay.md</a></td>
 <td>Relaying a run cancelled at GitHub to the worker pod, which the Q459 measurement found nothing does — split into the trigger (how the AGC learns) and the actuator (what it then does)</td>
 <td>⚠️ Partial — filed 2026-07-31. Reading the code for the fix found the actuator missing too: the classic tier cancelled a job's context on a definitively lost lock and never deleted the pod, so every Q254 teardown orphaned a worker until <code>maxWorkerLifetime</code> (12h). That half shipped as <a href="../queue/Q501/">Q501</a>. Phase 0 answered 2026-08-01 off a capture already in the repo — Q468 recorded a live cancelled run queueing a <code>JobCompleted</code> in ~0.2 s, which on ScaleSet stamps the worker and hands it to the reaper's five-minute grace, so the unbounded defect is classic-only and candidate B is not worth building. One measurement remains: whether <code>renewjob</code> reports the loss, which <code>E2E_GitHub_CancelledRunLeavesNoDeletionMark</code> is now instrumented to read on its next live run</td>
@@ -3700,6 +3695,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/q1188-scoped-secret-reads/">archive/q1188-scoped-secret-reads.md</a></td>
 <td>Scope the GMC's Secret <code>get</code>/<code>list</code>/<code>watch</code> to tenant namespaces: a <code>resourceNames</code>-scoped <code>bind</code> on a reader ClusterRole, a RoleBinding per tenant namespace, and per-namespace metadata-only Secret informers</td>
 <td>Archived 2026-10-23, Q1188. Shipped in one change; the durable rationale is in <a href="../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">05-security.md §5.1</a>.</td>
+</tr>
+<tr>
+<td><a href="archive/q1184-proxy-failure-attribution/">archive/q1184-proxy-failure-attribution.md</a></td>
+<td>Building the proxy failure attribution design in four phases: the proxy binary's attributed listeners, buffer and mTLS read endpoint; the API and GMC wiring; the AGC's pull and join; and the Calico enforcement measurement</td>
+<td>Archived 2026-10-25, Q1184. All four phases shipped (#2112, #2122, #2125, #2127, #2131).</td>
 </tr>
 </tbody>
 </table>

@@ -2930,9 +2930,9 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>Nothing</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1178/">Q1178</a>, <a href="../../queue/Q1184/">Q1184</a></td>
+<td><a href="../../queue/Q1178/">Q1178</a>, Q1184 (shipped)</td>
 <td>The proxy's outcome metrics, and per-job failure attribution</td>
-<td>Q1184: per-port ingress measured on the Calico lane</td>
+<td>Nothing</td>
 </tr>
 </tbody>
 </table>
@@ -3314,7 +3314,7 @@ It cannot see an HTTP status inside TLS, so a 403 or 429 from the upstream is in
 <p>Two constraints shape every row.
 <strong>Attribution is a retention decision.</strong> Correlating a failure with a job need not keep a record of where the job went, but it is still new use of per-job egress data, so its design is in <a href="../../design/05-security/#proxy-failure-attribution">05-security.md § Proxy failure attribution</a>: off by default, failures only, in memory, and attributed to a consumer by the port it arrived on.
 <strong>Destination labels have bounded cardinality only if they name the allowlist entry that matched</strong>, never the raw host.</p>
-<p><a href="../../queue/Q1178/">Q1178</a> labels the proxy's outcome metrics, <a href="../../queue/Q1184/">Q1184</a> attributes failures to jobs, and the uses beyond retry are non-commitments in <a href="../../design/appendix-g-future-enhancements/#g18-the-egress-proxy-as-a-platform-sensor">G.18</a>.</p>
+<p><a href="../../queue/Q1178/">Q1178</a> labels the proxy's outcome metrics, Q1184 attributes failures to jobs, and the uses beyond retry are non-commitments in <a href="../../design/appendix-g-future-enhancements/#g18-the-egress-proxy-as-a-platform-sensor">G.18</a>.</p>
 <h3 id="unclassified-retry-not-scheduled">Unclassified retry (not scheduled)<a class="headerlink" href="#unclassified-retry-not-scheduled" title="Permanent link">&para;</a></h3>
 <p>A blanket retry of failures nobody classified: the flake retry G.17 sketched.
 It is not scheduled, because <a href="#first-principles">moving the flake away from the author</a> is a cost classified retry does not pay.
