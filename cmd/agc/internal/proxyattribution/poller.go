@@ -25,6 +25,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	toolscache "k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -100,7 +101,9 @@ type Poller struct {
 	Gateway   string
 	Interval  time.Duration
 	Metrics   *Metrics
-	Log       *slog.Logger
+	// Recorder records an Event for each attributed denial; nil records none.
+	Recorder events.EventRecorder
+	Log      *slog.Logger
 
 	// Seams for tests; nil means the real resolver, dialer and clock.
 	resolve func(ctx context.Context, host string) ([]string, error)
@@ -109,16 +112,17 @@ type Poller struct {
 
 	windows  *addressWindows
 	failures *failureStore
+	denials  *denialEvents
 	cursors  map[replica]cursor
 }
 
 // NewPoller returns a Poller for gateway in namespace.
-func NewPoller(c, apiReader client.Reader, informers cache.Informers, namespace, gateway string, m *Metrics, log *slog.Logger) *Poller {
+func NewPoller(c, apiReader client.Reader, informers cache.Informers, namespace, gateway string, m *Metrics, rec events.EventRecorder, log *slog.Logger) *Poller {
 	return &Poller{
 		Client: c, APIReader: apiReader, Informers: informers,
 		Namespace: namespace, Gateway: gateway, Interval: DefaultInterval,
-		Metrics: m, Log: log,
-		windows: newAddressWindows(), failures: newFailureStore(), cursors: map[replica]cursor{},
+		Metrics: m, Recorder: rec, Log: log,
+		windows: newAddressWindows(), failures: newFailureStore(), denials: newDenialEvents(), cursors: map[replica]cursor{},
 	}
 }
 
@@ -232,12 +236,14 @@ func (p *Poller) poll(ctx context.Context) error {
 		}
 	}
 	p.failures.sweep(now)
+	p.denials.sweep(now)
 	return errors.Join(errs...)
 }
 
 func (p *Poller) reset() {
 	clear(p.cursors)
 	p.failures.reset()
+	p.denials.reset()
 }
 
 // pools resolves each of this gateway's RunnerSets to its pool, as the worker's
@@ -349,7 +355,7 @@ func (p *Poller) readReplica(ctx context.Context, hc *http.Client, r replica, ho
 	}
 	cur.read = p.clock()
 	for _, rec := range resp.Records {
-		p.ingest(rec)
+		p.ingest(ctx, r.pool, rec)
 		cur.after = max(cur.after, rec.Seq)
 	}
 	p.cursors[r] = cur
@@ -376,13 +382,17 @@ func fetch(ctx context.Context, hc *http.Client, hostPort string, after uint64) 
 	return &out, nil
 }
 
-// ingest attributes rec to the pod that held its source address, or drops it.
-func (p *Poller) ingest(rec record) {
-	pod, ok := p.windows.attribute(rec.SourceIP, rec.Time)
+// ingest attributes rec to the pod that held its source address, or drops it,
+// and reports an attributed denial.
+func (p *Poller) ingest(ctx context.Context, pl pool, rec record) {
+	w, ok := p.windows.attribute(rec.SourceIP, rec.Time)
 	result := "discarded"
 	if ok {
 		result = "attributed"
-		p.failures.add(pod, Failure{Time: rec.Time, Outcome: rec.Outcome, DialClass: rec.DialClass, Host: rec.Host, Port: rec.Port})
+		p.failures.add(w.uid, Failure{Time: rec.Time, Outcome: rec.Outcome, DialClass: rec.DialClass, Host: rec.Host, Port: rec.Port})
+		if rec.Outcome == "denied" {
+			p.reportDenial(ctx, pl, w, rec)
+		}
 	}
 	if p.Metrics != nil {
 		p.Metrics.Records.WithLabelValues(p.Namespace, outcomeLabel(rec.Outcome), result).Inc()

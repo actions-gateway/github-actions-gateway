@@ -437,7 +437,7 @@ Classified retry ([Q555 plan](../plan/q555-flaky-job-retry.md#the-egress-proxy-a
 An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
 That is new use of per-job egress data, so it is designed here before it is built (Q1184).
 The proxy's half is built (`cmd/proxy/attribution.go`), and so is the GMC's (`cmd/gmc/internal/controller/egressproxy_attribution.go`), which moves an opted-in namespace's workers onto their port.
-So is the AGC's reader (`cmd/agc/internal/proxyattribution`), which joins each record to its own worker pods; nothing acts on the result yet ([plan](../plan/archive/q1184-proxy-failure-attribution.md)).
+So is the AGC's reader (`cmd/agc/internal/proxyattribution`), which joins each record to its own worker pods ([plan](../plan/archive/q1184-proxy-failure-attribution.md)), and reports each attributed denial as an Event (Q1210, below); no retry decision uses the result yet.
 
 **It is off by default, behind two switches, for the audit record's reasons.** One on the `EgressProxy` makes the pool able to keep failures and serve them.
 One on a consuming `ActionsGateway` opts that gateway's namespace in.
@@ -505,7 +505,9 @@ The listener's ingress rule admits AGC pods of attributed namespaces only, with 
 The AGC attributes a record to a worker only when the worker is one of its own gateway's pods and the record's time falls inside the window that pod held the address, read from its own pod informer, and it discards a record near either edge rather than guess.
 A discarded record degrades to an unclassified failure, never to a wrong one.
 
-**Residual: the denial Event surfaces the host.** The Event the futile-retry use writes names the blocked host, in the job's own namespace.
+**Residual: the denial Event surfaces the host.** The AGC records an `EgressDestinationDenied` Warning Event for each denial it attributes, naming the pool and the blocked host, in the job's own namespace (Q1210).
+It is on the worker's `RunnerSet` with the pod as related, because the pod is deleted when its job ends, which can be before the record is read up to one 30-second poll later.
+A job decides how many denials it produces, so the AGC records one Event per job and destination, for at most eight destinations a job, and forgets a job once it has been quiet for the ten minutes it keeps its records; a discarded record and a dial failure record none.
 Anyone who can read Events there sees what the job tried to reach, and the cluster's event pipeline keeps it for as long as it keeps Events.
 It is the tenant's own job in the tenant's own namespace and the host is capped, but it is the one place this feature's data outlives the buffer, which is why the gateway carries its own switch.
 
