@@ -66,6 +66,21 @@ Q1086 shipped the sweep and proved it on envtest; the candidate is where it is r
 The gate's `storage` leg runs the sweep and takes that reading (Q1171, landed), so the candidate's evidence carries it.
 Only the first candidate's run rewrites anything: it leaves dogfood at `["v2"]`, so every later candidate's sweep takes the no-op path, and a sweep fix shipped in a later candidate is never exercised on a real cluster.
 
+## A release-notes edit owed at the candidate
+
+The notes' scale-set caveat reads "None of these five scale-set fixes was reproduced on a cluster.
+Each is covered by unit tests."
+That is accurate, but it understates Q1169, whose fix also passed the AGC envtest suite, and it does not say what the tests prove.
+The proposed wording, for the candidate's prose pass:
+
+> None of these five was reproduced on a cluster, and the release gate does not assert them.
+> Each has unit tests that fail with the fix removed, and Q1169's also passed the AGC's envtest suite.
+
+It holds only if all five PRs report an inversion check.
+Q1152 (#2059), Q1169 (#2103) and Q1174 (#2101) do.
+Read Q1153's (#2062) and Q1154's (#2063) before applying it, and narrow the claim to the three if either does not.
+The caveat stays true after dogfood validation, because nothing in the gate builds a crossed worker on purpose.
+
 ## Decided: an operator runs the sweep, as `gag-migrate storage-version`
 
 **Decided by the maintainer on 2026-10-09**, choosing between the operator-run command and a sweep the GMC runs itself at startup.
