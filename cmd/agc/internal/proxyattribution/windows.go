@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -19,9 +20,15 @@ const (
 	closedWindowRetention = 5 * time.Minute
 )
 
+// worker names the pod that held an address, and the RunnerSet it belongs to.
+type worker struct {
+	uid       types.UID
+	name, set string
+}
+
 // window is the interval one pod held one address. end is zero while it is open.
 type window struct {
-	uid   types.UID
+	worker
 	own   bool
 	start time.Time
 	end   time.Time
@@ -108,7 +115,7 @@ func (w *addressWindows) observe(pod *corev1.Pod, own bool, seen time.Time) {
 		win.own = win.own || own
 		return
 	}
-	win := &window{uid: pod.UID, own: own, start: start}
+	win := &window{worker: worker{uid: pod.UID, name: pod.Name, set: pod.Labels[provisioner.LabelRunnerSet]}, own: own, start: start}
 	w.live[pod.UID] = win
 	w.byIP[pod.Status.PodIP] = append(w.byIP[pod.Status.PodIP], win)
 }
@@ -126,7 +133,7 @@ func (w *addressWindows) close(uid types.UID, at time.Time) {
 // attribute names this gateway's pod that held ip at t. A time within
 // edgeMargin of a window's edge names nobody, and so does one inside more than
 // one window, or inside the window of a pod that is not this gateway's.
-func (w *addressWindows) attribute(ip string, t time.Time) (types.UID, bool) {
+func (w *addressWindows) attribute(ip string, t time.Time) (worker, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	var match *window
@@ -142,9 +149,9 @@ func (w *addressWindows) attribute(ip string, t time.Time) (types.UID, bool) {
 		n++
 	}
 	if n != 1 || !match.own {
-		return "", false
+		return worker{}, false
 	}
-	return match.uid, true
+	return match.worker, true
 }
 
 // sweep drops windows closed longer ago than closedWindowRetention.

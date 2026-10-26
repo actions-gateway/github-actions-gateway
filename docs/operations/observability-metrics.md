@@ -162,7 +162,7 @@ See the [right-sizing recipe](worker-rightsizing.md#step-0--read-the-built-in-re
 
 Emitted by an AGC whose gateway sets `proxyFailureAttribution: PerJob` (Q1184).
 Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
-Nothing acts on the attributed records yet; see [tenant onboarding](tenant-onboarding.md#proxy-failure-attribution).
+An attributed denial is also reported as an `EgressDestinationDenied` Event, and no retry decision uses the records; see [tenant onboarding](tenant-onboarding.md#proxy-failure-attribution).
 
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
@@ -378,6 +378,7 @@ Each also has a [runbook entry](troubleshooting.md#job-lifecycle-events-on-a-run
 | `AgentDeregistrationFailed` | Classic only | Single-use JIT agents are a classic-pool artifact, so only that tier has registrations to clean up on delete. |
 | `AgentPoolError` | Classic only | As above: a scale set provisions no agent Secrets. |
 | `AssignmentAbandoned` | Scale-set only | The listener giving up on assignments the queue stopped reporting. The classic protocol delivers no assignment to abandon. |
+| `EgressDestinationDenied` | Both | The failure-attribution reader joins records to worker pods off the shared pod informer, which watches both tiers' workers (Q1210). |
 | `EvictionRecoveryEvidenceLost` | Scale-set only | On this tier the disrupted pod is the disruption's only record (Q809); the classic tier holds it in process. |
 | `EvictionRecoveryIdentityUnknown` | Scale-set only | The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it. |
 | `EvictionRerunFailed` | Both | Recorded by the shared re-run path both tiers hand recoveries to (Q503). |

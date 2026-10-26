@@ -688,14 +688,16 @@ spec:
                   in it that uses such a pool move to that port at their next job, once the
                   pool has rolled; nothing restarts. The AGC's own traffic stays on the shared
                   port. The AGC then reads its namespace's failures from the pool and keeps
-                  only those from its own worker pods. A policy denial it attributes is reported as an Event in this namespace
-                  naming the blocked host, which is why this is a separate switch from the
-                  pool's. Design: docs/design/05-security.md, "Proxy failure attribution"
-                  (Q1184).
+                  only those from its own worker pods. Each policy denial it attributes is
+                  recorded as a Warning Event, reason EgressDestinationDenied, on the worker's
+                  RunnerSet in this namespace, naming the blocked host; it is recorded once per
+                  job and destination, for at most eight destinations a job. That Event is why
+                  this is a separate switch from the pool's. Design:
+                  docs/design/05-security.md, "Proxy failure attribution" (Q1184, Q1210).
 
-                  The AGC reads and attributes the records but does not act on them yet, so
-                  enabling this today moves the namespace's workers onto their port and counts
-                  their failures.
+                  The AGC does not retry a job, or withhold a retry, on these records, so
+                  enabling this moves the namespace's workers onto their port, counts their
+                  failures, and reports their denials.
                 enum:
                 - Disabled
                 - PerJob
@@ -2719,14 +2721,16 @@ spec:
                   in it that uses such a pool move to that port at their next job, once the
                   pool has rolled; nothing restarts. The AGC's own traffic stays on the shared
                   port. The AGC then reads its namespace's failures from the pool and keeps
-                  only those from its own worker pods. A policy denial it attributes is reported as an Event in this namespace
-                  naming the blocked host, which is why this is a separate switch from the
-                  pool's. Design: docs/design/05-security.md, "Proxy failure attribution"
-                  (Q1184).
+                  only those from its own worker pods. Each policy denial it attributes is
+                  recorded as a Warning Event, reason EgressDestinationDenied, on the worker's
+                  RunnerSet in this namespace, naming the blocked host; it is recorded once per
+                  job and destination, for at most eight destinations a job. That Event is why
+                  this is a separate switch from the pool's. Design:
+                  docs/design/05-security.md, "Proxy failure attribution" (Q1184, Q1210).
 
-                  The AGC reads and attributes the records but does not act on them yet, so
-                  enabling this today moves the namespace's workers onto their port and counts
-                  their failures.
+                  The AGC does not retry a job, or withhold a retry, on these records, so
+                  enabling this moves the namespace's workers onto their port, counts their
+                  failures, and reports their denials.
                 enum:
                 - Disabled
                 - PerJob
@@ -4746,14 +4750,16 @@ spec:
                   in it that uses such a pool move to that port at their next job, once the
                   pool has rolled; nothing restarts. The AGC's own traffic stays on the shared
                   port. The AGC then reads its namespace's failures from the pool and keeps
-                  only those from its own worker pods. A policy denial it attributes is reported as an Event in this namespace
-                  naming the blocked host, which is why this is a separate switch from the
-                  pool's. Design: docs/design/05-security.md, "Proxy failure attribution"
-                  (Q1184).
+                  only those from its own worker pods. Each policy denial it attributes is
+                  recorded as a Warning Event, reason EgressDestinationDenied, on the worker's
+                  RunnerSet in this namespace, naming the blocked host; it is recorded once per
+                  job and destination, for at most eight destinations a job. That Event is why
+                  this is a separate switch from the pool's. Design:
+                  docs/design/05-security.md, "Proxy failure attribution" (Q1184, Q1210).
 
-                  The AGC reads and attributes the records but does not act on them yet, so
-                  enabling this today moves the namespace's workers onto their port and counts
-                  their failures.
+                  The AGC does not retry a job, or withhold a retry, on these records, so
+                  enabling this moves the namespace's workers onto their port, counts their
+                  failures, and reports their denials.
                 enum:
                 - Disabled
                 - PerJob

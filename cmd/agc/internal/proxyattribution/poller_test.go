@@ -76,7 +76,7 @@ func TestAddressWindows_AttributeOnlyInsideOneWindow(t *testing.T) {
 			pod, ok := w.attribute("10.1.0.5", tc.at)
 			assert.Equal(t, tc.want, ok)
 			if tc.want {
-				assert.Equal(t, tc.pod, pod)
+				assert.Equal(t, tc.pod, pod.uid)
 			}
 		})
 	}
@@ -93,7 +93,7 @@ func TestAddressWindows_AttributeOnlyInsideOneWindow(t *testing.T) {
 	assert.False(t, ok, "a window closed longer than the proxy's retention is dropped")
 	pod, ok := w.attribute("10.1.0.5", t0.Add(5*time.Minute))
 	assert.True(t, ok)
-	assert.Equal(t, types.UID("u2"), pod, "an open window is never swept")
+	assert.Equal(t, types.UID("u2"), pod.uid, "an open window is never swept")
 }
 
 // A pod that is not this gateway's holds its address too: a record inside its
@@ -108,7 +108,7 @@ func TestAddressWindows_ASiblingsWindowBlocksAttribution(t *testing.T) {
 	assert.False(t, ok, "a time the sibling also held the address names nobody")
 	pod, ok := w.attribute("10.1.0.5", t0.Add(30*time.Second))
 	assert.True(t, ok)
-	assert.Equal(t, types.UID("u1"), pod)
+	assert.Equal(t, worker{uid: "u1", name: "own-1", set: "own"}, pod)
 
 	w.observe(workerPod("sib-2", "u3", "sibling", "10.1.0.8", t0), false, t0)
 	_, ok = w.attribute("10.1.0.8", t0.Add(30*time.Second))
@@ -125,9 +125,9 @@ func TestAddressWindows_OwnershipIsLearnedLater(t *testing.T) {
 	assert.False(t, ok)
 
 	w.observe(pod, true, t0)
-	uid, ok := w.attribute("10.1.0.5", t0.Add(30*time.Second))
+	got, ok := w.attribute("10.1.0.5", t0.Add(30*time.Second))
 	assert.True(t, ok, "a later event that shows the pod is own makes it so")
-	assert.Equal(t, types.UID("u1"), uid)
+	assert.Equal(t, types.UID("u1"), got.uid)
 
 	w.observe(pod, false, t0)
 	_, ok = w.attribute("10.1.0.5", t0.Add(30*time.Second))
@@ -266,6 +266,7 @@ type harness struct {
 	c   client.Client
 	reg *prometheus.Registry
 	gw  *v2alpha1.ActionsGateway
+	rec *captureRecorder
 }
 
 func newHarness(t *testing.T, p pki, replicaAddr string) *harness {
@@ -286,7 +287,8 @@ func newHarness(t *testing.T, p pki, replicaAddr string) *harness {
 	}}
 	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(gw, own, sibling, cm, sec).Build()
 	reg := prometheus.NewRegistry()
-	poller := NewPoller(c, c, nil, ns, "gw", NewMetrics(reg), slog.New(slog.DiscardHandler))
+	rec := &captureRecorder{}
+	poller := NewPoller(c, c, nil, ns, "gw", NewMetrics(reg), rec, slog.New(slog.DiscardHandler))
 	poller.resolve = func(_ context.Context, host string) ([]string, error) {
 		require.Equal(t, "shared-proxy-attr.provider.svc.cluster.local", host)
 		return []string{"10.2.0.7"}, nil
@@ -296,7 +298,7 @@ func newHarness(t *testing.T, p pki, replicaAddr string) *harness {
 		return (&net.Dialer{}).DialContext(ctx, network, replicaAddr)
 	}
 	poller.now = func() time.Time { return t0.Add(2 * time.Minute) }
-	return &harness{p: poller, c: c, reg: reg, gw: gw}
+	return &harness{p: poller, c: c, reg: reg, gw: gw, rec: rec}
 }
 
 func (h *harness) records(outcome, result string) float64 {

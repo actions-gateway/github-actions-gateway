@@ -814,7 +814,7 @@ func setupProxyAttribution(mgr ctrl.Manager, namespace, gateway string) error {
 		return nil
 	}
 	poller := proxyattribution.NewPoller(mgr.GetClient(), mgr.GetAPIReader(), mgr.GetCache(), namespace, gateway,
-		proxyattribution.NewMetrics(ctrlmetrics.Registry),
+		proxyattribution.NewMetrics(ctrlmetrics.Registry), mgr.GetEventRecorder("proxy-failure-attribution"),
 		slog.New(logr.ToSlogHandler(ctrl.Log.WithName("proxyattribution"))))
 	if err := mgr.Add(poller); err != nil {
 		return fmt.Errorf("add proxy failure attribution reader: %w", err)
