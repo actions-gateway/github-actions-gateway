@@ -3058,7 +3058,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <tr>
 <td>Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain)</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no re-run mechanism exists</strong><br><span class="gag-cont">the runner registration is removed and the job is given up on; 0.13.1 recovers the pod, never the job</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself in seconds</a></strong><br><span class="gag-cont">15&ndash;26 s measured for a preemption or drain; evictions, Spot reclamations, drains and hand-deleted workers all covered, under a per-run budget</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself in seconds</a></strong><br><span class="gag-cont">15&ndash;26 s measured for a preemption or drain; evictions, Spot reclamations, drains, node shutdowns and hand-deleted workers all covered, under a per-run budget</span></td>
 </tr>
 <tr>
 <td>Stop claiming jobs when the cluster can't place the worker</td>
@@ -3195,8 +3195,8 @@ rather than trusting it, and
      request: `make tier-claims-check` digests the tier-bearing lines of the
      section named in it, so a tier move there goes red here. -->
 <!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=67e9c239 -->
-<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a Spot node reclaimed, a drain and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers.
-A job that <em>failed</em> and a run you <em>cancelled</em> never do.
+<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers, and so does a dead node once an admin taints it <code>out-of-service</code>.
+A job that <em>failed</em> and a run you <em>cancelled</em> never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
 Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run on both tiers once capacity returns.
 <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">The full boundary</a>.</p>
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
