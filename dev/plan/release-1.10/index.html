@@ -2704,7 +2704,8 @@
 <h1 id="release-110-milestone-definition">Release 1.10 Milestone Definition<a class="headerlink" href="#release-110-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Status: scoped 2026-10-09, no candidate cut.</strong> The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-Eleven rows gate the tag and three ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211, Q1212 and Q1214 joined it on 2026-10-26.
+Ten rows gate the tag and four ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211 and Q1212 joined it on 2026-10-26.
+Q1214's fix gated <code>v1.10.0-rc.2</code>; its flake-watch soak rides, since it counts green runs on <code>main</code> after the fix.
 Nothing here is a commitment to a date.</p>
 </blockquote>
 <h2 id="why-this-release-exists">Why this release exists<a class="headerlink" href="#why-this-release-exists" title="Permanent link">&para;</a></h2>
@@ -2795,7 +2796,7 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <tr>
 <td><a href="../../queue/Q1214/">Q1214</a></td>
 <td>An attribution pool that gains a consumer namespace reissues its certificates, so <code>E2E_V2_ProxyAttribution</code> stops flaking</td>
-<td><code>1.10-gate</code></td>
+<td>rides</td>
 <td>✅ fixed: the GMC writes its owned Secrets by fetch-then-update, under the role it already holds, closing Q1200; envtest as the GMC ServiceAccount fails on the patch path. In flake watch. Found diagnosing the flake 2026-10-26</td>
 </tr>
 <tr>
