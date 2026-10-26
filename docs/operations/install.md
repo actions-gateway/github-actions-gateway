@@ -301,8 +301,12 @@ An **upgrade does not**.
 Helm skips `crds/` entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:
 
 ```sh
-helm show crds <chart> --version <version> | kubectl apply -f -
+helm pull <chart> --version <version> --untar --untardir gag-chart-<version>
+helm show crds gag-chart-<version>/actions-gateway | kubectl apply -f -
 ```
+
+Pull first: for an OCI reference, `helm show crds` prints its pull banner on stdout (measured on Helm 4.2), and `kubectl` rejects the result.
+From a local chart directory, `helm show crds <dir> | kubectl apply -f -` is enough.
 
 It is idempotent and version-correct, so it also covers any future schema change to this CRD with no release-note callout to remember.
 The chart preflights the CRD's presence and fails with that command rather than letting Helm emit a bare `no matches for kind`.

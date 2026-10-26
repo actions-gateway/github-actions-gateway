@@ -236,7 +236,7 @@ Copy the four image digests from the [release notes](https://github.com/actions-
 The [Installation guide](docs/operations/install.md) covers prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall; the [chart README](charts/actions-gateway/README.md) is the full values reference.
 
 > [!IMPORTANT]
-> **Upgrading is not `helm upgrade` alone.** Helm installs the chart-root `crds/` directory on a fresh install only, so every upgrade starts by piping `helm show crds` for the target version into `kubectl apply`.
+> **Upgrading is not `helm upgrade` alone.** Helm installs the chart-root `crds/` directory on a fresh install only, so every upgrade starts by pulling the target chart and applying its CRDs with `kubectl apply`.
 > Upgrading from an old enough release also moves a `priorityClassAllowlist.configMapName` into the cluster-scoped `PriorityClassAllowlist` CR, which fails closed; the upgrade guide says which releases that covers.
 > Both steps are guarded, and the [upgrade guide](docs/operations/upgrade.md) covers rolling back.
 
