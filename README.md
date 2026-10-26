@@ -246,13 +246,13 @@ For day-2 operations (`helm upgrade` and rollback, per-component upgrades, runbo
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GMC deployment, GitHub App Secret, and your first tenant.
 
-**New tenants should onboard on `actions-gateway.com/v2beta1`**, the graduated, ScaleSet-only hub version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
-It is v2's first stability contract and where new capability lands.
+**New tenants should onboard on `actions-gateway.com/v2`**, the GA, ScaleSet-only version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
+It is the storage version from 1.10, and the version `v2.0.0` keeps when it removes the others.
 
 | API version | Status |
 | --- | --- |
-| `v2beta1` | **Start here.** Stability contract and the conversion hub. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md), superseded by `v2`; moving is a re-apply |
-| `v2` | The GA version, served beside `v2beta1` since 1.9 and the storage version since 1.10 |
+| `v2` | **Start here.** The GA version, served since 1.9 and the storage version since 1.10 |
+| `v2beta1` | Served until [`v2.0.0` removes it](docs/operations/v1alpha1-deprecation.md). Same shape as `v2` apart from two deprecated `EgressProxy` aliases, so moving is a re-apply |
 | `v2alpha1` | Deprecated, apiserver warns on every apply. Stays served as the `gag-migrate` on-ramp so a migrating v1 tenant can keep Classic until it no longer needs it. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | `v1alpha1` | Deprecated single-CR API, still served. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | Classic protocol | Deprecated. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |

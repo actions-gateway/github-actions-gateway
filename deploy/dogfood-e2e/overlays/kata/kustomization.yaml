@@ -73,7 +73,7 @@ patches:
   # probe, and render at exit 0 (measured, kustomize v5.8.1).
   - target:
       group: actions-gateway.com
-      version: v2beta1
+      version: v2
       kind: ClusterRunnerTemplate
       name: kata-dind
     patch: |

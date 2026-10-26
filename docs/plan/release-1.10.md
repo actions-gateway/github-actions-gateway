@@ -1,7 +1,7 @@
 # Release 1.10 Milestone Definition
 
 > **Status: scoped 2026-10-09, no candidate cut.** The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
-> Eight rows gate the tag and three ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210 joined it on 2026-10-26.
+> Ten rows gate the tag and three ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211 and Q1212 joined it on 2026-10-26.
 > Nothing here is a commitment to a date.
 
 ## Why this release exists
@@ -38,6 +38,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q1069 | Per-`RunnerSet` egress-audit attribution condition and gauge | `1.10-gate` | ✅ landed: `EgressAuditUnattributed` on each `RunnerSet` and `actions_gateway_runnerset_egress_audit_unattributed{namespace,runner_set,reason}` |
 | Q1184 | Attribute egress proxy failures to the job that hit them, through phase 4 | `1.10-gate` | ✅ landed (#2112, #2122, #2125, #2127, #2131): an opted-in namespace's workers move onto a port of their own, and the AGC reads and attributes their failure records, reporting a denial as an Event through Q1210. The Calico e2e lane measures a pod refused on another namespace's port. Q1208's port hold on opt-out landed with it (#2126) |
 | Q1210 | The AGC records an Event naming the host when it attributes a policy denial, as `proxyFailureAttribution`'s description says it does | `1.10-gate` | ✅ landed: an `EgressDestinationDenied` Warning Event on the worker's `RunnerSet`, once per job and destination, at most eight a job. Unit-tested against a fake replica; not reproduced on a cluster. Found by the candidate's API pre-flight 2026-10-26 |
+| Q1211 | Onboarding pages and shipped runner templates tell a new tenant to write `actions-gateway.com/v2`, not `v2beta1`, which `v2.0.0` removes | `1.10-gate` | ✅ landed: every new-tenant page, the README, the three `deploy/templates/` entries and the generated API reference name `v2`; the dogfood e2e overlays' template patch targets moved with them. Not on the released surface by `check-artifact-unchanged.sh`, but the template library ships outside it |
 | Q1212 | Dogfood tenant objects are written at `actions-gateway.com/v2`, so the project runs what onboarding now recommends | `1.10-gate` | ✅ landed: `setup.sh`'s tenant and the e2e tenant's base and overlays author `v2`, and `setup.sh` defaults to `v1.10.0-rc.1` so a defaults run serves it. Kustomize renders and unit tests only; reaches the cluster at the next `setup.sh` |
 | — | RC validated on dogfood | gates | 🔲 no candidate cut |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
