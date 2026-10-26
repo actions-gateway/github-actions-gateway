@@ -7414,6 +7414,9 @@ That is safe, and it is worth knowing <em>why</em> before writing a suite that r
 The package var is safe because each process has its own copy and each suite writes a distinct base port before use — not because Ginkgo serialises anything.
 <code>Ordered</code> orders specs within a container; it does not order containers against each other.
 A resource that is genuinely shared <em>outside</em> the process — a cluster object, a fixed host port, a GitHub session — gets no protection from <code>Ordered</code> and needs <code>Serial</code>, an owner-scoped filter, or a per-process derivation such as <code>GinkgoParallelProcess()</code>.</p>
+<p>A RunnerSet's agent identity is one of those, and a namespace does not scope it.
+The webhook derives the stem <code>rs-&lt;RunnerSet name&gt;</code> and rejects a second claim on it under the same GitHub scope from any namespace (<code>agent-identity stem "rs-set-alpha" is already claimed by another runner pool registered against GitHub scope …</code>), so a new suite that reuses another suite's set name and org fails in <code>BeforeAll</code> on whichever runs second.
+Give each suite its own org (fakegithub accepts any name, e.g. <code>example-org-&lt;suite&gt;</code>) and set names prefixed by the suite; check with <code>git grep -n 'name: set-' cmd/gmc/test/e2e/</code> before choosing one.</p>
 <p>Dropping <code>Serial</code> from a suite is therefore a claim about <em>external</em> isolation, never about package state.
 Worked example, including the owner-prefix filter that made one such drop safe: <a href="../../plan/archive/e2e-ci-speed-round-2/#5-de-serialize-e2e_agc_workerpodlifecycle-">e2e-ci-speed-round-2.md</a>.</p>
 <h3 id="every-e2e-suite-dumps-cluster-state-before-it-tears-down">Every e2e suite dumps cluster state before it tears down<a class="headerlink" href="#every-e2e-suite-dumps-cluster-state-before-it-tears-down" title="Permanent link">&para;</a></h3>
