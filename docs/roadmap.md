@@ -24,7 +24,7 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.
 
 
-- **[Flaky-job detection, and auto-retry for more platform failures](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555,Q1183 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
+- **[Flaky-job detection, and auto-retry for more platform failures](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q555,Q1183,Q1181,Q1178 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
   Detection counts flaky jobs per runner set first.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
 
