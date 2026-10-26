@@ -594,7 +594,7 @@ Its direction differs from the sketch above: phase 2 retries newly *classified* 
 Kubernetes objects show none of them.
 An operator can point ARC's runners at a proxy they run themselves, so the proxy is not the moat; joining a proxy event to the job, the set and the controller that can act on it is.
 
-**What is already committed.** [Q1178](../queue/Q1178.md) labels the proxy's outcome counters by allowlist entry and outcome, and [Q1184](../queue/Q1184.md) attributes failures to the job that hit them, for retry.
+**What is already committed.** [Q1178](../queue/Q1178.md) labels the proxy's outcome counters by allowlist entry and outcome, and Q1184 attributes failures to the job that hit them, for retry.
 Everything below is a non-commitment.
 
 **Choosing the channel.** A use goes to **metrics** when its reader is a person, a dashboard or an alert reading aggregates over bounded labels, a scrape interval late and lossy.
