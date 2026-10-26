@@ -73,16 +73,17 @@ When a worker loses its job to infrastructure, the run concludes at GitHub and t
 A preemption or a drain concludes in **15 to 26 seconds** (measured), because the runner keeps its grace period and reports.
 A hard eviction has no report to send, so the job lock has to lapse first, about 10 minutes at worst.
 
-Three marks qualify a disruption:
+Four marks qualify a disruption:
 
 | Mark | What GAG sees |
 | --- | --- |
 | Kubelet **node-pressure eviction** (memory or disk exhaustion) | `Evicted` pod status |
 | **Scheduler preemption** by a higher `priorityTiers` tier | a `DisruptionTarget` condition, reason `PreemptionByScheduler` (Q497) |
 | **External graceful deletion** by a drain or a bare `kubectl delete pod` | a `deletionTimestamp` the AGC reads as its terminal phase publishes (Q502) |
+| **Node shutdown**: a graceful kubelet shutdown, a deleted Node, or a dead node tainted `node.kubernetes.io/out-of-service` | a `DisruptionTarget` condition, reason `TerminationByKubelet`, `DeletionByPodGC` or `DeletionByTaintManager` (Q1179, Q1207) |
 
-**The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, and workers the gateway's own cleanup reaped as stuck are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
-A configurable per-job retry budget, one per workflow run and shared across every cause, prevents loops on persistently failing workloads.
+**The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, workers the gateway's own cleanup reaped as stuck, and a worker evicted for exceeding its own storage limit are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
+A configurable retry budget, one per workflow run in each runner set and shared across every cause, prevents loops on persistently failing workloads.
 
 Both acquisition tiers run the flow, with different mechanisms: the classic tier also stops renewing the job lock the moment it detects the loss, while on the default scale-set tier the runner owns renewal, so the scale-set path records the workflow run on the worker pod and detects the disruption from the owning reconciler instead.
 [The full boundary, with detection marks and metrics](docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do) · [design detail](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry)
