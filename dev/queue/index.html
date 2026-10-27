@@ -3108,6 +3108,30 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every PR in a release batch rewrites the same cell, so each merge leaves the next PR conflicted and the batch can only merge one at a time.</td>
 </tr>
 <tr>
+<td><a href="Q1220/">Q1220</a></td>
+<td><a href="../plan/secure-multi-tenant-oss-ci/">Decide what GAG refuses to run for a fork pull request</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>GAG cannot tell a fork pull request's job from any other today, so it can neither refuse one nor route it to a tighter runner shape.</td>
+</tr>
+<tr>
+<td><a href="Q1221/">Q1221</a></td>
+<td><a href="../plan/secure-multi-tenant-oss-ci/">Decide whether an untrusted job gets a narrower runner credential</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Every credential a worker pod holds is readable by the job's own code, and nobody has listed them or asked whether an untrusted job should …</td>
+</tr>
+<tr>
+<td><a href="Q1222/">Q1222</a></td>
+<td><a href="../plan/secure-multi-tenant-oss-ci/">Define what a declared untrusted runner class would mean</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>"Untrusted" is a posture an operator assembles by hand today, and nothing says what the platform would apply if it were a declared thing.</td>
+</tr>
+<tr>
 <td><a href="Q1168/">Q1168</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-render-overflow.py">render-overflow-check cannot load a Mermaid page while unpkg.com stalls</a></td>
 <td><code>ci</code> <code>docs</code></td>
@@ -4162,6 +4186,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The release gate prints a pass/fail/skip summary for its first e2e leg (Kata) and <code>no JUnit artifact on run … — skipping the report</code> for …</td>
+</tr>
+<tr>
+<td><a href="Q1218/">Q1218</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Move the release signer to cosign v3 without breaking v2/Flux verifiers</a></td>
+<td><code>security</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The weekly updatecli cosign bump now crosses a major version, v2.5.2 to v3.1.4 (PR #2139, opened 2026-10-26), and is held unmerged until …</td>
+</tr>
+<tr>
+<td><a href="Q1219/">Q1219</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/autoscaler-cluster.sh">Bump CA_VERSION to v1.37 once cluster-autoscaler publishes it</a></td>
+<td><code>ci</code> <code>tests</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>Blocked on a <code>v1.37.*</code> tag in <code>registry.k8s.io/autoscaling/cluster-autoscaler</code>.</td>
 </tr>
 </tbody>
 </table>

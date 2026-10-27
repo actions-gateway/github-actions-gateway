@@ -2704,10 +2704,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#gaps-with-no-row-yet" class="md-nav__link">
+  <a href="#open-decisions-the-map-surfaced" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Gaps with no row yet
+        Open decisions the map surfaced
       
     </span>
   </a>
@@ -2738,8 +2738,8 @@
 <blockquote>
 <p><strong>Status: goal stated 2026-08-06, deliverables partly shipped.</strong> This is a map and a definition of done, not a design.
 The design for the network half is <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a> and is not restated here.
-Kernel isolation is shipped and validated.
-The rest is open.</p>
+Kernel isolation, the pod floor, the network layer, the metadata block and the egress evidence are shipped.
+Definition of Done items 4 and 6 are open, and so are the three decisions at the end of this document.</p>
 </blockquote>
 <h2 id="why-this-is-the-goal">Why this is the goal<a class="headerlink" href="#why-this-is-the-goal" title="Permanent link">&para;</a></h2>
 <p>Multi-tenant CI on shared, expensive nodes is the efficient answer, and almost nobody runs it.
@@ -2855,8 +2855,9 @@ This milestone is done when all of the following hold, each demonstrated rather 
   The mirror contract in <a href="../q408-untrusted-pr-egress/#35-the-mirror-role-is-a-contract">q408 §3.5</a> is what bounds this, and it is a contract rather than an enforcement.</li>
 <li><strong>A shared mirror set exposes cache timing to every tenant that can reach it.</strong> Whether a repository is already warm says that some other tenant pulled it.
   The repository <em>list</em> is no longer part of this: <code>GET /v2/_catalog</code> answered 200 with every cached repository named, <code>catalog.maxentries=0</code> did not close it, and every instance is now fronted by a proxy that refuses the path under both topologies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#closing-the-repository-catalog">how, and what it was measured against</a>).
-  What is left is timing.
-  The reading that counts is taken from inside the guest by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/mirror-timing.sh"><code>mirror-timing.sh</code></a> on the Kata lane; until a window has run it, the only figures are a laptop's, which bound the channel rather than measure it where an attacker sits.
+  What is left is timing, and it is readable from where an attacker sits.
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/mirror-timing.sh"><code>mirror-timing.sh</code></a> takes the reading from inside the guest on the Kata lane, and its first live run, in the <code>v1.8.0-rc.1</code> window, returned <code>SEPARATED</code>: every hit at 46 ms or less and every miss at 147 ms or more, over 4 references with one cold and one warm fetch each (<a href="../archive/release-1.8/">release-1.8.md</a>).
+  One window is one reading, but its arms did not touch, so a single timed fetch tells warm from cold there.
   It is an accepted risk only for an adopter who chose the shared topology knowing it, which is what <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.</li>
 <li><strong>This is not a claim about arbitrary hostile input at scale.</strong> The goal is that a fork pull request on an adopter's own repositories is safe to run.
   A public, unauthenticated build service is a different product with different economics.</li>
@@ -2866,25 +2867,30 @@ This milestone is done when all of the following hold, each demonstrated rather 
 <blockquote>
 <p>Kata micro-VM workers are validated end to end and are the default for GAG's own CI, which builds a kind cluster inside an unprivileged worker pod.
 Their egress is now closed to match: an in-cluster registry mirror carries every image pull, the tenant carries no allow-all rule, and a run's own probes confirm that a worker reaches cluster DNS, GitHub and the mirror and nothing else.
-What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.</p>
+An operator can opt in to a per-job record of which host each job reached.
+What is not yet demonstrated is the cross-tenant cache boundary, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.</p>
 </blockquote>
 <p>Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
 Item 5 closed with Q986.
 Item 4 is open on <a href="../../queue/Q215/">Q215</a>, and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> is what they choose on.
-The guest timing measurement the probe now takes sharpens that guidance rather than settling it: it can narrow what a shared set costs and cannot widen it past what a timing channel carries.
+The guest timing reading confirmed that guidance rather than changing it: a shared set does expose whether another tenant pulled an image, which is a timing channel and no more, so tenants who must not learn what each other build take isolation.
+The secrets and job-payload halves of item 4 have no demonstration recorded yet.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), TLS on the proxy hop, and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).</p>
-<p>Open, with rows: Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).</p>
-<h2 id="gaps-with-no-row-yet">Gaps with no row yet<a class="headerlink" href="#gaps-with-no-row-yet" title="Permanent link">&para;</a></h2>
-<p>Surfaced by drawing the whole picture, and each needs a decision before it needs a row:</p>
+<p>Open, with rows: Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes), and the three decisions below.</p>
+<h2 id="open-decisions-the-map-surfaced">Open decisions the map surfaced<a class="headerlink" href="#open-decisions-the-map-surfaced" title="Permanent link">&para;</a></h2>
+<p>Surfaced by drawing the whole picture; each is a decision before it is work:</p>
 <ol>
-<li><strong>Secret exposure to fork pull requests.</strong> What GAG can and cannot influence, and what it should refuse to run.
+<li><strong>Secret exposure to fork pull requests</strong> (<a href="../../queue/Q1220/">Q1220</a>).
+   What GAG can and cannot influence, and what it should refuse to run.
    Interacts with <code>pull_request_target</code> semantics that belong to the repository, not the platform.</li>
-<li><strong>Runner-token scope for an untrusted job.</strong> The job's own credentials are a reachable asset.
+<li><strong>Runner-token scope for an untrusted job</strong> (<a href="../../queue/Q1221/">Q1221</a>).
+   The job's own credentials are a reachable asset.
    Whether an untrusted class should receive a narrower token than a trusted one is unexamined.</li>
-<li><strong>What "untrusted" is, as a declared thing.</strong> Today it is a posture an operator assembles.
+<li><strong>What "untrusted" is, as a declared thing</strong> (<a href="../../queue/Q1222/">Q1222</a>).
+   Today it is a posture an operator assembles.
    A declared class would let the platform apply the whole set at once, but the moat review rejected building that surface while five of its dependencies are open or blocked, which is the correct order.
    The decision this document owes is what the class would mean, not yet how to express it.</li>
 </ol>
