@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -3224,6 +3224,11 @@ The fit is node-level encryption that covers every pod flow, such as Calico or C
 <p><strong>What would trigger building it.</strong> An operator with an encryption-in-transit requirement that covers pod DNS, asking for a supported recipe rather than configuring their CNI unaided.</p>
 <hr />
 <h2 id="g5-per-runnergroup-dedicated-proxy-pool">G.5. Per-RunnerGroup Dedicated Proxy Pool<a class="headerlink" href="#g5-per-runnergroup-dedicated-proxy-pool" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>✅ Delivered by the v2 API (Q567).</strong> No <code>dedicated</code> flag was needed: v2 decomposed the inline proxy into the standalone <code>EgressProxy</code> kind (§H.4), the GMC gives each one its own Deployment, Service and HPA, and a <code>RunnerSet</code>'s <code>spec.proxyRef</code> overrides the gateway's <code>defaultProxyRef</code>, so the per-group <code>HTTP_PROXY</code> this entry called for is already per set.
+<code>TestV2_RunnerSet_DedicatedProxyPool</code> pins two sets under one gateway egressing through different pools; the operator recipe is <a href="../../operations/tenant-onboarding/#a-dedicated-proxy-pool-for-a-bandwidth-heavy-runner-set">Tenant Onboarding — A dedicated proxy pool</a>.
+The text below records the v1 shape this entry was written against.</p>
+</blockquote>
 <p><strong>Current behavior.</strong> One proxy pool per <code>ActionsGateway</code> (i.e., per tenant).
 All RunnerGroups within a tenant share the pool.</p>
 <p><strong>Gap.</strong> A bandwidth-heavy GPU RunnerGroup can saturate the proxy pool and slow a co-tenant's CPU-bound RunnerGroup.
@@ -3917,10 +3922,10 @@ It pulls rather than being pushed to, so the proxy's data path never depends on 
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

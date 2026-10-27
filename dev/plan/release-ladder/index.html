@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -27,10 +27,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -2856,7 +2856,7 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 <tbody>
 <tr>
 <td>Recorded demand from an operator</td>
-<td>The proxy hardening cluster: <a href="../../queue/Q565/">Q565</a> rate limiting, <a href="../../queue/Q567/">Q567</a> per-group pools</td>
+<td>The proxy hardening cluster: <a href="../../queue/Q565/">Q565</a> rate limiting</td>
 </tr>
 <tr>
 <td>Hardware nobody has yet</td>
@@ -2864,16 +2864,17 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 </tr>
 </tbody>
 </table>
-<p>Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, Q566 was closed as already shipped, and Q555 was revived on 2026-10-10, so three of the original seven remain in it, which is the set the sentence below counts against.
+<p>Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, Q566 and Q567 were closed as already shipped, and Q555 was revived on 2026-10-10, so two of the original seven remain in it, which is the set the sentence below counts against.
 Its demand was Q725, which had sat in the Queue the whole time.</p>
-<p><strong>One of the original four is back.</strong> <a href="../../queue/Q555/">Q555</a> is the third revival: its trigger was an operator ask, and the maintainer ruled on 2026-10-10 that this repository's own CI is one; the prerequisite it also listed had been met since 2026-07-05 (<a href="../q555-flaky-job-retry/#the-prerequisite-already-exists">draft</a>).
+<p><strong>One of the original three is back.</strong> <a href="../../queue/Q555/">Q555</a> is the third revival: its trigger was an operator ask, and the maintainer ruled on 2026-10-10 that this repository's own CI is one; the prerequisite it also listed had been met since 2026-07-05 (<a href="../q555-flaky-job-retry/#the-prerequisite-already-exists">draft</a>).
 The previous revival has since shipped: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
 That is the trigger list working twice rather than a rule being bent, and it is what narrowed the rule above.
-The three left in the table have never been revived.
-Q566 left without one: the in-cluster TLS it asked for shipped on 2026-05-23, before the row was filed from a stale design note, so it was closed on 2026-10-10 as a gap the code never had.</p>
+The two left in the table have never been revived.
+Q566 left without one: the in-cluster TLS it asked for shipped on 2026-05-23, before the row was filed from a stale design note, so it was closed on 2026-10-10 as a gap the code never had.
+Q567 left the same way on 2026-10-27: the v2 API gives every <code>EgressProxy</code> its own pool and lets a <code>RunnerSet</code> name one with <code>spec.proxyRef</code>, which is the per-group pool it asked for.</p>
 <p>The proxy cluster is the clearest case and the one most likely to be re-litigated.
 <a href="../archive/release-1.4/">release-1.4.md</a> shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that <strong>none had demand recorded against it</strong>.
-That still holds of the two left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
+That still holds of Q565, the one left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
 A theme with no demand is a theme, not a release.</p>
 <h2 id="the-rule-this-establishes">The rule this establishes<a class="headerlink" href="#the-rule-this-establishes" title="Permanent link">&para;</a></h2>
 <p><strong>The roadmap's near-term section means "not waiting on an outside signal".</strong> An item that waits on demand, on an unbuilt prerequisite, or on hardware belongs in Deferred with a revive trigger, and surfaces on the roadmap under <em>Exploring / longer-term</em>.</p>
@@ -2886,7 +2887,7 @@ The release commitment is the narrower claim the <code>X.Y-gate</code> label car
 <p>The failure mode to watch is the comfortable one: leaving an item in the Queue because parking it feels like giving up.
 Deferred is not a graveyard here, it is a trigger list, and every row in it names the event that revives it.</p>
 <h2 id="what-this-does-not-decide">What this does not decide<a class="headerlink" href="#what-this-does-not-decide" title="Permanent link">&para;</a></h2>
-<p><strong>Applied 2026-08-09.</strong> The seven punted items moved to Deferred with the triggers this page names (three of them still are), and Q719 and Q727 took the <code>1.6-gate</code> label, which is what publishes the commitment where an adopter reads it.</p>
+<p><strong>Applied 2026-08-09.</strong> The seven punted items moved to Deferred with the triggers this page names (two of them still are), and Q719 and Q727 took the <code>1.6-gate</code> label, which is what publishes the commitment where an adopter reads it.</p>
 <p>That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.
 <a href="../archive/release-1.6/">release-1.6.md</a> was written on 2026-08-25, when 1.5 had tagged, on the same evidence the other release plans use.</p>
@@ -2978,10 +2979,10 @@ Its <code>1.5-gate</code> label is what enforces that, a release earlier than st
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       
