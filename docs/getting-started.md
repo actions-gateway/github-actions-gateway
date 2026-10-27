@@ -2,13 +2,13 @@
 
 > **Want to see it first?** The [Demo](demo.md) walks one real GitHub job through a local kind cluster (job → ephemeral worker pod → green on GitHub) with the exact commands to reproduce it.
 
-!!! tip "New tenants: start on `v2beta1`"
-    The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2beta1`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
-    `v2beta1` is the graduated, ScaleSet-only hub version, v2's first stability contract, and where new capabilities land.
-    The GA **`v2`** is served beside it with the same shape and is the storage version from 1.10; stay on `v2beta1` until `v2.0.0` if you may roll back to a release that does not serve `v2`.
-    `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
+!!! tip "New tenants: start on `v2`"
+    The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
+    `v2` is the General Availability (GA) version, ScaleSet-only, and the storage version from 1.10.
+    `v2beta1` stays served beside it until `v2.0.0` removes it, with the same shape apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so manifests already on `v2beta1` move by re-applying at `v2`.
+    `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the versions.
     The older single-custom-resource (CR) **`v1alpha1`** API is still fully served but **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you have a specific reason to, and see the [legacy v1 path](#legacy-the-v1alpha1-api-deprecated).
-    `v1alpha1`, `v2alpha1`, and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md); `v2beta1` is not.
+    `v1alpha1`, `v2alpha1`, `v2beta1` and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md).
     Already on v1?
     [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without changing how your jobs are acquired.
 
@@ -151,7 +151,7 @@ stringData:
 
 ## 4. Create your gateway and runner set (v2, recommended)
 
-The **v2 API** (`actions-gateway.com/v2beta1`) decomposes the single v1 CR into small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a `RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an optional `EgressProxy`.
+The **v2 API** (`actions-gateway.com/v2`) decomposes the single v1 CR into small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a `RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an optional `EgressProxy`.
 The set below is feature-equivalent to the legacy v1 example, a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.
 
 **You can skip authoring the template.** GAG ships three validated worker pod shapes; `kubectl apply -k deploy/templates/plain` gives you the baseline one, and a `RunnerSet` then points at it with `templateRef: { name: plain, kind: ClusterRunnerTemplate }` in place of the inline `RunnerTemplate` below.
@@ -160,7 +160,7 @@ See the [runner template library](operations/runner-template-library.md).
 
 <!-- gag:verify id=v2-gateway-set mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: team-a-egress
@@ -169,7 +169,7 @@ spec:
   minReplicas: 2
   maxReplicas: 10
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate            # a reusable pod shape, referenced by many RunnerSets
 metadata:
   name: default
@@ -180,7 +180,7 @@ spec:
       containers:
         - name: runner
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: team-a-gateway
@@ -198,7 +198,7 @@ spec:
   # securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field.
   # All gateways in a namespace share one Pod Security level. See Tenant Onboarding.
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: gpu                      # v2 names its own runner set; no first-label-derives-name rule
@@ -215,7 +215,7 @@ spec:
   # chart ships EMPTY, so a tier added at this point is rejected by admission.
   # See Security Operations for the allowlist and how to grow it.
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: linux

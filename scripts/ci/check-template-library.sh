@@ -13,7 +13,7 @@
 # What this asserts, and why each one is a way the library rots:
 #
 #   1. Every entry directory is a well-formed library entry: template.yaml +
-#      kustomization.yaml, a single v2beta1 ClusterRunnerTemplate whose
+#      kustomization.yaml, a single actions-gateway.com ClusterRunnerTemplate whose
 #      metadata.name IS the directory name. The name is the operator's whole
 #      interface (templateRef points at it), so a directory and a name that
 #      disagree make the README's instructions wrong.

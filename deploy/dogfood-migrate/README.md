@@ -17,10 +17,10 @@ The privileged DinD worker shape is what makes it representative: it is the case
 
 | | `dogfood-e2e/` | `dogfood-migrate/` (this tree) |
 |---|---|---|
-| API version | `actions-gateway.com/v2beta1` (front-door shape) | `actions-gateway.github.com/v1alpha1` (legacy, on purpose) |
+| API version | `actions-gateway.com/v2` (front-door shape) | `actions-gateway.github.com/v1alpha1` (legacy, on purpose) |
 | Lifetime | living CI tenant | throwaway; torn down at the end of the run |
 | Worker sizing | measured from a real kind-in-DinD e2e run (Q248) | sized for a **smoke** job — roughly a third as large |
-| Runner labels | one (`gag-ci-e2e`) because v2beta1 is ScaleSet-only | one (`gag-migrate-v1`) by choice, so `runs-on` survives the migration |
+| Runner labels | one (`gag-ci-e2e`) because v2 is ScaleSet-only | one (`gag-migrate-v1`) by choice, so `runs-on` survives the migration |
 
 ## Deploy
 

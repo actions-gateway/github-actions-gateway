@@ -876,7 +876,7 @@ kubectl -n team-a create configmap ghes-ca --from-file=ca.crt=/path/to/corp-root
 ```
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: my-gateway

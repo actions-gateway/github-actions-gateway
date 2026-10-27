@@ -9,8 +9,8 @@ For day-2 operations after onboarding, see the [Runbook](runbook.md).
 
 !!! tip "New tenants: onboard on the v2 API"
     Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
-    At the gateway step, the recommended shape for a **new** tenant is the **v2 API** at `actions-gateway.com/v2beta1` — see [v2 API](#v2-api-multiple-gateways-per-namespace) below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
-    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**, along with `v2alpha1` and the Classic protocol; already on v1?
+    At the gateway step, the recommended shape for a **new** tenant is the **v2 API** at `actions-gateway.com/v2` — see [v2 API](#v2-api-multiple-gateways-per-namespace) below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
+    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**, along with `v2alpha1`, `v2beta1` and the Classic protocol; already on v1?
     [`gag-migrate`](migration-v1-to-v2.md) moves you across.
 
 ---
@@ -761,10 +761,10 @@ Onboarding is complete when:
 
 ## v2 API: multiple gateways per namespace
 
-> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2beta1`** — the graduated, ScaleSet-only hub version, and the version every **new** tenant should use.
+> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2`** — the General Availability (GA) version, ScaleSet-only, the storage version since 1.10, and the version every **new** tenant should use.
 > It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
 > `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1: it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need.
-> `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md); `v2beta1` is not.
+> `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md), and so is `v2beta1`: it stays served until then with the same shape as `v2` apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so a tenant already on it moves by re-applying at `v2`.
 > Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
 The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)).
@@ -790,7 +790,7 @@ In v2 the egress proxy is **optional**.
 A gateway with no `spec.defaultProxyRef` and a `RunnerSet` with no `spec.proxyRef` egress **directly** to GitHub, collapsing the minimal onboarding to **three objects** — one `ActionsGateway`, one `RunnerTemplate`, one `RunnerSet`, with no `EgressProxy` at all:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:
@@ -804,7 +804,7 @@ spec:
   # githubCABundleRef: { name: ghes-ca }
   # no defaultProxyRef ⇒ direct egress
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata: { name: default, namespace: team-a }
 spec:
@@ -814,7 +814,7 @@ spec:
         - name: runner
           resources: { requests: { cpu: "1", memory: 2Gi } }
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata: { name: linux, namespace: team-a }
 spec:
@@ -843,8 +843,8 @@ A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated
 
 ### Job acquisition, and how labels route
 
-On `v2beta1` there is nothing to choose: every `RunnerSet` acquires jobs with the **runner-scale-set message-queue protocol** — one listener session per set, capacity-gated assignment, and a full-runner worker.
-It is the only protocol the graduated version serves, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).
+On `v2` there is nothing to choose: every `RunnerSet` acquires jobs with the **runner-scale-set message-queue protocol** — one listener session per set, capacity-gated assignment, and a full-runner worker.
+It is the only protocol `v2` and `v2beta1` serve, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).
 
 The rules that follow from it, and the ones most likely to bite when you author a set by hand:
 
@@ -863,12 +863,12 @@ This is the same routing ARC scale sets use, so workflows migrating from ARC car
 
 #### Acquisition protocol: `v2alpha1` only
 
-`v2alpha1` — served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp — carries a `spec.acquisitionProtocol` selector that `v2beta1` does not.
+`v2alpha1` — served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp — carries a `spec.acquisitionProtocol` selector that `v2beta1` and `v2` do not.
 It exists to let a tenant migrating off `v1alpha1` keep the classic per-runner broker protocol its groups were registered under, until it is ready to move.
 (Multi-label matching used to be the reason and no longer is: the scale-set protocol registers every `runnerLabel`.)
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1   # the field does not exist on v2beta1
+apiVersion: actions-gateway.com/v2alpha1   # the field does not exist on v2beta1 or v2
 kind: RunnerSet
 metadata: { name: linux, namespace: team-a }
 spec:
@@ -880,7 +880,7 @@ spec:
   maxWorkers: 50
 ```
 
-- **A new tenant should never need this.** Author on `v2beta1`, with as many labels per set as your workflows target.
+- **A new tenant should never need this.** Author on `v2`, with as many labels per set as your workflows target.
   `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
 - **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
   Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
@@ -899,7 +899,7 @@ The worker pod is still isolated exactly as this page describes; what is unbound
 Declare the group once on the gateway, and every set under it inherits:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:
@@ -910,7 +910,7 @@ spec:
 A set overrides it only when it needs a narrower policy of its own:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata: { name: gpu, namespace: team-a }
 spec:
@@ -992,7 +992,7 @@ The override is **per key**: set only the request/limit entries you want to chan
 For example, raising just the memory limit leaves the CPU request/limit and memory request at their defaults:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: my-gateway
@@ -1186,7 +1186,7 @@ There is **no `githubApp` Secret** for this method — you do not run [Step 1](#
 Instead you put the non-secret App identity (`appId`/`installationId`) inline and reference a Vault transit key:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata: { name: acme, namespace: team-a }
 spec:

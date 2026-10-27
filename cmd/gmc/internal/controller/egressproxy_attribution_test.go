@@ -242,9 +242,9 @@ func TestEgressProxyReconcile_PortsAndBundleAreStableAcrossGrantChanges(t *testi
 	ep := attributingPool("team-a", "team-b")
 	own := gatewayUsing("provider", true)
 	teamB := gatewayUsing("team-b", false)
-	c := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+	c := withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
 		ep, own, gatewayUsing("team-a", true), teamB,
-	).WithStatusSubresource(ep).Build()
+	).WithStatusSubresource(ep).Build())
 	ctx := context.Background()
 	caHash := func() string {
 		var dep appsv1.Deployment
@@ -277,8 +277,8 @@ func TestEgressProxyReconcile_PortsAndBundleAreStableAcrossGrantChanges(t *testi
 // refused 403 on a real cluster. The fake client and envtest run as admin, so the
 // refusal is injected here.
 // withGMCSecretVerbs refuses what the GMC's shipped RBAC refuses on Secrets: any
-// delete, and any list, since its reads are bound per tenant namespace and the
-// fake client runs as admin.
+// delete, any patch, and any list, since its reads are bound per tenant namespace
+// and the fake client runs as admin.
 func withGMCSecretVerbs(base client.WithWatch) client.WithWatch {
 	return interceptor.NewClient(base, interceptor.Funcs{
 		Delete: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
@@ -286,6 +286,12 @@ func withGMCSecretVerbs(base client.WithWatch) client.WithWatch {
 				return apierrors.NewForbidden(corev1.Resource("secrets"), obj.GetName(), nil)
 			}
 			return cl.Delete(ctx, obj, opts...)
+		},
+		Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+			if _, ok := obj.(*corev1.Secret); ok {
+				return apierrors.NewForbidden(corev1.Resource("secrets"), obj.GetName(), nil)
+			}
+			return cl.Patch(ctx, obj, patch, opts...)
 		},
 		List: func(ctx context.Context, cl client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
 			if _, ok := list.(*corev1.SecretList); ok {

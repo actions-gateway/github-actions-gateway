@@ -176,7 +176,7 @@ Kata is selected by `runtimeClassName` on the worker `podTemplate`.
 It is a platform-owned, cluster-scoped `ClusterRunnerTemplate`: the capability set below exceeds what a tenant should be able to self-author, and platform ownership is what enforces the "no privileged container" property (the namespace PSA level cannot; see [Why this matters for GAG](#why-this-matters-for-gag)).
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ClusterRunnerTemplate            # platform-owned golden template
 metadata:
   name: kata-dind

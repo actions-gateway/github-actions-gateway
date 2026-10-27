@@ -195,13 +195,13 @@ allowFloatingImageTags: true
 replicaCount: 1
 gmc:
   image:
-    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
+    tag: v1.10.0-rc.1
 agc:
   image:
-    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
+    tag: v1.10.0-rc.1
 proxy:
   image:
-    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
+    tag: v1.10.0-rc.1
 # WRAPPER_IMAGE drives Q235 worker-wrapper injection — the GMC forwards it to
 # every AGC, which injects the wrapper into each worker pod so the runner
 # container can be the unmodified upstream actions-runner. Pin it: the chart's
@@ -209,7 +209,7 @@ proxy:
 # and ImagePullBackOffs the injection.
 wrapper:
   image:
-    tag: 2715e7f87e48896b26aaa7c4bf4b8b48425576be
+    tag: v1.10.0-rc.1
 
 # Self-signed webhook cert — no cert-manager dependency.
 # The cert rotates on helm upgrade; acceptable for a personal dogfood cluster.
@@ -269,7 +269,7 @@ kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout
 
 #### Wire the webhook CA into the CRD conversion `caBundle` (Q279)
 
-Since Q74 the v2 kinds are served at **both** `v2beta1` and `v2alpha1` and stored at `v2beta1`, so a request naming `v2alpha1` crosses the GMC-hosted conversion webhook and one naming `v2beta1` does not.
+From 1.10 the v2 kinds are served at `v2`, `v2beta1` and `v2alpha1` and stored at `v2`, so a request naming either older version crosses the GMC-hosted conversion webhook and one naming `v2` does not.
 The apiserver calls that webhook over TLS and only trusts it if each CRD's `spec.conversion.webhook.clientConfig.caBundle` carries the CA that signed the GMC's serving cert.
 Dogfood is **self-signed** (no cert-manager), and the CRD chart renders an empty `caBundle` when `conversion.certManager.enabled=false` and `conversion.caBundle` is unset — so **without this step every CR `apply` (and its conversion read-back) fails the TLS handshake** with `x509: certificate signed by unknown authority`.
 
@@ -433,7 +433,7 @@ Attach an `EgressProxy` and set `spec.defaultProxyRef` on the gateway to add per
 
 ```bash
 kubectl apply -f - <<'EOF'
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: dogfood
@@ -445,7 +445,7 @@ spec:
       name: github-app-v1
   githubURL: https://github.com/actions-gateway/github-actions-gateway
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: default
@@ -490,7 +490,7 @@ spec:
             limits:
               memory: "3Gi"
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: ci
@@ -500,10 +500,10 @@ spec:
     name: dogfood
   templateRef:
     name: default
-  # ScaleSet (the Q264 P5 default), stated explicitly so the tenant's protocol is
-  # readable here. One runnerLabel, which is BOTH the scale set's name at GitHub and
-  # the workflows' runs-on target, so it must match vars.GAG_RUNNER exactly (Part C2).
-  acquisitionProtocol: ScaleSet
+  # No acquisitionProtocol: v2 is ScaleSet-only and has no such field, so naming
+  # one fails strict decoding. One runnerLabel, which is BOTH the scale set's name
+  # at GitHub and the workflows' runs-on target, so it must match vars.GAG_RUNNER
+  # exactly (Part C2).
   runnerLabels: ["gag-ci-scaleset"]
   # maxWorkers 8: the pd-standard disk right-size (Q248) lifted the worker-node
   # ceiling off the SSD quota, so the ~7-job dogfood CI matrix fits. On ScaleSet this
@@ -878,7 +878,7 @@ This script owns the **cluster infra** the kustomize overlays can't express:
 4. Creates the `gag-dogfood-e2e` namespace (v2 marker `actions-gateway.com/tenant=managed`) and the GitHub App Secret
 
 The **tenant objects** (ResourceQuota, `ActionsGateway`, `ClusterRunnerTemplate`, `RunnerSet`, egress policy, and the namespace's security-profile gates) are owned by the worker-isolation overlays under [`deploy/dogfood-e2e/`](../../deploy/dogfood-e2e/README.md) and applied on demand by `e2e-start.sh` (`E2E_VARIANT=kata|dind`, default `kata` since the Q286 flip; `dind` is the explicit opt-in fallback).
-They are authored **directly at `actions-gateway.com/v2beta1`** (Q231) — the graduated served+storage front-door shape (Q273), the same version `scripts/dogfood/setup.sh` (main dogfood) authors at since Q1104 moved it off `v2alpha1`.
+They are authored **directly at `actions-gateway.com/v2`**, the storage version from 1.10 and the same version `scripts/dogfood/setup.sh` (main dogfood) authors at (Q1212).
 
 In both variants the DinD native sidecar runs `dockerd` on `tcp://localhost:2375` (no TLS — pod-internal only) and the `runner` container sets `DOCKER_HOST=tcp://localhost:2375`.
 Because all containers in a pod share a network namespace, kind's API server is reachable at `localhost:<apiserver-port>` from the runner.
@@ -956,7 +956,7 @@ The e2e pool toggles independently from the CI pool — you can run only one or 
 > **Migrating a pre-existing Classic e2e tenant (one-time).** If the tenant's RunnerSet was previously authored at `v2alpha1` with `acquisitionProtocol: Classic`, the conversion webhook stamped a `conversion.actions-gateway.com/acquisition-protocol: Classic` annotation on the stored v2beta1 object.
 > `kubectl apply` of the new v2beta1 ScaleSet spec does **not** strip that webhook-added annotation, so the AGC keeps running Classic (it reads the RunnerSet through the v2beta1→v2alpha1 conversion, which restores `Classic` from the annotation).
 > Recreate the RunnerSet once so it comes back v2beta1-native (annotation defaults to `ScaleSet`): `kubectl delete runnerset ci-e2e -n gag-dogfood-e2e` then `kubectl apply -k deploy/dogfood-e2e/overlays/dind`.
-> A tenant created fresh by `e2e-setup.sh` (authored at v2beta1 directly) never carries the annotation.
+> A tenant created fresh (authored at `v2` directly) never carries the annotation.
 > Verified live 2026-07-07 (Q231).
 
 ---

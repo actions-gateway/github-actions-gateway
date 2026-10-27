@@ -77,15 +77,15 @@ Set `VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0` to restore the previou
 
 ## Install
 
-> **Current release — `v1.9.0`.** The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
-> Pin `--version 1.9.0` (the chart version is the release tag without the leading `v`).
-> Newer patch releases publish as `1.9.z`; pin the version you have verified.
+> **Current release — `v1.10.0`.** The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
+> Pin `--version 1.10.0` (the chart version is the release tag without the leading `v`).
+> Newer patch releases publish as `1.10.z`; pin the version you have verified.
 
 Install the published, signed chart straight from the registry — no source checkout needed:
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.9.0 \
+  --version 1.10.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -93,7 +93,7 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0) (the chart ships **no** baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
+Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0) (the chart ships **no** baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
 Verify the chart and image signatures before installing — see [release.md § Verify the publish](release.md#3-verify-the-publish) and [security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification).
 
 > **Installing from a source checkout** (dev/CI, or to install an unreleased chart) still works — substitute the local `charts/actions-gateway` path for the `oci://…` ref in any command on this page:
@@ -144,7 +144,7 @@ Digest pinning is preserved throughout (relocation is content-addressed).
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.9.0 \
+  --version 1.10.0 \
   --namespace gmc-system --create-namespace \
   --set certManager.enabled=false \
   --set gmc.image.digest=sha256:<gmc> \
@@ -301,8 +301,12 @@ An **upgrade does not**.
 Helm skips `crds/` entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:
 
 ```sh
-helm show crds <chart> --version <version> | kubectl apply -f -
+helm pull <chart> --version <version> --untar --untardir gag-chart-<version>
+helm show crds gag-chart-<version>/actions-gateway | kubectl apply -f -
 ```
+
+Pull first: for an OCI reference, `helm show crds` prints its pull banner on stdout (measured on Helm 4.2), and `kubectl` rejects the result.
+From a local chart directory, `helm show crds <dir> | kubectl apply -f -` is enough.
 
 It is idempotent and version-correct, so it also covers any future schema change to this CRD with no release-note callout to remember.
 The chart preflights the CRD's presence and fails with that command rather than letting Helm emit a bare `no matches for kind`.
