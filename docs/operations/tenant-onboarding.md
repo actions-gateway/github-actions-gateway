@@ -844,13 +844,20 @@ A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated
 ### A dedicated proxy pool for a bandwidth-heavy runner set
 
 Every `EgressProxy` is its own pool: the GMC gives each one a separate Deployment, Service, and HPA.
-So when one `RunnerSet` (large artifact uploads, container image pulls) is saturating the pool its co-tenants share, give it a pool of its own and leave the rest on the gateway default:
+So when one `RunnerSet` (large artifact uploads, container image pulls) is saturating the pool its co-tenants share, give it a pool of its own and leave the rest on the gateway default.
+
+**Start the new pool from the shared pool's spec, not from an empty one.** Every `EgressProxy` field belongs to its own pool, so a new pool takes the defaults rather than what the shared pool was set to.
+That covers egress auditing (`auditLogging`, off by default), the destination allowlist (`egressPolicyMode`, `destinationCIDRs`, `destinationFQDNs`), `noProxyCIDRs`, `failureAttribution`, `sharing`, `resources` and `scheduling`.
+A pool left at the defaults allows GitHub only, which jobs surface as failures.
+It also keeps no egress audit record, which nothing surfaces.
+Copy the spec with `kubectl get egressproxy <shared-pool> -n team-a -o yaml`, then change only the sizing:
 
 ```yaml
 apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata: { name: heavy, namespace: team-a }
 spec:
+  # ...every other field copied from the shared pool's spec...
   minReplicas: 2
   maxReplicas: 20
 ---
