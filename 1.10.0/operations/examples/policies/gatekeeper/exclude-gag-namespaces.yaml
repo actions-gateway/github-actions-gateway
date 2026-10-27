@@ -1,0 +1,64 @@
+# OPA Gatekeeper — exclude github-actions-gateway (GAG) namespaces from strict
+# cluster Constraints that GAG pods legitimately cannot satisfy.
+#
+# GAG pods cannot meet two common strict requirements:
+#   * readOnlyRootFilesystem — NO worker profile sets it (the runner writes to
+#     its working tree / tool cache / temp on the root filesystem).
+#   * drop-ALL-caps / allowPrivilegeEscalation:false — the DEFAULT `baseline`
+#     worker profile does not set these (baseline CI relies on in-job sudo).
+#     Tenants on securityProfile: restricted DO satisfy them.
+#
+# See ../../../admission-policies.md for the full compatibility matrix.
+#
+# Gatekeeper has no per-resource "exception" object like Kyverno's
+# PolicyException; you exclude namespaces from a Constraint instead. Two ways,
+# both shown below — use whichever fits how you author Constraints. Edit the
+# `kind`/`name` and the strict-Constraint references to match YOUR cluster.
+
+# ---------------------------------------------------------------------------
+# Option A — config-level exemption (applies to ALL Constraints at once).
+# Gatekeeper's global Config can exempt namespaces from processing entirely.
+# Coarse but simple. Replace `actions-gateway-system` with your GMC install
+# namespace; add each tenant namespace explicitly (Config does not support
+# label selectors).
+# ---------------------------------------------------------------------------
+apiVersion: config.gatekeeper.sh/v1alpha1
+kind: Config
+metadata:
+  name: config
+  namespace: gatekeeper-system
+spec:
+  match:
+    - excludedNamespaces:
+        - actions-gateway-system
+        # - <each GAG tenant namespace>
+      processes: ["*"]
+---
+# ---------------------------------------------------------------------------
+# Option B — per-Constraint exclusion (preferred: surgical, keeps every other
+# guardrail). Add the marker-label namespaceSelector (or excludedNamespaces) to
+# the SPECIFIC strict Constraints GAG cannot satisfy. The two below assume
+# Constraints generated from the Gatekeeper "pod-security-policy" library; rename
+# kind/name to match yours. This is illustrative — you are editing YOUR existing
+# Constraints, not creating new ones.
+#
+# Example: exclude GAG tenant namespaces from a read-only-rootfs Constraint.
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sReadOnlyRootFilesystem      # <-- your strict Constraint's kind
+metadata:
+  name: require-ro-rootfs            # <-- your strict Constraint's name
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: [Pod]
+    # Skip namespaces carrying the GAG tenant marker. Gatekeeper applies the
+    # Constraint only where the selector matches, so NotIn excludes GAG.
+    namespaceSelector:
+      matchExpressions:
+        - key: actions-gateway.github.com/tenant
+          operator: NotIn
+          values: ["true"]
+    # The GMC install namespace has no marker label, so exclude it by name too.
+    excludedNamespaces:
+      - actions-gateway-system
