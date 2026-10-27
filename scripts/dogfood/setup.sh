@@ -72,7 +72,7 @@ source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 # 2026-07-07 ref while dogfood ran 2026-07-24 and then 2026-07-31 code, so a
 # defaults run would have withdrawn the capacity-gate rung and re-blocked Q472.
 # When you pin a newer ref by hand, update this line in the same change.
-GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.10.0-rc.1}"
+GAG_IMAGE_TAG="${GAG_IMAGE_TAG:-v1.10.0-rc.2}"
 
 # Optional build-capable worker image for the RunnerTemplate (Q239). When set,
 # the runner container pins this image instead of staying image-less; the AGC
