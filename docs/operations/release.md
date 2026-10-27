@@ -1506,3 +1506,6 @@ The first two controls protect *who* runs the pipeline and *how* signatures are 
   All three sites move together on the weekly [updatecli](../development/dependency-updates.md#the-manifests) run rather than by hand (Q927), and the digests it writes come from the release's sigstore-signed `cosign_checksums.txt`, verified against a pinned identity by the cosign the repo already pins.
   Automating the copy without automating the trust would pin whatever the releases CDN served.
   The `$(COSIGN)` make rule keys on the pinned version, so a bump re-downloads instead of serving whatever `.build/cosign` already holds (Q857).
+- **The signer writes the v2 signature format.** From cosign v3, every `cosign sign`, `attest` and `sign-blob` in `publish.yml` passes `--new-bundle-format=false --use-signing-config=false`, and `make cosign-pin-check` refuses a v3 pin with a call missing either (Q1218).
+  The default in cosign v3.1.4 stores image signatures as OCI referrers, which cosign v2.5.2 reports as `no signatures found`, so dropping the flags breaks every operator verifying with cosign v2.
+  The flags are deprecated in v3, so a cosign release that removes them fails the publish job at its first signing step; moving to the new format then needs a stated verifier floor in the operator docs.

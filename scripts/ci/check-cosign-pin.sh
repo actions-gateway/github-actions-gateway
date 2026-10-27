@@ -18,6 +18,11 @@
 # that reference names is checked by actionlint, which rejects a reference to a
 # step id the job does not define.
 #
+# From cosign v3 it also holds the signer to the v2 format (Q1218): every
+# `cosign sign`, `attest` and `sign-blob` in publish.yml must pass
+# --new-bundle-format=false --use-signing-config=false, because v3's default
+# image signatures are invisible to the cosign v2 verifiers operators run.
+#
 # Scoped to cosign on purpose. CALICO_VERSION is the repo's other Makefile pin
 # duplicated into pins.env, and updatecli.d/calico.yaml rewrites both copies
 # together; a general cross-file pin gate is a larger change and would want its
@@ -26,8 +31,8 @@
 # Usage:
 #   check-cosign-pin.sh [path/to/Makefile] [path/to/publish.yml] [path/to/pins.env]
 #
-# Exits 1 on drift, and 2 when a pin the gate compares is absent — the gate
-# would otherwise pass by comparing nothing.
+# Exits 1 on drift, and 2 when a pin or signing call the gate compares is
+# absent — the gate would otherwise pass by comparing nothing.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -102,5 +107,38 @@ if ((drift)); then
 	exit 1
 fi
 
-printf 'cosign-pin: ok (%s in %s and %s; %d cosign-release input(s) in %s read it)\n' \
-	"$want" "$MAKEFILE" "$PINS" "${#refs[@]}" "$WORKFLOW"
+# From cosign v3 the signer must also be told to write the v2 format (Q1218):
+# v3's default image signatures are invisible to a cosign v2 verifier, and v2
+# rejects the two flags as unknown, so they are required from v3 and only there.
+# Continuation lines are joined first, so a flag on a wrapped line still counts.
+signs=0
+if [[ "$want" =~ ^v([0-9]+)\. ]] && ((BASH_REMATCH[1] >= 3)); then
+	mapfile -t calls < <(awk '
+		/^[[:space:]]*#/ { next }
+		{ line = (held == "" ? $0 : held " " $0) }
+		/\\[[:space:]]*$/ { sub(/\\[[:space:]]*$/, "", line); held = line; next }
+		{ held = ""; if (line ~ /cosign (sign|sign-blob|attest)([[:space:]]|$)/) print line }
+	' "$WORKFLOW")
+	signs=${#calls[@]}
+	if ((signs == 0)); then
+		printf 'cosign-pin: %s installs cosign %s but no cosign sign/attest/sign-blob call was found, so the format check compared nothing\n' \
+			"$WORKFLOW" "$want" >&2
+		exit 2
+	fi
+	for call in "${calls[@]}"; do
+		for flag in --new-bundle-format=false --use-signing-config=false; do
+			if [[ "$call" != *"$flag"* ]]; then
+				printf 'cosign-pin: %s signs with cosign %s without %s:\n  %s\n' \
+					"$WORKFLOW" "$want" "$flag" "${call#"${call%%[![:space:]]*}"}" >&2
+				drift=1
+			fi
+		done
+	done
+	if ((drift)); then
+		printf 'cosign v3 writes a format cosign v2 verifiers cannot read unless both flags are passed\n' >&2
+		exit 1
+	fi
+fi
+
+printf 'cosign-pin: ok (%s in %s and %s; %d cosign-release input(s) and %d v2-format signing call(s) in %s)\n' \
+	"$want" "$MAKEFILE" "$PINS" "${#refs[@]}" "$signs" "$WORKFLOW"

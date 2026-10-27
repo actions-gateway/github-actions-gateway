@@ -26,7 +26,7 @@ COSIGN         := $(REPO_ROOT)/.build/cosign
 # verifier the publish run signed with. A bump also needs the new platform
 # digests in scripts/release/download-cosign.sh; bump deliberately (see
 # docs/operations/release.md).
-COSIGN_VERSION ?= v2.5.2
+COSIGN_VERSION ?= v3.1.4
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
@@ -917,7 +917,7 @@ uses-pinned-check: ## Assert every workflow/action `uses:` is a 40-hex SHA with 
 # asked them to name the same binary. Also fails when a cosign-installer step
 # loses its `cosign-release` input, which floats the signer to latest.
 .PHONY: cosign-pin-check
-cosign-pin-check: ## Assert COSIGN_VERSION matches every `cosign-release` publish.yml signs with (Q903)
+cosign-pin-check: ## Assert COSIGN_VERSION matches every `cosign-release` publish.yml signs with, in the v2 format (Q903, Q1218)
 	scripts/ci/check-cosign-pin.sh
 
 # publish.yml's release build retries, and `no-cache: true` means the retry's

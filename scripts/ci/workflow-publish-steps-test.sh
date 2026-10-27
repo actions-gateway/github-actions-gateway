@@ -361,7 +361,7 @@ run_chart() {
 dir="$(run_chart chart-signs-pushed-digest "$CHART_BODY" "$CHART_DIGEST")"
 if [[ -n "$dir" ]]; then
 	expect_call chart-signs-pushed-digest "$dir" \
-		"cosign sign --yes ghcr.io/actions-gateway/charts/actions-gateway@$CHART_DIGEST" &&
+		"cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/actions-gateway/charts/actions-gateway@$CHART_DIGEST" &&
 		expect_call chart-signs-pushed-digest "$dir" 'helm package charts/actions-gateway' &&
 		expect_out_file chart-signs-pushed-digest "$dir" \
 			"ref=ghcr.io/actions-gateway/charts/actions-gateway@$CHART_DIGEST" &&
@@ -379,7 +379,7 @@ fi
 dir="$(run_chart chart-crds-signs-pushed-digest "$CHART_CRDS_BODY" "$CHART_DIGEST")"
 if [[ -n "$dir" ]]; then
 	expect_call chart-crds-signs-pushed-digest "$dir" \
-		"cosign sign --yes ghcr.io/actions-gateway/charts/actions-gateway-crds-v2@$CHART_DIGEST" &&
+		"cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/actions-gateway/charts/actions-gateway-crds-v2@$CHART_DIGEST" &&
 		pass chart-crds-signs-pushed-digest 'the v2 CRD chart signs its own pushed digest'
 fi
 
@@ -412,7 +412,7 @@ else
 		"TAG=v1.6.0" "OWNER=actions-gateway" "PRERELEASE=false" "REGISTRY=ghcr.io" \
 		"HELM_STUB_DIGEST=")"
 	die_if_killed chart-regression-no-guard "$got"
-	if [[ "$got" == 0 ]] && grep -qF 'cosign sign --yes ghcr.io/actions-gateway/charts/actions-gateway@' "$dir/calls"; then
+	if [[ "$got" == 0 ]] && grep -qF 'cosign sign --yes --new-bundle-format=false --use-signing-config=false ghcr.io/actions-gateway/charts/actions-gateway@' "$dir/calls"; then
 		pass chart-regression-no-guard 'without the refusal an empty digest is signed, so these cases can fail'
 	else
 		fail chart-regression-no-guard "the unguarded body did not reproduce the defect (rc=$got)"
@@ -524,7 +524,7 @@ got="$(drive "$dir" "$CRD_ASSET_BODY" \
 	"TAG=v1.6.0" "REPO=actions-gateway/github-actions-gateway" "GH_TOKEN=stub" \
 	"GH_STUB_RELEASE_EXISTS=true")"
 if expect_rc crd-asset-uploads 0 "$got" "$dir"; then
-	expect_call crd-asset-uploads "$dir" 'cosign sign-blob --yes --bundle' &&
+	expect_call crd-asset-uploads "$dir" 'cosign sign-blob --yes --new-bundle-format=false --use-signing-config=false --bundle' &&
 		expect_call crd-asset-uploads "$dir" 'gh release upload v1.6.0 --repo actions-gateway/github-actions-gateway --clobber' &&
 		expect_no_call crd-asset-uploads "$dir" 'gh release create' &&
 		expect_file_has crd-asset-uploads "$dir/runner-temp/actions-gateway-crds-v2.yaml" 'rendered crds' &&
@@ -550,7 +550,7 @@ got="$(drive "$dir" "$MIGRATE_BODY" \
 	"TAG=v1.6.0" "REPO=actions-gateway/github-actions-gateway" "GH_TOKEN=stub" \
 	"MIGRATE_STUB_BINARIES=gag-migrate-linux-amd64 gag-migrate-darwin-arm64")"
 if expect_rc migrate-uploads-binaries 0 "$got" "$dir"; then
-	expect_call migrate-uploads-binaries "$dir" 'cosign sign-blob --yes --bundle' &&
+	expect_call migrate-uploads-binaries "$dir" 'cosign sign-blob --yes --new-bundle-format=false --use-signing-config=false --bundle' &&
 		expect_call migrate-uploads-binaries "$dir" 'gag-migrate-linux-amd64' &&
 		expect_call migrate-uploads-binaries "$dir" 'gag-migrate-darwin-arm64' &&
 		expect_call migrate-uploads-binaries "$dir" 'SHA256SUMS.cosign.bundle' &&
