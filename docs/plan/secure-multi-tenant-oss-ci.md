@@ -2,8 +2,8 @@
 
 > **Status: goal stated 2026-08-06, deliverables partly shipped.** This is a map and a definition of done, not a design.
 > The design for the network half is [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
-> Kernel isolation is shipped and validated.
-> The rest is open.
+> Kernel isolation, the pod floor, the network layer, the metadata block and the egress evidence are shipped.
+> Definition of Done items 4 and 6 are open, and so are the three decisions at the end of this document.
 
 ## Why this is the goal
 
@@ -89,8 +89,9 @@ The most important section.
   The mirror contract in [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract) is what bounds this, and it is a contract rather than an enforcement.
 - **A shared mirror set exposes cache timing to every tenant that can reach it.** Whether a repository is already warm says that some other tenant pulled it.
   The repository *list* is no longer part of this: `GET /v2/_catalog` answered 200 with every cached repository named, `catalog.maxentries=0` did not close it, and every instance is now fronted by a proxy that refuses the path under both topologies ([how, and what it was measured against](../../deploy/registry-mirror/README.md#closing-the-repository-catalog)).
-  What is left is timing.
-  The reading that counts is taken from inside the guest by [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) on the Kata lane; until a window has run it, the only figures are a laptop's, which bound the channel rather than measure it where an attacker sits.
+  What is left is timing, and it is readable from where an attacker sits.
+  [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) takes the reading from inside the guest on the Kata lane, and its first live run, in the `v1.8.0-rc.1` window, returned `SEPARATED`: every hit at 46 ms or less and every miss at 147 ms or more, over 4 references with one cold and one warm fetch each ([release-1.8.md](archive/release-1.8.md)).
+  One window is one reading, but its arms did not touch, so a single timed fetch tells warm from cold there.
   It is an accepted risk only for an adopter who chose the shared topology knowing it, which is what [Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology) exists to make explicit; the isolated topology removes it and costs a mirror set per tenant.
 - **This is not a claim about arbitrary hostile input at scale.** The goal is that a fork pull request on an adopter's own repositories is safe to run.
   A public, unauthenticated build service is a different product with different economics.
@@ -101,12 +102,14 @@ Down to earth, current state only:
 
 > Kata micro-VM workers are validated end to end and are the default for GAG's own CI, which builds a kind cluster inside an unprivileged worker pod.
 > Their egress is now closed to match: an in-cluster registry mirror carries every image pull, the tenant carries no allow-all rule, and a run's own probes confirm that a worker reaches cluster DNS, GitHub and the mirror and nothing else.
-> What is not yet demonstrated is the cross-tenant cache boundary and the per-job egress record, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.
+> An operator can opt in to a per-job record of which host each job reached.
+> What is not yet demonstrated is the cross-tenant cache boundary, so we describe the posture and its measurements rather than declaring untrusted-PR readiness.
 
 Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
 Item 5 closed with Q986.
 Item 4 is open on [Q215](../queue/Q215.md), and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and [Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology) is what they choose on.
-The guest timing measurement the probe now takes sharpens that guidance rather than settling it: it can narrow what a shared set costs and cannot widen it past what a timing channel carries.
+The guest timing reading confirmed that guidance rather than changing it: a shared set does expose whether another tenant pulled an image, which is a timing channel and no more, so tenants who must not learn what each other build take isolation.
+The secrets and job-payload halves of item 4 have no demonstration recorded yet.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.
 
@@ -114,16 +117,19 @@ The claim is checkable and a wrong one costs more than the feature is worth.
 
 Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), TLS on the proxy hop, and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28).
 
-Open, with rows: Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes).
+Open, with rows: Q567 (per-group proxy pool), Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes), and the three decisions below.
 
-## Gaps with no row yet
+## Open decisions the map surfaced
 
-Surfaced by drawing the whole picture, and each needs a decision before it needs a row:
+Surfaced by drawing the whole picture; each is a decision before it is work:
 
-1. **Secret exposure to fork pull requests.** What GAG can and cannot influence, and what it should refuse to run.
+1. **Secret exposure to fork pull requests** ([Q1220](../queue/Q1220.md)).
+   What GAG can and cannot influence, and what it should refuse to run.
    Interacts with `pull_request_target` semantics that belong to the repository, not the platform.
-2. **Runner-token scope for an untrusted job.** The job's own credentials are a reachable asset.
+2. **Runner-token scope for an untrusted job** ([Q1221](../queue/Q1221.md)).
+   The job's own credentials are a reachable asset.
    Whether an untrusted class should receive a narrower token than a trusted one is unexamined.
-3. **What "untrusted" is, as a declared thing.** Today it is a posture an operator assembles.
+3. **What "untrusted" is, as a declared thing** ([Q1222](../queue/Q1222.md)).
+   Today it is a posture an operator assembles.
    A declared class would let the platform apply the whole set at once, but the moat review rejected building that surface while five of its dependencies are open or blocked, which is the correct order.
    The decision this document owes is what the class would mean, not yet how to express it.
