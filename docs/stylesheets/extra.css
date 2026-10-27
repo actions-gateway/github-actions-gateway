@@ -112,8 +112,99 @@ body[data-md-color-scheme="default"] {
      these are text colours, and the Material tokens they replace are tuned for
      the light palette only. See website.md § Interface rules the custom layer
      must satisfy for the per-palette APCA readings. */
-  --gag-muted: #6e6e6e;
+  --gag-muted: #646464;
   --gag-accent-ink: #2456c9;
+
+  /* Soft chrome: an off-white canvas with white cards and code on it, and a
+     light header, tab bar, footer and banner in place of Material's black
+     primary. See website.md § The light palette. */
+  --md-default-bg-color: #f6f8fa;
+  --gag-surface: #ffffff;
+  --gag-chrome-bg: #ffffff;
+  --gag-chrome-ink: #1f2328;
+  --gag-chrome-line: #d1d9e0;
+  --md-primary-fg-color: var(--gag-chrome-bg);
+  --md-primary-bg-color: var(--gag-chrome-ink);
+  --md-primary-bg-color--light: rgba(31, 35, 40, 0.7);
+  --md-footer-bg-color: #eef1f5;
+  --md-footer-bg-color--dark: #e4e8ee;
+  --md-footer-fg-color: var(--gag-chrome-ink);
+  --md-footer-fg-color--light: rgba(31, 35, 40, 0.88);
+  --md-footer-fg-color--lighter: rgba(31, 35, 40, 0.8);
+
+  /* Code: GitHub-light syntax colours on a white card, replacing Material's
+     saturated pinks and reds on grey. */
+  --md-code-bg-color: #ffffff;
+  --md-code-fg-color: #1f2328;
+  --md-code-hl-color: #326ce5;
+  --md-code-hl-color--light: rgba(50, 108, 229, 0.1);
+  --md-code-hl-number-color: #0550ae;
+  --md-code-hl-special-color: #cf222e;
+  --md-code-hl-function-color: #6639ba;
+  --md-code-hl-constant-color: #0550ae;
+  --md-code-hl-keyword-color: #cf222e;
+  --md-code-hl-string-color: #0a3069;
+  --md-code-hl-name-color: #1f2328;
+  --md-code-hl-operator-color: #59636e;
+  --md-code-hl-punctuation-color: #59636e;
+  --md-code-hl-comment-color: #59636e;
+  --md-code-hl-generic-color: #59636e;
+  --md-code-hl-variable-color: #953800;
+}
+
+/* Material's `primary: black` paints these surfaces directly rather than
+   through --md-primary-fg-color, so the token alone leaves them black. */
+body[data-md-color-scheme="default"] .md-header,
+body[data-md-color-scheme="default"] .md-tabs,
+html body[data-md-color-scheme="default"] .md-nav--primary .md-nav__title[for="__drawer"],
+body[data-md-color-scheme="default"] .md-nav__source {
+  background-color: var(--gag-chrome-bg);
+}
+
+body[data-md-color-scheme="default"] .md-tabs {
+  border-bottom: 1px solid var(--gag-chrome-line);
+}
+
+body[data-md-color-scheme="default"] .md-typeset .grid.cards > ul > li,
+body[data-md-color-scheme="default"] .md-typeset .grid > .card {
+  background-color: var(--gag-surface);
+}
+
+body[data-md-color-scheme="default"] .md-header--shadow {
+  box-shadow: 0 1px 3px rgba(31, 35, 40, 0.08);
+}
+
+body[data-md-color-scheme="default"] .md-footer {
+  border-top: 1px solid var(--gag-chrome-line);
+}
+
+@media screen and (min-width: 60em) {
+  body[data-md-color-scheme="default"] .md-search__form {
+    background-color: rgba(31, 35, 40, 0.06);
+  }
+
+  body[data-md-color-scheme="default"] .md-search__form:hover {
+    background-color: rgba(31, 35, 40, 0.1);
+  }
+}
+
+body[data-md-color-scheme="default"] .md-typeset pre > code,
+body[data-md-color-scheme="default"] .md-typeset :not(pre) > code {
+  box-shadow: inset 0 0 0 1px var(--gag-chrome-line);
+}
+
+body[data-md-color-scheme="default"] .md-banner {
+  background-color: color-mix(in srgb, var(--md-accent-fg-color) 9%, #ffffff);
+  color: var(--gag-chrome-ink);
+  border-bottom: 1px solid var(--gag-accent-line);
+}
+
+/* Version strings in the announce bar read as part of the sentence: a tint of
+   the bar's own ink rather than the page's code chip, in both palettes. */
+.md-banner code {
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  box-shadow: none;
 }
 
 body[data-md-color-scheme="slate"] {
@@ -122,6 +213,7 @@ body[data-md-color-scheme="slate"] {
   --md-typeset-a-color: #6fa0f5;
   --gag-elev-1: 0 1px 3px rgba(0, 0, 0, 0.4);
   --gag-elev-2: 0 10px 24px rgba(0, 0, 0, 0.5);
+  --gag-surface: var(--md-default-bg-color);
 
   /* Lighter inks for legible text/icons on the dark surface. Fills stay deep
      enough to carry white text (the proof-row pills, problem-card chips). */
@@ -547,7 +639,7 @@ body[data-md-color-scheme="slate"] {
   border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: 0.7rem;
   padding: 1rem;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
   box-shadow: var(--gag-elev-1);
 }
 
@@ -637,7 +729,7 @@ body[data-md-color-scheme="slate"] {
   border-radius: 0.6rem;
   padding: 1.1rem 1rem;
   text-align: center;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
   box-shadow: var(--gag-elev-1);
   transition: transform 0.2s var(--gag-ease), box-shadow 0.2s var(--gag-ease),
     border-color 0.2s var(--gag-ease);
@@ -695,7 +787,7 @@ body[data-md-color-scheme="slate"] {
   border-radius: 0.7rem;
   padding: 1.25rem;
   margin: 1.5rem 0;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
   box-shadow: var(--gag-elev-1);
 }
 
@@ -722,7 +814,7 @@ body[data-md-color-scheme="slate"] {
   padding: 0.45rem 0.55rem;
   border: 1px solid var(--md-default-fg-color--lighter);
   border-radius: 0.4rem;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
   color: var(--md-default-fg-color);
 }
 
@@ -746,7 +838,7 @@ body[data-md-color-scheme="slate"] {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--md-default-fg-color--lighter);
   border-radius: 0.45rem;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
   color: var(--md-default-fg-color);
   cursor: pointer;
   transition: border-color 0.15s var(--gag-ease), transform 0.15s var(--gag-ease);
@@ -778,7 +870,7 @@ body[data-md-color-scheme="slate"] {
   border-radius: 0.55rem;
   padding: 0.8rem 0.7rem;
   text-align: center;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
 }
 
 .gag-calc__cell--win {
@@ -857,7 +949,7 @@ body[data-md-color-scheme="slate"] {
   border-radius: 0.4rem;
   padding: 0.6rem 1rem;
   text-align: center;
-  background: var(--md-default-bg-color);
+  background: var(--gag-surface);
   min-width: 12rem;
 }
 

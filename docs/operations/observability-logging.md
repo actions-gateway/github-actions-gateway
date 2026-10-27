@@ -55,7 +55,7 @@ A proxy pool can write one structured line per **accepted** CONNECT, answering "
 It is **off by default** and opted into per pool:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: shared
@@ -120,12 +120,12 @@ Closing both takes two records, from two processes, joined on the source address
 **Turn on both halves.** Either alone records something nothing asks about:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 spec:
   auditLogging: ConnectionsWithSource   # adds sourceIP/sourcePort to the egress record
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 spec:
   auditLogging: WorkerAddresses         # says which job holds each address

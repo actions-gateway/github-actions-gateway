@@ -137,6 +137,60 @@ func TestV2_EgressProxy_Attribution_RunsUnderTheShippedRBAC(t *testing.T) {
 	}
 }
 
+// A namespace that opts in after another is already projected changes the
+// attributed set, so the pool reissues a bundle that already exists, which is a
+// patch on two owned Secrets (Q1200, Q1214).
+func TestV2_EgressProxy_Attribution_AddsASecondConsumerUnderTheShippedRBAC(t *testing.T) {
+	installGMCShippedRBAC(t)
+	const providerNS = "v2-attr-rbac-second-provider"
+	const alphaNS = "v2-attr-rbac-second-alpha"
+	const betaNS = "v2-attr-rbac-second-beta"
+	marker := map[string]string{v2alpha1.TenantNamespaceMarkerLabel: v2alpha1.TenantNamespaceMarkerValue}
+	for _, ns := range []string{providerNS, alphaNS, betaNS} {
+		createNamespaceWithLabels(t, ns, marker)
+	}
+
+	ep := &v2alpha1.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: "attr-pool", Namespace: providerNS},
+		Spec: v2alpha1.EgressProxySpec{
+			FailureAttribution: "PerConsumerPort",
+			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{alphaNS, betaNS}},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
+	optIn := func(ns string) {
+		ag := newV2GatewayWired("attr-gw", ns, "attr-creds", "")
+		ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
+		ag.Spec.ProxyFailureAttribution = "PerJob"
+		require.NoError(t, k8sClient.Create(ctx, ag))
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+	}
+	optIn(alphaNS)
+
+	startEgressProxyAsServiceAccount(t)
+	depKey := types.NamespacedName{Namespace: providerNS, Name: "attr-pool-proxy"}
+	projName := "proxy-attribution-" + providerNS + "-attr-pool"
+	projected := func(ns string) bool {
+		markPoolRolledOut(t, depKey)
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: projName}, &corev1.ConfigMap{}) == nil
+	}
+	require.Eventually(t, func() bool { return projected(alphaNS) }, 30*time.Second, 250*time.Millisecond,
+		"the first consumer never received its port")
+
+	optIn(betaNS)
+	require.Eventually(t, func() bool { return projected(betaNS) }, 30*time.Second, 250*time.Millisecond,
+		"the second consumer never received its port")
+
+	var pool v2alpha1.EgressProxy
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &pool))
+	for _, c := range pool.Status.Conditions {
+		if c.Type == "Degraded" {
+			assert.Equal(t, metav1.ConditionFalse, c.Status, "the pool must not go Degraded adding a consumer: %s", c.Message)
+		}
+	}
+}
+
 // A departing namespace with a RunnerSet is held, not withdrawn outright, under
 // the same shipped RBAC: the hold reads RunnerSets and records itself on the pool
 // Deployment, and neither may need a grant the GMC lacks (Q1208).

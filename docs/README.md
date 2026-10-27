@@ -16,7 +16,7 @@ For the project overview see the top-level [README](../README.md); for the conde
 | [design/](design/README.md) | Full system design — architecture, API/CRD contracts, security, test plan, glossary, appendices. |
 | [development/](development/README.md) | Developer workflow — building, testing, kind iteration, Go workspaces, code generation. |
 | [operations/](operations/README.md) | Operator guides — runbook, troubleshooting, observability, upgrades, tenant onboarding. |
-| [reference/](reference/README.md) | Generated API reference — every field of every `actions-gateway.com/v2beta1` kind. |
+| [reference/](reference/README.md) | Generated API reference — every field of every `actions-gateway.com/v2` kind. |
 | [plan/](plan/README.md) | Implementation plans and audits. Authoritative ordering lives in [the backlog](queue/README.md). |
 | [releases/](releases/README.md) | The curated GitHub Release body for each stable tag, verbatim. Authoring source, not a site page. |
 

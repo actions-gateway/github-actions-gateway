@@ -164,6 +164,9 @@ Emitted by an AGC whose gateway sets `proxyFailureAttribution: PerJob` (Q1184).
 Every 30 seconds it reads its namespace's failure records from each replica of the pools its RunnerSets use, and keeps a record only when one of its own worker pods held the record's source address at the time.
 An attributed denial is also reported as an `EgressDestinationDenied` Event, and no retry decision uses the records; see [tenant onboarding](tenant-onboarding.md#proxy-failure-attribution).
 
+**`outcome="denied"` needs a pool with a destination allowlist.** Only a pool that sets `destinationFQDNs` or `destinationCIDRs` refuses a CONNECT itself; one with neither forwards every request and leaves the pool's NetworkPolicy to block the destination, so the proxy records the blocked connection as `dial-failed`.
+Alert on `denied` alone and a default pool never fires it.
+
 | Metric | Type | Labels | Description |
 | --- | --- | --- | --- |
 | `actions_gateway_proxy_failure_records_total` | Counter | `namespace`, `outcome`, `result` | Records read, by `outcome` (`denied`, `dial-failed`, or `other` for any value the proxy does not write) and `result`: `attributed` to one of this gateway's worker pods, or `discarded`: the address belonged to a sibling gateway's worker, to no pod this AGC saw (one gone before it started, or past the five-minute retention), to two pods at that time, or the time was within two seconds of a pod's taking or giving up the address. |

@@ -35,7 +35,7 @@ hide:
 ```sh
 helm install gag \
   oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.9.0 \
+  --version 1.10.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -44,7 +44,7 @@ helm install gag \
 
 # v2 API (recommended): apply the signed, pre-rendered CRDs
 kubectl apply --server-side -f \
-  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.9.0/actions-gateway-crds-v2.yaml
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.10.0/actions-gateway-crds-v2.yaml
 ```
 
 </div>
@@ -300,7 +300,7 @@ The whole object set for a proxied gateway with a GPU runner set (priority tiers
 Every resource is namespaced, none is cluster-scoped, and no `ResourceQuota` field appears anywhere: the quota is platform-owned and set on the namespace, so it is a cap the tenant cannot raise.
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy               # (1)!
 metadata:
   name: team-a-egress
@@ -309,7 +309,7 @@ spec:
   minReplicas: 2
   maxReplicas: 10
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate            # (2)!
 metadata:
   name: default
@@ -320,7 +320,7 @@ spec:
       containers:
         - name: runner
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway            # (3)!
 metadata:
   name: team-a-gateway
@@ -334,7 +334,7 @@ spec:
   defaultProxyRef:
     name: team-a-egress         # every RunnerSet inherits this unless it sets proxyRef
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: gpu
@@ -349,7 +349,7 @@ spec:
     - priorityClassName: runner-standard
       threshold: 20
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: linux

@@ -5,7 +5,7 @@
 Whenever you modify CRD types (`api/` for the shared v2 kinds, `cmd/agc/api/` or `cmd/gmc/api/` for the v1 kinds), run the corresponding targets.
 Also run `make manifests` whenever you add or remove RBAC verbs/resources in a controller.
 
-A `v2beta1` change also has a second output: `make api-reference` rewrites the published field reference from the same markers.
+A `v2` change also has a second output: `make api-reference` rewrites the published field reference from the same markers.
 It is not part of `make generate` — that target is controller-gen's three modules — so a doc-comment edit that changes no schema still owes it.
 See [§ The generated API reference](#the-generated-api-reference).
 
@@ -95,10 +95,10 @@ make api-reference-check  # the drift gate, run by `make check` and CI's lint jo
 
 `crd-ref-docs` is pinned in the vendored `tools/` module like controller-gen, so `make tools` builds it into `.build/` and no host install is involved.
 
-**Scope is `api/v2beta1` only** — the served version every install authors at.
-`v1alpha1` and `v2alpha1` are removed at v2.0.0; a deprecated version documented field by field beside the current one reads as a supported choice, and `v2alpha1` is `v2beta1`'s shape anyway apart from the two RunnerSet fields the conversion webhook round-trips.
-Readers on either get `kubectl explain` and the [deprecation](../operations/v1alpha1-deprecation.md) and [migration](../operations/migration-v1-to-v2.md) pages instead — spelled out on the [reference overview](../reference/README.md).
-**Adding a version to the page is a deliberate decision, not a mechanical one**; adding a *kind* to `v2beta1` needs nothing beyond `make api-reference`, but do add it to the generator's completeness assertion (below).
+**Scope is `api/v2` only** — the General Availability (GA) version every new install authors at.
+`v1alpha1`, `v2alpha1` and `v2beta1` are removed at v2.0.0; a version on its way out documented field by field beside the current one reads as a supported choice, and `v2beta1` is `v2`'s shape anyway apart from the two deprecated `egressPolicyMode` values (`v2alpha1` adds the two RunnerSet fields the conversion webhook round-trips).
+Readers on any of them get `kubectl explain` and the [deprecation](../operations/v1alpha1-deprecation.md) and [migration](../operations/migration-v1-to-v2.md) pages instead — spelled out on the [reference overview](../reference/README.md).
+**Adding a version to the page is a deliberate decision, not a mechanical one**; adding a *kind* to `v2` needs nothing beyond `make api-reference`, but do add it to the generator's completeness assertion (below).
 
 Three inputs shape the output, all under [`api/hack/crd-ref-docs/`](../../api/hack/crd-ref-docs/):
 
@@ -110,7 +110,7 @@ Three inputs shape the output, all under [`api/hack/crd-ref-docs/`](../../api/ha
   The tool's `markdownRenderFieldDoc` turns *every* newline into `<br />`, so a description reached the table cell still wrapped at the Go source's ~80 columns and broke mid-sentence at a width the browser never chose; `field_doc` joins the soft wraps back into prose and keeps a break only for a blank line or a list item.
   **Doc comments are reflowed, so write them for godoc**: the site no longer inherits their wrap points.
   **Re-diff the fork against `tools/vendor/github.com/elastic/crd-ref-docs/templates/markdown/` when the pinned `crd-ref-docs` version moves.** A Dependabot bump that changes the rendering turns `api-reference-check` red on its own PR — `tools/**` is in the gate's CI path filter — and `make api-reference` is the remedy.
-- **the kind list in [`gen-api-reference.sh`](../../scripts/docs/gen-api-reference.sh)** — the script fails unless every `v2beta1` kind has a section in the output.
+- **the kind list in [`gen-api-reference.sh`](../../scripts/docs/gen-api-reference.sh)** — the script fails unless every `v2` kind has a section in the output.
   A tool that finds no API types exits 0 having rendered a stub, which would make `--check` pass on any tree and the writing mode quietly replace a good page.
 
 ## Sync the Helm chart CRDs (after any CRD change)
