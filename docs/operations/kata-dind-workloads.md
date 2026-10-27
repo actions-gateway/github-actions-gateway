@@ -368,20 +368,20 @@ The repeated cold pulls are the third cost and the one this project has not meas
 It takes a fronting proxy rather than a setting, because Distribution registers that route unconditionally and its one catalog knob is raised to a default whenever you set it to zero ([how, and what it was measured against](../../deploy/registry-mirror/README.md#closing-the-repository-catalog)).
 
 What a shared set still gives away is **timing**: whether a repository is already warm says that some other tenant pulled it.
-That channel is narrower, unmeasured where it matters (the next paragraph), and not something tuning closes either.
+That channel is narrower, readable from inside a guest (the next paragraph), and not something tuning closes either.
 So the judgement is unchanged in shape and cheaper in cost.
 Tenants who are teams inside one organisation, already able to read each other's repositories, lose nothing to it.
 Unrelated organisations on one cluster, or tenants held apart by contract or regulation, should still weigh it.
 Isolation also narrows the blast radius of a compromised mirror from every tenant to one, which no deny rule touches.
 [The multi-tenant goal](../plan/secure-multi-tenant-oss-ci.md#explicitly-out-of-scope-and-residual-risk-accepted) records where that leaves the residual risk, and it does not arise on the dogfood cluster, which runs one tenant.
 
-**What is still unmeasured, and why it does not hold up the choice.** Whether a cache hit is distinguishable from a miss *from inside a Kata guest*, across the bridge NAT, on this Deployment shape, is not measured.
-A laptop measurement against the pinned image put blob hits at 10 to 70 ms against two cold misses of 637 and 419 ms, and left manifest hits and misses overlapping over ten repositories, which bounds that channel rather than measuring it where an attacker sits.
-[`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) takes the reading where it counts: it runs in the job on the Kata lane, times each reference's blob once cold and once warm so the pair differs only in cache state, and reports whether the two arms **overlap** rather than how far apart their medians are.
+**What the guest reading shows.** [`mirror-timing.sh`](../../scripts/e2e/mirror-timing.sh) runs in the job on the Kata lane, times each reference's blob once cold and once warm so the pair differs only in cache state, and reports whether the two arms **overlap** rather than how far apart their medians are.
 An attacker times one fetch, so arms whose ranges touch leak nothing however wide the median gap.
 It reports and never fails the run.
+Its first live run, from inside a Kata guest on the dogfood cluster in the `v1.8.0-rc.1` window, returned `SEPARATED`: every hit at 46 ms or less and every miss at 147 ms or more, over 4 references.
+That is one window, and its arms did not touch, so one timed fetch tells a warm repository from a cold one there.
 
-With the catalog closed this timing is now the whole of what a shared set exposes rather than the smaller half of it, which raises what the reading is worth without inverting the guidance: it can narrow what a shared set costs, and it cannot widen it past what a timing channel carries.
+With the catalog closed this timing is the whole of what a shared set exposes, and it is real: a tenant can learn whether another tenant pulled a given image.
 Tenants who must not learn what each other build should take isolation without waiting for it.
 
 ### Wiring the job's image clients

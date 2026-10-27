@@ -104,7 +104,7 @@ check "the proxy's own log lines are not clients" "" \
 # The shape the pinned haproxy writes once catalog-deny.cfg captures the header,
 # measured on haproxy:3.2.23-alpine: `{<agent>}` before the request line, `{}`
 # when the header is absent. 169.254.4.6 is the address the 2026-09-14 window
-# could not resolve; that it is the kubelet is unconfirmed (Q1048).
+# could not resolve; every request it made in later windows carried `kube-probe/` (Q1048).
 UA_LOG='169.254.4.6:40112 [14/Sep/2026:07:02:22.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
 169.254.4.6:40118 [14/Sep/2026:07:02:32.008] mirror registry/local 0/0/0/2/2 200 2 - - ---- 1/1/0/0/0 0/0 {kube-probe/1.33} "GET /v2/ HTTP/1.1"
 10.36.10.5:51240 [14/Sep/2026:07:02:28.113] mirror registry/local 0/0/1/9/10 200 9226 - - ---- 1/1/0/0/0 0/0 {docker/27.3.1 go/go1.22 os/linux} "GET /v2/library/alpine/manifests/3.20 HTTP/1.1"

@@ -158,7 +158,7 @@ Every client in this repository is a container of an AGC-provisioned worker pod,
 [`e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh) reads who actually connected, from the deny proxy's log, and resolves each address to a pod or a node; an address that resolves to nothing is a refusal rather than a pass, because a worker is deleted at the end of its job.
 The one exception is an address whose every request was the registry container's probe, a `GET /v2/` carrying a `kube-probe/` User-Agent, which the proxy logs for this purpose.
 A host source matches no selector before the Q1026 narrowing or after it, so the narrowing cannot change whether it arrives.
-The dogfood cluster's unresolved `169.254.4.6` is the suspected case, unconfirmed until a window grades it.
+The dogfood cluster's `169.254.4.6`, the `CiliumInternalIP` every node carries ([measured for Q539](../../docs/plan/q539-dragonfly-mirror-backend.md#81-measured-the-worker-policy-holds-and-nothing-else-does)), is that case: in the `v1.9.0-rc.2` and `v1.10.0-rc.2` windows every request it made was a `kube-probe/` `GET /v2/`, so the census exempted it and graded.
 It grades every declared instance by name on whether its log was readable, so a window read over four of five mirrors refuses instead of passing as a whole reading.
 
 Each tenant still needs its own worker-side rule.
@@ -235,7 +235,9 @@ They are Calico-only — kindnet accepts NetworkPolicy objects and does not reli
 
 What that leaves is the client half.
 The lane grades the peer *expression* with a curl pod; it does not grade that a real worker's source address resolves to its workload-labelled pod under GKE Dataplane V2 across the Kata bridge.
-That reading is [`scripts/dogfood/e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh), which [`validate-release.sh`](../../scripts/dogfood/validate-release.sh) runs at the end of its e2e leg; it has not yet produced a graded verdict (Q1048).
+That reading is [`scripts/dogfood/e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh), which [`validate-release.sh`](../../scripts/dogfood/validate-release.sh) runs at the end of its e2e leg.
+It has graded a pass on both mirror back ends in the `v1.9.0-rc.2` and `v1.10.0-rc.2` windows: on each leg the one worker pod that connected carried the label, and the only other client was the kubelet's probe.
+That is a census of the clients one tenant's e2e matrix produces on GKE Dataplane V2, not of every client an adopter might run.
 
 The instances **serve**: 25 of 25 checks on the dogfood cluster on 2026-08-28, five per instance, by [`scripts/dogfood/e2e-mirror-validate.sh`](../../scripts/dogfood/e2e-mirror-validate.sh): Available, `/v2/`, a real upstream manifest, an upload refused with 405, and the bundled image's `:5001` debug listener unbound.
 That battery has since gained a sixth check per instance, that `/v2/_catalog` is refused, which has not run on the cluster yet; the deny's own reading is the local one [above](#closing-the-repository-catalog).
