@@ -3008,7 +3008,7 @@ These are the evidence bar, and none of them is a calendar check.</p>
 <h3 id="soak-readings">Soak readings<a class="headerlink" href="#soak-readings" title="Permanent link">&para;</a></h3>
 <p>Criteria 2 and 3 are settled by measurement, so this table holds the measurements rather than an opinion about them.
 Q1048's mirror-client census rides along in the same window because it needs the same dogfood kubectl.</p>
-<p>The dogfood gate writes one record per reading to <code>tmp/soak-readings.jsonl</code> and <code>scripts/dogfood/soak-readings.sh</code> renders them as the rows below, so nothing here is transcribed by hand.
+<p>The dogfood gate writes one record per reading to <code>tmp/soak-readings.jsonl</code> and <code>scripts/dogfood/soak-readings.sh</code> renders them as the rows below, so a reading taken on a host that keeps the stream is never transcribed by hand; the note under the table names the one exception.
 A window is billable and cannot be replayed; a reading that lives only in a terminal is a reading lost.</p>
 <p><strong>A reading that was not taken is not a pass.</strong> 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.</p>
 <p><strong>Nothing in this table gates a release.</strong> These are soak readings for the <code>v2</code> graduation, so a 🔲 is a measurement this project still wants, never a task standing between a candidate and its tag.
@@ -3027,9 +3027,16 @@ What gates 1.8 is its own <a href="../archive/release-1.8/#definition-of-done">d
 <tr>
 <td>Q1048</td>
 <td>mirror-client-census</td>
-<td>🔲 Not taken</td>
-<td>the census refused: an address resolved to no pod and no node, or nothing connected</td>
-<td><code>v1.8.0-rc.1</code> on <code>gag-dogfood</code>, 2026-09-14</td>
+<td>✅ Taken, positive</td>
+<td>every client that reached a mirror is a workload-labelled pod or the kubelet</td>
+<td><code>v1.10.0-rc.2</code> on <code>gag-dogfood</code>, 2026-10-27</td>
+</tr>
+<tr>
+<td>Q1048</td>
+<td>mirror-client-census-dragonfly</td>
+<td>✅ Taken, positive</td>
+<td>every client that reached a mirror is a workload-labelled pod or the kubelet</td>
+<td><code>v1.10.0-rc.2</code> on <code>gag-dogfood</code>, 2026-10-27</td>
 </tr>
 <tr>
 <td>Q1059</td>
@@ -3047,14 +3054,16 @@ What gates 1.8 is its own <a href="../archive/release-1.8/#definition-of-done">d
 </tr>
 </tbody>
 </table>
-<p>Those rows are <code>scripts/dogfood/soak-readings.sh</code>'s output pasted unedited, which is the point of it existing.</p>
+<p>The Q1059 and Q1060 rows are <code>scripts/dogfood/soak-readings.sh</code>'s output pasted unedited, which is the point of it existing.
+The two Q1048 rows are in its format but transcribed from the gate's job log (run 40407403332), because the CI gate does not keep the readings stream (<a href="../../queue/Q1223/">Q1223</a>).</p>
 <p><strong>What criterion 2's reading covers.</strong> The window manufactured a <code>v2beta1</code> <code>EgressProxy</code> in the standing tenant, which is the one kind <code>setup.sh</code> deliberately never creates, and it reconciled to Ready; the other four were already carrying this cluster's real CI traffic.
 So all five kinds have now reconciled on the dogfood cluster rather than only in envtest.</p>
 <p><strong>What criterion 3's reading covers, and what it does not.</strong> One real object, the standing tenant's <code>ActionsGateway</code>, read back at both served versions of the v2 CRD with identical specs, so the hop is lossless over an object that has lived on this cluster since 2026-07-25.
 It is one kind, not five, and this window did not establish whether that object predates the <code>v2beta1</code> graduation.
 The criterion's own wording asks for every served <em>version</em> rather than every kind, which this meets; whether it should also ask for every kind is a question for whoever closes Phase 1, not something the reading settles.</p>
-<p><strong>Q1048's census is not a criterion, and it did not report.</strong> It rides along because it needs the same dogfood kubectl.
-Its refusal is recorded as taken-nothing rather than as a pass, which is the distinction the whole verdict vocabulary exists for.</p>
+<p><strong>Q1048's census is not a criterion.</strong> It rides along because it needs the same dogfood kubectl.
+Through the 1.8 cycle it refused on a link-local <code>169.254.4.6</code> that resolved to no pod and no node, and that refusal was recorded as taken-nothing rather than as a pass.
+Since the proxy logs the User-Agent, that address is exempted as the kubelet's <code>kube-probe/</code> <code>GET /v2/</code>, and the census has graded a pass on both back ends in the <code>v1.9.0-rc.2</code> and <code>v1.10.0-rc.2</code> windows.</p>
 <h3 id="definition-of-done-audit-as-of-this-change">Definition of Done audit (as of this change)<a class="headerlink" href="#definition-of-done-audit-as-of-this-change" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

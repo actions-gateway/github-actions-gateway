@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1048/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1223/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing schedules the mirror client census in a dogfood window - GitHub Actions Gateway</title>
+        <title>The CI release gate never uploads its soak readings - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-schedules-the-mirror-client-census-in-a-dogfood-window" class="md-skip">
+        <a href="#the-ci-release-gate-never-uploads-its-soak-readings" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing schedules the mirror client census in a dogfood window
+              The CI release gate never uploads its soak readings
             
           </span>
         </div>
@@ -2627,53 +2627,16 @@
   
 
 
-<h1 id="nothing-schedules-the-mirror-client-census-in-a-dogfood-window">Nothing schedules the mirror client census in a dogfood window<a class="headerlink" href="#nothing-schedules-the-mirror-client-census-in-a-dogfood-window" title="Permanent link">&para;</a></h1>
-<p>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</p>
-<p><strong>Measured 2026-09-03.</strong> No workflow invokes <code>scripts/dogfood/e2e-mirror-clients.sh</code> and no runbook step asks for it.
-Outside its own unit test and the <code>mk/gate-lists.mk</code> entry that runs that test, every mention of it in the tree is prose: <code>scripts/README.md</code>, <code>deploy/registry-mirror/README.md</code>, and backlog rows.
-Its three siblings are all scheduled: <code>docs/operations/kata-dind-workloads.md</code> names <code>e2e-mirror-validate.sh</code>, <code>e2e-mirror-hits.sh</code> and <code>mirror-timing.sh</code> as window checks, and the census is the one omission.</p>
-<p><strong>What it would have said.</strong> The script resolves every address that reached a mirror to a pod or a node and reports whether each carries <code>actions-gateway/component=workload</code>, the label the shared topology's ingress peer now ANDs into its <code>from</code> element.
-That is a prediction of who the narrowing cuts off, and it is valid under the isolated topology the dogfood cluster actually runs, because it is a census of clients rather than a grading of a policy.
-It is also the reading that reaches a Kata worker's real source address on GKE Dataplane V2, which no kind lane can stand in for: <code>E2E_Mirror_SharedTenantsNP</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/mirror_np_test.go"><code>cmd/gmc/test/e2e/mirror_np_test.go</code></a>) grades the peer expression on a Calico kind cluster with a curl pod, and names this census as its residual.</p>
-<p><strong>Why it is small and not urgent.</strong> Every client in this repository is a container of an AGC-provisioned worker pod, and <code>pod.go</code> sets the label unconditionally, so the source read says the census should pass.
-That is precisely why it is worth taking rather than assuming: the script's own header says a source read has checked the clients somebody thought of.
-The cost of never taking it is borne by an adopter running the shared topology, once per adoption, against a failure that is total for the client it misses.</p>
-<p><strong>What it needs.</strong> A line in <code>kata-dind-workloads.md</code>'s window checklist beside its three siblings, and a step in the Kata leg's sequence that runs it while the workers are still up: the script exits 2 rather than passing when an address no longer resolves, so it cannot be run after <code>e2e-stop.sh</code>.
-<strong>Q1038 answered its half on 2026-09-12 and the answer is <code>e2e-reusable.yml</code>.</strong> <code>mirror-timing.sh</code> runs there as a step (<code>.github/workflows/e2e-reusable.yml:735:run: scripts/e2e/mirror-timing.sh</code>), and the <code>v1.8.0-rc.1</code> validation window gave it its first live run against a real mirror: <code>4 references through mirror-docker-io…, one cold fetch and one warm fetch each</code>, verdict <code>SEPARATED  every hit (&lt;=46ms) was faster than every miss (&gt;=147ms)</code>, without failing the e2e job.
-Q1038 is closed; this row inherits the caution it carried, that an exit 2 is a reading that was not taken and not a finding.</p>
-<p><strong>That answer does not transfer to the census, and an earlier reading of this row said it did.</strong> "The census should take the same route" was inferred from where <code>mirror-timing</code> ended up rather than checked, and the two scripts need different things.
-<code>mirror-timing.sh</code> fetches over HTTP from inside the guest, which any runner can do.
-The census reads the mirror pods' proxy logs and resolves each address against this cluster's pods and nodes (<code>kubectl logs deployment/… -n gag-registry-mirror</code>, <code>get pods --all-namespaces</code>, <code>get nodes</code>), and the e2e job runs inside a Kata worker whose kubectl addresses the kind cluster <code>make e2e</code> stands up.
-So the census can only be taken by something already holding the dogfood cluster's credentials, which the e2e job never does.</p>
-<p><strong>Wired 2026-09-12</strong> at the end of <code>validate-release.sh</code>'s e2e leg instead, before the run's exit status is acted on so a red matrix still yields the reading.
-That is the earliest point after the run at which the gate holds both the credentials and any still-live workers: the AGC reaps a worker pod on a TTL after its job, so each later minute turns a resolvable client into an exit 2.</p>
-<p><strong>The first <code>v1.8.0-rc.1</code> window predated the step and took no reading</strong>, which was this row's own point restated by events: nothing invoked the script, so the window came and went without it, and teardown scaled the mirror deployments to zero with the access logs it reads.</p>
-<p><strong>The second window ran it on 2026-09-14 and it still did not report.</strong> Two client addresses reached the mirrors.
-One graded: <code>10.36.10.5</code>, a <code>gag-dogfood-e2e</code> runner pod carrying <code>actions-gateway/component=workload</code>, which is the answer the source read predicts.
-The other, <code>169.254.4.6</code>, resolved to no pod and no node, so the script refused the whole census, exit 2.</p>
-<p><strong>The refusal's stated cause does not fit the address, and that is the new finding.</strong> The script offers "most likely a worker that has already been deleted", which is the TTL race this row and Q1038 both warn about.
-But <code>169.254.0.0/16</code> is link-local: pods on this cluster are <code>10.36.x.x</code> and nodes <code>10.142.x.x</code>, so a reaped worker's address would have been unresolvable <em>and</em> in the pod CIDR.
-A link-local source was never a pod at all, so the reaped-worker explanation cannot be the right one here.
-What it actually is has not been measured.
-<code>169.254.169.254</code> is GKE's metadata server and node-local DNS binds <code>169.254.20.10</code>, so a Dataplane V2 host-side address is the obvious family to check first, but <code>.4.6</code> matches neither and nothing here has confirmed a mechanism.</p>
-<p><strong>The class is one this repo already reasons about explicitly, and that is the useful part.</strong> <code>169.254.0.0/16</code> sits in the emitted DNS egress NetworkPolicy as an <code>ipBlock</code> for exactly this reason (Q136): on NodeLocal DNSCache clusters, pods send DNS to a per-node <code>hostNetwork</code> cache at a link-local address <strong>no pod or namespace selector can match</strong> (<a href="../../design/network-architecture/">network-architecture.md</a>, <a href="../../design/05-security/">05-security.md</a>).
-A selector cannot match such an address, and neither can this census, which resolves every client against the pod list and the node list and has nothing else to try.
-So the blind spot is not novel: the policy layer met this class, named it, and handles it with an <code>ipBlock</code> because no selector can.
-The census met the same class and reports it as a timing accident.</p>
-<p><strong>The leading candidate is the kubelet, and the census now checks for it rather than assuming it.</strong> The registry container's <code>/v2/</code> probes on 5000 traverse the deny proxy every 10 s and 20 s, <code>option httplog</code> logs them, and the window saw no node address at all, so the probe source had to be one of the two addresses; the worker pod is not a candidate.
-Outside this repo, a GKE Autopilot Dataplane V2 probe found the node's kubelet answering at <code>https://169.254.4.6:10250</code> (<a href="https://github.com/jayminwest/warren/pull/1294">jayminwest/warren#1294</a>).
-That is not a measurement on this cluster.</p>
-<p><strong>Whether the narrowing could cut such a source off does not depend on it being the kubelet.</strong> The mirror's ingress policy (<code>registry-mirror-worker-access</code>, applied by <code>e2e-start.sh</code> every window) admits 5000 only from a namespace selector for <code>gag-dogfood-e2e</code>, and <code>169.254.4.6</code> still reached the proxy's log; the live policy was not read on 2026-09-14.
-The stronger reading holds every window: <code>e2e-start.sh</code> applies that policy and then waits for the mirrors to be <code>Available</code>, which only the kubelet's probes on 5000 can satisfy, so whatever address those probes come from, a namespace selector does not govern it on this cluster.
-The narrowing ANDs a pod label into that same selector, which a host source matches neither before nor after, so its fate is unchanged: admitted where the dataplane leaves host traffic unpoliced, as here, and already dropped where it does not.
-<a href="https://github.com/cilium/cilium/issues/17839">cilium/cilium#17839</a> is that counter-case, GKE kubelet probes from a <code>169.254.x</code> address classed as world and dropped.
-<code>catalog-deny.cfg</code> now captures the User-Agent (measured on the pinned <code>haproxy:3.2.23-alpine</code>: logged as <code>{kube-probe/1.33}</code> before the request line, <code>{}</code> when absent, and <code>monitor-uri</code> requests not logged at all), and the census exempts an address that resolves to no pod or node only when every request it made was a <code>GET /v2/</code> carrying <code>kube-probe/</code>, the registry container's configured probe.
-A link-local address that did anything else still refuses, now saying it was never a pod address instead of blaming a deleted worker.</p>
-<p>So the next window answers the question either way: a graded verdict with <code>169.254.4.6</code> exempt as a probe, or a refusal that shows the address made non-probe requests, which would make it a real client no selector can match and a finding for the shared topology.
-Either closes the unknown; only the first closes this row.
-No manual step is needed for the capture to be live: <code>e2e-start.sh</code> re-applies the mirror overlay every window, and the ConfigMap hash rolls the Deployments (leaving the superseded ConfigMap behind, since <code>kubectl apply -k</code> does not prune).</p>
-<p><strong>Done when</strong> one window has produced a graded verdict from the script, pass or finding, and this row records which one.
-An exit 2 is a reading that was not taken, so it does not close this.</p>
+<h1 id="the-ci-release-gate-never-uploads-its-soak-readings">The CI release gate never uploads its soak readings<a class="headerlink" href="#the-ci-release-gate-never-uploads-its-soak-readings" title="Permanent link">&para;</a></h1>
+<p><code>validate-release.sh</code> appends one JSON record per soak reading to <code>tmp/soak-readings.jsonl</code>, and <code>scripts/dogfood/soak-readings.sh</code> renders that stream as the rows of <a href="../../plan/v2-ga/#soak-readings">v2-ga.md's readings table</a>, so that, in the script's own header, nothing there is transcribed by hand.
+Since the gate moved into <code>validate-candidate.yml</code>, that stream is written on a hosted runner and dropped with it.</p>
+<p><strong>Measured 2026-10-27.</strong> <code>.github/workflows/validate-candidate.yml:128:        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2</code> is the workflow's only upload, and its <code>path</code> is <code>${{ runner.temp }}/gate-evidence.txt</code>; nothing names the readings file or sets <code>RELEASE_READINGS_FILE</code>.
+The readings survive only as prose in the job log.
+Closing Q1048 needed the census verdicts from run 40407403332 (<code>v1.10.0-rc.2</code>), and they were read out of <code>gh run view --log</code> and typed into the table by hand, which is the transcription the renderer was written to remove.</p>
+<p><strong>What it needs.</strong> Point <code>RELEASE_READINGS_FILE</code> into <code>runner.temp</code> for the gate step and upload it beside the evidence under <code>if: always()</code>, so a red leg still keeps the readings taken before it.
+Then the table's rows can again be <code>soak-readings.sh --file &lt;downloaded artifact&gt;</code> output.</p>
+<p>Not a duplicate of Q1162 or Q1189, which <code>make queue-id</code> offered: both are about what the CI gate runs, and this is about what it keeps.</p>
+<p><strong>Done when</strong> a <code>validate-candidate.yml</code> run uploads a readings artifact that <code>soak-readings.sh --file</code> renders.</p>
 
 
 

@@ -3004,12 +3004,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>cover-check</code> prints two different tolerances for one module across runs of an unchanged tree, or reports a <code>FAIL</code> whose …</td>
 </tr>
 <tr>
-<td><a href="Q1048/">Q1048</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/e2e-mirror-clients.sh">Nothing schedules the mirror client census in a dogfood window</a></td>
+<td><a href="Q1223/">Q1223</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">The CI release gate never uploads its soak readings</a></td>
 <td><code>tests</code> <code>dogfood</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The reading Q1026 was written to take before its own narrowing has still never been taken, and no checklist asks for it.</td>
+<td><code>validate-release.sh</code> appends one JSON record per soak reading to <code>tmp/soak-readings.jsonl</code>, and <code>scripts/dogfood/soak-readings.sh</code> renders …</td>
 </tr>
 <tr>
 <td><a href="Q448/">Q448</a></td>
