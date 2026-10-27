@@ -104,7 +104,7 @@ What gates 1.8 is its own [definition of done](archive/release-1.8.md#definition
 | Q1060 | criterion-3-conversion-round-trip | ✅ Taken, positive | the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1 | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
 
 The Q1059 and Q1060 rows are `scripts/dogfood/soak-readings.sh`'s output pasted unedited, which is the point of it existing.
-The two Q1048 rows are in its format but transcribed from the gate's job log (run 40407403332), because the CI gate does not keep the readings stream ([Q1223](../queue/Q1223.md)).
+The two Q1048 rows are in its format but transcribed from the gate's job log (run 40407403332), taken before the CI gate uploaded the readings stream as an artifact ([Q1223](../queue/Q1223.md)).
 
 **What criterion 2's reading covers.** The window manufactured a `v2beta1` `EgressProxy` in the standing tenant, which is the one kind `setup.sh` deliberately never creates, and it reconciled to Ready; the other four were already carrying this cluster's real CI traffic.
 So all five kinds have now reconciled on the dogfood cluster rather than only in envtest.
