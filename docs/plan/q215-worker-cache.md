@@ -23,7 +23,8 @@ Read from [GitHub's dependency-caching reference](https://docs.github.com/en/act
 
 The attack this boundary does not stop is code execution *inside* a default-branch context: a `pull_request_target` workflow that checks out fork code can write the default-branch scope, and keys and versions are client-supplied, so a planted entry can match a future key ([Khan, 2024](https://adnanthekhan.com/2024/05/06/the-monsters-in-your-build-cache-github-actions-cache-poisoning/)).
 
-So an in-cluster cache is no weaker than GitHub's if it enforces the same ref scope **on the server**, from something the job cannot forge.
+So an in-cluster cache matches GitHub's ref boundary if it enforces the same scope **on the server**, from something the job cannot forge.
+That holds for the cache entries themselves; the transport that carries their bytes is weaker than GitHub's, as [the contract's residuals](#the-write-path-is-a-contract) say.
 
 ## The scope comes from GitHub's own token
 
@@ -60,7 +61,8 @@ The three places GAG does sit in the worker's path cannot change the URL:
 So the worker image patches the runner.
 The `cache-runner` target in the root `Dockerfile` builds on `build-runner` and renames the one UTF-16LE `ACTIONS_RESULTS_URL` literal in `Runner.Worker.dll` to `ACTIONS_RESULTS_GAG`, the patch falcondev-oss documents.
 The runner then writes the job's URL under the new name and leaves the pod's `ACTIONS_RESULTS_URL` alone.
-Measured on 2.338.1: the literal occurs exactly once in `Runner.Worker.dll` and in no other assembly, and the build fails unless that holds before and after the patch.
+Measured on 2.338.1 and 2.338.2: the literal occurs exactly once in `Runner.Worker.dll` and in no other assembly under `/home/runner/bin`.
+The build fails unless the literal is in that assembly alone, exactly once, before the patch, and nowhere after it.
 
 The image is opt-in, because a pod running it without `ACTIONS_RESULTS_URL` set loses both cache and artifacts.
 
@@ -80,13 +82,21 @@ Earlier attempts, [actions/runner#3411](https://github.com/actions/runner/pull/3
 The analogue of [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a-contract), whose read-only property this role cannot have:
 
 1. **Selectable by NetworkPolicy**, as the mirror is.
-2. **Scope from GitHub's signed token.** Every read and write is checked against the scopes and repository in a verified `ACTIONS_RUNTIME_TOKEN`; an unverifiable token gets nothing.
+2. **Scope from GitHub's signed token.** The three `CacheService` calls (reserve an entry, finalize it, look one up) are checked against the scopes and repository in a verified `ACTIONS_RUNTIME_TOKEN`; an unverifiable token gets nothing.
+   The byte transfers those calls hand out are not, as the residuals below say.
 3. **Writes land only in a scope the token grants write.** GitHub grants a fork pull request `refs/pull/<n>/merge` alone, and the default-branch scope only to its listed triggers.
 4. **Tenant-local storage.** One server holds one tenant's entries.
 
-The residual is GitHub's own: a workflow that runs fork code in a default-branch context can write that scope.
-This design reproduces the boundary and does not claim more.
-One property it does not add is job-lifetime credentials: the token stays valid until its own expiry, as it does against GitHub.
+Residuals, each read from falcondev v9.8.0 (`c866ae4`) and none measured:
+
+- **The ref boundary's own gap is GitHub's:** a workflow that runs fork code in a default-branch context can write that scope.
+  This design reproduces the boundary and does not claim more.
+- **The blob transport takes no token.** `PUT /upload/<id>` and `PUT /devstoreaccount1/upload/<id>` read no `Authorization` header, so while an upload is open its ID is the only credential: 10 decimal digits from `customAlphabet` in `lib/helpers.ts`, about 33 bits.
+  An unknown ID gets `201` with nothing written, so a guess learns nothing from the reply.
+  `GET /download/<id>` is tokenless too, keyed by a random UUID.
+  GitHub hands out signed SAS URLs for the same step, so whether a job can plant parts into another job's open upload has to be measured or closed before [Q215](../queue/Q215.md) ships `deploy/gha-cache/`.
+- **The server holds every job's runtime token in flight.** It forwards each non-cache results call to GitHub with the caller's bearer token (`routes/[...path].ts`), so compromising the server exposes those tokens until they expire.
+- **No job-lifetime credentials.** A token stays valid until its own expiry, as it does against GitHub.
 
 ## The spike (2026-10-27)
 
