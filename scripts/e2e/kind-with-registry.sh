@@ -137,7 +137,7 @@ install_calico() {
     [[ -z "${img}" ]] && continue
     if docker image inspect "${img}" >/dev/null 2>&1; then
       echo "==> preloading ${img} onto kind nodes"
-      kind load docker-image --name "${KIND_CLUSTER}" "${img}"
+      "$(dirname "$0")/kind-load-image.sh" "${KIND_CLUSTER}" "${img}"
     fi
   done < <(awk '$1 == "image:" { gsub(/"/, "", $2); print $2 }' "${manifest}" | sort -u)
 

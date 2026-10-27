@@ -654,7 +654,7 @@ jobs:
           while read -r img; do
             [[ -z "$img" ]] && continue
             echo "==> preloading $img onto kind nodes"
-            kind load docker-image --name actions-gateway-e2e "$img"
+            scripts/e2e/kind-load-image.sh actions-gateway-e2e "$img"
           done < /tmp/cert-manager-images/images.txt
           # Apply the manifest the pre-pull step already fetched. Applying from
           # the URL instead is a second fetch of the same bytes, unretried, and
@@ -689,7 +689,7 @@ jobs:
           while read -r img; do
             [[ -z "$img" ]] && continue
             echo "==> preloading $img onto kind nodes"
-            kind load docker-image --name actions-gateway-e2e "$img"
+            scripts/e2e/kind-load-image.sh actions-gateway-e2e "$img"
           done < /tmp/metrics-server-images/images.txt
 
       - name: Run e2e tests
