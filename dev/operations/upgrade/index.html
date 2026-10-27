@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -4587,7 +4587,7 @@ An <code>EgressProxy</code> that still names <code>CiliumFQDN</code> or <code>Ca
 Every write passes through the GMC's validating webhooks, so run it with the GMC up.
 If the apiserver refuses an object, for example because a validating webhook rejects it, the sweep finishes the other objects, names each refused one, leaves that object's CRD listing the old version, and exits non-zero.
 Fix the named objects and run it again.</p>
-<p><strong>Rolling back</strong> to <code>v1.9.0</code> is safe, because <code>v1.9.0</code> serves <code>v2</code> and so reads what this release stored.
+<p><strong>Rolling back</strong> to the 1.9 release is safe, because 1.9 serves <code>v2</code> and so reads what this release stored.
 Rolling back further is not: a release that does not serve <code>v2</code> cannot read an object stored at it.</p>
 <h3 id="action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: <code>deploy/templates/</code> is written at <code>v2</code><a class="headerlink" href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> operators who apply a <a href="../runner-template-library/">runner template library</a> entry through their own kustomize overlay with a JSON 6902 patch.</p>
@@ -5587,12 +5587,12 @@ Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, 
 The chart is the <strong>sole</strong> install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of the local chart with floating image tags.</p>
 <blockquote>
-<p><strong>Current release — <code>v1.9.0</code></strong> (chart version = release tag without the leading <code>v</code>).
-Pin <code>--version 1.9.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
+<p><strong>Current release — <code>v1.10.0</code></strong> (chart version = release tag without the leading <code>v</code>).
+Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
 <a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.9.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
