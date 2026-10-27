@@ -11,6 +11,10 @@
 # Env:
 #   COSIGN  Path to the cosign binary (default .build/cosign at the repo root —
 #           download the pinned version with `make cosign`).
+#   COSIGN_TIMEOUT  Seconds one signature check may take (default 180). cosign's
+#           own --timeout does not bound the registry credential lookup: a hung
+#           Docker credential helper stalled v2.5.2 for over 10 minutes with no
+#           output (2026-10-26), past its 3m default.
 set -euo pipefail
 shopt -s inherit_errexit
 
@@ -38,12 +42,28 @@ repo="ghcr.io/actions-gateway"
 id_re="$(release_identity_regexp)"
 issuer='https://token.actions.githubusercontent.com'
 chart_ver="${VERSION#v}"
+COSIGN_TIMEOUT="${COSIGN_TIMEOUT:-180}"
+timed_out=0
 
-# verify REF — print OK/FAIL for one signed artifact; returns cosign's status.
+# verify REF — print OK/FAIL/TIMEOUT for one signed artifact; returns non-zero
+# unless cosign verified it within COSIGN_TIMEOUT seconds.
 verify() {
-	local ref="$1"
-	if "$COSIGN" verify --certificate-identity-regexp "$id_re" \
-		--certificate-oidc-issuer "$issuer" "$ref" >/dev/null 2>&1; then
+	local ref="$1" pid waited=0
+	"$COSIGN" verify --certificate-identity-regexp "$id_re" \
+		--certificate-oidc-issuer "$issuer" "$ref" >/dev/null 2>&1 &
+	pid=$!
+	while kill -0 "$pid" 2>/dev/null; do
+		if ((waited >= COSIGN_TIMEOUT)); then
+			kill "$pid" 2>/dev/null || true
+			wait "$pid" 2>/dev/null || true
+			echo TIMEOUT
+			timed_out=1
+			return 1
+		fi
+		sleep 1
+		waited=$((waited + 1))
+	done
+	if wait "$pid"; then
 		echo OK
 	else
 		echo FAIL
@@ -62,6 +82,9 @@ printf '==> %-12s %s ... ' "crds-v2" "$chart_ver"
 verify "$repo/charts/actions-gateway-crds-v2:$chart_ver" || rc=1
 
 if [[ "$rc" -ne 0 ]]; then
+	if ((timed_out)); then
+		echo "a signature check exceeded ${COSIGN_TIMEOUT}s; a hung Docker credential helper does this, so retry with DOCKER_CONFIG=\$(mktemp -d)" >&2
+	fi
 	echo "signature verification FAILED (if local docker creds are misconfigured, retry with DOCKER_CONFIG=\$(mktemp -d))" >&2
 	exit 1
 fi

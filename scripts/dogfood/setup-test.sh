@@ -597,7 +597,7 @@ check_not_contains "stays image-less on a first run" \
 reset_stubs
 run_main
 manifests="$(cat "${MANIFESTS}")"
-# v2beta1 is ScaleSet-only and has no acquisitionProtocol field at all, so the
+# v2 is ScaleSet-only and has no acquisitionProtocol field at all, so the
 # protocol this tenant runs is now the API's by construction rather than a line
 # in the manifest. Asserting the absence, because the field's presence is what
 # broke the 2026-09-13 window: #1919 moved these CRs to v2beta1 and left the
@@ -643,38 +643,41 @@ run_main
 check_contains "renders the persistent Athens overlay on request" \
 	"deploy/athens/overlays/persistent" "$(call_line 'apply -k')"
 
-# --- the tenant is authored at v2beta1, and the webhook is probed -------------
+# --- the tenant is authored at v2, and the webhook is probed ------------------
 #
 # The three tenant CRs used to be authored at v2alpha1, which reached the
 # conversion webhook on every apply and so proved the caBundle by accident.
-# Q452 removes that version at v2.0.0, so the CRs moved to v2beta1 and the proof
-# became verify_conversion. Both halves are asserted: nothing applies at a
-# deprecated version, and the probe still names one.
+# Q452 removes that version at v2.0.0, so the CRs moved to v2beta1, then to v2
+# once 1.10 made it storage (Q1212), and the proof became verify_conversion.
+# Both halves are asserted: nothing applies at a deprecated version, and the
+# probe still names one.
 
 reset_stubs
 run_main
-check_contains "authors the tenant CRs at v2beta1" \
-	"apiVersion: actions-gateway.com/v2beta1" "$(cat "${MANIFESTS}")"
+check_contains "authors the tenant CRs at v2" \
+	"apiVersion: actions-gateway.com/v2"$'\n' "$(cat "${MANIFESTS}")"$'\n'
 check_not_contains "applies nothing at the doomed v2alpha1" \
 	"actions-gateway.com/v2alpha1" "$(cat "${MANIFESTS}")"
+check_not_contains "applies nothing at the deprecated v2beta1" \
+	"actions-gateway.com/v2beta1" "$(cat "${MANIFESTS}")"
 for kind in actionsgateways runnertemplates runnersets; do
 	check_contains "probes conversion for ${kind}" \
 		"${kind}.v2alpha1.actions-gateway.com" "$(cat "${CALL_LOG}")"
 done
 
-# Every spec field these CRs author must exist on the v2beta1 Go type.
+# Every spec field these CRs author must exist on the v2 Go type.
 #
-# The two assertions above are each true and together prove nothing: one says
-# the CRs are v2beta1, the other says nothing is authored at v2alpha1, and both
-# passed for the whole life of the defect that took the 2026-09-13 window down.
-# A v2alpha1-only field sitting in a v2beta1 spec is invisible to both, because
-# neither reads the schema -- and the apiserver's strict decoding does, an hour
-# in, with billable nodes already up. So this reconciles the rendered manifests
+# The assertions above are each true and together prove nothing: one says the
+# CRs are v2, the others say nothing is authored at an older version, and the
+# same pair (then at v2beta1) passed for the whole life of the defect that
+# took the 2026-09-13 window down. A v2alpha1-only field sitting in a v2 spec
+# is invisible to them, because none reads the schema -- and the apiserver's
+# strict decoding does, an hour in, with billable nodes already up. So this reconciles the rendered manifests
 # against the committed types instead of against a remembered field list.
 #
 # The field set is grepped from the kind's own types file, which is a superset:
 # it holds the status struct's tags too. That is deliberate. The check this
-# needs to survive is "does v2beta1 have this name anywhere", which is what
+# needs to survive is "does v2 have this name anywhere", which is what
 # separates a field belonging to another version from one merely misplaced, and
 # a superset cannot produce a false failure. It will not catch a real field at
 # the wrong nesting level; the apiserver is still the authority on that.
@@ -688,7 +691,7 @@ spec_keys() {
 }
 
 for kind in ActionsGateway RunnerTemplate RunnerSet; do
-	types_file="${API_ROOT}/api/v2beta1/$(echo "${kind}" | tr '[:upper:]' '[:lower:]')_types.go"
+	types_file="${API_ROOT}/api/v2/$(echo "${kind}" | tr '[:upper:]' '[:lower:]')_types.go"
 	tags="$(grep -o 'json:"[a-zA-Z][a-zA-Z0-9]*' "${types_file}" | cut -d'"' -f2 | sort -u)"
 	keys="$(spec_keys "${kind}")"
 	# An empty key list would pass every membership test below, so the render is
@@ -700,7 +703,7 @@ for kind in ActionsGateway RunnerTemplate RunnerSet; do
 		[[ -n "${key}" ]] || continue
 		grep -qx "${key}" <<<"${tags}" || unknown="${unknown} ${key}"
 	done <<<"${keys}"
-	check "${kind}: every authored spec field exists on the v2beta1 type" "" "${unknown}"
+	check "${kind}: every authored spec field exists on the v2 type" "" "${unknown}"
 done
 check_contains "probes the tenant namespace" \
 	"--namespace gag-dogfood" "$(call_line 'conversion-probe')"
