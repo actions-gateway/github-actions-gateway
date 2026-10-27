@@ -2383,7 +2383,7 @@ main() {
 	if [[ -n "${RELEASE_READINGS_FILE}" && -s "${RELEASE_READINGS_FILE}" ]]; then
 		echo "Soak readings recorded to ${RELEASE_READINGS_FILE}."
 		echo "  Render them as plan table rows with:"
-		echo "    ${SCRIPT_DIR}/soak-readings.sh"
+		echo "    ${SCRIPT_DIR}/soak-readings.sh --file ${RELEASE_READINGS_FILE}"
 	fi
 
 	# The verdict a stable tag needs is CI's: validate-candidate.yml uploads
