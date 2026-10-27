@@ -796,7 +796,7 @@ The subcommand lists every object of each kind at `v2` and writes it back unchan
 Once every object of a kind is rewritten it sets that CRD's `status.storedVersions` to `["v2"]`, which `v2.0.0` needs before its CRDs can stop serving the older versions.
 It is a read-write sweep rather than Kubernetes' `StorageVersionMigration` API, which is beta from 1.35 and so reaches only the newest clusters this release supports.
 It refuses to start while any `EgressProxy` names a `CiliumFQDN`/`CalicoFQDN` alias, because `v2` stores one only as `FQDN` plus a conversion annotation no served version reads once `v2.0.0` removes `v2beta1`.
-An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good ([release-1.10.md](../plan/release-1.10.md#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version)).
+An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good ([release-1.10.md](../plan/archive/release-1.10.md#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version)).
 
 ## H.12. Folding in the grandfathered label-value alignment (Q147)
 
