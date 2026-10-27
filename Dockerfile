@@ -358,7 +358,7 @@ COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 ## runner writes the job's URL to ACTIONS_RESULTS_GAG and leaves the inherited
 ## ACTIONS_RESULTS_URL alone. It is the patch falcondev-oss documents for its
 ## cache server; upstream is asked for a real override in
-## https://github.com/orgs/community/discussions/211429.
+## https://github.com/orgs/community/discussions/211436.
 ##
 ## The RUN fails the build unless the literal occurs exactly once before and
 ## zero times after, so a runner bump that moves or duplicates it cannot ship a

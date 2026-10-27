@@ -64,7 +64,7 @@ Measured on 2.338.1: the literal occurs exactly once in `Runner.Worker.dll` and 
 
 The image is opt-in, because a pod running it without `ACTIONS_RESULTS_URL` set loses both cache and artifacts.
 
-**Upstream** is asked for a real override in [community discussion #211429](https://github.com/orgs/community/discussions/211429).
+**Upstream** is asked for a real override in [community discussion #211436](https://github.com/orgs/community/discussions/211436).
 Earlier attempts, [actions/runner#3411](https://github.com/actions/runner/pull/3411) and [#3906](https://github.com/actions/runner/pull/3906), were closed without a maintainer reply.
 
 ## Design
