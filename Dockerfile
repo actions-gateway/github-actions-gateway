@@ -343,6 +343,48 @@ COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/lib/doc
 ## from vendor/ and covers only the Go modules linked into our own binaries.
 COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 
+########################  cache-runner  #######################################
+## `build-runner` with Runner.Worker patched so actions take ACTIONS_RESULTS_URL
+## from the pod environment instead of from the job message (Q215). That URL is
+## where `actions/cache` v2, `@actions/artifact` and BuildKit's `type=gha` cache
+## send their calls, so pointing it at an in-cluster cache server is how a job
+## reaches one. Opt-in only: a pod running this image MUST set
+## ACTIONS_RESULTS_URL, or every action loses both cache and artifacts.
+##
+## The runner offers no override: both action handlers assign the variable from
+## the job message after the action's environment is built
+## (NodeScriptActionHandler.cs, ContainerActionHandler.cs). The patch renames the
+## one UTF-16LE literal they share to a 19-character name of our own, so the
+## runner writes the job's URL to ACTIONS_RESULTS_GAG and leaves the inherited
+## ACTIONS_RESULTS_URL alone. It is the patch falcondev-oss documents for its
+## cache server; upstream is asked for a real override in
+## https://github.com/orgs/community/discussions/211429.
+##
+## The RUN fails the build unless the literal occurs exactly once before and
+## zero times after, so a runner bump that moves or duplicates it cannot ship a
+## silently unpatched image.
+FROM build-runner AS cache-runner
+ARG REVISION="unknown"
+ARG VERSION="dev"
+LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.title="cache-runner" \
+      org.opencontainers.image.description="build-runner with ACTIONS_RESULTS_URL taken from the pod, for an in-cluster cache" \
+      org.opencontainers.image.licenses="Apache-2.0"
+RUN perl -e ' \
+  my ($f) = @ARGV; \
+  open my $h, "<:raw", $f or die "$f: $!\n"; local $/; my $b = <$h>; close $h; \
+  my ($from, $to) = map { join("\0", split //) . "\0" } "ACTIONS_RESULTS_URL", "ACTIONS_RESULTS_GAG"; \
+  my $n = () = $b =~ /\Q$from\E/g; \
+  $n == 1 or die "expected 1 UTF-16LE ACTIONS_RESULTS_URL in $f, found $n\n"; \
+  $b =~ s/\Q$from\E/$to/; \
+  my $left = () = $b =~ /\Q$from\E/g; \
+  $left == 0 or die "$left ACTIONS_RESULTS_URL left in $f after patching\n"; \
+  open $h, ">:raw", $f or die "$f: $!\n"; print $h $b; close $h or die "$f: $!\n"; \
+  print "patched $f\n"; \
+  ' /home/runner/bin/Runner.Worker.dll
+
 ########################  fakegithub  #########################################
 # TEST-ONLY image: a fake GitHub API server used by the e2e suite, never
 # published. It intentionally omits the OCI provenance labels and /licenses
