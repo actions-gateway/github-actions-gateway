@@ -1,6 +1,8 @@
 # Release 1.10 Milestone Definition
 
-> **Status: scoped 2026-10-09, no candidate cut.** The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
+> **Status: `v1.10.0-rc.2` validated in CI on 2026-10-27 ([gate run 40407403332](https://github.com/actions-gateway/github-actions-gateway/actions/runs/40407403332)), at `5a69a95f0`; the stable tag waits on the promote decision.** `rc.1` failed only its storage leg, on a gate defect fixed in #2148, and was superseded by the chart text fix (#2149) and the GMC Secret fix (#2151).
+> Scoped 2026-10-09.
+> The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
 > Ten rows gate the tag and four ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211 and Q1212 joined it on 2026-10-26.
 > Q1214's fix gated `v1.10.0-rc.2`; its flake-watch soak rides, since it counts green runs on `main` after the fix.
 > Nothing here is a commitment to a date.
@@ -42,7 +44,7 @@ Six gating rows and the candidate validation, then the three items that ride.
 | Q1211 | Onboarding pages and shipped runner templates tell a new tenant to write `actions-gateway.com/v2`, not `v2beta1`, which `v2.0.0` removes | `1.10-gate` | ✅ landed: every new-tenant page, the README, the three `deploy/templates/` entries and the generated API reference name `v2`; the dogfood e2e overlays' template patch targets moved with them. Not on the released surface by `check-artifact-unchanged.sh`, but the template library ships outside it |
 | Q1212 | Dogfood tenant objects are written at `actions-gateway.com/v2`, so the project runs what onboarding now recommends | `1.10-gate` | ✅ landed: `setup.sh`'s tenant and the e2e tenant's base and overlays author `v2`, and `setup.sh` defaults to `v1.10.0-rc.1` so a defaults run serves it. Kustomize renders and unit tests only; reaches the cluster at the next `setup.sh` |
 | [Q1214](../queue/Q1214.md) | An attribution pool that gains a consumer namespace reissues its certificates, so `E2E_V2_ProxyAttribution` stops flaking | rides | ✅ fixed: the GMC writes its owned Secrets by fetch-then-update, under the role it already holds, closing Q1200; envtest as the GMC ServiceAccount fails on the patch path. In flake watch. Found diagnosing the flake 2026-10-26 |
-| — | RC validated on dogfood | gates | 🔲 no candidate cut |
+| — | RC validated on dogfood | gates | `rc.1` ❌ storage leg, a gate defect (#2148), superseded; `rc.2` ✅ in CI, gate run 40407403332 |
 | Q1070 | Security-dashboard panel keyed on Q1069's per-set gauge | rides | ✅ landed: a fourth series in the security dashboard's egress-posture timeline, filtered to tenants that turned on at least one half of the pair |
 | [Q1066](../queue/Q1066.md) | Registry read presents the worker ServiceAccount's pull secrets, then node-identity credentials for Artifact Registry and ECR | rides | Stage one ✅ landed: the worker ServiceAccount's `imagePullSecrets` stand in when the template names none, under a `get` on `serviceaccounts`. Stage two 🔲 ready |
 | Q540 | Validate Kata with Dragonfly at the node: the P2P mesh stays unreachable from worker pods | rides | ✅ landed: the node client ships as `deploy/dragonfly-node/`, validated on dogfood 2026-10-19 with a Kata worker's reachable set unchanged ([plan §6](q540-node-layer-p2p.md#6-dogfood-validation)), and this release's Dragonfly leg is its first full e2e run |
@@ -70,6 +72,10 @@ The dogfood gate validates every candidate; this one also has to show the storag
 Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports `storedVersions: ["v2"]` after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as `v2beta1` today.
 The gate's `storage` leg runs the sweep and takes that reading (Q1171, landed), so the candidate's evidence carries it.
 Only the first candidate's run rewrites anything: it leaves dogfood at `["v2"]`, so every later candidate's sweep takes the no-op path, and a sweep fix shipped in a later candidate is never exercised on a real cluster.
+
+**The rewrite was read on `rc.2`, in a local gate run rather than the CI one.** A local run on 2026-10-26 rewrote 9 objects across five of the six kinds (no `EgressProxy` was stored) and left every CRD at `storedVersions: ["v2"]`.
+The CI run that validated `rc.2` then found all six already at `[v2]` and did nothing, so its evidence records the storage leg as passed without showing a migration; the rewrite's only record is that local run's log.
+Both runs were the same candidate, so the reading stands; the local run spent it because the release-candidate skill still described a local launch, fixed in #2154.
 
 ## A release-notes edit owed at the candidate
 
