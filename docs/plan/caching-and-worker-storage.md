@@ -4,7 +4,8 @@
 > The storage half is the one that closed (Q719, item 5): see [worker-shared-storage.md](../operations/worker-shared-storage.md).
 > Every cache half is still unbuilt.
 > The image-pull half already has a design in [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
-> The job-cache and storage halves have no design yet, and the first thing this document does is establish that they are three different problems.
+> The job-cache and build-layer halves have one too, spiked 2026-10-27: [q215-worker-cache.md](q215-worker-cache.md).
+> The first thing this document does is establish that they are three different problems.
 
 ## Why this is a goal
 
@@ -70,7 +71,8 @@ A job cache is read-write by definition.
 So the artifact cache **cannot simply reuse the mirror role**, however well the same software serves both.
 It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.
 
-That is the sharpest version of the review [Q215](../queue/Q215.md) is blocked on, and it is a contract question rather than a storage question.
+That is the sharpest version of the review [Q215](../queue/Q215.md) was blocked on, and it is a contract question rather than a storage question.
+[q215-worker-cache.md](q215-worker-cache.md) answers it with a second role whose contract takes each job's scope from GitHub's own signed token.
 
 ### The accurate gap
 
@@ -91,7 +93,7 @@ The consequences run one way:
 1. For a **trusted** tenant, `actions/cache` works and a local cache is an optimisation.
 2. For an **untrusted-PR** tenant under the Q408 posture, `actions/cache` is gone, and an in-cluster cache is the only cache there can be.
    Q215 stops being an optimisation and becomes the thing that makes the security posture usable.
-3. That in-cluster cache is then reachable by hostile job code by construction, which is exactly the review Q215 is blocked on.
+3. That in-cluster cache is then reachable by hostile job code by construction, which is exactly the review Q215 was blocked on.
    A cache shared across tenants is an exfiltration path; a cache shared across *jobs of one tenant* is the useful thing and a narrower risk.
 4. And it must be **writable** by that job, which is the property the mirror role deliberately refuses.
    The two roles cannot be the same endpoint even when they are the same software.
@@ -141,7 +143,7 @@ Do not repeat that `actions/cache` has no home.
 
 Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).
 
-Open, with rows: [Q215](../queue/Q215.md) (job and build-layer cache, blocked on the isolation review this document reframes as the design), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q215](../queue/Q215.md) (job and build-layer cache, designed and spiked in [q215-worker-cache.md](q215-worker-cache.md), with publishing and the reference architecture left), [Q1224](../queue/Q1224.md) (retiring the runner patch that design rests on), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.
