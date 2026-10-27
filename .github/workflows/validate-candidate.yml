@@ -118,6 +118,7 @@ jobs:
         timeout-minutes: 210
         env:
           GATE_EVIDENCE_FILE: ${{ runner.temp }}/gate-evidence.txt
+          RELEASE_READINGS_FILE: ${{ runner.temp }}/soak-readings.jsonl
         run: scripts/dogfood/validate-release.sh --legs "${LEGS}" "${TAG}"
 
       # The verdict publish.yml reads (Q880): the candidate's commit and every leg
@@ -129,6 +130,18 @@ jobs:
         with:
           name: gate-evidence-${{ github.run_attempt }}
           path: ${{ runner.temp }}/gate-evidence.txt
+          if-no-files-found: ignore
+          retention-days: 90
+
+      # The soak readings soak-readings.sh renders into the v2 GA plan's table.
+      # Its own artifact, so publish.yml's gate-evidence prefix never matches it;
+      # uploaded on failure too, for the readings taken before a red leg.
+      - name: Upload the soak readings
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: soak-readings-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/soak-readings.jsonl
           if-no-files-found: ignore
           retention-days: 90
 
