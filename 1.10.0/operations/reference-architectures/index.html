@@ -2939,7 +2939,7 @@ Setup and the reasoning are in <a href="../kata-dind-workloads/#untrusted-pull-r
 Nodes need nested virtualization.</p>
 <h3 id="untrusted-pull-requests-at-scale">Untrusted pull requests at scale<a class="headerlink" href="#untrusted-pull-requests-at-scale" title="Permanent link">&para;</a></h3>
 <p>The same posture with Dragonfly, a P2P image distribution system, in two places: the registry mirrors fetch layer blobs through a Dragonfly seed peer, and a Dragonfly client on each node serves the kubelet's pulls of the worker image.
-The mirror half is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/registry-mirror/README.md#dragonfly-back-end"><code>deploy/registry-mirror/</code> § Dragonfly back end</a>; the node half is <a href="../p2p-image-distribution/#gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe</a>.</p>
+The mirror half is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#dragonfly-back-end"><code>deploy/registry-mirror/</code> § Dragonfly back end</a>; the node half is <a href="../p2p-image-distribution/#gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe</a>.</p>
 <p>The node client joined the leg on 2026-10-23, after the last release candidate, so no candidate has run it yet: <code>v1.9.0</code>'s gate ran the Dragonfly back end without it.
 The next candidate's gate is the first to run the profile as the table shows it.</p>
 <p>A green matrix proves little here, because the mirrors serve whether or not Dragonfly does.
@@ -2993,12 +2993,12 @@ It ran once, in <a href="https://github.com/actions-gateway/github-actions-gatew
 Each line says how far the evidence goes, read from the scripts and manifests on 2026-10-23.</p>
 <ul>
 <li><strong>A persistent mirror cache</strong>, under either topology.
-  <code>overlays/persistent</code> and <code>overlays/shared-tenants-persistent</code> are render-checked on every change to the mirror tree and have not run on the dogfood cluster (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/registry-mirror/README.md#what-is-proven-and-what-is-not">what is proven</a>).</li>
+  <code>overlays/persistent</code> and <code>overlays/shared-tenants-persistent</code> are render-checked on every change to the mirror tree and have not run on the dogfood cluster (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#what-is-proven-and-what-is-not">what is proven</a>).</li>
 <li><strong>One mirror set shared by every tenant.</strong> Its NetworkPolicy peer is driven on every merge that touches the mirror tree, by the Calico e2e lane on a kind cluster.
-  Whether real workers on GKE carry the label that peer admits has not yet produced a graded reading (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1048.md">Q1048</a>).
+  Whether real workers on GKE carry the label that peer admits has not yet produced a graded reading (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/Q1048.md">Q1048</a>).
   The dogfood cluster runs one tenant, so the gated profiles use one set per tenant.</li>
 <li><strong>The Dragonfly back end with a persistent cache, or with a shared set.</strong> No overlay renders either, and <code>scripts/dogfood/e2e-start.sh</code> refuses <code>E2E_MIRROR_BACKEND=dragonfly</code> together with <code>REGISTRY_MIRROR_PERSISTENT=1</code>.</li>
-<li><strong>Spegel as the node layer.</strong> Graded on kind against Dragonfly, and not yet a supported recipe (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1192.md">Q1192</a>).</li>
+<li><strong>Spegel as the node layer.</strong> Graded on kind against Dragonfly, and not yet a supported recipe (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/Q1192.md">Q1192</a>).</li>
 <li><strong>A CNI other than GKE Dataplane V2.</strong> The kindnet and Calico e2e lanes run the controller suite on merges whose diff touches the paths each lane covers.
   They run on GitHub-hosted runners, so they test the controllers rather than any profile's worker or mirror wiring.</li>
 </ul>

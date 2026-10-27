@@ -2814,7 +2814,7 @@
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Four reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+<p><strong>Import as code.</strong> Four reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
 The layouts below document what each contains.</p>
 </blockquote>
 <table>
@@ -2827,22 +2827,22 @@ The layouts below document what each contains.</p>
 </thead>
 <tbody>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
 <td>Platform engineer running the GMC / the fleet</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
 <td>a tenant's AGC (per-tenant mTLS)</td>
 <td>Budget owner paying for the fleet</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-security.json"><code>grafana-dashboard-security.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/grafana-dashboard-security.json"><code>grafana-dashboard-security.json</code></a></td>
 <td>the per-tenant proxy and AGC scrapes, the GMC scrape, and the apiserver scrape</td>
 <td>Security / compliance reviewer asking for evidence</td>
 </tr>
@@ -2853,7 +2853,7 @@ The layouts below document what each contains.</p>
 A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.</p>
 <p>The <strong>security</strong> dashboard splits the same way and reads all three scrapes, because the evidence a reviewer asks for is spread across them: egress is on the proxy scrape, the condition gauges and webhook counters on the GMC's, and the admission-policy verdicts on the apiserver's.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
@@ -3540,7 +3540,7 @@ The legend leaves the reason out: a label that long clips in the state timeline'
 A tenant that never opted in has no row rather than a permanently red one, which would otherwise light most of a fleet and teach the eye to discount the three neighbours where a <code>1</code> is a fault.
 How many tenants have opted in is not on this dashboard.
 A green row says the pair is configured, not that a pipeline runs the join, and a set whose references have not resolved has no row at all.
-It can also outlive its pool: a set whose <code>EgressProxy</code> is deleted keeps its last reading rather than turning red (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1079.md">Q1079</a>).</p>
+It can also outlive its pool: a set whose <code>EgressProxy</code> is deleted keeps its last reading rather than turning red (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/Q1079.md">Q1079</a>).</p>
 <p><strong>Row 2: Admission Decisions</strong></p>
 <table>
 <thead>
