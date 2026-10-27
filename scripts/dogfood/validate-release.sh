@@ -2086,6 +2086,25 @@ reclaim_orphaned_gate() {
 	echo "  Reclaim complete — the orphaned run's cluster is back at rest."
 }
 
+# local_run_notice — before a local run spends, say that it records nothing
+# publish reads, and name the tag's CI gate run when one is waiting for its
+# approval. Saying it only at the end left two 1.10 candidates validated locally
+# while rc.1's CI run waited eight hours (2026-10-26).
+local_run_notice() {
+	[[ -z "${GATE_EVIDENCE_FILE:-}" ]] || return 0
+	echo "This is a local run, and it records nothing publish reads: a stable tag needs"
+	echo "  the legs passed by validate-candidate.yml in CI. Run locally to diagnose."
+	local waiting
+	waiting="$(gh run list --repo "${REPO}" --workflow validate-candidate.yml \
+		--status waiting --limit 20 --json databaseId,displayTitle \
+		--jq "[.[] | select(.displayTitle | endswith(\" ${GAG_IMAGE_TAG}\")) | .databaseId] | first // empty" \
+		2>/dev/null)" || waiting=""
+	if [[ -n "${waiting}" ]]; then
+		echo "  The CI gate run for ${GAG_IMAGE_TAG} is waiting for approval in dogfood-validation:"
+		echo "  https://github.com/${REPO}/actions/runs/${waiting}"
+	fi
+}
+
 # confirm_target — show the resolved target and require one confirmation before
 # any billable/cluster write. Honors ASSUME_YES for the operator (set BEFORE the
 # child ASSUME_YES=1 export, so the human still gates the wrapper itself).
@@ -2239,6 +2258,7 @@ main() {
 	# evidence publish cannot use.
 	evidence_start || exit 1
 
+	local_run_notice
 	confirm_target
 
 	# Before preflight, not after it: until the stream is emptied, every reader
