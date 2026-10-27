@@ -27,7 +27,7 @@
 #     cannot self-elevate; see docs/operations/runner-template-library.md.
 #   - PSA `privileged` makes the AGC's applySecurityDefaults a no-op by design,
 #     so this template carries the entire security posture of its workers.
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ClusterRunnerTemplate
 metadata:
   name: privileged-dind

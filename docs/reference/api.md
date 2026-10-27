@@ -8,40 +8,29 @@ together, start at the [reference overview](README.md); for the deprecated
 removal](../operations/v1alpha1-deprecation.md).
 
 ## Packages
-- [actions-gateway.com/v2beta1](#actions-gatewaycomv2beta1)
+- [actions-gateway.com/v2](#actions-gatewaycomv2)
 
 
-## actions-gateway.com/v2beta1
+## actions-gateway.com/v2
 
-Package v2beta1 contains the API Schema definitions for the
-actions-gateway.com v2beta1 API group: all five v2 kinds — the GMC-reconciled
-ActionsGateway (control) and EgressProxy (data) kinds, and the AGC-reconciled
-RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data) kinds —
-plus their shared types.
+Package v2 contains the API Schema definitions for the actions-gateway.com v2
+API group, the General Availability (GA) version: the five converted v2 kinds —
+the GMC-reconciled ActionsGateway (control) and EgressProxy (data) kinds, and the
+AGC-reconciled RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate
+(data) kinds — plus the platform-owned PriorityClassAllowlist and their shared
+types.
 
-v2beta1 is the graduation of the v2alpha1 API (Q74). It is the conversion **hub**:
-the five kinds implement conversion.Hub here, while v2alpha1 and the GA v2
-implement conversion.Convertible (ConvertTo/ConvertFrom) as the spokes. It was the
-storage version until 1.10, when v2 took it over (Q1086); v2.0.0 removes it.
-v2beta1 is served beside v2alpha1 during the coexistence window so a tenant can
-roll forward at its own pace (and the gag-migrate Classic on-ramp keeps landing on
-v2alpha1); the two versions round-trip losslessly through the conversion webhook.
+v2 is the storage version from 1.10 (Q1086). It was served beside v2beta1 a release
+earlier, in 1.9, because Kubernetes' deprecation policy (rule #4b) will not let the
+storage version advance in the release that introduces its successor (Q413).
 
-The shape is identical to v2alpha1 with one deliberate exception: v2beta1 is
-ScaleSet-only, so RunnerSet drops the transitional acquisitionProtocol selector
-and the classic-only maxListeners knob (Q264 §5a-U7/U8). Those two v2alpha1-only
-fields survive a v2alpha1→v2beta1→v2alpha1 round-trip via an annotation carried on
-the v2beta1 object (see api/v2alpha1/conversion.go), so a coexistence-era Classic
-or ScaleSet set is never silently re-protocol'd.
-
-These kinds live in a single neutral module
-(github.com/actions-gateway/github-actions-gateway/api) that both the GMC and
-AGC controller modules import. The AGC's RunnerSet reconciler must read the
-GMC-group ActionsGateway (gatewayRef) and EgressProxy (proxyRef), but the GMC
-module already imports the AGC module to build RunnerSet CRs; co-locating the v2
-kinds here breaks that would-be module dependency cycle without either
-controller module importing the other's API package (the neutral api/ module
-resolves the GMC↔AGC cycle; see docs/development/go-workspaces.md).
+v2 is a conversion **spoke** of the v2beta1 hub (see conversion.go), like
+v2alpha1. The shape is identical to v2beta1 with one exception: EgressProxy's
+egressPolicyMode enum is CIDR;FQDN, without the deprecated CiliumFQDN/CalicoFQDN
+aliases (Q452); a stored alias reads at v2 as FQDN with the alias carried in a
+conversion annotation (see conversion.go).
+PriorityClassAllowlist has no conversion webhook: its schema is identical at
+every version, so the apiserver converts it by rewriting apiVersion alone.
 
 
 ### Resource Types
@@ -120,7 +109,7 @@ namespace (multi-gateway support lands in M3b).
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `actions-gateway.com/v2beta1` | | |
+| `apiVersion` _string_ | `actions-gateway.com/v2` | | |
 | `kind` _string_ | `ActionsGateway` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[ActionsGatewaySpec](#actionsgatewayspec)_ |  |  |  |
@@ -259,7 +248,7 @@ ClusterRunnerTemplate (§H.4). Pure data: nothing owns it and it owns nothing.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `actions-gateway.com/v2beta1` | | |
+| `apiVersion` _string_ | `actions-gateway.com/v2` | | |
 | `kind` _string_ | `ClusterRunnerTemplate` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[RunnerTemplateSpec](#runnertemplatespec)_ |  |  |  |
@@ -366,28 +355,21 @@ FQDN mechanisms proliferate (Q245).
     operator's --fqdn-policy-backend. FQDN intent is REJECTED at admission when the
     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
     closed and loud, never a silent runtime Degraded.
-  - CiliumFQDN / CalicoFQDN are DEPRECATED aliases, and admission no longer accepts
-    a NEW one: a create naming either, or an update that switches onto one, is
-    REJECTED. An EgressProxy that already stores one is admitted unchanged, with a
-    warning, so an existing pool keeps working until it is migrated. Each alias pins
-    its namesake mechanism (a CiliumNetworkPolicy with toFQDNs, or a Calico
-    NetworkPolicy with destination domains) regardless of the operator backend. The
-    FQDN intent plus --fqdn-policy-backend enforces the same policy. They are
-    REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition: enum
-    members of v2alpha1 and v2beta1, both of which v2.0.0 removes, and the GA v2
-    version does not define them. Migrate before upgrading: v2 cannot represent an
-    object naming an alias, and one such object fails the conversion for every
-    object batched into the same request. See
-    docs/operations/v1alpha1-deprecation.md.
 
-All FQDN-family modes are fail-closed: the standard NetworkPolicy still
+v2 does not define the deprecated CiliumFQDN / CalicoFQDN aliases that v2alpha1 and
+v2beta1 still carry (Q452). An EgressProxy stored with one cannot be read at v2:
+its conversion fails, and so does every other object batched into the same
+request. Migrate it to FQDN plus --fqdn-policy-backend first. See
+docs/operations/v1alpha1-deprecation.md.
+
+FQDN mode is fail-closed: the standard NetworkPolicy still
 default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
 allow), so if the CNI cannot enforce the native policy — or the additive-allow GKE
 FQDNNetworkPolicy is absent — GitHub egress stays denied rather than opening wide.
-Selecting an FQDN mode therefore never silently weakens the default.
+Selecting FQDN therefore never silently weakens the default.
 
 _Validation:_
-- Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]
+- Enum: [CIDR FQDN]
 
 _Appears in:_
 - [EgressProxySpec](#egressproxyspec)
@@ -396,8 +378,6 @@ _Appears in:_
 | --- | --- |
 | `CIDR` | EgressPolicyModeCIDR is the default: a standard NetworkPolicy with the GitHub IP-range allowlist, refreshed every 24h. Works on every CNI. |
 | `FQDN` | EgressPolicyModeFQDN expresses the GitHub egress allowlist by hostname. The concrete CNI-native policy kind is chosen by the operator's --fqdn-policy-backend (cilium/calico/gke); FQDN intent with no backend is rejected at admission. |
-| `CiliumFQDN` | EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=cilium. Removed at v2.0.0; see the EgressPolicyMode doc comment. |
-| `CalicoFQDN` | EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=calico. Removed at v2.0.0; see the EgressPolicyMode doc comment. |
 
 
 #### EgressProxy
@@ -414,7 +394,7 @@ proxy pool. It is referenced by RunnerSets (proxyRef) and ActionsGateways
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `actions-gateway.com/v2beta1` | | |
+| `apiVersion` _string_ | `actions-gateway.com/v2` | | |
 | `kind` _string_ | `EgressProxy` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[EgressProxySpec](#egressproxyspec)_ |  |  |  |
@@ -447,8 +427,8 @@ _Appears in:_
 | `failureAttribution` _string_ | FailureAttribution selects whether this pool keeps the CONNECT failures of the namespaces that consume it, for each namespace's AGC to read and attribute to the job that hit them. Disabled (the default) keeps none.<br />PerConsumerPort gives each consuming namespace its own CONNECT port on the pool's Service, and the proxy records which namespace a failure came from by the port it arrived on, never from anything in the request. A namespace gets a port only once one of its own ActionsGateways sets proxyFailureAttribution: PerJob; every other namespace, this pool's own included, stays on the shared port, where nothing is recorded. The pool's ingress NetworkPolicy admits each namespace on its own port only.<br />Only failures are kept: a policy denial or an upstream dial failure, with the client address, the time, the capped destination host and port, and for a dial failure its class rather than the error text. They are held in memory for minutes, partitioned per namespace and capped per source address, and are lost when a replica restarts; nothing is written to disk or to the log. Each AGC reads only its own namespace's records, over a dedicated mutual-TLS listener with its own certificate authority.<br />While it is PerConsumerPort, sharing.allowedNamespaces is capped at 32, which bounds the ports and the buffer. Granting or revoking a namespace's port is a rolling restart of the pool, as is the certificate authority's renewal; a namespace's workers move onto its port at their next job once every replica has rolled. Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184).<br />A consuming AGC reads and attributes the records, and records an Event for each attributed policy denial (ActionsGateway.spec.proxyFailureAttribution). No retry decision uses them, so enabling this moves workers onto their ports, counts their failures, and reports their denials. | Disabled | Enum: [Disabled PerConsumerPort]<br />Optional: \{\} |
 | `noProxyCIDRs` _string array_ | NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY domain suffixes for internal destinations. Never list GitHub here — an entry that routes GitHub traffic around the proxy defeats per-tenant egress-IP attribution and is rejected by the GMC admission path. The admission check covers the public GitHub hosts plus the gitHubURL host — a GitHub Enterprise Server host included — of every ActionsGateway or RunnerSet that references this proxy, on both the proxy write and the referrer write.<br />The cluster-internal destinations are appended automatically and need not be listed: svc.cluster.local, localhost and 127.0.0.1 for both the AGC and its workers, plus kubernetes.default.svc and this cluster's API server ClusterIP (read from KUBERNETES_SERVICE_HOST) for the AGC, which dials the API server by IP. Every entry added here bypasses the proxy and so escapes the per-tenant egress-IP attribution: exempt specific internal destinations, never a broad range. |  | Optional: \{\} |
 | `managedNetworkPolicy` _boolean_ | ManagedNetworkPolicy controls whether the GMC manages this proxy's egress NetworkPolicy. Defaults to true (secure default). | true | Optional: \{\} |
-| `egressPolicyMode` _[EgressPolicyMode](#egresspolicymode)_ | EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at v2.0.0; admission rejects a new write naming one, and admits an object that already stores one unchanged. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee. | CIDR | Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]<br />Optional: \{\} |
-| `destinationFQDNs` _string array_ | DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always allowed and need not be listed; empty (the default) means GitHub-only. Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs rules. Opening egress beyond GitHub is an admin decision: the GMC rejects any entry not on its --allowed-egress-fqdns platform allowlist (empty allowlist denies all). G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist). |  | MaxItems: 64<br />Optional: \{\} |
+| `egressPolicyMode` _[EgressPolicyMode](#egresspolicymode)_ | EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee. | CIDR | Enum: [CIDR FQDN]<br />Optional: \{\} |
+| `destinationFQDNs` _string array_ | DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always allowed and need not be listed; empty (the default) means GitHub-only. Host-suffix entries REQUIRE egressPolicyMode FQDN, since the pod-egress layer expresses them as toFQDNs rules. Opening egress beyond GitHub is an admin decision: the GMC rejects any entry not on its --allowed-egress-fqdns platform allowlist (empty allowlist denies all). G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist). |  | MaxItems: 64<br />Optional: \{\} |
 | `destinationCIDRs` _string array_ | DestinationCIDRs lists EXTRA, non-GitHub IP ranges the proxy may forward to (e.g. an internal 10.x subnet with no DNS, or a cloud private-API range). CIDR entries work in ANY egressPolicyMode — they become ipBlock egress peers (CIDR mode) or toCIDR peers (FQDN mode). The GMC rejects any entry not contained in its --allowed-egress-cidrs platform allowlist (empty denies all). |  | MaxItems: 64<br />Optional: \{\} |
 | `sharing` _[ProxySharing](#proxysharing)_ | Sharing controls cross-namespace reference to this proxy. nil means same-namespace only (the default, secure). Consent lives on the provider (proxy owner) side: a consumer-side name alone never authorizes the reference (§H.9). v2 ships the inline allowlist only. |  | Optional: \{\} |
 | `scheduling` _[PodScheduling](#podscheduling)_ | Scheduling pins this proxy pool's pods to specific nodes — the mechanism that binds a tenant to a per-tenant egress IP (Q243/Q282), since the pod's node determines which cloud NAT / egress path its traffic leaves by. A podAntiAffinity set here replaces the built-in required cross-node spread; see PodScheduling for the full precedence rules and the tenant-settable-by-design rationale. |  | Optional: \{\} |
@@ -726,7 +706,7 @@ cluster-scoped, and writable only by a platform admin.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `actions-gateway.com/v2beta1` | | |
+| `apiVersion` _string_ | `actions-gateway.com/v2` | | |
 | `kind` _string_ | `PriorityClassAllowlist` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[PriorityClassAllowlistSpec](#priorityclassallowlistspec)_ |  |  |  |
@@ -840,7 +820,7 @@ so the two are never declared simultaneously. See Q74.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `actions-gateway.com/v2beta1` | | |
+| `apiVersion` _string_ | `actions-gateway.com/v2` | | |
 | `kind` _string_ | `RunnerSet` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[RunnerSetSpec](#runnersetspec)_ |  |  |  |
@@ -929,7 +909,7 @@ RunnerSets via templateRef. Pure data: nothing owns it and it owns nothing (§H.
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `apiVersion` _string_ | `actions-gateway.com/v2beta1` | | |
+| `apiVersion` _string_ | `actions-gateway.com/v2` | | |
 | `kind` _string_ | `RunnerTemplate` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[RunnerTemplateSpec](#runnertemplatespec)_ |  |  |  |

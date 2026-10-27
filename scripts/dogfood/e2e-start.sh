@@ -305,7 +305,7 @@ main() {
 	# NetworkPolicy). The GitHub App Secret is created out-of-band by
 	# e2e-setup.sh and is NOT re-applied here. Applying the ActionsGateway is
 	# what brings the per-tenant AGC pod up.
-	echo "Spinning up the on-demand e2e tenant (v2beta1 ${E2E_VARIANT} overlay)..."
+	echo "Spinning up the on-demand e2e tenant (v2 ${E2E_VARIANT} overlay)..."
 	kubectl apply -k "${REPO_ROOT}/deploy/dogfood-e2e/overlays/${E2E_VARIANT}"
 
 	enforce_kata_egress
@@ -322,7 +322,7 @@ main() {
 		apply_dragonfly_nodes
 	fi
 
-	# ScaleSet routing (Q231): the v2beta1 RunnerSet declares exactly one
+	# ScaleSet routing (Q231): the v2 RunnerSet declares exactly one
 	# runnerLabel (gag-ci-e2e), which is both the runs-on target and the
 	# scale-set name registered at GitHub. Both routing paths resolve it through
 	# fromJSON — the reusable workflow's `runner` input for a single dispatched

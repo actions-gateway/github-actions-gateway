@@ -134,41 +134,63 @@ The URI must end `publish.yml@refs/tags/<this tag>` and the digest must equal th
 Optional and worth it: `cosign verify-blob` on the CRD manifest, and an SBOM attestation against a **per-arch** digest (SBOMs bind per-arch, provenance binds to the index, and swapping them looks like a missing attestation).
 Re-run each against a deliberately wrong identity and require failure; a check that cannot fail proves nothing.
 
-## 5. Validate on dogfood
+## 5. Validate on dogfood, in CI
 
-Confirm the cluster is at rest before spending, which also proves the target you resolved:
+**Pushing the tag already started the gate, and only that run counts.** `validate-candidate.yml` dispatches the gate on `main` for the tag, and `publish.yml` refuses a stable tag unless CI runs of it have passed every leg for one candidate commit (Q880).
+A local gate run records nothing a stable tag can use.
+`v1.10.0-rc.1` and `rc.2` were each run locally from this step's old text, about 80 minutes of dogfood apiece, while rc.1's CI run waited eight hours for an approval nobody had been asked for.
+
+Find the dispatched run, and confirm the cluster is at rest before anyone approves it:
 
 ```bash
+gh run list --workflow validate-candidate.yml --limit 4 \
+  --json databaseId,status,displayTitle --jq '.[]|"\(.databaseId) \(.status) \(.displayTitle)"'
 PROJECT=… CLUSTER=… ZONE=… scripts/dogfood/ops.sh at-rest
 ```
 
-Then the gate, backgrounded, with a 60-minute Bash timeout:
+**The four values are in [gke-dogfood.md § Variables](../../../docs/plan/gke-dogfood.md#variables)** — `actions-gateway-dogfood`, `gag-dogfood`, `us-east1-b`, `actions-gateway/github-actions-gateway`.
+They are not secrets.
+
+**A superseded candidate's run blocks the next one.** The runs share the `dogfood-release-gate` concurrency group without cancelling, so a newer candidate's run sits `pending` behind an older one `waiting` for approval.
+Cancel the superseded run (`gh run cancel <id>`); its candidate is not going to ship.
+
+**The approval is the user's, so ask for it and then check it arrived.** The run waits in the `dogfood-validation` environment: open the run, choose **Review deployments**, tick the environment, then **Approve and deploy**.
+Never approve it yourself: `gh` here acts as the maintainer's account, so an agent's approval cannot be told apart from theirs and empties the gate.
+Confirm the approval registered before reporting the run as started, since a first attempt on 2026-10-26 recorded nothing:
+
+```bash
+gh api repos/<owner>/<repo>/actions/runs/<id>/approvals --jq '.[]|"\(.state) \(.user.login)"'
+```
+
+Watch the run to a terminal state with Monitor, never a Bash poll.
+Then read the verdict from its evidence artifact, not from the run's colour:
+
+```bash
+gh run download <id> --pattern 'gate-evidence-*' --dir tmp/evidence
+```
+
+It names the tag, the commit and one `leg <name>` line per leg that passed; a failed run still uploads the legs that passed before it failed.
+Want the commit to equal the tag target and every leg in `scripts/dogfood/lib/gate-legs.sh` present.
+`scripts/release/check-validated-candidate.sh vX.Y.Z` answers the same question across runs, but only once the stable tag exists.
+
+### Locally, for diagnosis only
+
+Run the gate locally to iterate on the gate itself or to diagnose a failed CI leg, never as the candidate's validation:
 
 ```bash
 ASSUME_YES=1 PROJECT=… CLUSTER=… ZONE=… REPO=… \
-  scripts/agent/record-launch.sh scripts/dogfood/validate-release.sh vX.Y.Z-rc.N > tmp/validate.log 2>&1
+  scripts/agent/record-launch.sh scripts/dogfood/validate-release.sh [--legs <leg>] vX.Y.Z-rc.N > tmp/validate.log 2>&1
 ```
 
-`ASSUME_YES=1` is required when detaching and it **skips the gate's own target confirmation**, so verify the target yourself first, as above, and say you did.
+Background it with a 60-minute Bash timeout.
+`ASSUME_YES=1` **skips the gate's own target confirmation**, so run `ops.sh at-rest` first and say you did.
+A local run and a CI one read the same lease, so whichever starts second refuses.
+**A local run spends one-way legs:** a storage sweep rewrites the cluster's objects once, so a CI run after it takes the no-op path and its evidence no longer shows a migration.
 
-**The four values are in [gke-dogfood.md § Variables](../../../docs/plan/gke-dogfood.md#variables)** — `actions-gateway-dogfood`, `gag-dogfood`, `us-east1-b`, `actions-gateway/github-actions-gateway`.
-They are not secrets.
-Substitute them rather than asking for them.
+If an auto-mode refusal stops the launch, retry the plain form once; the classifier reads the transcript, so the same command can pass in one session and fail in the next.
+The teardown trap misses `kill -9` and a killed parent, which leave billable nodes up; reclaim with `validate-release.sh --reclaim` under the same four variables.
 
-**A harness refusal on this launch is not a decision the user has to make, and relaying it as one is the defect.** The identical command was permitted for one candidate and refused for the next a few hours later on 2026-08-29.
-Auto mode classifies with the session transcript as part of its input, so the verdict tracks the conversation rather than the command, and a session that has accumulated refusals and workaround talk draws more of them: 0 refusals in that session's first 77 tool calls, 6 in the 12 that followed the first one.
-Retry the plain form once.
-If it is refused again, check the transcripts under `~/.claude/projects/` (read-exempt) for a session that already ran it, which separates *was refused* from *was never tried* — a `tool_use` whose `input.command` names the script, and the `tool_result` after it.
-Hand back only after that, and say which of the two you established.
-
-The teardown trap covers normal exits and SIGTERM but not `kill -9` or a killed parent, which leave billable nodes up.
-If the run dies hard, tell the user the reclaim command:
-
-```bash
-PROJECT=… CLUSTER=… ZONE=… REPO=… scripts/dogfood/validate-release.sh --reclaim
-```
-
-Confirm the cluster returned to 0 nodes by **asking the cluster** (`ops.sh at-rest`), not by reading the gate's own teardown line.
+**Either way, confirm the cluster returned to 0 nodes by asking the cluster** (`ops.sh at-rest`), not by reading the gate's own teardown line.
 
 ## 6. Stop and hand back the decision
 
@@ -203,7 +225,7 @@ If the answer is yes, the [`release`](../release/SKILL.md) skill carries those o
   Then the candidate may still be sound.
   Two of the three failures in the 1.5 cycle were the release tooling itself, not the product.
 
-Either way, once the cause is fixed, re-run only the leg that failed (`--legs <leg>`, or the workflow's `legs` input): the legs before it are already recorded.
+Either way, once the cause is fixed, re-run only the leg that failed in CI (`gh workflow run validate-candidate.yml --ref main -f tag=vX.Y.Z-rc.N -f legs=<leg>`): the legs before it are already recorded.
 
 Propose action items in that split, with the mitigative fix and the preventative one named separately, and let the user choose.
 A failed candidate is also a retro trigger.

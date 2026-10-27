@@ -474,6 +474,20 @@ t.map(x => [x.querySelector('.gag-stat__num').innerText,
 **Two pages must not carry near-identical bands.** `index.md` and `why-gag.md` both used one, and two of the four tiles matched verbatim, number and lead text alike, so the comparison page read as a repeat of the landing page.
 The band was removed from `why-gag.md` rather than reworded: the outcome flow diagram above it and the capability table below it already carried the same argument twice.
 
+### The light palette
+
+Light mode does not use Material's `primary: black` chrome.
+A black header, tab bar and footer around a pure-white page put the two highest-contrast edges on the screen at its frame, so the page read as harsher than dark mode.
+The light block in `extra.css` instead sets an off-white canvas (`#f6f8fa`), white cards and code blocks on it (`--gag-surface`), a white header and tab bar with a hairline rule, a pale footer, and an accent-tinted announce bar whose `<code>` version strings take a tint of the bar's own ink.
+Code uses GitHub-light syntax colours in place of Material's saturated defaults.
+
+`primary: black` paints the header, tab bar, drawer title and mobile repo link with direct `background-color` rules, not only through `--md-primary-fg-color`, so each one is overridden by name.
+The search field's tint lives on `.md-search__form`, not the input.
+
+Moving the canvas off white cost contrast, so the inks were re-measured on it (2026-10-26): `--gag-muted` darkened from `#6e6e6e` to `#646464` to stay at Lc 75, and the footer's secondary inks rose to 0.88 and 0.8 alpha to clear 75 on the footer strip.
+The badges dropped to Lc 64.9–67.2, still inside the spot-text band below.
+Slate is untouched apart from the announce-bar chips.
+
 ### Interface rules the custom layer must satisfy
 
 Material owns the page chrome and handles its own controls.
@@ -496,8 +510,8 @@ That is why secondary text and accent labels take `--gag-muted` and `--gag-accen
 
 | | Light | Dark |
 | --- | --- | --- |
-| `--gag-muted` | `#6e6e6e`, Lc 75.2 | `hsl(225 15% 70%)`, Lc 55.6 |
-| `--gag-accent-ink` | `#2456c9`, Lc 81.4 | `hsl(220 82% 78%)`, Lc 61.5 |
+| `--gag-muted` | `#646464`, Lc 75.3 on the canvas, 79.6 on a card | `hsl(225 15% 70%)`, Lc 55.6 |
+| `--gag-accent-ink` | `#2456c9`, Lc 77.1 on the canvas | `hsl(220 82% 78%)`, Lc 61.5 |
 
 **The dark values are capped, not chosen.** Slate's own body text is only `Lc 66.9`, so muted prose that reached 75 would out-contrast the body copy it is meant to sit beneath.
 55.6 and 61.5 are the most those tokens can carry while the hierarchy holds; raising the ceiling means raising Material's palette, which is Q734.
@@ -516,7 +530,7 @@ What that leaves, measured on `/why-gag/`:
 
 | Palette | Below the strict floor | Bounded by |
 | --- | --- | --- |
-| Light | `.gag-flow__sub`, `.gag-flow__arrow` (Lc 75.2 against 90), `.gag-vs-row__text` (85.6 against 90) | the size of the type, not the token: at 15.6px regular nothing short of near-body ink clears 90 |
+| Light | `.gag-flow__sub` (Lc 79.6 against 90), `.gag-flow__arrow` (75.3), `.gag-vs-row__text` (85.6 against 90) | the size of the type, not the token: at 15.6px regular nothing short of near-body ink clears 90 |
 | Dark | ten selectors, Lc 55.6 to 69.3 | Q734: slate's body copy is itself Lc 66.9, so `.gag-flow__title` and `.gag-vs-row__text` sit at the palette ceiling rather than at a token we chose |
 
 Treat the sweep as a **comparison against these numbers**, not as a list that must be empty.
