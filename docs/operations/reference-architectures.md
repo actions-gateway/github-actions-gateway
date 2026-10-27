@@ -84,7 +84,7 @@ Each line says how far the evidence goes, read from the scripts and manifests on
 - **A persistent mirror cache**, under either topology.
   `overlays/persistent` and `overlays/shared-tenants-persistent` are render-checked on every change to the mirror tree and have not run on the dogfood cluster ([what is proven](../../deploy/registry-mirror/README.md#what-is-proven-and-what-is-not)).
 - **One mirror set shared by every tenant.** Its NetworkPolicy peer is driven on every merge that touches the mirror tree, by the Calico e2e lane on a kind cluster.
-  Whether real workers on GKE carry the label that peer admits has not yet produced a graded reading ([Q1048](../queue/Q1048.md)).
+  Real Kata workers on GKE carry the label that peer admits: the release gate's client census graded a pass in the `v1.9.0-rc.2` and `v1.10.0-rc.2` windows ([what that covers](../../deploy/registry-mirror/README.md#what-is-proven-and-what-is-not)).
   The dogfood cluster runs one tenant, so the gated profiles use one set per tenant.
 - **The Dragonfly back end with a persistent cache, or with a shared set.** No overlay renders either, and `scripts/dogfood/e2e-start.sh` refuses `E2E_MIRROR_BACKEND=dragonfly` together with `REGISTRY_MIRROR_PERSISTENT=1`.
 - **Spegel as the node layer.** Graded on kind against Dragonfly, and not yet a supported recipe ([Q1192](../queue/Q1192.md)).
