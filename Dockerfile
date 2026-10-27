@@ -360,9 +360,10 @@ COPY THIRD-PARTY-NOTICES-DOCKER /licenses/
 ## cache server; upstream is asked for a real override in
 ## https://github.com/orgs/community/discussions/211436.
 ##
-## The RUN fails the build unless the literal occurs exactly once before and
-## zero times after, so a runner bump that moves or duplicates it cannot ship a
-## silently unpatched image.
+## The RUN fails the build unless the literal occurs in no assembly under
+## /home/runner/bin but Runner.Worker.dll, exactly once there before the patch
+## and zero times after, so a runner bump that moves or duplicates it cannot
+## ship a silently unpatched image.
 FROM build-runner AS cache-runner
 ARG REVISION="unknown"
 ARG VERSION="dev"
@@ -373,17 +374,20 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.description="build-runner with ACTIONS_RESULTS_URL taken from the pod, for an in-cluster cache" \
       org.opencontainers.image.licenses="Apache-2.0"
 RUN perl -e ' \
-  my ($f) = @ARGV; \
-  open my $h, "<:raw", $f or die "$f: $!\n"; local $/; my $b = <$h>; close $h; \
   my ($from, $to) = map { join("\0", split //) . "\0" } "ACTIONS_RESULTS_URL", "ACTIONS_RESULTS_GAG"; \
+  sub slurp { open my $h, "<:raw", $_[0] or die "$_[0]: $!\n"; local $/; my $b = <$h>; close $h; $b } \
+  my $f = "/home/runner/bin/Runner.Worker.dll"; \
+  my @hits = grep { my $b = slurp($_); () = $b =~ /\Q$from\E/g } glob "/home/runner/bin/*.dll"; \
+  "@hits" eq $f or die "expected UTF-16LE ACTIONS_RESULTS_URL in $f alone, found it in: @hits\n"; \
+  my $b = slurp($f); \
   my $n = () = $b =~ /\Q$from\E/g; \
   $n == 1 or die "expected 1 UTF-16LE ACTIONS_RESULTS_URL in $f, found $n\n"; \
   $b =~ s/\Q$from\E/$to/; \
   my $left = () = $b =~ /\Q$from\E/g; \
   $left == 0 or die "$left ACTIONS_RESULTS_URL left in $f after patching\n"; \
-  open $h, ">:raw", $f or die "$f: $!\n"; print $h $b; close $h or die "$f: $!\n"; \
+  open my $h, ">:raw", $f or die "$f: $!\n"; print $h $b; close $h or die "$f: $!\n"; \
   print "patched $f\n"; \
-  ' /home/runner/bin/Runner.Worker.dll
+  '
 
 ########################  fakegithub  #########################################
 # TEST-ONLY image: a fake GitHub API server used by the e2e suite, never
