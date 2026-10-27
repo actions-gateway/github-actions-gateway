@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">Read the release notes.</a>
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -2753,14 +2753,9 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Shipped as <code>v1.7.0</code> on 2026-08-30, validated on <code>rc.3</code>. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Of 1.6's three hand-offs, <a href="../queue/Q215/">Q215</a>'s trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), Q986 has landed, so Definition of Done #5 is claimed rather than narrowed, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in. Three candidates: <code>rc.1</code> failed the admission ladder's quota rung on a real product defect (Q1035, the advertisement recomputed every long-poll but published only by a reconcile an idle set never triggered), <code>rc.2</code> passed with the fix, and <code>rc.3</code> was cut because Q1026 narrowed the shared mirror set's ingress peer afterwards, a manifest that ships in no image and no chart and so is invisible to <code>check-artifact-unchanged.sh</code></td>
 </tr>
 <tr>
-<td><a href="release-1.10/">release-1.10.md</a></td>
-<td>The 1.10 release gate: the storage advance to <code>v2</code> (Q1086), which cannot share an apply with the <code>v2.0.0</code> removals, plus three scale-set correctness fixes and the per-set egress-audit flag; three more items ride</td>
-<td>❌ Scoped 2026-10-09, no candidate cut: Q1086, Q1069, Q1152, Q1153, Q1154, Q1070 and Q1171 landed; Q540 landed too; <a href="../queue/Q1066/">Q1066</a> rides</td>
-</tr>
-<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="release-1.10/">release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: <a href="../queue/Q1167/">Q1167</a>, <a href="../queue/Q273/">Q273</a> and <a href="../queue/Q264/">Q264</a>, blocked behind it; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, blocked on all four</td>
+<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: <a href="../queue/Q1167/">Q1167</a>, <a href="../queue/Q273/">Q273</a> and <a href="../queue/Q264/">Q264</a>, blocked behind it; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, blocked on all four</td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
@@ -2822,7 +2817,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="release-ladder/">release-ladder.md</a></td>
 <td>The map between the individual release plans: how many releases stand between here and <code>v2.0.0</code>, what each carries, why 1.6 exists rather than folding into 1.5, and what is deliberately punted past 2.0 with the signal each waits on</td>
-<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="archive/release-1.6/">release-1.6.md</a>), then extended 2026-09-07 to 1.7 → 1.8 → 2.0 because the GA soak had no evidence to gate on (<a href="archive/release-1.8/">release-1.8.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired. Extended 2026-10-09 to 1.9 → 1.10 → 2.0, because the storage advance cannot share an apply with the removals (<a href="release-1.10/">release-1.10.md</a>)</td>
+<td>ⓘ Ongoing goal doc. Shape decided 2026-08-09 as 1.5 → 1.6 → 2.0, and re-themed 2026-08-25 to 1.5 → 1.6 → 1.7 → 2.0 when untrusted-PR CI moved off the 1.6 rung (<a href="archive/release-1.6/">release-1.6.md</a>), then extended 2026-09-07 to 1.7 → 1.8 → 2.0 because the GA soak had no evidence to gate on (<a href="archive/release-1.8/">release-1.8.md</a>). Establishes what the roadmap's near-term section means, applied 2026-08-09 (seven items parked to Deferred, Q719 and Q727 gated to 1.6; Q719 closed 2026-08-24) and narrowed 2026-08-18 to "not waiting on an outside signal" once two revive triggers fired. Extended 2026-10-09 to 1.9 → 1.10 → 2.0, because the storage advance cannot share an apply with the removals (<a href="archive/release-1.10/">archive/release-1.10.md</a>)</td>
 </tr>
 <tr>
 <td><a href="arc-parity/">arc-parity.md</a></td>
@@ -3041,6 +3036,11 @@ The doc remains available — the rationale is often more valuable than the diff
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="archive/release-1.10/">archive/release-1.10.md</a></td>
+<td>The storage advance: <code>v2</code> becomes the storage version on every kind and <code>gag-migrate storage-version</code> rewrites what is stored, so <code>v2.0.0</code> can be removals only; with it, scale-set recovery keyed on the job a runner took and per-job egress-proxy failure attribution</td>
+<td>Archived 2026-10-27, at the tag. Shipped as <code>v1.10.0</code> on 2026-10-27, validated on <code>rc.2</code> in CI (gate run 40407403332); the storage rewrite itself was read in a local run of the same candidate. <code>rc.1</code> failed only its storage leg, on a gate defect (#2148), and was superseded by #2149 and #2151. Q1066's second stage and Q1214's flake-watch soak rode and carry on as their own rows</td>
+</tr>
 <tr>
 <td><a href="archive/milestone-1/">archive/milestone-1.md</a></td>
 <td>Wire-protocol probe; broker + githubapp packages</td>

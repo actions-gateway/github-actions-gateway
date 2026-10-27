@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">Read the release notes.</a>
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -2825,7 +2825,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 <blockquote>
 <p><strong>Status: Phases 1 and 2 are done.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), and Q413 then shipped Phase 2 for 1.9: <code>v2</code> served beside <code>v2beta1</code> on every kind, storage unmoved.
 <strong>Scoped 2026-10-09</strong>, after <code>v1.9.0</code> tagged on 2026-10-05: the <a href="#scope-ledger">scope ledger</a> is the release's record.
-Phase 3's storage advance ships first, in its own release: Q1086 landed it for <a href="../release-1.10/">1.10</a>, <code>v2</code> storing on every kind and <code>gag-migrate storage-version</code> rewriting what is stored, decided by the maintainer on 2026-10-09 (<a href="#the-storage-advance-needs-a-state-between-two-applies">why it cannot share an apply with the removals</a>).
+Phase 3's storage advance ships first, in its own release: Q1086 landed it for <a href="../archive/release-1.10/">1.10</a>, <code>v2</code> storing on every kind and <code>gag-migrate storage-version</code> rewriting what is stored, decided by the maintainer on 2026-10-09 (<a href="#the-storage-advance-needs-a-state-between-two-applies">why it cannot share an apply with the removals</a>).
 The removals follow in <code>v2.0.0</code>: <a href="../../queue/Q1167/">Q1167</a> for <code>v2alpha1</code>, <code>v2beta1</code> and the hub, <a href="../../queue/Q273/">Q273</a> for <code>v1alpha1</code>, and <a href="../../queue/Q264/">Q264</a> for classic; Phase 4's docs and the tag are <a href="../../queue/Q1107/">Q1107</a>, blocked on all four.
 The Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The phase table below is the real state.</p>
@@ -2876,7 +2876,7 @@ The phase table below is the real state.</p>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <p>What the <code>v2.0.0</code> tag waits for, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.
 Phase 2 is not here: Q413 gated 1.9, and <a href="../archive/release-1.9/#scope-ledger">release-1.9.md</a> carries it, as it did Q1150, the validators' retype onto <code>v2</code>.
-Nor is the storage advance: Q1086 gated 1.10, and <a href="../release-1.10/#scope-ledger">release-1.10.md</a> carries it.
+Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.10/#scope-ledger">release-1.10.md</a> carries it.
 <code>make release-ladder-check</code> holds the <code>Gates?</code> column to each row's labels in both directions.</p>
 <table>
 <thead>

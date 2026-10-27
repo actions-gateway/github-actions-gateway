@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">Read the release notes.</a>
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -2786,7 +2786,7 @@ Neither answered <strong>"how many more releases before <code>v2.0.0</code>, and
 <tr>
 <td><strong>1.10</strong></td>
 <td>The storage advance: <code>v2</code> becomes the storage version and Q1086's sweep rewrites every stored object, with every version still served. Gated with it, three scale-set correctness fixes (Q1152, Q1153, Q1154) and the per-set egress-audit flag (Q1069)</td>
-<td><a href="../release-1.10/">release-1.10.md</a></td>
+<td><a href="../archive/release-1.10/">release-1.10.md</a></td>
 </tr>
 <tr>
 <td><strong>2.0</strong></td>
@@ -2841,7 +2841,7 @@ The apiserver will not drop a version from a CRD's <code>spec.versions</code> wh
 </ul>
 <p>Nothing else forced either.
 Rule 4b was satisfied by <code>v1.9.0</code>, and <code>semver-floor.sh v1.9.0</code> read <code>FLOOR: NONE</code> on 2026-10-09 over two commits.
-So the rung is justified by sequencing rather than by content, which is new on this ladder, and the maintainer gave it content in the same decision: three scale-set correctness fixes and the per-set egress-audit flag gate it beside the storage advance, and three more items ride (<a href="../release-1.10/#scope-ledger">release-1.10.md</a>).</p>
+So the rung is justified by sequencing rather than by content, which is new on this ladder, and the maintainer gave it content in the same decision: three scale-set correctness fixes and the per-set egress-audit flag gate it beside the storage advance, and three more items ride (<a href="../archive/release-1.10/#scope-ledger">release-1.10.md</a>).</p>
 <p>For the backlog it means the removals wait for the <code>1.10</code> tag: once a served version is gone from <code>main</code>, the next tag cut from it is <code>v2.0.0</code>.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
 <p>Not scheduled, and that is a decision rather than an oversight.

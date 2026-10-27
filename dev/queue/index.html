@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">Read the release notes.</a>
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -2695,7 +2695,7 @@ Pick the number deliberately rather than treating it as a constant: it is a deci
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.10-gate</code> (blocks the <a href="../plan/release-1.10/">Release 1.10</a> tag, the storage advance) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.10-gate</code> (blocks the <a href="../plan/archive/release-1.10/">Release 1.10</a> tag, the storage advance) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)<br />
 <strong>Ranks:</strong> <code>make queue-rank ARGS="--after &lt;rank&gt; --before &lt;rank&gt;"</code> (also <code>--head</code> / <code>--tail</code>): it warns when the key it mints is one the store already holds (<a href="../development/maintaining-backlog/#mint-the-rank-dont-write-one">why a tie is legal</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.

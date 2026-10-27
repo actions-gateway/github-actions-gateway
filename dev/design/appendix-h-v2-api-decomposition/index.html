@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">Read the release notes.</a>
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -4361,7 +4361,7 @@ The subcommand lists every object of each kind at <code>v2</code> and writes it 
 Once every object of a kind is rewritten it sets that CRD's <code>status.storedVersions</code> to <code>["v2"]</code>, which <code>v2.0.0</code> needs before its CRDs can stop serving the older versions.
 It is a read-write sweep rather than Kubernetes' <code>StorageVersionMigration</code> API, which is beta from 1.35 and so reaches only the newest clusters this release supports.
 It refuses to start while any <code>EgressProxy</code> names a <code>CiliumFQDN</code>/<code>CalicoFQDN</code> alias, because <code>v2</code> stores one only as <code>FQDN</code> plus a conversion annotation no served version reads once <code>v2.0.0</code> removes <code>v2beta1</code>.
-An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good (<a href="../../plan/release-1.10/#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version">release-1.10.md</a>).</p>
+An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good (<a href="../../plan/archive/release-1.10/#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version">release-1.10.md</a>).</p>
 <h2 id="h12-folding-in-the-grandfathered-label-value-alignment-q147">H.12. Folding in the grandfathered label-value alignment (Q147)<a class="headerlink" href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" title="Permanent link">&para;</a></h2>
 <p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the <a href="../../development/kubernetes-conventions/">no-boolean label convention</a> and are grandfathered only because changing them is breaking:</p>
 <ul>
