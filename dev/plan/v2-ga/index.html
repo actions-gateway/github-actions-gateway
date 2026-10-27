@@ -3055,7 +3055,7 @@ What gates 1.8 is its own <a href="../archive/release-1.8/#definition-of-done">d
 </tbody>
 </table>
 <p>The Q1059 and Q1060 rows are <code>scripts/dogfood/soak-readings.sh</code>'s output pasted unedited, which is the point of it existing.
-The two Q1048 rows are in its format but transcribed from the gate's job log (run 40407403332), because the CI gate does not keep the readings stream (<a href="../../queue/Q1223/">Q1223</a>).</p>
+The two Q1048 rows are in its format but transcribed from the gate's job log (run 40407403332), taken before the CI gate uploaded the readings stream as an artifact (<a href="../../queue/Q1223/">Q1223</a>).</p>
 <p><strong>What criterion 2's reading covers.</strong> The window manufactured a <code>v2beta1</code> <code>EgressProxy</code> in the standing tenant, which is the one kind <code>setup.sh</code> deliberately never creates, and it reconciled to Ready; the other four were already carrying this cluster's real CI traffic.
 So all five kinds have now reconciled on the dogfood cluster rather than only in envtest.</p>
 <p><strong>What criterion 3's reading covers, and what it does not.</strong> One real object, the standing tenant's <code>ActionsGateway</code>, read back at both served versions of the v2 CRD with identical specs, so the hop is lossless over an object that has lived on this cluster since 2026-07-25.

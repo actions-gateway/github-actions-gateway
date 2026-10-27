@@ -23,7 +23,7 @@
     
     
       
-        <title>The CI release gate never uploads its soak readings - GitHub Actions Gateway</title>
+        <title>Confirm an RC gate run uploads a renderable soak-readings artifact - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#the-ci-release-gate-never-uploads-its-soak-readings" class="md-skip">
+        <a href="#confirm-an-rc-gate-run-uploads-a-renderable-soak-readings-artifact" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              The CI release gate never uploads its soak readings
+              Confirm an RC gate run uploads a renderable soak-readings artifact
             
           </span>
         </div>
@@ -2627,16 +2627,16 @@
   
 
 
-<h1 id="the-ci-release-gate-never-uploads-its-soak-readings">The CI release gate never uploads its soak readings<a class="headerlink" href="#the-ci-release-gate-never-uploads-its-soak-readings" title="Permanent link">&para;</a></h1>
-<p><code>validate-release.sh</code> appends one JSON record per soak reading to <code>tmp/soak-readings.jsonl</code>, and <code>scripts/dogfood/soak-readings.sh</code> renders that stream as the rows of <a href="../../plan/v2-ga/#soak-readings">v2-ga.md's readings table</a>, so that, in the script's own header, nothing there is transcribed by hand.
-Since the gate moved into <code>validate-candidate.yml</code>, that stream is written on a hosted runner and dropped with it.</p>
-<p><strong>Measured 2026-10-27.</strong> <code>.github/workflows/validate-candidate.yml:128:        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2</code> is the workflow's only upload, and its <code>path</code> is <code>${{ runner.temp }}/gate-evidence.txt</code>; nothing names the readings file or sets <code>RELEASE_READINGS_FILE</code>.
-The readings survive only as prose in the job log.
-Closing Q1048 needed the census verdicts from run 40407403332 (<code>v1.10.0-rc.2</code>), and they were read out of <code>gh run view --log</code> and typed into the table by hand, which is the transcription the renderer was written to remove.</p>
-<p><strong>What it needs.</strong> Point <code>RELEASE_READINGS_FILE</code> into <code>runner.temp</code> for the gate step and upload it beside the evidence under <code>if: always()</code>, so a red leg still keeps the readings taken before it.
-Then the table's rows can again be <code>soak-readings.sh --file &lt;downloaded artifact&gt;</code> output.</p>
-<p>Not a duplicate of Q1162 or Q1189, which <code>make queue-id</code> offered: both are about what the CI gate runs, and this is about what it keeps.</p>
-<p><strong>Done when</strong> a <code>validate-candidate.yml</code> run uploads a readings artifact that <code>soak-readings.sh --file</code> renders.</p>
+<h1 id="confirm-an-rc-gate-run-uploads-a-renderable-soak-readings-artifact">Confirm an RC gate run uploads a renderable soak-readings artifact<a class="headerlink" href="#confirm-an-rc-gate-run-uploads-a-renderable-soak-readings-artifact" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> the next <code>validate-candidate.yml</code> gate run on a release-candidate tag completes, green or red.</p>
+<p><code>validate-release.sh</code> appends each soak reading to <code>RELEASE_READINGS_FILE</code>, and <code>scripts/dogfood/soak-readings.sh</code> renders that stream as the rows of <a href="../../plan/v2-ga/#soak-readings">v2-ga.md's readings table</a>.
+<code>validate-candidate.yml</code> points that file at <code>${{ runner.temp }}/soak-readings.jsonl</code> and uploads it as the <code>soak-readings-&lt;attempt&gt;</code> artifact under <code>if: always()</code>, so a CI gate run keeps its readings rather than leaving them only in the job log.</p>
+<p><strong>What is measured and what is not.</strong> Locally: an explicitly set <code>RELEASE_READINGS_FILE</code> wins over the derived default (<code>scripts/dogfood/lib/progress.sh:47</code>), and <code>soak-readings.sh --file</code> renders a record written that way.
+<code>gh run download -n &lt;name&gt; -D &lt;dir&gt;</code> extracts a single-file artifact flat into <code>&lt;dir&gt;</code>, measured on gh 2.101.0.
+No gate run on a real runner has produced the artifact, because that needs a release-candidate tag and a billable dogfood window, which no pull request can supply.</p>
+<p><strong>The check.</strong> On that run, follow step 6 of <a href="../../operations/release/#the-legs-the-gate-runs">the legs the gate runs</a>: <code>gh run download &lt;run-id&gt; -n soak-readings-&lt;attempt&gt; -D tmp/readings</code>, then <code>scripts/dogfood/soak-readings.sh --file tmp/readings/soak-readings.jsonl</code>.
+A missing artifact or an empty render means the env or the upload is not wired the way the workflow reads, and the readings from that window are in its job log only.</p>
+<p><strong>Done when</strong> that run's <code>soak-readings-&lt;attempt&gt;</code> artifact renders as table rows with <code>soak-readings.sh --file</code>.</p>
 
 
 

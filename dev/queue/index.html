@@ -3005,11 +3005,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1223/">Q1223</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">The CI release gate never uploads its soak readings</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">Confirm an RC gate run uploads a renderable soak-readings artifact</a></td>
 <td><code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><code>validate-release.sh</code> appends one JSON record per soak reading to <code>tmp/soak-readings.jsonl</code>, and <code>scripts/dogfood/soak-readings.sh</code> renders …</td>
+<td><strong>Event:</strong> the next <code>validate-candidate.yml</code> gate run on a release-candidate tag completes, green or red.</td>
 </tr>
 <tr>
 <td><a href="Q448/">Q448</a></td>
