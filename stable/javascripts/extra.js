@@ -482,6 +482,15 @@
 // Per-doc audience: upgrade a leading "> **Audience:** ..." blockquote into pills.
 // On github.com (and without JS) it stays a readable blockquote.
 (function () {
+  // Link back to the operations index, pre-filtered to this persona. The href
+  // starts from the site root (Material's __config "base"), not the page, so it
+  // holds at any depth; a page served as *.html means directory URLs are off,
+  // as in the offline export, where the directory needs its index.html named.
+  var base = "..";
+  try {
+    base = JSON.parse(document.getElementById("__config").textContent).base || ".";
+  } catch (e) { /* keep the one-level-up default */ }
+  var index = base + "/operations/" + (/\.html$/.test(location.pathname) ? "index.html" : "");
   document.querySelectorAll(".md-content blockquote").forEach(function (bq) {
     var m = bq.textContent.trim().match(/^Audience:\s*(.+)$/i);
     if (!m) return;
@@ -489,9 +498,8 @@
     var div = document.createElement("div");
     div.className = "persona-pills-top";
     div.setAttribute("aria-label", "Audience");
-    // Link back to the operations index, pre-filtered to this persona.
     div.innerHTML = tags.map(function (t) {
-      return '<a class="persona-pill" href="../?persona=' + encodeURIComponent(t) +
+      return '<a class="persona-pill" href="' + index + "?persona=" + encodeURIComponent(t) +
         '" title="See all ' + t + ' docs">' + t + "</a>";
     }).join(" ");
     bq.parentNode.replaceChild(div, bq);

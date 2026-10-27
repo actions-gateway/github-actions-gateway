@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/v1alpha1-deprecation/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/v1alpha1-deprecation/">
       
       
         <link rel="prev" href="../migration-v1-to-v2/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -2045,6 +2047,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -2103,10 +2133,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -2124,8 +2154,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2893,11 +2923,11 @@
 </blockquote>
 <div class="admonition warning">
 <p class="admonition-title">Four deprecations, one removal release: <code>v2.0.0</code></p>
-<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2beta1</code> (see <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>), and author them as single-label <code>ScaleSet</code> runner sets.
+<p>Onboard new tenants on the <strong>v2 API</strong> at <code>actions-gateway.com/v2</code> (see <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started</a>), and author them as single-label <code>ScaleSet</code> runner sets.
 Everything named below stays <strong>fully served until <code>v2.0.0</code></strong>, so nothing is forced today.
 Migrate existing tenants with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> at your convenience: the move changes the API objects, not how jobs are acquired.</p>
 <p><code>v2beta1</code> is itself removed at <code>v2.0.0</code>, superseded by the General Availability (GA) version <code>v2</code>.
-That is not a reason to delay: the release before <code>v2.0.0</code> serves <code>v2beta1</code> and <code>v2</code> side by side, and moving between them is a re-apply rather than a re-author.</p>
+A tenant already on <code>v2beta1</code> moves by re-applying at <code>v2</code>: 1.9 and 1.10 serve both side by side, and the two differ only in the deprecated <code>egressPolicyMode</code> aliases below.</p>
 </div>
 <p>This page is the project's standing deprecation notice.
 It records what <code>v2.0.0</code> removes, what keeps working until then, and what an operator has to do before upgrading past it.
@@ -2933,15 +2963,16 @@ A fourth deprecation, <a href="#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200
 </tr>
 <tr>
 <td><strong><code>actions-gateway.com/v2beta1</code></strong></td>
-<td>the graduated beta version, storage and hub since <code>v1.1.0</code></td>
+<td>the graduated beta version, the hub since <code>v1.1.0</code>, and the storage version from <code>v1.1.0</code> until 1.10</td>
 <td><code>v2</code>, the GA version</td>
 <td>read and re-apply your objects at <code>v2</code>; the conversion webhook round-trips them, with the one exception of the two deprecated <code>egressPolicyMode</code> aliases below</td>
 </tr>
 </tbody>
 </table>
 <p><strong><code>v2beta1</code>'s removal was decided later than the other three</strong> and is not in the <code>release-1.3.md</code> announcement.
-Decided 2026-09-08 (<a href="../../plan/v2beta1-retirement/">reasoning</a>): <code>v2.0.0</code> is a major release, and dropping a served version is a breaking change a major release may make.
+Decided 2026-09-08 (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/v2beta1-retirement.md">reasoning</a>): <code>v2.0.0</code> is a major release, and dropping a served version is a breaking change a major release may make.
 Beta's contract is a migration path, not permanence, and the path here is the overlap release: the tag before <code>v2.0.0</code> serves <code>v2beta1</code> and <code>v2</code> together, so no object is ever unreachable.</p>
+<p><strong>Removing a version also needs every stored object rewritten at <code>v2</code> first.</strong> 1.10 makes <code>v2</code> the storage version, and <code>gag-migrate storage-version</code> rewrites what is already stored; run it after upgrading to 1.10 and before <code>v2.0.0</code>, or the <code>v2.0.0</code> CRD apply is rejected (<a href="../upgrade/#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">how</a>).</p>
 <h3 id="why-the-removals-are-coupled">Why the removals are coupled<a class="headerlink" href="#why-the-removals-are-coupled" title="Permanent link">&para;</a></h3>
 <p><code>v2beta1</code> is already ScaleSet-only, so classic acquisition exists <em>only</em> to serve <code>v1alpha1</code> and <code>v2alpha1</code> objects.
 Removing those two versions removes classic's entire reason to exist.
@@ -2954,7 +2985,7 @@ Splitting the removals across separate releases would buy nothing and would cost
 Nothing about the API contract changed; one premise under that reasoning did.
 The old chain ran: the values are enum members of <code>v2alpha1</code> <em>and</em> <code>v2beta1</code>; an API element is removed by incrementing the version, never by deleting it from a served one; so the values live exactly as long as <code>v2beta1</code> does.
 Every step of that still holds.
-What changed is the last input — <code>v2beta1</code> was expected to outlive <code>v2.0.0</code>, and as of 2026-09-08 it does not (<a href="../../plan/v2beta1-retirement/">why</a>).
+What changed is the last input — <code>v2beta1</code> was expected to outlive <code>v2.0.0</code>, and as of 2026-09-08 it does not (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/v2beta1-retirement.md">why</a>).
 Both versions carrying the aliases are removed at <code>v2.0.0</code>, and the GA <code>v2</code> version does not define them, so <code>v2.0.0</code> is where they go.</p>
 <p><strong>What to do before upgrading to <code>v2.0.0</code>:</strong> if any <code>EgressProxy</code> still names <code>CiliumFQDN</code> or <code>CalicoFQDN</code>, migrate it.
 Set <code>egressPolicyMode: FQDN</code> on the <code>EgressProxy</code> and have the platform operator set the matching GMC <code>--fqdn-policy-backend</code> (<code>cilium</code> or <code>calico</code>).
@@ -2976,7 +3007,7 @@ A pool that already stores one is admitted unchanged, with the warning, so an op
 </code></pre></div>
 <p>The warning is advisory: it does not fail an <code>apply</code>, and both controllers deduplicate it to one log line per process (<a href="../observability-logging/#logging">observability-logging</a>).
 Classic acquisition carries no apiserver warning of its own — it is a <em>field value</em>, not a version, and the versions that admit it are the two that warn above.
-- <strong>New tenants should onboard on <code>v2beta1</code>.</strong> See <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
+- <strong>New tenants should onboard on <code>v2</code>.</strong> See <a href="../tenant-onboarding/">tenant onboarding</a> for the v2 object set.
 - <strong><code>v2alpha1</code> stays served as the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp.</strong> It carries the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs, which a new tenant does not.
   Note that alpha's contract allows an alpha version to be dropped without notice; naming <code>v2.0.0</code> for it is a stronger commitment than the maturity level requires.
 - <strong>Existing tenants migrate with the tool</strong> on their own schedule: see <a href="../migration-v1-to-v2/">migration-v1-to-v2.md</a>.
@@ -3014,7 +3045,7 @@ Point it at the per-<code>RunnerGroup</code> field or the metric instead.</p>
 <p>Neither field is carried into v2.
 <code>v2beta1</code> replaces <code>SecretReference</code> with the name-only <code>LocalSecretReference</code>, which has no <code>namespace</code> at all, and <code>ActionsGatewayStatus</code> simply omits <code>activeSessions</code>.
 So migrating with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> needs no action for either: there is nothing to carry across.</p>
-<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="../../development/api-review/#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
+<p>They stay in <code>v1alpha1</code> rather than being deleted now because <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/development/api-review.md#removal-needs-a-version-increment-not-a-promise">removing a field from a served version is a breaking change</a>.
 The removal is the version's own, at <code>v2.0.0</code>.</p>
 <h2 id="why-v2-what-the-decomposition-buys">Why v2 (what the decomposition buys)<a class="headerlink" href="#why-v2-what-the-decomposition-buys" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3079,7 +3110,7 @@ Gating on v2 maturity is what lets the commitment be concrete: you are never ask
 <ol>
 <li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.
    Do this <em>before</em> upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects have no served version.</li>
-<li><strong>Move <code>v2alpha1</code> objects to <code>v2beta1</code>.</strong> Re-apply them at <code>v2beta1</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
+<li><strong>Move <code>v2alpha1</code> and <code>v2beta1</code> objects to <code>v2</code>.</strong> Re-apply them at <code>v2</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
 <li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> Created fresh, since <code>acquisitionProtocol</code> is immutable.
    The labels carry across as they are, since a <code>ScaleSet</code> set registers every <code>runnerLabel</code>, so a multi-label group does not have to be split.
    Pick the <em>first</em> one deliberately: it names the scale set at GitHub and must be unique under the gateway.

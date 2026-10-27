@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/p2p-image-distribution/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/p2p-image-distribution/">
       
       
         <link rel="prev" href="../kata-dind-workloads/">
       
       
-        <link rel="next" href="../service-mesh-coexistence/">
+        <link rel="next" href="../reference-architectures/">
       
       
         
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -2019,6 +2021,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gags-dragonfly-node-client-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GAG's Dragonfly node-client recipe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GAG&#39;s Dragonfly node-client recipe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-privileged-dind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On privileged DinD
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#operational-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2044,6 +2074,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -2114,10 +2172,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -2135,8 +2193,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2868,6 +2926,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#gags-dragonfly-node-client-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GAG's Dragonfly node-client recipe
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="GAG&#39;s Dragonfly node-client recipe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-privileged-dind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On privileged DinD
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#operational-notes" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2915,7 +3001,8 @@
 </blockquote>
 <p><strong>Goal:</strong> for a platform team running GitHub Actions Gateway (GAG) at scale, decide whether to add a peer-to-peer (P2P) container-image mirror — <a href="https://github.com/spegel-org/spegel">Spegel</a> or <a href="https://d7y.io/">Dragonfly</a> — to keep the runner image-pull path fast and resilient when many ephemeral worker pods start at once.</p>
 <blockquote>
-<p><strong>This is a recommended companion, not a GAG component.</strong> GAG does not bundle, install, require, or configure either tool.
+<p><strong>This is a recommended companion, not a GAG component.</strong> GAG's chart does not install, require, or configure either tool.
+The repository carries one tested recipe, <a href="#gags-dragonfly-node-client-recipe">Dragonfly's node client</a>, which the release gate runs; you apply it yourself.
 A P2P mirror is a cluster-wide, node-level concern that lives below GAG, at the container runtime.
 This page explains <em>why</em> it pairs well with GAG's worker model and <em>how</em> the two interact; the tools' own documentation is authoritative for installation and tuning.</p>
 </blockquote>
@@ -2943,7 +3030,7 @@ It adds <strong>no separate storage</strong> and never mutates or re-packages im
 <li><strong>What it does <em>not</em> do:</strong> Spegel is <strong>lazy</strong> — it can only serve images some node in the cluster has <em>already</em> pulled.
   It does not pre-fetch or pre-heat, and it distributes container images only.</li>
 <li><strong>Choose Spegel when:</strong> you want a low-operational-overhead, drop-in mirror that smooths pull storms with no new stateful component.
-  This is the right default for most GAG fleets.
+  It is the lighter of the two, though GAG ships and tests a recipe for Dragonfly only; on a cluster shared by tenants with private images, read <a href="#operational-notes">what it exposes</a> first.
   It requires a containerd-based runtime configured to keep unpacked layers (<code>discard_unpacked_layers = false</code>) and to honor mirror config — check Spegel's <a href="https://spegel.dev/docs/getting-started/">compatibility requirements</a> against your node image first.</li>
 </ul>
 <h3 id="dragonfly--full-p2p-distribution-with-pre-heating">Dragonfly — full P2P distribution with pre-heating<a class="headerlink" href="#dragonfly--full-p2p-distribution-with-pre-heating" title="Permanent link">&para;</a></h3>
@@ -3033,6 +3120,40 @@ That:</p>
 <li><strong>Speeds cold starts</strong>, shrinking the gap between job acquisition and the runner coming online.</li>
 </ul>
 <p>This composes with an <a href="../air-gapped-install/">air-gapped install</a>: the private mirror remains the back-to-source registry, and P2P keeps load off it the same way it keeps load off GHCR.</p>
+<h2 id="gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe<a class="headerlink" href="#gags-dragonfly-node-client-recipe" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a> puts a Dragonfly <code>dfdaemon</code> on each Kata node, and containerd pulls worker images through it.
+It shares the scheduler in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/dragonfly-core/README.md"><code>deploy/dragonfly-core/</code></a> with the registry mirrors' seed peer, so it needs that applied first.
+It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</code>, and the release gate's Dragonfly leg runs the e2e matrix with it installed.</p>
+<p><strong>What changes on the node:</strong></p>
+<ul>
+<li><strong>containerd restarts once on each node.</strong> <code>dfinit</code> switches containerd to per-registry <code>certs.d</code> files, which containerd reads only on startup.
+  Running pods, Kata ones included, kept running through the restart.</li>
+<li><strong><code>docker.io</code> and <code>ghcr.io</code> pulls go through Dragonfly.</strong> Only blob requests take the peer path; tags and manifests go to the registry through it directly.</li>
+<li><strong>On GKE, the node's <code>mirror.gcr.io</code> mirror for Docker Hub is gone.</strong> Docker Hub pulls reach Docker Hub through Dragonfly, once per cluster rather than once per node, so watch Docker Hub's rate limits if your worker images live there.</li>
+<li><strong><code>kata-deploy</code>'s containerd config survives.</strong> <code>dfinit</code> kept its <code>imports</code> line on the nodes tested.</li>
+</ul>
+<p><strong>What it exposes, and to whom:</strong></p>
+<ul>
+<li><strong>The peer ports listen on every node address, unauthenticated.</strong> That is upload gRPC on 4000, then metrics, health, stats and piece storage on 4002 to 4006.
+  A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one, and so did a DinD worker whose tenant adds an allow-all egress policy (<a href="#on-privileged-dind">below</a>).
+  So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.</li>
+<li><strong>The proxy is bound to loopback</strong>, so only the node's own containerd can use it, and it never reaches a worker.</li>
+</ul>
+<p><strong>Set three values before applying it:</strong> the node selector and toleration in <code>client.yaml</code> (your worker nodes), the CIDR in <code>scheduler-from-nodes.yaml</code> (your node subnet), and the registries in the <code>dfinit</code> config.</p>
+<p><strong>Not yet measured:</strong> UDP 4006, and more than one fresh-node startup order, where <code>dfinit</code> and <code>kata-deploy</code> race to edit containerd's config on a new node.</p>
+<h3 id="on-privileged-dind">On privileged DinD<a class="headerlink" href="#on-privileged-dind" title="Permanent link">&para;</a></h3>
+<p>The same recipe runs under the privileged-DinD worker, the fallback for jobs Kata cannot run, such as GPU jobs on hardware Kata does not support.
+It was validated once rather than on every release: one dogfood e2e run on 2026-10-24 (UTC), with <code>E2E_VARIANT=dind E2E_MIRROR_BACKEND=dragonfly E2E_DRAGONFLY_NODES=1</code>, was green.</p>
+<p>What the readings from that run showed:</p>
+<ul>
+<li><strong>The job's pulls rode the mirrors.</strong> All five instances served it: 161 content requests across 15 repositories, from the inner <code>dockerd</code>, the rewritten refs, helm and buildkit.</li>
+<li><strong>The mirrors fetched through Dragonfly.</strong> The seed peer sent 123 blob requests by its peer-to-peer rule and 374 direct.</li>
+<li><strong>The node client served the worker pod's own image.</strong> containerd sent 34 requests through it, the runner image's blobs among them, and 17 tasks were served by peers and 14 from the registry.</li>
+<li><strong>A DinD worker reached the node client's upload port, 4000.</strong> The tenant's allow-all egress policy adds to GAG's workload policy, so it admits node addresses too.
+  The seed peer's proxy held: the same worker timed out on it, because the seed's own ingress policy refuses it.</li>
+</ul>
+<p>So DinD with this recipe gives every job a path to an unauthenticated gRPC port on its node.
+That fits the trusted-CI use DinD is already limited to, and it is one more reason never to run untrusted code there.</p>
 <h2 id="operational-notes">Operational notes<a class="headerlink" href="#operational-notes" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Pull Secrets still matter for the first pull.</strong> The node performing the back-to-source pull authenticates to the registry as usual (the worker's <code>imagePullSecrets</code>; see <a href="../air-gapped-install/">air-gapped install</a> for the secure pull-Secret pattern).
@@ -3040,12 +3161,22 @@ That:</p>
 <li><strong>NetworkPolicy.</strong> P2P daemons talk node-to-node on their own ports.
   GAG's isolation boundary is the <em>tenant</em> NetworkPolicy on worker and proxy pods, not host-level node traffic, so the two generally do not collide — but if you run a default-deny policy at the node/host layer, allow the P2P tool's ports per its docs.</li>
 <li><strong>Keep worker pods off Dragonfly's proxy port.</strong> dfdaemon's proxy (port 4001 by default) forwards requests to any host, including pushes, and no setting restricts it, so a worker that can reach it has unrestricted egress (measured on client v1.5.7).
-  Admit only the clients you mean to serve, by NetworkPolicy on a pod-network deployment; a <code>hostNetwork</code> dfdaemon listens on every node address, where pod-level policy cannot select it.</li>
+  Admit only the clients you mean to serve, by NetworkPolicy on a pod-network deployment; a <code>hostNetwork</code> dfdaemon listens on every node address, where pod-level policy cannot select it.
+  GAG's worker egress policy does block a worker from that port on every node, its own included (measured with a Kata worker on GKE Dataplane V2), but any pod without its own egress policy reaches it.</li>
+<li><strong>Binding dfdaemon's proxy to loopback is not enough on its own.</strong> <code>proxy.server.ip: 127.0.0.1</code> keeps the proxy off node addresses, and containerd still pulls through it (measured on kind with chart 1.8.5).
+  Upload gRPC, metrics, health, stats and piece storage stay on every node address, and the upload service accepts task download and delete calls with no authentication unless you configure peer TLS (read from the client v1.5.7 source).
+  Treat those ports as reachable by any pod without an egress policy.</li>
+<li><strong>Spegel serves cached images to anything that reaches it.</strong> It serves <code>GET</code> and <code>HEAD</code> only and never fetches from a host a request names (measured on v0.7.4), but it checks no per-request credential, so an image one tenant pulled with its own pull Secret is readable by any pod that reaches Spegel (read from the source; only public images were probed).
+  Spegel runs on the pod network, so an ingress NetworkPolicy can admit only node addresses and other Spegel pods.
+  On kind with Calico that closed the pod ports and a pod's path to its own node's hostPort, but not to another node's hostPort, which arrives from a node address.
+  Set <code>resolveTags: false</code> so a peer cannot answer a tag lookup; containerd verifies digests but not tag resolution.
+  Spegel also moves existing per-registry <code>certs.d</code> entries to <code>_backup/</code> unless <code>prependExisting</code> is set.</li>
 <li><strong>Verify with the upstream guides.</strong> Installation, runtime compatibility (containerd settings, mirror configuration), and tuning are owned by the tools.
   Start at Spegel's <a href="https://spegel.dev/docs/getting-started/">Getting Started</a> or Dragonfly's <a href="https://d7y.io/docs/">documentation</a>.</li>
 </ul>
 <h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
 <ul>
+<li><a href="../reference-architectures/">Reference architectures</a>: which P2P pairings are supported profiles, and how each was tested.</li>
 <li><a href="../air-gapped-install/">Air-gapped install</a> — relocating images to a private registry with digests preserved; P2P sits in front of that registry.</li>
 <li><a href="../in-runner-image-builds/">In-runner image builds</a> — the sibling scale/PSA companion for build workloads inside workers.</li>
 <li><a href="../../design/05-security/">Security § Supply-Chain Compromise of Worker Image</a> — why worker images are digest-pinned and the <code>imagePullPolicy</code> rationale.</li>
@@ -3106,13 +3237,13 @@ That:</p>
         
         
           
-          <a href="../service-mesh-coexistence/" class="md-footer__link md-footer__link--next" aria-label="Next: Service mesh coexistence">
+          <a href="../reference-architectures/" class="md-footer__link md-footer__link--next" aria-label="Next: Reference architectures">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Service mesh coexistence
+                Reference architectures
               </div>
             </div>
             <div class="md-footer__button md-icon">

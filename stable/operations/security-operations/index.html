@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/security-operations/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/security-operations/">
       
       
         <link rel="prev" href="../troubleshooting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -1887,6 +1889,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1945,10 +1975,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -1966,8 +1996,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4028,7 +4058,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 </tr>
 <tr>
 <td><strong>AGC overpermissioned Secret access</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>, H-2 residual) — compromised AGC binary issuing a full-body Secret <code>list</code></td>
-<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="../../plan/security/">security.md H-2</a>)</td>
+<td>AGC ServiceAccount <code>list secrets</code> in audit log (legit code path is metadata-only — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/security.md">security.md H-2</a>)</td>
 <td>Audit log</td>
 <td>Page</td>
 </tr>
@@ -4214,7 +4244,7 @@ If your scrape config does not add it, drop the interpolation.</p>
 <hr />
 <h2 id="audit-log-abuse-detections">Audit-log abuse detections<a class="headerlink" href="#audit-log-abuse-detections" title="Permanent link">&para;</a></h2>
 <p>The most dangerous abuse signals — a compromised AGC or GMC issuing RBAC calls that are <em>permitted</em> but <em>anomalous</em> — are invisible to Prometheus.
-The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="../../plan/security/">H-2</a>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
+The legitimate code paths avoid them (the AGC enumerates its Secrets metadata-only per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/security.md">H-2</a>, and reads a tenant's Secret body only to present a pull secret to the registry read behind <code>RunnerVersionTooOld</code>; the GMC reads Secret bodies only during a reconcile via a cache-bypassing <code>Get</code>, and lists and watches Secret metadata only in tenant namespaces), so any of the calls below originating from a controller ServiceAccount indicates the binary is doing something its source does not.</p>
 <p>Detecting these requires an <strong>API-server audit policy</strong> that logs the relevant verbs at <code>Metadata</code> level or higher, shipped to a security information and event management (SIEM) system or log-based alerting backend.
 A ready-to-adapt sample policy ships at <a href="../examples/apiserver-audit-policy.yaml"><code>examples/apiserver-audit-policy.yaml</code></a>; <a href="#api-server-audit-policy-sample">§ API server audit policy (sample)</a> below covers installing it and reading the events.
 The table specifies <em>what to alert on</em> once that policy is in place.</p>
@@ -4231,7 +4261,7 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <tr>
 <td><strong>AGC full-body Secret list</strong></td>
 <td><code>verb=list resource=secrets</code> by the AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:&lt;gateway&gt;-agc</code> under v2, <code>…:actions-gateway-controller</code> under v1) returning object bodies</td>
-<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="../../plan/security/">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
+<td>Legit AGC code lists Secret <em>metadata</em> only (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/security.md">H-2 residual</a>). A body <code>list</code> means out-of-band enumeration of user-managed Secrets.</td>
 <td>Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image.</td>
 </tr>
 <tr>
@@ -4247,6 +4277,12 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <td>Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate <strong>all</strong> tenant GitHub App keys, audit which Secrets were read.</td>
 </tr>
 <tr>
+<td><strong>GMC Secret read outside tenant namespaces</strong></td>
+<td><code>verb</code> <code>get</code>/<code>list</code>/<code>watch</code> on <code>secrets</code> by the GMC SA with <code>responseStatus.code=403</code>, or a <code>list</code>/<code>watch</code> with no <code>objectRef.namespace</code></td>
+<td>The GMC holds Secret reads only through the <code>gmc-tenant-secret-reader</code> RoleBinding it creates in each tenant namespace (Q1188), so RBAC refuses a read anywhere else. A refusal means the binary tried a read its source never makes.</td>
+<td>A refusal is a successful block but a <em>signal</em> of compromise. Isolate the GMC and investigate.</td>
+</tr>
+<tr>
 <td><strong>GMC namespace-PSA escalation attempt</strong></td>
 <td><code>namespace-psa-guard</code> ValidatingAdmissionPolicy <code>deny</code> events for the GMC SA</td>
 <td>The guard (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>) blocks the GMC relabelling non-tenant namespaces (e.g. <code>kube-system</code> → <code>privileged</code>). A denial means the GMC tried.</td>
@@ -4255,7 +4291,7 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 <tr>
 <td><strong>GMC out-of-tenant resource write</strong></td>
 <td><code>gmc-tenant-resource-guard</code> ValidatingAdmissionPolicy <code>deny</code> events for the GMC SA</td>
-<td>The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked <code>actions-gateway.github.com/tenant=true</code> (e.g. a Deployment or Secret into <code>kube-system</code>). A denial means the GMC tried (Q121/Q122).</td>
+<td>The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked <code>actions-gateway.github.com/tenant=true</code> (e.g. a Deployment or Secret into <code>kube-system</code>), and any ClusterRoleBinding whose <code>roleRef</code> is not <code>agc-clusterrunnertemplate-reader</code>, which is how a compromised GMC would grant itself Secret reads cluster-wide (Q1188). A denial means the GMC tried (Q121/Q122).</td>
 <td>A denial is a successful block but a <em>signal</em> of compromise. Isolate the GMC and investigate.</td>
 </tr>
 <tr>
@@ -4266,9 +4302,10 @@ The table specifies <em>what to alert on</em> once that policy is in place.</p>
 </tr>
 </tbody>
 </table>
-<p>Without the audit policy, these threats are mitigated structurally (RBAC scope, cache-bypass, the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> VAPs, no Secret informer) but write-confinement denials aside are <strong>not observable</strong> — there is no alert that fires if a compromised binary exercises its standing <em>read</em> permissions.
+<p>Without the audit policy, these threats are mitigated structurally (RBAC scope, cache-bypass, the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> VAPs, metadata-only Secret informers per tenant namespace) but write-confinement denials aside are <strong>not observable</strong> — there is no alert that fires if a compromised binary exercises its standing <em>read</em> permissions.
 Closing that gap is the value of the audit policy.
-Note the two VAPs confine GMC <em>writes</em> (create/update/delete) only; Secret <em>reads</em> (<code>get</code>/<code>list</code>/<code>watch</code>) cannot be gated at admission and remain cluster-wide at the RBAC layer — the audit policy is the only detective control for them (see <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>).</p>
+The two VAPs confine GMC <em>writes</em> (create/update/delete); Secret <em>reads</em> (<code>get</code>/<code>list</code>/<code>watch</code>) cannot be gated at admission, so RBAC confines them instead, to the namespaces where the GMC holds a <code>gmc-tenant-secret-reader</code> RoleBinding.
+Inside a tenant namespace the audit policy is the only detective control for them (see <a href="../../design/05-security/#51-gmc-level-threats-cluster-scoped">§5.1</a>).</p>
 <h3 id="api-server-audit-policy-sample">API server audit policy (sample)<a class="headerlink" href="#api-server-audit-policy-sample" title="Permanent link">&para;</a></h3>
 <p>A sample audit policy that captures exactly the verbs the table above alerts on — and nothing else — ships at <a href="../examples/apiserver-audit-policy.yaml"><code>examples/apiserver-audit-policy.yaml</code></a>.</p>
 <p><strong>What it detects.</strong> Three focused rule groups, all at <code>Metadata</code> level:</p>
@@ -4315,7 +4352,7 @@ The provider's default policy is broader than this sample (it logs more than the
 <a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>| filter @logStream like /kube-apiserver-audit/
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>| filter objectRef.resource = "secrets"
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    and user.username = "system:serviceaccount:gmc-system:gmc-controller-manager"
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>| filter verb in ["list","watch"] or objectRef.namespace != "&lt;a-tenant-namespace&gt;"
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>| filter responseStatus.code = 403 or not ispresent(objectRef.namespace)
 </code></pre></div>
 <ul>
 <li><strong>Google GKE.</strong> API-server <strong>write</strong> events are Admin Activity audit logs (always on).
@@ -4336,7 +4373,7 @@ The provider's default policy is broader than this sample (it logs more than the
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="p">|</span><span class="w"> </span><span class="k">extend</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">parse_json</span><span class="p">(</span><span class="n">log_s</span><span class="p">)</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">resource</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"secrets"</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">    </span><span class="k">and</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">user</span><span class="p">.</span><span class="n">username</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="s">"system:serviceaccount:gmc-system:gmc-controller-manager"</span>
-<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">verb</span><span class="w"> </span><span class="n">in</span><span class="w"> </span><span class="p">(</span><span class="s">"list"</span><span class="p">,</span><span class="s">"watch"</span><span class="p">)</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">namespace</span><span class="w"> </span><span class="p">!=</span><span class="w"> </span><span class="s">"&lt;a-tenant-namespace&gt;"</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">|</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">responseStatus</span><span class="p">.</span><span class="n">code</span><span class="w"> </span><span class="p">==</span><span class="w"> </span><span class="mi">403</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">isempty</span><span class="p">(</span><span class="n">e</span><span class="p">.</span><span class="n">objectRef</span><span class="p">.</span><span class="n">namespace</span><span class="p">)</span>
 </code></pre></div>
 <p>Repeat the per-provider queries for each AGC ServiceAccount (<code>system:serviceaccount:&lt;tenant-ns&gt;:&lt;gateway&gt;-agc</code> under v2, <code>…:actions-gateway-controller</code> under v1), alerting on <code>verb == "list"</code> or a <code>get</code> on a Secret the AGC does not own.</p>
 <p><strong>Read the events.</strong> Audit events are one JSON object per line.
@@ -4347,11 +4384,12 @@ To see GMC Secret reads (substitute your GMC user string):</p>
 <a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s1">          code: .responseStatus.code, t: .requestReceivedTimestamp}'</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>/var/log/kubernetes/audit/audit.log
 </code></pre></div>
-<p>A baseline is one <code>get</code> per <code>gitHubAppRef</code> Secret per reconcile, only in tenant namespaces.
-Alert on: any <code>list</code>/<code>watch</code>; a <code>get</code> rate well above the reconcile cadence; or any <code>get</code> outside a tenant namespace (e.g.
-<code>kube-system</code>).
+<p>A baseline is one <code>get</code> per <code>gitHubAppRef</code> Secret per reconcile, plus one <code>list</code> and a long-lived <code>watch</code> per tenant namespace from its metadata-only informer, issued when the GMC starts and whenever a watch is re-established, all in tenant namespaces.
+Alert on: any <code>403</code> (RBAC refused a read outside the tenant namespaces); a <code>list</code>/<code>watch</code> with no namespace, which is a cluster-wide read the GMC no longer holds; or a <code>get</code> rate well above the reconcile cadence.
 For the GMC write rule, a <code>responseStatus.code</code> of <code>403</code> is a VAP block — investigate the binary that attempted it.
-For AGC reads, filter by each AGC user string and alert on <code>verb == "list"</code> (the legit path is metadata-only) or a <code>get</code> on a Secret name the AGC does not own.</p>
+For AGC reads, filter by each AGC user string and alert on <code>verb == "list"</code> (the legit path is metadata-only) or a <code>get</code> on a Secret name the AGC does not own, other than a pull secret.
+The registry read <code>get</code>s each <code>imagePullSecrets</code> entry the worker pod template names, or, when it names none, those on the worker ServiceAccount, which it reads with one <code>get</code> on <code>serviceaccounts</code>; it repeats on a failure's backoff (one minute doubling to an hour) and on each hourly re-check of a tag-addressed image.
+A <code>get</code> on a ServiceAccount other than the worker ServiceAccount, or on a Secret that neither names, is outside it.</p>
 <hr />
 <h2 id="per-connection-egress-audit">Per-connection egress audit<a class="headerlink" href="#per-connection-egress-audit" title="Permanent link">&para;</a></h2>
 <p>The audit policy above is a detective control on what a controller asks the <strong>apiserver</strong>.
@@ -4432,13 +4470,13 @@ The abuse-specific first moves:</p>
 Two scanners catch posture regressions <em>before</em> they reach a cluster — one in CI on every chart change, one a pre-production manual step against the live cluster.</p>
 <p>If your cluster runs a policy engine (Kyverno / OPA Gatekeeper), see <a href="../admission-policies/">admission-policies.md</a> for whether GAG pods comply with common admission policies and for sample policies that <em>enforce</em> GAG's posture at admission time.</p>
 <h3 id="manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)<a class="headerlink" href="#manifest-posture--polaris-automated-in-ci" title="Permanent link">&para;</a></h3>
-<p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes security/best-practice posture of the <strong>shipped install artifact</strong>: the CI <code>polaris</code> job (in <a href="../../.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>) renders the <a href="../../charts/actions-gateway">Helm chart</a> and checks the rendered manifests.
+<p><a href="https://polaris.docs.fairwinds.com/">polaris</a> audits the Kubernetes security/best-practice posture of the <strong>shipped install artifact</strong>: the CI <code>polaris</code> job (in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/.github/workflows/security-scan.yml"><code>.github/workflows/security-scan.yml</code></a>) renders the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/charts/actions-gateway">Helm chart</a> and checks the rendered manifests.
 It runs on every PR that touches the chart or the <code>Makefile</code>, and on every push to <code>main</code>.</p>
 <ul>
 <li><strong>What it gates.</strong> The scan fails the PR on any <code>danger</code> finding — a privileged container, a host namespace, dangerous capabilities, a missing <code>securityContext</code>, a floating <code>:latest</code> image tag, and similar real regressions.
   A change that weakens the chart's hardened defaults cannot merge.</li>
 <li><strong>What it reports but does not block.</strong> <code>warning</code>-level findings are printed for visibility.
-  The handful that are false positives against a Helm-packaged operator chart (the controller's required ServiceAccount-token automount, the cross-document NetworkPolicy match polaris can't resolve statically, the <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in <a href="../../charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>, each with a justifying comment.
+  The handful that are false positives against a Helm-packaged operator chart (the controller's required ServiceAccount-token automount, the cross-document NetworkPolicy match polaris can't resolve statically, the <code>IfNotPresent</code> pull policy that is correct for a digest-pinned image, and Helm's <code>app.kubernetes.io/instance</code> labelling) are tuned to <code>ignore</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/charts/actions-gateway/polaris.yaml"><code>charts/actions-gateway/polaris.yaml</code></a>, each with a justifying comment.
   <strong>Never relax a <code>danger</code> check to silence a finding — fix the chart instead</strong> (secure-by-default).</li>
 <li><strong>Run it yourself.</strong> <code>make polaris-scan</code> (needs <code>helm</code> and <code>polaris</code> on <code>PATH</code>) runs the exact CI gate locally.
   It renders with a placeholder image digest so the audit reflects the production, digest-pinned posture — a digest is also required for the chart to render at all (an empty digest on any of the four images — <code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code> — fails the render; <code>make manifest-validate</code> asserts each rejection), so the placeholder cannot mask a fail-open default.</li>
@@ -4477,7 +4515,7 @@ Those are the province of the <a href="https://www.cisecurity.org/benchmark/kube
   If your node-local-dns cache listens on a non-default address <em>outside</em> <code>169.254.0.0/16</code>, set <code>spec.proxy.managedNetworkPolicy: false</code> and supply your own DNS egress rule, or add an additive NetworkPolicy — see <a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a>.</li>
 <li><strong>Findings that don't apply</strong> (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.</li>
 </ul>
-<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="../../plan/milestone-5/#3-posture-audit-kube-bench--polaris">milestone-5.md § 3</a>).</p>
+<p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/milestone-5.md#3-posture-audit-kube-bench--polaris">milestone-5.md § 3</a>).</p>
 <h2 id="job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group<a class="headerlink" href="#job-intake-bind-every-tenant-to-a-github-runner-group" title="Permanent link">&para;</a></h2>
 <p>Everything else on this page bounds what a tenant's workers may reach.
 This bounds who may reach <em>them</em>, and it is the one control that lives at GitHub, outside anything the cluster can enforce.</p>
@@ -4579,7 +4617,7 @@ If your cluster enforces DNS-based egress, you can instead have the GMC express 
   The tenant does <strong>not</strong> name Cilium/Calico/GKE.</li>
 <li><strong>The operator picks the mechanism</strong>, once per cluster, via the GMC <code>--fqdn-policy-backend</code> flag (chart: <code>fqdnPolicyBackend</code>).</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
@@ -4641,14 +4679,14 @@ Migrate by changing the tenant field to <code>FQDN</code> and setting the matchi
 <blockquote>
 <p><strong>They are removed at <code>v2.0.0</code></strong>, alongside <code>v1alpha1</code>, <code>v2alpha1</code> and classic acquisition.
 The two values are enum members of <code>egressPolicyMode</code> in <code>actions-gateway.com/v2alpha1</code> and <code>v2beta1</code>; <code>v2.0.0</code> removes both versions, and the General Availability (GA) <code>v2</code> version that replaces them does not define the values.
-An API element can only be removed by incrementing the version, never deleted from a version that is still served — which is why these two live exactly as long as <code>v2beta1</code> does, and <code>v2beta1</code> ends at <code>v2.0.0</code> (<a href="../../plan/v2beta1-retirement/">decided 2026-09-08</a>).
+An API element can only be removed by incrementing the version, never deleted from a version that is still served — which is why these two live exactly as long as <code>v2beta1</code> does, and <code>v2beta1</code> ends at <code>v2.0.0</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/v2beta1-retirement.md">decided 2026-09-08</a>).
 An earlier notice put the floor at <code>v3.0.0</code>, on the expectation that <code>v2.0.0</code> would keep serving <code>v2beta1</code>; the reasoning was sound and that expectation changed.
 <strong>Migrate before upgrading to <code>v2.0.0</code>:</strong> one <code>EgressProxy</code> still naming an alias fails the conversion for every object in the same request, so it breaks <code>kubectl get egressproxies</code> at <code>v2</code> cluster-wide.
 Full reasoning and the coupling to the other clocks: <a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">the deprecation and removal notice</a>.</p>
 <p><strong>Managed "Cilium" platforms usually do NOT accept the <code>cilium</code> backend.</strong> The CRD test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does not install it</strong> (dropped since GKE 1.21.5-gke.1300) — use <code>--fqdn-policy-backend=gke</code> there, not <code>cilium</code>.
 If a selected backend's CRD is absent, the GMC's apply fails loudly and the <code>EgressProxy</code> goes <code>Degraded</code>; GitHub egress stays <strong>denied</strong> (the base NetworkPolicy default-denies it), never silently opened.
-The still-deferred cluster-scoped backends (AKS <code>CiliumClusterwideNetworkPolicy</code>, EKS <code>ClusterNetworkPolicy</code>) and OpenShift OVN <code>EgressFirewall</code> are tracked in the <a href="../../plan/q245-fqdn-intent-backend-split/">Q245 plan</a>.</p>
+The still-deferred cluster-scoped backends (AKS <code>CiliumClusterwideNetworkPolicy</code>, EKS <code>ClusterNetworkPolicy</code>) and OpenShift OVN <code>EgressFirewall</code> are tracked in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.</p>
 <p><strong>The <code>gke</code> backend is additive-allow, so the base NetworkPolicy is load-bearing.</strong> Unlike Cilium/Calico policies (which are self-default-denying), a GKE <code>FQDNNetworkPolicy</code> only <em>adds</em> an allow — it is a union with any NetworkPolicy on the same pod, not a default-deny.
 GAG's fail-closed guarantee therefore depends on the base standard NetworkPolicy (always emitted, GitHub-CIDR rule dropped in FQDN mode) staying present: the FQDN object widens the union to permit GitHub, and if it is absent or unenforced, GitHub egress stays denied by the base NP.
 <strong><code>gke</code>-backend enforcement is not yet live-validated on a real GKE cluster</strong> (see the Q245 plan's live-validation follow-up); also note GKE's ~50-IP-per-FQDN resolution ceiling can intermittently drop egress for a wide wildcard like <code>*.blob.core.windows.net</code> under load — reserve FQDN egress for what an in-cluster caching mirror can't proxy.</p>
@@ -4665,7 +4703,7 @@ The v1 <code>ActionsGateway</code> proxy and v2 direct-egress (proxy-less) gatew
 So the pod's <strong>node</strong> decides which IP its traffic leaves by, and pinning the tenant's proxy pool to the tenant's node pool is what binds the two.</p>
 <p><code>EgressProxy.spec.scheduling</code> carries the standard <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, and <code>priorityClassName</code>; <code>ActionsGateway.spec.scheduling</code> does the same for the AGC control-plane pod.
 (Worker pods have always had the full surface via <code>RunnerTemplate.spec.podTemplate</code>.)</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
@@ -4742,7 +4780,7 @@ It is a cluster-wide, cross-tenant preemption lever, not a choice about the tena
 <code>spec.scheduling.priorityClassName</code> raises these infra pods above best-effort workloads under node pressure.
 Because a <code>PriorityClass</code> is a cluster-wide preemption lever — and <code>system-*</code> classes are nameable from <em>any</em> namespace, not just <code>kube-system</code> — this field is gated against a <strong>separate, infra-only</strong> allowlist (<code>--allowed-infra-priority-classes</code>) that must stay <strong>disjoint</strong> from the worker allowlist.
 See <a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the two allowlists</a>.</p>
-<p>The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives, cost model, and the live-validated GKE recipe — is in the <a href="../../plan/q243-egress-ip-reference-arch/">Q243 plan</a>.</p>
+<p>The full per-tenant egress-IP reference architecture — cloud-by-cloud primitives, cost model, and the live-validated GKE recipe — is in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/q243-egress-ip-reference-arch.md">Q243 plan</a>.</p>
 <hr />
 <h2 id="worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist<a class="headerlink" href="#worker-egress-destinations-the-egress-allowlist" title="Permanent link">&para;</a></h2>
 <p>By default a worker can reach <strong>only GitHub</strong> through its per-tenant egress proxy — the proxy pool's NetworkPolicy permits the GitHub endpoints and nothing else.
@@ -4758,11 +4796,11 @@ The egress allowlist (Q242 G.1) lets a <strong>platform admin</strong> open a sm
 <li><strong>Better behavior</strong> — caching cuts repeat fetches, survives upstream outages, and gives a single audit point.</li>
 </ul>
 <p>Per-ecosystem mirrors: <strong>Athens</strong> (Go module proxy), <strong>Verdaccio</strong> (npm), a registry <strong>pull-through cache</strong> (container images).
-Two of those are built here as reference manifests: <a href="../../deploy/athens/README.md"><code>deploy/athens/</code></a> for Go modules, and <a href="../../deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a> for container images.
+Two of those are built here as reference manifests: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/athens/README.md"><code>deploy/athens/</code></a> for Go modules, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a> for container images.
 The registry mirror is one <a href="https://github.com/distribution/distribution">CNCF Distribution</a> instance per upstream, shipped with the NetworkPolicies that make it a worker's only registry path.
 Both are dogfood-shaped; each README names the handful of cluster-specific values to retarget.
 With more than one tenant the registry mirror needs a topology decision as well as retargeting, one shared set or one per tenant: <a href="../kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a>.
-Its opt-in Dragonfly back end shares layers peer to peer at a cost in trust: the mirrors stop verifying upstreams themselves and rely on the seed peer, and on the secrecy of its interception CA's key (<a href="../../deploy/registry-mirror/README.md#dragonfly-back-end">Dragonfly back end</a>).
+Its opt-in Dragonfly back end shares layers peer to peer at a cost in trust: the mirrors stop verifying upstreams themselves and rely on the seed peer, and on the secrecy of its interception CA's key (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/registry-mirror/README.md#dragonfly-back-end">Dragonfly back end</a>).
 Reserve the destination allowlist for what a mirror genuinely cannot proxy: a <em>specific</em> live cloud-provider API (<code>kms.&lt;region&gt;.amazonaws.com</code>, a Private-Google-Access CIDR like <code>199.36.153.8/30</code>), internal services reachable only by IP, and one-off stable endpoints.
 <strong>Never</strong> a wildcard like <code>*.googleapis.com</code> (it covers <code>storage.googleapis.com/&lt;any-bucket&gt;</code> and reopens broad exfil), and <strong>not</strong> the metadata/IMDS endpoint.</p>
 <p>The registry mirror is also the load-bearing half of the <strong>untrusted-pull-request posture</strong>: with every registry pull riding it, a tenant's allow-all egress policy can be deleted outright and a Kata worker's reachable set becomes cluster DNS, GitHub, and the mirror Services.
@@ -4787,13 +4825,13 @@ GitHub is always allowed implicitly; the lists only add.</p>
 </code></pre></div>
 <p>A tenant then requests the destination on their <code>EgressProxy</code>.
 FQDN destinations require an FQDN <code>egressPolicyMode</code> (the CRD rejects <code>destinationFQDNs</code> in CIDR mode, since the pod-egress layer expresses them as <code>toFQDNs</code> rules); CIDR destinations work in any mode:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
 <a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span><span class="nt">egressPolicyMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FQDN</span><span class="w">   </span><span class="c1"># (or the deprecated CiliumFQDN/CalicoFQDN); requires an operator --fqdn-policy-backend</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">  </span><span class="nt">egressPolicyMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FQDN</span><span class="w">   </span><span class="c1"># requires an operator --fqdn-policy-backend</span>
 <a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span><span class="nt">destinationFQDNs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">proxy.golang.org</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sum.golang.org</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># rejected unless covered by --allowed-egress-fqdns</span>
 <a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">  </span><span class="nt">destinationCIDRs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">                                   </span><span class="c1"># rejected unless contained in --allowed-egress-cidrs</span>
 </code></pre></div>
@@ -4830,7 +4868,7 @@ One proxy pool can serve several namespaces (a platform-operated central pool, o
 <h3 id="consent-lives-on-the-provider">Consent lives on the provider<a class="headerlink" href="#consent-lives-on-the-provider" title="Permanent link">&para;</a></h3>
 <p>Naming a proxy from the consumer side authorizes nothing.
 The proxy owner lists the namespaces permitted to use it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
@@ -4842,7 +4880,7 @@ The proxy owner lists the namespaces permitted to use it:</p>
 <a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b</span>
 </code></pre></div>
 <p>A consumer then names the proxy and its namespace:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway</span>
@@ -4871,6 +4909,9 @@ If it is missing, the grant has not been accepted; check the consumer's conditio
 <p><code>Degraded</code> with reason <code>ProxyShareNotGranted</code> means the proxy exists but does not list this namespace.
 Reason <code>ProxyNotFound</code> means the name or namespace is wrong.
 Both fail closed: no worker pods run and no traffic is permitted while either is set.</p>
+<p>A gateway's AGC mounts the proxy certificate from that ConfigMap, so the GMC creates the AGC only once the ConfigMap exists.
+For the few seconds after you create a gateway naming a granted proxy, it reports <code>ProxyShareNotGranted</code> with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.
+That message persisting means the ConfigMap is not being written: check the provider's <code>EgressProxy</code> status and the GMC logs.</p>
 <p>Confirm the provider side admits the consumer:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>platform-egress<span class="w"> </span>shared-pool-proxy<span class="w"> </span>-o<span class="w"> </span>yaml
 </code></pre></div>
@@ -5285,7 +5326,7 @@ Observed on Kubernetes 1.35.5 and 1.36.1.</p>
 <p><strong>What fixes it.</strong> For a <em>CRD</em> <code>paramKind</code> the apiserver allocates a fresh dynamic informer per context, so the same transition is survivable.
 Moving the parameter to the cluster-scoped <code>PriorityClassAllowlist</code> CR (Q492) therefore removes the exposure at its root rather than mitigating it.
 The contrast is measured directly — the same empty-binding-set transition, one GVK apart — by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, and the uninstall/reinstall cycle is now a CI gate (<code>scripts/e2e/chart-reinstall-check.sh</code>).
-Mechanism and measurements: <a href="../../plan/archive/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
+Mechanism and measurements: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
 <p><strong>If you are still on an affected release</strong>, upgrade in place — <code>helm upgrade</code> never removes the binding and is safe — and see <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.
 If you are already in the broken state, restart kube-apiserver where you can; otherwise set <code>admissionPolicy.enabled=false</code> to restore writes (you lose the backstop until the apiserver recycles), then upgrade.</p>
 <p><strong>The benign window is not this defect.</strong> A reinstall removes the parameter object and recreates it, and for a second or two in between the guard correctly fails closed with the same message.
@@ -5312,12 +5353,12 @@ Each of the four production images therefore ships its license attribution under
 <a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
 </code></pre></div>
 <ul>
-<li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is <strong>generated and committed</strong> by <code>make third-party-notices</code> (<a href="../../scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>), which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under the committed, version-pinned <code>vendor/</code> tree — offline, no network or module cache.
+<li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is <strong>generated and committed</strong> by <code>make third-party-notices</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>), which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under the committed, version-pinned <code>vendor/</code> tree — offline, no network or module cache.
   The CI <code>license-notices</code> workflow runs <code>make third-party-notices-check</code> on every change to <code>vendor/**</code> (or the generator) and fails the PR if the committed file is stale, so a dependency add/remove/bump cannot ship without refreshed attribution.</li>
 </ul>
 <hr />
 <h2 id="image-provenance-signature--sbom-verification">Image provenance: signature &amp; SBOM verification<a class="headerlink" href="#image-provenance-signature--sbom-verification" title="Permanent link">&para;</a></h2>
-<p>The six first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>) are published to GHCR by the <a href="../../.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in <a href="../release/">release.md</a>).
+<p>The six first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>) are published to GHCR by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow on every <code>v*</code> release tag (the maintainer-facing cut-a-release procedure is in <a href="../release/">release.md</a>).
 Each one is:</p>
 <ul>
 <li><strong>Multi-arch</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>): the published ref is an OCI image <strong>index</strong>; the digest you pin at install time is the index digest, and the kubelet resolves the node's per-arch manifest from it at pull time.</li>
@@ -5389,7 +5430,7 @@ To pull and inspect one from the registry, resolve the per-arch digest from the 
 <a id="__codelineno-40-12" name="__codelineno-40-12" href="#__codelineno-40-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
 <a id="__codelineno-40-13" name="__codelineno-40-13" href="#__codelineno-40-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.packages[].name'</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
-<p>PR CI (<a href="../../.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds each image and generates the same SBOM as a build artifact, so SBOM generation is exercised on every code PR — but <strong>signing and attestation run only on publish</strong> (they need a registry push and the publish workflow's OIDC identity).
+<p>PR CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds each image and generates the same SBOM as a build artifact, so SBOM generation is exercised on every code PR — but <strong>signing and attestation run only on publish</strong> (they need a registry push and the publish workflow's OIDC identity).
 A green PR therefore proves the image builds and the SBOM generates; it does not exercise the cosign sign/attest path.</p>
 <hr />
 <h2 id="reference-links">Reference Links<a class="headerlink" href="#reference-links" title="Permanent link">&para;</a></h2>
@@ -5398,7 +5439,7 @@ A green PR therefore proves the image builds and the SBOM generates; it does not
 <li><a href="../observability/">observability.md</a> — full metrics reference and SLO alerting</li>
 <li><a href="../runbook/">runbook.md</a> — incident response and day-2 operations</li>
 <li><a href="../troubleshooting/">troubleshooting.md</a> — symptom → diagnosis → remediation</li>
-<li><a href="../../plan/security/">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
+<li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/security.md">Security review findings (plan/security.md)</a> — per-finding status, including H-2 and the audit-policy follow-on</li>
 </ul>
 
 

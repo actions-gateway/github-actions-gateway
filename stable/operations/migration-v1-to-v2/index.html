@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/migration-v1-to-v2/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/migration-v1-to-v2/">
       
       
         <link rel="prev" href="../migration-from-arc/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -2140,6 +2142,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -2198,10 +2228,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -2219,8 +2249,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3087,7 +3117,7 @@ Because one v1 object fans out into several v2 objects, the move is a tool-assis
 <p>This guide covers running the <code>gag-migrate</code> tool: dry-run → review → <code>--apply</code>, the coexistence/rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
 <p>v2 is <strong>opt-in</strong>.
-It is served at three versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only storage/hub version), <strong><code>v2</code></strong> (the GA version, storage from <code>v2.0.0</code>), and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp).
+It is served at three versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only hub version), <strong><code>v2</code></strong> (the GA version, storage from 1.10), and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp).
 <code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs Classic.
 Multi-label matching is not a reason to stay: <code>v2beta1</code> registers every <code>runnerLabel</code> on the scale set.
 Because <code>v2alpha1</code> is deprecated, the apiserver warns on every <code>v2alpha1</code> read or write, including the objects <code>gag-migrate</code> applies.

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/install/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/install/">
       
       
         <link rel="prev" href="../personas/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -2117,6 +2119,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -2175,10 +2205,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -2196,8 +2226,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3042,7 +3072,7 @@ For the full end-to-end walkthrough that continues past the GMC install into the
 <p>The Helm chart installs the GMC and its cluster prerequisites <strong>only</strong> — CRDs, RBAC, the validating webhook, the <code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>, and <code>priorityclass-allowlist-guard</code> admission policies, and NetworkPolicies.
 Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are <strong>not</strong> chart resources; the GMC provisions them at runtime from each tenant's <code>ActionsGateway</code> CR.
 The chart is the <strong>sole</strong> install path — there is no kustomize overlay; the plain-YAML files under <code>cmd/gmc/config/</code> are the controller-gen codegen + test substrate, not an install vehicle.
-For the full chart reference (every value, the templates it renders, offline validation), see the <a href="../../charts/actions-gateway/README.md">chart README</a>.</p>
+For the full chart reference (every value, the templates it renders, offline validation), see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/charts/actions-gateway/README.md">chart README</a>.</p>
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
@@ -3121,20 +3151,20 @@ Set <code>VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0</code> to restore 
 <hr />
 <h2 id="install">Install<a class="headerlink" href="#install" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Current release — <code>v1.9.0</code>.</strong> The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
-Pin <code>--version 1.9.0</code> (the chart version is the release tag without the leading <code>v</code>).
-Newer patch releases publish as <code>1.9.z</code>; pin the version you have verified.</p>
+<p><strong>Current release — <code>v1.10.0</code>.</strong> The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
+Pin <code>--version 1.10.0</code> (the chart version is the release tag without the leading <code>v</code>).
+Newer patch releases publish as <code>1.10.z</code>; pin the version you have verified.</p>
 </blockquote>
 <p>Install the published, signed chart straight from the registry — no source checkout needed:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.9.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
-<p>Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0">release notes</a> (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
+<p>Copy the four image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">release notes</a> (the chart ships <strong>no</strong> baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
 Verify the chart and image signatures before installing — see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a> and <a href="../security-operations/#image-provenance-signature--sbom-verification">security-operations.md § Image provenance</a>.</p>
 <blockquote>
 <p><strong>Installing from a source checkout</strong> (dev/CI, or to install an unreleased chart) still works — substitute the local <code>charts/actions-gateway</code> path for the <code>oci://…</code> ref in any command on this page:</p>
@@ -3172,7 +3202,7 @@ This is the secure default: a digest is immutable, so neither the controller nor
 Digest pinning is preserved throughout (relocation is content-addressed).</p>
 <h3 id="without-cert-manager">Without cert-manager<a class="headerlink" href="#without-cert-manager" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.9.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span>--set<span class="w"> </span>certManager.enabled<span class="o">=</span><span class="nb">false</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
@@ -3201,7 +3231,7 @@ It gives ready-to-apply Argo CD <code>Application</code> and Flux <code>HelmRele
 <p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) CRDs — still fully served, but <a href="../v1alpha1-deprecation/">deprecated</a>.
 The v2 (<code>actions-gateway.com</code>) API that new tenants onboard on ships its five CRDs in a <strong>separate, opt-in chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
 Install it alongside the main chart unless you are running v1-only.</p>
-<p>Each v2 CRD is served at <strong>three versions</strong>: <strong><code>v2beta1</code></strong> (the served <strong>and</strong> storage version — the graduated, ScaleSet-only shape), <strong><code>v2</code></strong> (the General Availability (GA) version, identical but for the dropped <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, and the storage version from <code>v2.0.0</code>), and <strong><code>v2alpha1</code></strong> (served as the <code>gag-migrate</code> on-ramp, deprecated, and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>).
+<p>Each v2 CRD is served at <strong>three versions</strong>: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only shape, and the conversion hub), <strong><code>v2</code></strong> (the General Availability (GA) version, identical but for the dropped <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, and the storage version from 1.10), and <strong><code>v2alpha1</code></strong> (served as the <code>gag-migrate</code> on-ramp, deprecated, and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>).
 An unpinned <code>kubectl get</code> returns <code>v2</code>, the version the apiserver prefers (<a href="../upgrade/#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">what that changes</a>).
 The apiserver converts between them through a <strong>conversion webhook hosted by the GMC</strong> (the <code>/convert</code> endpoint on the same <code>webhook-service</code> that fronts the validating webhooks).
 Two consequences for an operator:</p>
@@ -3327,7 +3357,7 @@ The knobs an operator is most likely to override:</p>
 </tbody>
 </table>
 <p>A <code>values.schema.json</code> validates these at install/lint time (digest format, enum values, etc.).
-The <strong>full reference</strong> — every value with its default and description — lives in the <a href="../../charts/actions-gateway/README.md#values">chart README</a>; this table is only the common subset, not a duplicate.</p>
+The <strong>full reference</strong> — every value with its default and description — lives in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/charts/actions-gateway/README.md#values">chart README</a>; this table is only the common subset, not a duplicate.</p>
 <h3 id="the-policy-parameter-is-a-crd-not-a-configmap-q492">The policy parameter is a CRD, not a ConfigMap (Q492)<a class="headerlink" href="#the-policy-parameter-is-a-crd-not-a-configmap-q492" title="Permanent link">&para;</a></h3>
 <p>The guard reads its allowlist from a cluster-scoped <code>PriorityClassAllowlist</code> CR (<code>&lt;release&gt;-priorityclass-allowlist</code>), which the chart renders from <code>allowedPriorityClasses</code> and the GMC also watches.
 One object, two consumers, so the webhook and the policy cannot disagree.</p>
@@ -3341,8 +3371,11 @@ This is measured rather than inferred: <code>scripts/e2e/vap-param-informer-chec
 A <strong>fresh <code>helm install</code> handles this for you</strong>; <code>crds/</code> is applied first.</p>
 <p>An <strong>upgrade does not</strong>.
 Helm skips <code>crds/</code> entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>&lt;chart&gt;<span class="w"> </span>--version<span class="w"> </span>&lt;version&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>&lt;chart&gt;<span class="w"> </span>--version<span class="w"> </span>&lt;version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;version&gt;
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
+<p>Pull first: for an OCI reference, <code>helm show crds</code> prints its pull banner on stdout (measured on Helm 4.2), and <code>kubectl</code> rejects the result.
+From a local chart directory, <code>helm show crds &lt;dir&gt; | kubectl apply -f -</code> is enough.</p>
 <p>It is idempotent and version-correct, so it also covers any future schema change to this CRD with no release-note callout to remember.
 The chart preflights the CRD's presence and fails with that command rather than letting Helm emit a bare <code>no matches for kind</code>.
 Steps: <a href="../upgrade/#gmc-install-and-upgrade-via-helm-recommended">upgrade.md</a>.</p>

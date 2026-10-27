@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/why-gag/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/why-gag/">
       
       
         <link rel="prev" href="..">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1550,6 +1550,8 @@
       
         
       
+        
+      
     
     
     
@@ -2031,6 +2033,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -2086,10 +2116,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -2107,8 +2137,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3027,7 +3057,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <tr>
 <td>Auto-re-run jobs disrupted mid-flight (eviction / preemption / drain)</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no re-run mechanism exists</strong><br><span class="gag-cont">the runner registration is removed and the job is given up on; 0.13.1 recovers the pod, never the job</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself in seconds</a></strong><br><span class="gag-cont">15&ndash;26 s measured for a preemption or drain; evictions, drains and hand-deleted workers all covered, under a per-run budget</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself in seconds</a></strong><br><span class="gag-cont">15&ndash;26 s measured for a preemption or drain; evictions, Spot reclamations, drains, node shutdowns and hand-deleted workers all covered, under a per-run budget</span></td>
 </tr>
 <tr>
 <td>Stop claiming jobs when the cluster can't place the worker</td>
@@ -3122,7 +3152,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 </tbody>
 </table>
 <p>Every GAG capability above is available today.
-Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2beta1</code> API, which is where new tenants start.
+Rows marked <span class="gag-v2-badge">v2</span> need the <code>actions-gateway.com/v2</code> API, which is where new tenants start.
 Which release a capability arrived in is on <a href="../features/">Features</a>; the version selector at the top of the page switches between what each release shipped.</p>
 <h3 id="how-to-read-the-arc-column">How to read the ARC column<a class="headerlink" href="#how-to-read-the-arc-column" title="Permanent link">&para;</a></h3>
 <p>Every ARC cell renders one of two things, and the difference is what it rests on:</p>
@@ -3147,7 +3177,7 @@ two dates because there were two passes: the original column on
 still the newest published chart. The tag is what
 the stamp names; the commit is what makes it re-checkable, since a link to a
 branch drifts out from under the claim it was cited for. Per-cell evidence,
-file by file, is in the <a href="../plan/competitive-analysis-2026-08/#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
+file by file, is in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/competitive-analysis-2026-08.md#per-cell-evidence-for-the-arc-column-2026-08-12">competitive analysis</a>.</p>
 <p>If you are evaluating on a later ARC than a cell names, re-check that cell
 rather than trusting it, and
 <a href="https://github.com/actions-gateway/github-actions-gateway/issues">tell us what changed</a>.</p>
@@ -3163,9 +3193,9 @@ rather than trusting it, and
      fire. The stamp below is what makes that second case a gate rather than a
      request: `make tier-claims-check` digests the tier-bearing lines of the
      section named in it, so a tier move there goes red here. -->
-<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=c7781d75 -->
-<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a drain and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers.
-A job that <em>failed</em> and a run you <em>cancelled</em> never do.
+<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=67e9c239 -->
+<p><strong>Auto-re-run covers disruption, never failure.</strong> Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray <code>kubectl delete pod</code> all come back, on both acquisition tiers, and so does a dead node once an admin taints it <code>out-of-service</code>.
+A job that <em>failed</em> and a run you <em>cancelled</em> never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
 Nor do workers the reaper took, with one exception: a worker reaped while still <code>Pending</code> is re-run on both tiers once capacity returns.
 <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">The full boundary</a>.</p>
 <p><strong>Right-sizing is structural, not a feature race.</strong> An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.
@@ -3190,7 +3220,7 @@ Two we do not plan to match: the support entitlement, and <code>containerMode: k
   That is a real cost, and it is a trade rather than a straight loss: ARC needs no <em>pod</em> privilege there because it takes a namespace-wide Kubernetes API grant instead, which needs no exploit to use and reaches the other runner sets in that namespace.</li>
 <li><strong>GHES that is actually tested.</strong> GAG serves GHES gateways and marks both of its GHES features untested against a real appliance.</li>
 </ul>
-<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG's v2 API still stores its beta (<code>v2beta1</code>, its first stability contract) and serves the GA <code>v2</code> beside it only from 1.9.
+<p>The maturity gap is real too: ARC is GA and widely deployed, while GAG has served its GA <code>v2</code> API only since 1.9, and stored objects at it only since 1.10.
 That is why the v1 to v2 migration runs on a committed, documented schedule with a working <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> tool.
 The discipline is the "won't strand you" signal while the track record accumulates.</p>
 <p>One thing is <strong>not</strong> a differentiator either way: both ride the same Public-Preview runner-scale-set protocol, through the same <a href="https://github.com/actions/scaleset"><code>actions/scaleset</code></a> client library.</p>

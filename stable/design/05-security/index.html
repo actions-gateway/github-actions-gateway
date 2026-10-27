@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/design/05-security/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/design/05-security/">
       
       
         <link rel="prev" href="../04-operational-flows/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1239,6 +1239,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-failure-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy failure attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cross-tenant-pod-preemption-via-priorityclass" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1896,6 +1907,8 @@
       
         
       
+        
+      
     
     
     
@@ -2377,6 +2390,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -2432,10 +2473,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -2453,8 +2494,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3292,6 +3333,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#proxy-failure-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proxy failure attribution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cross-tenant-pod-preemption-via-priorityclass" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3566,7 +3618,7 @@ Threats are grouped by which tier they affect.</p>
 <tr>
 <td><strong>GMC Privilege Escalation</strong> (Blast Radius: All Tenants)</td>
 <td>Critical</td>
-<td>Cluster-wide provisioning writes are confined to marked tenant namespaces by two <code>ValidatingAdmissionPolicy</code> objects (<code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>); the honest residual is cluster-wide Secret <em>reads</em>, offset by metadata-only caching, uncached direct reads, and the Q29 audit policy. Full blast radius and compensating controls: <a href="#gmc-privilege-escalation-blast-radius-and-compensating-controls">see below</a>.</td>
+<td>Cluster-wide provisioning writes are confined to marked tenant namespaces by two <code>ValidatingAdmissionPolicy</code> objects (<code>namespace-psa-guard</code>, <code>gmc-tenant-resource-guard</code>), and Secret <em>reads</em> are granted per tenant namespace through a RoleBinding the same policy fences (Q1188). Full blast radius and compensating controls: <a href="#gmc-privilege-escalation-blast-radius-and-compensating-controls">see below</a>.</td>
 </tr>
 <tr>
 <td><strong>Admission Webhook Unavailability or Bypass</strong></td>
@@ -3586,7 +3638,7 @@ Threats are grouped by which tier they affect.</p>
 <tr>
 <td><strong>Cross-Tenant GitHub App Credential Leakage</strong></td>
 <td>High</td>
-<td><code>ActionsGateway</code> is namespace-scoped so a <code>gitHubAppRef</code> cannot cross namespaces, and the credential Secret is mounted into the AGC pod only (never worker pods). Secret <strong>writes</strong> are confined by <code>gmc-tenant-resource-guard</code>; cluster-wide <em>reads</em> are offset by two-layer cache isolation (metadata-only informer + <code>DisableFor</code> uncached <code>Get</code>). Full detail: <a href="#cross-tenant-github-app-credential-leakage-and-cache-isolation">see below</a>.</td>
+<td><code>ActionsGateway</code> is namespace-scoped so a <code>gitHubAppRef</code> cannot cross namespaces, and the credential Secret is mounted into the AGC pod only (never worker pods). Secret <strong>writes</strong> are confined by <code>gmc-tenant-resource-guard</code>, and <em>reads</em> are granted only in tenant namespaces (Q1188), with two-layer cache isolation (metadata-only informer + <code>DisableFor</code> uncached <code>Get</code>) keeping key material out of the GMC's memory. Full detail: <a href="#cross-tenant-github-app-credential-leakage-and-cache-isolation">see below</a>.</td>
 </tr>
 <tr>
 <td><strong><code>ActionsGateway</code> CR in Reserved Namespace</strong></td>
@@ -3599,20 +3651,42 @@ Threats are grouped by which tier they affect.</p>
 <p>The GMC's ClusterRole grants cluster-wide <em>write</em> (<code>create</code>/<code>update</code>/<code>delete</code>) on the tenant provisioning kinds — Deployments, Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, VerticalPodAutoscalers (Q360; the grant is inert on a cluster without the optional <code>autoscaling.k8s.io</code> CRDs, and a VPA only ever resizes the workload it targets), PodDisruptionBudgets, RunnerGroups, and Secret <code>create</code>/<code>update</code> — because RBAC cannot express "only namespaces that carry a marker label".</p>
 <p>Two <code>ValidatingAdmissionPolicy</code> objects close that gap by confining the GMC ServiceAccount at admission: <code>namespace-psa-guard</code> confines <code>namespaces:patch</code> to the six <code>pod-security.kubernetes.io/*</code> keys on marked namespaces, and <strong><code>gmc-tenant-resource-guard</code> confines every <code>create</code>/<code>update</code>/<code>delete</code> of the kinds above to namespaces an administrator has marked <code>actions-gateway.github.com/tenant: "true"</code></strong> (Q121 write path / Q122).
 So a compromised GMC cannot create a Deployment or RoleBinding in <code>kube-system</code>, write a Secret into an arbitrary namespace, or relabel <code>kube-system</code> PSA to <code>privileged</code> (see <a href="#53-security-profiles-and-the-privileged-opt-in">§5.3</a>).</p>
-<p>The grant RBAC and admission cannot confine is Secret <strong>reads</strong>: admission never runs on <code>get</code>/<code>list</code>/<code>watch</code>, <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so <code>get</code> cannot be name-scoped either — therefore the ClusterRole grants cluster-wide Secret <code>get</code>/<code>list</code>/<code>watch</code>, and this is an honestly-stated residual, not a confined property (Q121; compensating controls below).</p>
+<p>Secret <strong>reads</strong> need a different mechanism, because admission never runs on <code>get</code>/<code>list</code>/<code>watch</code>.
+RBAC cannot scope a grant by namespace label either, so the reads leave the ClusterRole altogether (Q1188).
+A singleton ClusterRole, <code>gmc-tenant-secret-reader</code>, holds <code>get</code>/<code>list</code>/<code>watch</code> on Secrets, and the GMC creates a RoleBinding to it in each namespace carrying a tenant marker.
+The GMC holds <code>bind</code> on that one <code>resourceName</code> and nothing broader, the pattern it already uses to hand the AGC <code>agc-tenant-role</code>, so RBAC escalation prevention is satisfied without <code>escalate</code>.
+What stops the GMC binding the reader into <code>kube-system</code> is <code>gmc-tenant-resource-guard</code>, which confines its RoleBinding writes to tenant namespaces, together with <code>namespace-psa-guard</code>, which makes the tenant marker immutable to it.</p>
+<p>The ClusterRole's Secret write verbs are <code>create</code> and <code>update</code>, and never <code>patch</code>, because a <code>patch</code> is a read.
+A PATCH needs no prior <code>get</code> and its response carries the stored object, so an empty merge patch returns a Secret's <code>.data</code> to a caller holding <code>patch</code> alone (measured on kind, Kubernetes v1.36.1, 2026-10-26).
+Granted cluster-wide, that verb would read any Secret admission lets through, which is every namespace whenever <code>gmc-tenant-resource-guard</code> runs in <code>Audit</code> or is disabled.
+An <code>update</code> cannot read: it returns only what it sent, and the GMC fetches an owned Secret through its tenant reader binding before updating it (Q1214).</p>
+<p>A <code>bind</code> grant also lets the GMC create a ClusterRoleBinding to the same role, and a ClusterRoleBinding to <code>gmc-tenant-secret-reader</code> or <code>agc-tenant-role</code> would grant Secret reads in every namespace.
+The GMC needs <code>create</code> on ClusterRoleBindings for the per-gateway <code>agc-clusterrunnertemplate-reader</code> binding, so the guard also checks ClusterRoleBinding writes: the GMC may create, update or delete one only when its <code>roleRef</code> names <code>agc-clusterrunnertemplate-reader</code>.</p>
+<p>The metadata-only informer cannot keep the reads off the cluster-wide grant, because RBAC cannot tell a metadata <code>list</code> from a full-body one.
+A metadata request is an ordinary <code>list secrets</code> whose <code>Accept</code> header asks for <code>PartialObjectMetadataList</code>, and authorization decides on user, verb, namespace, resource, name, path and selectors, never the response format.
+So the GMC runs one metadata-only Secret informer per tenant namespace instead of one cluster-wide, started when the namespace's RoleBinding exists and stopped when the namespace loses its marker.</p>
 <p><strong>Explicit blast radius if compromised.</strong> A compromised GMC can:</p>
 <ul>
 <li>Enumerate every <code>ActionsGateway</code> CR in the cluster, learning each tenant's <code>gitHubAppRef</code> name and namespace.</li>
-<li><code>list</code>/<code>watch</code> and <code>get</code> the full <code>.data</code> of <strong>any</strong> Secret in the cluster, including GitHub App private keys (the metadata-only informer and uncached reads below are client-side hygiene, not authorization).</li>
+<li><code>list</code>/<code>watch</code> and <code>get</code> the full <code>.data</code> of any Secret <strong>in a marked tenant namespace</strong>, including that tenant's GitHub App private key.</li>
 <li>Create/update/delete workloads and Secrets <strong>only in marked tenant namespaces</strong> (the <code>gmc-tenant-resource-guard</code> VAP denies writes elsewhere).</li>
 </ul>
-<p>It CANNOT exec into pods, create new namespaces, or write resources into unmarked namespaces such as <code>kube-system</code>.</p>
-<p><strong>Secret-read compensating controls.</strong> Four, three preventive and one detective:</p>
+<p>It CANNOT exec into pods, create new namespaces, write resources into unmarked namespaces such as <code>kube-system</code>, or read their Secrets.</p>
+<p><strong>Residuals.</strong></p>
 <ul>
-<li><code>WatchesMetadata</code> keeps the informer cache to Secret ObjectMeta only (no <code>.data</code>).</li>
+<li>With <code>admissionPolicy.enabled=false</code> nothing fences the <code>bind</code>, so a compromised GMC can bind the reader into any namespace, or cluster-wide through a ClusterRoleBinding, and read every Secret.
+  Its <code>bind</code> on <code>agc-tenant-role</code> reaches the same reads by the same two routes.</li>
+<li>A namespace that loses its marker keeps the reader RoleBinding: the guard denies the GMC's delete there, because the namespace is no longer a tenant.
+  The platform admin who removes the marker also deletes <code>gmc-tenant-secret-reader</code> in that namespace (<a href="../../operations/upgrade/">upgrade.md</a>).</li>
+<li>Secret <code>create</code>/<code>update</code> stay cluster-wide.
+  Admission rejects an out-of-tenant write before the API server responds, so neither verb returns another namespace's Secret body.</li>
+</ul>
+<p><strong>Secret-read compensating controls</strong>, inside the tenant namespaces where reads are granted:</p>
+<ul>
+<li>The per-namespace informers are metadata-only, so the cache holds Secret ObjectMeta and no <code>.data</code>.</li>
 <li><code>client.Cache.DisableFor[*corev1.Secret]</code> forces <code>r.Get()</code> to hit the API server directly, so key material is never cache-resident.</li>
-<li>In practice the GMC only <code>get</code>s the named credential Secret in the CR's own namespace.</li>
-<li>The Q29 audit policy (<a href="../../operations/examples/apiserver-audit-policy.yaml">sample</a>, <a href="../../operations/security-operations/#api-server-audit-policy-sample">runbook</a>) surfaces any out-of-pattern Secret read.</li>
+<li>In practice the GMC only <code>get</code>s the named credential Secret and the Secrets it owns, in the CR's own namespace.</li>
+<li>The Q29 audit policy (<a href="../../operations/examples/apiserver-audit-policy.yaml">sample</a>, <a href="../../operations/security-operations/#api-server-audit-policy-sample">runbook</a>) surfaces any out-of-pattern Secret read, and a <code>Forbidden</code> outside a tenant namespace.</li>
 </ul>
 <p>GMC pod runs with non-root user, read-only root filesystem, no host mounts, and <code>seccompProfile: {type: RuntimeDefault}</code>.
 Image is digest-pinned, enforced at chart render time — the Helm chart refuses to render an unpinned <code>gmc.image</code>.
@@ -3635,8 +3709,8 @@ This matches the controller-runtime scaffold's own secure default.</p>
 The GMC mounts credentials into the AGC Pod only; worker pods never have access to the Secret object.
 Secrets are immutable; rotation creates a new Secret and updates the CR reference, producing a clean Deployment rollout.
 Old Secrets are not readable by running Pods once the rollout completes.</p>
-<p>The GMC's ClusterRole grants Secret <code>get</code>/<code>list</code>/<code>watch</code> cluster-wide (not name-scoped — <code>resourceNames</code> cannot scope <code>list</code>/<code>watch</code>, and tenant Secret names are dynamic so it cannot scope <code>get</code> either); Secret <strong>writes</strong> (<code>create</code>/<code>update</code>) are confined to marked tenant namespaces by the <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code>, but reads cannot be confined at the authorization layer (admission does not run on read verbs — Q121).</p>
-<p><strong>Two-layer cache isolation</strong> (the compensating control for reads): the GMC uses <code>WatchesMetadata</code> (not a full Secret watch) so the in-process informer cache holds only Secret ObjectMeta (name, namespace, resourceVersion — no <code>.data</code>); and <code>client.Cache.DisableFor[*corev1.Secret]</code> ensures <code>r.Get()</code> calls bypass the cache entirely and hit the API server directly, so actual key material is never resident in memory beyond the duration of a single reconcile call.</p>
+<p>The GMC reads Secrets only in marked tenant namespaces, through the per-namespace <code>gmc-tenant-secret-reader</code> RoleBinding described <a href="#gmc-privilege-escalation-blast-radius-and-compensating-controls">above</a> (Q1188); Secret <strong>writes</strong> (<code>create</code>/<code>update</code>) are confined to the same namespaces by the <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code>.</p>
+<p><strong>Two-layer cache isolation</strong>: the GMC's per-tenant-namespace Secret informers are metadata-only (not a full Secret watch), so the in-process informer cache holds only Secret ObjectMeta (name, namespace, resourceVersion — no <code>.data</code>); and <code>client.Cache.DisableFor[*corev1.Secret]</code> ensures <code>r.Get()</code> calls bypass the cache entirely and hit the API server directly, so actual key material is never resident in memory beyond the duration of a single reconcile call.</p>
 <hr />
 <h2 id="52-agc--proxy-level-threats-namespace-scoped">5.2. AGC &amp; Proxy-Level Threats (Namespace-Scoped)<a class="headerlink" href="#52-agc--proxy-level-threats-namespace-scoped" title="Permanent link">&para;</a></h2>
 <p>Several mitigations below rest on the per-tenant NetworkPolicies the GMC reconciles (workload egress restricted to DNS + proxy, with <strong>DNS itself confined to the cluster DNS service</strong> rather than any resolver — Q105; only AGC-labelled pods get apiserver egress; <strong>workload pods default-deny all ingress</strong> — Q128).</p>
@@ -3662,7 +3736,7 @@ The secure default <code>--fqdn-policy-backend=none</code> <strong>rejects</stro
 <p><strong>The <code>gke</code> backend is additive-allow, so the base default-deny NetworkPolicy is a required invariant.</strong> Unlike Cilium/Calico FQDN policies (self-default-denying), a GKE <code>FQDNNetworkPolicy</code> composes with a NetworkPolicy on the same pod as a <strong>union</strong> — it only <em>adds</em> an allow, it denies nothing on its own.
 GAG's fail-closed guarantee for <code>gke</code> therefore depends on the base standard NetworkPolicy (always emitted; GitHub-CIDR rule dropped, DNS-only allow kept) staying present alongside it: the <code>FQDNNetworkPolicy</code> only widens the union to permit GitHub, and if it is absent or unenforced GitHub egress stays denied by the base NP.
 A future refactor must not drop the base NP for the <code>gke</code> backend, or it opens egress.
-(<code>gke</code>-backend enforcement is not yet live-validated; see the <a href="../../plan/q245-fqdn-intent-backend-split/">Q245 plan</a>.)
+(<code>gke</code>-backend enforcement is not yet live-validated; see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.)
 See <a href="../network-architecture/#cni-native-fqdn-egress-mode-opt-in-q208-q245">network-architecture.md § CNI-native FQDN egress mode</a> and the operator runbook <a href="../../operations/security-operations/#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">security-operations.md § Expressing GitHub egress by FQDN</a>.</p>
 <p><strong>Pod placement is CR-author-settable, so per-tenant egress-IP <em>attribution</em> is a property of the cluster's policy layer, not of GAG alone (Q282).</strong> A per-tenant egress IP is realized by pinning a tenant's pods to a node pool whose egress path (cloud NAT gateway, dedicated subnet) owns that IP — so the pod's <strong>node</strong> decides which IP its traffic leaves by.
 GAG passes placement through to the CR author in three places: <code>RunnerTemplate.spec.podTemplate</code> (a full <code>PodTemplateSpec</code>, always has), and — since Q282 — <code>EgressProxy.spec.scheduling</code> and <code>ActionsGateway.spec.scheduling</code>, each carrying <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>.
@@ -3681,7 +3755,7 @@ Because the <code>EgressProxy</code> is tenant-authorable, the destinations are 
 <strong>Both empty ⇒ deny-all-non-GitHub</strong>, identical in spirit to the empty <code>--allowed-priority-classes</code> default (Q132/Q188).
 The destinations widen one source into two enforcement surfaces (CIDR <code>ipBlock</code> / FQDN <code>toFQDNs</code> on the pod-egress policy, and the proxy CONNECT allowlist as defense-in-depth with DNS-rebinding revalidation on the CIDR path); GitHub stays implicit.
 This is a <strong>deliberate, bounded relaxation</strong> of the GitHub-only posture, accepted with the trade-offs recorded — the residual is that a compromised worker can exfiltrate to an allowlisted destination, which the allowlist bounds but does not eliminate; the docs therefore steer operators to an <strong>in-cluster caching mirror</strong> first and reserve the allowlist for what a mirror can't proxy.
-See the threat row below, <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, the operator runbook <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the design <a href="../../plan/archive/q242-g1-proxy-destination-allowlist/">Q242 plan</a>.</p>
+See the threat row below, <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, the operator runbook <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the design <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a>.</p>
 <p><strong>A <code>noProxyCIDRs</code> entry must never route GitHub around the proxy.</strong> <code>noProxyCIDRs</code> (v1 <code>ActionsGateway.spec.proxy</code>, v2 <code>EgressProxy.spec</code>) is threaded verbatim into the AGC/worker <code>NO_PROXY</code> env var, where a hostname entry is a domain-suffix match — so a tenant-authored entry like <code>github.com</code> (or an over-broad <code>.com</code>) would silently exclude GitHub from the proxy and defeat per-tenant egress-IP attribution.
 Both GMC validating webhooks reject any entry that NO_PROXY-matches a protected GitHub host (shared guard: <code>gmc/internal/webhook/noproxy</code>), while still admitting the legitimate internal-destination entries (CIDRs, bare IPs, non-GitHub domain suffixes such as <code>svc.cluster.local</code>).
 On the v2 <code>EgressProxy</code> — which carries no <code>gitHubURL</code> of its own — the protected set is the public GitHub hosts <strong>plus the <code>gitHubURL</code> host (a GitHub Enterprise Server host included) of every referrer</strong>, resolved through the uncached API reader from both directions (Q322): the <code>EgressProxy</code> write checks the gateways/RunnerSets that reference it, and the <code>ActionsGateway</code>/<code>RunnerSet</code> write checks the referenced proxy's <code>noProxyCIDRs</code>, so the bypass pair is rejected regardless of creation order (<code>gmc/internal/webhook/v2/noproxy_referrers.go</code>; unresolvable reads fail closed).
@@ -3735,6 +3809,11 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <td>Enforce absolute 1-Job-Per-Pod isolation. Avoid reusing volumes or host paths between worker pods. Use ephemeral, <code>emptyDir</code> volumes for workspace storage.</td>
 </tr>
 <tr>
+<td><strong>A Runner Credential Outliving Its Worker</strong> (scale-set JIT-config Secret)</td>
+<td>Medium</td>
+<td>Each scale-set worker mounts a per-job Secret holding its runner's JIT config. Once the pod exists it becomes the Secret's only owner, so the garbage collector deletes the Secret whenever the pod goes: reaped, drained, or deleted by hand (Q1154). Before that the RunnerSet owned it, and a job completion, the only other reclaim, reads the Secret's name off a pod that may already be gone. The handover is best-effort: if it fails, the RunnerSet keeps ownership, and the Secret is reclaimed by the job's completion when it can find the worker, and otherwise only when the RunnerSet is deleted.</td>
+</tr>
+<tr>
 <td><strong>AGC Token Compromise</strong></td>
 <td>High</td>
 <td>The AGC never saves plaintext keys to disk. GitHub App private keys are mounted as read-only volumes with restrictive file permissions (0400).</td>
@@ -3757,7 +3836,7 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <tr>
 <td><strong>Eviction-Retry API Misuse</strong></td>
 <td>Medium</td>
-<td>The AGC calls <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> using the tenant's installation access token when a worker pod is evicted. The blast radius is bounded: the installation token is scoped to the GitHub App's installation on a specific organization or repository, so the AGC cannot re-run jobs belonging to other tenants or organizations. The <code>run_id</code> originates with GitHub in both acquisition tiers — from the job payload delivered by the broker (classic), or from the <code>workflowRunId</code> on the scale-set assignment message, which the provisioner records on the worker pod at creation and reads back on eviction (scale-set, Q417). Neither path lets the AGC fabricate or substitute a run ID for a run it did not acquire; the pod annotation is controller-written and controller-read, and an absent or malformed identity is refused rather than defaulted (no re-run is attempted, and <code>actions_gateway_eviction_recovery_identity_unknown_total</code> increments). To prevent abuse of the retry path (e.g. a compromised AGC looping re-runs), <code>maxEvictionRetries</code> caps the number of automatic retries per run — keyed by run ID alone, so the cap is shared across both tiers rather than doubled — and is enforced before the API call is made. The scale-set path additionally claims each evicted pod under an optimistic lock before calling GitHub, so a re-run is attempted at most once per evicted pod even across AGC replicas. Operators should monitor <code>actions_gateway_eviction_retries_exhausted_total</code> to detect abnormal eviction patterns.</td>
+<td>The AGC calls <code>POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs</code> using the tenant's installation access token when a worker pod is evicted, and <code>POST .../actions/runs/{run_id}/force-cancel</code> when a job is abandoned before its worker started. Both require the App's <strong><code>Actions: write</code></strong> permission, which the gateway holds only for this automatic recovery: everything else it does on the Actions permission is a read, and runner registration needs write on a separate permission (<code>Self-hosted runners</code> for an organization, <code>Administration</code> for a repository). An operator may withhold <code>Actions: write</code> and set <code>maxEvictionRetries: 0</code>, giving up automatic recovery (<a href="../../operations/tenant-onboarding/#0a-create-the-app-web-ui">tenant-onboarding § Running with <code>Actions: Read-only</code></a>). The blast radius is bounded: the installation token is scoped to the GitHub App's installation on a specific organization or repository, so the AGC cannot re-run jobs belonging to other tenants or organizations. The <code>run_id</code> originates with GitHub in both acquisition tiers — from the job payload delivered by the broker (classic), or from the <code>workflowRunId</code> on the scale-set assignment message, which the provisioner records on the worker pod at creation and reads back on eviction (scale-set, Q417). Neither path lets the AGC fabricate or substitute a run ID for a run it did not acquire; the pod annotation is controller-written and controller-read, and an absent or malformed identity is refused rather than defaulted (no re-run is attempted, and <code>actions_gateway_eviction_recovery_identity_unknown_total</code> increments). To prevent abuse of the retry path (e.g. a compromised AGC looping re-runs), <code>maxEvictionRetries</code> caps the number of automatic retries per run — keyed by run ID alone, so the cap is shared across both tiers rather than doubled — and is enforced before the API call is made. The scale-set path additionally claims each evicted pod under an optimistic lock before calling GitHub, so a re-run is attempted at most once per evicted pod even across AGC replicas. Operators should monitor <code>actions_gateway_eviction_retries_exhausted_total</code> to detect abnormal eviction patterns.</td>
 </tr>
 <tr>
 <td><strong>DNS Exfiltration Side-Channel</strong> (Unattributed Egress)</td>
@@ -3869,10 +3948,10 @@ Digest pinning eliminates the "update the tag, get a different binary" attack cl
 Operators are expected to restrict the set of permitted registries via cluster admission policy (e.g.
 Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because registry policy is a cluster-wide concern.</p>
 <h4 id="ci-scans-every-image-on-every-pr">CI scans every image on every PR<a class="headerlink" href="#ci-scans-every-image-on-every-pr" title="Permanent link">&para;</a></h4>
-<p>The gateway's own CI runs two supply-chain gates on every PR (<code>security-scan.yml</code>): <code>govulncheck</code> across all Go modules and <code>trivy</code> image scans of all seven built images — see <a href="../../development/testing/#security-scanning">testing.md § Security scanning</a>.
+<p>The gateway's own CI runs two supply-chain gates on every PR (<code>security-scan.yml</code>): <code>govulncheck</code> across all Go modules and <code>trivy</code> image scans of all seven built images — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/development/testing.md#security-scanning">testing.md § Security scanning</a>.
 The five images built from a minimal/distroless or scratch base block on fixable HIGH/CRITICAL findings.
 The two built <code>FROM</code> the upstream actions-runner (the default worker image and <code>build-runner</code>) are scanned report-only, because their CVEs live in upstream components that cannot be fixed without forking the runner.
-That report-only posture assumes the base is kept current, and today nothing does so automatically: the dependabot <code>docker</code> ecosystem is scoped to directories that hold no Dockerfile, tracked in <a href="../../queue/Q976/">Q976</a>.
+That report-only posture assumes the base is kept current, and today nothing does so automatically: the dependabot <code>docker</code> ecosystem is scoped to directories that hold no Dockerfile, tracked in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q976.md">Q976</a>.
 Tenants supplying their own <code>WorkerImage</code> are still expected to scan it themselves.
 <code>imagePullPolicy: IfNotPresent</code> (digest) or <code>Always</code> (tag) ensures the kubelet does not serve a stale, possibly tampered local copy.</p>
 <h4 id="first-party-digests-are-enforced-at-chart-render-time">First-party digests are enforced at chart render time<a class="headerlink" href="#first-party-digests-are-enforced-at-chart-render-time" title="Permanent link">&para;</a></h4>
@@ -3917,7 +3996,7 @@ The residual is honestly stated: a compromised worker (malicious dependency, job
 <p>The properties the cheap alternatives throw away are <strong>preserved</strong>: traffic still exits the per-tenant proxy IPs (attribution intact) and DNS still resolves on the in-cluster path (no new exfil channel).
 Enforcement is dual-surface from one source of truth — CIDR <code>ipBlock</code> / FQDN <code>toFQDNs</code> on the pod-egress policy (the hard gate; fail-closed if the CNI can't enforce an FQDN rule, same as Q208) <strong>and</strong> the proxy CONNECT allowlist as defense-in-depth (with resolve-and-dial-the-validated-IP closing the DNS-rebinding window on the CIDR path; denials counted on <code>actions_gateway_proxy_connect_denied_total</code>).</p>
 <p>The admin footgun (a too-broad suffix/CIDR — <code>*.googleapis.com</code>, a CDN, the IMDS endpoint) is bounded by guidance, not code: the docs <strong>lead with an in-cluster caching mirror</strong> as the recommended path and reserve the allowlist for what a mirror genuinely can't proxy.
-See <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the <a href="../../plan/archive/q242-g1-proxy-destination-allowlist/">Q242 plan</a> for the full trade-off record.</p>
+See <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q242-g1-proxy-destination-allowlist.md">Q242 plan</a> for the full trade-off record.</p>
 <h3 id="the-registry-read-behind-runnerversiontooold">The registry read behind <code>RunnerVersionTooOld</code><a class="headerlink" href="#the-registry-read-behind-runnerversiontooold" title="Permanent link">&para;</a></h3>
 <p>The AGC reads the worker image out of its registry to learn the runner version it ships (Q988): a manifest GET, an index GET for a multi-arch reference, and a streamed blob GET per layer scanned, topmost first, until <code>bin/Runner.Listener.deps.json</code> turns up.
 It is the attestable counterpart of the wrapper's self-report (<code>observedRunnerVersion</code>, Q792), and the trust argument is the one the tag already rests on: both are tenant-authored, and the registry copy is the stronger, because it is immutable once addressed by digest and nothing running inside the container can rewrite it.
@@ -3926,10 +4005,11 @@ That is what lets the reading move the condition where the self-report deliberat
 <ul>
 <li><strong>No new egress breadth.</strong> The read uses the AGC's existing policy, which admits 443 and 6443 to any destination by default (the exfiltration section above) and no other port, so it opens nothing and a registry on another port is out of reach; an install that scopes egress with <code>apiServerCIDRs</code> closes the registry too, and the verdict falls back to the tag with the failure in the message.
   A scoped policy carries no registry allowance, which is the decision recorded below.</li>
-<li><strong>No new credential surface.</strong> The only login the AGC presents is a <code>kubernetes.io/dockerconfigjson</code> Secret the pod template's <code>imagePullSecrets</code> names, read through the <code>get</code> on Secrets the tenant Role already grants; it is the credential kubelet reads for the same pull.
+<li><strong>No new credential surface.</strong> The only login the AGC presents is a <code>kubernetes.io/dockerconfigjson</code> Secret the pod template's <code>imagePullSecrets</code> names, or the worker ServiceAccount's when the template names none, read through the <code>get</code> on Secrets the tenant Role already grants; it is the set ServiceAccount admission puts on the worker pod, so the credential kubelet reads for the same pull.
+  Reading the ServiceAccount takes a <code>get</code> on <code>serviceaccounts</code> in the tenant namespace (Q1066), with no <code>list</code>, <code>watch</code> or write: the AGC can read one named ServiceAccount's Secret references and can neither enumerate ServiceAccounts nor change which Secrets one carries, and every Secret it could reach that way it could already <code>get</code> by name.
   The password is never logged or reported; the username reaches the condition message and the warning log when a read fails, so an operator can tell which login was refused.
   A Bearer challenge's realm must be <code>https</code>, since the login rides on that exchange.
-  Node-identity registries are out of reach by construction (<a href="../../queue/Q1066/">Q1066</a>).</li>
+  Node-identity registries are out of reach by construction (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1066.md">Q1066</a>).</li>
 <li><strong>Bounded by the AGC, not the image.</strong> A tenant image is untrusted input to the scan, so the stream is capped at 2 GiB of compressed layer bytes, the manifest read at 4 MiB, the dependency file at 4 MiB, and one inspection at fifteen minutes; inspections run one at a time and never touch disk.
   The official image costs about 114 MB per digest per AGC process (measured 2026-09-07): a digest-addressed reference is never re-read, and a tag-addressed one has its manifest re-fetched hourly and its layers streamed again only when the digest moved.
   What reaches the condition message is capped at the resolver boundary, so a hostile image or registry cannot push a status write past the 32 KiB a condition message admits.
@@ -3976,7 +4056,7 @@ Whichever is chosen, it is an explicit opt-in on a policy that is otherwise clos
 <h3 id="proxy-egress-audit-record">Proxy egress audit record<a class="headerlink" href="#proxy-egress-audit-record" title="Permanent link">&para;</a></h3>
 <p>The proxy's per-connection record (<code>EgressProxy.spec.auditLogging: Connections</code>, Q564 / <a href="../appendix-g-future-enhancements/#g3-proxy-side-audit-logging">appendix G.3</a>) is the one place the platform deliberately writes down where a tenant's workers went.
 That makes both halves of it a security decision: whether it runs at all, and what a line is allowed to carry.</p>
-<p><strong>It is not the per-tenant audit attribution claimed elsewhere in this design.</strong> That property is a source-IP one at GitHub's end: GitHub's own audit log groups by source IP, and a per-tenant egress IP is what keeps a tenant's activity separable there (<a href="../../plan/q243-egress-ip-reference-arch/">q243 reference architecture</a>).
+<p><strong>It is not the per-tenant audit attribution claimed elsewhere in this design.</strong> That property is a source-IP one at GitHub's end: GitHub's own audit log groups by source IP, and a per-tenant egress IP is what keeps a tenant's activity separable there (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/q243-egress-ip-reference-arch.md">q243 reference architecture</a>).
 This record is a line on the pool's own stdout, keyed on <code>msg == "egress audit"</code>, and it is off unless enabled.
 The two are easy to conflate because a shared pool breaks both, for unrelated reasons: one because every consumer leaves from the same addresses, the other because a CONNECT carries no namespace.</p>
 <p><strong>It is off by default, and that is a requirement rather than a convenience.</strong> A record naming the destination a tenant reached and when is data the platform must choose to retain, for a period it has decided on and in a pipeline it has sized, so it is opted into per pool.
@@ -4046,6 +4126,96 @@ It has no Kubernetes client at all, and it is the one component untrusted worker
 <p>Only <strong>accepted</strong> CONNECTs produce a record.
 A refusal and a failed dial already have their warn/error line and their counter (<code>actions_gateway_proxy_connect_denied_total</code>, <code>actions_gateway_proxy_dial_errors_total</code>); recording them here would double-count a connection that carried no egress.</p>
 <p>See <a href="../../operations/observability-logging/#proxy-egress-audit-record">observability-logging.md § Proxy egress audit record</a> for the shape, and <a href="../../operations/tenant-onboarding/#per-pool-egress-audit-record">tenant-onboarding.md § Per-pool egress audit record</a> for turning it on.</p>
+<h3 id="proxy-failure-attribution">Proxy failure attribution<a class="headerlink" href="#proxy-failure-attribution" title="Permanent link">&para;</a></h3>
+<p>Classified retry (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/q555-flaky-job-retry.md#the-egress-proxy-as-a-failure-sensor">Q555 plan</a>) needs to know which job a proxy failure came from.
+An upstream dial failure is a retry class, and a policy denial makes a retry futile and is worth an Event naming the blocked host.
+That is new use of per-job egress data, so it is designed here before it is built (Q1184).
+The proxy's half is built (<code>cmd/proxy/attribution.go</code>), and so is the GMC's (<code>cmd/gmc/internal/controller/egressproxy_attribution.go</code>), which moves an opted-in namespace's workers onto their port.
+So is the AGC's reader (<code>cmd/agc/internal/proxyattribution</code>), which joins each record to its own worker pods (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q1184-proxy-failure-attribution.md">plan</a>), and reports each attributed denial as an Event (Q1210, below); no retry decision uses the result.</p>
+<p><strong>It is off by default, behind two switches, for the audit record's reasons.</strong> One on the <code>EgressProxy</code> makes the pool able to keep failures and serve them.
+One on a consuming <code>ActionsGateway</code> opts that gateway's namespace in.
+Either alone attributes nothing.
+They are <code>EgressProxy.spec.failureAttribution: PerConsumerPort</code> and <code>ActionsGateway.spec.proxyFailureAttribution: PerJob</code>, each <code>Disabled</code> by default.</p>
+<p><strong>A namespace is attributed only when it has opted in itself.</strong> The pool's existing port stays an unattributed port that records nothing, and every namespace starts on it, the pool's own included.
+The switch is per gateway and the port is per namespace, so a namespace is opted in once any of its gateways is.
+When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and, once every pool replica listens on it, projects that port into the namespace; the AGC then sets it in the <code>HTTPS_PROXY</code> of every new worker of every gateway there that uses the pool.
+It withdraws the projection when either side turns off, and new workers go back to the shared port.
+That is the only consumer-side change: it restarts nothing in the consumer's namespace, and the AGC's own traffic stays on the shared port, since its failures are not a job's.
+So a pool edit can move workers in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
+A namespace where no gateway has opted in is never moved by a pool edit.
+A departing namespace that the pool still admits keeps its port, listening and admitted for its workers alone, until its longest worker lifetime has passed, so its running jobs are not refused mid-run; its failures on the port are recorded until then, readable only with a client certificate its AGC already loaded, since the projected copy is blanked at once.
+The port is not reallocated while held, which keeps a joiner's failures out of the leaver's partition.
+A namespace whose grant is withdrawn is refused on every port at once and is not held.
+Within an opted-in namespace, a gateway that did not opt in moves with the rest, so one gateway's opt-in moves its siblings' workers; that is one tenant's own decision.
+The rule also keeps a namespace that has not opted in from having its failures recorded under someone else's: its traffic arrives on the unattributed port, and nothing reads that.
+Each AGC joins only its own gateway's pods (below), so an opted-in gateway is served its siblings' failures and discards them, which is one tenant seeing its own records rather than a cross-tenant read.</p>
+<p><strong>The proxy keeps failures only, in memory, and bounded.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Kept</th>
+<th>Why it is safe to keep</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Consumer namespace</td>
+<td>From the port the connection arrived on (below), never the request</td>
+</tr>
+<tr>
+<td>Client source address</td>
+<td>Read off the accepted connection, so a worker cannot forge it</td>
+</tr>
+<tr>
+<td>Time</td>
+<td>The proxy's clock</td>
+</tr>
+<tr>
+<td>Outcome</td>
+<td><code>denied</code> or <code>dial-failed</code>, and for a dial failure a class (timeout, refused, DNS, other) rather than the error text, which embeds the address</td>
+</tr>
+<tr>
+<td>Destination host and port</td>
+<td>Capped as at every other site that logs the authority (see the amplifier note above)</td>
+</tr>
+</tbody>
+</table>
+<p>Not kept: accepted connections, byte counts, any request header, anything from inside the tunnel.
+Records live for minutes in memory and are lost on restart; the feature writes nothing to disk or to the log.
+Untrusted job code decides what goes into the buffer, since a job can produce denials at will, so the buffer is partitioned by consumer namespace and capped per source address within each partition.
+The per-namespace partition keeps one tenant's workers from evicting another tenant's records, which a single shared cap would allow however small the per-source cap.
+The per-source cap keeps one job from evicting the other jobs' records in its own namespace to hide their failures.
+The total is the per-namespace cap times the number of attributed namespaces, which the <code>allowedNamespaces</code> cap below bounds.</p>
+<p><strong>The proxy learns the consumer from the port, not the address.</strong> A CONNECT carries no namespace and the proxy has no Kubernetes client, which this design keeps (see the audit record above).
+Each attributed namespace's port is a port on the pool's one Service, targeting a numbered container port.
+One Service rather than one per consumer keeps the proxy's serving certificate unchanged as grants come and go, since it lists a single Service's DNS names.
+The provider's ingress NetworkPolicy admits each namespace on its own port only, so a worker that dials another tenant's port is refused before the proxy sees the connection.
+NetworkPolicy matches the pod's port after Service translation, so each rule names the container port, and by number: a named port resolves against the pod's declared <code>containerPorts</code>, which would put the grant list into the pool's pod template and roll the pool on every grant.
+<code>allowedNamespaces</code> has no maximum otherwise, so while attribution is on the CRD caps it at 32.</p>
+<p><strong>Where the CNI does not enforce that ingress, NetworkPolicy is not the only defence, and eviction is what is left.</strong> A worker in one namespace can then dial another's port.
+Its records land in that namespace's partition carrying its own pod address, and that namespace's AGC discards them, because the address is no pod of its own in the window it held it.
+So a forged record is never attributed, and what crosses is the dialing job's own failures, sent there by its own code.
+What it can still do is fill the other namespace's partition and push its records out, which degrades that tenant to unclassified failures.
+The kindnet CNI is one such: its enforcer does not drop the NetworkPolicy negatives, and the e2e specs that assert enforcement skip themselves on it (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/development/testing.md">testing.md</a>, <em>Egress-enforcing CNI profile</em>).
+Cross-namespace sharing already rests on the same ingress policy, so a shared pool on a non-enforcing CNI has no tenant boundary to attribute across in the first place.
+Enforcement of per-port ingress has to be measured on the Calico lane before this ships.</p>
+<p>The same port would also tell the audit record which consumer a connection came from, closing the shared-pool gap above.
+That is a separate change and not part of this design.</p>
+<p><strong>The AGC reads only its own namespace's records.</strong> The endpoint is its own listener with its own per-<code>EgressProxy</code> CA, not the metrics port.
+The metrics port admits only <code>metrics=enabled</code> namespaces so tenant pods cannot read traffic metrics, and a monitoring certificate must not read per-job data any more than an AGC certificate may read metrics.
+The GMC mints each opted-in gateway's AGC a client certificate naming its namespace, and projects it into that namespace as a Secret.
+Every namespace's client key is also held in the pool's own namespace, in <code>&lt;ep&gt;-attribution-clients</code>, because the bundle is generated whole; whoever can read Secrets there already administers the pool, which sees every connection.
+The proxy returns only records from the port mapped to the namespace the certificate names.
+It checks that name against its current port map on every request, so removing a grant ends access at the next configuration reload rather than at certificate expiry.
+The listener's ingress rule admits AGC pods of attributed namespaces only, with both selectors in one peer as the sharing rules require; workers never reach it.</p>
+<p><strong>The AGC joins on the pod's lifetime, not the address alone.</strong> A worker's address returns to the CNI's pool when its job ends, so within the buffer's window one address can belong to two jobs.
+The AGC attributes a record to a worker only when the worker is one of its own gateway's pods and the record's time falls inside the window that pod held the address, read from its own pod informer, and it discards a record near either edge rather than guess.
+A discarded record degrades to an unclassified failure, never to a wrong one.</p>
+<p><strong>Residual: the denial Event surfaces the host.</strong> The AGC records an <code>EgressDestinationDenied</code> Warning Event for each denial it attributes, naming the pool and the blocked host, in the job's own namespace (Q1210).
+It is on the worker's <code>RunnerSet</code> with the pod as related, because the pod is deleted when its job ends, which can be before the record is read up to one 30-second poll later.
+A job decides how many denials it produces, so the AGC records one Event per job and destination, for at most eight destinations a job, and forgets a job once it has been quiet for the ten minutes it keeps its records; a discarded record and a dial failure record none.
+Anyone who can read Events there sees what the job tried to reach, and the cluster's event pipeline keeps it for as long as it keeps Events.
+It is the tenant's own job in the tenant's own namespace and the host is capped, but it is the one place this feature's data outlives the buffer, which is why the gateway carries its own switch.</p>
 <h3 id="cross-tenant-pod-preemption-via-priorityclass">Cross-tenant pod preemption via PriorityClass<a class="headerlink" href="#cross-tenant-pod-preemption-via-priorityclass" title="Permanent link">&para;</a></h3>
 <p>A <strong>cluster-scoped</strong> <code>PriorityClass</code> carries a priority value and a <code>preemptionPolicy</code> (Kubernetes default <code>PreemptLowerPriority</code>), so an unvalidated tenant-chosen class would let a tenant name a high-priority, preempting class and have the scheduler <strong>evict other tenants' running worker pods</strong> — and their egress proxies — to schedule its own, defeating per-tenant isolation.</p>
 <p>A tenant can reach a worker pod's <code>priorityClassName</code> by <strong>two</strong> routes, and the allowlist gates both — on every tenant-authored kind that carries them:</p>
@@ -4092,8 +4262,8 @@ With a <em>core</em>-type <code>paramKind</code> (a ConfigMap, as shipped before
 <p>Because <code>parameterNotFoundAction: Deny</code> resolves params before per-object matching, that denied <em>every</em> matched write cluster-wide, recoverable only by a kube-apiserver restart — unavailable on a managed control plane.
 It could also fail <strong>open</strong>, silently enforcing a stale allowlist from the torn-down informer's frozen cache, which is the more dangerous half.
 The trigger is deleting the policy's <em>binding</em> (what <code>helm uninstall</code> does): the apiserver keys one shared param informer per <code>paramKind</code>, tears it down once no binding names that kind, and never restarts it.</p>
-<p>A CRD <code>paramKind</code> gets a fresh dynamic informer per context and survives the same transition — measured against a ConfigMap on one apiserver by <a href="../../scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, and guarded end to end by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
-Mechanism: <a href="../../plan/archive/q444-vap-param-resolution/"><code>../plan/archive/q444-vap-param-resolution.md</code></a>.</p>
+<p>A CRD <code>paramKind</code> gets a fresh dynamic informer per context and survives the same transition — measured against a ConfigMap on one apiserver by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/scripts/e2e/vap-param-informer-check.sh"><code>scripts/e2e/vap-param-informer-check.sh</code></a>, and guarded end to end by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
+Mechanism: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q444-vap-param-resolution.md"><code>../plan/archive/q444-vap-param-resolution.md</code></a>.</p>
 <h4 id="deletion-only-updates-are-exempt-from-re-validation-q518">Deletion-only updates are exempt from re-validation (Q518)<a class="headerlink" href="#deletion-only-updates-are-exempt-from-re-validation-q518" title="Permanent link">&para;</a></h4>
 <p>Stored-object re-validation has one legitimate write it must not deny: the teardown write.
 Once a class is removed from the allowlist while stored objects still name it, <em>every</em> later write to those objects is denied — including the AGC's finalizer-removal update — so a tenant deleted in that state wedged permanently: the finalizer could never clear and the namespace hung in <code>Terminating</code> (Q499).
@@ -4160,7 +4330,7 @@ Three properties make it a boundary rather than a hint:</p>
 <p><strong>What stays outside GAG's control, and must stay documented.</strong> GAG never creates a runner group and never edits which repositories one admits; both are the platform admin's, at GitHub.
 So the guarantee is exactly "the tenant's runners live in the group you named" and never "only your repositories can reach them" — a named group whose access policy is <em>All repositories</em> is the default group with extra steps.
 See <a href="../../operations/tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a>.</p>
-<p>The field is tenant-authored, and the <a href="../../development/api-review/#ask-whose-fact-it-is">whose-fact</a> question resolves benignly: a tenant naming a group that is not theirs volunteers <em>its own</em> runners to that group's repositories.
+<p>The field is tenant-authored, and the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/development/api-review.md#ask-whose-fact-it-is">whose-fact</a> question resolves benignly: a tenant naming a group that is not theirs volunteers <em>its own</em> runners to that group's repositories.
 It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way <code>priorityClassName</code> is.
 <strong>Closed (Q712).</strong></p>
 <h3 id="cross-tenant-job-acquisition-via-a-shared-scale-set-name">Cross-tenant job acquisition via a shared scale-set name<a class="headerlink" href="#cross-tenant-job-acquisition-via-a-shared-scale-set-name" title="Permanent link">&para;</a></h3>
@@ -4295,7 +4465,7 @@ This is the same trust model as the <code>actions-gateway.github.com/tenant</cod
 The GMC never sets it itself.</p>
 <p>The granting value is the enum keyword <code>allowed</code>, <strong>not</strong> <code>true</code>, deliberately: a boolean-looking label value invites the YAML coercion footgun (<code>privileged-profile: true</code> parses as a boolean, which a string label value then rejects or mishandles — and YAML 1.1 coerces <code>yes</code>/<code>no</code>/<code>on</code>/<code>off</code> too), so a non-boolean keyword is both safer to author and self-documenting.
 The value is matched exactly.
-This is the project-wide convention for new operator-set labels and annotations — see <a href="../../development/kubernetes-conventions/#label--annotation-value-conventions">Kubernetes API conventions</a>.</p>
+This is the project-wide convention for new operator-set labels and annotations — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/development/kubernetes-conventions.md#label--annotation-value-conventions">Kubernetes API conventions</a>.</p>
 <p>The gate is <strong>fail-closed</strong>: an absent label, any value other than <code>allowed</code>, or a namespace the webhook cannot read all leave privileged <strong>ineligible</strong> and the request is rejected.
 Non-privileged profiles (<code>baseline</code>, <code>restricted</code>, and the empty default) never consult the label and are unaffected.</p>
 <p>The two privileged gates are independent and both must pass: the namespace must be labelled eligible (this check), <em>and</em> on an update the rank-downgrade guard still requires the <code>actions-gateway.github.com/allow-profile-downgrade</code> annotation (anything → <code>privileged</code> is a downgrade in rank).

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/reference/api/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/reference/api/">
       
       
         <link rel="prev" href="../">
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1399,6 +1399,8 @@
       
         
       
+        
+      
     
     
     
@@ -1880,6 +1882,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1935,10 +1965,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -1956,8 +1986,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2610,15 +2640,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#actions-gatewaycomv2beta1" class="md-nav__link">
+  <a href="#actions-gatewaycomv2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        actions-gateway.com/v2beta1
+        actions-gateway.com/v2
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="actions-gateway.com/v2beta1">
+    <nav class="md-nav" aria-label="actions-gateway.com/v2">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3148,15 +3178,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#actions-gatewaycomv2beta1" class="md-nav__link">
+  <a href="#actions-gatewaycomv2" class="md-nav__link">
     <span class="md-ellipsis">
       
-        actions-gateway.com/v2beta1
+        actions-gateway.com/v2
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="actions-gateway.com/v2beta1">
+    <nav class="md-nav" aria-label="actions-gateway.com/v2">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3661,35 +3691,25 @@ together, start at the <a href="../">reference overview</a>; for the deprecated
 removal</a>.</p>
 <h2 id="packages">Packages<a class="headerlink" href="#packages" title="Permanent link">&para;</a></h2>
 <ul>
-<li><a href="#actions-gatewaycomv2beta1">actions-gateway.com/v2beta1</a></li>
+<li><a href="#actions-gatewaycomv2">actions-gateway.com/v2</a></li>
 </ul>
-<h2 id="actions-gatewaycomv2beta1">actions-gateway.com/v2beta1<a class="headerlink" href="#actions-gatewaycomv2beta1" title="Permanent link">&para;</a></h2>
-<p>Package v2beta1 contains the API Schema definitions for the
-actions-gateway.com v2beta1 API group: all five v2 kinds — the GMC-reconciled
-ActionsGateway (control) and EgressProxy (data) kinds, and the AGC-reconciled
-RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data) kinds —
-plus their shared types.</p>
-<p>v2beta1 is the graduation of the v2alpha1 API (Q74). It is the storage version
-and the conversion <strong>hub</strong>: the five kinds implement conversion.Hub here, while
-v2alpha1 and the GA v2 implement conversion.Convertible (ConvertTo/ConvertFrom) as
-the spokes. v2 is served beside it from 1.9 and takes over storage at v2.0.0.
-v2beta1 is served beside v2alpha1 during the coexistence window so a tenant can
-roll forward at its own pace (and the gag-migrate Classic on-ramp keeps landing on
-v2alpha1); the two versions round-trip losslessly through the conversion webhook.</p>
-<p>The shape is identical to v2alpha1 with one deliberate exception: v2beta1 is
-ScaleSet-only, so RunnerSet drops the transitional acquisitionProtocol selector
-and the classic-only maxListeners knob (Q264 §5a-U7/U8). Those two v2alpha1-only
-fields survive a v2alpha1→v2beta1→v2alpha1 round-trip via an annotation carried on
-the v2beta1 object (see api/v2alpha1/conversion.go), so a coexistence-era Classic
-or ScaleSet set is never silently re-protocol'd.</p>
-<p>These kinds live in a single neutral module
-(github.com/actions-gateway/github-actions-gateway/api) that both the GMC and
-AGC controller modules import. The AGC's RunnerSet reconciler must read the
-GMC-group ActionsGateway (gatewayRef) and EgressProxy (proxyRef), but the GMC
-module already imports the AGC module to build RunnerSet CRs; co-locating the v2
-kinds here breaks that would-be module dependency cycle without either
-controller module importing the other's API package (the neutral api/ module
-resolves the GMC↔AGC cycle; see docs/development/go-workspaces.md).</p>
+<h2 id="actions-gatewaycomv2">actions-gateway.com/v2<a class="headerlink" href="#actions-gatewaycomv2" title="Permanent link">&para;</a></h2>
+<p>Package v2 contains the API Schema definitions for the actions-gateway.com v2
+API group, the General Availability (GA) version: the five converted v2 kinds —
+the GMC-reconciled ActionsGateway (control) and EgressProxy (data) kinds, and the
+AGC-reconciled RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate
+(data) kinds — plus the platform-owned PriorityClassAllowlist and their shared
+types.</p>
+<p>v2 is the storage version from 1.10 (Q1086). It was served beside v2beta1 a release
+earlier, in 1.9, because Kubernetes' deprecation policy (rule #4b) will not let the
+storage version advance in the release that introduces its successor (Q413).</p>
+<p>v2 is a conversion <strong>spoke</strong> of the v2beta1 hub (see conversion.go), like
+v2alpha1. The shape is identical to v2beta1 with one exception: EgressProxy's
+egressPolicyMode enum is CIDR;FQDN, without the deprecated CiliumFQDN/CalicoFQDN
+aliases (Q452); a stored alias reads at v2 as FQDN with the alias carried in a
+conversion annotation (see conversion.go).
+PriorityClassAllowlist has no conversion webhook: its schema is identical at
+every version, so the apiserver converts it by rewriting apiVersion alone.</p>
 <h3 id="resource-types">Resource Types<a class="headerlink" href="#resource-types" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="#actionsgateway">ActionsGateway</a></li>
@@ -3770,7 +3790,7 @@ namespace (multi-gateway support lands in M3b).</p>
 <tbody>
 <tr>
 <td><code>apiVersion</code> <em>string</em></td>
-<td><code>actions-gateway.com/v2beta1</code></td>
+<td><code>actions-gateway.com/v2</code></td>
 <td></td>
 <td></td>
 </tr>
@@ -3849,6 +3869,12 @@ docs/operations/security-operations.md.</p>
 <td>DefaultProxyRef names an EgressProxy used for AGC control-plane egress and inherited by RunnerSets under this gateway that do not set their own proxyRef. Optional: unset means the control plane egresses directly (subject to NetworkPolicy). Same-namespace unless the target EgressProxy grants cross-namespace use (§H.4, §H.9).</td>
 <td></td>
 <td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>proxyFailureAttribution</code> <em>string</em></td>
+<td>ProxyFailureAttribution opts this gateway's namespace into the egress proxy recording which job a CONNECT failure came from. Disabled (the default) opts nothing in.<br />PerJob takes effect only on a pool whose EgressProxy.spec.failureAttribution is PerConsumerPort; either side alone attributes nothing. The opt-in is per namespace: once any gateway in a namespace sets PerJob, that namespace gets its own port on each attributing pool it uses, and the workers of every gateway in it that uses such a pool move to that port at their next job, once the pool has rolled; nothing restarts. The AGC's own traffic stays on the shared port. The AGC then reads its namespace's failures from the pool and keeps only those from its own worker pods. Each policy denial it attributes is recorded as a Warning Event, reason EgressDestinationDenied, on the worker's RunnerSet in this namespace, naming the blocked host; it is recorded once per job and destination, for at most eight destinations a job. That Event is why this is a separate switch from the pool's. Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184, Q1210).<br />The AGC does not retry a job, or withhold a retry, on these records, so enabling this moves the namespace's workers onto their port, counts their failures, and reports their denials.</td>
+<td>Disabled</td>
+<td>Enum: [Disabled PerJob]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>defaultTemplateRef</code> <em><a href="#objectref">ObjectRef</a></em></td>
@@ -4022,7 +4048,7 @@ ClusterRunnerTemplate (§H.4). Pure data: nothing owns it and it owns nothing.</
 <tbody>
 <tr>
 <td><code>apiVersion</code> <em>string</em></td>
-<td><code>actions-gateway.com/v2beta1</code></td>
+<td><code>actions-gateway.com/v2</code></td>
 <td></td>
 <td></td>
 </tr>
@@ -4213,27 +4239,19 @@ FQDN mechanisms proliferate (Q245).</p>
     operator's --fqdn-policy-backend. FQDN intent is REJECTED at admission when the
     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
     closed and loud, never a silent runtime Degraded.</li>
-<li>CiliumFQDN / CalicoFQDN are DEPRECATED aliases, and admission no longer accepts
-    a NEW one: a create naming either, or an update that switches onto one, is
-    REJECTED. An EgressProxy that already stores one is admitted unchanged, with a
-    warning, so an existing pool keeps working until it is migrated. Each alias pins
-    its namesake mechanism (a CiliumNetworkPolicy with toFQDNs, or a Calico
-    NetworkPolicy with destination domains) regardless of the operator backend. The
-    FQDN intent plus --fqdn-policy-backend enforces the same policy. They are
-    REMOVED AT v2.0.0, with v1alpha1, v2alpha1, and classic acquisition: enum
-    members of v2alpha1 and v2beta1, both of which v2.0.0 removes, and the GA v2
-    version does not define them. Migrate before upgrading: v2 cannot represent an
-    object naming an alias, and one such object fails the conversion for every
-    object batched into the same request. See
-    docs/operations/v1alpha1-deprecation.md.</li>
 </ul>
-<p>All FQDN-family modes are fail-closed: the standard NetworkPolicy still
+<p>v2 does not define the deprecated CiliumFQDN / CalicoFQDN aliases that v2alpha1 and
+v2beta1 still carry (Q452). An EgressProxy stored with one cannot be read at v2:
+its conversion fails, and so does every other object batched into the same
+request. Migrate it to FQDN plus --fqdn-policy-backend first. See
+docs/operations/v1alpha1-deprecation.md.</p>
+<p>FQDN mode is fail-closed: the standard NetworkPolicy still
 default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
 allow), so if the CNI cannot enforce the native policy — or the additive-allow GKE
 FQDNNetworkPolicy is absent — GitHub egress stays denied rather than opening wide.
-Selecting an FQDN mode therefore never silently weakens the default.</p>
+Selecting FQDN therefore never silently weakens the default.</p>
 <p><em>Validation:</em>
-- Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]</p>
+- Enum: [CIDR FQDN]</p>
 <p><em>Appears in:</em>
 - <a href="#egressproxyspec">EgressProxySpec</a></p>
 <table>
@@ -4251,14 +4269,6 @@ Selecting an FQDN mode therefore never silently weakens the default.</p>
 <tr>
 <td><code>FQDN</code></td>
 <td>EgressPolicyModeFQDN expresses the GitHub egress allowlist by hostname. The concrete CNI-native policy kind is chosen by the operator's --fqdn-policy-backend (cilium/calico/gke); FQDN intent with no backend is rejected at admission.</td>
-</tr>
-<tr>
-<td><code>CiliumFQDN</code></td>
-<td>EgressPolicyModeCiliumFQDN is a DEPRECATED alias for FQDN that pins the Cilium backend (a CiliumNetworkPolicy with toFQDNs) regardless of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=cilium. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
-</tr>
-<tr>
-<td><code>CalicoFQDN</code></td>
-<td>EgressPolicyModeCalicoFQDN is a DEPRECATED alias for FQDN that pins the Calico backend (a projectcalico.org/v3 NetworkPolicy with destination domains) regardless of --fqdn-policy-backend. Admission rejects a new write naming it; use FQDN + --fqdn-policy-backend=calico. Removed at v2.0.0; see the EgressPolicyMode doc comment.</td>
 </tr>
 </tbody>
 </table>
@@ -4278,7 +4288,7 @@ proxy pool. It is referenced by RunnerSets (proxyRef) and ActionsGateways
 <tbody>
 <tr>
 <td><code>apiVersion</code> <em>string</em></td>
-<td><code>actions-gateway.com/v2beta1</code></td>
+<td><code>actions-gateway.com/v2</code></td>
 <td></td>
 <td></td>
 </tr>
@@ -4368,6 +4378,12 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 <td>Enum: [Off Connections ConnectionsWithSource]<br />Optional: {}</td>
 </tr>
 <tr>
+<td><code>failureAttribution</code> <em>string</em></td>
+<td>FailureAttribution selects whether this pool keeps the CONNECT failures of the namespaces that consume it, for each namespace's AGC to read and attribute to the job that hit them. Disabled (the default) keeps none.<br />PerConsumerPort gives each consuming namespace its own CONNECT port on the pool's Service, and the proxy records which namespace a failure came from by the port it arrived on, never from anything in the request. A namespace gets a port only once one of its own ActionsGateways sets proxyFailureAttribution: PerJob; every other namespace, this pool's own included, stays on the shared port, where nothing is recorded. The pool's ingress NetworkPolicy admits each namespace on its own port only.<br />Only failures are kept: a policy denial or an upstream dial failure, with the client address, the time, the capped destination host and port, and for a dial failure its class rather than the error text. They are held in memory for minutes, partitioned per namespace and capped per source address, and are lost when a replica restarts; nothing is written to disk or to the log. Each AGC reads only its own namespace's records, over a dedicated mutual-TLS listener with its own certificate authority.<br />While it is PerConsumerPort, sharing.allowedNamespaces is capped at 32, which bounds the ports and the buffer. Granting or revoking a namespace's port is a rolling restart of the pool, as is the certificate authority's renewal; a namespace's workers move onto its port at their next job once every replica has rolled. Design: docs/design/05-security.md, "Proxy failure attribution" (Q1184).<br />A consuming AGC reads and attributes the records, and records an Event for each attributed policy denial (ActionsGateway.spec.proxyFailureAttribution). No retry decision uses them, so enabling this moves workers onto their ports, counts their failures, and reports their denials.</td>
+<td>Disabled</td>
+<td>Enum: [Disabled PerConsumerPort]<br />Optional: {}</td>
+</tr>
+<tr>
 <td><code>noProxyCIDRs</code> <em>string array</em></td>
 <td>NoProxyCIDRs lists destinations excluded from the per-tenant egress proxy (appended to NO_PROXY). Entries may be CIDR prefixes, bare IPs, or NO_PROXY domain suffixes for internal destinations. Never list GitHub here — an entry that routes GitHub traffic around the proxy defeats per-tenant egress-IP attribution and is rejected by the GMC admission path. The admission check covers the public GitHub hosts plus the gitHubURL host — a GitHub Enterprise Server host included — of every ActionsGateway or RunnerSet that references this proxy, on both the proxy write and the referrer write.<br />The cluster-internal destinations are appended automatically and need not be listed: svc.cluster.local, localhost and 127.0.0.1 for both the AGC and its workers, plus kubernetes.default.svc and this cluster's API server ClusterIP (read from KUBERNETES_SERVICE_HOST) for the AGC, which dials the API server by IP. Every entry added here bypasses the proxy and so escapes the per-tenant egress-IP attribution: exempt specific internal destinations, never a broad range.</td>
 <td></td>
@@ -4381,13 +4397,13 @@ GMC, which owns the proxy Deployment/Service/HPA/PDB (the reconciler lands in M2
 </tr>
 <tr>
 <td><code>egressPolicyMode</code> <em><a href="#egresspolicymode">EgressPolicyMode</a></em></td>
-<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). The deprecated CiliumFQDN/CalicoFQDN aliases pin their namesake backend and are removed at v2.0.0; admission rejects a new write naming one, and admits an object that already stores one unchanged. It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
+<td>EgressPolicyMode selects how the GMC expresses the proxy pool's GitHub egress allowlist: the default CIDR mode (standard NetworkPolicy + 24h IP-range reconcile, works on every CNI) or an FQDN intent (a CNI-native DNS-aware policy whose mechanism the operator picks via --fqdn-policy-backend). It has no effect when managedNetworkPolicy is false. See the EgressPolicyMode docs for the secure-by-default (fail-closed) guarantee.</td>
 <td>CIDR</td>
-<td>Enum: [CIDR FQDN CiliumFQDN CalicoFQDN]<br />Optional: {}</td>
+<td>Enum: [CIDR FQDN]<br />Optional: {}</td>
 </tr>
 <tr>
 <td><code>destinationFQDNs</code> <em>string array</em></td>
-<td>DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always allowed and need not be listed; empty (the default) means GitHub-only. Host-suffix entries REQUIRE an FQDN egressPolicyMode (FQDN, or the deprecated CiliumFQDN/CalicoFQDN), since the pod-egress layer expresses them as toFQDNs rules. Opening egress beyond GitHub is an admin decision: the GMC rejects any entry not on its --allowed-egress-fqdns platform allowlist (empty allowlist denies all). G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).</td>
+<td>DestinationFQDNs lists EXTRA, non-GitHub DNS host suffixes the proxy may forward worker CONNECT traffic to (e.g. proxy.golang.org). GitHub is always allowed and need not be listed; empty (the default) means GitHub-only. Host-suffix entries REQUIRE egressPolicyMode FQDN, since the pod-egress layer expresses them as toFQDNs rules. Opening egress beyond GitHub is an admin decision: the GMC rejects any entry not on its --allowed-egress-fqdns platform allowlist (empty allowlist denies all). G.1 / Q242; see design Appendix G.1 (Proxy-Enforced Destination Allowlist).</td>
 <td></td>
 <td>MaxItems: 64<br />Optional: {}</td>
 </tr>
@@ -4784,7 +4800,7 @@ cluster-scoped, and writable only by a platform admin.</p>
 <tbody>
 <tr>
 <td><code>apiVersion</code> <em>string</em></td>
-<td><code>actions-gateway.com/v2beta1</code></td>
+<td><code>actions-gateway.com/v2</code></td>
 <td></td>
 <td></td>
 </tr>
@@ -4956,7 +4972,7 @@ so the two are never declared simultaneously. See Q74.</p>
 <tbody>
 <tr>
 <td><code>apiVersion</code> <em>string</em></td>
-<td><code>actions-gateway.com/v2beta1</code></td>
+<td><code>actions-gateway.com/v2</code></td>
 <td></td>
 <td></td>
 </tr>
@@ -5049,7 +5065,7 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 </tr>
 <tr>
 <td><code>maxEvictionRetries</code> <em>integer</em></td>
-<td>MaxEvictionRetries controls how many times the AGC automatically re-queues a job whose worker pod was evicted. Set to 0 to disable auto-retry entirely. Defaults to 2 when omitted.<br />Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this API version offers — the worker is provisioned fire-and-forget, so the eviction is detected by the owning reconciler from the worker pod rather than by a goroutine watching it; the budget itself is shared, keyed by workflow run, so this cap applies per run across both tiers rather than once each.</td>
+<td>MaxEvictionRetries controls how many times the AGC automatically re-queues a job whose worker pod was evicted. Set to 0 to disable auto-retry entirely. Defaults to 2 when omitted.<br />Honored on both acquisition tiers as of Q417. On ScaleSet — the only tier this API version offers — the worker is provisioned fire-and-forget, so the eviction is detected by the owning reconciler from the worker pod rather than by a goroutine watching it. The cap counts the AGC's own re-runs of each workflow run, across every disruption cause, and is kept per RunnerSet in a ConfigMap that an AGC restart does not reset. Disruptions of one run attempt share one re-run.</td>
 <td></td>
 <td>Maximum: 10<br />Minimum: 0<br />Optional: {}</td>
 </tr>
@@ -5130,7 +5146,7 @@ missing object.</p>
 <tbody>
 <tr>
 <td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta">Condition</a> array</em></td>
-<td>Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift.</td>
+<td>Conditions are the observed conditions of the runner set. Known types: Ready, Degraded, EgressUnattributed, EgressAuditUnattributed, PossibleReapBlockingSidecar, WorkerQuotaPressure, WorkerQuotaExceeded, WorkersUnschedulable, RateLimited, RunnerVersionTooOld, SizingDrift.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -5217,7 +5233,7 @@ RunnerSets via templateRef. Pure data: nothing owns it and it owns nothing (§H.
 <tbody>
 <tr>
 <td><code>apiVersion</code> <em>string</em></td>
-<td><code>actions-gateway.com/v2beta1</code></td>
+<td><code>actions-gateway.com/v2</code></td>
 <td></td>
 <td></td>
 </tr>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/getting-started/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/getting-started/">
       
       
         <link rel="prev" href="../demo/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1525,6 +1525,8 @@
       
         
       
+        
+      
     
     
     
@@ -2006,6 +2008,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -2061,10 +2091,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
             
   
   
@@ -2082,8 +2112,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2816,13 +2846,13 @@
 <p><strong>Want to see it first?</strong> The <a href="../demo/">Demo</a> walks one real GitHub job through a local kind cluster (job → ephemeral worker pod → green on GitHub) with the exact commands to reproduce it.</p>
 </blockquote>
 <div class="admonition tip">
-<p class="admonition-title">New tenants: start on <code>v2beta1</code></p>
-<p>The recommended shape for a new tenant is the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2beta1</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
-<code>v2beta1</code> is the graduated, ScaleSet-only storage and hub version, v2's first stability contract, and where new capabilities land.
-The GA <strong><code>v2</code></strong> is served beside it with the same shape and becomes the storage version at <code>v2.0.0</code>; stay on <code>v2beta1</code> until then if you may roll back to a release that does not serve <code>v2</code>.
-<code>v2alpha1</code> stays served as the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the two.
+<p class="admonition-title">New tenants: start on <code>v2</code></p>
+<p>The recommended shape for a new tenant is the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
+<code>v2</code> is the General Availability (GA) version, ScaleSet-only, and the storage version from 1.10.
+<code>v2beta1</code> stays served beside it until <code>v2.0.0</code> removes it, with the same shape apart from the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> <code>EgressProxy</code> aliases, so manifests already on <code>v2beta1</code> move by re-applying at <code>v2</code>.
+<code>v2alpha1</code> stays served as the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the versions.
 The older single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API is still fully served but <strong><a href="../operations/v1alpha1-deprecation/">deprecated</a></strong>: reach for it only if you have a specific reason to, and see the <a href="#legacy-the-v1alpha1-api-deprecated">legacy v1 path</a>.
-<code>v1alpha1</code>, <code>v2alpha1</code>, and the classic acquisition protocol are all <a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>; <code>v2beta1</code> is not.
+<code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code> and the classic acquisition protocol are all <a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>.
 Already on v1?
 <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across without changing how your jobs are acquired.</p>
 </div>
@@ -2835,7 +2865,7 @@ Already on v1?
 <li>Go 1.27+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="../charts/actions-gateway/README.md">reference</a>).
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/charts/actions-gateway/README.md">reference</a>).
 It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.</p>
@@ -2850,7 +2880,7 @@ They are not installed by the chart.</p>
 <p>All four images must be <strong>pinned by digest</strong>.
 The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too).
 Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only.
-See the <a href="../charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
 <blockquote>
 <p><strong>Dev/CI.</strong> The Helm chart is the single install path.
 There is no kustomize alternative.
@@ -2870,11 +2900,11 @@ For the default <code>gmc-system</code> namespace, apply the pre-rendered, cosig
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
-<p>Either way the <code>clientConfig</code> must resolve to the GMC's <code>webhook-service</code>: each v2 CRD is served at <code>v2beta1</code> (the storage/hub version), <code>v2</code> and <code>v2alpha1</code>, and the apiserver converts between them via a conversion webhook hosted by the GMC (see <a href="../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for signature verification and the full options).
+<p>Either way the <code>clientConfig</code> must resolve to the GMC's <code>webhook-service</code>: each v2 CRD is served at <code>v2beta1</code> (the hub version), <code>v2</code> (the storage version) and <code>v2alpha1</code>, and the apiserver converts between them via a conversion webhook hosted by the GMC (see <a href="../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for signature verification and the full options).
 The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code>).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>).
-See the <a href="../charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
 <p>Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
@@ -2941,13 +2971,13 @@ See <a href="../operations/resourcequota-sizing/#only-constrain-keys-every-pod-d
 <a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="no">-----END RSA PRIVATE KEY-----</span>
 </code></pre></div>
 <h2 id="4-create-your-gateway-and-runner-set-v2-recommended">4. Create your gateway and runner set (v2, recommended)<a class="headerlink" href="#4-create-your-gateway-and-runner-set-v2-recommended" title="Permanent link">&para;</a></h2>
-<p>The <strong>v2 API</strong> (<code>actions-gateway.com/v2beta1</code>) decomposes the single v1 CR into small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub binding), a <code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an optional <code>EgressProxy</code>.
+<p>The <strong>v2 API</strong> (<code>actions-gateway.com/v2</code>) decomposes the single v1 CR into small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub binding), a <code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an optional <code>EgressProxy</code>.
 The set below is feature-equivalent to the legacy v1 example, a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.</p>
 <p><strong>You can skip authoring the template.</strong> GAG ships three validated worker pod shapes; <code>kubectl apply -k deploy/templates/plain</code> gives you the baseline one, and a <code>RunnerSet</code> then points at it with <code>templateRef: { name: plain, kind: ClusterRunnerTemplate }</code> in place of the inline <code>RunnerTemplate</code> below.
 If your jobs build container images, start from <code>kata-dind</code> instead.
 See the <a href="../operations/runner-template-library/">runner template library</a>.</p>
 <!-- gag:verify id=v2-gateway-set mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
 <a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span>
@@ -2956,7 +2986,7 @@ See the <a href="../operations/runner-template-library/">runner template library
 <a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 <a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">  </span><span class="nt">maxReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
 <a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="nn">---</span>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span><span class="w">            </span><span class="c1"># a reusable pod shape, referenced by many RunnerSets</span>
 <a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
@@ -2967,7 +2997,7 @@ See the <a href="../operations/runner-template-library/">runner template library
 <a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
 <a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
 <a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="nn">---</span>
-<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-6-22" name="__codelineno-6-22" href="#__codelineno-6-22"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-6-23" name="__codelineno-6-23" href="#__codelineno-6-23"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-6-24" name="__codelineno-6-24" href="#__codelineno-6-24"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-gateway</span>
@@ -2985,7 +3015,7 @@ See the <a href="../operations/runner-template-library/">runner template library
 <a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="w">  </span><span class="c1"># securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field.</span>
 <a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="w">  </span><span class="c1"># All gateways in a namespace share one Pod Security level. See Tenant Onboarding.</span>
 <a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="nn">---</span>
-<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-6-40" name="__codelineno-6-40" href="#__codelineno-6-40"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
 <a id="__codelineno-6-41" name="__codelineno-6-41" href="#__codelineno-6-41"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-6-42" name="__codelineno-6-42" href="#__codelineno-6-42"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu</span><span class="w">                      </span><span class="c1"># v2 names its own runner set; no first-label-derives-name rule</span>
@@ -3002,7 +3032,7 @@ See the <a href="../operations/runner-template-library/">runner template library
 <a id="__codelineno-6-53" name="__codelineno-6-53" href="#__codelineno-6-53"></a><span class="w">  </span><span class="c1"># chart ships EMPTY, so a tier added at this point is rejected by admission.</span>
 <a id="__codelineno-6-54" name="__codelineno-6-54" href="#__codelineno-6-54"></a><span class="w">  </span><span class="c1"># See Security Operations for the allowlist and how to grow it.</span>
 <a id="__codelineno-6-55" name="__codelineno-6-55" href="#__codelineno-6-55"></a><span class="nn">---</span>
-<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<a id="__codelineno-6-56" name="__codelineno-6-56" href="#__codelineno-6-56"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-6-57" name="__codelineno-6-57" href="#__codelineno-6-57"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerSet</span>
 <a id="__codelineno-6-58" name="__codelineno-6-58" href="#__codelineno-6-58"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-6-59" name="__codelineno-6-59" href="#__codelineno-6-59"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linux</span>

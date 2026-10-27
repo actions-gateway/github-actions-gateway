@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/observability-dashboards/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/observability-dashboards/">
       
       
         <link rel="prev" href="../observability-alerting/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -1887,6 +1889,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1947,10 +1977,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" checked>
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -1968,8 +1998,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2784,7 +2814,7 @@
 <p>Part of the <a href="../observability/">Observability</a> guide.
 The panels below query the <a href="../observability-metrics/">Metrics reference</a> and the <a href="../observability-alerting/#slo-recording-rules">SLO recording rules</a>; the scrape wiring they depend on is in <a href="../observability-metrics-access/">Accessing metrics</a>.</p>
 <blockquote>
-<p><strong>Import as code.</strong> Four reference dashboards ship under <a href="../../deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
+<p><strong>Import as code.</strong> Four reference dashboards ship under <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/README.md"><code>deploy/monitoring/</code></a>: import them into Grafana (<strong>Dashboards → New → Import</strong>) or provision them, rather than rebuilding the panels by hand.
 The layouts below document what each contains.</p>
 </blockquote>
 <table>
@@ -2797,22 +2827,22 @@ The layouts below document what each contains.</p>
 </thead>
 <tbody>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-tenant.json"><code>grafana-dashboard-tenant.json</code></a></td>
 <td>a tenant's AGC + egress proxy (per-tenant mTLS)</td>
 <td>operator of one tenant's runners</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-platform.json"><code>grafana-dashboard-platform.json</code></a></td>
 <td>the GMC manager (one cluster-wide TLS scrape)</td>
 <td>Platform engineer running the GMC / the fleet</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-budget.json"><code>grafana-dashboard-budget.json</code></a></td>
 <td>a tenant's AGC (per-tenant mTLS)</td>
 <td>Budget owner paying for the fleet</td>
 </tr>
 <tr>
-<td><a href="../../deploy/monitoring/grafana-dashboard-security.json"><code>grafana-dashboard-security.json</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/grafana-dashboard-security.json"><code>grafana-dashboard-security.json</code></a></td>
 <td>the per-tenant proxy and AGC scrapes, the GMC scrape, and the apiserver scrape</td>
 <td>Security / compliance reviewer asking for evidence</td>
 </tr>
@@ -2823,7 +2853,7 @@ The layouts below document what each contains.</p>
 A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.</p>
 <p>The <strong>security</strong> dashboard splits the same way and reads all three scrapes, because the evidence a reviewer asks for is spread across them: egress is on the proxy scrape, the condition gauges and webhook counters on the GMC's, and the admission-policy verdicts on the apiserver's.</p>
 <blockquote>
-<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="../../deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
+<p>The screenshots below are rendered against a real Prometheus with synthetic data by the reproducible harness in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/deploy/monitoring/preview/README.md"><code>deploy/monitoring/preview/</code></a>; regenerate them there whenever a dashboard changes.</p>
 </blockquote>
 <h2 id="tenant-dashboard">Tenant dashboard<a class="headerlink" href="#tenant-dashboard" title="Permanent link">&para;</a></h2>
 <p><img alt="The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows." src="../../assets/grafana-dashboard-tenant.png" /></p>
@@ -2916,7 +2946,7 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 <tr>
 <td>Disruption retries</td>
 <td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
-<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them, <code>vanished</code> rising means the AGC itself keeps missing worker teardowns — different investigations entirely</td>
+<td>Bar chart, split by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>node_shutdown</code> rising means Spot or preemptible nodes are being reclaimed under running jobs, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them, <code>vanished</code> rising means the AGC itself keeps missing worker teardowns — different investigations entirely</td>
 </tr>
 <tr>
 <td>Abandoned runs awaiting capacity</td>
@@ -3467,10 +3497,10 @@ It reads three scrapes, and each row says which: egress and the abuse counters c
 <p><strong>It is keyed on the pool, not the consumer, and says so on the page.</strong> <code>namespace</code> on every proxy series is the namespace the pool runs in, stamped by the scrape target.
 On a pool no other namespace references that is the tenant; on a pool shared via <code>spec.sharing.allowedNamespaces</code> it is the pool, and no metric says which consumer opened a tunnel.
 Attributing a connection to a tenant and a job is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">audit-record join</a> of two log streams, and no panel here reads them, so the dashboard never presents a pool's traffic as a consumer's.
-Whether that join is missing for a gateway is now a gauge, <code>actions_gateway_egress_audit_unattributed</code>, <code>1</code> while either half of the pair is off (Q1062), and that is the series a consumer-keyed panel would have to gate on.
-No panel here reads it yet (<a href="../../queue/Q1070/">Q1070</a>).
-It reads the gateway's <code>defaultProxyRef</code> only, so it is not a per-pool answer: a <code>RunnerSet</code> naming its own <code>spec.proxyRef</code> egresses through a pool the gauge never looked at, in both directions (<a href="../../queue/Q1069/">Q1069</a>).
-A panel keyed on it is therefore gating on the gateway's declared pair, not on the pool whose traffic it would be drawing.</p>
+Whether that join is missing is a gauge per <code>RunnerSet</code>, <code>actions_gateway_runnerset_egress_audit_unattributed</code>, <code>1</code> while either half of the pair is off for that set's workers (Q1069), and that is the series a consumer-keyed panel would have to gate on.
+It is read off the pool the set's workers actually use, its own <code>spec.proxyRef</code> before the gateway's <code>defaultProxyRef</code>, and its <code>reason</code> label names the missing half.
+The gateway-level <code>actions_gateway_egress_audit_unattributed</code> (Q1062) reads only <code>defaultProxyRef</code>, the AGC's own pool, so it is not the one to gate worker traffic on.
+The egress-posture timeline below plots the per-set gauge; no panel reads the gateway-level one.</p>
 <p><strong>Row 1: Egress Attribution (per pool)</strong></p>
 <table>
 <thead>
@@ -3497,16 +3527,20 @@ A panel keyed on it is therefore gating on the gateway's declared pair, not on t
 <td>Time series. A pool pinned near capacity is the slowloris signal (<code>ActionsGatewayProxyConnectionsSaturated</code>)</td>
 </tr>
 <tr>
-<td>Egress posture per gateway</td>
-<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code></td>
-<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, and an incomplete GHES allowlist denies the appliance. GMC scrape; <code>egress_rules_stale</code> is emitted for v1 and v2 gateways, the other two for v2 only</td>
+<td>Egress posture per gateway and RunnerSet</td>
+<td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code>, and <code>max by (namespace, runner_set) (actions_gateway_runnerset_egress_audit_unattributed{reason!~"EgressAuditDisabled\|DirectEgress"})</code></td>
+<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, an incomplete GHES allowlist denies the appliance, and a set's egress audit records join to no job. The first three from the GMC scrape, where <code>egress_rules_stale</code> is emitted for v1 and v2 gateways and the other two for v2 only; the fourth per <code>RunnerSet</code> from the AGC scrape, one row per set across a change of <code>reason</code></td>
 </tr>
 </tbody>
 </table>
-<p><code>actions_gateway_egress_audit_unattributed</code> belongs in that timeline as a fourth flag and is not in it yet (<a href="../../queue/Q1070/">Q1070</a>).
-It shares the row's <code>1 = flagged</code> polarity, and it is the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">job-attribution</a> half, whether an egress record resolves to a tenant and a job, where <code>egress_unattributed</code> is the IP-identity half, whether there is a per-tenant proxy at all.
+<p>The <code>egress audit</code> rows are the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">job-attribution</a> half, whether an egress record resolves to a tenant and a job, where <code>egress_unattributed</code> is the IP-identity half, whether there is a per-tenant proxy at all.
 A gateway can be proxied and still unattributed by job, and that is the common state, since both halves of the pair default <code>Off</code>.
-Expect it near-solid <code>1</code> across a fleet that has not opted in, which is a true reading rather than an incident: unlike its three neighbours, a <code>1</code> here is a tenant nobody turned attribution on for, not something that broke.</p>
+<strong>They plot only tenants that turned on at least one half.</strong> <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a set whose tenant turned neither half on, and the query drops them, so a red band is a tenant that turned on one half and is missing the other, and the series' <code>reason</code> label, or the set's <code>EgressAuditUnattributed</code> condition, names the half to fix (<a href="../tenant-onboarding/#per-pool-egress-audit-record">what to set for each</a>).
+The legend leaves the reason out: a label that long clips in the state timeline's label column.
+A tenant that never opted in has no row rather than a permanently red one, which would otherwise light most of a fleet and teach the eye to discount the three neighbours where a <code>1</code> is a fault.
+How many tenants have opted in is not on this dashboard.
+A green row says the pair is configured, not that a pipeline runs the join, and a set whose references have not resolved has no row at all.
+It can also outlive its pool: a set whose <code>EgressProxy</code> is deleted keeps its last reading rather than turning red (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1079.md">Q1079</a>).</p>
 <p><strong>Row 2: Admission Decisions</strong></p>
 <table>
 <thead>

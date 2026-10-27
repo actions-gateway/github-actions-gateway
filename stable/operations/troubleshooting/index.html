@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.9.0/operations/troubleshooting/">
+        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/troubleshooting/">
       
       
         <link rel="prev" href="../velero-backup-restore/">
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.9.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.9.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.9.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.9.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.9.0",
+    "url": "https://actions-gateway.com/1.10.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.9.0"
+      "url": "https://actions-gateway.com/1.10.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.9.0",
-    "logo": "https://actions-gateway.com/1.9.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/1.10.0",
+    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.9.0 is here.</strong>
-      Every kind is now served at <code>v2</code> beside <code>v2beta1</code>, so <code>v2.0.0</code> has a release to roll back to, and a scale-set worker running a job is no longer reaped as orphaned.
+            <strong>v1.10.0 is here.</strong>
+      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.9.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -1887,6 +1889,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
@@ -1945,10 +1975,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_18" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
         
           
-          <label class="md-nav__link" for="__nav_9_18" id="__nav_9_18_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
             
   
   
@@ -1966,8 +1996,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_18_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_18">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_19">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -5484,7 +5514,7 @@ Edits to the allowlist appear to apply and silently do nothing.
 After any event that could have tripped this, confirm the guard sees your current allowlist rather than assuming it does: change the allowlist and check that a <code>RunnerGroup</code> naming a newly removed class is actually rejected.</p>
 <p>Observed on Kubernetes 1.35.5 and 1.36.1.
 Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kubernetes/kubernetes#130887</a>.
-Full mechanism and the reproducer: <a href="../../plan/archive/q444-vap-param-resolution/"><code>q444-vap-param-resolution.md</code></a>.</p>
+Full mechanism and the reproducer: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q444-vap-param-resolution.md"><code>q444-vap-param-resolution.md</code></a>.</p>
 <p><strong>Resolution.</strong></p>
 <ul>
 <li><strong>Upgrade the release.</strong> The parameter is now a cluster-scoped <code>PriorityClassAllowlist</code> CR, and the apiserver allocates a fresh dynamic informer per context for a CRD <code>paramKind</code> — so the transition that breaks a ConfigMap parameter is survivable.
@@ -5959,7 +5989,7 @@ Routing through an <code>EgressProxy</code> does not help: the proxy tunnels wit
 This is tenant-self-serve — no platform allowlist is involved, unlike the egress ranges above.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>create<span class="w"> </span>configmap<span class="w"> </span>ghes-ca<span class="w"> </span>--from-file<span class="o">=</span>ca.crt<span class="o">=</span>/path/to/corp-root-ca.pem
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-gateway</span>
@@ -6479,7 +6509,7 @@ The job was abandoned because its worker could not be scheduled, so re-running a
 <ul>
 <li><strong>The retry budget.</strong> The re-run draws on the same per-run budget as every other disruption recovery, so it reports as <code>actions_gateway_eviction_retries_total{cause="abandoned"}</code>, and a run abandoned again after its re-run is capped at <code>spec.maxEvictionRetries</code> re-runs in total.
   On exhaustion you get <code>actions_gateway_eviction_retries_exhausted_total{cause="abandoned"}</code> and an <code>EvictionRetriesExhausted</code> Warning Event on the owner, and the run then needs a manual re-run.
-  The budget is keyed by run ID alone, so a run that is abandoned <em>and</em> evicted cannot spend two budgets.</li>
+  The budget covers every disruption cause, so a run that is abandoned <em>and</em> evicted cannot spend two budgets.</li>
 <li><strong>The wait window.</strong> Capacity may never return, because <code>pending_deadline</code> also reaps a pod no amount of waiting will place (an unpullable image, a constraint no node satisfies).
   After 30 minutes the wait is given up and counted as <code>actions_gateway_abandoned_run_rerun_waits_total{outcome="expired"}</code>; the successful case is <code>{outcome="capacity_returned"}</code>.</li>
 </ul>
@@ -6562,7 +6592,11 @@ Treat a <em>sustained</em> or <em>bursty</em> rate as the signal:</p>
 <p><strong>Symptoms.</strong> A <code>Warning</code> Event with reason <code>WorkerPodOrphanedRunning</code> appears on the <code>RunnerSet</code> (<code>kubectl describe runnerset &lt;name&gt; -n &lt;namespace&gt;</code>) and <code>actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}</code> increments.
 Before the reap fires, the shape is a set that looks busy and is not: <code>status.activeJobs</code> sits at some non-zero number, worker pods are <code>Running</code>, but no job is executing — <code>kubectl logs</code> on the pod ends at <code>Listening for Jobs</code>, and GitHub shows nothing in progress for the set.</p>
 <p><strong>What happened.</strong> The pod was still <code>Running</code> five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
-For a job that ended before any runner started it, the pod the AGC created for that job is the one on the clock, unless its runner has since started a different job.
+For a job that ended before any runner started it, the set is left with one runner more than it has jobs, and one idle worker goes on the clock: the pod the AGC created for that job, or, when that pod's runner has started a different job, the oldest <code>Running</code> worker whose runner has started nothing (Q1153).
+Such a pod carries <code>actions-gateway.com/surplus-for-job</code> naming the job that freed it.
+If its runner is given a job after all, the stamp comes off it and moves to another idle worker when the AGC records that job's start.
+A start the AGC fails to record is redelivered until it is recorded.
+A start that reaches the AGC more than five minutes after the stamp, because the listener's session was down that long, comes too late, and the worker can be reaped mid-job.
 GitHub gives a ScaleSet job to whichever of the set's runners asks first, so a worker often runs a job other than the one it was created for; the AGC follows the runner GitHub names, not the job ID in the pod name.
 Three causes produce that:</p>
 <ul>
@@ -6590,7 +6624,7 @@ Upgrade; nothing on those releases prevents it.</p>
 <a id="__codelineno-76-4" name="__codelineno-76-4" href="#__codelineno-76-4"></a><span class="c1"># Which Running workers already have a completion stamp (they are on the clock),</span>
 <a id="__codelineno-76-5" name="__codelineno-76-5" href="#__codelineno-76-5"></a><span class="c1"># and which job each one's runner actually started</span>
 <a id="__codelineno-76-6" name="__codelineno-76-6" href="#__codelineno-76-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;set&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-76-7" name="__codelineno-76-7" href="#__codelineno-76-7"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id'</span>
+<a id="__codelineno-76-7" name="__codelineno-76-7" href="#__codelineno-76-7"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,JOB-DONE:.metadata.annotations.actions-gateway\.com/job-completed-at,STARTED:.metadata.annotations.actions-gateway\.com/started-job-id,SURPLUS-FOR:.metadata.annotations.actions-gateway\.com/surplus-for-job'</span>
 <a id="__codelineno-76-8" name="__codelineno-76-8" href="#__codelineno-76-8"></a>
 <a id="__codelineno-76-9" name="__codelineno-76-9" href="#__codelineno-76-9"></a><span class="c1"># Rate of orphan reaps per set</span>
 <a id="__codelineno-76-10" name="__codelineno-76-10" href="#__codelineno-76-10"></a><span class="c1"># PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])</span>
@@ -6872,7 +6906,8 @@ That reading is the verdict once it lands, whatever the tag says, and the messag
 It covers a digest-only reference and a custom tag, so <code>Unknown</code> now means one of three things the message spells out: the read is still in progress, the read failed and the tag alone could say nothing, or the image carries no <code>deps.json</code> in its layers and is not <code>actions/runner</code>-derived where the runner layout puts it.</p>
 <p>The read happens once per image digest per AGC process; a tag-addressed reference has its manifest re-fetched hourly since a tag can move, and its layers are streamed again only when the digest moved.
 It costs about 114 MB of egress for the official image, which is 544 MB.
-Credentials come from the pod template's <code>imagePullSecrets</code> (<code>kubernetes.io/dockerconfigjson</code>), which the AGC reads through its own Role; a pull secret attached to the worker ServiceAccount, or a registry kubelet reaches through the node's identity, is not something the AGC can present (<a href="../../queue/Q1066/">Q1066</a>).
+Credentials come from the pod template's <code>imagePullSecrets</code> (<code>kubernetes.io/dockerconfigjson</code>), or, when the template names none, from the worker ServiceAccount's, which is the same set admission puts on the worker pod; the AGC reads both through its own Role.
+A registry kubelet reaches through the node's identity is not something the AGC can present (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1066.md">Q1066</a>).
 Reach is the AGC's egress policy's: by default it admits 443 and 6443 to any destination and no other port, so a registry on a custom port (<code>registry.example.com:5000</code>) is out of reach, and an install that scopes it with <code>apiServerCIDRs</code> closes the registry too, and carries no registry allowance to reopen it (<a href="../../design/05-security/#a-scoped-agc-egress-policy-carries-no-registry-allowance">the decision</a>).
 A failed read is not an incident: the AGC logs it at warning level, retries on a backoff that doubles from one minute to an hour (on the set's next reconcile once the delay has passed, since the resolver runs no timer of its own), and the verdict the tag supports stands with the failure appended, so a reference whose tag names a runner version never regresses to <code>Unknown</code> because a registry was unreachable.</p>
 <p><code>Unknown</code> is deliberately not <code>False</code>: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.</p>
@@ -6887,11 +6922,13 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
   An authentication failure is about the AGC's own read and not about the pull: kubelet can hold a credential the AGC cannot, so worker pods may be pulling and running normally while this fails.
   Do not read it off pod state either way, since a digest-pinned image defaults to <code>imagePullPolicy: IfNotPresent</code> and a node that already has the layers runs the pod without contacting the registry at all.
   Where the failure names the credential the AGC presented, in a trailing parenthesis, that is what decides the fix, whichever message carries it; the rest fall to the out-of-reach case below.
-  Anything ending <code>(as &lt;user&gt;)</code>, whether <code>unauthorized after authenticating</code> or <code>token exchange with &lt;host&gt;: HTTP &lt;n&gt;</code>, means a Secret the pod template names was read and presented and the registry refused it, so the credential is expired, wrong, or carries no pull scope on that repository: replace it rather than naming another.
-  Anything ending <code>(anonymous)</code>, and <code>requires a login and the pod template names no imagePullSecret</code>, means none was presented, and what to do then turns on whether a <code>kubernetes.io/dockerconfigjson</code> Secret exists in the namespace (<code>kubectl get secrets -n &lt;namespace&gt; --field-selector type=kubernetes.io/dockerconfigjson</code>).
-  If one does, name it in <code>podTemplate.spec.imagePullSecrets</code>, which is the only place the AGC looks.
-  The <a href="../air-gapped-install/#5-wire-pull-secrets-for-the-runtime-workloads-agc--proxy--worker">air-gapped install</a> pattern lands here by design, attaching the Secret to the <code>actions-gateway-worker</code> ServiceAccount, which kubelet injects and the AGC never reads; adding it to the pod template restores the reading and changes nothing about the pull.
-  If none does, either no pull credential is configured at all, so create one and name it there, or kubelet is reaching the registry through the node's identity (Artifact Registry under Workload Identity, ECR under the node role) or a node-level <code>config.json</code>, neither of which the AGC can present (<a href="../../queue/Q1066/">Q1066</a>), leaving the tag to carry the verdict.
+  Anything ending <code>(as &lt;user&gt;)</code>, whether <code>unauthorized after authenticating</code> or <code>token exchange with &lt;host&gt;: HTTP &lt;n&gt;</code>, means a Secret the pod template or the worker ServiceAccount names was read and presented and the registry refused it, so the credential is expired, wrong, or carries no pull scope on that repository: replace it rather than naming another.
+  Anything ending <code>(anonymous)</code>, and <code>requires a login and no imagePullSecret names it</code>, means none was presented, and what to do then turns on whether a <code>kubernetes.io/dockerconfigjson</code> Secret exists in the namespace (<code>kubectl get secrets -n &lt;namespace&gt; --field-selector type=kubernetes.io/dockerconfigjson</code>).
+  If one does, name it in <code>podTemplate.spec.imagePullSecrets</code>, or on the worker ServiceAccount when the template names none.
+  The template's list replaces the ServiceAccount's rather than adding to it, for the pull as for this read, so a template naming one Secret hides every Secret on the ServiceAccount.
+  A failure ending <code>(worker ServiceAccount imagePullSecrets unread: …)</code> means the AGC could not read the ServiceAccount, usually because the tenant Role predates the <code>get</code> on <code>serviceaccounts</code> grant: re-render it from the current chart.
+  A change to the ServiceAccount or the Role is picked up at the read's next retry, up to an hour later, while a change to the pod template's <code>imagePullSecrets</code> is read at once; restarting the AGC drops the failed reading and retries immediately.
+  If none does, either no pull credential is configured at all, so create one and name it there, or kubelet is reaching the registry through the node's identity (Artifact Registry under Workload Identity, ECR under the node role) or a node-level <code>config.json</code>, neither of which the AGC can present (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/queue/Q1066.md">Q1066</a>), leaving the tag to carry the verdict.
   Worker pods that are themselves stuck on the image are a separate problem with its own reading: see the air-gapped install's <a href="../air-gapped-install/#7-verify">verification step</a>.
   <code>context deadline exceeded</code> means one inspection ran past its fifteen-minute budget, which starts once the inspection holds its slot, not while it queues behind another image.
   <code>carries no bin/Runner.Listener.deps.json</code> means the image is not <code>actions/runner</code>-derived in the expected layout, and no tag can fix that.
@@ -6976,7 +7013,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRetriesExhausted</code></td>
 <td>Warning</td>
-<td>An evicted worker pod's auto-retry budget (<code>maxEvictionRetries</code>) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, which share one per-run budget.</td>
+<td>An evicted worker pod's auto-retry budget (<code>maxEvictionRetries</code>) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, each of which keeps its own per-run budget.</td>
 <td><a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a> · <a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a></td>
 </tr>
 <tr>
@@ -6988,8 +7025,8 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>An externally deleted worker's run had already concluded <code>cancelled</code>, so recovery deliberately did not ask GitHub to re-run it and the cancel stands (Q811). The budget slot is spent; no manual re-run is wanted. Normal, because nothing is wrong.</td>
-<td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a></td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either an externally deleted worker's run had already concluded <code>cancelled</code>, so the cancel stands and the budget slot is spent (Q811); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, so no slot is spent and the Event quotes the kubelet's message (Q1177).</td>
+<td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
 <td><code>JobProvisionStalled</code></td>
@@ -7020,6 +7057,12 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <td>Warning</td>
 <td>One or more worker pods were placed on a node and the kubelet could not start them, sitting in <code>ImagePullBackOff</code> on the container image (Q906). Recorded on every <code>RunnerSet</code> on the False→True transition, whether or not the set opted into <code>spec.capacityGate</code>; the note carries the kubelet's own text, which names the image. Also sets the advisory <code>WorkersNotStarting</code> condition and reads <code>1</code> on <code>actions_gateway_runnerset_workers_not_starting</code>.</td>
 <td><a href="#the-reason-is-podsnotstarting-the-image-will-not-pull">The reason is <code>PodsNotStarting</code>: the image will not pull</a></td>
+</tr>
+<tr>
+<td><code>EgressDestinationDenied</code></td>
+<td>Warning</td>
+<td>A worker's job was refused a CONNECT because the destination is not on the egress proxy pool's allowlist, attributed to that job's pod through <code>proxyFailureAttribution: PerJob</code> (Q1210). The note names the pool, the pod and the host and port. A retry is refused the same way. Once per job and destination, at most eight destinations a job.</td>
+<td><a href="../tenant-onboarding/#proxy-failure-attribution">Proxy failure attribution</a></td>
 </tr>
 <tr>
 <td><code>AgentDeregistrationFailed</code></td>
@@ -7356,7 +7399,7 @@ Two ways in, and the condition message says which labels are affected either way
 </li>
 <li>
 <p><strong>Otherwise, give the set a new scale set.</strong> Labels are fixed when the scale set is created, and the AGC finds the scale set by name.
-  There is no in-place fix to wait for: the Actions Service accepts a labels <code>PATCH</code>, discards it, and answers 200 (measured 2026-08-24, <a href="../../plan/archive/q793-labels-patch/">Q793</a>).
+  There is no in-place fix to wait for: the Actions Service accepts a labels <code>PATCH</code>, discards it, and answers 200 (measured 2026-08-24, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q793-labels-patch.md">Q793</a>).
   So neither editing <code>spec.runnerLabels</code> nor deleting and re-creating the <code>RunnerSet</code> under the same first label will add them: the second re-adopts the same scale set with the same old labels.</p>
 <p>Two ways out, and both cost the old scale set:</p>
 <ul>
@@ -7431,7 +7474,7 @@ Read it with:</p>
 </tr>
 <tr>
 <td><code>422 Unprocessable Entity</code></td>
-<td>The App lacks the <code>Actions: Read</code> and <code>Administration: Read</code> permissions.</td>
+<td>The App lacks the <a href="../tenant-onboarding/#0a-create-the-app-web-ui">onboarding permission set</a>.</td>
 </tr>
 </tbody>
 </table>
@@ -7571,7 +7614,7 @@ When a lock is <em>definitively</em> lost, current versions self-cancel the work
 - The repo/org runner list (<code>gh api .../actions/runners</code>) loses one runner after each completed job, and the registrations never come back.
 - <code>RunnerGroup</code> <code>status.activeSessions</code> decays over time; after roughly <code>maxListeners</code> completed jobs, queued workflow jobs wait forever even though the AGC pod is healthy.</p>
 <p><strong>Cause.</strong> GitHub deletes a JIT-registered runner record once it acquires a job (single-use runners).
-Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot (<a href="../../plan/archive/milestone-4/#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12, bug 2</a>).</p>
+Pre-fix AGC versions keep polling the dead session with the dead agent's credentials instead of re-registering, so every completed job permanently burns one listener slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12, bug 2</a>).</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-123-1" name="__codelineno-123-1" href="#__codelineno-123-1"></a><span class="c1"># Repeating EOF/401 poll errors</span>
 <a id="__codelineno-123-2" name="__codelineno-123-2" href="#__codelineno-123-2"></a><span class="c1"># v2</span>
@@ -7679,7 +7722,7 @@ The mitigation (<code>AGC_FANOUT_COMPLETION</code>, Q260 Option A) is <strong>on
 The dogfood re-route #5 experiment (2026-07-04) live-confirmed it: the run service's completion is <strong>per-delivery, not plan-ID-scoped</strong> — <code>completejob</code> on a sibling's own job ID resolves only that assignment (returns OK), while the winner's own delivery still carries the real workflow result reported by its runner binary, so a green sibling proxy cannot mask a red workflow.
 Previously-wedged concurrent jobs concluded green, the recycle 422 cleared per job on winner completion, and no job cancelled at the ~15-minute timeout.
 Opt out with <code>AGC_FANOUT_COMPLETION=false</code>.
-See <a href="../../plan/archive/q260-fanout-completion-reconciliation/"><code>docs/plan/q260-fanout-completion-reconciliation.md</code></a>.</p>
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/archive/q260-fanout-completion-reconciliation.md"><code>docs/plan/q260-fanout-completion-reconciliation.md</code></a>.</p>
 <p><strong>Related failure mode — deduped-loser slot stranding (Q266).</strong> Because a deduped sibling already ran <code>acquirejob</code>, GitHub holds <em>its</em> runner as assigned to the job.
 That runner's recycle therefore <code>422</code>s ("runner is currently running a job and cannot be deleted") for the <strong>winner's entire runtime</strong> — the loser's <code>422</code> only clears when the winner fans <code>completejob</code> out to that delivery on completion (above).
 On gateway versions before Q266 the loser recycled <em>eagerly</em>, blew through the bounded recycle backoff (which is sized for the seconds-long Q259 post-job race, not a whole job runtime), gave up, and <strong>exited the listener</strong> — and a non-permanent replacement is never restarted, so under sustained fan-out burst enough losers stranded and exited to collapse the pool (observed 2/8 online at dogfood re-route #5).
@@ -7802,7 +7845,7 @@ This is the port-axis equivalent of the <code>ipBlock: &lt;ClusterIP&gt;/32</cod
 <p><strong>Resolution.</strong> Ensure <code>buildAGCNetworkPolicy</code> allows both port 443 (production Service shape) <em>and</em> port 6443 (kind / Endpoints-on-6443 clusters).
 The shipped policy does this.
 If you see this on a custom build or a hand-edited NP, add the 6443 rule.
-The diagnosis writeup at <a href="../../development/networkpolicy-port-matching/"><code>docs/development/networkpolicy-port-matching.md</code></a> has a minimal repro and the reasoning behind allowing both ports.</p>
+The diagnosis writeup at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/development/networkpolicy-port-matching.md"><code>docs/development/networkpolicy-port-matching.md</code></a> has a minimal repro and the reasoning behind allowing both ports.</p>
 <p>If you see the same symptom for an <em>ingress</em>-type rule or for a different Service whose backend port differs from the Service port, the same fix applies: list both ports, or omit the port restriction on that rule.</p>
 <hr />
 <h2 id="dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache">DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)<a class="headerlink" href="#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache" title="Permanent link">&para;</a></h2>
@@ -7889,7 +7932,7 @@ UntrustedRoot means one of those steps did not happen.</p>
 <p>The consolidated boundary for the automatic re-run machinery the sections below troubleshoot individually.
 Every firing case spends one slot of the run's shared <code>maxEvictionRetries</code> budget (default 2, max 10).
 All but the last work on <strong>both acquisition tiers</strong>; the <code>vanished</code> row is <code>ScaleSet</code>-only, because the classic tier's provisioning goroutine watches its own worker pod and never has this window.
-A fifth cause, <code>abandoned</code>, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
+A sixth cause, <code>abandoned</code>, works on both tiers too but sits outside this table because it does not re-run directly: the job never ran, so its run is force-cancelled first and re-run only once capacity returns.
 It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</p>
 <p><strong>Fires — the interrupted run is re-run via <code>rerun-failed-jobs</code>:</strong></p>
 <table>
@@ -7904,12 +7947,17 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <tr>
 <td>Kubelet eviction (node pressure)</td>
 <td><code class="gag-nowrap">eviction</code></td>
-<td>pod <code>Failed</code> with <code>reason: Evicted</code></td>
+<td>pod <code>Failed</code> with <code>reason: Evicted</code> (the kubelet also sets a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code>, but the arm does not read it)</td>
 </tr>
 <tr>
 <td>Scheduler preemption (a preempting <code>priorityTiers</code> floor)</td>
 <td><code class="gag-nowrap">preemption</code></td>
 <td><code>DisruptionTarget</code> condition, reason <code>PreemptionByScheduler</code></td>
+</tr>
+<tr>
+<td>Node shutdown under a running worker: a Spot or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted under it, or a dead node you taint <code>node.kubernetes.io/out-of-service</code></td>
+<td><code class="gag-nowrap">node_shutdown</code></td>
+<td>pod <code>Failed</code> with a <code>DisruptionTarget</code> condition, reason <code>TerminationByKubelet</code> (the kubelet's graceful shutdown), <code>DeletionByPodGC</code> (the node was gone first), or <code>DeletionByTaintManager</code> with the runner container still recorded <code>Running</code> (the out-of-service taint)</td>
 </tr>
 <tr>
 <td>Node drain of a running worker</td>
@@ -7924,14 +7972,23 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <tr>
 <td>Any of the above that happened while the AGC was down (<code>ScaleSet</code> tier)</td>
 <td><code class="gag-nowrap">vanished</code></td>
-<td>a persisted in-flight record whose worker pod is no longer there</td>
+<td>a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone, or is running another job while no other worker that has not exited is idle to take it</td>
 </tr>
 </tbody>
 </table>
 <p><strong>Never fires, by design:</strong></p>
 <ul>
 <li><strong>A genuine job failure.</strong> The job ran and failed on its own merits; nothing was disrupted, and re-running it would mask real breakage.</li>
+<li><strong>A worker evicted for its own limit.</strong> The kubelet writes <code>Failed</code> / <code>Evicted</code> too when a pod exceeds its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, but with a limit message and no <code>DisruptionTarget</code> condition.
+  The job outgrew a limit its template sets, so a re-run gets the same limit and fails the same way.
+  No slot is spent: <code>eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.
+  Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).</li>
 <li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job <em>is</em> re-run; see <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
+<li><strong>A node that goes <code>NotReady</code> and keeps its Node object, untainted.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
+  GAG does not force it, because a node that is only partitioned may still be running the job.
+  Once you have confirmed the node is dead, taint it with <code>kubectl taint node &lt;node&gt; node.kubernetes.io/out-of-service=nodeshutdown:NoExecute</code>; PodGC then fails and removes the pod, and the <code>node_shutdown</code> row above re-runs it.
+  Deleting the Node object works too: PodGC then fails the pod with <code>DeletionByPodGC</code>.
+  A <code>NoExecute</code> taint of your own on a live node is the drain case instead, recovered as <code>deletion</code>.</li>
 <li><strong>The AGC's own reaper deletions</strong> — the lifetime cap (<code>maxWorkerLifetime</code>), the stuck-<code>Running</code> reap deadline, orphan cleanup.
   Each is stamped <code>actions-gateway.com/deletion-reason</code> before deletion and excluded: the gateway just judged that job stuck, so a re-run would loop it.
   The stamp is the pod's, so it does not survive the pod: a reaped worker whose job completion a previous AGC process never read is picked up by the <code>vanished</code> row above instead, which needs the completion to have gone unread for <code>completedPodTTL</code> and then a kill inside that state.</li>
@@ -7956,7 +8013,11 @@ See <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Do
 <hr />
 <h2 id="evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget<a class="headerlink" href="#evicted-worker-pods-exhausting-retry-budget" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Applies to both acquisition tiers.</strong> The budget is keyed by workflow run alone, so <code>maxEvictionRetries</code> caps re-runs per run across classic and scale-set together, not once each — several evicted workers of one run share one budget whichever tier they came from.
+<p><strong>Applies to both acquisition tiers, each with its own budget.</strong> <code>maxEvictionRetries</code> caps GAG's re-runs per run across every disruption cause.
+A scale-set <code>RunnerSet</code> counts them in its <code>scaleset-failures-&lt;set&gt;</code> ConfigMap, so an AGC restart does not refill the budget, and several disrupted workers of one run attempt share one re-run rather than each spending a slot (Q1182).
+A classic <code>RunnerGroup</code> counts in AGC memory.
+A run whose workers span a classic group and a scale-set set, or two sets, has a budget in each, so it can be re-run up to <code>maxEvictionRetries</code> times per set.
+A human's re-runs never count.
 Split the counters by the <code>tier</code> label to see where the evictions are landing.
 If the counters are flat at <strong>zero</strong> on a scale-set set rather than exhausted, the recovery is not firing at all: see <a href="#evicted-scale-set-jobs-are-not-re-run-automatically">Evicted Scale-Set Jobs Are Not Re-Run Automatically</a> below.</p>
 <p><strong>Flat at zero on the <em>classic</em> tier, with <code>pod evicted but run_id unknown; skipping auto-retry</code> in the AGC log?</strong> That is a fixed defect, not a misconfiguration: the AGC read the run identity from a payload field GitHub does not send, so no classic eviction was ever re-run and worker pods carried no <code>actions-gateway.com/run-id</code> annotation (Q495).
@@ -7970,6 +8031,13 @@ A recovery that gave up instead logs <code>disruption auto-retry failed</code>, 
 <code>reason="run_never_concluded"</code> means the original run outlived the 15-minute window (check whether GitHub still shows it in progress); <code>reason="api_error"</code> means the API failed outright — check the AGC log line's error for a permissions 403 or an endpoint problem.
 <code>reason="conclusion_unknown"</code> is the deletion arm only: its cancel check (Q811) spent the whole window unable to reach the run (the request never completing, or a 5xx), so no re-run was fired rather than one fired blind against a possible cancel.
 A 4xx or an undecodable 2xx on that same check lands in <code>api_error</code> instead, and fails immediately rather than at the window: neither answer changes inside fifteen minutes, and a 2xx that is not a run means the configured endpoint is not the API.
+On the scale-set tier every cause reads the run once before reserving its budget, to learn the attempt the job failed in, and the same two reasons cover that read.
+<code>reason="budget_unrecorded"</code> is the scale-set tier only: the budget decision could not be written to <code>scaleset-failures-&lt;set&gt;</code>, so the re-run was withheld rather than made without a slot (Q1182).
+The AGC log line <code>could not record the run's re-run budget decision</code> carries the cause: a <code>configmaps</code> write the tenant <code>Role</code> refuses, a ledger at its 512 KiB cap, or <code>requires writer version</code>: a newer AGC wrote the ConfigMap with a schema this one may not write, which a rollback produces and which clears once the newer AGC is back.
+Inspect it with <code>kubectl get configmap -n &lt;namespace&gt; scaleset-failures-&lt;runnerset&gt; -o jsonpath='{.data.failures\.json}'</code>.
+<strong>A disrupted worker with no re-run and no counter at all</strong>, on the scale-set tier, was most likely merged: the AGC log says <code>a re-run is already reserved for this run attempt</code>, then <code>the run was already re-run past the attempt this job failed in</code>.
+The re-run another worker's disruption reserved re-ran this job too, because GitHub re-runs every failed job of the attempt at once.
+If that re-run never lands (its recovery failed, or the AGC restarted first), the merged worker's own loop re-runs the attempt instead, spending no further slot.
 On an AGC older than the Q503 fix, the single un-retried re-run always lost this race and every evicted job needed a manual re-run.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> <code>actions_gateway_eviction_retries_exhausted_total</code> is incrementing.
@@ -7978,12 +8046,12 @@ Jobs are being cancelled after eviction despite automatic retries.
 <p><strong>Likely causes.</strong>
 - Worker pod keeps being evicted on every attempt (persistent node pressure, OOM loop, or scheduling conflict that prevents the pod from completing).
 - The run is being <strong>repeatedly preempted</strong> by a higher <code>priorityTiers</code> floor.
-  The budget is shared across both causes (see the <code>cause</code> label below), so a run alternately evicted and preempted exhausts it twice as fast as either alone.
+  The budget is shared across every cause (see the <code>cause</code> label below), so a run alternately evicted and preempted exhausts it twice as fast as either alone.
 - <code>maxEvictionRetries</code> is set too low for a workload that is disrupted more than twice per run.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-136-1" name="__codelineno-136-1" href="#__codelineno-136-1"></a><span class="c1"># Check disruption retry metrics. The tier label splits the two acquisition paths</span>
 <a id="__codelineno-136-2" name="__codelineno-136-2" href="#__codelineno-136-2"></a><span class="c1"># (classic, scaleset) and the cause label splits the three disruptions (eviction,</span>
-<a id="__codelineno-136-3" name="__codelineno-136-3" href="#__codelineno-136-3"></a><span class="c1"># preemption, deletion); the retry budget itself is shared across every combination.</span>
+<a id="__codelineno-136-3" name="__codelineno-136-3" href="#__codelineno-136-3"></a><span class="c1"># preemption, deletion); the retry budget is shared across causes and kept per tier.</span>
 <a id="__codelineno-136-4" name="__codelineno-136-4" href="#__codelineno-136-4"></a><span class="c1"># actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}</span>
 <a id="__codelineno-136-5" name="__codelineno-136-5" href="#__codelineno-136-5"></a><span class="c1"># actions_gateway_eviction_retries_exhausted_total{namespace, runner_group, tier, cause}</span>
 <a id="__codelineno-136-6" name="__codelineno-136-6" href="#__codelineno-136-6"></a><span class="c1"># actions_gateway_eviction_rerun_failures_total{namespace, runner_group, tier, cause, reason}</span>
@@ -8008,6 +8076,8 @@ Jobs are being cancelled after eviction despite automatic retries.
   A long job in an opportunistic tier is the usual culprit, since every displacement restarts it from the beginning.
 - <code>cause="deletion"</code> climbing — something outside the gateway is deleting live workers: a node drain (upgrades, autoscaler consolidation), a descheduler, or hand-run <code>kubectl delete pod</code>.
   Find the deleter before raising the budget; see <a href="#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">Draining a Worker Auto-Re-Runs the Jobs It Interrupts</a>.
+- <code>cause="node_shutdown"</code> climbing: workers are landing on nodes that go away under them, usually Spot or preemptible capacity being reclaimed.
+  Every reclamation restarts the job from the beginning, so move long jobs onto on-demand nodes with the RunnerGroup's scheduling constraints.
 - If the retry budget is simply too low for a workload that is legitimately disrupted more than twice per run: increase <code>maxEvictionRetries</code> on the RunnerGroup spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not a disruption): the auto-retry is not appropriate.
   Set <code>maxEvictionRetries: 0</code> and investigate the underlying workload issue.</p>
@@ -8067,7 +8137,7 @@ Consequences an operator should know:</p>
 <a id="__codelineno-138-5" name="__codelineno-138-5" href="#__codelineno-138-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'Evicted|Preempted|Killing|TaintManagerEviction'</span>
 <a id="__codelineno-138-6" name="__codelineno-138-6" href="#__codelineno-138-6"></a>
 <a id="__codelineno-138-7" name="__codelineno-138-7" href="#__codelineno-138-7"></a><span class="c1"># Whether recovery fired for the window in question. The cause label separates the</span>
-<a id="__codelineno-138-8" name="__codelineno-138-8" href="#__codelineno-138-8"></a><span class="c1"># three recovered disruptions (eviction, preemption, deletion):</span>
+<a id="__codelineno-138-8" name="__codelineno-138-8" href="#__codelineno-138-8"></a><span class="c1"># recovered disruptions (eviction, preemption, node_shutdown, deletion):</span>
 <a id="__codelineno-138-9" name="__codelineno-138-9" href="#__codelineno-138-9"></a><span class="c1"># actions_gateway_eviction_retries_total{namespace, runner_group, tier, cause}</span>
 <a id="__codelineno-138-10" name="__codelineno-138-10" href="#__codelineno-138-10"></a><span class="c1"># Flat across a drain of RUNNING workers is unexpected — check the AGC log below.</span>
 <a id="__codelineno-138-11" name="__codelineno-138-11" href="#__codelineno-138-11"></a><span class="c1"># Flat across a drain that only caught Pending workers is correct.</span>
@@ -8117,7 +8187,7 @@ Expected behaviour is one automatic re-run per preempted run.</p>
 <ol>
 <li><strong>The victim was not actually preempted.</strong> A <code>kubectl drain</code>, a manual delete, or a descheduler eviction looks similar but is recovered under <code>cause="deletion"</code> instead (see the previous runbook) — and only if the worker reached a terminal phase before the object went away.
    Check which cause, if any, actually moved.</li>
-<li><strong>The retry budget is spent.</strong> <code>maxEvictionRetries</code> (default 2) is a hard lifetime cap per workflow run, shared across both tiers <em>and</em> both disruption causes: a run already re-run twice for node-pressure evictions has nothing left for a preemption.
+<li><strong>The retry budget is spent.</strong> <code>maxEvictionRetries</code> (default 2) is a hard lifetime cap per workflow run on each tier, shared across every disruption cause: a run already re-run twice for node-pressure evictions has nothing left for a preemption.
    <code>actions_gateway_eviction_retries_exhausted_total{cause="preemption"}</code> confirms it, as does a <code>Warning</code> event with reason <code>EvictionRetriesExhausted</code>.</li>
 <li><strong>The worker carried no workflow-run identity</strong> (scale-set tier only).
    <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="preemption"}</code> increments and a <code>Warning</code> event with reason <code>EvictionRecoveryIdentityUnknown</code> is recorded on the <code>RunnerSet</code>.
@@ -8188,7 +8258,7 @@ The composed chain has not been observed end to end for a job with a live worker
 - <strong>Delete the worker pod to reclaim the capacity.</strong> <code>kubectl delete pod -n &lt;namespace&gt; &lt;worker-pod&gt;</code> terminates it gracefully: the wrapper relays SIGTERM and the runner stops.
   The cancel stands, and the job is <strong>not</strong> re-queued.</p>
 <blockquote>
-<p><strong>Why the delete no longer undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC would otherwise ask GitHub to re-run the run's failed jobs, and GitHub honours that for a <code>cancelled</code> conclusion, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="../../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
+<p><strong>Why the delete no longer undoes the cancel.</strong> A hand-deleted worker is the shape graceful-deletion recovery acts on (an external delete ordered before the container's exit), so the AGC would otherwise ask GitHub to re-run the run's failed jobs, and GitHub honours that for a <code>cancelled</code> conclusion, where a <code>success</code> conclusion refuses it with a 403 (measured live 2026-08-05, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/docs/plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>).
 Since Q811 that arm reads the run's conclusion first and stands down on <code>cancelled</code>, counting <code>actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}</code> and emitting a Normal <code>EvictionRerunWithheld</code> Event on the owner instead of calling.
 Nothing in the gateway deletes a cancelled run's pod, which is why the deletion mark is trusted as a disruption signal; this remedy is the one case where an operator produces that mark deliberately, and the conclusion check is what separates the two.
 It applies on ScaleSet too: the tier's own reclaim carries the <code>actions-gateway.com/deletion-reason</code> stamp and is excluded, while a hand-delete carries no stamp and takes the recovery path.
@@ -8208,7 +8278,7 @@ Usually one of two accompanying signals is present:</p>
 <li>neither counter moves at all.</li>
 </ul>
 <p><strong>Cause.</strong> The scale-set tier provisions fire-and-forget — the runner pulls and completes its own job — so nothing in the AGC is watching a given worker pod, and there is no acquired payload to read the job's identity from.
-Recovery therefore depends on two things being on the pod: the run identity (<code>actions-gateway.com/run-id</code>, <code>actions-gateway.com/repository</code>), stamped from the assignment message's <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>, and the <code>actions-gateway.com/acquisition-protocol=ScaleSet</code> label that tells the reconciler the pod is its to recover.
+Recovery therefore depends on two things being on the pod: the run identity (<code>actions-gateway.com/run-id</code>, <code>actions-gateway.com/repository</code>), stamped from the assignment message's <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> and replaced from the <code>JobStarted</code> of the job the pod's runner actually took (Q1152), and the <code>actions-gateway.com/acquisition-protocol=ScaleSet</code> label that tells the reconciler the pod is its to recover.
 Either one missing makes recovery inert for that pod.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-141-1" name="__codelineno-141-1" href="#__codelineno-141-1"></a><span class="c1"># Does the evicted worker carry its run identity and the tier marker?</span>
@@ -8229,6 +8299,10 @@ Either one missing makes recovery inert for that pod.</p>
 <td>Not a kubelet eviction. Only <code>PodFailed</code>/<code>Evicted</code> triggers recovery — anything else ran and reported its own outcome, so re-running it would double-report</td>
 </tr>
 <tr>
+<td><code>REASON</code> is <code>Evicted</code>, <code>HANDLED</code> set, no re-run, and an <code>EvictionRerunWithheld</code> Event</td>
+<td>The kubelet evicted the worker for exceeding its own storage limit; read its message with <code>kubectl get pod &lt;name&gt; -o jsonpath='{.status.message}'</code>. Working as intended: raise the limit (Q1177)</td>
+</tr>
+<tr>
 <td><code>RUN</code>/<code>REPO</code> empty</td>
 <td>The assignment carried no run identity. This is the <code>EvictionRecoveryIdentityUnknown</code> case</td>
 </tr>
@@ -8240,11 +8314,15 @@ Either one missing makes recovery inert for that pod.</p>
 <td><code>HANDLED</code> set but no re-run</td>
 <td>The claim succeeded and the rerun call failed. Look for <code>eviction auto-retry failed</code> in the AGC log, or an exhausted budget</td>
 </tr>
+<tr>
+<td><code>HANDLED</code> set, no re-run, and the pod has no <code>started-job-id</code></td>
+<td>Deliberate. Another worker has started the job this pod was created for, or the pod's container never ran and an idle worker can still take that job, so that run lost nothing. The AGC logs <code>not re-running that job's run</code> (Q1169)</td>
+</tr>
 </tbody>
 </table>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-142-1" name="__codelineno-142-1" href="#__codelineno-142-1"></a><span class="c1"># The AGC's own account of what it did with the eviction.</span>
 <a id="__codelineno-142-2" name="__codelineno-142-2" href="#__codelineno-142-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed'</span>
+<a id="__codelineno-142-3" name="__codelineno-142-3" href="#__codelineno-142-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'pod evicted|eviction auto-retry|run identity is unknown|eviction recovery scan failed|not re-running that job'</span>
 <a id="__codelineno-142-4" name="__codelineno-142-4" href="#__codelineno-142-4"></a>
 <a id="__codelineno-142-5" name="__codelineno-142-5" href="#__codelineno-142-5"></a><span class="c1"># The identity the queue actually delivered (raise the AGC to debug first).</span>
 <a id="__codelineno-142-6" name="__codelineno-142-6" href="#__codelineno-142-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="se">\</span>
@@ -8259,7 +8337,7 @@ Either one missing makes recovery inert for that pod.</p>
 - <strong>Evicted pods disappearing before recovery runs.</strong> Recovery reads the evicted pod, so it must still exist.
   A very short <code>completedPodTTL</code> combined with a backlogged AGC can delete the evidence first; raise <code>completedPodTTL</code> (default 5 m) if you see terminal workers vanishing within seconds.
 - <strong>Budget exhausted instead.</strong> See <a href="#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.
-  Note the budget is shared across both tiers for a given run, not per tier.
+  Note the budget is per tier, and on the scale-set tier per <code>RunnerSet</code>, so a run spanning two of them has a budget in each.
 - <strong>Node drains rather than kubelet evictions.</strong> A drained pod is deleted, not left <code>PodFailed</code>/<code>Evicted</code>, and the runner reports its own cancellation through the SIGTERM relay — so it is deliberately outside this mechanism, not a gap in it.
 - <strong>Recovery fires but the rerun call fails (GHES).</strong> If the AGC logs <code>disruption auto-retry failed ... rerun API returned 401: Bad credentials</code>, the detection worked and the <em>call</em> went to the wrong host.
   Before the Q504 fix the rerun always addressed <code>api.github.com</code> regardless of <code>GITHUB_API_BASE_URL</code>, so on GHES it presented a token that host had never issued.
