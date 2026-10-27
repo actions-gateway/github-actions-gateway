@@ -1971,6 +1971,28 @@ evidence_leg dind
 check "evidence: the tag, its commit, then each passed leg" \
 	"tag v9.9.0-rc.1 commit ${EVIDENCE_COMMIT} leg kata leg dind" "$(xargs <"${GATE_EVIDENCE_FILE}")"
 
+# A local run says before it spends that publish cannot use it, and names the
+# tag's CI gate run when that run is waiting for approval; a CI run says neither.
+gh() {
+	case "$*" in
+	*"validate-candidate.yml"*"--status waiting"*) echo 4242 ;;
+	*) return 1 ;;
+	esac
+}
+REPO="octo/repo"
+GAG_IMAGE_TAG="v9.9.0-rc.1"
+notice="$(GATE_EVIDENCE_FILE="" local_run_notice)"
+check "local notice: says publish cannot use a local run" "yes" \
+	"$([[ "${notice}" == *"records nothing publish reads"* ]] && echo yes || echo no)"
+check "local notice: names the waiting CI gate run" "yes" \
+	"$([[ "${notice}" == *"https://github.com/octo/repo/actions/runs/4242"* ]] && echo yes || echo no)"
+gh() { return 1; }
+notice="$(GATE_EVIDENCE_FILE="" local_run_notice)"
+check "local notice: no waiting run, no run named" "no" \
+	"$([[ "${notice}" == *"actions/runs/"* ]] && echo yes || echo no)"
+notice="$(GATE_EVIDENCE_FILE="${SCRATCH}/evidence.txt" local_run_notice)"
+check "local notice: a CI run prints nothing" "" "${notice}"
+
 # A commit the gate cannot resolve stops the run before it spends: evidence that
 # names no commit is evidence publish cannot use.
 gh() { return 1; }
