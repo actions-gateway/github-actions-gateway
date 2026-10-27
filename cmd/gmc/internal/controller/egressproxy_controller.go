@@ -556,12 +556,7 @@ func (r *EgressProxyReconciler) applyNetworkPolicy(ctx context.Context, ep *gmcv
 }
 
 func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *corev1.Secret) error {
-	obj := &corev1.Secret{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
-		obj.Type = desired.Type
-		obj.Data = desired.Data
-		return nil
-	})
+	return applyManagedSecret(ctx, r.Client, r.Scheme, ep, desired)
 }
 
 // updateStatus reads the proxy Deployment's readiness and writes the uniform v2

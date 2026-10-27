@@ -15,7 +15,9 @@
 // +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
 // Secret reads are not granted here: they come from the per-namespace
-// gmc-tenant-secret-reader RoleBinding (tenant_secret_access.go, Q1188).
+// gmc-tenant-secret-reader RoleBinding (tenant_secret_access.go, Q1188). Nor is
+// patch, which returns the stored object and so would read any Secret admission
+// lets through; owned Secrets are written by applyManagedSecret instead.
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=create;update
 // events: the reconciler emits Kubernetes Events on teardown and PSA-label
 // failures. Both groups are required — the manager's new-style recorder
@@ -1156,17 +1158,10 @@ func (r *ActionsGatewayReconciler) ensureMetricsCerts(ctx context.Context, ag *g
 	return nil
 }
 
-// applyOwnedSecret creates or patches a Secret, setting an owner reference on
-// the ActionsGateway so the Secret is GC'd on CR delete. Like the other apply*
-// helpers it uses CreateOrPatch and writes only the controller-managed
-// type/data/labels, so a concurrent writer is not clobbered.
+// applyOwnedSecret creates or updates a Secret, setting an owner reference on
+// the ActionsGateway so the Secret is GC'd on CR delete (applyManagedSecret).
 func (r *ActionsGatewayReconciler) applyOwnedSecret(ctx context.Context, ag *gmcv1alpha1.ActionsGateway, desired *corev1.Secret) error {
-	obj := &corev1.Secret{}
-	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
-		obj.Type = desired.Type
-		obj.Data = desired.Data
-		return nil
-	})
+	return applyManagedSecret(ctx, r.Client, r.Scheme, ag, desired)
 }
 
 // applyOrPruneServiceMonitors reconciles the two per-tenant ServiceMonitors

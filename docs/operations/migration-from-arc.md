@@ -9,7 +9,7 @@ It assumes you already run ARC's `gha-runner-scale-set` chart; if you are new to
 The good news up front: GAG was designed to make this migration cheap.
 The worker pod template is the **same Kubernetes type** ARC uses, so your pod spec transfers with no schema translation; job routing is the **same single-name model** ARC scale sets use, so your `runs-on` lines need no edit; and ARC and GAG can run **side by side** on the same cluster, so you migrate one scale set at a time and roll back by pointing `runs-on` back at the old name.
 
-**Scope.** This covers ARC's **scale-set mode** (the `AutoscalingRunnerSet` / `gha-runner-scale-set` chart — GitHub's current and recommended mode), and targets GAG's **v2 API** (`actions-gateway.com/v2beta1`), which is where new tenants onboard.
+**Scope.** This covers ARC's **scale-set mode** (the `AutoscalingRunnerSet` / `gha-runner-scale-set` chart — GitHub's current and recommended mode), and targets GAG's **v2 API** (`actions-gateway.com/v2`), which is where new tenants onboard.
 Legacy ARC (`RunnerDeployment` + `HorizontalRunnerAutoscaler`) maps similarly, including its multi-label routing; see [Job routing](#job-routing-a-11-map).
 
 > **Do not migrate via GAG's v1 API.** The older single-CR `actions-gateway.github.com/v1alpha1` shape is **[deprecated](v1alpha1-deprecation.md)** and, more to the point here, it is *Classic-protocol only* — it would move you **off** the single-acquirer model your ARC scale sets already use.
@@ -213,7 +213,7 @@ Never copy a private key through an environment variable or shell history.
 Lift your ARC `spec.template` straight into the `RunnerTemplate` (same type), and carry the scale-set name across as the runner set's single label so existing `runs-on` keeps working:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: team-a-egress
@@ -222,7 +222,7 @@ spec:
   minReplicas: 2
   maxReplicas: 10
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate           # your ARC spec.template, written once and shared
 metadata:
   name: gpu
@@ -239,7 +239,7 @@ spec:
             limits:
               nvidia.com/gpu: "1"
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: team-a-gateway
@@ -254,7 +254,7 @@ spec:
     name: team-a-egress        # every RunnerSet below inherits this
   # No securityProfile field: the Pod Security level is a namespace label in v2.
 ---
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: gpu-large              # v2 names the set explicitly

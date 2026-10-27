@@ -31,7 +31,7 @@ The AGC gap-fills `runAsUser: 1001` on every profile except `privileged`, so the
 Pod-level `fsGroup` is what fixes it: the kubelet adds the group to the container's supplementary groups and applies it to the volume, after which the runner can write.
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: shared-workspace

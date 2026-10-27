@@ -7,7 +7,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > **Scoped 2026-10-09**, after `v1.9.0` tagged on 2026-10-05: the [scope ledger](#scope-ledger) is the release's record.
-> Phase 3's storage advance ships first, in its own release: Q1086 landed it for [1.10](release-1.10.md), `v2` storing on every kind and `gag-migrate storage-version` rewriting what is stored, decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
+> Phase 3's storage advance ships first, in its own release: Q1086 landed it for [1.10](archive/release-1.10.md), `v2` storing on every kind and `gag-migrate storage-version` rewriting what is stored, decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
 > The removals follow in `v2.0.0`: [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub, [Q273](../queue/Q273.md) for `v1alpha1`, and [Q264](../queue/Q264.md) for classic; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on all four.
 > The Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The phase table below is the real state.
@@ -26,7 +26,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 
 What the `v2.0.0` tag waits for, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
 Phase 2 is not here: Q413 gated 1.9, and [release-1.9.md](archive/release-1.9.md#scope-ledger) carries it, as it did Q1150, the validators' retype onto `v2`.
-Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](release-1.10.md#scope-ledger) carries it.
+Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/release-1.10.md#scope-ledger) carries it.
 `make release-ladder-check` holds the `Gates?` column to each row's labels in both directions.
 
 | Q-ID | Item | Gates? | Status |

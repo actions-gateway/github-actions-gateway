@@ -631,7 +631,7 @@ The choice is split across **two roles** (Q245), so the tenant API stays stable 
 - **The operator picks the mechanism**, once per cluster, via the GMC `--fqdn-policy-backend` flag (chart: `fqdnPolicyBackend`).
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: shared
@@ -704,7 +704,7 @@ So the pod's **node** decides which IP its traffic leaves by, and pinning the te
 (Worker pods have always had the full surface via `RunnerTemplate.spec.podTemplate`.)
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: shared
@@ -834,13 +834,13 @@ A tenant then requests the destination on their `EgressProxy`.
 FQDN destinations require an FQDN `egressPolicyMode` (the CRD rejects `destinationFQDNs` in CIDR mode, since the pod-egress layer expresses them as `toFQDNs` rules); CIDR destinations work in any mode:
 
 ```yaml
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: shared
   namespace: team-a
 spec:
-  egressPolicyMode: FQDN   # (or the deprecated CiliumFQDN/CalicoFQDN); requires an operator --fqdn-policy-backend
+  egressPolicyMode: FQDN   # requires an operator --fqdn-policy-backend
   destinationFQDNs: [proxy.golang.org, sum.golang.org]   # rejected unless covered by --allowed-egress-fqdns
   destinationCIDRs: []                                   # rejected unless contained in --allowed-egress-cidrs
 ```
@@ -891,7 +891,7 @@ Naming a proxy from the consumer side authorizes nothing.
 The proxy owner lists the namespaces permitted to use it:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: shared-pool
@@ -906,7 +906,7 @@ spec:
 A consumer then names the proxy and its namespace:
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: gateway
