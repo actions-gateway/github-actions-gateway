@@ -98,21 +98,22 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 
 | Waiting on | Items |
 |---|---|
-| Recorded demand from an operator | The proxy hardening cluster: [Q565](../queue/Q565.md) rate limiting, [Q567](../queue/Q567.md) per-group pools |
+| Recorded demand from an operator | The proxy hardening cluster: [Q565](../queue/Q565.md) rate limiting |
 | Hardware nobody has yet | [Q765](../queue/Q765.md) GHES validation on a real appliance |
 
-Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, Q566 was closed as already shipped, and Q555 was revived on 2026-10-10, so three of the original seven remain in it, which is the set the sentence below counts against.
+Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, Q566 and Q567 were closed as already shipped, and Q555 was revived on 2026-10-10, so two of the original seven remain in it, which is the set the sentence below counts against.
 Its demand was Q725, which had sat in the Queue the whole time.
 
-**One of the original four is back.** [Q555](../queue/Q555.md) is the third revival: its trigger was an operator ask, and the maintainer ruled on 2026-10-10 that this repository's own CI is one; the prerequisite it also listed had been met since 2026-07-05 ([draft](q555-flaky-job-retry.md#the-prerequisite-already-exists)).
+**One of the original three is back.** [Q555](../queue/Q555.md) is the third revival: its trigger was an operator ask, and the maintainer ruled on 2026-10-10 that this repository's own CI is one; the prerequisite it also listed had been met since 2026-07-05 ([draft](q555-flaky-job-retry.md#the-prerequisite-already-exists)).
 The previous revival has since shipped: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
 That is the trigger list working twice rather than a rule being bent, and it is what narrowed the rule above.
-The three left in the table have never been revived.
+The two left in the table have never been revived.
 Q566 left without one: the in-cluster TLS it asked for shipped on 2026-05-23, before the row was filed from a stale design note, so it was closed on 2026-10-10 as a gap the code never had.
+Q567 left the same way on 2026-10-27: the v2 API gives every `EgressProxy` its own pool and lets a `RunnerSet` name one with `spec.proxyRef`, which is the per-group pool it asked for.
 
 The proxy cluster is the clearest case and the one most likely to be re-litigated.
 [release-1.4.md](archive/release-1.4.md) shelved all four together with the reasoning that they are a coherent release theme, and recorded in the same breath that **none had demand recorded against it**.
-That still holds of the two left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
+That still holds of Q565, the one left, and Q564 leaving on a recorded ask, then shipping, is the reasoning working rather than failing.
 A theme with no demand is a theme, not a release.
 
 ## The rule this establishes
@@ -132,7 +133,7 @@ Deferred is not a graveyard here, it is a trigger list, and every row in it name
 
 ## What this does not decide
 
-**Applied 2026-08-09.** The seven punted items moved to Deferred with the triggers this page names (three of them still are), and Q719 and Q727 took the `1.6-gate` label, which is what publishes the commitment where an adopter reads it.
+**Applied 2026-08-09.** The seven punted items moved to Deferred with the triggers this page names (two of them still are), and Q719 and Q727 took the `1.6-gate` label, which is what publishes the commitment where an adopter reads it.
 
 That does not make 1.6 a decided release.
 The labels encode the target, and the reading above still governs: if both items slip on demand, the labels come off rather than an empty tag being cut.

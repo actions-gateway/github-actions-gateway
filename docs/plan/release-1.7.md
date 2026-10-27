@@ -87,7 +87,7 @@ The criterion now also records the decline, so a later reading cannot revive the
 - **[Q215](../queue/Q215.md) as a build.** Deferred with an unfired trigger, per the section above.
 - **Controller or API changes.** Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.
   A 1.7 that grows an API field has lost the plot of what the release is.
-- **The remaining proxy-hardening cluster.** [Q565](../queue/Q565.md) and [Q567](../queue/Q567.md) keep their demand triggers, unchanged since [release-1.4.md](archive/release-1.4.md#deferred-out-of-14-and-why) shelved them.
+- **The remaining proxy-hardening cluster.** [Q565](../queue/Q565.md) and Q567 (since closed as delivered by v2's per-`RunnerSet` `proxyRef`) keep their demand triggers, unchanged since [release-1.4.md](archive/release-1.4.md#deferred-out-of-14-and-why) shelved them.
 
 ## Definition of done
 

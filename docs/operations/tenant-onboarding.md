@@ -841,6 +841,41 @@ What you trade, and what you do **not**:
 To add attribution later, create an `EgressProxy` and set `spec.defaultProxyRef` on the gateway (every `RunnerSet` under it inherits the proxy unless it sets its own `proxyRef`).
 A `proxyRef`/`defaultProxyRef` that names a **missing** `EgressProxy` is treated as an error and fails closed (`Ready=False`/`ProxyNotFound`) — it does **not** silently fall back to direct egress; only an entirely-unset reference means direct.
 
+### A dedicated proxy pool for a bandwidth-heavy runner set
+
+Every `EgressProxy` is its own pool: the GMC gives each one a separate Deployment, Service, and HPA.
+So when one `RunnerSet` (large artifact uploads, container image pulls) is saturating the pool its co-tenants share, give it a pool of its own and leave the rest on the gateway default.
+
+**Start the new pool from the shared pool's spec, not from an empty one.** Every `EgressProxy` field belongs to its own pool, so a new pool takes the defaults rather than what the shared pool was set to.
+That covers egress auditing (`auditLogging`, off by default), the destination allowlist (`egressPolicyMode`, `destinationCIDRs`, `destinationFQDNs`), `noProxyCIDRs`, `failureAttribution`, `resources` and `scheduling`.
+A pool left at the defaults allows GitHub only, which jobs surface as failures.
+It also keeps no egress audit record, which nothing surfaces.
+Copy the spec with `kubectl get egressproxy <shared-pool> -n team-a -o yaml`, then change only the sizing.
+**Leave `sharing` out of the copy.** Copying it would let every namespace the shared pool grants point its sets at the dedicated pool, which brings back the co-tenants the pool exists to keep out.
+Unset, the pool serves its own namespace only.
+
+```yaml
+apiVersion: actions-gateway.com/v2
+kind: EgressProxy
+metadata: { name: heavy, namespace: team-a }
+spec:
+  # ...every field but sharing copied from the shared pool's spec...
+  minReplicas: 2
+  maxReplicas: 20
+---
+apiVersion: actions-gateway.com/v2
+kind: RunnerSet
+metadata: { name: gpu, namespace: team-a }
+spec:
+  gatewayRef:  { name: acme }   # other sets keep acme's default
+  templateRef: { name: default }
+  proxyRef:    { name: heavy }  # this set uses heavy only
+  runnerLabels: [gag-gpu]
+```
+
+The set's `proxyRef` takes precedence over the gateway's `defaultProxyRef`, so only `gpu`'s workers move; their `HTTPS_PROXY` and mounted proxy CA both switch to `heavy`.
+The namespace `ResourceQuota` now has to hold both pools at their `maxReplicas`, so add the second pool's term when [sizing it](#step-1b-set-the-platform-owned-resourcequota).
+
 ### Job acquisition, and how labels route
 
 On `v2` there is nothing to choose: every `RunnerSet` acquires jobs with the **runner-scale-set message-queue protocol** — one listener session per set, capacity-gated assignment, and a full-runner worker.
