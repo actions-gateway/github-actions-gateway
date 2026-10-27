@@ -4155,6 +4155,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>M</td>
 <td>An <code>EgressProxy</code>'s attribution server bundle (<code>&lt;ep&gt;-attribution-tls</code>) is rewritten in place when its namespace set changes, so a pod …</td>
 </tr>
+<tr>
+<td><a href="Q1217/">Q1217</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Gate reports e2e test counts for its first leg only</a></td>
+<td><code>bug</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The release gate prints a pass/fail/skip summary for its first e2e leg (Kata) and <code>no JUnit artifact on run … — skipping the report</code> for …</td>
+</tr>
 </tbody>
 </table>
 

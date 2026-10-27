@@ -2703,7 +2703,9 @@
 
 <h1 id="release-110-milestone-definition">Release 1.10 Milestone Definition<a class="headerlink" href="#release-110-milestone-definition" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scoped 2026-10-09, no candidate cut.</strong> The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
+<p><strong>Status: <code>v1.10.0-rc.2</code> validated in CI on 2026-10-27 (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/40407403332">gate run 40407403332</a>), at <code>5a69a95f0</code>; the stable tag waits on the promote decision.</strong> <code>rc.1</code> failed only its storage leg, on a gate defect fixed in #2148, and was superseded by the chart text fix (#2149) and the GMC Secret fix (#2151).
+Scoped 2026-10-09.
+The rung was decided by the maintainer on 2026-10-09, when scoping 2.0 found that the storage advance cannot share a CustomResourceDefinition apply with the removals.
 Ten rows gate the tag and four ride; Q1086, the storage advance, has landed, Q1184 joined the gate on 2026-10-25 and landed the same day, and Q1210, Q1211 and Q1212 joined it on 2026-10-26.
 Q1214's fix gated <code>v1.10.0-rc.2</code>; its flake-watch soak rides, since it counts green runs on <code>main</code> after the fix.
 Nothing here is a commitment to a date.</p>
@@ -2803,7 +2805,7 @@ Dropping one is <a href="../../queue/Q1167/">Q1167</a>'s and <a href="../../queu
 <td>—</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td>🔲 no candidate cut</td>
+<td><code>rc.1</code> ❌ storage leg, a gate defect (#2148), superseded; <code>rc.2</code> ✅ in CI, gate run 40407403332</td>
 </tr>
 <tr>
 <td>Q1070</td>
@@ -2843,6 +2845,9 @@ The ledger takes a row for each further item that merges onto the released surfa
 Q1086 shipped the sweep and proved it on envtest; the candidate is where it is read on a real upgrade: every one of the six kinds' CRDs reports <code>storedVersions: ["v2"]</code> after the upgrade and the sweep, on the dogfood cluster, whose objects are stored as <code>v2beta1</code> today.
 The gate's <code>storage</code> leg runs the sweep and takes that reading (Q1171, landed), so the candidate's evidence carries it.
 Only the first candidate's run rewrites anything: it leaves dogfood at <code>["v2"]</code>, so every later candidate's sweep takes the no-op path, and a sweep fix shipped in a later candidate is never exercised on a real cluster.</p>
+<p><strong>The rewrite was read on <code>rc.2</code>, in a local gate run rather than the CI one.</strong> A local run on 2026-10-26 rewrote 9 objects across five of the six kinds (no <code>EgressProxy</code> was stored) and left every CRD at <code>storedVersions: ["v2"]</code>.
+The CI run that validated <code>rc.2</code> then found all six already at <code>[v2]</code> and did nothing, so its evidence records the storage leg as passed without showing a migration; the rewrite's only record is that local run's log.
+Both runs were the same candidate, so the reading stands; the local run spent it because the release-candidate skill still described a local launch, fixed in #2154.</p>
 <h2 id="a-release-notes-edit-owed-at-the-candidate">A release-notes edit owed at the candidate<a class="headerlink" href="#a-release-notes-edit-owed-at-the-candidate" title="Permanent link">&para;</a></h2>
 <p>The notes' scale-set caveat reads "None of these five scale-set fixes was reproduced on a cluster.
 Each is covered by unit tests."
