@@ -384,11 +384,11 @@ done
 
 # Pre-pull the released GMC image on the host and load it onto the kind nodes,
 # so kubelet's pull from ghcr.io is a local hit — same de-flake pattern as the
-# cert-manager/metrics-server pre-pulls in e2e-reusable.yml. Best-effort: on
-# some hosts (macOS Docker Desktop) `kind load` cannot import a registry-pulled
-# multi-arch image ("content digest ... not found"), and kubelet's own retried
-# pull is a working fallback everywhere — the chart's imagePullPolicy is
-# IfNotPresent, so a successful load is still a per-node cache hit.
+# cert-manager/metrics-server pre-pulls in e2e-reusable.yml. kind-load-image.sh
+# exports only the daemon's platform, which a containerd-store daemon needs for a
+# registry-pulled multi-arch image. Best-effort: kubelet's own retried pull is a
+# working fallback everywhere — the chart's imagePullPolicy is IfNotPresent, so a
+# successful load is still a per-node cache hit.
 # awk consumes the whole stream (no early exit): exiting at the first match
 # closes the pipe while tar may still be writing, and the resulting EPIPE fails
 # the pipeline under pipefail — a timing-dependent flake (Q548, 2026-07-31).
@@ -402,7 +402,7 @@ if [[ -n "${released_gmc_repo}" ]] && command -v docker >/dev/null && command -v
 	[[ "${KUBE_CONTEXT}" == "kind-${KIND_CLUSTER}" ]]; then
 	step "pre-pulling ${released_gmc_repo}:${RELEASED_TAG} onto the kind nodes (best-effort)"
 	if ! { "${REPO_ROOT}/scripts/fetch/pull-image-with-retry.sh" "${released_gmc_repo}:${RELEASED_TAG}" &&
-		kind load docker-image --name "${KIND_CLUSTER}" "${released_gmc_repo}:${RELEASED_TAG}"; }; then
+		"${REPO_ROOT}/scripts/e2e/kind-load-image.sh" "${KIND_CLUSTER}" "${released_gmc_repo}:${RELEASED_TAG}"; }; then
 		echo "     (pre-pull/load failed; kubelet will pull the image itself, with its own backoff)"
 	fi
 fi
