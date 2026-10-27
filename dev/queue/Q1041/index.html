@@ -2628,7 +2628,7 @@
 
 
 <h1 id="a-pages-deploy-can-succeed-while-the-site-never-serves-the-version">A pages deploy can succeed while the site never serves the version<a class="headerlink" href="#a-pages-deploy-can-succeed-while-the-site-never-serves-the-version" title="Permanent link">&para;</a></h1>
-<p>Three consecutive stable tags have published nothing to the site while every check the run could make of its own tree was correct.
+<p>Every stable tag from <code>v1.6.0</code> to <code>v1.10.0</code> has published nothing to the site while every check the run could make of its own tree was correct.
 The deploy step succeeds, <code>verify-pages-live</code> exhausts its 300s budget, and a hand-run <code>workflow_dispatch</code> of the same content publishes.</p>
 <table>
 <thead>
@@ -2669,10 +2669,25 @@ The deploy step succeeds, <code>verify-pages-live</code> exhausts its 300s budge
 <td>1m31s</td>
 <td>no; <code>/1.8.0/</code> 404 at origin 14 min later</td>
 </tr>
+<tr>
+<td><code>v1.9.0</code></td>
+<td>unmeasured</td>
+<td>2026-10-06 (run 37395739033)</td>
+<td>unmeasured</td>
+<td>no; the run failed <code>verify-pages-live</code></td>
+</tr>
+<tr>
+<td><code>v1.10.0</code></td>
+<td>2026-10-27T01:58:00Z</td>
+<td>02:31:18Z</td>
+<td>33m18s</td>
+<td>no; <code>versions.json</code> still listed 1.9.0 as <code>stable</code> at 02:36</td>
+</tr>
 </tbody>
 </table>
-<p><strong>What the three have in common is the gap, not the content.</strong> A stable tag sits on <code>main</code>'s tip, so the merge push and the tag push are the same commit and both trigger <code>pages</code>.
-The <code>pages-deploy</code> concurrency group serialises them on <code>gh-pages</code> and lets the second deploy land one to two minutes behind the first.</p>
+<p><strong>A short gap is common to <code>v1.5.0</code> through <code>v1.8.0</code>, and <code>v1.10.0</code> shows it is not the cause.</strong> A stable tag sits on <code>main</code>'s tip, so the merge push and the tag push are the same commit and both trigger <code>pages</code>.
+The <code>pages-deploy</code> concurrency group serialises them on <code>gh-pages</code>, and for those four the tag's deploy landed one to two minutes behind <code>main</code>'s.
+<code>v1.10.0</code>'s landed 33 minutes behind it, on a site <code>main</code> had finished deploying long before, and still never served.</p>
 <p><code>v1.8.0</code> is the clearest reading because the winner is identifiable.
 The live <code>/1.7.0/</code> page carried <code>last-modified: 10:28:39</code>, which is the <code>main</code> run's artifact, assembled at 10:28:28, before <code>mike</code> wrote 1.8.0 at 10:30:15.
 <code>x-proxy-cache: MISS</code> and <code>age: 0</code> on the 404 rule out an edge cache.
@@ -2680,7 +2695,8 @@ The tag run's own checks were all correct: <code>mike</code> pushed 1.8.0 with t
 <p><strong>A same-commit collision is not the mechanism, and the recovery is what refutes it.</strong> Both runs create a Pages deployment whose id is <code>pages_build_version</code>, which <code>actions/deploy-pages</code> defaults to <code>github.sha</code>, so both get the same string.
 That is a real observation and it does not explain the failure: the <code>v1.8.0</code> republish (run 34834527848) deployed <strong>the same</strong> <code>09a57c0cc…</code> build version 13 minutes later and served fine.
 So a deployment at that id is not permanently deduped.
-What distinguishes the two is that the republish was alone.</p>
+The republish was alone, but so was <code>v1.10.0</code>'s tag deploy, which failed; its republish (run 40439517751) deployed the same <code>6465a4562…</code> build version 7 minutes later and served.
+So neither the gap nor solitude separates a deploy that serves from one that does not, and the republish is the one action that has recovered every time.</p>
 <p><strong>This bears on the two candidate fixes, which had no evidence when they were written:</strong></p>
 <ul>
 <li>Retry the publish once from inside the job when <code>verify-pages-live</code> exhausts its budget, then re-verify.
