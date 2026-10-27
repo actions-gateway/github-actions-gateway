@@ -28,8 +28,9 @@
 # The kubelet's readiness and liveness probes reach 5000 too, and are exempt.
 # A probe from a node address resolves to that node. On the dogfood cluster
 # (GKE Dataplane V2) the 2026-09-14 window saw no node address at all, only a
-# workload pod and `169.254.4.6`, which no pod or node lists. That it is the
-# kubelet is unconfirmed (Q1048). Whatever the kubelet's probe source is, it
+# workload pod and `169.254.4.6`, which no pod or node lists. Every request it
+# made in the v1.9.0-rc.2 and v1.10.0-rc.2 windows carried `kube-probe/`
+# (Q1048). Whatever the kubelet's probe source is, it
 # passes the mirror's ingress policy, whose only peer is a namespace selector:
 # e2e-start.sh applies that policy and then waits for Available, which needs
 # those probes. So selectors do not govern it here.

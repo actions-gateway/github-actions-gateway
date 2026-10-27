@@ -88,7 +88,7 @@ These are the evidence bar, and none of them is a calendar check.
 Criteria 2 and 3 are settled by measurement, so this table holds the measurements rather than an opinion about them.
 Q1048's mirror-client census rides along in the same window because it needs the same dogfood kubectl.
 
-The dogfood gate writes one record per reading to `tmp/soak-readings.jsonl` and `scripts/dogfood/soak-readings.sh` renders them as the rows below, so nothing here is transcribed by hand.
+The dogfood gate writes one record per reading to `tmp/soak-readings.jsonl` and `scripts/dogfood/soak-readings.sh` renders them as the rows below, so a reading taken on a host that keeps the stream is never transcribed by hand; the note under the table names the one exception.
 A window is billable and cannot be replayed; a reading that lives only in a terminal is a reading lost.
 
 **A reading that was not taken is not a pass.** 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.
@@ -98,11 +98,13 @@ What gates 1.8 is its own [definition of done](archive/release-1.8.md#definition
 
 | Reading | Criterion | Verdict | What it found | Window |
 |---|---|---|---|---|
-| Q1048 | mirror-client-census | 🔲 Not taken | the census refused: an address resolved to no pod and no node, or nothing connected | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
+| Q1048 | mirror-client-census | ✅ Taken, positive | every client that reached a mirror is a workload-labelled pod or the kubelet | `v1.10.0-rc.2` on `gag-dogfood`, 2026-10-27 |
+| Q1048 | mirror-client-census-dragonfly | ✅ Taken, positive | every client that reached a mirror is a workload-labelled pod or the kubelet | `v1.10.0-rc.2` on `gag-dogfood`, 2026-10-27 |
 | Q1059 | criterion-2-every-kind | ✅ Taken, positive | all five v2beta1 kinds present; EgressProxy reconciled to Ready | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
 | Q1060 | criterion-3-conversion-round-trip | ✅ Taken, positive | the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1 | `v1.8.0-rc.1` on `gag-dogfood`, 2026-09-14 |
 
-Those rows are `scripts/dogfood/soak-readings.sh`'s output pasted unedited, which is the point of it existing.
+The Q1059 and Q1060 rows are `scripts/dogfood/soak-readings.sh`'s output pasted unedited, which is the point of it existing.
+The two Q1048 rows are in its format but transcribed from the gate's job log (run 40407403332), because the CI gate does not keep the readings stream ([Q1223](../queue/Q1223.md)).
 
 **What criterion 2's reading covers.** The window manufactured a `v2beta1` `EgressProxy` in the standing tenant, which is the one kind `setup.sh` deliberately never creates, and it reconciled to Ready; the other four were already carrying this cluster's real CI traffic.
 So all five kinds have now reconciled on the dogfood cluster rather than only in envtest.
@@ -111,8 +113,9 @@ So all five kinds have now reconciled on the dogfood cluster rather than only in
 It is one kind, not five, and this window did not establish whether that object predates the `v2beta1` graduation.
 The criterion's own wording asks for every served *version* rather than every kind, which this meets; whether it should also ask for every kind is a question for whoever closes Phase 1, not something the reading settles.
 
-**Q1048's census is not a criterion, and it did not report.** It rides along because it needs the same dogfood kubectl.
-Its refusal is recorded as taken-nothing rather than as a pass, which is the distinction the whole verdict vocabulary exists for.
+**Q1048's census is not a criterion.** It rides along because it needs the same dogfood kubectl.
+Through the 1.8 cycle it refused on a link-local `169.254.4.6` that resolved to no pod and no node, and that refusal was recorded as taken-nothing rather than as a pass.
+Since the proxy logs the User-Agent, that address is exempted as the kubelet's `kube-probe/` `GET /v2/`, and the census has graded a pass on both back ends in the `v1.9.0-rc.2` and `v1.10.0-rc.2` windows.
 
 ### Definition of Done audit (as of this change)
 
