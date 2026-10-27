@@ -51,7 +51,7 @@ const WorkerSAName = "actions-gateway-worker"
 // It MUST equal the FROM tag in the root Dockerfile's `worker` stage; the
 // lockstep test in runner_version_test.go enforces that so a future bump cannot
 // drift.
-const RunnerVersion = "2.338.1"
+const RunnerVersion = "2.338.2"
 
 // MinRunnerVersion is the lowest actions/runner version GitHub accepts when a
 // runner registers. Below it, GitHub refuses the registration outright, so a worker
@@ -84,7 +84,7 @@ const WorkerImageRepo = "ghcr.io/actions/actions-runner"
 //	docker buildx imagetools inspect ghcr.io/actions/actions-runner:<X.Y.Z>
 //
 // using the top-level "Digest:" (the OCI image index), not a per-platform one.
-const WorkerImageDigest = "sha256:e275409999c37162649aa050ca573f03eab2eabcb3a1e7fcc47548de6b4f9690"
+const WorkerImageDigest = "sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232"
 
 // DefaultWorkerImage is the fully digest-pinned default worker image
 // ("<repo>:<version>@<digest>") the AGC pulls when neither the per-RunnerGroup
