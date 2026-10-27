@@ -100,6 +100,10 @@ The fit is node-level encryption that covers every pod flow, such as Calico or C
 
 ## G.5. Per-RunnerGroup Dedicated Proxy Pool
 
+> **✅ Delivered by the v2 API (Q567).** No `dedicated` flag was needed: v2 decomposed the inline proxy into the standalone `EgressProxy` kind (§H.4), the GMC gives each one its own Deployment, Service and HPA, and a `RunnerSet`'s `spec.proxyRef` overrides the gateway's `defaultProxyRef`, so the per-group `HTTP_PROXY` this entry called for is already per set.
+> `TestV2_RunnerSet_DedicatedProxyPool` pins two sets under one gateway egressing through different pools; the operator recipe is [Tenant Onboarding — A dedicated proxy pool](../operations/tenant-onboarding.md#a-dedicated-proxy-pool-for-a-bandwidth-heavy-runner-set).
+> The text below records the v1 shape this entry was written against.
+
 **Current behavior.** One proxy pool per `ActionsGateway` (i.e., per tenant).
 All RunnerGroups within a tenant share the pool.
 
