@@ -1971,6 +1971,28 @@ evidence_leg dind
 check "evidence: the tag, its commit, then each passed leg" \
 	"tag v9.9.0-rc.1 commit ${EVIDENCE_COMMIT} leg kata leg dind" "$(xargs <"${GATE_EVIDENCE_FILE}")"
 
+# A local run says before it spends that publish cannot use it, and names the
+# tag's CI gate run when that run is waiting for approval; a CI run says neither.
+gh() {
+	case "$*" in
+	*"validate-candidate.yml"*"--status waiting"*) echo 4242 ;;
+	*) return 1 ;;
+	esac
+}
+REPO="octo/repo"
+GAG_IMAGE_TAG="v9.9.0-rc.1"
+notice="$(GATE_EVIDENCE_FILE="" local_run_notice)"
+check "local notice: says publish cannot use a local run" "yes" \
+	"$([[ "${notice}" == *"records nothing publish reads"* ]] && echo yes || echo no)"
+check "local notice: names the waiting CI gate run" "yes" \
+	"$([[ "${notice}" == *"https://github.com/octo/repo/actions/runs/4242"* ]] && echo yes || echo no)"
+gh() { return 1; }
+notice="$(GATE_EVIDENCE_FILE="" local_run_notice)"
+check "local notice: no waiting run, no run named" "no" \
+	"$([[ "${notice}" == *"actions/runs/"* ]] && echo yes || echo no)"
+notice="$(GATE_EVIDENCE_FILE="${SCRATCH}/evidence.txt" local_run_notice)"
+check "local notice: a CI run prints nothing" "" "${notice}"
+
 # A commit the gate cannot resolve stops the run before it spends: evidence that
 # names no commit is evidence publish cannot use.
 gh() { return 1; }
@@ -2065,10 +2087,37 @@ storage_case() (
 		cp "${STORAGE_DIR}/SHA256SUMS" "${WORKDIR}/SHA256SUMS"
 		: >"${WORKDIR}/SHA256SUMS.cosign.bundle"
 	}
-	helm() { echo "helm $*" >>"${STORAGE_LOG}"; }
+	# Helm 4.2.3 prints an OCI pull's banner on stdout, so a stub that prints
+	# nothing hides the one way capturing its output breaks.
+	helm() {
+		echo "helm $*" >>"${STORAGE_LOG}"
+		local arg ref="" untardir=""
+		while (($#)); do
+			arg="$1"
+			shift
+			case "${arg}" in
+			oci://*) ref="${arg}" ;;
+			--untardir) untardir="$1" ;;
+			esac
+		done
+		[[ -n "${ref}" ]] && printf 'Pulled: %s\nDigest: sha256:0\n' "${ref#oci://}"
+		if [[ -n "${untardir}" ]]; then
+			mkdir -p "${untardir}/actions-gateway/crds"
+			printf 'apiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\n' \
+				>"${untardir}/actions-gateway/crds/crd.yaml"
+		else
+			printf -- '---\napiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\n'
+		fi
+	}
 	kubectl() {
 		case "$1" in
-		apply) echo "kubectl $*" >>"${STORAGE_LOG}" ;;
+		apply)
+			echo "kubectl $*" >>"${STORAGE_LOG}"
+			if grep -q '^Pulled:' "$3"; then
+				echo 'error: error validating data: [apiVersion not set, kind not set]' >&2
+				return 1
+			fi
+			;;
 		get) fake_crd_json ;;
 		esac
 	}
@@ -2080,7 +2129,7 @@ rc=0
 storage_case >"${STORAGE_DIR}/out" 2>&1 || rc=$?
 check "storage: a verified binary and a pruned cluster pass" "0" "${rc}"
 check "storage: the order is pin, chart CRDs, apply, verify, preview, sweep" \
-	"pin|helm show crds oci://ghcr.io/octo/charts/actions-gateway --version 1.10.0-rc.1|kubectl apply -f ${STORAGE_DIR}/work/actions-gateway-crds.yaml|cosign verify-blob|gag-migrate storage-version --context gke_p_z_c|gag-migrate storage-version --context gke_p_z_c --apply --assume-yes" \
+	"pin|helm pull oci://ghcr.io/octo/charts/actions-gateway --version 1.10.0-rc.1 --untar --untardir ${STORAGE_DIR}/work/chart|helm show crds ${STORAGE_DIR}/work/chart/actions-gateway|kubectl apply -f ${STORAGE_DIR}/work/actions-gateway-crds.yaml|cosign verify-blob|gag-migrate storage-version --context gke_p_z_c|gag-migrate storage-version --context gke_p_z_c --apply --assume-yes" \
 	"$(paste -sd'|' "${STORAGE_LOG}")"
 
 storage_fixture match 0

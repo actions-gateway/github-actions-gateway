@@ -66,7 +66,7 @@ Lists are not.
 patches:
   - target:
       group: actions-gateway.com
-      version: v2beta1
+      version: v2
       kind: ClusterRunnerTemplate
       name: kata-dind
     patch: |

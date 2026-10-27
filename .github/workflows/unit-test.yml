@@ -16,7 +16,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'docs/**'
-      # Generated from api/v2beta1 and gated by the `lint` job's
+      # Generated from api/v2 and gated by the `lint` job's
       # api-reference-check (Q632), so a hand-edit landing on main must still
       # reach that gate — a docs path that is code output, not prose.
       - '!docs/reference/api.md'
@@ -323,7 +323,7 @@ jobs:
       - name: controller-gen manifest drift (make codegen-check)
         run: make codegen-check
 
-      # Assert the published API reference still matches the api/v2beta1 doc
+      # Assert the published API reference still matches the api/v2 doc
       # comments and validation markers it is generated from (Q632). Same
       # reasoning as codegen-check above and the same `code` filter: the drift is
       # caused by a GO type/doc-comment change, and a doc-comment edit changes no

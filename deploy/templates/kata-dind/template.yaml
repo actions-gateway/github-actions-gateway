@@ -33,7 +33,7 @@
 # Forbidden; enforce=privileged admits it. The property "no privileged
 # container" is therefore enforced by this template being platform-owned
 # (cluster-scoped; tenants cannot author it), not by the PSA level.
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ClusterRunnerTemplate
 metadata:
   name: kata-dind

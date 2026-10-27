@@ -78,6 +78,7 @@ cat > "$FIXTURE_DIR/cosign" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$STUB_COSIGN_LOG"
+if [[ -n "${STUB_COSIGN_SLEEP:-}" ]]; then sleep "$STUB_COSIGN_SLEEP"; fi
 exit "${STUB_COSIGN_RC:-0}"
 STUB
 chmod +x "$FIXTURE_DIR/cosign"
@@ -156,6 +157,16 @@ if [[ "$out_text" == *"signature verification FAILED"* ]]; then
 	pass 'a failed signature is reported'
 else
 	fail 'a failed signature is reported' "output: $out_text"
+fi
+
+# A check that never returns must fail the run rather than stall it: a hung
+# Docker credential helper holds cosign past its own --timeout with no output.
+STUB_COSIGN_SLEEP=30 COSIGN_TIMEOUT=1 run_verify v1.2.3
+expect_rc 'a hung signature check fails the run' 1
+if [[ "$out_text" == *"TIMEOUT"* && "$out_text" == *"credential helper"* ]]; then
+	pass 'a hung signature check is reported as a timeout'
+else
+	fail 'a hung signature check is reported as a timeout' "output: $out_text"
 fi
 
 if ((fails > 0)); then

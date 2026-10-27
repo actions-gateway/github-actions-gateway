@@ -73,16 +73,17 @@ When a worker loses its job to infrastructure, the run concludes at GitHub and t
 A preemption or a drain concludes in **15 to 26 seconds** (measured), because the runner keeps its grace period and reports.
 A hard eviction has no report to send, so the job lock has to lapse first, about 10 minutes at worst.
 
-Three marks qualify a disruption:
+Four marks qualify a disruption:
 
 | Mark | What GAG sees |
 | --- | --- |
 | Kubelet **node-pressure eviction** (memory or disk exhaustion) | `Evicted` pod status |
 | **Scheduler preemption** by a higher `priorityTiers` tier | a `DisruptionTarget` condition, reason `PreemptionByScheduler` (Q497) |
 | **External graceful deletion** by a drain or a bare `kubectl delete pod` | a `deletionTimestamp` the AGC reads as its terminal phase publishes (Q502) |
+| **Node shutdown**: a graceful kubelet shutdown, a deleted Node, or a dead node tainted `node.kubernetes.io/out-of-service` | a `DisruptionTarget` condition, reason `TerminationByKubelet`, `DeletionByPodGC` or `DeletionByTaintManager` (Q1179, Q1207) |
 
-**The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, and workers the gateway's own cleanup reaped as stuck are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
-A configurable per-job retry budget, one per workflow run and shared across every cause, prevents loops on persistently failing workloads.
+**The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, workers the gateway's own cleanup reaped as stuck, and a worker evicted for exceeding its own storage limit are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
+A configurable retry budget, one per workflow run in each runner set and shared across every cause, prevents loops on persistently failing workloads.
 
 Both acquisition tiers run the flow, with different mechanisms: the classic tier also stops renewing the job lock the moment it detects the loss, while on the default scale-set tier the runner owns renewal, so the scale-set path records the workflow run on the worker pod and detects the disruption from the owning reconciler instead.
 [The full boundary, with detection marks and metrics](docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do) · [design detail](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry)
@@ -218,12 +219,12 @@ GAG ships as the **`actions-gateway` Helm chart**, which installs the Gateway Ma
 The GMC then provisions per-tenant gateways at runtime from each `ActionsGateway` CR.
 
 The chart is published to the GHCR OCI registry and signed with cosign.
-The current release is **`1.9.0`** (GA; charts carry no leading `v`, images are tagged `v1.9.0`).
+The current release is **`1.10.0`** (GA; charts carry no leading `v`, images are tagged `v1.10.0`).
 Install it straight from the registry:
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.9.0 \
+  --version 1.10.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -231,11 +232,11 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.9.0) and verify the signatures before installing.
+Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0) and verify the signatures before installing.
 The [Installation guide](docs/operations/install.md) covers prerequisites, image-digest pinning, the cert-manager toggle, healthy-install verification, and uninstall; the [chart README](charts/actions-gateway/README.md) is the full values reference.
 
 > [!IMPORTANT]
-> **Upgrading is not `helm upgrade` alone.** Helm installs the chart-root `crds/` directory on a fresh install only, so every upgrade starts by piping `helm show crds` for the target version into `kubectl apply`.
+> **Upgrading is not `helm upgrade` alone.** Helm installs the chart-root `crds/` directory on a fresh install only, so every upgrade starts by pulling the target chart and applying its CRDs with `kubectl apply`.
 > Upgrading from an old enough release also moves a `priorityClassAllowlist.configMapName` into the cluster-scoped `PriorityClassAllowlist` CR, which fails closed; the upgrade guide says which releases that covers.
 > Both steps are guarded, and the [upgrade guide](docs/operations/upgrade.md) covers rolling back.
 
@@ -245,13 +246,13 @@ For day-2 operations (`helm upgrade` and rollback, per-component upgrades, runbo
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GMC deployment, GitHub App Secret, and your first tenant.
 
-**New tenants should onboard on `actions-gateway.com/v2beta1`**, the graduated, ScaleSet-only hub version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
-It is v2's first stability contract and where new capability lands.
+**New tenants should onboard on `actions-gateway.com/v2`**, the GA, ScaleSet-only version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
+It is the storage version from 1.10, and the version `v2.0.0` keeps when it removes the others.
 
 | API version | Status |
 | --- | --- |
-| `v2beta1` | **Start here.** Stability contract and the conversion hub. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md), superseded by `v2`; moving is a re-apply |
-| `v2` | The GA version, served beside `v2beta1` since 1.9 and the storage version since 1.10 |
+| `v2` | **Start here.** The GA version, served since 1.9 and the storage version since 1.10 |
+| `v2beta1` | Served until [`v2.0.0` removes it](docs/operations/v1alpha1-deprecation.md). Same shape as `v2` apart from two deprecated `EgressProxy` aliases, so moving is a re-apply |
 | `v2alpha1` | Deprecated, apiserver warns on every apply. Stays served as the `gag-migrate` on-ramp so a migrating v1 tenant can keep Classic until it no longer needs it. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | `v1alpha1` | Deprecated single-CR API, still served. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | Classic protocol | Deprecated. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |

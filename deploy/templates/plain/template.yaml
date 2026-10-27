@@ -14,7 +14,7 @@
 # namespaced RunnerTemplate. It ships cluster-scoped so all three library
 # entries are selected the same way (templateRef.kind: ClusterRunnerTemplate)
 # and an operator can move between them by changing one name.
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: ClusterRunnerTemplate
 metadata:
   name: plain

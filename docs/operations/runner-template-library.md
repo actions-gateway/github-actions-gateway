@@ -10,7 +10,7 @@ kubectl apply -k deploy/templates/plain
 ```
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: linux
@@ -168,7 +168,7 @@ Concretely: this patch, which reads like it adjusts one field,
 ```yaml
 patches:
   - patch: |
-      apiVersion: actions-gateway.com/v2beta1
+      apiVersion: actions-gateway.com/v2
       kind: ClusterRunnerTemplate
       metadata:
         name: kata-dind
@@ -205,7 +205,7 @@ resources:
 patches:
   - target:
       group: actions-gateway.com
-      version: v2beta1
+      version: v2
       kind: ClusterRunnerTemplate
       name: kata-dind
     patch: |
@@ -229,7 +229,7 @@ Pin what you depend on with a comment, or prefer the whole-map `op: replace` ove
 ```json
 {
   "definitions": {
-    "com.actions-gateway.v2beta1.ClusterRunnerTemplate": {
+    "com.actions-gateway.v2.ClusterRunnerTemplate": {
       "type": "object",
       "properties": {
         "spec": { "type": "object", "properties": {
@@ -246,7 +246,7 @@ Pin what you depend on with a comment, or prefer the whole-map `op: replace` ove
         }}
       },
       "x-kubernetes-group-version-kind": [
-        { "group": "actions-gateway.com", "kind": "ClusterRunnerTemplate", "version": "v2beta1" }
+        { "group": "actions-gateway.com", "kind": "ClusterRunnerTemplate", "version": "v2" }
       ]
     }
   }

@@ -3,12 +3,12 @@
 > **Audience:** Platform engineer, Tenant operator
 
 !!! warning "Four deprecations, one removal release: `v2.0.0`"
-    Onboard new tenants on the **v2 API** at `actions-gateway.com/v2beta1` (see [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)), and author them as single-label `ScaleSet` runner sets.
+    Onboard new tenants on the **v2 API** at `actions-gateway.com/v2` (see [Getting Started](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended)), and author them as single-label `ScaleSet` runner sets.
     Everything named below stays **fully served until `v2.0.0`**, so nothing is forced today.
     Migrate existing tenants with [`gag-migrate`](migration-v1-to-v2.md) at your convenience: the move changes the API objects, not how jobs are acquired.
 
     `v2beta1` is itself removed at `v2.0.0`, superseded by the General Availability (GA) version `v2`.
-    That is not a reason to delay: the release before `v2.0.0` serves `v2beta1` and `v2` side by side, and moving between them is a re-apply rather than a re-author.
+    A tenant already on `v2beta1` moves by re-applying at `v2`: 1.9 and 1.10 serve both side by side, and the two differ only in the deprecated `egressPolicyMode` aliases below.
 
 This page is the project's standing deprecation notice.
 It records what `v2.0.0` removes, what keeps working until then, and what an operator has to do before upgrading past it.
@@ -75,7 +75,7 @@ A pool that already stores one is admitted unchanged, with the warning, so an op
 
     The warning is advisory: it does not fail an `apply`, and both controllers deduplicate it to one log line per process ([observability-logging](observability-logging.md#logging)).
     Classic acquisition carries no apiserver warning of its own — it is a *field value*, not a version, and the versions that admit it are the two that warn above.
-- **New tenants should onboard on `v2beta1`.** See [tenant onboarding](tenant-onboarding.md) for the v2 object set.
+- **New tenants should onboard on `v2`.** See [tenant onboarding](tenant-onboarding.md) for the v2 object set.
 - **`v2alpha1` stays served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp.** It carries the `acquisitionProtocol` selector a migrating v1 tenant needs, which a new tenant does not.
   Note that alpha's contract allows an alpha version to be dropped without notice; naming `v2.0.0` for it is a stronger commitment than the maturity level requires.
 - **Existing tenants migrate with the tool** on their own schedule: see [migration-v1-to-v2.md](migration-v1-to-v2.md).
@@ -146,7 +146,7 @@ There is deliberately **no date**.
 
 1. **Migrate off `v1alpha1`.** Run [`gag-migrate`](migration-v1-to-v2.md), which also relabels the namespace markers and annotations onto the `actions-gateway.com/` spellings.
    Do this *before* upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining `v1alpha1` objects have no served version.
-2. **Move `v2alpha1` objects to `v2beta1`.** Re-apply them at `v2beta1` (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.
+2. **Move `v2alpha1` and `v2beta1` objects to `v2`.** Re-apply them at `v2` (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.
 3. **Replace Classic runner sets with `ScaleSet` sets.** Created fresh, since `acquisitionProtocol` is immutable.
    The labels carry across as they are, since a `ScaleSet` set registers every `runnerLabel`, so a multi-label group does not have to be split.
    Pick the *first* one deliberately: it names the scale set at GitHub and must be unique under the gateway.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# gen-api-reference.sh - Generate docs/reference/api.md from the api/v2beta1
+# gen-api-reference.sh - Generate docs/reference/api.md from the api/v2
 # kubebuilder markers (Q632).
 #
 # The CRD schemas were the only field-level authority, so an operator asking what
@@ -8,9 +8,9 @@
 # reads the same Go doc comments and validation markers controller-gen turns into
 # the CRD schemas, so the page cannot describe a field the API does not have.
 #
-# Scope is v2beta1 only — the served version every install authors at. v1alpha1
-# and v2alpha1 are deprecated and removed at v2.0.0; documenting them field by
-# field beside v2beta1 would read as a supported choice. Their readers are served
+# Scope is v2 only — the GA version every new install authors at. v1alpha1,
+# v2alpha1 and v2beta1 are removed at v2.0.0; documenting them field by field
+# beside v2 would read as a supported choice. Their readers are served
 # by docs/operations/v1alpha1-deprecation.md and migration-v1-to-v2.md.
 #
 #   scripts/docs/gen-api-reference.sh          # write docs/reference/api.md (make api-reference)
@@ -30,7 +30,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
 CRD_REF_DOCS="${CRD_REF_DOCS:-$REPO_ROOT/.build/crd-ref-docs}"
-SOURCE_PATH="api/v2beta1"
+SOURCE_PATH="api/v2"
 CONFIG="api/hack/crd-ref-docs/config.yaml"
 TEMPLATES_DIR="api/hack/crd-ref-docs/templates"
 OUTPUT="docs/reference/api.md"
@@ -110,7 +110,7 @@ GOWORK="$API_GOWORK" "$CRD_REF_DOCS" \
 	--log-level ERROR
 
 # A tool that silently rendered nothing would make --check pass on any tree and
-# the writing mode replace a good page with a stub. Every v2beta1 kind must be in
+# the writing mode replace a good page with a stub. Every v2 kind must be in
 # the output before it counts as a generation.
 for kind in ActionsGateway ClusterRunnerTemplate EgressProxy PriorityClassAllowlist RunnerSet RunnerTemplate; do
 	if ! grep -q "^#### ${kind}\$" "$generated"; then
