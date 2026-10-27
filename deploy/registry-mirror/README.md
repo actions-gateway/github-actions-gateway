@@ -158,7 +158,7 @@ Every client in this repository is a container of an AGC-provisioned worker pod,
 [`e2e-mirror-clients.sh`](../../scripts/dogfood/e2e-mirror-clients.sh) reads who actually connected, from the deny proxy's log, and resolves each address to a pod or a node; an address that resolves to nothing is a refusal rather than a pass, because a worker is deleted at the end of its job.
 The one exception is an address whose every request was the registry container's probe, a `GET /v2/` carrying a `kube-probe/` User-Agent, which the proxy logs for this purpose.
 A host source matches no selector before the Q1026 narrowing or after it, so the narrowing cannot change whether it arrives.
-The dogfood cluster's `169.254.4.6` is that case: in the `v1.9.0-rc.2` and `v1.10.0-rc.2` windows every request it made was a `kube-probe/` `GET /v2/`, so the census exempted it and graded.
+The dogfood cluster's `169.254.4.6`, the `CiliumInternalIP` every node carries ([measured for Q539](../../docs/plan/q539-dragonfly-mirror-backend.md#81-measured-the-worker-policy-holds-and-nothing-else-does)), is that case: in the `v1.9.0-rc.2` and `v1.10.0-rc.2` windows every request it made was a `kube-probe/` `GET /v2/`, so the census exempted it and graded.
 It grades every declared instance by name on whether its log was readable, so a window read over four of five mirrors refuses instead of passing as a whole reading.
 
 Each tenant still needs its own worker-side rule.

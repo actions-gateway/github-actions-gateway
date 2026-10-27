@@ -88,7 +88,7 @@ These are the evidence bar, and none of them is a calendar check.
 Criteria 2 and 3 are settled by measurement, so this table holds the measurements rather than an opinion about them.
 Q1048's mirror-client census rides along in the same window because it needs the same dogfood kubectl.
 
-The dogfood gate writes one record per reading to `tmp/soak-readings.jsonl` and `scripts/dogfood/soak-readings.sh` renders them as the rows below, so nothing here is transcribed by hand.
+The dogfood gate writes one record per reading to `tmp/soak-readings.jsonl` and `scripts/dogfood/soak-readings.sh` renders them as the rows below, so a reading taken on a host that keeps the stream is never transcribed by hand; the note under the table names the one exception.
 A window is billable and cannot be replayed; a reading that lives only in a terminal is a reading lost.
 
 **A reading that was not taken is not a pass.** 🔲 says the window could not produce the measurement, which leaves the criterion exactly as unmet as before it ran. ⚠️ is not a failure either: a negative reading is the shape defect this soak exists to find while beta still permits fixing it.
