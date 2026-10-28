@@ -85,7 +85,7 @@ The analogue of [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a
 2. **Scope from GitHub's signed token.** The three `CacheService` calls (reserve an entry, finalize it, look one up) are checked against the scopes and repository in a verified `ACTIONS_RUNTIME_TOKEN`; an unverifiable token gets nothing.
    The byte transfers those calls hand out are not, as the residuals below say.
 3. **Writes land only in a scope the token grants write.** GitHub grants a fork pull request `refs/pull/<n>/merge` alone, and the default-branch scope only to its listed triggers.
-4. **Tenant-local storage.** One server holds one tenant's entries.
+4. **Tenant-local storage.** One server holds one tenant's entries, in the per-tenant mode; the shared modes give this up, as [tenancy modes](#tenancy-modes) says.
 
 Residuals, each read from falcondev v9.8.0 (`c866ae4`) and none measured:
 
@@ -97,6 +97,30 @@ Residuals, each read from falcondev v9.8.0 (`c866ae4`) and none measured:
   GitHub hands out signed SAS URLs for the same step, so whether a job can plant parts into another job's open upload has to be measured or closed before [Q215](../queue/Q215.md) ships `deploy/gha-cache/`.
 - **The server holds every job's runtime token in flight.** It forwards each non-cache results call to GitHub with the caller's bearer token (`routes/[...path].ts`), so compromising the server exposes those tokens until they expire.
 - **No job-lifetime credentials.** A token stays valid until its own expiry, as it does against GitHub.
+
+### Tenancy modes
+
+Who pays for the storage follows from where the server runs, and the shapes are the ones the egress proxy already has ([§H.9](../design/appendix-h-v2-api-decomposition.md#h9-cross-namespace-proxy-sharing)):
+
+1. **Per tenant.** The server sits in the tenant namespace and its volume counts against that tenant's `ResourceQuota`.
+   This is the mode Q215 ships, and the only one for an untrusted-PR tenant.
+2. **Shared between authorized tenants.** One tenant's server admits others it names, with consent on the provider's side as `EgressProxy`'s `spec.sharing.allowedNamespaces` does, and the provider's namespace pays.
+3. **Platform-operated.** The server sits in a namespace a cluster tenant owns, not a GAG tenant, granted to whichever GAG tenants the platform team picks.
+   Quota, cost accounting and chargeback are then the cluster administrator's, through whatever they already use for that namespace.
+
+Modes 2 and 3 are one mechanism with different owners: a provider namespace plus grants.
+Managing it with a CRD shaped like `EgressProxy` would let the GMC write both sides' NetworkPolicy and hand each granted namespace the server's URL, where today an operator hand-wires both; [Q1225](../queue/Q1225.md) holds that.
+
+Sharing gives up more than it does for a proxy.
+Read from falcondev v9.8.0 source, not measured:
+
+- **Entries stay apart.** Every entry is keyed by the token's `repository_id`, so one tenant cannot restore another's.
+- **Space does not.** `CACHE_MAX_SIZE_BYTES` is one budget for the whole server, evicted least-recently-read first (`enforceStorageBudget` in `lib/storage.ts`), so one tenant's saves can evict another's entries.
+  There is no per-repository cap to set.
+- **The server accepts a token from any repository GitHub signs.** It checks the signature and the claims, not the owner (`getCacheScope` in `lib/scope.ts`), so the NetworkPolicy grant is the only thing deciding which tenants are callers.
+- **The residuals cross tenants.** The tokenless upload and the token custody above span every tenant the server admits.
+
+So, as §H.9 says of a shared proxy, the shared modes are for cooperating tenants.
 
 ## The spike (2026-10-27)
 
@@ -121,5 +145,5 @@ The server's `cache_requests_total` read `hit` 1 and `miss` 2 after both runs: t
 
 ## Open decisions
 
-- **Eviction.** falcondev's defaults are 90 days unused and a volume-percentage cap; matching GitHub's 7 days and 10 GB per repository is two settings (`CACHE_CLEANUP_OLDER_THAN_DAYS`, `CACHE_MAX_SIZE_BYTES`), not yet chosen.
-- **Who pays for storage.** A server in the tenant namespace consumes the tenant's `ResourceQuota`; one outside it is platform capacity a tenant can fill.
+- **Eviction.** falcondev's defaults are 90 days unused and a volume-percentage cap.
+  `CACHE_CLEANUP_OLDER_THAN_DAYS` can match GitHub's 7 days, but `CACHE_MAX_SIZE_BYTES` caps the whole server, so GitHub's 10 GB per repository has no equivalent; a per-tenant server's cap is the tenant's total.
