@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/http"
 	neturl "net/url"
-	"strconv"
 	"time"
 )
 
@@ -54,7 +54,7 @@ func (p *Provisioner) futileRerun(ctx context.Context, target Target, owner, rep
 		return p.withholdFutileRerun(target, runID, tier, cause, run.attempt, log, rerunWithheldReasonRunTooOld, fmt.Sprintf("worker pod for run %s was lost to %s, but the run was created %s, and GitHub re-runs only runs created in the last 30 days, so no automatic re-run was requested; start a new run to retry the job",
 			runID, cause, run.createdAt.UTC().Format(time.RFC3339)))
 	}
-	if newer, ok := p.supersedingRun(ctx, owner, repo, run, log); ok {
+	if newer, ok := p.supersedingRun(ctx, owner, repo, runID, run, log); ok {
 		return p.withholdFutileRerun(target, runID, tier, cause, run.attempt, log, rerunWithheldReasonSuperseded, fmt.Sprintf("worker pod for run %s was lost to %s, but run %d of the same workflow has since started on %s for a newer commit (%.7s), so no automatic re-run was requested; nothing to do, the newer commit is building",
 			runID, cause, newer.ID, run.headBranch, newer.HeadSHA))
 	}
@@ -93,14 +93,26 @@ type workflowRunSummary struct {
 //
 // A list that cannot be read answers false: the check only ever withholds a re-run, so
 // an unreadable answer must not withhold one.
-func (p *Provisioner) supersedingRun(ctx context.Context, owner, repo string, run runState, log *slog.Logger) (workflowRunSummary, bool) {
+func (p *Provisioner) supersedingRun(ctx context.Context, owner, repo, runID string, run runState, log *slog.Logger) (workflowRunSummary, bool) {
 	if !supersedableEvents[run.event] || run.workflowID == 0 || run.headBranch == "" ||
 		run.headSHA == "" || run.headRepo == "" {
 		return workflowRunSummary{}, false
 	}
-	query := neturl.Values{"branch": {run.headBranch}, "event": {run.event}, "per_page": {"1"}}
-	status, body, err := p.githubGET(ctx, owner, repo,
-		"actions/workflows/"+strconv.FormatInt(run.workflowID, 10)+"/runs", query)
+	if err := p.githubReady(owner, repo, "workflow-runs"); err != nil {
+		log.Warn("could not list the workflow's newer runs; re-running without the superseded check",
+			"runID", runID, "error", err)
+		return workflowRunSummary{}, false
+	}
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/workflows/%d/runs",
+		p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), run.workflowID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		log.Warn("could not list the workflow's newer runs; re-running without the superseded check",
+			"runID", runID, "error", err)
+		return workflowRunSummary{}, false
+	}
+	req.URL.RawQuery = neturl.Values{"branch": {run.headBranch}, "event": {run.event}, "per_page": {"1"}}.Encode()
+	status, body, err := p.githubSend(ctx, req)
 	if err == nil && (status < 200 || status > 299) {
 		err = fmt.Errorf("workflow-runs API returned %d", status)
 	}
@@ -112,14 +124,14 @@ func (p *Provisioner) supersedingRun(ctx context.Context, owner, repo string, ru
 	}
 	if err != nil {
 		log.Warn("could not list the workflow's newer runs; re-running without the superseded check",
-			"runID", run.id, "error", err)
+			"runID", runID, "error", err)
 		return workflowRunSummary{}, false
 	}
 	if len(list.Runs) == 0 {
 		return workflowRunSummary{}, false
 	}
 	newest := list.Runs[0]
-	if newest.ID == run.id || newest.HeadSHA == run.headSHA ||
+	if newest.HeadSHA == run.headSHA ||
 		newest.HeadRepository.FullName != run.headRepo || !newest.CreatedAt.After(run.createdAt) {
 		return workflowRunSummary{}, false
 	}

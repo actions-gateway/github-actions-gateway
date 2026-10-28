@@ -654,7 +654,7 @@ func evictionShard(runID string) uint32 {
 type runState struct {
 	status, conclusion string
 	attempt            int
-	id, workflowID     int64
+	workflowID         int64
 	createdAt          time.Time
 	event              string
 	headBranch         string
@@ -676,7 +676,19 @@ type runState struct {
 // error page, a misconfigured GHES), and re-asking it thirty times only delays the Event
 // that tells an operator so.
 func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID string) (runState, error) {
-	status, body, err := p.githubGET(ctx, owner, repo, "actions/runs/"+neturl.PathEscape(runID), nil)
+	if err := p.githubReady(owner, repo, "run-status"); err != nil {
+		return runState{}, err
+	}
+	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s",
+		p.GitHubAPIURL,
+		neturl.PathEscape(owner),
+		neturl.PathEscape(repo),
+		neturl.PathEscape(runID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return runState{}, fmt.Errorf("build run-status request: %w", err)
+	}
+	status, body, err := p.githubSend(ctx, req)
 	switch {
 	case errors.Is(err, errGitHubUnreachable):
 		return runState{}, fmt.Errorf("run-status API call: %v: %w", err, errRunConclusionUnreadable)
@@ -690,7 +702,6 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	}
 
 	var run struct {
-		ID             int64     `json:"id"`
 		Status         string    `json:"status"`
 		Conclusion     string    `json:"conclusion"`
 		RunAttempt     int       `json:"run_attempt"`
@@ -708,42 +719,39 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	}
 	return runState{
 		status: run.Status, conclusion: run.Conclusion, attempt: run.RunAttempt,
-		id: run.ID, workflowID: run.WorkflowID, createdAt: run.CreatedAt, event: run.Event,
+		workflowID: run.WorkflowID, createdAt: run.CreatedAt, event: run.Event,
 		headBranch: run.HeadBranch, headSHA: run.HeadSHA, headRepo: run.HeadRepository.FullName,
 	}, nil
 }
 
-// errGitHubUnreachable marks a githubGET whose request never completed, which a later
+// errGitHubUnreachable marks a githubSend whose request never completed, which a later
 // attempt could answer differently.
 var errGitHubUnreachable = errors.New("the GitHub API could not be reached")
 
-// githubGET calls GET {GitHubAPIURL}/repos/{owner}/{repo}/{path}?{query} and returns the
-// status and up to 1 MiB of the body. The guards mirror rerunFailedJobs; a request that
-// never completed is wrapped errGitHubUnreachable.
-func (p *Provisioner) githubGET(ctx context.Context, owner, repo, path string, query neturl.Values) (int, []byte, error) {
+// githubReady holds the guards every run-scoped GET shares with rerunFailedJobs: a
+// well-formed owner/repo, a token source and an explicit endpoint (no silent default,
+// Q504). call names the request in the error.
+func (p *Provisioner) githubReady(owner, repo, call string) error {
 	if !repoSegmentRE.MatchString(owner) || !repoSegmentRE.MatchString(repo) {
-		return 0, nil, fmt.Errorf("invalid owner/repo characters: %q/%q", owner, repo)
+		return fmt.Errorf("invalid owner/repo characters: %q/%q", owner, repo)
 	}
 	if p.TokenFunc == nil {
-		return 0, nil, fmt.Errorf("TokenFunc is not configured")
+		return fmt.Errorf("TokenFunc is not configured")
 	}
+	if p.GitHubAPIURL == "" {
+		return fmt.Errorf("GitHubAPIURL is not configured; refusing to guess an endpoint for the %s call", call)
+	}
+	return nil
+}
+
+// githubSend authenticates req and sends it, returning the status and up to 1 MiB of
+// the body. A request that never completed is wrapped errGitHubUnreachable. Callers
+// build req themselves, so each GitHub path is composed where the endpoint-parity gate
+// can read it.
+func (p *Provisioner) githubSend(ctx context.Context, req *http.Request) (int, []byte, error) {
 	token, err := p.TokenFunc(ctx)
 	if err != nil {
 		return 0, nil, fmt.Errorf("get installation token: %w", err)
-	}
-	// No silent default, for the same reason as the rerun call (Q504).
-	if p.GitHubAPIURL == "" {
-		return 0, nil, fmt.Errorf("GitHubAPIURL is not configured; refusing to guess an endpoint for the %s call", path)
-	}
-	apiURL := fmt.Sprintf("%s/repos/%s/%s/%s",
-		p.GitHubAPIURL, neturl.PathEscape(owner), neturl.PathEscape(repo), path)
-	if len(query) > 0 {
-		apiURL += "?" + query.Encode()
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return 0, nil, fmt.Errorf("build %s request: %w", path, err)
 	}
 	req.Header.Set("Authorization", "token "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")

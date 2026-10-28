@@ -16,6 +16,7 @@
 //	GET  /api/v3/.../actions/runners?name=<n>    — list runners (name filter)
 //	DELETE /api/v3/.../actions/runners/{id}      — deregister runner
 //	GET  /api/v3/repos/{o}/{r}/actions/runs/{id}  — run status/conclusion (Q811)
+//	GET  /api/v3/repos/{o}/{r}/actions/workflows/{id}/runs — newer runs, always none (Q1181)
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
 //	POST /api/v3/.../actions/runners/registration-token — scale-set bootstrap, hop 1
@@ -1363,8 +1364,9 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
-// addresses directly off GITHUB_API_BASE_URL. Only the run read, rerun-failed-jobs
-// and force-cancel are served; anything else 404s, as an unimplemented endpoint should.
+// addresses directly off GITHUB_API_BASE_URL. Only the run read, the workflow-runs
+// list, rerun-failed-jobs and force-cancel are served; anything else 404s, as an
+// unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
 		s.handleRerunFailedJobs(w, r)
@@ -1378,7 +1380,36 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 		s.handleRunStatus(w, id)
 		return
 	}
+	if isWorkflowRunsPath(r.URL.Path) && r.Method == http.MethodGet {
+		handleWorkflowRuns(w)
+		return
+	}
 	notServed(w, r)
+}
+
+// isWorkflowRunsPath reports a .../actions/workflows/{workflow_id}/runs path.
+func isWorkflowRunsPath(path string) bool {
+	const marker = "/actions/workflows/"
+	i := strings.Index(path, marker)
+	if i < 0 {
+		return false
+	}
+	id, rest, ok := strings.Cut(path[i+len(marker):], "/")
+	return ok && id != "" && rest == "runs"
+}
+
+// handleWorkflowRuns serves the list the scale-set tier's superseded check reads before
+// a re-run (Q1181):
+//
+//	GET /api/v3/repos/{owner}/{repo}/actions/workflows/{workflow_id}/runs
+//
+// It always lists no runs, so no recovery the e2e drives is withheld as superseded. The
+// run read above sends no event or workflow_id either, which skips the check before it
+// gets here; serving the list keeps the venue in parity if it ever does.
+func handleWorkflowRuns(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]any{"total_count": 0, "workflow_runs": []any{}})
 }
 
 // runIDFromRunPath reports the run_id of a bare .../actions/runs/{run_id} path —
