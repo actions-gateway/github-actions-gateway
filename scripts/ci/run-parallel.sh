@@ -101,16 +101,39 @@ reap_one() {
 # order while commands finish in any order.
 timings="$(mktemp -d)"
 
+# cleanup signals only children still running: in idx_of (not yet collected by
+# reap_one) and in `jobs -rp`. bash reaps an exited child from its SIGCHLD
+# handler before `wait` collects it, so idx_of alone can name a pid the kernel
+# has already freed, and the host allocates pids fast enough to wrap within one
+# fan-out, so signalling it sends SIGTERM to an unrelated process (Q1173).
+# `jobs -rp` read in the EXIT trap omits a child bash has reaped (measured on
+# bash 5.3.15). A child that exits between that read and its kill can still be
+# reaped in between; bash offers no way to close that window. It runs once, at
+# EXIT: a signal exits through on_signal, so no child is signalled twice.
+#
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
 # that whenever the script ends in an explicit `exit`.
 cleanup() {
-    local pid
-    for pid in "${pids[@]+"${pids[@]}"}"; do
+    local pid running_pids
+    running_pids=" $(jobs -rp | tr '\n' ' ') "
+    for pid in "${!idx_of[@]}"; do
+        [[ "$running_pids" == *" $pid "* ]] || continue
         kill "$pid" 2>/dev/null || true
     done
     rm -rf "$timings"
 }
-trap cleanup EXIT INT TERM
+# on_signal SIG — the runner itself was signalled, not a child: say so and exit
+# 128+n, so a caller reads it as killed rather than failed.
+#
+# shellcheck disable=SC2329 # invoked by the INT and TERM traps below.
+on_signal() {
+    printf '%s: received signal %d (exit %d); the runner itself was signalled, not a child\n' \
+        "${0##*/}" "$1" "$(( 128 + $1 ))" >&2
+    exit "$(( 128 + $1 ))"
+}
+trap cleanup EXIT
+trap 'on_signal 2' INT
+trap 'on_signal 15' TERM
 
 for spec in "$@"; do
     label="${spec%%:*}"

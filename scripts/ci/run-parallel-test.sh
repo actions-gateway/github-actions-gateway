@@ -378,6 +378,71 @@ else
 	fails=$((fails + 1))
 fi
 
+# The exit trap signals only children still running (Q1173). A reaped child's
+# pid is free for reuse, and one fan-out of `make scripts-test` measured the host
+# wrapping the whole pid space before it exited, so signalling the list it
+# spawned sends SIGTERM to whatever process holds those pids now. An exported
+# `kill` function shadows the builtin inside the runner and logs every call,
+# with whether its target still existed.
+KILL_LOG="$REPO_ROOT/tmp/run-parallel-test-kills.$$"
+trap 'rm -rf "$TRACE_DIR" "$CAP_DIR" "$KILL_LOG" "$KILL_LOG.started" "$KILL_LOG.out"' EXIT
+# shellcheck disable=SC2329 # reached through `export -f`, inside the runner.
+kill() {
+	local state=live
+	ps -p "${!#}" >/dev/null 2>&1 || state=gone
+	printf '%s %s\n' "$*" "$state" >>"$KILL_LOG"
+	builtin kill "$@"
+}
+export KILL_LOG
+export -f kill
+
+: >"$KILL_LOG"
+rp "a:true" "b:true"
+want_rc 'a finished fan-out still exits 0' 0
+if [[ -s "$KILL_LOG" ]]; then
+	printf 'FAIL %-42s signalled reaped pid(s): %s\n' 'a finished fan-out signals no reaped pid' \
+		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
+	fails=$((fails + 1))
+else
+	printf 'ok   %-42s\n' 'a finished fan-out signals no reaped pid'
+fi
+
+# The other direction: a TERM to the runner still reaches a child that is running.
+# One long child only: a short one can exit between cleanup's `jobs -rp` read and
+# its kill, which is harmless and would make the liveness check below flake.
+: >"$KILL_LOG"
+"$RP" "slow:touch '$KILL_LOG.started'; sleep 5" >"$KILL_LOG.out" 2>&1 &
+runner=$!
+for ((i = 0; i < 600; i++)); do
+	[[ -e "$KILL_LOG.started" ]] && break
+	sleep 0.1
+done
+builtin kill -TERM "$runner"
+rc=0
+wait "$runner" || rc=$?
+out="$(<"$KILL_LOG.out")"
+# The runner itself was signalled, so it reports a kill rather than a failure.
+want_rc 'a TERM to the runner exits 143' 143
+want 'a TERM to the runner is named as such' 'received signal 15 \(exit 143\).*runner itself was signalled'
+if [[ -s "$KILL_LOG" ]]; then
+	printf 'ok   %-42s\n' 'a TERM still signals a running child'
+else
+	printf 'FAIL %-42s kill log: %s\n' 'a TERM still signals a running child' \
+		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
+	fails=$((fails + 1))
+fi
+# A cleanup filtered on idx_of alone and run from both the TERM and EXIT traps
+# signals the child a second time after bash has reaped it (Q1173 review).
+if grep -q ' gone$' "$KILL_LOG"; then
+	printf 'FAIL %-42s kill log: %s\n' 'a TERM signals no pid already gone' \
+		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
+	fails=$((fails + 1))
+else
+	printf 'ok   %-42s\n' 'a TERM signals no pid already gone'
+fi
+export -n -f kill
+unset -f kill
+
 if (( fails > 0 )); then
 	echo "run-parallel-test: $fails failure(s)" >&2
 	exit 1
