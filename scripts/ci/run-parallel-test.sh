@@ -408,8 +408,10 @@ else
 fi
 
 # The other direction: a TERM to the runner still reaches a child that is running.
+# One long child only: a short one can exit between cleanup's `jobs -rp` read and
+# its kill, which is harmless and would make the liveness check below flake.
 : >"$KILL_LOG"
-"$RP" "done:true" "slow:touch '$KILL_LOG.started'; sleep 5" >"$KILL_LOG.out" 2>&1 &
+"$RP" "slow:touch '$KILL_LOG.started'; sleep 5" >"$KILL_LOG.out" 2>&1 &
 runner=$!
 for ((i = 0; i < 600; i++)); do
 	[[ -e "$KILL_LOG.started" ]] && break
@@ -429,8 +431,8 @@ else
 		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
 	fails=$((fails + 1))
 fi
-# The runner's EXIT trap runs after its TERM trap already killed that child, and
-# bash reaps a dead child before `wait` does, so a pid list alone signals it twice.
+# A cleanup filtered on idx_of alone and run from both the TERM and EXIT traps
+# signals the child a second time after bash has reaped it (Q1173 review).
 if grep -q ' gone$' "$KILL_LOG"; then
 	printf 'FAIL %-42s kill log: %s\n' 'a TERM signals no pid already gone' \
 		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
