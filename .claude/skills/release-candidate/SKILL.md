@@ -120,7 +120,8 @@ make verify-release-compat VERSION=vX.Y.Z-rc.N > tmp/verify-compat.log 2>&1; ech
 
 The second line verifies with cosign v2, which operators run; the first uses the signer's own cosign and passes a candidate only v3 can read.
 A compat failure blocks the promote.
-On the first candidate signed by cosign v3, also run every check in [Q1218](../../../docs/queue/Q1218.md)'s Done-means: the compat verifier checks image and chart signatures only, not the SBOM attestation or the blob bundles.
+Both check the image signatures, every per-arch SBOM attestation, both charts, and the Release's blob bundles.
+On the first candidate signed by cosign v3, also run [Q1218](../../../docs/queue/Q1218.md)'s Flux check.
 
 **The check that discriminates is the provenance digest**, not the signatures.
 Signatures prove who built it; only the digest proves *what* was built, and it is the one check that would have caught the stale-commit candidate while all seven signatures passed:
@@ -136,8 +137,7 @@ jq -r '.[0].verificationResult.signature.certificate
 Read the JSON.
 The URI must end `publish.yml@refs/tags/<this tag>` and the digest must equal the target SHA.
 
-Optional and worth it: `cosign verify-blob` on the CRD manifest, and an SBOM attestation against a **per-arch** digest (SBOMs bind per-arch, provenance binds to the index, and swapping them looks like a missing attestation).
-Re-run each against a deliberately wrong identity and require failure; a check that cannot fail proves nothing.
+Optional and worth it: re-run one `cosign verify` against a deliberately wrong identity and require failure; a check that cannot fail proves nothing.
 
 ## 5. Validate on dogfood, in CI
 

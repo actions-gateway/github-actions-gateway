@@ -78,10 +78,47 @@ cat > "$FIXTURE_DIR/cosign" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$STUB_COSIGN_LOG"
-if [[ -n "${STUB_COSIGN_SLEEP:-}" ]]; then sleep "$STUB_COSIGN_SLEEP"; fi
+if [[ -n "${STUB_COSIGN_SLEEP:-}" ]]; then exec sleep "$STUB_COSIGN_SLEEP"; fi
 exit "${STUB_COSIGN_RC:-0}"
 STUB
 chmod +x "$FIXTURE_DIR/cosign"
+
+# Stub docker and gh: an index with two arches and one attestation manifest (or
+# amd64 alone under STUB_NO_ARM64), and
+# a Release carrying both blob bundles unless STUB_BUNDLES overrides the list.
+mkdir -p "$FIXTURE_DIR/bin"
+cat > "$FIXTURE_DIR/bin/docker" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ -n "${STUB_NO_ARM64:-}" ]]; then
+	echo '{"manifests":[{"digest":"sha256:aaaa","platform":{"os":"linux","architecture":"amd64"}}]}'
+	exit 0
+fi
+cat << 'JSON'
+{"manifests":[
+ {"digest":"sha256:aaaa","platform":{"os":"linux","architecture":"amd64"}},
+ {"digest":"sha256:bbbb","platform":{"os":"linux","architecture":"arm64"}},
+ {"digest":"sha256:cccc","platform":{"os":"unknown","architecture":"unknown"}}]}
+JSON
+STUB
+cat > "$FIXTURE_DIR/bin/gh" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$2" in
+	view) printf '%s\n' ${STUB_BUNDLES-actions-gateway-crds-v2.yaml.cosign.bundle SHA256SUMS.cosign.bundle} ;;
+	download)
+		dir="" pats=()
+		while (($#)); do
+			case "$1" in
+				--dir) dir="$2"; shift ;;
+				--pattern) pats+=("$2"); shift ;;
+			esac
+			shift
+		done
+		for p in "${pats[@]}"; do : > "$dir/$p"; done ;;
+esac
+STUB
+chmod +x "$FIXTURE_DIR/bin/docker" "$FIXTURE_DIR/bin/gh"
 
 out_text=""
 out_rc=0
@@ -91,8 +128,8 @@ out_rc=0
 run_verify() {
 	out_rc=0
 	: > "$COSIGN_LOG"
-	out_text="$(COSIGN="$FIXTURE_DIR/cosign" STUB_COSIGN_LOG="$COSIGN_LOG" \
-		"$SCRIPT" "$@" 2>&1)" || out_rc=$?
+	out_text="$(PATH="$FIXTURE_DIR/bin:$PATH" COSIGN="$FIXTURE_DIR/cosign" \
+		STUB_COSIGN_LOG="$COSIGN_LOG" "$SCRIPT" "$@" 2>&1)" || out_rc=$?
 }
 
 expect_rc() {
@@ -111,17 +148,20 @@ expect_rc 'missing version rejected' 2
 run_verify v1.2.3
 expect_rc 'every signature verified passes' 0
 
-# Every published artifact publish.yml signs must be checked, and the chart
-# artifacts take the tagless chart version.
-want_refs='ghcr.io/actions-gateway/gmc:v1.2.3
-ghcr.io/actions-gateway/agc:v1.2.3
-ghcr.io/actions-gateway/proxy:v1.2.3
-ghcr.io/actions-gateway/worker:v1.2.3
-ghcr.io/actions-gateway/wrapper:v1.2.3
-ghcr.io/actions-gateway/build-runner:v1.2.3
-ghcr.io/actions-gateway/charts/actions-gateway:1.2.3
-ghcr.io/actions-gateway/charts/actions-gateway-crds-v2:1.2.3'
-got_refs="$(awk '{print $NF}' "$COSIGN_LOG")"
+# Every published artifact publish.yml signs must be checked: each image, its
+# SBOM attestation on every per-arch manifest (never the attestation manifest),
+# the chart artifacts at the tagless chart version, and each blob bundle.
+want_refs=""
+for img in gmc agc proxy worker wrapper build-runner; do
+	want_refs+="verify ghcr.io/actions-gateway/$img:v1.2.3"$'\n'
+	want_refs+="verify-attestation ghcr.io/actions-gateway/$img@sha256:aaaa"$'\n'
+	want_refs+="verify-attestation ghcr.io/actions-gateway/$img@sha256:bbbb"$'\n'
+done
+want_refs+='verify ghcr.io/actions-gateway/charts/actions-gateway:1.2.3
+verify ghcr.io/actions-gateway/charts/actions-gateway-crds-v2:1.2.3
+verify-blob actions-gateway-crds-v2.yaml
+verify-blob SHA256SUMS'
+got_refs="$(awk '{ref = $NF; if ($1 == "verify-blob") sub(/.*\//, "", ref); print $1, ref}' "$COSIGN_LOG")"
 if [[ "$got_refs" == "$want_refs" ]]; then
 	pass 'verifies every signed artifact at the release version'
 else
@@ -148,6 +188,29 @@ else
 	fail 'every check pins the signing identity and the OIDC issuer' \
 		"$unconstrained call(s) missing a constraint; calls:"$'\n'"$(< "$COSIGN_LOG")"
 fi
+
+# An attestation check that skipped --type would accept any predicate, and a
+# blob check must name the bundle that signs the subject it verifies.
+if grep -q '^verify-attestation .*--type spdxjson ' "$COSIGN_LOG" &&
+	! grep '^verify-attestation ' "$COSIGN_LOG" | grep -qv -- '--type spdxjson '; then
+	pass 'every attestation check requires the spdxjson predicate'
+else
+	fail 'every attestation check requires the spdxjson predicate' "calls:"$'\n'"$(< "$COSIGN_LOG")"
+fi
+if grep -q -- '--bundle [^ ]*/SHA256SUMS.cosign.bundle [^ ]*/SHA256SUMS$' "$COSIGN_LOG"; then
+	pass 'a blob check pairs each bundle with its own subject'
+else
+	fail 'a blob check pairs each bundle with its own subject' "calls:"$'\n'"$(< "$COSIGN_LOG")"
+fi
+
+# An index that lost a platform fails, though every manifest it has verifies.
+STUB_NO_ARM64=1 run_verify v1.2.3
+expect_rc 'an index without linux/arm64 fails' 1
+
+# A release missing the CRD manifest bundle fails, rather than verifying the
+# bundles it does carry and reporting green.
+STUB_BUNDLES='SHA256SUMS.cosign.bundle' run_verify v1.2.3
+expect_rc 'a release without the CRD bundle fails' 1
 
 # One bad signature must fail the run — the per-artifact OK/FAIL is printed, not
 # returned, so the aggregate exit code is the only thing a release cut reads.

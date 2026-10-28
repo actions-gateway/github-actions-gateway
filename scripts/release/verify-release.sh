@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 #
 # Verify the keyless cosign signatures of a published release: the six images
-# (gmc, agc, proxy, worker, wrapper, build-runner) at the version tag plus both
-# Helm chart OCI artifacts. Backs `make verify-release VERSION=vX.Y.Z`; the
-# identity/issuer constraints match what .github/workflows/publish.yml signs
+# (gmc, agc, proxy, worker, wrapper, build-runner) at the version tag, the SPDX
+# SBOM attestation on each image's per-arch manifests (amd64 and arm64 both
+# required), both Helm chart OCI
+# artifacts, and every `*.cosign.bundle` blob signature on the GitHub Release.
+# Backs `make verify-release VERSION=vX.Y.Z` and `make verify-release-compat`;
+# the identity/issuer constraints match what .github/workflows/publish.yml signs
 # with. See docs/operations/release.md.
+#
+# Needs docker (buildx imagetools, to resolve per-arch digests), gh and jq.
 #
 # Usage: scripts/release/verify-release.sh vX.Y.Z
 #
@@ -36,6 +41,7 @@ if [[ ! -x "$COSIGN" ]]; then
 fi
 
 repo="ghcr.io/actions-gateway"
+RELEASE_REPO="${RELEASE_REPO:-actions-gateway/github-actions-gateway}"
 # Tags-only signing identity (Q124). The pattern lives in common.sh so
 # verify-release-test.sh can assert the tags-only property holds; publish.yml
 # refuses to run from a non-tag ref as the first defense, this is the second.
@@ -45,22 +51,25 @@ chart_ver="${VERSION#v}"
 COSIGN_TIMEOUT="${COSIGN_TIMEOUT:-180}"
 timed_out=0
 
-# verify REF — print OK/FAIL/TIMEOUT for one signed artifact; returns non-zero
-# unless cosign verified it within COSIGN_TIMEOUT seconds.
-verify() {
-	local ref="$1" pid waited=0
-	"$COSIGN" verify --certificate-identity-regexp "$id_re" \
-		--certificate-oidc-issuer "$issuer" "$ref" >/dev/null 2>&1 &
+# check SUBCOMMAND ARGS... — run one cosign verification with the identity and
+# issuer constraints and print OK/FAIL/TIMEOUT; returns non-zero unless cosign
+# verified it within COSIGN_TIMEOUT seconds.
+check() {
+	local sub="$1" pid waited=0
+	shift
+	"$COSIGN" "$sub" --certificate-identity-regexp "$id_re" \
+		--certificate-oidc-issuer "$issuer" "$@" >/dev/null 2>&1 &
 	pid=$!
+	# Polled in tenths of a second, so a fast check is not billed a whole one.
 	while kill -0 "$pid" 2>/dev/null; do
-		if ((waited >= COSIGN_TIMEOUT)); then
+		if ((waited >= COSIGN_TIMEOUT * 10)); then
 			kill "$pid" 2>/dev/null || true
 			wait "$pid" 2>/dev/null || true
 			echo TIMEOUT
 			timed_out=1
 			return 1
 		fi
-		sleep 1
+		sleep 0.1
 		waited=$((waited + 1))
 	done
 	if wait "$pid"; then
@@ -71,15 +80,61 @@ verify() {
 	fi
 }
 
+# arch_digests REF — the per-arch manifest digests of an image index, one per
+# line, skipping any entry with an unknown platform (an attestation manifest).
+arch_digests() {
+	docker buildx imagetools inspect "$1" --raw |
+		jq -r '.manifests[] | select(.platform.os != "unknown") | "\(.platform.architecture) \(.digest)"'
+}
+
 rc=0
 for img in gmc agc proxy worker wrapper build-runner; do
-	printf '==> %-12s %s ... ' "$img" "$VERSION"
-	verify "$repo/$img:$VERSION" || rc=1
+	printf '==> %-28s %s ... ' "$img" "$VERSION"
+	check verify "$repo/$img:$VERSION" || rc=1
+	# SBOMs are attested per arch (publish.yml), so the index carries none.
+	if ! arches="$(arch_digests "$repo/$img:$VERSION")" || [[ -z "$arches" ]]; then
+		printf '==> %-28s %s ... FAIL (no per-arch manifests resolved)\n' "$img sbom" "$VERSION"
+		rc=1
+		continue
+	fi
+	for want in amd64 arm64; do
+		if [[ $'\n'"$arches" != *$'\n'"$want "* ]]; then
+			printf '==> %-28s %s ... FAIL (index has no linux/%s manifest)\n' "$img sbom $want" "$VERSION" "$want"
+			rc=1
+		fi
+	done
+	while read -r arch digest; do
+		printf '==> %-28s %s ... ' "$img sbom $arch" "$VERSION"
+		check verify-attestation --type spdxjson "$repo/$img@$digest" || rc=1
+	done <<< "$arches"
 done
-printf '==> %-12s %s ... ' "chart" "$chart_ver"
-verify "$repo/charts/actions-gateway:$chart_ver" || rc=1
-printf '==> %-12s %s ... ' "crds-v2" "$chart_ver"
-verify "$repo/charts/actions-gateway-crds-v2:$chart_ver" || rc=1
+printf '==> %-28s %s ... ' "chart" "$chart_ver"
+check verify "$repo/charts/actions-gateway:$chart_ver" || rc=1
+printf '==> %-28s %s ... ' "crds-v2 chart" "$chart_ver"
+check verify "$repo/charts/actions-gateway-crds-v2:$chart_ver" || rc=1
+
+# Every blob signature on the Release: the v2 CRD manifest always, and the
+# gag-migrate SHA256SUMS while that asset ships. Each bundle signs the asset
+# named by dropping its .cosign.bundle suffix.
+blob_dir="$(mktemp -d)"
+trap 'rm -rf "$blob_dir"' EXIT
+mapfile -t bundles < <(gh release view "$VERSION" --repo "$RELEASE_REPO" \
+	--json assets --jq '.assets[].name | select(endswith(".cosign.bundle"))')
+if [[ " ${bundles[*]} " != *" actions-gateway-crds-v2.yaml.cosign.bundle "* ]]; then
+	printf '==> %-28s %s ... FAIL (no actions-gateway-crds-v2.yaml.cosign.bundle on the release)\n' "crds-v2 manifest" "$VERSION"
+	rc=1
+fi
+for bundle in "${bundles[@]}"; do
+	subject="${bundle%.cosign.bundle}"
+	printf '==> %-28s %s ... ' "$subject" "$VERSION"
+	if ! gh release download "$VERSION" --repo "$RELEASE_REPO" --dir "$blob_dir" \
+		--pattern "$bundle" --pattern "$subject" --clobber >/dev/null 2>&1; then
+		echo "FAIL (download)"
+		rc=1
+		continue
+	fi
+	check verify-blob --bundle "$blob_dir/$bundle" "$blob_dir/$subject" || rc=1
+done
 
 if [[ "$rc" -ne 0 ]]; then
 	if ((timed_out)); then
