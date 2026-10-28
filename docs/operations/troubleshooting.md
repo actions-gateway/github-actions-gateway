@@ -825,6 +825,7 @@ curl -sSI https://api.github.com/meta | grep -i '^x-ratelimit'
 
 **Resolution.** The GMC retries on its own, after the time GitHub names and never sooner than a minute: the `Retry-After` header, or `x-ratelimit-reset` when `x-ratelimit-remaining` is `0`.
 With neither, it waits a minute and doubles the wait on each further limit, up to an hour.
+A `403` that carries neither GitHub's rate-limit headers nor its rate-limit message, such as a forward proxy's deny page, is not treated as a limit: the GMC logs `GitHub meta returned 403` and retries on its ordinary 30 s backoff.
 Restarting the GMC does not help: it starts over with an empty cache and spends a call.
 To recover sooner, find what else spends the unauthenticated quota from that egress IP.
 

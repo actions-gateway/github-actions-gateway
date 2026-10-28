@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -167,7 +169,7 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+	if isMetaRateLimit(resp) {
 		now := time.Now
 		if f.now != nil {
 			now = f.now
@@ -201,6 +203,26 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 		cidrs = append(cidrs, *cidr)
 	}
 	return cidrs, nil
+}
+
+// isMetaRateLimit reports whether a /meta response is a GitHub rate limit. A 429
+// always is. A 403 is only when it carries GitHub's rate-limit evidence — a
+// Retry-After or X-RateLimit-* header, or a body naming a rate limit, which GitHub
+// documents for both primary and secondary limits — so a forward proxy's 403
+// stays on the ordinary backoff.
+func isMetaRateLimit(resp *http.Response) bool {
+	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusForbidden:
+	default:
+		return false
+	}
+	if resp.Header.Get("Retry-After") != "" || resp.Header.Get("X-RateLimit-Remaining") != "" || resp.Header.Get("X-RateLimit-Reset") != "" {
+		return true
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return strings.Contains(strings.ToLower(string(body)), "rate limit")
 }
 
 // metaRateLimitError reads GitHub's rate-limit headers off a 403 or 429 from the

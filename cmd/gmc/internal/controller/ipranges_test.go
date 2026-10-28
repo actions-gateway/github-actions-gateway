@@ -260,7 +260,7 @@ func TestHTTPFetcher_RateLimitHeaders(t *testing.T) {
 			map[string]string{"X-RateLimit-Remaining": "12", "X-RateLimit-Reset": reset}, -1},
 		{"reset already passed", http.StatusForbidden,
 			map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": strconv.FormatInt(now.Add(-time.Minute).Unix(), 10)}, 0},
-		{"no headers", http.StatusTooManyRequests, nil, -1},
+		{"429 with no headers", http.StatusTooManyRequests, nil, -1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -280,6 +280,39 @@ func TestHTTPFetcher_RateLimitHeaders(t *testing.T) {
 			assert.Contains(t, err.Error(), strconv.Itoa(tc.status), "the log line must still name the status")
 		})
 	}
+}
+
+// TestHTTPFetcher_SecondaryLimitBodyIsRateLimit classifies a header-less 403 by
+// the message GitHub documents for a secondary limit.
+func TestHTTPFetcher_SecondaryLimitBodyIsRateLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}`))
+	}))
+	defer ts.Close()
+
+	_, err := (&HTTPGitHubIPRangeFetcher{APIURL: ts.URL}).FetchIPRanges(context.Background())
+	var rl *httpx.RateLimitError
+	require.ErrorAs(t, err, &rl)
+	assert.Equal(t, time.Duration(-1), rl.RetryAfter)
+}
+
+// TestHTTPFetcher_ProxyForbiddenIsNotRateLimit keeps a 403 with no GitHub
+// rate-limit header or message, such as a forward proxy's deny page, on the
+// ordinary backoff.
+func TestHTTPFetcher_ProxyForbiddenIsNotRateLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("<html><body>Access to api.github.com is denied by policy.</body></html>"))
+	}))
+	defer ts.Close()
+
+	_, err := (&HTTPGitHubIPRangeFetcher{APIURL: ts.URL}).FetchIPRanges(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403")
+	var rl *httpx.RateLimitError
+	assert.False(t, errors.As(err, &rl))
 }
 
 // TestHTTPFetcher_ServerErrorIsNotRateLimit keeps a 5xx on the ordinary backoff.
