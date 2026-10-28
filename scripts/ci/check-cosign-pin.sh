@@ -19,7 +19,7 @@
 # step id the job does not define.
 #
 # From cosign v3 it also holds the signer to the v2 format (Q1218): every
-# `cosign sign`, `attest` and `sign-blob` in publish.yml must pass
+# `cosign sign`, `attest`, `sign-blob` and `attest-blob` in publish.yml must pass
 # --new-bundle-format=false --use-signing-config=false, because v3's default
 # image signatures are invisible to the cosign v2 verifiers operators run.
 #
@@ -117,11 +117,11 @@ if [[ "$want" =~ ^v([0-9]+)\. ]] && ((BASH_REMATCH[1] >= 3)); then
 		/^[[:space:]]*#/ { next }
 		{ line = (held == "" ? $0 : held " " $0) }
 		/\\[[:space:]]*$/ { sub(/\\[[:space:]]*$/, "", line); held = line; next }
-		{ held = ""; if (line ~ /cosign (sign|sign-blob|attest)([[:space:]]|$)/) print line }
+		{ held = ""; if (line ~ /cosign (sign|sign-blob|attest|attest-blob)([[:space:]]|$)/) print line }
 	' "$WORKFLOW")
 	signs=${#calls[@]}
 	if ((signs == 0)); then
-		printf 'cosign-pin: %s installs cosign %s but no cosign sign/attest/sign-blob call was found, so the format check compared nothing\n' \
+		printf 'cosign-pin: %s installs cosign %s but no cosign sign/attest/sign-blob/attest-blob call was found, so the format check compared nothing\n' \
 			"$WORKFLOW" "$want" >&2
 		exit 2
 	fi

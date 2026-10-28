@@ -204,6 +204,11 @@ wf="$(write_signing_workflow v3-wrapped-unflagged \
 	'  --predicate sbom.json "${IMAGE}"')"
 expect v3-wrapped-call-unflagged 1 "$mk_v3" "$wf" "$pins_v3" 'cosign attest --yes --type spdxjson'
 
+wf="$(write_signing_workflow v3-attest-blob-unflagged \
+	"retry.sh cosign sign --yes $F \"\${ref}\"" \
+	'retry.sh cosign attest-blob --yes --predicate p.json --bundle b out')"
+expect v3-attest-blob-unflagged 1 "$mk_v3" "$wf" "$pins_v3" 'cosign attest-blob'
+
 wf="$(write_signing_workflow v3-no-calls 'echo nothing signed')"
 expect v3-signs-nothing 2 "$mk_v3" "$wf" "$pins_v3" 'compared nothing'
 
