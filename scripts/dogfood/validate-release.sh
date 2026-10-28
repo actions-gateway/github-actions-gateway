@@ -1049,7 +1049,7 @@ report_e2e_run() {
 	local report
 	while IFS= read -r report; do
 		echo ""
-		echo "=== e2e report: $(basename "$(dirname "${report}")") ==="
+		echo "=== e2e report: run ${run_id}, $(basename "$(dirname "${report}")") ==="
 		bash "${REPO_ROOT}/scripts/e2e/e2e-report-summary.sh" "${report}" || true
 	done < <(find "${dir}" -name '*.xml' -type f 2>/dev/null)
 }

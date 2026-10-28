@@ -1968,16 +1968,19 @@ REPORT_LOG="${SCRATCH}/report.log"
 			[[ "$1" == "--dir" ]] && dir="$2"
 			shift
 		done
-		[[ -e "${dir}/e2e-report.xml" ]] && return 1
-		mkdir -p "${dir}" && : >"${dir}/e2e-report.xml"
+		# --pattern puts each artifact in a folder named for it.
+		local art="${dir}/e2e-junit-report-kindnet"
+		[[ -e "${art}/e2e-report.xml" ]] && return 1
+		mkdir -p "${art}" && : >"${art}/e2e-report.xml"
 	}
 	bash() { printf 'summary %s\n' "$2" >>"${REPORT_LOG}"; }
-	report_e2e_run 111 >/dev/null
-	report_e2e_run 222 >/dev/null
-	report_e2e_run 333 >"${SCRATCH}/report.out"
+	report_e2e_run 111 >"${SCRATCH}/report.out"
+	report_e2e_run 222 >>"${SCRATCH}/report.out"
+	report_e2e_run 333 >>"${SCRATCH}/report.out"
 )
 check "e2e report: every leg's run is summarised" "3" "$(grep -c '^summary ' "${REPORT_LOG}")"
-check_contains "e2e report: the second leg's report is its own file" "/e2e-report/222/e2e-report.xml" "$(cat "${REPORT_LOG}")"
+check_contains "e2e report: the second leg's report is its own file" "/e2e-report/222/e2e-junit-report-kindnet/e2e-report.xml" "$(cat "${REPORT_LOG}")"
+check_contains "e2e report: the header names the run" "=== e2e report: run 222, e2e-junit-report-kindnet ===" "$(cat "${SCRATCH}/report.out")"
 check "e2e report: no leg is skipped as missing" "0" "$(grep -c 'skipping the report' "${SCRATCH}/report.out" || true)"
 
 # The evidence publish reads (Q880): the candidate's commit, then each leg as it
