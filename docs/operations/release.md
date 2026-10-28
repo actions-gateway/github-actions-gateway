@@ -768,7 +768,7 @@ make verify-release VERSION=vX.Y.Z
 make verify-release-compat VERSION=vX.Y.Z
 ```
 
-The second line runs the same check with the cosign v2 verifier that `COSIGN_COMPAT_VERSION` in `scripts/ci/pins.env` pins.
+The second line runs the same image and chart signature check with the cosign v2 verifier that `COSIGN_COMPAT_VERSION` in `scripts/ci/pins.env` pins.
 The signer is cosign v3, and a check run with the signer's own version passes signatures that cosign v2 cannot read (Q1218).
 A compat failure is the same stop-ship as a signature failure.
 
