@@ -39,7 +39,7 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | [Q1183](../queue/Q1183.md) | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | 🚫 blocked on Q555 |
 | [Q1181](../queue/Q1181.md) | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | 🔲 open |
 | Q1178 | Label egress proxy outcome metrics by allowlist entry and outcome | `2.0-gate` | ✅ |
-| [Q1180](../queue/Q1180.md) | Dogfood keeps no AGC or proxy metrics past the pod's life | `2.0-gate` | 🔲 open |
+| [Q1180](../queue/Q1180.md) | Dogfood keeps no AGC or proxy metrics past the pod's life | `2.0-gate` | 🔲 open: the scrape is written, the apply is owed |
 | - | RC validated on dogfood | gates | 🔲 no candidate cut |
 | [Q275](../queue/Q275.md) | Reconcile the capacity and density docs with the ScaleSet default | rides | 🚫 blocked on Q264, whose removal makes the classic framing false |
 

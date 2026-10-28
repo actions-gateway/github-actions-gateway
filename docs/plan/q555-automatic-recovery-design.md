@@ -162,7 +162,7 @@ Per occurrence, the names go to:
 - **a Normal Event, `FlakyJobDetected`,** on the set when a pairing reaches the flaky verdict, naming the run, the job and the trigger;
 - **a Warning Event, `PlatformFaultOnFailedJob`,** when a failed job's snapshot shows a fault (a non-zero or `OOMKilled` container, a `DisruptionTarget` condition, an unready colocated proxy), not on every red test;
 - **a log line per failed job carrying the snapshot**, at Warn when the snapshot shows a fault and Info otherwise.
-  A log store that keeps only warnings, as dogfood's does, still keeps every platform fault.
+  A log store that keeps only warnings, as dogfood's does ([Q1180](../queue/Q1180.md)), still keeps every platform fault.
 
 ## Component 2: one run read before every re-run (Q1182 budget, Q1181 futility)
 

@@ -24,7 +24,7 @@ GMP's collector has no secret access of its own; the `Role` and `RoleBinding` gr
 Prerequisites not expressible in kustomize:
 
 1. **GMP managed collection is enabled.** It is on by default on a GKE Standard cluster at 1.27 or later.
-   The `PodMonitoring` uses the `tls.ca`/`cert`/`key` Secret references, which the dogfood cluster's GMP version has not been checked for; `kubectl apply` validates fields strictly by default (`--validate=strict`), so a version without them rejects the apply rather than dropping the fields.
+   On dogfood it is: the `PodMonitoring` CRD there is GMP `0.18.2-gke.0`, whose endpoint schema has the `tls.ca`/`cert`/`key` Secret references this manifest uses (read-only reading taken during review, 2026-10-27).
 2. **`gmp-system` carries `metrics=enabled`.** The GMC's per-tenant NetworkPolicy admits `:8443` only from namespaces with that label, so without it the scrape times out before the TLS handshake:
 
    ```bash
@@ -34,7 +34,7 @@ Prerequisites not expressible in kustomize:
 
    This admits every pod in `gmp-system` to every tenant's metrics port and to the GMC manager's, not only the collector.
    Each listener still demands its own client certificate, so the label opens the network path and grants no access.
-   `gmp-system` is a GKE-managed namespace; whether GKE keeps a label it did not set has not been checked, so re-check it after a cluster upgrade.
+   `gmp-system` is addon-managed (`addonmanager.kubernetes.io/mode=Reconcile`), and whether reconciliation strips a label it did not set has not been measured, so re-check it after a cluster upgrade.
 
 Then apply, pinned to the dogfood context:
 
@@ -43,6 +43,8 @@ kubectl --context "gke_${PROJECT}_${ZONE}_${CLUSTER}" apply -k deploy/dogfood-me
 ```
 
 ## What is still owed
+
+Applying this is tracked as Q1180, which stays open as a release gate until the scrape is confirmed.
 
 - **A series count.** Nobody has counted the AGC's live series; take one `/metrics` sample through the runbook's port-forward and count the non-comment lines before relying on any cost estimate.
 - **The egress proxy.** The dogfood tenant runs without an `EgressProxy`, so there is no proxy to scrape.
