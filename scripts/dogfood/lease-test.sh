@@ -384,7 +384,16 @@ wait "${owner}" || owner_rc=$?
 check "a renewer without stop-owner leaves its owner running" "0" "${owner_rc}"
 check_contains "the owner ran to completion" "survived" "$(cat "${WORKDIR}/quiet.out")"
 quiet="$(cat "${WORKDIR}/quiet.pid")"
-kill -0 "${quiet}" 2>/dev/null && quiet_alive=1 || quiet_alive=0
+# The renewer notices the loss on its next tick, which can land after the owner's
+# sleep returns, so wait for it to exit rather than reading once.
+quiet_alive=1
+for _ in $(seq 100); do
+	kill -0 "${quiet}" 2>/dev/null || {
+		quiet_alive=0
+		break
+	}
+	sleep 0.1
+done
 check "a renewer that lost its lease stops renewing" "0" "${quiet_alive}"
 ((quiet_alive == 0)) || kill "${quiet}" 2>/dev/null || true
 
