@@ -4301,7 +4301,11 @@ See <a href="../../development/testing/#image-builds-retry-the-transport-never-t
 <p>Confirm every image <strong>and the chart</strong> was signed by <em>this</em> workflow before announcing the release.
 The one-command check uses the pinned cosign (<code>make</code> downloads <code>COSIGN_VERSION</code> — the same version <code>publish.yml</code> signs with — into <code>.build/</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>make<span class="w"> </span>verify-release<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>make<span class="w"> </span>verify-release-compat<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
+<p>The second line runs the same image and chart signature check with the cosign v2 verifier that <code>COSIGN_COMPAT_VERSION</code> in <code>scripts/ci/pins.env</code> pins.
+The signer is cosign v3, and a check run with the signer's own version passes signatures that cosign v2 cannot read (Q1218).
+A compat failure is the same stop-ship as a signature failure.</p>
 <blockquote>
 <p><strong>A broken or missing chart publish now reddens PR CI, not just operators.</strong> CI's released-chart upgrade gate (<a href="../../development/testing/#the-released-chart-upgrade-gate-q507">testing.md § The released-chart upgrade gate</a>) discovers the highest stable <code>vX.Y.Z</code> tag on the repo and <code>helm pull</code>s that chart version from GHCR on every e2e run.
 Pushing a stable tag whose <code>chart-publish</code> job failed therefore fails e2e on <strong>every subsequent PR</strong> until the publish is repaired (re-run the <code>publish.yml</code> run for the tag) or the tag is removed.
@@ -4977,6 +4981,9 @@ Two layers enforce that a signature can only ever be a tag signature:</p>
   All three sites move together on the weekly <a href="../../development/dependency-updates/#the-manifests">updatecli</a> run rather than by hand (Q927), and the digests it writes come from the release's sigstore-signed <code>cosign_checksums.txt</code>, verified against a pinned identity by the cosign the repo already pins.
   Automating the copy without automating the trust would pin whatever the releases CDN served.
   The <code>$(COSIGN)</code> make rule keys on the pinned version, so a bump re-downloads instead of serving whatever <code>.build/cosign</code> already holds (Q857).</li>
+<li><strong>The signer writes the v2 signature format.</strong> From cosign v3, every <code>cosign sign</code>, <code>attest</code> and <code>sign-blob</code> in <code>publish.yml</code> passes <code>--new-bundle-format=false --use-signing-config=false</code>, and <code>make cosign-pin-check</code> refuses a v3 pin with a call missing either (Q1218).
+  The default in cosign v3.1.4 stores image signatures as OCI referrers, which cosign v2.5.2 reports as <code>no signatures found</code>, so dropping the flags breaks every operator verifying with cosign v2.
+  The flags are deprecated in v3, so a cosign release that removes them fails the publish job at its first signing step; moving to the new format then needs a stated verifier floor in the operator docs.</li>
 </ul>
 
 

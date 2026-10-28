@@ -23,7 +23,7 @@
     
     
       
-        <title>Move the release signer to cosign v3 without breaking v2/Flux verifiers - GitHub Actions Gateway</title>
+        <title>Verify the first cosign v3 release candidate with Flux and cosign v2 - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#move-the-release-signer-to-cosign-v3-without-breaking-v2flux-verifiers" class="md-skip">
+        <a href="#verify-the-first-cosign-v3-release-candidate-with-flux-and-cosign-v2" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Move the release signer to cosign v3 without breaking v2/Flux verifiers
+              Verify the first cosign v3 release candidate with Flux and cosign v2
             
           </span>
         </div>
@@ -2627,14 +2627,29 @@
   
 
 
-<h1 id="move-the-release-signer-to-cosign-v3-without-breaking-v2flux-verifiers">Move the release signer to cosign v3 without breaking v2/Flux verifiers<a class="headerlink" href="#move-the-release-signer-to-cosign-v3-without-breaking-v2flux-verifiers" title="Permanent link">&para;</a></h1>
-<p>The weekly updatecli cosign bump now crosses a major version, v2.5.2 to v3.1.4 (PR #2139, opened 2026-10-26), and is held unmerged until this row is done.
-That binary signs every image, attestation, chart and blob <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> releases, and operators verify those signatures with their own tools: their own cosign (<a href="../../operations/install/">install.md</a>, <a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a>) and Flux's cosign provider (<a href="../../operations/gitops/">gitops.md</a>).</p>
-<p>No pre-merge check reaches the risk.
-The publish job runs only on a <code>v*</code> tag, so no PR executes a signing step, and the release-candidate gate verifies with the same pinned cosign that signed, so it would pass a release a cosign v2 or Flux verifier rejects.
-Whether v3's default signature and bundle output stays readable by those verifiers is unmeasured.</p>
-<p>Done means: sign a test artifact with v3 the way <code>publish.yml</code> does (image <code>sign --recursive</code>, <code>attest --type spdxjson</code>, <code>sign-blob</code> bundle), verify each with cosign v2.5.x and with the Flux version <code>gitops.md</code> names, and either merge the bump with the operator docs stating the verifier floor, or pin the v2-compatible signing flags in <code>publish.yml</code> before merging.
-Validate the result with a release candidate before the next stable tag.</p>
+<h1 id="verify-the-first-cosign-v3-release-candidate-with-flux-and-cosign-v2">Verify the first cosign v3 release candidate with Flux and cosign v2<a class="headerlink" href="#verify-the-first-cosign-v3-release-candidate-with-flux-and-cosign-v2" title="Permanent link">&para;</a></h1>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> signs with cosign v3.1.4 and passes <code>--new-bundle-format=false --use-signing-config=false</code> on every <code>sign</code>, <code>attest</code> and <code>sign-blob</code>, so v3 writes the format operators already verify (<a href="../../operations/release/">release.md</a>, the "signer writes the v2 signature format" bullet).
+What has not been measured is the keyless path and Flux.</p>
+<p>Measured 2026-10-27 against a local <code>registry:2</code> with a throwaway key pair and no transparency log:</p>
+<ul>
+<li>v3.1.4's <strong>default</strong> <code>sign --recursive</code> and <code>attest --type spdxjson</code> are invisible to cosign v2.5.2, which reports <code>no signatures found</code> on the index, the child, and the attestation, with or without <code>--new-bundle-format</code>.
+  Cosign v3 stored them under the OCI referrers fallback tag (<code>sha256-&lt;digest&gt;</code>) instead of <code>sha256-&lt;digest&gt;.sig</code>.</li>
+<li>With the two flags, v2.5.2 verifies all three, and the <code>.sig</code> and <code>.att</code> manifests match v2.5.2's own output in media type and annotation keys.</li>
+<li><code>sign-blob --bundle</code> with the flags writes the old bundle JSON, which v2.5.2 and v3.1.4 both verify.
+  The v0.3 bundle that v3 writes by default also verified under v2.5.2.</li>
+<li>Cosign v3.1.4 verifies the published, keyless, v2-signed v1.10.0 with <code>scripts/release/verify-release.sh</code> (all eight artifacts OK).</li>
+</ul>
+<p>Unmeasured: keyless signing adds a Fulcio certificate and a Rekor entry, which the key-pair runs never wrote, and no Flux version was run against a v3-signed artifact.
+<code>make verify-release-compat</code> now checks image and chart signatures with cosign v2.5.2 on every candidate: it runs <code>verify-release.sh</code>, which issues <code>cosign verify</code> only, with the version <code>COSIGN_COMPAT_VERSION</code> pins, and the release-candidate skill and release.md both call it.
+It verified the v2-signed v1.10.0 on 2026-10-27.
+It does not check an SBOM attestation or a blob bundle, and the attestation is the artifact v3's default format broke for v2.</p>
+<p>Done means: on the first release candidate signed by v3, before it is promoted, the first three pass with <code>.build/cosign-compat</code> (v2.5.2) against the publish identity in release.md, and the fourth passes on Flux:</p>
+<ul>
+<li><code>make verify-release-compat</code>.</li>
+<li><code>verify-attestation --type spdxjson</code> on one per-arch digest of one image.</li>
+<li><code>verify-blob</code> on <code>actions-gateway-crds-v2.yaml.cosign.bundle</code> and on <code>SHA256SUMS.cosign.bundle</code>.</li>
+<li>The chart reconciles through an <code>OCIRepository</code> with <code>verify.provider: cosign</code> on a current Flux.</li>
+</ul>
 
 
 
