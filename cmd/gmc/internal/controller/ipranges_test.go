@@ -8,10 +8,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -229,6 +231,102 @@ func TestHTTPFetcher_Non200Response(t *testing.T) {
 	_, err := f.FetchIPRanges(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "500")
+}
+
+// TestHTTPFetcher_RateLimitHeaders pins the GitHub rate-limit contract the retry
+// loop keys on (Q1203). The header shapes are those GitHub documents for the REST
+// API, and the 403 + remaining=0 + reset case is what the 2026-10-24 kind
+// measurement read from api.github.com/meta.
+func TestHTTPFetcher_RateLimitHeaders(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	reset := strconv.FormatInt(now.Add(28*time.Minute).Unix(), 10)
+	cases := []struct {
+		name    string
+		status  int
+		headers map[string]string
+		want    time.Duration // RetryAfter; -1 for no hint
+	}{
+		{"403 primary limit waits for reset", http.StatusForbidden,
+			map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}, 28*time.Minute + time.Second},
+		{"429 primary limit waits for reset", http.StatusTooManyRequests,
+			map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}, 28*time.Minute + time.Second},
+		{"Retry-After alone", http.StatusForbidden,
+			map[string]string{"Retry-After": "90"}, 90 * time.Second},
+		{"Retry-After wins over reset", http.StatusTooManyRequests,
+			map[string]string{"Retry-After": "120", "X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}, 2 * time.Minute},
+		{"remaining 0 with reset missing", http.StatusForbidden,
+			map[string]string{"X-RateLimit-Remaining": "0"}, -1},
+		{"reset present but quota left", http.StatusForbidden,
+			map[string]string{"X-RateLimit-Remaining": "12", "X-RateLimit-Reset": reset}, -1},
+		{"reset already passed", http.StatusForbidden,
+			map[string]string{"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": strconv.FormatInt(now.Add(-time.Minute).Unix(), 10)}, 0},
+		{"429 with no headers", http.StatusTooManyRequests, nil, -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				for k, v := range tc.headers {
+					w.Header().Set(k, v)
+				}
+				w.WriteHeader(tc.status)
+			}))
+			defer ts.Close()
+
+			f := &HTTPGitHubIPRangeFetcher{APIURL: ts.URL, now: func() time.Time { return now }}
+			_, err := f.FetchIPRanges(context.Background())
+			var rl *httpx.RateLimitError
+			require.ErrorAs(t, err, &rl)
+			assert.Equal(t, tc.want, rl.RetryAfter)
+			assert.Contains(t, err.Error(), strconv.Itoa(tc.status), "the log line must still name the status")
+		})
+	}
+}
+
+// TestHTTPFetcher_SecondaryLimitBodyIsRateLimit classifies a header-less 403 by
+// the message GitHub documents for a secondary limit.
+func TestHTTPFetcher_SecondaryLimitBodyIsRateLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}`))
+	}))
+	defer ts.Close()
+
+	_, err := (&HTTPGitHubIPRangeFetcher{APIURL: ts.URL}).FetchIPRanges(context.Background())
+	var rl *httpx.RateLimitError
+	require.ErrorAs(t, err, &rl)
+	assert.Equal(t, time.Duration(-1), rl.RetryAfter)
+}
+
+// TestHTTPFetcher_ProxyForbiddenIsNotRateLimit keeps a 403 with no GitHub
+// rate-limit header or message, such as a forward proxy's deny page, on the
+// ordinary backoff.
+func TestHTTPFetcher_ProxyForbiddenIsNotRateLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("<html><body>Access to api.github.com is denied by policy.</body></html>"))
+	}))
+	defer ts.Close()
+
+	_, err := (&HTTPGitHubIPRangeFetcher{APIURL: ts.URL}).FetchIPRanges(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403")
+	var rl *httpx.RateLimitError
+	assert.False(t, errors.As(err, &rl))
+}
+
+// TestHTTPFetcher_ServerErrorIsNotRateLimit keeps a 5xx on the ordinary backoff.
+func TestHTTPFetcher_ServerErrorIsNotRateLimit(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer ts.Close()
+
+	_, err := (&HTTPGitHubIPRangeFetcher{APIURL: ts.URL}).FetchIPRanges(context.Background())
+	require.Error(t, err)
+	var rl *httpx.RateLimitError
+	assert.False(t, errors.As(err, &rl))
 }
 
 func TestHTTPFetcher_InvalidJSON(t *testing.T) {
@@ -579,4 +677,62 @@ func TestIPRangeReconciler_Start_CancelExitsCleanly(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Start did not exit within 1s after context cancellation")
 	}
+}
+
+// scriptedFetcher returns errs in order, then cidrs.
+type scriptedFetcher struct {
+	mu    sync.Mutex
+	errs  []error
+	cidrs []net.IPNet
+}
+
+func (f *scriptedFetcher) FetchIPRanges(_ context.Context) ([]net.IPNet, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.errs) == 0 {
+		return f.cidrs, nil
+	}
+	err := f.errs[0]
+	f.errs = f.errs[1:]
+	return nil, err
+}
+
+// TestIPRangeReconciler_RateLimitedInitialFetchWaits is the regression test for
+// Q1203: a rate-limited /meta fetch must wait for GitHub's reset rather than
+// retry on the 30s backoff, which kept an exhausted unauthenticated quota at zero.
+func TestIPRangeReconciler_RateLimitedInitialFetchWaits(t *testing.T) {
+	limited := func(d time.Duration) error {
+		return fmt.Errorf("GitHub meta returned 403: %w", &httpx.RateLimitError{RetryAfter: d})
+	}
+	ff := &scriptedFetcher{
+		errs: []error{
+			limited(28 * time.Minute),  // reset hint
+			limited(5 * time.Second),   // below the one-minute floor
+			limited(3 * time.Hour),     // above the one-window ceiling
+			limited(-1),                // no hint: one minute, then doubling
+			limited(-1),                //
+			errors.New("network down"), // ordinary failure keeps the short backoff
+		},
+		cidrs: []net.IPNet{parseCIDR(t, "140.82.112.0/20")},
+	}
+	var waits []time.Duration
+	r := &IPRangeReconciler{
+		Client:         fake.NewClientBuilder().WithScheme(newIPRangeScheme(t)).Build(),
+		Fetcher:        ff,
+		Cache:          &IPRangeCache{},
+		InitialBackoff: time.Second,
+		after: func(d time.Duration) <-chan time.Time {
+			waits = append(waits, d)
+			ch := make(chan time.Time, 1)
+			ch <- time.Time{}
+			return ch
+		},
+	}
+
+	r.reconcileInitial(context.Background(), slog.Default())
+
+	assert.Equal(t, []time.Duration{
+		28 * time.Minute, time.Minute, time.Hour, time.Minute, 2 * time.Minute, time.Second,
+	}, waits)
+	assert.Len(t, r.Cache.Snapshot(), 1, "the loop must still finish once the fetch succeeds")
 }

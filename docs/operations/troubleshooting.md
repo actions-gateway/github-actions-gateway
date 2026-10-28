@@ -30,6 +30,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [RunnerSet Reports WorkerCapacityDeclined (the Gateway Stopped Claiming Jobs)](#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)
 - [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
+- [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start)
 - [A GHES Tenant's Traffic Never Reaches the Appliance](#a-ghes-tenants-traffic-never-reaches-the-appliance)
 - [A GHES Appliance's Certificate Is Not Trusted](#a-ghes-appliances-certificate-is-not-trusted)
 - [Tenant Namespace Missing the Managed-Tenant Marker Label](#tenant-namespace-missing-the-managed-tenant-marker-label)
@@ -798,6 +799,35 @@ kubectl exec -n <gmc-namespace> deploy/<gmc> -- wget -qO- https://api.github.com
 **Resolution.** Restore the GMC's reachability to `api.github.com` (egress policy, DNS, proxy).
 The `actions_gateway_ip_range_updates_total` counter resumes incrementing on the next successful refresh, and the condition clears automatically within the re-check cadence (a fraction of the staleness window).
 If GitHub's meta API is down, no action is needed beyond waiting — the allowlist is still valid until GitHub rotates.
+
+---
+
+## Proxy Pools Have No GitHub Egress After a GMC Start
+
+**Symptoms.** After the GMC starts or restarts, tenants acquire no jobs.
+The proxy pool logs `upstream dial failed` with an `i/o timeout` to a GitHub address, and answers the AGC `502 upstream unavailable`.
+The pool's `NetworkPolicy` has a DNS egress rule and no GitHub rule.
+`EgressRulesStale` does **not** fire: it measures how long ago the last refresh succeeded, and here none has.
+
+**Cause.** The GMC holds GitHub's IP ranges in memory only, so a fresh GMC has none until its first `api.github.com/meta` fetch succeeds.
+That call is unauthenticated, and GitHub allows 60 of them an hour per source IP.
+When several GMCs, or anything else, share one egress IP, that budget can be spent before the GMC's fetch, and GitHub answers `403` or `429` until the window resets.
+
+**Diagnostics.**
+
+```sh
+# A rate-limited fetch logs how long the GMC will wait before its next attempt.
+kubectl logs -n <gmc-namespace> deploy/<gmc> | grep -i "ip-range fetch"
+
+# Read the quota from a host that shares the GMC's egress IP. This spends one call.
+curl -sSI https://api.github.com/meta | grep -i '^x-ratelimit'
+```
+
+**Resolution.** The GMC retries on its own, after the time GitHub names and never sooner than a minute: the `Retry-After` header, or `x-ratelimit-reset` when `x-ratelimit-remaining` is `0`.
+With neither, it waits a minute and doubles the wait on each further limit, up to an hour.
+A `403` that carries neither GitHub's rate-limit headers nor its rate-limit message, such as a forward proxy's deny page, is not treated as a limit: the GMC logs `GitHub meta returned 403` and retries on its ordinary 30 s backoff.
+Restarting the GMC does not help: it starts over with an empty cache and spends a call.
+To recover sooner, find what else spends the unauthenticated quota from that egress IP.
 
 ---
 

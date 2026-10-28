@@ -3,10 +3,14 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,6 +104,9 @@ type HTTPGitHubIPRangeFetcher struct {
 	// AttemptTimeout bounds a single FetchIPRanges call (one retry attempt).
 	// Zero selects defaultFetchAttemptTimeout. See FetchIPRanges (Q62).
 	AttemptTimeout time.Duration
+
+	// now reads the clock for rate-limit reset arithmetic; nil uses time.Now.
+	now func() time.Time
 }
 
 // defaultFetchAttemptTimeout bounds one /meta fetch attempt. The reconcileInitial
@@ -162,6 +169,13 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if isMetaRateLimit(resp) {
+		now := time.Now
+		if f.now != nil {
+			now = f.now
+		}
+		return nil, fmt.Errorf("GitHub meta returned %d: %w", resp.StatusCode, metaRateLimitError(resp.Header, now()))
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub meta returned %d", resp.StatusCode)
 	}
@@ -191,10 +205,57 @@ func (f *HTTPGitHubIPRangeFetcher) FetchIPRanges(ctx context.Context) ([]net.IPN
 	return cidrs, nil
 }
 
+// isMetaRateLimit reports whether a /meta response is a GitHub rate limit. A 429
+// always is. A 403 is only when it carries GitHub's rate-limit evidence — a
+// Retry-After or X-RateLimit-* header, or a body naming a rate limit, which GitHub
+// documents for both primary and secondary limits — so a forward proxy's 403
+// stays on the ordinary backoff.
+func isMetaRateLimit(resp *http.Response) bool {
+	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusForbidden:
+	default:
+		return false
+	}
+	if resp.Header.Get("Retry-After") != "" || resp.Header.Get("X-RateLimit-Remaining") != "" || resp.Header.Get("X-RateLimit-Reset") != "" {
+		return true
+	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	return strings.Contains(strings.ToLower(string(body)), "rate limit")
+}
+
+// metaRateLimitError reads GitHub's rate-limit headers off a 403 or 429 from the
+// unauthenticated /meta endpoint, where either status means a primary or secondary
+// rate limit. RetryAfter follows GitHub's documented order: Retry-After seconds
+// when present, else the time until X-RateLimit-Reset (UTC epoch seconds) when
+// X-RateLimit-Remaining is 0, else -1 for no hint.
+func metaRateLimitError(h http.Header, now time.Time) *httpx.RateLimitError {
+	if rl := httpx.ParseRateLimitError("", h); rl.RetryAfter >= 0 {
+		return rl
+	}
+	if h.Get("X-RateLimit-Remaining") == "0" {
+		if reset, err := strconv.ParseInt(h.Get("X-RateLimit-Reset"), 10, 64); err == nil {
+			// The header has whole-second resolution; the extra second lands the retry
+			// after the reset rather than inside its final second.
+			return &httpx.RateLimitError{RetryAfter: max(time.Unix(reset, 0).Sub(now)+time.Second, 0)}
+		}
+	}
+	return &httpx.RateLimitError{RetryAfter: -1}
+}
+
 // Default bounds for the initial-fetch retry loop in Start. See reconcileInitial.
 const (
 	defaultInitialBackoff = 1 * time.Second
 	defaultMaxBackoff     = 30 * time.Second
+)
+
+// Bounds on a rate-limited retry wait. The floor is GitHub's "wait at least one
+// minute" for a limit with no header hint; the ceiling is the length of the
+// primary-limit window, which caps a skewed clock or a malformed header.
+const (
+	minRateLimitWait = 1 * time.Minute
+	maxRateLimitWait = 1 * time.Hour
 )
 
 // IPRangeReconciler is a controller-runtime Runnable that periodically
@@ -231,6 +292,9 @@ type IPRangeReconciler struct {
 	// defaultInitialBackoff / defaultMaxBackoff; tests set small values.
 	InitialBackoff time.Duration
 	MaxBackoff     time.Duration
+
+	// after starts a retry wait in reconcileInitial; nil uses time.After.
+	after func(time.Duration) <-chan time.Time
 }
 
 // Start implements manager.Runnable. It runs until ctx is cancelled.
@@ -273,6 +337,11 @@ func (r *IPRangeReconciler) Start(ctx context.Context) error {
 // (Q61). Retrying the initial fetch on a sub-Interval cadence closes that gap;
 // the subsequent patch pass repairs any NP that was created with the empty
 // cache during the retry window.
+//
+// A rate-limited fetch waits as rateLimitWait directs instead of on the backoff
+// cadence: /meta is unauthenticated, so its budget is 60 calls an hour per source
+// IP, and a 30s retry would spend each new window's budget before it could
+// succeed (Q1203).
 func (r *IPRangeReconciler) reconcileInitial(ctx context.Context, log *slog.Logger) {
 	initial := r.InitialBackoff
 	if initial <= 0 {
@@ -282,27 +351,48 @@ func (r *IPRangeReconciler) reconcileInitial(ctx context.Context, log *slog.Logg
 	if maxBackoff <= 0 {
 		maxBackoff = defaultMaxBackoff
 	}
+	after := r.after
+	if after == nil {
+		after = time.After
+	}
 
 	backoff := initial
+	rateLimitBackoff := minRateLimitWait
 	for {
-		if err := r.reconcileAll(ctx, log); err == nil {
+		err := r.reconcileAll(ctx, log)
+		if err == nil {
 			return
 		}
-		log.Warn("retrying initial GitHub IP-range fetch", "backoff", backoff.String())
-		timer := time.NewTimer(backoff)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return
-		case <-timer.C:
-		}
-		if backoff < maxBackoff {
-			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+		wait := backoff
+		var rl *httpx.RateLimitError
+		if errors.As(err, &rl) {
+			wait = rateLimitWait(rl.RetryAfter, rateLimitBackoff)
+			if rl.RetryAfter < 0 {
+				rateLimitBackoff = min(2*rateLimitBackoff, maxRateLimitWait)
+			}
+			log.Warn("GitHub IP-range fetch rate limited; waiting before retry", "wait", wait.String())
+		} else {
+			log.Warn("retrying initial GitHub IP-range fetch", "backoff", backoff.String())
+			if backoff < maxBackoff {
+				backoff = min(2*backoff, maxBackoff)
 			}
 		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-after(wait):
+		}
 	}
+}
+
+// rateLimitWait returns the wait before retrying a rate-limited fetch: the
+// server's hint clamped to [minRateLimitWait, maxRateLimitWait], or fallback when
+// the response carried none (hint < 0).
+func rateLimitWait(hint, fallback time.Duration) time.Duration {
+	if hint < 0 {
+		return fallback
+	}
+	return min(max(hint, minRateLimitWait), maxRateLimitWait)
 }
 
 // ReconcileNow triggers an immediate reconciliation of all ActionsGateway CRs.

@@ -46,6 +46,7 @@ This protects the AGC↔proxy hop from in-cluster eavesdropping or impersonation
 
 The GMC also makes one additional outbound call: `GET https://api.github.com/meta` every 24 hours to refresh the GitHub IP ranges used in tenant `NetworkPolicy` egress rules.
 This call originates from the GMC's own egress path in the system namespace, not through any tenant's proxy pool.
+The call is unauthenticated, so it shares GitHub's 60-an-hour budget with everything else behind the same egress IP; a rate-limited fetch waits for the reset GitHub's headers name rather than retrying on its 30 s backoff.
 
 ### GitHub Endpoints Reached via Proxy
 
