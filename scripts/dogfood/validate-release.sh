@@ -1031,7 +1031,10 @@ b=\$(curl -sk -o /dev/null -w '%{http_code}' --max-time 20 -x ${DRAGONFLY_PROXY}
 # expected miss here, and retrying it would spend the whole backoff schedule
 # before printing the line that says so.
 report_e2e_run() {
-	local run_id="$1" dir="${WORKDIR}/e2e-report"
+	# A folder per run: gh refuses to extract e2e-report.xml over an existing
+	# one, so legs sharing a folder read as a missing artifact after the first.
+	local run_id="$1"
+	local dir="${WORKDIR}/e2e-report/${run_id}"
 	mkdir -p "${dir}" 2>/dev/null || return 0
 
 	# --pattern: the reusable workflow names the artifact per CNI lane
@@ -1046,7 +1049,7 @@ report_e2e_run() {
 	local report
 	while IFS= read -r report; do
 		echo ""
-		echo "=== e2e report: $(basename "$(dirname "${report}")") ==="
+		echo "=== e2e report: run ${run_id}, $(basename "$(dirname "${report}")") ==="
 		bash "${REPO_ROOT}/scripts/e2e/e2e-report-summary.sh" "${report}" || true
 	done < <(find "${dir}" -name '*.xml' -type f 2>/dev/null)
 }
