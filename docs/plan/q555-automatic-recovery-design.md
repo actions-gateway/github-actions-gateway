@@ -325,7 +325,7 @@ In the order the CI history and existing machinery make cheapest:
 
 1. **Node lost under a running worker** (`freshPod`): no longer a class to build here, because Q1179 added a `node_shutdown` recovery arm keyed on the pod's `DisruptionTarget` condition (`TerminationByKubelet` or `DeletionByPodGC`) after kubelet and PodGC source showed no existing arm fired.
 2. **Egress proxy pool unavailable** (`observable`), for a colocated pool: the snapshot's proxy `Ready` was `False` or `readyReplicas` was 0 while the job ran, and `ready` is the EgressProxy's `Ready` condition.
-   The AGC already watches EgressProxies in its own namespace, so this needs nothing from [Q1178](../queue/Q1178.md).
+   The AGC already watches EgressProxies in its own namespace, so this needs nothing from Q1178.
    A shared pool in another namespace is invisible to it, so the class does not cover one.
 3. **`dockerd` sidecar crash** (`freshPod`): the Docker-in-Docker sidecar's restart count rose, with a discriminator against tenant disk use still to find.
 
@@ -335,20 +335,21 @@ In the order the CI history and existing machinery make cheapest:
 
 ### Outcome metrics (Q1178)
 
-`checkDestination` returns `(dialAddr, allowed)`, and its helpers `matchesHostSuffix` and `ipInAny` return only a boolean, so which of its three allow paths and which entry admitted a connection is never computed.
-Make the helpers return the matching entry, as written in the allowlist (a host suffix or a CIDR), and `checkDestination` return it with an outcome.
-Two defects it fixes on the way:
+Built.
+`checkDestination` returns the allowlist entry that admitted a connection, as written in the allowlist (a host suffix or a CIDR), beside the dial address, where it used to return only whether one did.
+Two defects it fixed on the way:
 
 - **A failed lookup on the CIDR path reads as a policy denial.** A DNS outage then looks like "destination not allowed", which is exactly the misreading that would make a futility check withhold a retry it should make.
-  It becomes `outcome="dns_error"`.
-- **Every dial failure is one unlabelled counter**, though `errors.As` can tell the kinds apart.
+  It is `outcome="dns_error"`.
+- **Every dial failure was one unlabelled counter**, though `errors.As` can tell the kinds apart.
 
 | Metric | Labels |
 |---|---|
 | `actions_gateway_proxy_connects_total` | `destination` (the matched entry; `unlisted` for a denial; `any` with no allowlist), `outcome` (`tunneled`, `denied`, `dns_error`, `refused`, `timeout`, `unreachable`, `error`) |
 
-Admission caps the allowlist at 64 host suffixes and 64 CIDRs (`egressproxy_types.go`), so `destination` takes at most 130 values and the metric at most 910 series per pool.
-The two unlabelled counters stay, as sums of the new one, until a release note retires them.
+`destination` takes one value per allowlist entry plus `unlisted` and `any`.
+Admission caps the operator's entries at 64 host suffixes and 64 CIDRs (`egressproxy_types.go`); the GMC adds six implicit GitHub suffixes and one per GitHub Enterprise Server host a referrer binds (`proxyAllowlistEnv`), so the bound is that sum plus two, times seven outcomes, per pool.
+The two unlabelled counters stay, as sums of the new one, until a release note retires them: `…_connect_denied_total` is the `unlisted` series, and `…_dial_errors_total` the failures on every other destination.
 
 ### Why the AGC does not read the proxy yet
 
@@ -555,4 +556,4 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 3. Q1181: the futility checks on the widened run read, honouring `selfCancelledAttempt` for `run_cancelled`, between the run read and the reservation in `handleScaleSetEviction`.
 4. Q555 adds the `failures` map, the snapshot, the pairing and the metrics on that store.
 5. Q1183: the `pending` map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.
-6. Q1178 any time; Q1184 after its review.
+6. Q1178 (built); Q1184 after its review.
