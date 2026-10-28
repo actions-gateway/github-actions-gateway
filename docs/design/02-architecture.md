@@ -138,6 +138,10 @@ Two children break that assumption and so assign fields selectively instead:
 
 SSA would have made both cases fall out of per-field ownership for free; with `CreateOrPatch` they are a hand-maintained invariant, enforced by envtest (`hpa_scale_preservation`) because neither the `scale` subresource nor `.spec.replicas` defaulting exists on a fake client.
 
+Metadata labels are never the GMC's alone, so every child write merges the GMC's labels over the live map instead of replacing it (`mergeLabels`, Q1215): a label another controller or an operator adds to a GMC child survives every reconcile.
+The cost is that a key the GMC stops setting is never removed.
+No child has dropped one in the project's history, so the merge carries no owned-key record; the first change that retires a label has to add one, or delete the key itself.
+
 **Where SSA remains the right tool:** `applyNamespacePSA` keeps SSA (field manager `actionsgateway-controller-psa`) precisely because PSA labels are a security control — SSA records per-field-manager ownership and surfaces a conflict when a human admin changes a field the controller owns, so an out-of-band edit is detected and reported (a `PSALabelsOverridden` Warning Event) rather than silently re-asserted.
 See [§5.3](05-security.md#53-security-profiles-and-the-privileged-opt-in).
 

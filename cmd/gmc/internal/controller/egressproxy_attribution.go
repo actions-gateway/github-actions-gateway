@@ -863,7 +863,7 @@ func (r *EgressProxyReconciler) applyProjectedSecret(ctx context.Context, desire
 	if err != nil {
 		return err
 	}
-	existing.Labels = desired.Labels
+	mergeLabels(&existing, desired.Labels)
 	existing.Data = desired.Data
 	return r.Update(ctx, &existing)
 }

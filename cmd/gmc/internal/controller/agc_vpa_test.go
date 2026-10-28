@@ -275,6 +275,15 @@ func TestApplyAGCAutoscaler_StampsAndPrunes(t *testing.T) {
 	assert.True(t, hasEventContaining(rec, gmcv2alpha1.ReasonAGCAutoscalingActive),
 		"the precedence resolution must be announced when the autoscaler first appears")
 
+	// A label another writer added survives the next apply (Q1215).
+	want := got.GetLabels()
+	got.SetLabels(seededLabels(want))
+	require.NoError(t, c.Update(context.Background(), got))
+	_, err = r.applyOrPruneAGCAutoscaler(context.Background(), ag)
+	require.NoError(t, err)
+	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: agcVPAName(ag)}, got))
+	assertLabelsMerged(t, want, got.GetLabels())
+
 	// Removing the opt-in prunes it.
 	ag.Spec.AGCAutoscaling = nil
 	state, err = r.applyOrPruneAGCAutoscaler(context.Background(), ag)

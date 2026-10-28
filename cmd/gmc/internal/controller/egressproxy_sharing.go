@@ -279,7 +279,7 @@ func (r *EgressProxyReconciler) applyProxyShare(ctx context.Context, desired *co
 	if err != nil {
 		return err
 	}
-	existing.Labels = desired.Labels
+	mergeLabels(&existing, desired.Labels)
 	existing.Data = desired.Data
 	return r.Update(ctx, &existing)
 }
