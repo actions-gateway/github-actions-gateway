@@ -143,8 +143,8 @@ const runStatusCompleted = "completed"
 // a restart. Within a tier the Q106 cap of maxRetries re-runs per run holds across every
 // disruption cause together, so a run alternately evicted and preempted cannot spend
 // two budgets. cause labels the same surfaces and, on the classic tier, selects the
-// conclusion check (attemptRerun, Q811), which only recoveryCauseDeletion takes there. d names the
-// disruption to the scale-set ledger and is ignored on the classic tier.
+// conclusion check (attemptRerun, Q811), which only recoveryCauseDeletion takes there.
+// d names the disruption to the scale-set ledger and is ignored on the classic tier.
 func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier, cause string, d rerunDisruption) <-chan struct{} {
 	if runID == "0" || runID == "" {
 		log.Warn("worker pod disrupted but run_id unknown; skipping auto-retry", "cause", cause)
@@ -200,7 +200,8 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // (the abandoned arm's) still takes the read, for the futility checks.
 //
 // The futility checks (futileRerun, Q1181) run on that read, before the reservation, so
-// a re-run they withhold spends no slot. The reservation then resumes, merges, refuses or reserves (reserveScaleSetRerun).
+// a re-run they withhold spends no slot. The reservation then resumes, merges, refuses
+// or reserves (reserveScaleSetRerun).
 // Every outcome but a refusal goes on to the re-run loop, which reads the run before
 // each call and stands down once its attempt has moved past the one the job failed in
 // (errRerunCovered). That is what makes a merge safe: a merged disruption re-runs only
