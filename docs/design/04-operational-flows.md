@@ -732,7 +732,11 @@ sequenceDiagram
 Three things make this the same capability rather than a lookalike.
 The **identity** is the `actions-gateway.com/run-id` / `actions-gateway.com/repository` pair `ProvisionScaleSetWorker` stamps, the same pair Q417's eviction recovery reads.
 A worker that never ran has no `JobStarted` to replace it, so it is the identity of the job the pod was created for, which another runner may be running.
-So the recovery first lists the set's workers, and where one carries that job as its `actions-gateway.com/started-job-id`, the job has a runner and nothing is cancelled (Q1169).
+So the recovery first lists the set's workers, and where one carries that job as its `actions-gateway.com/started-job-id`, the job has a runner and its run is spared (Q1169).
+The set is still one runner short, though, and the job left without one is a different job, which the recovery names and cancels instead (Q1195).
+It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
+A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
+The recovery names no job while any worker is `Running` with no start recorded, because that runner may hold the job already with its `JobStarted` still in flight; a stranded job found then is not recovered, and nothing re-checks it.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
 The **budget** is the scale-set tier's ledger budget (Q1182), and the force-cancel is recorded in it: before cancelling, the AGC reads the run's attempt and stores it as `selfCancelledAttempt`, so the graceful-deletion arm's `cancelled` check reads a cancel of that attempt as GAG's own rather than a user's, and the abandoned run's later re-run merges into one another disruption of the same attempt already reserved.
 And the **wait** is the identical capacity test: a worker pod of the same owner binding after the abandonment.

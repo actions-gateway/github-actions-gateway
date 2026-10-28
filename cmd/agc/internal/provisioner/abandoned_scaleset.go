@@ -99,15 +99,34 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 	// The pod's run identity is that of the job it was created for, which another runner
 	// of the set may have taken. That run lost nothing, so cancelling it would end a live
 	// job (Q1169). A worker lost with its node was placed, so the idle workers beside it
-	// are not waiting on its capacity and count as able to take the job, as they did when
+	// are not waiting on its capacity and count as able to take a job, as they did when
 	// this shape took the disruption path.
-	if p.assignedJobAccountedFor(ctx, target, pod, detection == abandonedDetectionNodeLost, log) {
-		log.Info("scale-set worker was removed before it ran, but another worker's runner started the job it was created for; not force-cancelling that job's run",
+	//
+	// Where another runner did take it, the set is still one runner short, and the job
+	// left without one is the one recovered instead (strandedScaleSetJob, Q1195).
+	owner, repo, runID, ok := runIdentityFromPod(pod)
+	job := pod.Annotations[annotationJobName]
+	if workers, err := p.liveScaleSetWorkers(ctx, target); err != nil {
+		log.Warn("could not list the set's workers to check whether another one holds this worker's job; recovering it by its own run identity",
+			"error", err)
+	} else if detection == abandonedDetectionNodeLost && workers.idleBesides(pod.Name) {
+		log.Info("scale-set worker was removed before it ran, but an idle worker of its set can still take a job; not force-cancelling",
 			"detection", detection, "runID", pod.Annotations[AnnotationRunID])
 		return closedChan()
+	} else if workers.startedElsewhere(key.Name, pod.Name) {
+		stranded, found := p.strandedScaleSetJob(ctx, target, workers, pod.Name, log)
+		if !found {
+			log.Info("scale-set worker was removed before it ran, but another worker's runner started the job it was created for, and the job left without a runner could not be named; not force-cancelling",
+				"detection", detection, "runID", pod.Annotations[AnnotationRunID])
+			return closedChan()
+		}
+		log.Info("scale-set worker was removed before it ran, and another worker's runner started the job it was created for; recovering the job left without a runner instead",
+			"detection", detection, "jobID", stranded.JobID, "runID", stranded.RunID)
+		owner, repo, runID = stranded.Owner, stranded.Repository, stranded.RunID
+		ok = owner != "" && repo != "" && runID != "" && runID != "0"
+		job = ""
 	}
 
-	owner, repo, runID, ok := runIdentityFromPod(pod)
 	if !ok {
 		// Counted as the tier's identity-unknown failure rather than as a force-cancel
 		// outcome, so the two counters stay disjoint: on this tier
@@ -131,7 +150,7 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 	go func() {
 		defer close(done)
 		p.forceCancelAbandonedRun(fctx, target, owner, repo, runID, evictionTierScaleSet, log,
-			rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName]})
+			rerunDisruption{key: pod.Name, job: job})
 	}()
 	return done
 }
@@ -175,6 +194,41 @@ func abandonedAwaitingRecovery(pod *corev1.Pod) bool {
 		return false
 	}
 	return !podEverStarted(pod)
+}
+
+// InFlightLister is implemented by a Target that can read the jobs its listener has
+// provisioned a worker for and not seen conclude (scalesetlistener.GuardState.InFlight).
+// It is optional: a Target without it leaves a stranded job unnamed.
+type InFlightLister interface {
+	InFlightJobs(ctx context.Context) ([]OrphanedWorker, error)
+}
+
+// strandedScaleSetJob names the job that podName's removal left with no runner, where
+// another worker's runner started the job podName was created for (Q1195).
+//
+// The set loses one runner and keeps every job, so some job goes unserved, and it is
+// not podName's own. It is found by following the runners: the worker that started
+// podName's job was created for a job of its own, which some other worker may have
+// started in turn, until a job nobody started. That job's own worker is busy with
+// another job, and the walk declines while any runner's start may be unrecorded
+// (scaleSetWorkerSet.strandedJob), so a job a runner has just taken is not named. That
+// leaves a residual: a stranded job found while such a runner exists is not recovered,
+// and nothing re-checks it.
+//
+// A worker's name is a hash of the job it was created for, so the walk reads that job,
+// and the run identity to recover it by, from the listener's in-flight set; the
+// started stamp has already replaced the worker's own identity annotations (Q1152).
+func (p *Provisioner) strandedScaleSetJob(ctx context.Context, target Target, workers scaleSetWorkerSet, podName string, log *slog.Logger) (OrphanedWorker, bool) {
+	lister, ok := target.(InFlightLister)
+	if !ok {
+		return OrphanedWorker{}, false
+	}
+	inFlight, err := lister.InFlightJobs(ctx)
+	if err != nil {
+		log.Warn("could not read the set's in-flight jobs to name the job left without a runner", "error", err)
+		return OrphanedWorker{}, false
+	}
+	return workers.strandedJob(target.Key().Name, podName, inFlight)
 }
 
 // assignedJobAccountedFor reports whether the job a never-started scale-set worker was

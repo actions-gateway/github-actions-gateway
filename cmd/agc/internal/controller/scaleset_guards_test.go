@@ -116,3 +116,20 @@ func TestScaleSetGuardStore_LoadRejectsUnparseableState(t *testing.T) {
 	_, err := s.Load(context.Background())
 	require.ErrorContains(t, err, "delete the ConfigMap")
 }
+
+// TestRunnerSetTarget_InFlightJobsReadsTheListenersRecord pins the read abandoned-run
+// recovery names a stranded job from (Q1195): the target reads the same ConfigMap the
+// listener saves, and returns each in-flight job's run identity.
+func TestRunnerSetTarget_InFlightJobsReadsTheListenersRecord(t *testing.T) {
+	ctx := context.Background()
+	rs := testRunnerSet()
+	c := fake.NewClientBuilder().WithScheme(guardScheme()).Build()
+	r := &RunnerSetReconciler{Client: c}
+	require.NoError(t, r.scaleSetGuardStore(rs).Save(ctx, scalesetlistener.GuardState{
+		InFlight: []scalesetlistener.InFlightJob{{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"}},
+	}))
+
+	jobs, err := r.provisionerTarget(rs).InFlightJobs(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []provisioner.OrphanedWorker{{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"}}, jobs)
+}

@@ -202,6 +202,7 @@ type scaleSetWorkerSet struct {
 	startedJobs map[string]bool   // job IDs some live worker's runner has started
 	idle        int               // workers not terminal or deleting whose runner has started no job
 	idlePods    map[string]bool   // the pods idle counts, by name
+	unrecorded  int               // idle workers already Running, whose runner may have started a job not yet stamped
 }
 
 // serving reports whether a live worker is running jobID. That is the worker whose
@@ -223,12 +224,53 @@ func (s scaleSetWorkerSet) serving(ownerName, jobID string) bool {
 // podName was created for. A worker's started job names the pod minted for it through
 // scaleSetPodName, so this needs no job ID off podName itself (Q1169).
 func (s scaleSetWorkerSet) startedElsewhere(ownerName, podName string) bool {
+	return s.holderOf(ownerName, podName) != ""
+}
+
+// strandedJob follows podName's lost runner to the job left with none: the worker whose
+// runner started the job podName was created for, then the job that worker was created
+// for, and so on to a job no live worker started. inFlight maps a worker to the job it
+// was created for. ok is false where the walk leaves the listed workers or the in-flight
+// set, which an absent record or a concluded job makes it do.
+//
+// It is also false while any worker is Running with no start recorded. The listener
+// stamps a start only once its JobStarted arrives, so such a runner may already hold
+// the job the walk would end at, and cancelling that job's run would end a live job.
+func (s scaleSetWorkerSet) strandedJob(ownerName, podName string, inFlight []OrphanedWorker) (OrphanedWorker, bool) {
+	if s.unrecorded > 0 {
+		return OrphanedWorker{}, false
+	}
+	createdFor := make(map[string]OrphanedWorker, len(inFlight))
+	for _, w := range inFlight {
+		createdFor[scaleSetPodName(ownerName, w.JobID)] = w
+	}
+	minted := podName
+	for range len(s.started) {
+		holder := s.holderOf(ownerName, minted)
+		if holder == "" {
+			return OrphanedWorker{}, false
+		}
+		job, ok := createdFor[holder]
+		if !ok {
+			return OrphanedWorker{}, false
+		}
+		if !s.startedJobs[job.JobID] {
+			return job, true
+		}
+		minted = holder
+	}
+	return OrphanedWorker{}, false
+}
+
+// holderOf returns the worker whose runner started the job minted was created for, or
+// "" where none did.
+func (s scaleSetWorkerSet) holderOf(ownerName, minted string) string {
 	for name, jobID := range s.started {
-		if name != podName && jobID != "" && scaleSetPodName(ownerName, jobID) == podName {
-			return true
+		if name != minted && jobID != "" && scaleSetPodName(ownerName, jobID) == minted {
+			return name
 		}
 	}
-	return false
+	return ""
 }
 
 // idleBesides reports whether a worker other than podName could still be given a job.
@@ -276,6 +318,9 @@ func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (s
 		} else if canTakeAJob(&pods.Items[i]) {
 			set.idle++
 			set.idlePods[pods.Items[i].Name] = true
+			if pods.Items[i].Status.Phase == corev1.PodRunning {
+				set.unrecorded++
+			}
 		}
 	}
 	return set, nil
