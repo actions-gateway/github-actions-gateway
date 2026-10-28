@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// Known-futile re-runs on the scale-set tier (Q1181, R18 of
-// docs/plan/q555-flaky-job-retry.md). A disruption arm's re-run that GitHub will refuse,
+// Known-futile re-runs on the scale-set tier (Q1181; docs/design/04-operational-flows.md
+// §4.2 has the operator account). A disruption arm's re-run that GitHub will refuse,
 // or that a newer commit has made pointless, still costs a budget slot, a node and queue
 // time, and ends in an Event asking for a manual re-run that would not help either.
 // futileRerun judges the run read handleScaleSetEviction already makes, before the
@@ -88,7 +88,8 @@ type workflowRunSummary struct {
 // supersedingRun returns the newest run of run's workflow, event and branch where it is a
 // newer commit from the same head repository, which supersedes run. Filtering on the
 // event and comparing the head repository keeps a fork's branch from matching
-// upstream's of the same name (M5 in docs/plan/q555-automatic-recovery-design.md).
+// upstream's of the same name. Whether the branch filter matches a fork pull
+// request's head branch is unmeasured; a miss re-runs.
 //
 // A list that cannot be read answers false: the check only ever withholds a re-run, so
 // an unreadable answer must not withhold one.
