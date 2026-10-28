@@ -765,7 +765,12 @@ The one-command check uses the pinned cosign (`make` downloads `COSIGN_VERSION` 
 
 ```bash
 make verify-release VERSION=vX.Y.Z
+make verify-release-compat VERSION=vX.Y.Z
 ```
+
+The second line runs the same check with the cosign v2 verifier that `COSIGN_COMPAT_VERSION` in `scripts/ci/pins.env` pins.
+The signer is cosign v3, and a check run with the signer's own version passes signatures that cosign v2 cannot read (Q1218).
+A compat failure is the same stop-ship as a signature failure.
 
 > **A broken or missing chart publish now reddens PR CI, not just operators.** CI's released-chart upgrade gate ([testing.md § The released-chart upgrade gate](../development/testing.md#the-released-chart-upgrade-gate-q507)) discovers the highest stable `vX.Y.Z` tag on the repo and `helm pull`s that chart version from GHCR on every e2e run.
 > Pushing a stable tag whose `chart-publish` job failed therefore fails e2e on **every subsequent PR** until the publish is repaired (re-run the `publish.yml` run for the tag) or the tag is removed.

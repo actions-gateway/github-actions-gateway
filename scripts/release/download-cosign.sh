@@ -25,6 +25,9 @@
 # By hand, the same source:
 #   curl -fsSL https://github.com/sigstore/cosign/releases/download/<ver>/cosign_checksums.txt
 #
+# COSIGN_COMPAT_VERSION in scripts/ci/pins.env names one more version, the
+# cosign v2 verifier `make verify-release-compat` uses; its digests live there.
+#
 # Usage: scripts/release/download-cosign.sh <output-path> <version>
 set -euo pipefail
 shopt -s inherit_errexit
@@ -62,7 +65,18 @@ case "$arch" in
 esac
 
 platform="$os-$arch"
-want="$(expected_sha256 "$version $platform" || true)"
+
+# The compat verifier (Q1218) is pinned in pins.env rather than above, so the
+# weekly updatecli rewrite of those four lines never moves it.
+compat_sha256() {
+	local pins key
+	pins="$(dirname "$0")/../ci/pins.env"
+	[[ "$(awk -F= '$1 == "COSIGN_COMPAT_VERSION" {print $2}' "$pins")" == "$version" ]] || return 1
+	key="COSIGN_COMPAT_$(tr '[:lower:]-' '[:upper:]_' <<<"$platform")_SHA256"
+	awk -F= -v k="$key" '$1 == k {print $2}' "$pins"
+}
+
+want="$(expected_sha256 "$version $platform" || compat_sha256 || true)"
 if [[ -z "$want" ]]; then
 	echo "no pinned SHA256 for cosign $version ($platform); add it to $0 before bumping COSIGN_VERSION" >&2
 	exit 1
