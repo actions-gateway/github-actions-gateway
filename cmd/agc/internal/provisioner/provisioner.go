@@ -19,6 +19,7 @@ package provisioner
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -776,9 +777,10 @@ func (j ScaleSetJob) jobMeta() jobMeta {
 // It is idempotent per jobID: the Secret and pod are named deterministically from the
 // jobID, so a job replayed to a re-created session is a no-op (an AlreadyExists is
 // treated as success), except for a Secret left by a worker that is already gone, which
-// is replaced (replaceStaleScaleSetSecret). Capacity is already gated upstream by the listener's advertised
-// X-ScaleSetMaxCapacity, so a concurrency-ceiling hit here is a narrow race the
-// listener retries on its next poll.
+// is replaced (replaceStaleScaleSetSecret), and a pod still terminating, which fails the
+// delivery with a *WorkerTerminatingError (adoptExistingScaleSetPod). Capacity is already
+// gated upstream by the listener's advertised X-ScaleSetMaxCapacity, so a
+// concurrency-ceiling hit here is a narrow race the listener retries on its next poll.
 //
 // Cleanup: every exit that fails BEFORE the worker pod exists deletes the Secret this
 // call staged, so a credential-bearing Secret never outlives a job that never ran
@@ -904,11 +906,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 
 	if err := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log); err != nil {
 		if apierrors.IsAlreadyExists(err) {
-			// Idempotent: a replayed job already has its worker pod — and that pod mounts
-			// this Secret, so the Secret must survive. It is reclaimed with every other
-			// steady-state Secret by CleanupScaleSetJob on the job's completion.
-			p.handScaleSetSecretToPod(ctx, key.Namespace, podName, "", secretName, log)
-			return nil
+			return p.adoptExistingScaleSetPod(ctx, key.Namespace, podName, secretName, unstage, log)
 		}
 		unstage()
 		return fmt.Errorf("provisioner: create scale-set Pod %s: %w", podName, err)
@@ -916,6 +914,53 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	log.Debug("scale-set worker pod created", "priorityClass", priorityClass)
 	p.handScaleSetSecretToPod(ctx, key.Namespace, podName, pod.UID, secretName, log)
 	return nil
+}
+
+// adoptExistingScaleSetPod decides what a delivery whose pod create found the job's pod
+// already there does. A live pod is the replayed job's worker, and it mounts this Secret,
+// so the Secret must survive; it is reclaimed with every other steady-state Secret by
+// CleanupScaleSetJob on the job's completion. A pod being deleted is not a worker for
+// this delivery, which registered a runner that pod will never start, so the delivery
+// fails with a *WorkerTerminatingError and is re-offered once the pod is gone (Q1199).
+func (p *Provisioner) adoptExistingScaleSetPod(ctx context.Context, namespace, podName, secretName string, unstage func(), log *slog.Logger) error {
+	var pod corev1.Pod
+	err := p.liveReader().Get(ctx, client.ObjectKey{Namespace: namespace, Name: podName}, &pod)
+	switch {
+	case apierrors.IsNotFound(err):
+		// Gone between the create and this read: nothing mounts the Secret yet.
+		unstage()
+		return &WorkerTerminatingError{Pod: podName}
+	case err != nil:
+		unstage()
+		return fmt.Errorf("provisioner: read existing scale-set Pod %s: %w", podName, err)
+	case pod.DeletionTimestamp != nil:
+		unstage()
+		log.Info("scale-set worker pod is still terminating; re-offering the job once it is gone")
+		return &WorkerTerminatingError{Pod: podName}
+	}
+	p.handScaleSetSecretToPod(ctx, namespace, podName, pod.UID, secretName, log)
+	return nil
+}
+
+// WorkerTerminatingError reports that a scale-set job's worker pod name is held by a pod
+// already being deleted, so the job cannot have a worker until that pod is gone (Q1199).
+//
+// It is a distinct type for the reason CeilingReachedError is: the listener redelivers a
+// transient failure immediately, and a graceful termination lasts seconds to minutes (a
+// pod on a lost node, until the node is removed), so it belongs on the re-offer backoff.
+type WorkerTerminatingError struct {
+	// Pod is the terminating pod's name.
+	Pod string
+}
+
+func (e *WorkerTerminatingError) Error() string {
+	return fmt.Sprintf("provisioner: scale-set worker pod %s is still terminating", e.Pod)
+}
+
+// IsWorkerTerminating reports whether err is (or wraps) a *WorkerTerminatingError.
+func IsWorkerTerminating(err error) bool {
+	var te *WorkerTerminatingError
+	return errors.As(err, &te)
 }
 
 // handScaleSetSecretToPod makes the worker pod the only owner of the JIT-config Secret

@@ -639,9 +639,17 @@ const (
 	// re-offered until a running worker finishes. Expected backpressure on a saturated
 	// set, not a fault.
 	ReasonWorkerCeilingReached = "WorkerCeilingReached"
+	// ReasonWorkerTerminating is the JobProvisionStalled=True reason when a
+	// stalled job is waiting for its previous worker pod, which holds the pod name the
+	// job's worker needs, to finish terminating (a session re-created during that pod's
+	// grace period replays the job). It outranks ReasonWorkerCeilingReached and is
+	// outranked by ReasonRunnerNameConflict. A pod held terminating past its grace
+	// period usually sits on a lost node.
+	ReasonWorkerTerminating = "WorkerTerminating"
 	// ReasonJobsProvisioning is the JobProvisionStalled=False reason: no assigned job
-	// is waiting on a runner name or on capacity — either none ever was (published
-	// when the listener starts) or the last stalled job provisioned or completed.
+	// is waiting on a runner name, a terminating worker, or capacity — either none ever
+	// was (published when the listener starts) or the last stalled job provisioned or
+	// completed.
 	ReasonJobsProvisioning = "JobsProvisioning"
 )
 

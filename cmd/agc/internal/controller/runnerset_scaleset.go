@@ -337,11 +337,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		// translated into the listener's own vocabulary; every other error travels
 		// as-is, and the listener treats it as "provision anyway".
 		CheckCapacity: func(ctx context.Context) error {
-			err := r.Provisioner.CheckScaleSetCapacity(ctx, target)
-			if provisioner.IsCeilingReached(err) {
-				return fmt.Errorf("%w: %w", scalesetlistener.ErrCapacityUnavailable, err)
-			}
-			return err
+			return listenerProvisionError(r.Provisioner.CheckScaleSetCapacity(ctx, target))
 		},
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
 			err := r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
@@ -363,10 +359,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 			// The authoritative ceiling check, losing the race the pre-check above
 			// could not close: same translation, so the job is re-offered rather than
 			// redelivered.
-			if provisioner.IsCeilingReached(err) {
-				return fmt.Errorf("%w: %w", scalesetlistener.ErrCapacityUnavailable, err)
-			}
-			return err
+			return listenerProvisionError(err)
 		},
 		// Keyed by the runner that held the job, which need not be the one minted for it
 		// (Q1151).
@@ -715,4 +708,19 @@ func applyAdvertisedCapacity(rs *v2alpha1.RunnerSet, rec *capacityRecord) {
 func clearAdvertisedCapacity(rs *v2alpha1.RunnerSet) {
 	rs.Status.AdvertisedCapacity = nil
 	rs.Status.WithheldCapacity = nil
+}
+
+// listenerProvisionError translates the provisioner's verdicts that must not be redelivered
+// into the scale-set listener's vocabulary, so the job is re-offered on a backoff: a full
+// worker ceiling (Q576) and a previous worker pod still terminating (Q1199). Every other
+// error travels as-is.
+func listenerProvisionError(err error) error {
+	switch {
+	case provisioner.IsCeilingReached(err):
+		return fmt.Errorf("%w: %w", scalesetlistener.ErrCapacityUnavailable, err)
+	case provisioner.IsWorkerTerminating(err):
+		return fmt.Errorf("%w: %w", scalesetlistener.ErrWorkerTerminating, err)
+	default:
+		return err
+	}
 }
