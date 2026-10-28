@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; the rest is not.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up ([Q1236](../queue/Q1236.md)) and without the proxy's readiness ([Q1237](../queue/Q1237.md)); the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -19,7 +19,7 @@ Each of these decides a component's shape, and none has been observed:
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
-| M1 | The `result` vocabulary for a red step, a cancelled run and a timed-out job | Which completions the ledger records | The dogfood turn-up [Q555](../queue/Q555.md) already names |
+| M1 | The `result` vocabulary for a red step, a cancelled run and a timed-out job | Which completions the ledger records | The dogfood turn-up [Q1236](../queue/Q1236.md) names |
 | M2 | Whether a re-run job's `JobAssigned` carries a new job UUID and the same `jobDisplayName`, and whether two jobs in one run can share a display name (GitHub allows a duplicate `name:`, from recall) | Pairing's key | Same turn-up: re-run the failed job and read both assignments at debug level; a workflow with two jobs named alike |
 | M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | A dogfood job that allocates past its limit under `Binpack` |
 | M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | The same turn-up: compare the pod's deletion time to the completion's arrival in the AGC log |
@@ -554,6 +554,7 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 1. The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
 3. Q1181: the futility checks on the widened run read, honouring `selfCancelledAttempt` for `run_cancelled`, between the run read and the reservation in `handleScaleSetEviction`.
-4. Q555 adds the `failures` map, the snapshot, the pairing and the metrics on that store.
+4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
+   Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
 5. Q1183: the `pending` map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.
 6. Q1178 (built); Q1184 after its review.

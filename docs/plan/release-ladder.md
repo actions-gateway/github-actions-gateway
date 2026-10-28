@@ -104,9 +104,9 @@ Each waits on a real signal, and each carries a revive trigger on the backlog ra
 Q564 was the seventh, revived on the same 2026-08-13 evidence and since shipped, so it left this accounting; Q408 has now followed it, Q566 and Q567 were closed as already shipped, and Q555 was revived on 2026-10-10, so two of the original seven remain in it, which is the set the sentence below counts against.
 Its demand was Q725, which had sat in the Queue the whole time.
 
-**One of the original three is back.** [Q555](../queue/Q555.md) is the third revival: its trigger was an operator ask, and the maintainer ruled on 2026-10-10 that this repository's own CI is one; the prerequisite it also listed had been met since 2026-07-05 ([draft](q555-flaky-job-retry.md#the-prerequisite-already-exists)).
-The previous revival has since shipped: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
-That is the trigger list working twice rather than a rule being bent, and it is what narrowed the rule above.
+**None of the original two are back.** The third revival has since shipped and left this accounting: Q555, now flaky-job detection, whose trigger was an operator ask, and the maintainer ruled on 2026-10-10 that this repository's own CI is one; the prerequisite it also listed had been met since 2026-07-05 ([draft](q555-flaky-job-retry.md#the-prerequisite-already-exists)).
+The revival before it shipped too: Q408 waited on an operator ask plus a measurement, its trigger fired by 2026-08-13 because the maintainer is the operator asking for untrusted-PR CI, and it landed on 2026-08-28, leaving this accounting the way Q564 did.
+That is the trigger list working three times rather than a rule being bent, and it is what narrowed the rule above.
 The two left in the table have never been revived.
 Q566 left without one: the in-cluster TLS it asked for shipped on 2026-05-23, before the row was filed from a stale design note, so it was closed on 2026-10-10 as a gap the code never had.
 Q567 left the same way on 2026-10-27: the v2 API gives every `EgressProxy` its own pool and lets a `RunnerSet` name one with `spec.proxyRef`, which is the per-group pool it asked for.

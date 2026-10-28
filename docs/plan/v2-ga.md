@@ -35,8 +35,8 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate` (Phase 3) | `2.0-gate` | 🚫 blocked on the 1.10 tag |
 | [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q1167 and Q273 |
 | [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q273 and Q264 |
-| [Q555](../queue/Q555.md) | Detect flaky jobs and record each failure's platform context | `2.0-gate` | 🔲 open: the dogfood `result` reading comes first |
-| [Q1183](../queue/Q1183.md) | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | 🚫 blocked on Q555 |
+| Q555 | Detect flaky jobs and record each failure's platform context | `2.0-gate` | ✅ landed on the scale-set tier: the failure ledger's `failures` map, the worker snapshot, the pairing and its three metrics; the dogfood readings it rests on are [Q1236](../queue/Q1236.md) |
+| [Q1183](../queue/Q1183.md) | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | 🔲 open |
 | [Q1181](../queue/Q1181.md) | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | 🔲 open |
 | Q1178 | Label egress proxy outcome metrics by allowlist entry and outcome | `2.0-gate` | ✅ |
 | [Q1180](../queue/Q1180.md) | Dogfood keeps no AGC or proxy metrics past the pod's life | `2.0-gate` | 🔲 open |
