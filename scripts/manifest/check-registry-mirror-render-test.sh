@@ -500,6 +500,8 @@ for i in "${!cases[@]}"; do
 	c="${cases[i]}"
 	case_rc=0
 	wait "${pids[i]}" || case_rc=$?
+	# Reaped, so its pid is free for reuse and cleanup must not signal it (Q1173).
+	unset 'pids[i]'
 	cat "${WORKDIR}/${c}.log"
 	die_if_killed "${c}" "${case_rc}"
 	fails=$((fails + case_rc))
