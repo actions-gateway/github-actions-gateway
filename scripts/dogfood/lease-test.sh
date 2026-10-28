@@ -367,26 +367,38 @@ check "the stopped gate leaves the new holder's record" "ci-runner-7/4242" "$(ho
 # A renewer started for a teardown or a reclaim must not signal: its owner is
 # already running stop scripts, and a TERM there kills bash mid-trap while the
 # stop script carries on. It stops renewing and leaves its owner alone.
+# The owner outlives the renewer's exit, so the exit seen is the lost-lease one
+# and not the owner-gone one.
 reset_leases
+rm -f "${WORKDIR}/quiet.pid"
 run_owner "lease_acquire '${PROJECT}' '${ZONE}' '${CLUSTER}' rc
 	lease_renew_start '${PROJECT}' '${ZONE}' '${CLUSTER}'
 	echo \"\${LEASE_RENEWER_PID}\" >'${WORKDIR}/quiet.pid'
-	sleep 2
+	sleep 8
 	echo survived" >"${WORKDIR}/quiet.out" 2>&1 &
 owner=$!
 for _ in $(seq 50); do
-	[[ "$(holder)" == owner-host/* ]] && break
+	[[ "$(holder)" == owner-host/* && -s "${WORKDIR}/quiet.pid" ]] && break
 	sleep 0.1
 done
 remote_lease 1 "ci-runner-7/4242"
+quiet="$(cat "${WORKDIR}/quiet.pid")"
+quiet_alive=1
+for _ in $(seq 50); do
+	kill -0 "${quiet}" 2>/dev/null || {
+		quiet_alive=0
+		break
+	}
+	sleep 0.1
+done
+check "a renewer that lost its lease stops renewing" "0" "${quiet_alive}"
+kill -0 "${owner}" 2>/dev/null && owner_alive=1 || owner_alive=0
+check "the renewer stopped while its owner still ran" "1" "${owner_alive}"
+((quiet_alive == 0)) || kill "${quiet}" 2>/dev/null || true
 owner_rc=0
 wait "${owner}" || owner_rc=$?
 check "a renewer without stop-owner leaves its owner running" "0" "${owner_rc}"
 check_contains "the owner ran to completion" "survived" "$(cat "${WORKDIR}/quiet.out")"
-quiet="$(cat "${WORKDIR}/quiet.pid")"
-kill -0 "${quiet}" 2>/dev/null && quiet_alive=1 || quiet_alive=0
-check "a renewer that lost its lease stops renewing" "0" "${quiet_alive}"
-((quiet_alive == 0)) || kill "${quiet}" 2>/dev/null || true
 
 # A renewer outliving a SIGKILLed gate would keep a dead run's lease fresh
 # forever, and no other host could ever reclaim it.
