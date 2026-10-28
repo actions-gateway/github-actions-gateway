@@ -117,7 +117,7 @@ The claim is checkable and a wrong one costs more than the feature is worth.
 
 Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), TLS on the proxy hop, and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28), and per-runner-set proxy pools (Q567).
 
-Open, with rows: Q215 (cache backend, blocked on the cross-tenant isolation review this document scopes), and the three decisions below.
+Open, with rows: Q215 (cache backend, designed and spiked in [q215-worker-cache.md](q215-worker-cache.md), with publishing and the reference architecture left), and the three decisions below.
 
 ## Open decisions the map surfaced
 

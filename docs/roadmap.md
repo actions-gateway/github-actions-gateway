@@ -28,6 +28,10 @@ No pill means no release is decided for that item yet.
   Detection counts flaky jobs per runner set first.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
 
+- **[A worker cache backend](plan/q215-worker-cache.md)** <!-- q:Q215 --> `actions/cache` already works.
+  What is missing is a cache *inside* the cluster, which an untrusted-PR job under tight egress needs because it has no other.
+  The design enforces GitHub's own ref scope on the server; publishing its runner image and a reference architecture remain.
+
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
 
@@ -52,10 +56,6 @@ Each waits on a real operator need, a measured limit, or a gating release before
 - **[First-class GPU runner support](design/appendix-e-capacity-planning.md)** <!-- q:Q216 --> Priority tiers and the [`NodeShare` sizing profile](operations/worker-rightsizing.md) already carry the GPU cases, but GPU Operator / Node Feature Discovery awareness, and `nodeSelector` / toleration / `RuntimeClass` conventions that make a GPU runner set feel native, wait on a concrete GPU workload to design against.
 - **[Multi-node GPU jobs](design/appendix-e-capacity-planning.md)** <!-- q:Q718 --> One job needing several co-scheduled workers in one NVLink or InfiniBand domain is a different problem from one job needing one GPU: capacity is a single integer to GitHub, and a gang requirement is a placement predicate rather than a count.
   Waits on a real multi-node workload, and would interact with Kueue or Volcano.
-- **[A worker cache backend](plan/ecosystem-integration-landscape.md#j-registry-build-cache--images-runner-workload-plane)** <!-- q:Q215 --> `actions/cache` already works.
-  What is missing is a cache *inside* the cluster, to cut egress cost and restore latency.
-  Docker layer caching has no home either way, because workers are storage-less by design.
-  It waits on a [security review](design/05-security.md) of cross-job cache isolation: a shared cache between tenants is an obvious exfiltration path.
 - **[A warm worker pool](design/appendix-g-future-enhancements.md#g12-warm-worker-pool-minidleworkers)** <!-- q:Q268 --> An opt-in pool of idle pods per runner set, for teams that still hit pod-schedule latency after image pre-pull and caching.
 - **[gVisor validation](plan/milestone-5.md)** <!-- q:Q15 --> The `runtimeClassName` path is [validated end-to-end with Kata](operations/kata-dind-workloads.md); gVisor is documented but unproven on a real cluster.
   It waits on an operator who wants lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since Kata already covers the DinD case.

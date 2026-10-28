@@ -1,7 +1,7 @@
 # See https://docs.docker.com/engine/reference/builder/#dockerignore-file.
 #
-# Applied to every image — all seven (gmc, agc, proxy, worker, wrapper,
-# build-runner, fakegithub) are named stages of the root Dockerfile and share
+# Applied to every image — all eight (gmc, agc, proxy, worker, wrapper,
+# build-runner, cache-runner, fakegithub) are named stages of the root Dockerfile and share
 # the repo-root build context (see docker-bake.hcl, where _common sets
 # context = ".").
 #
