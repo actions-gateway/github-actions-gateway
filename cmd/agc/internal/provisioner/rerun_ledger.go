@@ -430,10 +430,12 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 	p.ledgerMu.Lock()
 	defer p.ledgerMu.Unlock()
 
-	// A conflict means another replica's write landed, so the loop always makes
-	// progress in aggregate, and is bounded by ctx rather than a count: a replica
-	// writing a drain's worth of reservations back to back wins one round per write,
-	// which outlasted a fixed bound of five with two replicas in about one run in 20.
+	// A conflict means another replica's write landed, so the loop retries rather than
+	// counting: a replica writing a drain's worth of reservations back to back wins one
+	// round per write, which outlasted a fixed bound of five with two replicas in about
+	// one run in 20. Each round needs a rival write, so the loop ends when those stop;
+	// ctx ends it sooner where the caller set a deadline, as the watch path's
+	// disruptedWorkerRecoveryBudget does and the reconcile scan does not.
 	for {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("provisioner: write failure ledger: %w", err)
