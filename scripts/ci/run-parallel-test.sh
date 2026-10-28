@@ -378,16 +378,19 @@ else
 	fails=$((fails + 1))
 fi
 
-# The exit trap signals only children not yet reaped (Q1173). A reaped child's
+# The exit trap signals only children still running (Q1173). A reaped child's
 # pid is free for reuse, and one fan-out of `make scripts-test` measured the host
 # wrapping the whole pid space before it exited, so signalling the list it
 # spawned sends SIGTERM to whatever process holds those pids now. An exported
-# `kill` function shadows the builtin inside the runner and logs every call.
+# `kill` function shadows the builtin inside the runner and logs every call,
+# with whether its target still existed.
 KILL_LOG="$REPO_ROOT/tmp/run-parallel-test-kills.$$"
 trap 'rm -rf "$TRACE_DIR" "$CAP_DIR" "$KILL_LOG" "$KILL_LOG.started" "$KILL_LOG.out"' EXIT
 # shellcheck disable=SC2329 # reached through `export -f`, inside the runner.
 kill() {
-	printf '%s\n' "$*" >>"$KILL_LOG"
+	local state=live
+	ps -p "${!#}" >/dev/null 2>&1 || state=gone
+	printf '%s %s\n' "$*" "$state" >>"$KILL_LOG"
 	builtin kill "$@"
 }
 export KILL_LOG
@@ -425,6 +428,15 @@ else
 	printf 'FAIL %-42s kill log: %s\n' 'a TERM still signals a running child' \
 		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
 	fails=$((fails + 1))
+fi
+# The runner's EXIT trap runs after its TERM trap already killed that child, and
+# bash reaps a dead child before `wait` does, so a pid list alone signals it twice.
+if grep -q ' gone$' "$KILL_LOG"; then
+	printf 'FAIL %-42s kill log: %s\n' 'a TERM signals no pid already gone' \
+		"$(tr '\n' ' ' <"$KILL_LOG")" >&2
+	fails=$((fails + 1))
+else
+	printf 'ok   %-42s\n' 'a TERM signals no pid already gone'
 fi
 export -n -f kill
 unset -f kill

@@ -108,16 +108,21 @@ reap_one() {
 # order while commands finish in any order.
 timings="$(mktemp -d)"
 
-# cleanup signals only the children not yet reaped, which idx_of holds. An
-# unreaped child is alive or a zombie, so its pid cannot have been reused; a
-# reaped one's can, and the host allocates pids fast enough to wrap within one
+# cleanup signals only children still running: in idx_of (not yet collected by
+# reap_one) and in `jobs -rp`. bash reaps an exited child from its SIGCHLD
+# handler before `wait` collects it, so idx_of alone can name a pid the kernel
+# has already freed, and the host allocates pids fast enough to wrap within one
 # fan-out, so signalling it sends SIGTERM to an unrelated process (Q1173).
+# `jobs -rp` read inside a TERM trap omits a child bash has reaped (measured on
+# bash 5.3.15).
 #
 # shellcheck disable=SC2329 # invoked by `trap cleanup EXIT`; shellcheck 0.11 misses
 # that whenever the script ends in an explicit `exit`.
 cleanup() {
-    local pid
+    local pid running_pids
+    running_pids=" $(jobs -rp | tr '\n' ' ') "
     for pid in "${!idx_of[@]}"; do
+        [[ "$running_pids" == *" $pid "* ]] || continue
         kill "$pid" 2>/dev/null || true
     done
     rm -rf "$timings"
