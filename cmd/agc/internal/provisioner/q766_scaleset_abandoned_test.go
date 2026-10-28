@@ -298,6 +298,22 @@ func TestQ766_AbandonedAwaitingRecovery(t *testing.T) {
 			pod:  outOfService(scaleSetWorkerPod("h", identityAnnotations())),
 		},
 		{
+			// Q1198: the kubelet's shutdown manager fails a still-Pending worker and
+			// deletes nothing, so the deletion mark this arm otherwise needs is absent.
+			name: "never started on a node the kubelet shut down",
+			pod:  shutDown(scaleSetWorkerPod("i", identityAnnotations()), corev1.PodReasonTerminationByKubelet),
+			want: true,
+		},
+		{
+			name: "never started, PodGC orphan",
+			pod:  shutDown(scaleSetWorkerPod("j", identityAnnotations()), podReasonDeletionByPodGC),
+			want: true,
+		},
+		{
+			name: "started on a node the kubelet shut down",
+			pod:  started(shutDown(scaleSetWorkerPod("k", identityAnnotations()), corev1.PodReasonTerminationByKubelet)),
+		},
+		{
 			name: "not being deleted at all",
 			pod: func() *corev1.Pod {
 				pod := scaleSetWorkerPod("e", identityAnnotations())
@@ -369,6 +385,46 @@ func TestQ766_ScanSendsNeverStartedToForceCancelAndDisruptedToRerun(t *testing.T
 
 	// The never-started run is queued for its capacity-gated re-run; the disrupted one
 	// was re-run at once and never enters the wait.
+	keys := f.p.pendingAbandonedRerunKeys()
+	require.Len(t, keys, 1)
+	assert.Equal(t, "111", keys[0].runID)
+}
+
+// TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel is the scan half of Q1198, made on
+// the endpoints. Both workers' node shut down under them; only the one whose runner ran
+// has a failed job to re-run, and the one still pulling its image has a run to cancel.
+func TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel(t *testing.T) {
+	ctx := context.Background()
+
+	pulling := shutDown(scaleSetWorkerPod("runner-gpu-pulling", map[string]string{
+		AnnotationRunID: "111", AnnotationRepository: "myorg/myrepo",
+	}), corev1.PodReasonTerminationByKubelet)
+	pulling.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  "runner",
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}},
+	}}
+	ran := shutDown(scaleSetWorkerPod("runner-gpu-ran", map[string]string{
+		AnnotationRunID: "222", AnnotationRepository: "myorg/myrepo",
+		AnnotationStartedJobID: "job-222",
+	}), corev1.PodReasonTerminationByKubelet)
+	ran.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  "runner",
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+	}}
+
+	f := newAbandonedScaleSetFixture(t, http.StatusAccepted, pulling, ran)
+
+	done, err := f.p.RecoverEvictedScaleSetWorkers(ctx, f.target)
+	require.NoError(t, err)
+	<-done
+
+	forceCancel, rerun := f.calls.snapshot()
+	assert.Equal(t, []string{"/repos/myorg/myrepo/actions/runs/111/force-cancel"}, forceCancel,
+		"a worker its node took before it started ran no job, so its run is concluded first")
+	assert.Equal(t, []string{"/repos/myorg/myrepo/actions/runs/222/rerun-failed-jobs"}, rerun,
+		"a worker its node took mid-job keeps the Q1179 re-run")
+	assert.Equal(t, float64(1), testutil.ToFloat64(f.m.EvictionRetries.WithLabelValues("team-a", "gpu", "scaleset", "node_shutdown")))
+
 	keys := f.p.pendingAbandonedRerunKeys()
 	require.Len(t, keys, 1)
 	assert.Equal(t, "111", keys[0].runID)

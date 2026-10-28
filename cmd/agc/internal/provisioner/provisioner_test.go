@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
+	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -1064,6 +1066,10 @@ func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
 				Status: corev1.ConditionTrue,
 				Reason: corev1.PodReasonTerminationByKubelet,
 			})
+			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+				Name:  "runner",
+				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+			}}
 		}},
 		{name: "out-of-service node", shape: func(pod *corev1.Pod) {
 			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
@@ -1124,6 +1130,75 @@ func testNodeShutdownAutoRetry(t *testing.T, shape func(*corev1.Pod)) {
 		t.Fatal("a node-shutdown worker's run was not re-run within timeout")
 	}
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "node_shutdown")))
+}
+
+// TestProvisioner_Q1198_NodeShutdownBeforeStartForceCancels is the classic half of
+// Q1198. The kubelet's shutdown manager fails a worker still pulling its image the same
+// way it fails a running one, but that job never ran: re-running its run is refused
+// until GitHub's unstarted-job timeout concludes it, so it takes the abandoned handling
+// instead — reported abandoned, its run force-cancelled, and no re-run fired at once.
+func TestProvisioner_Q1198_NodeShutdownBeforeStartForceCancels(t *testing.T) {
+	waiting := []corev1.ContainerStatus{{
+		Name:  "runner",
+		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}},
+	}}
+	for _, tc := range []struct {
+		name   string
+		reason string
+	}{
+		{name: "kubelet shutdown", reason: corev1.PodReasonTerminationByKubelet},
+		{name: "PodGC orphan", reason: "DeletionByPodGC"},
+		{name: "out-of-service node", reason: "DeletionByTaintManager"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer goleak.VerifyNone(t)
+			ctx := context.Background()
+			fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+
+			var forceCancels, reruns atomic.Int64
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/runs/78/force-cancel"):
+					forceCancels.Add(1)
+				case strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs"):
+					reruns.Add(1)
+				}
+				w.WriteHeader(http.StatusAccepted)
+			}))
+			defer srv.Close()
+
+			p := newProvisioner(fc)
+			p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
+			p.GitHubAPIURL = srv.URL
+			p.HTTPClient = srv.Client()
+
+			type result struct {
+				result broker.TaskResult
+				err    error
+			}
+			done := make(chan result, 1)
+			go func() {
+				r, err := p.HandlerFor(newRG("mygroup", "team-a"))(ctx, "", "plan-q1198", stubPayloadFull("myorg", "myrepo", 78), "")
+				done <- result{r, err}
+			}()
+
+			pod := waitForPodCreated(ctx, t, fc, "team-a")
+			var live corev1.Pod
+			require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
+			live.Status.Phase = corev1.PodFailed
+			live.Status.Conditions = append(live.Status.Conditions, corev1.PodCondition{
+				Type: corev1.DisruptionTarget, Status: corev1.ConditionTrue, Reason: tc.reason,
+			})
+			live.Status.ContainerStatuses = waiting
+			require.NoError(t, fc.Status().Update(ctx, &live))
+
+			got := <-done
+			require.NoError(t, got.err)
+			assert.Equal(t, broker.TaskResultAbandoned, got.result)
+			assert.Equal(t, int64(1), forceCancels.Load(), "the run of a job that never ran is concluded first")
+			assert.Equal(t, int64(0), reruns.Load(), "no re-run until capacity returns (Q691)")
+		})
+	}
 }
 
 // TestProvisioner_OrdinaryCompletionIsNotRetried is the negative that bounds the change

@@ -18,6 +18,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
+  - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
   - [Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once](#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once)
@@ -235,6 +236,19 @@ Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2
 
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
+
+### Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run
+
+**Who is affected:** clusters on Spot or preemptible capacity, or anywhere a node can go away while a worker is still `Pending`, pulling its image.
+Nothing to do.
+
+The kubelet's graceful shutdown fails a still-`Pending` worker the same way it fails a running one, and such a worker used to be re-run under `cause="node_shutdown"` at once.
+Its job never ran, and GitHub refuses a re-run of a run it has not concluded, so that recovery waited on GitHub's own ending of a run with an unstarted job: about 15 minutes, as long as the re-run window, which risks ending as `eviction_rerun_failures_total{reason="run_never_concluded"}` with a spent retry slot.
+That outcome is read from source and has not been observed on a cluster.
+It now takes the never-started handling on both tiers: the run is force-cancelled at once and re-run once the owner places a worker again, counted under `abandoned_run_force_cancels_total` rather than `eviction_retries_total{cause="node_shutdown"}` (Q1198).
+A classic-tier worker that never started on a dead node you taint out-of-service used to stay failed, and is now recovered the same way.
+
+**Rolling back** returns these workers to the immediate re-run, and the classic out-of-service case to staying failed.
 
 ### Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically
 
