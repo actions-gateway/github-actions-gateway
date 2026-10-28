@@ -79,7 +79,10 @@ kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -i
 # deploy/dragonfly-core is the same class (Q539: the mirrors' P2P back end), and its
 # ca-chart is linted and rendered like the CRD chart below; deploy/dragonfly-node
 # is its node client (Q540).
-yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dragonfly-core deploy/dragonfly-node deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
+# deploy/dogfood-metrics is the dogfood GMP scrape (Q1180), applied with
+# `kubectl apply -k`; kubeconform covers its Role and RoleBinding and skips the
+# PodMonitoring, a GMP kind.
+yamllint_paths="charts/actions-gateway charts/actions-gateway-crds-v2 cmd/agc/config cmd/gmc/config deploy/dogfood-metrics deploy/dragonfly-core deploy/dragonfly-node deploy/kata-ci deploy/registry-mirror deploy/templates deploy/monitoring/prometheusrule.yaml"
 
 # The shipped Grafana dashboards. Nothing parsed them before Q827, so a stray
 # comma survived to whoever imported the file. jq is required-tier already.
@@ -124,6 +127,7 @@ deploy/registry-mirror/base/deployment.yaml
 deploy/registry-mirror/base/service.yaml
 deploy/registry-mirror/base/networkpolicy.yaml
 deploy/registry-mirror/overlays/persistent/pvc.yaml
+deploy/dogfood-metrics/podmonitoring.yaml
 deploy/dragonfly-core/namespace.yaml
 deploy/dragonfly-core/scheduler.yaml
 deploy/dragonfly-core/seed-client.yaml

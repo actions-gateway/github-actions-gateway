@@ -662,6 +662,9 @@ curl --resolve dogfood-agc.gag-dogfood.svc:18443:127.0.0.1 \
 
 Used by the §9e/§9f (Q469/Q462) and §9h (Q513) capacity-gate measurements in [capacity-aware-intake.md](capacity-aware-intake.md); since Q514, `worker_pods_reaped_total` stamps `runner_set` on scale-set reaps alongside `runner_group`, so one `runner_set` filter covers it and the `scaleset_*` gauges.
 
+A hand sample is one point in time, and the counters reset with the pod.
+To keep history, [`deploy/dogfood-metrics/`](../../deploy/dogfood-metrics/README.md) has Google Managed Prometheus scrape the AGC with the same client Secret; its README lists the namespace label it needs and what is still unmeasured.
+
 ### Stop dogfooding
 
 Opt-in dispatches are one-shot, so there is no standing CI route to revert — only the end-state global routing below needs the `GAG_RUNNER` reset.
