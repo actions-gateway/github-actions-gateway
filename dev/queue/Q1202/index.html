@@ -2628,14 +2628,18 @@
 
 
 <h1 id="flake-lease-tests-lost-lease-renewer-races-the-owners-sleep-2">Flake: lease-test's lost-lease renewer races the owner's sleep 2<a class="headerlink" href="#flake-lease-tests-lost-lease-renewer-races-the-owners-sleep-2" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
-<p>Observed 2026-10-23 at about 20:00 PDT in a local <code>make check</code> on the Q1193 branch, which touches nothing under <code>scripts/dogfood/lease*</code> or <code>scripts/dogfood/lib/</code>.
-One case failed and the rest of the suite passed:</p>
+<p><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that lost its lease stops renewing</code> on <code>main</code>, or locally on a tree that passes it alone.</p>
+<p>Observed 2026-10-23 at about 20:00 PDT in a local <code>make check</code> on a branch that touches nothing under <code>scripts/dogfood/lease*</code> or <code>scripts/dogfood/lib/</code>, at load averages of 223 on the 18-core host:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[lease-test] FAIL a renewer that lost its lease stops renewing: want '0', got '1'
 </code></pre></div>
-<p>Running <code>scripts/dogfood/lease-test.sh</code> alone straight afterwards, with no code change, exited 0 with 69 <code>ok</code> lines.
-<code>uptime</code> read <code>load averages: 223.22 126.78 60.58</code> while that <code>make check</code> ran, on the 18-core host.</p>
-<p><strong>Mechanism unverified; the shape points at a wall-clock budget.</strong> The case at <code>scripts/dogfood/lease-test.sh:388:check "a renewer that lost its lease stops renewing" "0" "${quiet_alive}"</code> starts a renewer, hands the lease to another holder with <code>remote_lease 1 "ci-runner-7/4242"</code>, and checks <code>kill -0</code> on the renewer once the owner's <code>sleep 2</code> returns. So the renewer has to notice the loss and exit inside that window, and at load 223 it plausibly did not get scheduled in time. Not measured: the renewer's poll interval against the 2 s, and whether the renewer was still running or merely slow to exit. The fix is likely a bounded wait for the renewer to exit, the shape the next case already uses (<code>for _ in $(seq 30)</code> at line 401), rather than a single <code>kill -0</code> read.</p>
+<p><strong>Mechanism, measured 2026-10-27.</strong> The case ran the renewer at <code>RELEASE_LEASE_RENEW_INTERVAL=0.2</code> against an owner that slept 2 s, and read <code>kill -0</code> once the owner returned.
+The renewer notices the lost lease only on its next tick, so a host that delays it past the owner's sleep fails the read.
+Stretching the interval to 2.5 s in a copy of that test reproduces the exact line above (<code>want '0', got '1'</code>, exit 1, every other case <code>ok</code>).</p>
+<p><strong>The case holds the owner alive while it waits.</strong> The owner sleeps 8 s, and the test polls up to 5 s (50 x 0.1 s) for the renewer to exit, then asserts the owner is still running.
+A wait that starts after the owner exits passes through the renewer's owner-gone exit (<code>kill -0 "${owner}" || exit 0</code>) and never exercises the lost-lease one. Mutating <code>lib/lease.sh</code>'s <code>[[ "${on_lost}" == stop-owner ]] || exit 0</code> to <code>|| continue</code> makes the suite exit 1 with the flake's own line; unmutated, it exits 0.
+A grep for <code>kill -0</code> in the test finds the renewer-exit case, already a bounded wait, and this one.</p>
+<p><strong>Not this row:</strong> <code>kill -0</code> succeeds on a zombie, which is how the same suite fails deterministically on GAG runners.
+The row for the renewer-exit check carries that state check, and the same one belongs in this loop.</p>
 
 
 

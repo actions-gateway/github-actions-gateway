@@ -2756,14 +2756,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>**Deterministic on GitHub Actions Gateway (GAG) runners, not a flake, so this row does not follow the [flake …</td>
 </tr>
 <tr>
-<td><a href="Q1202/">Q1202</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">Flake: lease-test's lost-lease renewer races the owner's sleep 2</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Observed 2026-10-23 at about 20:00 …</td>
-</tr>
-<tr>
 <td><a href="Q1173/">Q1173</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged-test.sh">check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2906,6 +2898,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> any of <code>verify-pages-live-test.sh</code>'s three retry assertions fails on <code>main</code>: *a site that goes correct on a later attempt …</td>
+</tr>
+<tr>
+<td><a href="Q1202/">Q1202</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">Flake: lease-test's lost-lease renewer races the owner's sleep 2</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that lost its lease stops renewing</code> on <code>main</code>, or locally on a tree that passes it alone.</td>
 </tr>
 <tr>
 <td><a href="Q1064/">Q1064</a></td>
