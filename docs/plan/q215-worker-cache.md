@@ -111,16 +111,39 @@ Who pays for the storage follows from where the server runs, and the shapes are 
 Modes 2 and 3 are one mechanism with different owners: a provider namespace plus grants.
 Managing it with a CRD shaped like `EgressProxy` would let the GMC write both sides' NetworkPolicy and hand each granted namespace the server's URL, where today an operator hand-wires both; [Q1225](../queue/Q1225.md) holds that.
 
-Sharing gives up more than it does for a proxy.
-Read from falcondev v9.8.0 source, not measured:
-
-- **Entries stay apart.** Every entry is keyed by the token's `repository_id`, so one tenant cannot restore another's.
-- **Space does not.** `CACHE_MAX_SIZE_BYTES` is one budget for the whole server, evicted least-recently-read first (`enforceStorageBudget` in `lib/storage.ts`), so one tenant's saves can evict another's entries.
-  There is no per-repository cap to set.
-- **The server accepts a token from any repository GitHub signs.** It checks the signature and the claims, not the owner (`getCacheScope` in `lib/scope.ts`), so the NetworkPolicy grant is the only thing deciding which tenants are callers.
-- **The residuals cross tenants.** The tokenless upload and the token custody above span every tenant the server admits.
-
+Sharing gives up more than it does for a proxy, because the server keeps tenants' entries apart and nothing else, as [phase 2](#phase-2-sharing-q1225) lists.
 So, as §H.9 says of a shared proxy, the shared modes are for cooperating tenants.
+
+### Delivery phases
+
+#### Phase 1: per tenant (Q215)
+
+One stock falcondev server per tenant, in the tenant namespace.
+Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream.
+The steps are on [Q215](../queue/Q215.md), the tokenless upload first.
+
+#### Phase 2: sharing (Q1225)
+
+Phase 2 adds the shared and platform-operated modes once phase 1 ships.
+Of what a shared server needs, falcondev v9.8.0 has only storage isolation, read from source and not measured:
+
+| A shared server needs | falcondev v9.8.0 |
+|---|---|
+| Tenants cannot restore each other's entries | Yes: every entry is keyed by the token's `repository_id`. |
+| A budget per tenant | No: `CACHE_MAX_SIZE_BYTES` is one budget for the whole server, evicted least-recently-read first (`enforceStorageBudget` in `lib/storage.ts`), so one tenant's saves evict another's entries. |
+| Metrics per tenant | No: `cache_requests_total`, `cache_uploads_total` and `cache_storage_bytes` carry no repository or owner label (`lib/metrics.ts`). |
+| Admitting only granted owners | No: it accepts a token from any repository GitHub signs, checking the signature and claims but not the owner (`getCacheScope` in `lib/scope.ts`), so the NetworkPolicy grant is the only caller boundary. |
+
+The [residuals](#the-write-path-is-a-contract) also span every tenant a shared server admits.
+None of the three gaps is requested upstream: the titles of falcondev's last 200 issues and pull requests, searched 2026-10-27, hold two metrics requests (#72, #297) and one on storage rotation (#219), none of them per tenant.
+
+The work, in order:
+
+1. **Feature requests upstream** for an owner allowlist, a budget per owner, and an owner label on the metrics, offering the pull requests.
+   An owner label rather than a repository one keeps the series count to the number of tenants.
+2. **A CRD shaped like `EgressProxy`** that grants a provider's server to other namespaces, as [tenancy modes](#tenancy-modes) describes, configuring each grant's owner on the server once upstream supports it.
+3. **If upstream declines**, the CRD runs one stock server per granted tenant instead, in the provider namespace and on the provider's bill: per-tenant budget, metrics and admission at the cost of a pod and a volume per grant, the cache's counterpart of `EgressProxy`'s `PerConsumerPort`.
+   A fork is the last resort, because it means owning the token verification this design reuses.
 
 ## The spike (2026-10-27)
 
