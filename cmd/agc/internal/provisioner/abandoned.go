@@ -40,7 +40,8 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // as GAG's own cancel before cancelling, so the cancelled conclusion it produces is not
 // taken for a user's (Q1182), and the re-run it registers is judged against that
 // attempt. Neither step blocks the cancel: without them the run is cancelled as before,
-// and a later deletion-arm check reads the cancel as a user's, the safe direction. d
+// and every later scale-set check, this arm's own re-run included, reads the cancel as a
+// user's and withholds the re-run, the safe direction (Q1181). d
 // names the abandoned worker to the ledger, and is ignored on the classic tier.
 func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID, tier string, log *slog.Logger, d rerunDisruption) {
 	outcome := "cancelled"
