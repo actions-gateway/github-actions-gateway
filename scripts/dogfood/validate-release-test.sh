@@ -1954,6 +1954,32 @@ rc=0
 leg_selected kata || rc=$?
 check "legs: an unnamed leg is not" "1" "${rc}"
 
+# Q1217: every leg's JUnit report is downloaded and summarised. The gh stub
+# fails the way the real CLI does when e2e-report.xml already exists in --dir
+# ("error extracting"), so legs sharing one folder lose every report after the
+# first; the summary script is stubbed to log which report it was handed.
+REPORT_LOG="${SCRATCH}/report.log"
+: >"${REPORT_LOG}"
+(
+	WORKDIR="${SCRATCH}/report-workdir"
+	gh() {
+		local dir=""
+		while (($#)); do
+			[[ "$1" == "--dir" ]] && dir="$2"
+			shift
+		done
+		[[ -e "${dir}/e2e-report.xml" ]] && return 1
+		mkdir -p "${dir}" && : >"${dir}/e2e-report.xml"
+	}
+	bash() { printf 'summary %s\n' "$2" >>"${REPORT_LOG}"; }
+	report_e2e_run 111 >/dev/null
+	report_e2e_run 222 >/dev/null
+	report_e2e_run 333 >"${SCRATCH}/report.out"
+)
+check "e2e report: every leg's run is summarised" "3" "$(grep -c '^summary ' "${REPORT_LOG}")"
+check_contains "e2e report: the second leg's report is its own file" "/e2e-report/222/e2e-report.xml" "$(cat "${REPORT_LOG}")"
+check "e2e report: no leg is skipped as missing" "0" "$(grep -c 'skipping the report' "${SCRATCH}/report.out" || true)"
+
 # The evidence publish reads (Q880): the candidate's commit, then each leg as it
 # passes. The commit is the remote's answer for the tag.
 EVIDENCE_COMMIT=1111111111111111111111111111111111111111
