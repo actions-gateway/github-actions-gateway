@@ -2745,8 +2745,8 @@ The count is three across both CNI lanes and both trigger events, and the July p
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <p><code>i/o timeout</code> on a dial to a GitHub address is where the existing evidence stops, and it is consistent with the SYN being dropped before it left the node and with it being lost past the node.
 <code>UPSTREAM-DIAL-FAILED</code> names that as the open question rather than answering it; separating the two needs something outside the proxy's egress NetworkPolicy reaching the same address in the same window, which nothing captures today.</p>
-<p>Q1203 measured a mechanism that produces this exact signature: a GMC whose <code>/meta</code> fetch is rate-limited leaves the proxy NetworkPolicy with no <code>443</code> rule, so the dial times out while every other path to the same address answers.
-Read the GMC log for <code>GitHub meta returned 403</code> on the next occurrence.</p>
+<p>A 2026-10-24 kind measurement found a mechanism that produces this exact signature: a GMC whose <code>/meta</code> fetch is rate-limited leaves the proxy NetworkPolicy with no <code>443</code> rule, so the dial times out while every other path to the same address answers.
+Read the GMC log for <code>GitHub meta returned 403</code> or <code>GitHub IP-range fetch rate limited</code> on the next occurrence.</p>
 
 
 

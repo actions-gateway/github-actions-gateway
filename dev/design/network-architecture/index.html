@@ -3262,7 +3262,8 @@ Kubernetes API traffic from the AGC travels directly in-cluster and bypasses the
 The GMC generates a per-tenant self-signed cert for the proxy at provisioning time and pins it into the AGC's trust store (W7 / M-5).
 This protects the AGC↔proxy hop from in-cluster eavesdropping or impersonation by any tenant whose pods can reach the Service ClusterIP.</p>
 <p>The GMC also makes one additional outbound call: <code>GET https://api.github.com/meta</code> every 24 hours to refresh the GitHub IP ranges used in tenant <code>NetworkPolicy</code> egress rules.
-This call originates from the GMC's own egress path in the system namespace, not through any tenant's proxy pool.</p>
+This call originates from the GMC's own egress path in the system namespace, not through any tenant's proxy pool.
+The call is unauthenticated, so it shares GitHub's 60-an-hour budget with everything else behind the same egress IP; a rate-limited fetch waits for the reset GitHub's headers name rather than retrying on its 30 s backoff.</p>
 <h3 id="github-endpoints-reached-via-proxy">GitHub Endpoints Reached via Proxy<a class="headerlink" href="#github-endpoints-reached-via-proxy" title="Permanent link">&para;</a></h3>
 <table>
 <thead>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1203/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1227/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>GMC IP-range retry drains the unauthenticated GitHub quota it waits on - GitHub Actions Gateway</title>
+        <title>Persist GitHub IP ranges so a GMC restart keeps proxy egress - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gmc-ip-range-retry-drains-the-unauthenticated-github-quota-it-waits-on" class="md-skip">
+        <a href="#persist-github-ip-ranges-so-a-gmc-restart-keeps-proxy-egress" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GMC IP-range retry drains the unauthenticated GitHub quota it waits on
+              Persist GitHub IP ranges so a GMC restart keeps proxy egress
             
           </span>
         </div>
@@ -2627,46 +2627,17 @@
   
 
 
-<h1 id="gmc-ip-range-retry-drains-the-unauthenticated-github-quota-it-waits-on">GMC IP-range retry drains the unauthenticated GitHub quota it waits on<a class="headerlink" href="#gmc-ip-range-retry-drains-the-unauthenticated-github-quota-it-waits-on" title="Permanent link">&para;</a></h1>
-<p>A GMC that cannot fetch GitHub's IP ranges at startup keeps every proxy pool it manages from reaching GitHub.
-Its own retries can then keep that fetch failing indefinitely.</p>
-<p><code>HTTPGitHubIPRangeFetcher</code> calls <code>https://api.github.com/meta</code> unauthenticated.
-GitHub allows 60 such calls an hour per source IP.
-On any non-200 response, <code>reconcileInitial</code> retries with exponential backoff capped at <code>defaultMaxBackoff = 30s</code>.
-That is about 120 calls an hour from the leader alone, and it never reads <code>X-RateLimit-Reset</code> or <code>Retry-After</code>.
-So once the IP's quota is spent, the GMC's own retries spend each new hour's 60 calls within about 30 minutes of the reset, and the fetch stays at 403.</p>
-<p>The cache starts empty, and <code>buildProxyNetworkPolicy</code> adds the GitHub <code>443</code> egress rule only when the cache has CIDRs.
-Until a fetch succeeds, the proxy's NetworkPolicy permits DNS and nothing else.
-Every CONNECT then dials into a dropped SYN, and the proxy answers <code>502 upstream unavailable</code> after its 10 s dial timeout.
-The AGC's GitHub App token POST rides that tunnel, so the tenant never gets a token and never acquires a job.</p>
-<p><strong>Measured 2026-10-24</strong> on the local kind e2e cluster, during Q1177's live runs.
-Three consecutive <code>E2E_GitHub_EvictedWorkerLatencyAndRerun</code> runs left the job <code>queued</code> for 10 minutes.
-In the third, during the queued wait:</p>
-<ul>
-<li>The GMC logged <code>failed to fetch GitHub IP ranges</code> with <code>GitHub meta returned 403</code> every 30 s.</li>
-<li><code>curl -sSI https://api.github.com/meta</code> from the host read <code>x-ratelimit-remaining: 0</code> and <code>x-ratelimit-used: 60</code>.</li>
-<li>Its <code>x-ratelimit-reset</code> was 28 minutes away.
-  The suite's own preflight had already read <code>x-ratelimit-remaining=0</code> at 02:55Z, over four hours earlier.</li>
-<li>The tenant's <code>actions-gateway-proxy</code> NetworkPolicy had a single egress rule, DNS.</li>
-<li>The proxy logged <code>upstream dial failed</code> with <code>dial tcp 172.182.252.137:443: i/o timeout</code> on every attempt.</li>
-<li>In the same second, that address answered HTTP 403 in under 100 ms from the host, from the proxy's own node (<code>docker exec</code>), and from a pod in <code>default</code> on that node.
-  The drop is the policy, not the network.</li>
-</ul>
-<p>The kind cluster's GMC stayed up between runs (<code>E2E_SKIP_TEARDOWN=true</code>), and its 30 s retry alone outruns the 60-an-hour budget, which fits the quota staying at zero for hours.
-That it was the only consumer is unverified: nothing else on the host was checked.</p>
-<p><strong>Where it bites in production.</strong> Several GMCs behind one NAT can exhaust the quota together, and so can anything else sharing the egress IP.
-After that, a GMC restart leaves every proxy pool with no GitHub egress, and it stays that way while the retry loop keeps the quota spent.
-The existing <code>EgressRulesStale</code> condition covers a cache that went stale, not one that never filled.</p>
-<p><strong>Q1119 may be this.</strong> Its 2026-09-16 v1 capture shows the same <code>dial tcp 172.182.252.137:443: i/o timeout</code> from the proxy.
-The runner-host preflight in that same run read <code>BLOCKED (HTTP 403; x-ratelimit-remaining=0)</code>.
-Whether those CI runs' GMC was failing its <code>/meta</code> fetch is unverified; the GMC log is the place to read it on the next occurrence.</p>
-<p>Fix shape, unmeasured:</p>
-<ul>
-<li>On a 403 or 429 carrying <code>X-RateLimit-Remaining: 0</code>, wait until <code>X-RateLimit-Reset</code> (or <code>Retry-After</code>) before retrying, rather than every 30 s.</li>
-<li>Persist the last good CIDR set, for example in a ConfigMap the GMC owns, and seed the cache from it at startup, so a restart during a rate-limited window keeps working egress.</li>
-<li>Surface the never-filled case on the gateway's conditions.
-  Whether <code>Ready</code> reads <code>True</code> in this state is unmeasured.</li>
-</ul>
+<h1 id="persist-github-ip-ranges-so-a-gmc-restart-keeps-proxy-egress">Persist GitHub IP ranges so a GMC restart keeps proxy egress<a class="headerlink" href="#persist-github-ip-ranges-so-a-gmc-restart-keeps-proxy-egress" title="Permanent link">&para;</a></h1>
+<p>Split out of Q1203, whose rate-limit-aware retry shipped without this part; Q1203 is closed, so it is named here rather than linked.</p>
+<p>A GMC restart leaves every proxy pool with no GitHub egress until its first <code>api.github.com/meta</code> fetch succeeds, because <code>IPRangeCache</code> lives only in memory.
+<code>buildProxyNetworkPolicy</code> and its v2 analogues add the GitHub <code>443</code> rule only when the cache has CIDRs, so until then a pool's NetworkPolicy permits DNS and nothing else.</p>
+<p>That fetch is unauthenticated, with a budget of 60 calls an hour per source IP that every GMC and anything else behind the same egress IP share.
+A 2026-10-24 kind measurement found that budget at zero: <code>curl -sSI https://api.github.com/meta</code> read <code>x-ratelimit-remaining: 0</code>, the proxy's NetworkPolicy had a single DNS egress rule, and the proxy's dials to a GitHub address timed out while the same address answered from the node.
+The rate-limit-aware retry that shipped with this row's parent now waits for the reset instead of spending each new window, but a restart inside a limited window still means up to an hour with no tenant egress.</p>
+<p>Fix shape, unmeasured: write the last good CIDR set to an object the GMC owns, for example a ConfigMap in its own namespace, and seed the cache from it at startup before the first fetch.
+That is a new GMC-owned child object, so it is a design change to state in the PR.
+The GMC's ClusterRole already grants <code>configmaps</code> (<code>cmd/gmc/config/rbac/role.yaml:10:  - configmaps</code>); read whether that grant covers a write in its own namespace before adding RBAC.
+Decide whether a seeded cache stamps <code>MarkRefreshed</code>: if it does, <code>EgressRulesStale</code> cannot see that the ranges came from disk; if it does not, a seeded cache reads as never refreshed.</p>
 
 
 
