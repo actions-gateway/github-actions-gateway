@@ -23,7 +23,7 @@
     
     
       
-        <title>check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate - GitHub Actions Gateway</title>
+        <title>Gates under make check killed by a stray SIGTERM mid-run - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#check-artifact-unchanged-test-pathfilters-killed-by-sigterm-mid-gate" class="md-skip">
+        <a href="#gates-under-make-check-killed-by-a-stray-sigterm-mid-run" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate
+              Gates under make check killed by a stray SIGTERM mid-run
             
           </span>
         </div>
@@ -2627,24 +2627,30 @@
   
 
 
-<h1 id="check-artifact-unchanged-test-pathfilters-killed-by-sigterm-mid-gate">check-artifact-unchanged-test: pathfilters killed by SIGTERM mid-gate<a class="headerlink" href="#check-artifact-unchanged-test-pathfilters-killed-by-sigterm-mid-gate" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
-<p>Observed 2026-10-09 16:40 PDT in a local <code>make check</code> on a branch that touches nothing under <code>scripts/release/</code> or <code>devtools/</code>.
-One case failed, the rest of the suite passed:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>FAIL --lane e2e-test.yml: an AGC change is inside it (want exit 1, got 2)
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>check-artifact-unchanged: pathfilters match e2e-test.yml at bfef9dce7a9446a955b4b7fe995a2dc149e40b37 failed (exit 143)
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>13 passed, 1 failed
-</code></pre></div>
-<p>Running <code>scripts/release/check-artifact-unchanged-test.sh</code> alone straight afterwards, with no code change, passed <code>14 passed, 0 failed</code>.
-<code>uptime</code> then read <code>load averages: 20.75 33.96 35.37</code> on the 18-core host.</p>
-<p><strong>Mechanism unverified.</strong> Exit 143 is a SIGTERM to <code>pathfilters</code>, and nothing in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">check-artifact-unchanged.sh</a> or its test sets a timeout, so the signal came from outside the suite.
-It is not <a href="../Q1144/">Q1144</a>'s shared-binary hazard: this script builds <code>pathfilters</code> into its own <code>mktemp -d</code> directory, not <code>.build/</code>.
-It is not <a href="../Q1106/">Q1106</a>'s probe either: the read that failed is <code>git show</code> of a committed workflow into that same temp directory.
-The same <code>make check</code> ran <code>scripts/lib/serialize-heavy-build-test.sh</code> concurrently, which sends TERM, HUP and INT, but only to pids it launched and the processes below them, so a stray hit would need pid reuse within milliseconds.
-That is unmeasured rather than ruled out.
-A second sighting, 2026-10-10 11:47 PDT, in a <code>make check</code> on the same branch rebased onto <code>63824ad79</code>: <code>[script-docs-check] make[1]: *** [script-docs-check] Terminated: 15</code>, with <code>uptime</code> reading <code>load averages: 61.88 121.99 91.54</code>.
-So the target is not one suite: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">run-parallel.sh</a>'s header already says it never kills a child and that a command ended by a signal under host contention is SIGTERM, which names the symptom and not the sender.
-A first step is to record which process sent the signal on a recurrence, for example by running the suite under <code>make check</code> in a loop with the match wrapped to log its parent and process group on exit 143.</p>
+<h1 id="gates-under-make-check-killed-by-a-stray-sigterm-mid-run">Gates under <code>make check</code> killed by a stray SIGTERM mid-run<a class="headerlink" href="#gates-under-make-check-killed-by-a-stray-sigterm-mid-run" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> a command under <code>make check</code> or <code>make scripts-test</code> ends on signal 15 (exit 143, or make's <code>Terminated: 15</code>) on <code>main</code> with nothing in its own suite sending one.
+Record the label, the <code>uptime</code> load, and how many <code>make check</code> runs other sessions had live at the time: the sender this row's fix removed was host-wide, not per-run.</p>
+<p>Two sightings, both on one branch that touched nothing they ran.
+2026-10-09 16:40 PDT, load 20.75: <code>check-artifact-unchanged: pathfilters match e2e-test.yml at bfef9dce… failed (exit 143)</code> inside <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged-test.sh">check-artifact-unchanged-test.sh</a>, which passed 14/14 run alone straight afterwards.
+2026-10-10 11:47 PDT, load 61.88: <code>[script-docs-check] make[1]: *** [script-docs-check] Terminated: 15</code>.</p>
+<p><strong>The sender fixed here: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">run-parallel.sh</a>'s exit trap signalled every pid it had ever spawned</strong>, children reaped minutes earlier included.
+A reaped pid is free for reuse, so on a host whose pid space wraps within one fan-out that trap sends SIGTERM to whatever unrelated process holds the number by then, in any session's <code>make check</code>.
+Measured 2026-10-27 on this host with the trap instrumented to log, rather than signal, each reaped pid: the <code>make scripts-test</code> fan-out spawned children from pid 26886 to 96313 with <code>uptime</code> reading 23.52 at its start and 97.68 at its end, and when it exited 261 s later new pids were being allocated at 13171, so the pid space had wrapped once and stood about 13,700 short of the fan-out's first child.
+None of its 137 reaped pids was held by a live process at that moment, so a direct hit was not observed; the outer <code>make check</code> fan-out lives longer than that one and ran no instrumented exit.
+The trap now signals only children both still in <code>idx_of</code> and listed by <code>jobs -rp</code>: bash reaps an exited child from its SIGCHLD handler before <code>wait</code> collects it, so <code>idx_of</code> alone can name a freed pid, and <code>jobs -rp</code> read inside a TERM trap omits such a child (measured on bash 5.3.15).
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel-test.sh">run-parallel-test.sh</a> pins three halves: the original trap fails it by signalling two reaped pids, a trap filtering on <code>idx_of</code> alone fails 3/3 by signalling a TERM-killed child a second time after bash reaped it, and a trap that signals nothing fails the control case.
+Cleanup runs once, from the EXIT trap, so a signal no longer cleans up and then keeps spawning.
+One window stays open: a child exiting between cleanup's <code>jobs -rp</code> read and its kill can be reaped in between, and no bash construct closes it.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/manifest/check-registry-mirror-render-test.sh">check-registry-mirror-render-test.sh</a> had the same shape over a narrower window, signalling cases it had already waited for when a killed case ends it early, and drops each pid as it waits it.</p>
+<p>Not the sender, by reading: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-artifact-unchanged.sh">check-artifact-unchanged.sh</a> builds <code>pathfilters</code> into its own <code>mktemp -d</code> directory and sets no timeout, so it is neither <a href="../Q1144/">Q1144</a>'s shared binary nor <a href="../Q1106/">Q1106</a>'s probe.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/lib/serialize-heavy-build-test.sh">serialize-heavy-build-test.sh</a> signals only processes it has just checked are inside the section, and on a pass signals nothing after they exit.
+The other scripts keeping pid lists signal only live or unreaped children: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/verify-release.sh">verify-release.sh</a> behind <code>kill -0</code> before any <code>wait</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/qos-cluster-probe.sh">qos-cluster-probe.sh</a> over infinite spinners it reaps and then forgets.
+Three more sightings followed, all on the branch carrying the fix, with ten other dispatch workers live whose gates run <code>main</code>'s unfixed trap.
+The first, 2026-10-27 20:29 PDT (<code>uptime</code> 87.44 at the start, 73.57 at the kill): the outer <code>make check</code> runner itself took the signal, reported then as <code>run-parallel.sh: wait -n returned 143 with no child of ours to reap</code> and exit 1.
+The next two <code>make check</code> runs on that branch lost one suite each to signal 15: <code>check-script-docs-test</code> at 20:32–20:43 (<code>uptime</code> 79.18 then 90.11) and <code>check-roadmap-test</code> at 20:43–20:49 (85.26 then 51.48), each passing run alone straight afterwards.
+The old message is now <code>received signal 15 (exit 143); the runner itself was signalled, not a child</code> and exits 143, so a runner killed this way reads as KILLED rather than FAILED.
+None of the three counts against the fix: every other session's trap still carried the defect, so the soak starts once <code>main</code> does.
+A recurrence after that means a second sender; a bash trap is not told the sender's pid, so the next instrument is a snapshot of the process table taken in the runner's trap.</p>
 
 
 
