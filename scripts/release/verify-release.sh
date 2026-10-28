@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# Verify the keyless cosign signatures of a published release: the six images
-# (gmc, agc, proxy, worker, wrapper, build-runner) at the version tag plus both
-# Helm chart OCI artifacts. Backs `make verify-release VERSION=vX.Y.Z`; the
-# identity/issuer constraints match what .github/workflows/publish.yml signs
-# with. See docs/operations/release.md.
+# Verify the keyless cosign signatures of a published release: the seven images
+# (gmc, agc, proxy, worker, wrapper, build-runner, cache-runner) at the version
+# tag plus both Helm chart OCI artifacts. Backs `make verify-release
+# VERSION=vX.Y.Z`; the identity/issuer constraints match what
+# .github/workflows/publish.yml signs with. See docs/operations/release.md.
 #
 # Usage: scripts/release/verify-release.sh vX.Y.Z
 #
@@ -72,7 +72,7 @@ verify() {
 }
 
 rc=0
-for img in gmc agc proxy worker wrapper build-runner; do
+for img in gmc agc proxy worker wrapper build-runner cache-runner; do
 	printf '==> %-12s %s ... ' "$img" "$VERSION"
 	verify "$repo/$img:$VERSION" || rc=1
 done

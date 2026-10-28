@@ -1,6 +1,6 @@
 # In-Cluster Worker Cache — Q215
 
-> **Status: design settled and spiked 2026-10-27; the opt-in `cache-runner` image is built, nothing else is.** Revived on a tenant's request for an in-cluster cache.
+> **Status: design settled and spiked 2026-10-27; the opt-in `cache-runner` image is built and published with each release, and the rest of phase 1 waits on upstream's upload fix.** Revived on a tenant's request for an in-cluster cache.
 > The primary case is the untrusted-PR tenant, where a shared cache is a vector for compromise by cache poisoning.
 > The same design serves a trusted tenant's `actions/cache` and a Docker build's layer cache, on every profile in [reference-architectures.md](../operations/reference-architectures.md).
 > The umbrella goal and its definition of done are in [caching-and-worker-storage.md](caching-and-worker-storage.md); this file is the design that goal calls for.
