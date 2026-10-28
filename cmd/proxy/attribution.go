@@ -163,6 +163,24 @@ func classifyDialError(err error) string {
 	}
 }
 
+// dialOutcome is the outcome label of actions_gateway_proxy_connects_total for a
+// failed upstream dial.
+func dialOutcome(err error) string {
+	if errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) {
+		return "unreachable"
+	}
+	switch classifyDialError(err) {
+	case "dns":
+		return "dns_error"
+	case "refused":
+		return "refused"
+	case "timeout":
+		return "timeout"
+	default:
+		return "error"
+	}
+}
+
 // namespaceKey carries an attributed listener's namespace on a request context.
 type namespaceKey struct{}
 

@@ -411,7 +411,7 @@ func TestAudit_UnsplittableAuthorityIsLoggedWhole(t *testing.T) {
 // log-volume amplifier a worker drives on demand.
 //
 // The dial-failure path is the one that matters in the GMC-built configuration:
-// with an allowlist injected, matchesHostSuffix does a bare strings.HasSuffix
+// with an allowlist injected, matchHostSuffix does a bare strings.HasSuffix
 // with no length bound, so junk+".github.com" PASSES the allowlist and reaches
 // the dial. The deny path is only reachable for a host that fails the match.
 // Both the host attr and the dial error must be bounded — the error embeds the
@@ -427,7 +427,8 @@ func TestLogging_OverLengthAuthorityIsBoundedOnEveryPath(t *testing.T) {
 		srv.AllowedHostSuffixes = []string{"github.com"}
 		srv.DialTimeout = 100 * time.Millisecond
 
-		require.True(t, matchesHostSuffix(junkHost, srv.AllowedHostSuffixes),
+		_, matched := matchHostSuffix(junkHost, srv.AllowedHostSuffixes)
+		require.True(t, matched,
 			"precondition: the junk host must PASS the allowlist, else this exercises the deny path")
 
 		ts := httptest.NewServer(http.HandlerFunc(srv.handleConnect))

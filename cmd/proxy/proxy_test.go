@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -221,6 +222,7 @@ func TestProxy_Metrics(t *testing.T) {
 		return gaugeValue(t, reg, "actions_gateway_proxy_connections_active") == 1
 	}, time.Second, 5*time.Millisecond)
 	assert.Equal(t, float64(1), gaugeValue(t, reg, "actions_gateway_proxy_connections_total"))
+	assert.Equal(t, float64(1), testutil.ToFloat64(srv.connects.WithLabelValues(destinationAny, "tunneled")))
 
 	// Close connection — active gauge drops to 0.
 	_ = conn.Close()

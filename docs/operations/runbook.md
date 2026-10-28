@@ -254,11 +254,15 @@ The other reason the same gauge carries, `reason="ceiling"`, is a set running at
 ### ActionsGatewayProxyConnectDenied
 
 **Ticket.** The egress proxy is refusing CONNECT requests to destinations off the egress allowlist at a sustained rate — a Server-Side Request Forgery (SSRF) / egress-policy signal.
-Every increment is an explicit allowlist denial (sharper than `dial_errors`, which also counts transient failures to *allowed* hosts).
+Every increment is an explicit allowlist denial (sharper than `dial_errors`, which also counts transient failures to *allowed* hosts), with one exception step 1 separates out.
 
-1. Identify the denied destinations from the proxy's `CONNECT destination not allowed` warning logs, which record the rejected `host`: `kubectl logs -n <namespace> deploy/<proxy-deployment> | grep "destination not allowed"`.
-2. If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with `proxy_dial_errors_total`.
-3. If a legitimate egress target is missing, add it to the platform-owned egress allowlist rather than to the workflow — see [security-operations.md § Worker egress destinations](security-operations.md#worker-egress-destinations-the-egress-allowlist).
+1. Split the refusals by outcome: `sum by (outcome) (rate(actions_gateway_proxy_connects_total{destination="unlisted"}[5m]))`.
+   A `dns_error` rate is lookups that timed out or failed in the resolver before the proxy could check the name against its CIDR entries, so check the cluster resolver before treating it as probing.
+   A name that does not exist is counted as `denied`, because probing nonexistent names (`metadata.google.internal`) is still probing.
+   Only `denied` is the SSRF signal.
+2. Identify the denied destinations from the proxy's `CONNECT destination not allowed` warning logs, which record the rejected `host`: `kubectl logs -n <namespace> deploy/<proxy-deployment> | grep "destination not allowed"`.
+3. If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with `proxy_dial_errors_total`.
+4. If a legitimate egress target is missing, add it to the platform-owned egress allowlist rather than to the workflow — see [security-operations.md § Worker egress destinations](security-operations.md#worker-egress-destinations-the-egress-allowlist).
 
 ### ActionsGatewayCapacityGateRejectingJobs
 
