@@ -84,12 +84,14 @@ STUB
 chmod +x "$FIXTURE_DIR/cosign"
 
 # Stub docker and gh: an index with two arches and one attestation manifest (or
-# amd64 alone under STUB_NO_ARM64), and
-# a Release carrying both blob bundles unless STUB_BUNDLES overrides the list.
+# amd64 alone under STUB_NO_ARM64, or no answer under STUB_DOCKER_SLEEP), and a
+# Release carrying both blob bundles unless STUB_BUNDLES overrides the list or
+# STUB_GH_VIEW_FAIL makes the listing fail.
 mkdir -p "$FIXTURE_DIR/bin"
 cat > "$FIXTURE_DIR/bin/docker" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${STUB_DOCKER_SLEEP:-}" ]]; then exec sleep "$STUB_DOCKER_SLEEP"; fi
 if [[ -n "${STUB_NO_ARM64:-}" ]]; then
 	echo '{"manifests":[{"digest":"sha256:aaaa","platform":{"os":"linux","architecture":"amd64"}}]}'
 	exit 0
@@ -105,7 +107,12 @@ cat > "$FIXTURE_DIR/bin/gh" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 case "$2" in
-	view) printf '%s\n' ${STUB_BUNDLES-actions-gateway-crds-v2.yaml.cosign.bundle SHA256SUMS.cosign.bundle} ;;
+	view)
+		if [[ -n "${STUB_GH_VIEW_FAIL:-}" ]]; then
+			echo 'HTTP 401: Bad credentials' >&2
+			exit 1
+		fi
+		printf '%s\n' ${STUB_BUNDLES-actions-gateway-crds-v2.yaml.cosign.bundle SHA256SUMS.cosign.bundle} ;;
 	download)
 		dir="" pats=()
 		while (($#)); do
@@ -230,6 +237,25 @@ if [[ "$out_text" == *"TIMEOUT"* && "$out_text" == *"credential helper"* ]]; the
 	pass 'a hung signature check is reported as a timeout'
 else
 	fail 'a hung signature check is reported as a timeout' "output: $out_text"
+fi
+
+# The index lookup goes through the same credential helper, so it must hit the
+# same deadline rather than stall the run with no output.
+STUB_DOCKER_SLEEP=30 COSIGN_TIMEOUT=1 run_verify v1.2.3
+expect_rc 'a hung index lookup fails the run' 1
+if [[ "$out_text" == *"TIMEOUT (resolving per-arch manifests)"* && "$out_text" == *"credential helper"* ]]; then
+	pass 'a hung index lookup is reported as a timeout'
+else
+	fail 'a hung index lookup is reported as a timeout' "output: $out_text"
+fi
+
+# A failed asset listing names gh's error, not a missing bundle.
+STUB_GH_VIEW_FAIL=1 run_verify v1.2.3
+expect_rc 'a failed release listing fails the run' 1
+if [[ "$out_text" == *"gh release view: HTTP 401"* && "$out_text" != *"no actions-gateway-crds-v2.yaml.cosign.bundle"* ]]; then
+	pass 'a failed release listing reports gh'"'"'s error'
+else
+	fail 'a failed release listing reports gh'"'"'s error' "output: $out_text"
 fi
 
 if ((fails > 0)); then
