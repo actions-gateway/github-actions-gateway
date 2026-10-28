@@ -498,6 +498,7 @@ A finalizer on the worker pod was rejected rather than weighed: it closes the ra
 
 **What the ledger costs.** One uncached `Get` and one `Update` per disruption, on a path that previously took one pod patch; disruptions are rare by construction, and the budget that bounds them (`maxEvictionRetries`, default 2) says so.
 One AGC's own claims are serialised behind a mutex before that write, so the compare-and-swap arbitrates between replicas rather than between goroutines: a node drain disrupts every worker it holds at once, and both detection paths see each of them, which is enough concurrent claimants to exhaust a retry budget sized for replicas.
+The mutex also turns one replica's claims into a back-to-back burst, so a replica claiming during a rolling update can lose a round to each of the other's writes; the retry is therefore bounded by the caller's context rather than a count, since every conflict is another claim landing (Q1197).
 Entries are swept on write, past a TTL that has to outlive every possible rival claimant: a stale informer copy, the watch handler's own 30-second budget, and the once-per-process orphan scan a restart runs.
 The set is additionally capped, so the object cannot grow without bound on a `RunnerSet` under sustained preemption.
 Overflowing the cap can cost at-most-once for the oldest claim it drops, which is a strictly better failure than the manual re-run it replaces.
@@ -515,7 +516,7 @@ The scan stays for what no event reaches, such as a pod already terminal when th
 What the scan *can* still say is the other half.
 It logs the terminating workers it did judge and decline, at `Debug`, so an unrecovered drain that appears nowhere in the log is separable from one the discriminator rejected.
 
-**What is still reported as unrecoverable**, under the same `actions_gateway_eviction_recovery_evidence_lost_total` counter and `EvictionRecoveryEvidenceLost` Warning Event the lost pod used to produce, is a claim the AGC could not durably record at all: the ConfigMap write failing past its retries.
+**What is still reported as unrecoverable**, under the same `actions_gateway_eviction_recovery_evidence_lost_total` counter and `EvictionRecoveryEvidenceLost` Warning Event the lost pod used to produce, is a claim the AGC could not durably record at all: the ConfigMap write failing for any reason but a conflict, or conflicting until its caller's context ends.
 The metric's meaning is unchanged where an operator acts on it ("this disruption was detected and its run will not be re-run automatically"); what narrowed is the set of ways to reach it.
 
 Note that the `DisruptionTarget` **condition type** alone is not the discriminator for either deleted-pod row: the eviction API stamps it too, with reason `EvictionByEvictionAPI`, and a bare `kubectl delete pod` stamps nothing.
