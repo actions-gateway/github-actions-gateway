@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up ([Q1236](../queue/Q1236.md)) and without the proxy's readiness ([Q1237](../queue/Q1237.md)); the rest is not.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up ([Q1236](../queue/Q1236.md)) and without the proxy's readiness ([Q1237](../queue/Q1237.md)); the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -212,7 +212,7 @@ The `EvictionRerunWithheld` Event names the reason and the fix.
 | `already_rerun` | The job itself has a later attempt than the one it failed in: unchanged `run_attempt` rules that out with no extra call, and a moved one is settled by the latest attempt's jobs list (`GET …/runs/{id}/attempts/{n}/jobs`) | None: somebody re-ran it |
 | `run_cancelled` | `conclusion: cancelled`, unless the run's `selfCancelledAttempt` equals the current `run_attempt`, meaning GAG's own force-cancel produced this cancel | None, as Q811 |
 | `run_succeeded` | `conclusion: success`; GitHub refuses with a 403 | None |
-| `attempt_limit` | `run_attempt >= 50`, GitHub's cap | None |
+| `attempt_limit` | `run_attempt > 50`: GitHub caps a run at 50 re-runs, so attempt 51 is the last (changelog, 2026-04-10) | None |
 | `run_too_old` | `created_at` older than 30 days | None |
 | `superseded` | A newer run of the same `workflow_id`, `event` and `head_branch` from the same `head_repository`, with a different `head_sha`, exists (`GET …/workflows/{id}/runs?branch=…&event=…&per_page=1`), for `push` and `pull_request` only | None: a newer commit is building |
 | `same_class_again` | Class only: this job's failure entry already records a re-run by the same cause that failed again | The class does not fit this job; investigate |
@@ -553,7 +553,7 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 
 1. The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
-3. Q1181: the futility checks on the widened run read, honouring `selfCancelledAttempt` for `run_cancelled`, between the run read and the reservation in `handleScaleSetEviction`.
+3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; `already_rerun`, `run_succeeded` and `worker_unstartable` are not built, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
 5. Q1183: the `pending` map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.

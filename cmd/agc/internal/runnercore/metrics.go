@@ -86,12 +86,16 @@ type Metrics struct {
 	// EvictionRerunWithheld counts disruption recoveries that deliberately did not ask
 	// GitHub to re-run. Split by reason:
 	//
-	//   - run_cancelled (cause deletion, Q811): the run concluded `cancelled`, which
-	//     rerun-failed-jobs accepts, so the graceful-deletion arm would re-queue a job a
-	//     human stopped — the cancel runbook's own remedy for a worker that will not stop
-	//     is to delete its pod, which supplies the deletion mark that arm keys on. It
+	//   - run_cancelled (Q811; every cause on the scale-set tier, Q1181): the run
+	//     concluded `cancelled` by someone other than GAG, which rerun-failed-jobs
+	//     accepts, so a re-run would re-queue a job a human or a concurrency group
+	//     stopped — the cancel runbook's own remedy for a worker that will not stop is to
+	//     delete its pod, which supplies the deletion mark that arm keys on. It usually
 	//     accompanies a spent budget slot: the reservation is taken at detection, minutes
 	//     before GitHub concludes the run, so the conclusion cannot be read first.
+	//   - attempt_limit, run_too_old, superseded (scale-set only, Q1181): a re-run GitHub
+	//     would refuse or a newer commit has made pointless. Decided on the run read
+	//     before the reservation, so no slot is spent.
 	//   - own_limit (cause eviction, Q1177): the kubelet evicted the worker for exceeding
 	//     its own ephemeral-storage or emptyDir limit, which a re-run with the same limit
 	//     repeats. Decided at detection, so no slot is spent.
@@ -277,7 +281,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_withheld_total",
-			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (deletion, eviction), and reason (run_cancelled: cause deletion, the run concluded cancelled, so a re-run would undo a human's cancel — Q811, with the retry slot spent and no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit).",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished; classic only ever deletion and eviction), and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q811 on classic's deletion arm, every cause on scaleset, Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit; attempt_limit, run_too_old, superseded: scaleset only, Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{

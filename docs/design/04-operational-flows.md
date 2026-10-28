@@ -425,7 +425,7 @@ It lives in the set's `scaleset-failures-<set>` ConfigMap as a count of GAG's ow
 A reservation is taken once per disruption, after a run read that names the attempt the job failed in, and does one of four things: it **resumes** a reservation the same worker already holds, **merges** into a re-run already reserved for that attempt (rerun-failed-jobs re-runs every failed job of an attempt, so a second disruption of the same attempt is covered and spends nothing), **refuses** at `maxEvictionRetries`, or **reserves** a slot.
 Every outcome but a refusal then enters the re-run loop, which reads the run before each call and stands down once its attempt is past the one the job failed in.
 That is what stops two disruptions in one run from each landing a re-run (before it, the second retried against `403 This workflow is already running` until GAG's first re-run concluded, then re-ran the run again), and what keeps a merge safe: a merged disruption re-runs the attempt itself if the reservation it joined never lands, because that recovery failed or the AGC restarted before it.
-A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; Q1181's `already_rerun` check closes that.
+A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; the design's `already_rerun` check, not built, would close that.
 The cap covers every disruption cause, so the `cause` label splits the reporting but not the cap; it is per set, so a run whose jobs span two sets, or a set and a classic group, has a budget in each.
 A run that cannot be read, or a decision that cannot be written, withholds the re-run, counted as `eviction_rerun_failures_total{reason="conclusion_unknown"|"api_error"|"budget_unrecorded"}`.
 The ConfigMap's schema and its rules for being shared by two AGC versions are in [the Q555 recovery design](../plan/q555-automatic-recovery-design.md#the-storage-shape).
@@ -464,8 +464,27 @@ A conclusion the AGC cannot read is **not** treated as "not cancelled".
 The failures are split the way the re-run call's already are: a request that never completed and a 5xx are retried inside the same 15-minute window, and a window that closes on one ends as `actions_gateway_eviction_rerun_failures_total{reason="conclusion_unknown"}` with an `EvictionRerunFailed` Warning Event.
 A 4xx, and a 2xx carrying something that will not decode as a run, are terminal at once and counted `api_error`, because neither becomes a verdict inside the window: a 2xx that is not a run means the configured endpoint is not the API, and re-asking it thirty times only delays the Event that says so.
 Either way no re-run is fired, so a job that lost its recovery is visible rather than silently re-queued against a cancel.
-And only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
-The residual is a cancelled run whose worker is *also* evicted or preempted before it stops, which is re-run as before.
+On the classic tier only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
+The residual there is a cancelled run whose worker is *also* evicted or preempted before it stops, which is re-run as before.
+On the scale-set tier every arm takes it (Q1181), because that tier already reads the run on every pass, so the check costs no call, and the failure ledger's `selfCancelledAttempt` tells the abandoned arm's own force-cancel from anyone else's: a user's cancel, or a concurrency group's, is honoured whichever arm the worker was lost to, and GAG's own cancel is re-run with no exemption for any arm.
+
+##### Futile re-runs are withheld before a slot is spent (scale-set)
+
+Some re-runs cannot help, and before Q1181 each one spent a budget slot, a node and queue time, then ended in an Event asking for a manual re-run that would not help either.
+The scale-set tier now judges the run read it takes before reserving a slot ([`rerun_futility.go`](../../cmd/agc/internal/provisioner/rerun_futility.go)) and withholds a futile re-run there, so it spends nothing: `actions_gateway_eviction_rerun_withheld_total` counts the `reason`, and a **Normal** `EvictionRerunWithheld` Event names the run, the reason and what would fix it.
+
+| `reason` | Withheld when | What the Event says to do |
+|---|---|---|
+| `run_cancelled` | The run concluded `cancelled` and the ledger does not record GAG force-cancelling that attempt. Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot | Re-run by hand if the cancel was not intended |
+| `attempt_limit` | `run_attempt` is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial ([changelog, 2026-04-10](https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/)) | Start a new run |
+| `run_too_old` | The run was created more than 30 days ago, outside GitHub's re-run window | Start a new run |
+| `superseded` | A `push` or `pull_request` run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository | Nothing: the newer commit is building |
+
+A field GitHub did not send skips its check rather than withholding.
+The superseded check is the only one that costs a call (the workflow's runs, filtered to the branch and event, newest first), and a list it cannot read re-runs: that check only ever withholds, so an unreadable answer must not.
+Comparing the head repository keeps a fork's branch from matching upstream's of the same name; whether GitHub's `branch` filter matches a fork pull request's head branch is unmeasured (M5 in [the Q555 design](../plan/q555-automatic-recovery-design.md#measure-before-building)), and a miss there re-runs, the safe direction.
+A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees `attempt_limit` where GitHub would have accepted the re-run.
+The classic tier reserves from process memory with no run read first and takes none of these checks.
 
 ##### Detecting a disruption is not the same as claiming it
 
