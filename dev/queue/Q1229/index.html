@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1178/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1229/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Label egress proxy outcome metrics by allowlist entry and outcome - GitHub Actions Gateway</title>
+        <title>Plot proxy CONNECT outcomes by allowlist entry on a dashboard - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#label-egress-proxy-outcome-metrics-by-allowlist-entry-and-outcome" class="md-skip">
+        <a href="#plot-proxy-connect-outcomes-by-allowlist-entry-on-a-dashboard" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Label egress proxy outcome metrics by allowlist entry and outcome
+              Plot proxy CONNECT outcomes by allowlist entry on a dashboard
             
           </span>
         </div>
@@ -2627,14 +2627,12 @@
   
 
 
-<h1 id="label-egress-proxy-outcome-metrics-by-allowlist-entry-and-outcome">Label egress proxy outcome metrics by allowlist entry and outcome<a class="headerlink" href="#label-egress-proxy-outcome-metrics-by-allowlist-entry-and-outcome" title="Permanent link">&para;</a></h1>
-<p>The proxy's <code>actions_gateway_proxy_dial_errors_total</code> and <code>_connect_denied_total</code> carry no labels, so neither an operator nor the AGC can tell which destination is failing (read from <code>cmd/proxy</code>, 2026-10-10).
-Count every CONNECT by the allowlist entry that matched and an outcome (allowed, denied, DNS failure, dial refused, dial timeout), keyed on the entry rather than the raw host so cardinality stays bounded by the allowlist.
-This is metrics, not a bespoke API: aggregates, bounded labels, read by dashboards and alerts, and fine a scrape interval late.
-These metrics are for operators: the AGC cannot read a proxy's metrics port today (no network path, no client certificate, no replica discovery), so the per-destination breaker built on them waits for Q1184's security review (<a href="../../plan/q555-automatic-recovery-design/#why-the-agc-does-not-read-the-proxy-yet">design</a>).
-A failed DNS lookup on the CIDR path is counted as a denial today and gets its own outcome.
-Per-job attribution is Q1184; the longer-horizon proxy-as-sensor ideas, including cluster-level aggregation, are in <a href="../../design/appendix-g-future-enhancements/#g18-the-egress-proxy-as-a-platform-sensor">G.18</a>.
-Constraint: no TLS termination, so an upstream's HTTP status stays invisible.</p>
+<h1 id="plot-proxy-connect-outcomes-by-allowlist-entry-on-a-dashboard">Plot proxy CONNECT outcomes by allowlist entry on a dashboard<a class="headerlink" href="#plot-proxy-connect-outcomes-by-allowlist-entry-on-a-dashboard" title="Permanent link">&para;</a></h1>
+<p><code>actions_gateway_proxy_connects_total{destination,outcome}</code> (Q1178) counts every CONNECT by the allowlist entry that admitted it and how it ended, but no shipped dashboard plots it, so an operator has to write the query by hand to see which destination is failing.
+Q1178 left the panel out because a dashboard change needs a fresh screenshot from the kind-backed preview harness (<code>make dashboard-render-check</code> fails without one), which was out of proportion to that row.
+The tenant dashboard's Egress Proxy row is full at 24 columns (five panels, read from <code>deploy/monitoring/grafana-dashboard-tenant.json</code>, 2026-10-27), so a panel there needs a second line in that row and shifts every row below it; the security dashboard's Abuse Signals row is the other candidate.
+The query the operator docs give is <code>sum by (destination, outcome) (rate(actions_gateway_proxy_connects_total{outcome!="tunneled"}[5m]))</code>.
+Done means the panel ships in the dashboard JSON, <code>deploy/monitoring/preview/exporter.py</code> emits the series so the preview populates it, the screenshot in <code>docs/assets/</code> is re-rendered, and <code>docs/operations/observability-dashboards.md</code> lists the panel.</p>
 
 
 

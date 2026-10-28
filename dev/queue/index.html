@@ -3092,12 +3092,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Blocked on Q555, whose detection measures each class's retry success rate (R14); the budget a class spends survives a restart …</td>
 </tr>
 <tr>
-<td><a href="Q1178/">Q1178</a></td>
-<td><a href="../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Label egress proxy outcome metrics by allowlist entry and outcome</a></td>
-<td><code>feature</code> <code>2.0-gate</code></td>
+<td><a href="Q1229/">Q1229</a></td>
+<td>Plot proxy CONNECT outcomes by allowlist entry on a dashboard</td>
+<td><code>feature</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The proxy's <code>actions_gateway_proxy_dial_errors_total</code> and <code>_connect_denied_total</code> carry no labels, so neither an operator nor the AGC can …</td>
+<td><code>actions_gateway_proxy_connects_total{destination,outcome}</code> (Q1178) counts every CONNECT by the allowlist entry that admitted it and how it …</td>
 </tr>
 <tr>
 <td><a href="Q1130/">Q1130</a></td>

@@ -3720,6 +3720,12 @@ If you scrape the proxy with a hand-written scrape config instead of the generat
 <td>CONNECT requests refused because the destination is not on the egress allowlist. A precise Server-Side Request Forgery (SSRF) / egress-policy signal: unlike <code>…_dial_errors_total</code> (which also counts transient dial failures to <em>allowed</em> hosts), every increment here is an explicit allowlist denial — a workload attempting to reach a blocked destination. A sustained rate is alert-worthy; see <a href="../security-operations/#threat--signal-map">security-operations.md § Threat → signal map</a>.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_proxy_connects_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>¹, <code>destination</code>, <code>outcome</code></td>
+<td>Every CONNECT, by the allowlist entry that admitted it and how it ended, so a failing destination can be told from a failing proxy. <code>destination</code> is the entry as configured (a host suffix or a CIDR), <code>unlisted</code> when no entry matched, and <code>any</code> on a proxy with no allowlist. It is never the requested host, so its values are bounded by the allowlist. <code>outcome</code> is <code>tunneled</code>, <code>denied</code>, <code>dns_error</code>, <code>refused</code>, <code>timeout</code>, <code>unreachable</code> or <code>error</code>. A <code>dns_error</code> on <code>unlisted</code> is a hostname whose lookup failed without an answer (a timeout or resolver failure), so the proxy could not check it against the CIDR entries; it is refused, and <code>…_connect_denied_total</code> counts it as a denial. A name that does not exist is <code>denied</code>, not <code>dns_error</code>. Read the failures with <code>sum by (destination, outcome) (rate(actions_gateway_proxy_connects_total{outcome!="tunneled"}[5m]))</code>.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_proxy_tunnel_duration_seconds</code></td>
 <td>Histogram</td>
 <td><code>namespace</code>¹</td>

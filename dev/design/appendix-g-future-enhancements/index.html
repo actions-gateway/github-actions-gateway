@@ -3779,7 +3779,7 @@ Its direction differs from the sketch above: phase 2 retries newly <em>classifie
 <p><strong>The idea.</strong> Every outbound fetch a tenant's job makes goes through the tenant's egress proxy, and this repository's own flake record is dominated by exactly those fetches failing: registry pulls, release-CDN downloads, GitHub API calls (<a href="../../plan/q555-flaky-job-retry/#the-egress-proxy-as-a-failure-sensor">Q555 draft</a>).
 Kubernetes objects show none of them.
 An operator can point ARC's runners at a proxy they run themselves, so the proxy is not the moat; joining a proxy event to the job, the set and the controller that can act on it is.</p>
-<p><strong>What is already committed.</strong> <a href="../../queue/Q1178/">Q1178</a> labels the proxy's outcome counters by allowlist entry and outcome, and Q1184 attributes failures to the job that hit them, for retry.
+<p><strong>What is already built.</strong> Q1178 counts every CONNECT by the allowlist entry that admitted it and its outcome (<code>actions_gateway_proxy_connects_total</code>), and Q1184 attributes failures to the job that hit them, for retry.
 Everything below is a non-commitment.</p>
 <p><strong>Choosing the channel.</strong> A use goes to <strong>metrics</strong> when its reader is a person, a dashboard or an alert reading aggregates over bounded labels, a scrape interval late and lossy.
 It needs a <strong>bespoke endpoint</strong> when the reader is a control loop acting on one job or pod: per-instance identity is unbounded for metrics, the answer has to be exact for that instance, and per-job egress is too sensitive for a shared, long-retention time-series store.

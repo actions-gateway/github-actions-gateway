@@ -3419,20 +3419,20 @@ In the order the CI history and existing machinery make cheapest:</p>
 <ol>
 <li><strong>Node lost under a running worker</strong> (<code>freshPod</code>): no longer a class to build here, because Q1179 added a <code>node_shutdown</code> recovery arm keyed on the pod's <code>DisruptionTarget</code> condition (<code>TerminationByKubelet</code> or <code>DeletionByPodGC</code>) after kubelet and PodGC source showed no existing arm fired.</li>
 <li><strong>Egress proxy pool unavailable</strong> (<code>observable</code>), for a colocated pool: the snapshot's proxy <code>Ready</code> was <code>False</code> or <code>readyReplicas</code> was 0 while the job ran, and <code>ready</code> is the EgressProxy's <code>Ready</code> condition.
-   The AGC already watches EgressProxies in its own namespace, so this needs nothing from <a href="../../queue/Q1178/">Q1178</a>.
+   The AGC already watches EgressProxies in its own namespace, so this needs nothing from Q1178.
    A shared pool in another namespace is invisible to it, so the class does not cover one.</li>
 <li><strong><code>dockerd</code> sidecar crash</strong> (<code>freshPod</code>): the Docker-in-Docker sidecar's restart count rose, with a discriminator against tenant disk use still to find.</li>
 </ol>
 <p><strong>Decide (open question 3):</strong> measure in that order, and ship only the out-of-memory class under Q1183; each later class is a row of its own once reproduced.</p>
 <h2 id="component-4-the-proxy-as-a-sensor-q1178-q1184">Component 4: the proxy as a sensor (Q1178, Q1184)<a class="headerlink" href="#component-4-the-proxy-as-a-sensor-q1178-q1184" title="Permanent link">&para;</a></h2>
 <h3 id="outcome-metrics-q1178">Outcome metrics (Q1178)<a class="headerlink" href="#outcome-metrics-q1178" title="Permanent link">&para;</a></h3>
-<p><code>checkDestination</code> returns <code>(dialAddr, allowed)</code>, and its helpers <code>matchesHostSuffix</code> and <code>ipInAny</code> return only a boolean, so which of its three allow paths and which entry admitted a connection is never computed.
-Make the helpers return the matching entry, as written in the allowlist (a host suffix or a CIDR), and <code>checkDestination</code> return it with an outcome.
-Two defects it fixes on the way:</p>
+<p>Built.
+<code>checkDestination</code> returns the allowlist entry that admitted a connection, as written in the allowlist (a host suffix or a CIDR), beside the dial address, where it used to return only whether one did.
+Two defects it fixed on the way:</p>
 <ul>
-<li><strong>A failed lookup on the CIDR path reads as a policy denial.</strong> A DNS outage then looks like "destination not allowed", which is exactly the misreading that would make a futility check withhold a retry it should make.
-  It becomes <code>outcome="dns_error"</code>.</li>
-<li><strong>Every dial failure is one unlabelled counter</strong>, though <code>errors.As</code> can tell the kinds apart.</li>
+<li><strong>A failed lookup on the CIDR path read as a policy denial.</strong> A DNS outage then looked like "destination not allowed", which is exactly the misreading that would make a futility check withhold a retry it should make.
+  It is <code>outcome="dns_error"</code>, for a lookup that failed without an answer; a name that does not exist (<code>IsNotFound</code>) stays <code>denied</code>, since a workload probing nonexistent names is still probing.</li>
+<li><strong>Every dial failure was one unlabelled counter</strong>, though <code>errors.As</code> can tell the kinds apart.</li>
 </ul>
 <table>
 <thead>
@@ -3448,8 +3448,9 @@ Two defects it fixes on the way:</p>
 </tr>
 </tbody>
 </table>
-<p>Admission caps the allowlist at 64 host suffixes and 64 CIDRs (<code>egressproxy_types.go</code>), so <code>destination</code> takes at most 130 values and the metric at most 910 series per pool.
-The two unlabelled counters stay, as sums of the new one, until a release note retires them.</p>
+<p><code>destination</code> takes one value per allowlist entry plus <code>unlisted</code> and <code>any</code>.
+Admission caps the operator's entries at 64 host suffixes and 64 CIDRs (<code>egressproxy_types.go</code>); the GMC adds six implicit GitHub suffixes and one per GitHub Enterprise Server host a referrer binds (<code>proxyAllowlistEnv</code>), so the bound is that sum plus two, times seven outcomes, per pool.
+The two unlabelled counters stay, as sums of the new one, until a release note retires them: <code>…_connect_denied_total</code> is the <code>unlisted</code> series, and <code>…_dial_errors_total</code> the failures on every other destination.</p>
 <h3 id="why-the-agc-does-not-read-the-proxy-yet">Why the AGC does not read the proxy yet<a class="headerlink" href="#why-the-agc-does-not-read-the-proxy-yet" title="Permanent link">&para;</a></h3>
 <p>Reading a replica's <code>/metrics</code> from the AGC needs three changes, none of them small:</p>
 <ul>
@@ -3687,7 +3688,7 @@ Job-granular avoids that, and costs:</p>
 <li>Q1181: the futility checks on the widened run read, honouring <code>selfCancelledAttempt</code> for <code>run_cancelled</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>.</li>
 <li>Q555 adds the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.</li>
 <li>Q1183: the <code>pending</code> map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.</li>
-<li>Q1178 any time; Q1184 after its review.</li>
+<li>Q1178 (built); Q1184 after its review.</li>
 </ol>
 
 
