@@ -3493,11 +3493,27 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q215/">Q215</a></td>
-<td><a href="../plan/caching-and-worker-storage/">Worker cache backend (actions/cache + Docker layer cache)</a></td>
+<td><a href="../plan/q215-worker-cache/">Ship the in-cluster worker cache as a reference architecture</a></td>
 <td><code>feature</code></td>
-<td>💤</td>
+<td>🔲</td>
 <td>L</td>
-<td><strong>Demand:</strong> an in-cluster cache ask.</td>
+<td>A tenant asked for an in-cluster cache on 2026-10-27, which fired this row's trigger, and the design is settled and spiked in …</td>
+</tr>
+<tr>
+<td><a href="Q1224/">Q1224</a></td>
+<td><a href="../plan/q215-worker-cache/#why-the-hook-is-a-patched-runner">Retire the cache-runner patch once actions/runner takes an override</a></td>
+<td><code>debt</code></td>
+<td>💤</td>
+<td>M</td>
+<td><strong>Event:</strong> a GitHub staff member, not the <code>github-actions</code> bot whose "feedback submitted" acknowledgement is already there, replies to the …</td>
+</tr>
+<tr>
+<td><a href="Q1225/">Q1225</a></td>
+<td><a href="../plan/q215-worker-cache/#phase-2-sharing-q1225">Share in-cluster caches across tenants: upstream asks, then a CRD</a></td>
+<td><code>feature</code></td>
+<td>🚫</td>
+<td>L</td>
+<td>Blocked by <a href="Q215/">Q215</a>: phase 2 of the in-cluster cache starts once phase 1, one server per tenant, has shipped.</td>
 </tr>
 <tr>
 <td><a href="Q718/">Q718</a></td>

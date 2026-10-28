@@ -23,7 +23,7 @@
     
     
       
-        <title>Worker cache backend (actions/cache + Docker layer cache) - GitHub Actions Gateway</title>
+        <title>Ship the in-cluster worker cache as a reference architecture - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#worker-cache-backend-actionscache--docker-layer-cache" class="md-skip">
+        <a href="#ship-the-in-cluster-worker-cache-as-a-reference-architecture" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Worker cache backend (actions/cache + Docker layer cache)
+              Ship the in-cluster worker cache as a reference architecture
             
           </span>
         </div>
@@ -2627,18 +2627,24 @@
   
 
 
-<h1 id="worker-cache-backend-actionscache--docker-layer-cache">Worker cache backend (actions/cache + Docker layer cache)<a class="headerlink" href="#worker-cache-backend-actionscache--docker-layer-cache" title="Permanent link">&para;</a></h1>
-<p><strong>Demand:</strong> an in-cluster cache ask.
-<strong>Event:</strong> a tenant loses its working <code>actions/cache</code>, which is the <em>tenant</em> path and not this repo's own CI.</p>
-<p>The reading was ambiguous until 2026-08-26 and is now fixed, because an ambiguous trigger is a standing query nobody can re-run.
-The trigger is about the capability GAG offers a tenant, and that capability works today: the tenant egress proxy's implicit GitHub allowlist carries <code>*.blob.core.windows.net</code>, the Azure-blob store the Actions cache runs on (<code>githubEgressFQDNs</code> in <code>cmd/gmc/internal/controller/egressproxy_fqdn.go</code>).
-So <code>actions/cache</code> reaches its store on the proxy form, and the gap is local rather than absolute.</p>
-<p>Q408 Phase 1 did <strong>not</strong> fire this.
-It gated every <code>actions/cache</code> step and <code>GHA_CACHE</code> to <code>runner.environment == 'github-hosted'</code> in this repo's own <code>e2e-reusable.yml</code>, which is GAG dogfooding the untrusted-PR posture on its self-hosted lane, not a tenant losing anything.
-Settled in <a href="../../plan/release-1.7/#q215s-trigger-has-not-fired-and-the-row-now-says-which-reading-it-takes">release-1.7.md</a>.</p>
-<p>One asymmetry to know before re-reading this: the direct-egress form admits GitHub CIDRs, and the Azure blob store is not among them, so a tenant on that form has no working <code>actions/cache</code> now and never did.
-The trigger reads on the proxy form because that is where the capability exists to lose.</p>
-<p>The design question the row exists for is unchanged: the read-only mirror role cannot hold a read-write cache.</p>
+<h1 id="ship-the-in-cluster-worker-cache-as-a-reference-architecture">Ship the in-cluster worker cache as a reference architecture<a class="headerlink" href="#ship-the-in-cluster-worker-cache-as-a-reference-architecture" title="Permanent link">&para;</a></h1>
+<p>A tenant asked for an in-cluster cache on 2026-10-27, which fired this row's trigger, and the design is settled and spiked in <a href="../../plan/q215-worker-cache/">q215-worker-cache.md</a>.
+The untrusted-PR tenant is the case it exists for: under the tight egress posture <code>actions/cache</code> has no store to reach, and a cache shared across jobs is a poisoning vector unless the server enforces GitHub's ref scope.</p>
+<p>What is built: the opt-in <code>cache-runner</code> target in the root <code>Dockerfile</code>, which patches <code>Runner.Worker.dll</code> so actions take <code>ACTIONS_RESULTS_URL</code> from the pod, with a build check that fails when a runner bump moves the literal.
+The spike ran it on kind against real GitHub with falcondev-oss's cache server: save, restore and artifacts all worked through the in-cluster server, GitHub's cache held nothing, and a sibling branch could not restore the entry.</p>
+<p>What is left, in order:</p>
+<ol>
+<li><strong>Close or measure the tokenless blob transport.</strong> falcondev v9.8.0 authenticates its three <code>CacheService</code> calls by the job's token, but the uploads they hand out (<code>PUT /upload/&lt;id&gt;</code>) take none, and an upload ID is 10 decimal digits, about 33 bits.
+   Measure whether one job can plant parts into another's open upload, and close it upstream or in front of the server if it can, before anything below ships it (<a href="../../plan/q215-worker-cache/#the-write-path-is-a-contract">the residuals</a>).</li>
+<li><strong>Publish <code>cache-runner</code></strong> as a seventh image: the <code>publish.yml</code> matrix and its verify loop, <code>verify-release.sh</code>, <code>trivy-scan.sh</code>, <code>security-scan.yml</code>, <code>dockerfile-lint.yml</code>, and the image lists in <code>release.md</code>, <code>air-gapped-install.md</code> and <code>security-operations.md</code> (every file naming <code>build-runner</code> today).</li>
+<li><strong>A <code>deploy/gha-cache/</code> base</strong> shaped like <code>deploy/registry-mirror/</code>: the server pinned by digest, its Service, the two NetworkPolicies from the spike, an <code>emptyDir</code> default and a persistent overlay.</li>
+<li><strong>An operator page</strong> under <code>docs/operations/</code> and a runner template library entry, saying that the image is opt-in and that a pod running it without <code>ACTIONS_RESULTS_URL</code> loses cache and artifacts.</li>
+<li><strong>Validate on the untrusted pull requests profile</strong> (Kata, tight egress): the server answers from a worker, <code>*.blob.core.windows.net</code> does not.</li>
+<li><strong>Measure a fork pull request's scope</strong>, which the spike could not: its saves must land in <code>refs/pull/&lt;n&gt;/merge</code> and a push to the base branch must not restore them.</li>
+<li><strong>Eviction</strong>: set <code>CACHE_CLEANUP_OLDER_THAN_DAYS</code> to GitHub's 7 days, and pick a default for <code>CACHE_MAX_SIZE_BYTES</code>, which caps the whole server rather than GitHub's 10 GB per repository.</li>
+</ol>
+<p>The server goes in the tenant namespace, so the tenant's <code>ResourceQuota</code> pays for it; the shared and platform-operated modes in <a href="../../plan/q215-worker-cache/#tenancy-modes">tenancy modes</a> are <a href="../Q1225/">Q1225</a>.
+The patch itself is temporary; <a href="../Q1224/">Q1224</a> retires it once upstream takes an override.</p>
 
 
 

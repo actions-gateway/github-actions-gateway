@@ -2810,6 +2810,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>ⓘ Ongoing goal doc. The RWX storage half closed 2026-08-24 (Q719); every cache half is unbuilt. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens Q539/Q540 to grade the contract per content class</td>
 </tr>
 <tr>
+<td><a href="q215-worker-cache/">q215-worker-cache.md</a></td>
+<td>The in-cluster <code>actions/cache</code> and build-layer cache: a per-tenant cache server that takes each job's scope from GitHub's signed runtime token, reached through an opt-in runner image patched to take <code>ACTIONS_RESULTS_URL</code> from the pod, and the kind spike against real GitHub</td>
+<td>⚠️ Designed and spiked 2026-10-27; the <code>cache-runner</code> image is built. Publishing it, the reference architecture and the fork-PR scope reading are open on <a href="../queue/Q215/">Q215</a>; retiring the patch is <a href="../queue/Q1224/">Q1224</a></td>
+</tr>
+<tr>
 <td><a href="gpu-and-accelerated-ci/">gpu-and-accelerated-ci.md</a></td>
 <td>The umbrella goal for accelerated CI: what already ships, why GPU and Kata do not compose on cloud machine families, and why gang scheduling is the one place the pre-claim gate is structurally defensible</td>
 <td>ⓘ Ongoing goal doc. Foundations shipped (scale-to-zero, priority floors, GPU-safe right-sizing); <a href="../queue/Q216/">Q216</a> and <a href="../queue/Q718/">Q718</a> are demand-gated on purpose</td>

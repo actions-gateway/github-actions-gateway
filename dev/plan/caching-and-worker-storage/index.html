@@ -2779,7 +2779,8 @@
 The storage half is the one that closed (Q719, item 5): see <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>.
 Every cache half is still unbuilt.
 The image-pull half already has a design in <a href="../q408-untrusted-pr-egress/">q408-untrusted-pr-egress.md</a> and is not restated here.
-The job-cache and storage halves have no design yet, and the first thing this document does is establish that they are three different problems.</p>
+The job-cache and build-layer halves have one too, spiked 2026-10-27: <a href="../q215-worker-cache/">q215-worker-cache.md</a>.
+The first thing this document does is establish that they are three different problems.</p>
 </blockquote>
 <h2 id="why-this-is-a-goal">Why this is a goal<a class="headerlink" href="#why-this-is-a-goal" title="Permanent link">&para;</a></h2>
 <p>Caching is the most common thing a CI platform is measured on that GAG has no answer for, and it is the one place where the <a href="../secure-multi-tenant-oss-ci/">secure multi-tenant OSS CI</a> goal actively makes the problem worse rather than better.
@@ -2867,7 +2868,8 @@ That property is load-bearing: it is most of why an untrusted job can be allowed
 <code>actions/cache</code> saves entries as well as restoring them, and a cache nothing writes to is empty.
 So the artifact cache <strong>cannot simply reuse the mirror role</strong>, however well the same software serves both.
 It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.</p>
-<p>That is the sharpest version of the review <a href="../../queue/Q215/">Q215</a> is blocked on, and it is a contract question rather than a storage question.</p>
+<p>That is the sharpest version of the review <a href="../../queue/Q215/">Q215</a> was blocked on, and it is a contract question rather than a storage question.
+<a href="../q215-worker-cache/">q215-worker-cache.md</a> answers it with a second role whose contract takes each job's scope from GitHub's own signed token.</p>
 <h3 id="the-accurate-gap">The accurate gap<a class="headerlink" href="#the-accurate-gap" title="Permanent link">&para;</a></h3>
 <p>The gap is <strong>a cache inside the cluster</strong>, not caching.
 What a local cache would buy is egress cost and restore latency, not capability.
@@ -2882,7 +2884,7 @@ This is already the measured state of GAG's own self-hosted CI lane, where every
 <li>For a <strong>trusted</strong> tenant, <code>actions/cache</code> works and a local cache is an optimisation.</li>
 <li>For an <strong>untrusted-PR</strong> tenant under the Q408 posture, <code>actions/cache</code> is gone, and an in-cluster cache is the only cache there can be.
    Q215 stops being an optimisation and becomes the thing that makes the security posture usable.</li>
-<li>That in-cluster cache is then reachable by hostile job code by construction, which is exactly the review Q215 is blocked on.
+<li>That in-cluster cache is then reachable by hostile job code by construction, which is exactly the review Q215 was blocked on.
    A cache shared across tenants is an exfiltration path; a cache shared across <em>jobs of one tenant</em> is the useful thing and a narrower risk.</li>
 <li>And it must be <strong>writable</strong> by that job, which is the property the mirror role deliberately refuses.
    The two roles cannot be the same endpoint even when they are the same software.</li>
@@ -2926,7 +2928,7 @@ ARC has none either, so this is not a reason to prefer ARC; GitLab Runner and th
 Do not repeat that <code>actions/cache</code> has no home.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, <a href="../../operations/worker-shared-storage/">worker-shared-storage.md</a>); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).</p>
-<p>Open, with rows: <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, blocked on the isolation review this document reframes as the design), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
+<p>Open, with rows: <a href="../../queue/Q215/">Q215</a> (job and build-layer cache, designed and spiked in <a href="../q215-worker-cache/">q215-worker-cache.md</a>, with publishing and the reference architecture left), <a href="../../queue/Q1224/">Q1224</a> (retiring the runner patch that design rests on), <a href="../../queue/Q268/">Q268</a> (warm worker pool, the competing lever for the latency half of the same complaint).</p>
 <p><strong>Scope note for Q539 and Q540.</strong> Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether <em>one</em> deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.

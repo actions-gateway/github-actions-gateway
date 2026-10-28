@@ -2781,6 +2781,11 @@ No pill means no release is decided for that item yet.</p>
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.</p>
 </li>
 <li>
+<p><strong><a href="../plan/q215-worker-cache/">A worker cache backend</a></strong> <!-- q:Q215 --> <code>actions/cache</code> already works.
+  What is missing is a cache <em>inside</em> the cluster, which an untrusted-PR job under tight egress needs because it has no other.
+  The design enforces GitHub's own ref scope on the server; publishing its runner image and a reference architecture remain.</p>
+</li>
+<li>
 <p><strong><a href="../operations/v1alpha1-deprecation/">Retiring <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, and the classic acquisition protocol</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q273,Q1167 --> <strong><code>v2.0.0</code></strong> removes all four, plus the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> egress aliases, on clusters whose stored objects have already moved to <code>v2</code>.
   <code>v1.3.0</code> announced the first three; <code>v2beta1</code> was added 2026-09-08, superseded by GA <code>v2</code>.</p>
 </li>
@@ -2809,10 +2814,6 @@ Each waits on a real operator need, a measured limit, or a gating release before
 <li><strong><a href="../design/appendix-e-capacity-planning/">First-class GPU runner support</a></strong> <!-- q:Q216 --> Priority tiers and the <a href="../operations/worker-rightsizing/"><code>NodeShare</code> sizing profile</a> already carry the GPU cases, but GPU Operator / Node Feature Discovery awareness, and <code>nodeSelector</code> / toleration / <code>RuntimeClass</code> conventions that make a GPU runner set feel native, wait on a concrete GPU workload to design against.</li>
 <li><strong><a href="../design/appendix-e-capacity-planning/">Multi-node GPU jobs</a></strong> <!-- q:Q718 --> One job needing several co-scheduled workers in one NVLink or InfiniBand domain is a different problem from one job needing one GPU: capacity is a single integer to GitHub, and a gang requirement is a placement predicate rather than a count.
   Waits on a real multi-node workload, and would interact with Kueue or Volcano.</li>
-<li><strong><a href="../plan/ecosystem-integration-landscape/#j-registry-build-cache--images-runner-workload-plane">A worker cache backend</a></strong> <!-- q:Q215 --> <code>actions/cache</code> already works.
-  What is missing is a cache <em>inside</em> the cluster, to cut egress cost and restore latency.
-  Docker layer caching has no home either way, because workers are storage-less by design.
-  It waits on a <a href="../design/05-security/">security review</a> of cross-job cache isolation: a shared cache between tenants is an obvious exfiltration path.</li>
 <li><strong><a href="../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">A warm worker pool</a></strong> <!-- q:Q268 --> An opt-in pool of idle pods per runner set, for teams that still hit pod-schedule latency after image pre-pull and caching.</li>
 <li><strong><a href="../plan/milestone-5/">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is <a href="../operations/kata-dind-workloads/">validated end-to-end with Kata</a>; gVisor is documented but unproven on a real cluster.
   It waits on an operator who wants lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since Kata already covers the DinD case.</li>
