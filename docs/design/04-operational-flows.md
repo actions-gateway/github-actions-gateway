@@ -556,6 +556,27 @@ They raise the kubelet's `memory.available` hard threshold on the worker's own n
 The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
 Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, `DisruptionTarget=True` / `TerminationByKubelet`.
 
+#### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
+
+Detection records what each recovery did, and changes nothing it does.
+The listener reports every terminal `JobCompleted` once per process, with its result, run identity, triggering event and workflow ref.
+A `failed` completion, or a `canceled` one a recovery claim names, is recorded in the set's failure ledger (`scaleset-failures-<set>`, the ConfigMap that holds the scale-set budget) under `failures["<runID>/<job name>"]`, for 7 days.
+The record carries the worker's state at its terminal transition, which the pod watch snapshots into a bounded in-memory map (1,024 workers) because the pod may be gone when the completion arrives; the completion falls back to reading the pod, and records no context when neither exists.
+The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.
+
+A later completion of the same key with a new job ID is the job's next attempt, attributed from GAG's own re-runs of the run in the same ledger:
+
+| GAG re-ran the run and | Trigger | Flaky when it succeeds |
+|---|---|---|
+| listed this job | `gag` | Never; the result counts in `eviction_rerun_outcomes_total{cause}` |
+| re-ran failed jobs without listing it | `gag_collateral` | When its failure had no disruption cause |
+| did neither | `other` | As above |
+
+A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context, and marks GAG's re-run it was attributed to as spent so a later attempt does not claim it again.
+`JobCompleted` carries no run attempt, so GAG's re-runs are matched by job name rather than by attempt: a job that first fails in an attempt after one GAG re-ran reads as `gag_collateral` rather than `other`.
+A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
+Failure records are evicted oldest first when the ledger would pass its 512 KiB cap; budget records never are.
+
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 
 A recurring question, because the answer decides three things we measured and could not change: why the worker's disruption-safety annotations did not deflect the preemption, why adding a `PodDisruptionBudget` would not either, and why scale-set preemption recovery cannot be made restart-safe.

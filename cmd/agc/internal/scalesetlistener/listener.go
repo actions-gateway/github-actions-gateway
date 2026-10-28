@@ -226,6 +226,10 @@ type Job struct {
 	// JobName is the job's display name from the workflow YAML, stamped on the pod
 	// for operator legibility. Best-effort like the identity triple.
 	JobName string
+	// EventName and WorkflowRef are the run's triggering event and the job's workflow
+	// file and ref, best-effort like the identity triple. Only Completed reads them.
+	EventName   string
+	WorkflowRef string
 }
 
 // ErrCapacityUnavailable means the owner cannot run another worker pod right now
@@ -289,6 +293,13 @@ type CleanupFunc func(ctx context.Context, jobID, runnerName string) error
 // not necessarily the one its worker was created for (Q1152); JITConfig is empty. It
 // must be idempotent, since a re-created session replays messages from cursor 0.
 type StartedFunc func(ctx context.Context, job Job) error
+
+// CompletedFunc reports a terminal JobCompleted with its result, for flaky-job detection
+// (Q555). job carries the completion's run identity and the runner that held it;
+// JITConfig is empty. It is called once per job per process, but a re-created session
+// replays completions from cursor 0, so it must be idempotent per job.JobID. It is
+// best-effort: its error is logged and never holds the message.
+type CompletedFunc func(ctx context.Context, job Job, result string) error
 
 // GuardState is the durable half of the replay guards: the jobs this listener has
 // concluded — completed or abandoned — whose queue messages may not all be deleted yet.
@@ -473,6 +484,9 @@ type Config struct {
 	// disables it, so a completion that names no runner cannot tell a busy worker from
 	// an idle one (Q1151) — the reconciler always wires it.
 	Started StartedFunc
+	// Completed reports each terminal completion and its result. Nil disables flaky-job
+	// detection.
+	Completed CompletedFunc
 	// Guards persists the concluded-job guards across a process boundary, closing the
 	// hard-kill half of the settle→DELETE gap (Q606). Nil disables persistence, leaving
 	// the guards process-scoped (the pre-Q606 behaviour).
@@ -1952,6 +1966,9 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	if first && l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
 	}
+	if first {
+		l.reportCompleted(ctx, cj)
+	}
 	if l.cfg.Cleanup == nil {
 		l.settle(cj.JobID)
 		return true
@@ -1966,6 +1983,29 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	}
 	l.settle(cj.JobID)
 	return true
+}
+
+// reportCompleted hands a completion to Config.Completed, logging rather than holding
+// the message on its error: detection is best-effort, and holding the cursor would
+// redeliver the whole batch for it.
+func (l *Listener) reportCompleted(ctx context.Context, cj scaleset.JobMessage) {
+	if l.cfg.Completed == nil {
+		return
+	}
+	owner, repo, runID, _ := cj.RunIdentity()
+	if err := l.cfg.Completed(ctx, Job{
+		JobID:       cj.JobID,
+		RunnerName:  cj.RunnerName,
+		Owner:       owner,
+		Repository:  repo,
+		RunID:       runID,
+		JobName:     cj.JobDisplayName,
+		EventName:   cj.EventName,
+		WorkflowRef: cj.JobWorkflowRef,
+	}, cj.Result); err != nil {
+		l.log.Warn("scaleset: record job completion for flaky-job detection",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", cj.JobID, "result", cj.Result, "err", err)
+	}
 }
 
 // advanceCursor moves lastMessageID past a handled message — the first half of the

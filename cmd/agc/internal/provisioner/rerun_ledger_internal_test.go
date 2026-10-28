@@ -408,9 +408,10 @@ func TestRerunLedger_OlderWriterPreservesWhatItDoesNotKnow(t *testing.T) {
 		"version": 3, "minWriterVersion": 1, "futureTop": {"a": 1},
 		"reruns": {"77": {"expiresAt": "`+live+`", "count": 1, "futureRecord": true,
 			"attempts": {"1": {"scope": "FailedJobs", "cause": "oom", "disruptions": ["x"], "futureAttempt": "y"}}}},
-		"failures": {"keep": {"expiresAt": "`+live+`", "jobID": "j1"},
-		             "drop": {"expiresAt": "`+expired+`", "jobID": "j2"},
-		             "undated": {"jobID": "j3"}}
+		"failures": {"900/build": {"expiresAt": "`+live+`", "failedAt": "`+live+`", "jobID": "j0", "memoryFloor": "6Gi"}},
+		"pending": {"keep": {"expiresAt": "`+live+`", "jobID": "j1"},
+		            "drop": {"expiresAt": "`+expired+`", "jobID": "j2"},
+		            "undated": {"jobID": "j3"}}
 	}`)
 
 	got, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
@@ -421,8 +422,9 @@ func TestRerunLedger_OlderWriterPreservesWhatItDoesNotKnow(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(readLedgerData(t, c, target)), &doc))
 	assert.JSONEq(t, `3`, string(doc["version"]), "an older writer does not downgrade the schema")
 	assert.JSONEq(t, `{"a": 1}`, string(doc["futureTop"]))
-	assert.JSONEq(t, `{"keep": {"expiresAt": "`+live+`", "jobID": "j1"}, "undated": {"jobID": "j3"}}`, string(doc["failures"]),
+	assert.JSONEq(t, `{"keep": {"expiresAt": "`+live+`", "jobID": "j1"}, "undated": {"jobID": "j3"}}`, string(doc["pending"]),
 		"an unknown map keeps its live and undated entries and loses its expired one")
+	assert.Contains(t, string(doc["failures"]), `"memoryFloor":"6Gi"`, "a failure record keeps a field it does not know")
 	var reruns map[string]map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(doc["reruns"], &reruns))
 	assert.JSONEq(t, `true`, string(reruns["77"]["futureRecord"]))

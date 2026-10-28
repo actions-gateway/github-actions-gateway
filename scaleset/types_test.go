@@ -73,6 +73,12 @@ func TestJobMessage_RunIdentity(t *testing.T) {
 	if got := jobs[0].JobDisplayName; got != "build (ubuntu-latest)" {
 		t.Errorf("JobDisplayName = %q", got)
 	}
+	if got := jobs[0].EventName; got != "push" {
+		t.Errorf("EventName = %q, want push", got)
+	}
+	if got := jobs[0].JobWorkflowRef; got != "myorg/myrepo/.github/workflows/ci.yml@refs/heads/main" {
+		t.Errorf("JobWorkflowRef = %q", got)
+	}
 }
 
 // TestJobMessage_RunIdentityIncomplete pins the degrade contract: any missing piece

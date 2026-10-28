@@ -99,6 +99,19 @@ type Metrics struct {
 	// It is counted so a re-run that did not happen is visible rather than
 	// indistinguishable from a recovery that never armed.
 	EvictionRerunWithheld *prometheus.CounterVec
+	// EvictionRerunOutcomes counts the later attempt of each job GAG re-ran, by the
+	// cause it re-ran for, the run's triggering event, and result (succeeded, failed):
+	// failed over the total is a cause's failure rate (Q555). It keeps this family's
+	// prefix and runner_group label so it joins EvictionRetries.
+	EvictionRerunOutcomes *prometheus.CounterVec
+	// ScaleSetJobReruns counts a later attempt of a failed scale-set job completing, by
+	// who re-ran it: gag (the job was in GAG's re-run), gag_collateral (GAG's
+	// rerun-failed-jobs re-ran it beside a disrupted job), other (anyone else). other
+	// over scaleset_jobs_completed_total is the manual re-run rate (Q555).
+	ScaleSetJobReruns *prometheus.CounterVec
+	// ScaleSetFlakyJobs counts a failed scale-set job that later succeeded with no
+	// disruption attributed to it, by the same trigger (Q555).
+	ScaleSetFlakyJobs *prometheus.CounterVec
 	// AbandonedRunForceCancels counts the provisioner's REST force-cancels of a run
 	// whose worker pod was removed before it ran (Q683). Nothing will ever report
 	// such a job — no completejob value ends it honestly (Q645/Q676) — and told
@@ -366,7 +379,32 @@ func NewMetrics() *Metrics {
 		m.BrokerSessionLeaksTotal,
 		m.ReapBlockingSidecarTemplates,
 	)
+	m.addFlakyJobMetrics()
 	return m
+}
+
+// addFlakyJobMetrics builds and registers flaky-job detection's series (Q555).
+func (m *Metrics) addFlakyJobMetrics() {
+	// A literal keys each series by its field, which metric-tiers-check resolves
+	// emission sites through.
+	f := Metrics{
+		EvictionRerunOutcomes: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_eviction_rerun_outcomes_total",
+			Help: "The later attempt of each scale-set job GAG re-ran for a disruption, by the cause it re-ran for (eviction, preemption, node_shutdown, deletion, abandoned, vanished), the run's triggering event (push, pull_request, ..., other, unknown), and result (succeeded, failed). result=failed over the total is a cause's failure rate (Q555). Scale-set tier only.",
+		}, []string{"namespace", "runner_group", "tier", "cause", "event", "result"}),
+
+		ScaleSetJobReruns: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_scaleset_job_reruns_total",
+			Help: "A later attempt of a failed scale-set job completed, by trigger: gag (the job was in GAG's own disruption re-run), gag_collateral (GAG's rerun-failed-jobs re-ran it beside a disrupted job), other (a human or another automation re-ran it). trigger=other over actions_gateway_scaleset_jobs_completed_total is the manual re-run rate (Q555).",
+		}, []string{"namespace", "runner_set", "trigger"}),
+
+		ScaleSetFlakyJobs: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "actions_gateway_scaleset_flaky_jobs_total",
+			Help: "A failed scale-set job later succeeded with no disruption attributed to its failure, by trigger (gag_collateral, other), as on actions_gateway_scaleset_job_reruns_total (Q555).",
+		}, []string{"namespace", "runner_set", "trigger"}),
+	}
+	m.EvictionRerunOutcomes, m.ScaleSetJobReruns, m.ScaleSetFlakyJobs = f.EvictionRerunOutcomes, f.ScaleSetJobReruns, f.ScaleSetFlakyJobs
+	metrics.Registry.MustRegister(m.EvictionRerunOutcomes, m.ScaleSetJobReruns, m.ScaleSetFlakyJobs)
 }
 
 // IncAgentRecycle implements agentpool.RecycleMetrics.

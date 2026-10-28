@@ -1260,7 +1260,9 @@ func (r *RunnerSetReconciler) podToRunnerSet(_ context.Context, obj client.Objec
 // workerPodHandler is the worker-pod watch's handler: the RunnerSet enqueue every
 // event gets, with scale-set disruption recovery run off the event first (Q1029). Why
 // the event rather than the reconcile it enqueues is on
-// provisioner.RecoverDisruptedScaleSetWorker.
+// provisioner.RecoverDisruptedScaleSetWorker. Updates and deletes also snapshot a
+// worker's terminal state for flaky-job detection (Q555), since the pod may be gone by
+// the time its job's completion arrives.
 func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 	enqueue := handler.EnqueueRequestsFromMapFunc(r.podToRunnerSet)
 	return handler.Funcs{
@@ -1269,11 +1271,23 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 			enqueue.Create(ctx, e, q)
 		},
 		UpdateFunc: func(ctx context.Context, e event.UpdateEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			r.snapshotWorkerPod(e.ObjectNew)
 			r.recoverDisruptedWorkerPod(ctx, e.ObjectNew)
 			enqueue.Update(ctx, e, q)
 		},
-		DeleteFunc:  enqueue.Delete,
+		DeleteFunc: func(ctx context.Context, e event.DeleteEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
+			r.snapshotWorkerPod(e.Object)
+			enqueue.Delete(ctx, e, q)
+		},
 		GenericFunc: enqueue.Generic,
+	}
+}
+
+// snapshotWorkerPod hands a worker pod from a watch event to the provisioner's
+// snapshot store, which keeps only scale-set workers at a terminal transition.
+func (r *RunnerSetReconciler) snapshotWorkerPod(obj client.Object) {
+	if pod, ok := obj.(*corev1.Pod); ok && r.Provisioner != nil {
+		r.Provisioner.SnapshotScaleSetWorker(pod)
 	}
 }
 
