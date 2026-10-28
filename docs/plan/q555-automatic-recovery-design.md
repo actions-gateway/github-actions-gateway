@@ -127,7 +127,7 @@ Whether `JobCompleted` carries them too is inferred from upstream's struct and u
 - **The cap evicts failures, never budgets.** Past a cap sized so the object stays under 512 KiB, the oldest failure entries go first, except one holding a `memoryFloor` whose re-run has not completed.
   A `reruns` or `pending` entry is never evicted to make room: if those alone reach the cap, new reservations fail and their re-runs are withheld, because evicting one would refill its run's budget.
 - **The size, measured** by `TestRerunLedger_CapHoldsEnoughBudgets` with 63-character pod names: a `reruns` entry is 476 bytes at the default budget of 2 with 40-character job names, so the cap holds about 1,100 runs GAG re-ran inside 30 days on one set, and 2,533 bytes at the field's ceiling of 10 with 100-character names, about 206 runs.
-  Q555 extends the test to the `failures` map when it adds it.
+  Q555 extended it to the `failures` map (`TestRerunLedger_CapHoldsEnoughFailures`), and evicts failure records past *half* the cap rather than at it, because `v1.10.0` shares the object and cannot evict them.
 
 ### Pairing and attribution (R1, R2, R8)
 

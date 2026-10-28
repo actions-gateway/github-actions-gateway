@@ -338,8 +338,8 @@ func TestFlakyJobs_SnapshotStoreIsBounded(t *testing.T) {
 	assert.NotNil(t, w.take(fmt.Sprint(maxWorkerSnapshots)))
 }
 
-// TestRerunLedger_CapEvictsFailuresBeforeBudgets: past the cap the oldest failure
-// record goes, and the budget the write was for is reserved.
+// TestRerunLedger_CapEvictsFailuresBeforeBudgets: past half the cap the oldest failure
+// records go, and the budget the write was for is reserved.
 func TestRerunLedger_CapEvictsFailuresBeforeBudgets(t *testing.T) {
 	ctx := context.Background()
 	c, p, target := flakyFixture(t)
@@ -362,12 +362,38 @@ func TestRerunLedger_CapEvictsFailuresBeforeBudgets(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, got.Reruns, "77")
 	assert.Contains(t, got.Reruns, "78")
-	assert.NotContains(t, got.Failures, "1/job-0", "the oldest failure is evicted")
-	assert.Contains(t, got.Failures, "1/job-3", "only as many as the cap needs")
+	for _, k := range []string{"1/job-0", "1/job-1", "1/job-2"} {
+		assert.NotContains(t, got.Failures, k, "the oldest failures are evicted")
+	}
+	assert.Contains(t, got.Failures, "1/job-3", "only as many as the ceiling needs")
+}
+
+// TestRerunLedger_FailuresLeaveHalfTheCapToAnOlderWriter pins the ceiling v1.10.0
+// needs: it keeps failure records without understanding them, cannot evict them, and
+// refuses a write past the cap, so failures past half the cap would cost it its
+// re-run reservations.
+func TestRerunLedger_FailuresLeaveHalfTheCapToAnOlderWriter(t *testing.T) {
+	ctx := context.Background()
+	c, p, target := flakyFixture(t)
+	snap := json.RawMessage(`"` + strings.Repeat("c", 1400) + `"`)
+	require.NoError(t, p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {
+		for i := range 400 {
+			l.Failures[fmt.Sprintf("1/job-%03d", i)] = &failureRecord{ExpiresAt: now.Add(time.Hour),
+				FailedAt: now.Add(time.Duration(i) * time.Second), Context: snap}
+		}
+		return true
+	}))
+	data := readLedgerData(t, c, target)
+	assert.LessOrEqual(t, len(data), rerunLedgerMaxBytes/2, "an older writer keeps at least half the cap")
+	got, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.NotContains(t, got.Failures, "1/job-000")
+	assert.Contains(t, got.Failures, "1/job-399", "the newest failures are kept")
+	t.Logf("%d of 400 failures kept in %d bytes", len(got.Failures), len(data))
 }
 
 // TestRerunLedger_CapHoldsEnoughFailures measures how many failure records fit under
-// the cap, each with a snapshot of a typical worker: phase, reason, a truncated
+// their ceiling, half the cap, each with a snapshot of a typical worker: phase, reason, a truncated
 // message, five conditions, and a runner and two sidecars.
 func TestRerunLedger_CapHoldsEnoughFailures(t *testing.T) {
 	const sample = 100
@@ -394,9 +420,9 @@ func TestRerunLedger_CapHoldsEnoughFailures(t *testing.T) {
 	}
 	b, err := json.Marshal(l)
 	require.NoError(t, err)
-	fit := rerunLedgerMaxBytes * sample / len(b)
+	fit := failureRecordsCeiling * sample / len(b)
 	t.Logf("%d bytes per failure, %d failures fit", len(b)/sample, fit)
-	assert.GreaterOrEqual(t, fit, 300)
+	assert.GreaterOrEqual(t, fit, 150)
 }
 
 // scaleSetWorker is a scale-set worker pod for runner, carrying run 900's identity.

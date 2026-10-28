@@ -575,7 +575,7 @@ A later completion of the same key with a new job ID is the job's next attempt, 
 A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context, and marks GAG's re-run it was attributed to as spent so a later attempt does not claim it again.
 `JobCompleted` carries no run attempt, so GAG's re-runs are matched by job name rather than by attempt: a job that first fails in an attempt after one GAG re-ran reads as `gag_collateral` rather than `other`.
 A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
-Failure records are evicted oldest first when the ledger would pass its 512 KiB cap; budget records never are.
+Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: `v1.10.0` writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.
 
 #### Why preemption *deletes* rather than *evicts*, and what that costs us
 

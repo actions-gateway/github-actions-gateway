@@ -53,11 +53,18 @@ const rerunRecordTTL = 30 * 24 * time.Hour
 // weekend later to pair with it.
 const failureRecordTTL = 7 * 24 * time.Hour
 
-// rerunLedgerMaxBytes caps the encoded ledger under the 1 MiB ConfigMap ceiling. Failure
-// records are evicted oldest first to make room. A budget entry never is, because
-// evicting one refills its run's budget: a write the budgets alone would push past the
-// cap fails, and its re-run is withheld.
+// rerunLedgerMaxBytes caps the encoded ledger under the 1 MiB ConfigMap ceiling. A
+// budget entry is never evicted to make room, because evicting one refills its run's
+// budget: a write the budgets alone would push past the cap fails, and its re-run is
+// withheld.
 const rerunLedgerMaxBytes = 512 << 10
+
+// failureRecordsCeiling is the encoded size past which failure records are evicted,
+// oldest first. It is half the cap, not the cap: v1.10.0 writes this ledger too, keeps
+// failure records it does not know, cannot evict them, and refuses a write past the
+// cap, so records filling the ledger would withhold every re-run it reserves during a
+// rollout or after a rollback.
+const failureRecordsCeiling = rerunLedgerMaxBytes / 2
 
 // Re-run scopes: what one re-run covered. rerun-failed-jobs, the only call GAG makes
 // today, covers every failed job of the attempt; scopeJob is reserved for a
@@ -457,7 +464,7 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 		l.MinWriterVersion = max(l.MinWriterVersion, rerunLedgerMinWriterVersion)
 
 		data, err := json.Marshal(l)
-		for err == nil && len(data) > rerunLedgerMaxBytes && evictOldestFailure(l) {
+		for err == nil && len(data) > failureRecordsCeiling && evictOldestFailure(l) {
 			data, err = json.Marshal(l)
 		}
 		if err != nil {
