@@ -38,7 +38,10 @@ func TestResolverPendingThenDoneWakes(t *testing.T) {
 	got := waitFor(t, r, req)
 	assert.Equal(t, Done, got.State)
 	assert.Equal(t, "2.335.1", got.Result.Version)
-	assert.Equal(t, int32(1), woken.Load(), "the caller is woken exactly once per state change")
+	// The resolver publishes the new state before it calls the wakes, so Done can
+	// be visible before the wake lands; wait for it rather than reading it once.
+	require.Eventually(t, func() bool { return woken.Load() >= 1 }, 5*time.Second, time.Millisecond, "the caller is woken once the state changes")
+	assert.Never(t, func() bool { return woken.Load() > 1 }, 50*time.Millisecond, time.Millisecond, "the caller is woken exactly once per state change")
 }
 
 func TestResolverDedupsInFlight(t *testing.T) {
