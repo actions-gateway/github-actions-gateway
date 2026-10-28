@@ -87,14 +87,17 @@ The analogue of [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a
 3. **Writes land only in a scope the token grants write.** GitHub grants a fork pull request `refs/pull/<n>/merge` alone, and the default-branch scope only to its listed triggers.
 4. **Tenant-local storage.** One server holds one tenant's entries, in the per-tenant mode; the shared modes give this up, as [tenancy modes](#tenancy-modes) says.
 
-Residuals, each read from falcondev v9.8.0 (`c866ae4`) and none measured:
+Residuals, each read from falcondev v9.8.0 (`c866ae4`); the blob transport's is also measured:
 
 - **The ref boundary's own gap is GitHub's:** a workflow that runs fork code in a default-branch context can write that scope.
   This design reproduces the boundary and does not claim more.
 - **The blob transport takes no token.** `PUT /upload/<id>` and `PUT /devstoreaccount1/upload/<id>` read no `Authorization` header, so while an upload is open its ID is the only credential: 10 decimal digits from `customAlphabet` in `lib/helpers.ts`, about 33 bits.
   An unknown ID gets `201` with nothing written, so a guess learns nothing from the reply.
   `GET /download/<id>` is tokenless too, keyed by a random UUID.
-  GitHub hands out signed SAS URLs for the same step, so whether a job can plant parts into another job's open upload has to be measured or closed before [Q215](../queue/Q215.md) ships `deploy/gha-cache/`.
+  Measured 2026-10-27 against v9.8.0 in a local container with a fixture token: a `PUT` carrying no credential to an open upload's URL got `201`, and its bytes were what the entry restored after finalize.
+  The URL carries no signature, so anyone holding or guessing the ID writes the entry, where GitHub hands out signed SAS URLs for the same step.
+  Upstream agrees: a maintainer called it a real gap on falcondev #259 and asked for a random per-upload token in the URL, checked on every write and stored only as a hash; #299 tracks that design, unmerged on 2026-10-27.
+  [Q215](../queue/Q215.md) does not ship `deploy/gha-cache/` until a release carries it or something in front of the server closes it.
 - **The server holds every job's runtime token in flight.** It forwards each non-cache results call to GitHub with the caller's bearer token (`routes/[...path].ts`), so compromising the server exposes those tokens until they expire.
 - **No job-lifetime credentials.** A token stays valid until its own expiry, as it does against GitHub.
 
@@ -119,8 +122,11 @@ So, as §H.9 says of a shared proxy, the shared modes are for cooperating tenant
 #### Phase 1: per tenant (Q215)
 
 One stock falcondev server per tenant, in the tenant namespace.
-Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream.
+Its budget and its metrics are the tenant's because the server is, so it needs nothing upstream beyond the upload fix in [the residuals](#the-write-path-is-a-contract).
 The steps are on [Q215](../queue/Q215.md), the tokenless upload first.
+
+The pin is two releases behind: v9.9.0 and v9.10.0 shipped since 9.8.0, and v9.10.0 fixes repository-scoped deletes wiping every entry.
+Upstream also merged a Rust rewrite into its development branch on 2026-10-26, so every source read here is of the TypeScript server and has to be re-read against the first release built from it.
 
 #### Phase 2: sharing (Q1225)
 
@@ -139,7 +145,8 @@ None of the three gaps is requested upstream: the titles of falcondev's last 200
 
 The work, in order:
 
-1. **Feature requests upstream** for an owner allowlist, a budget per owner, and an owner label on the metrics, offering the pull requests.
+1. **Feature requests upstream** for an owner allowlist, a budget per owner, and an owner label on the metrics, one issue each.
+   Since v9.10.0 falcondev takes no outside pull requests (its `AGENTS.md`: "External contributions are disabled"), so the issues are the whole upstream ask.
    An owner label rather than a repository one keeps the series count to the number of tenants.
 2. **A CRD shaped like `EgressProxy`** that grants a provider's server to other namespaces, as [tenancy modes](#tenancy-modes) describes, configuring each grant's owner on the server once upstream supports it.
 3. **If upstream declines**, the CRD runs one stock server per granted tenant instead, in the provider namespace and on the provider's bill: per-tenant budget, metrics and admission at the cost of a pod and a volume per grant, the cache's counterpart of `EgressProxy`'s `PerConsumerPort`.
