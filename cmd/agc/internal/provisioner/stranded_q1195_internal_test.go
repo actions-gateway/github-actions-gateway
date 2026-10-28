@@ -45,6 +45,7 @@ func TestRecoverAbandonedScaleSetWorker_Q1195_RecoversTheStrandedJob(t *testing.
 	for _, tc := range []struct {
 		name    string
 		workers []*corev1.Pod
+		jobs    []OrphanedWorker
 		want    []string
 	}{
 		{
@@ -90,10 +91,24 @@ func TestRecoverAbandonedScaleSetWorker_Q1195_RecoversTheStrandedJob(t *testing.
 			name:    "holder's own job unknown",
 			workers: []*corev1.Pod{startedOn(mintedWorker("job-x", "myorg/repo-a", "111"), "job-a")},
 		},
+		{
+			// job-b finished and its worker is gone, but its in-flight removal is not
+			// saved yet. The record says a runner took it, so it is not named.
+			name:    "the end job's record says it started",
+			workers: []*corev1.Pod{startedOn(mintedWorker("job-b", "myorg/repo-a", "111"), "job-a")},
+			jobs: func() []OrphanedWorker {
+				finished := inFlight("job-b", "myorg/repo-b", "222")
+				finished.Started = true
+				return []OrphanedWorker{jobs[0], finished, jobs[2]}
+			}(),
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newAbandonedScaleSetFixture(t, http.StatusAccepted, tc.workers...)
 			target := &inFlightTarget{stubTarget: f.target, jobs: jobs}
+			if tc.jobs != nil {
+				target.jobs = tc.jobs
+			}
 
 			<-f.p.RecoverAbandonedScaleSetWorker(context.Background(), target, reapedPendingWorker(scaleSetPodName("gpu", "job-a")))
 

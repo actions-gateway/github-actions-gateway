@@ -79,6 +79,8 @@ type OrphanedWorker struct {
 	Owner      string
 	Repository string
 	RunID      string
+	// Started is the listener's record that some runner took the job (Q1195).
+	Started bool
 }
 
 // orphanScanState records which owners have already had their stored in-flight set
@@ -229,9 +231,12 @@ func (s scaleSetWorkerSet) startedElsewhere(ownerName, podName string) bool {
 
 // strandedJob follows podName's lost runner to the job left with none: the worker whose
 // runner started the job podName was created for, then the job that worker was created
-// for, and so on to a job no live worker started. inFlight maps a worker to the job it
-// was created for. ok is false where the walk leaves the listed workers or the in-flight
-// set, which an absent record or a concluded job makes it do.
+// for, and so on to a job no live worker started and the listener has not seen started.
+// inFlight maps a worker to the job it was created for. ok is false where the walk
+// leaves the listed workers or the in-flight set, which an absent record or a concluded
+// job makes it do, and where the job it ends at was started on a worker since removed:
+// a finished job's pod can be deleted before the listener saves its record's removal,
+// with completedPodTTL at zero, and only the record's start says it ran.
 //
 // It is also false while any worker is Running with no start recorded. The listener
 // stamps a start only once its JobStarted arrives, so such a runner may already hold
@@ -255,6 +260,11 @@ func (s scaleSetWorkerSet) strandedJob(ownerName, podName string, inFlight []Orp
 			return OrphanedWorker{}, false
 		}
 		if !s.startedJobs[job.JobID] {
+			if job.Started {
+				// Some runner took it and its worker is gone: the job finished, or was
+				// lost with its worker, and its record has not been retired yet.
+				return OrphanedWorker{}, false
+			}
 			return job, true
 		}
 		minted = holder

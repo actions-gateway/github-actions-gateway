@@ -738,6 +738,9 @@ It follows the runners: the worker that took the reaped worker's job was created
 A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
 The recovery names no job while any worker is `Running` with no start recorded, because that runner may hold the job already with its `JobStarted` still in flight; a stranded job found then is not recovered, and nothing re-checks it.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
+A finished job leaves the record only in a later save, so its worker pod can be gone first, at once under `completedPodTTL: 0s`.
+The listener therefore marks a job's record started when its `JobStarted` arrives, and the walk names no job whose record is marked.
+Two windows stay open: a start not yet saved, either because the guard save keeps failing or because the job started and its pod went within one poll; and the marks a restart drops, since the next listener rebuilds the record from the jobs still assigned.
 The **budget** is the scale-set tier's ledger budget (Q1182), and the force-cancel is recorded in it: before cancelling, the AGC reads the run's attempt and stores it as `selfCancelledAttempt`, so the graceful-deletion arm's `cancelled` check reads a cancel of that attempt as GAG's own rather than a user's, and the abandoned run's later re-run merges into one another disruption of the same attempt already reserved.
 And the **wait** is the identical capacity test: a worker pod of the same owner binding after the abandonment.
 

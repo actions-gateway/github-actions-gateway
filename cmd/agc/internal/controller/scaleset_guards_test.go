@@ -126,10 +126,16 @@ func TestRunnerSetTarget_InFlightJobsReadsTheListenersRecord(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(guardScheme()).Build()
 	r := &RunnerSetReconciler{Client: c}
 	require.NoError(t, r.scaleSetGuardStore(rs).Save(ctx, scalesetlistener.GuardState{
-		InFlight: []scalesetlistener.InFlightJob{{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"}},
+		InFlight: []scalesetlistener.InFlightJob{
+			{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"},
+			{JobID: "job-c", Owner: "myorg", Repository: "repo-c", RunID: "333", Started: true},
+		},
 	}))
 
 	jobs, err := r.provisionerTarget(rs).InFlightJobs(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, []provisioner.OrphanedWorker{{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"}}, jobs)
+	assert.Equal(t, []provisioner.OrphanedWorker{
+		{JobID: "job-b", Owner: "myorg", Repository: "repo-b", RunID: "222"},
+		{JobID: "job-c", Owner: "myorg", Repository: "repo-c", RunID: "333", Started: true},
+	}, jobs)
 }

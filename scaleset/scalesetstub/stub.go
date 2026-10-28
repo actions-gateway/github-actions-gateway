@@ -777,6 +777,30 @@ func (s *Stub) CompleteAssignedJob(scaleSetID int, jobID, result string) bool {
 	return false
 }
 
+// StartAssignedJob appends a JobStarted naming runnerName for an assigned job, the
+// message the backend sends once a runner takes it. Returns false if no non-terminal
+// job with that id exists.
+func (s *Stub) StartAssignedJob(scaleSetID int, jobID, runnerName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ss := s.scaleSets[scaleSetID]
+	if ss == nil {
+		return false
+	}
+	for _, j := range ss.jobs {
+		if j.jobID == jobID && !j.state.terminal() {
+			ss.appendMessage(s.newMsgID(), []scaleset.JobMessage{{
+				MessageType: scaleset.MessageTypeJobStarted,
+				JobID:       j.jobID,
+				RunnerName:  runnerName,
+			}})
+			s.notifyLocked()
+			return true
+		}
+	}
+	return false
+}
+
 // DropAssignedJob ends an assignment WITHOUT delivering a JobCompleted — the way the
 // backend loses a job a client is still holding. The statistics stop counting it and
 // nothing else is said, so a client that waits for a completion waits forever (Q553).
