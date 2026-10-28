@@ -131,6 +131,7 @@ type Server struct {
 	dialErrors        *prometheus.CounterVec
 	tunnelDuration    *prometheus.HistogramVec
 	connectDenied     *prometheus.CounterVec
+	connects          *prometheus.CounterVec
 
 	// metricsGatherer is the registry the /metrics endpoint serves — the same
 	// one the proxy metrics above are registered on, so a custom registry (tests,
@@ -237,7 +238,13 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		Name: "actions_gateway_proxy_connect_denied_total",
 		Help: "CONNECT requests refused because the destination is not on the allowlist.",
 	}, nil)
-	reg.MustRegister(active, total, dialErr, tunnelDur, denied)
+	connects := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "actions_gateway_proxy_connects_total",
+		Help: "CONNECT requests by destination (the allowlist entry that matched, " +
+			"unlisted for a refusal, any with no allowlist) and outcome " +
+			"(tunneled, denied, dns_error, refused, timeout, unreachable, error).",
+	}, []string{"destination", "outcome"})
+	reg.MustRegister(active, total, dialErr, tunnelDur, denied, connects)
 	// Emit actions_gateway_build_info{component="proxy",version=…} 1 on the same
 	// registry so the running binary version is correlatable straight from
 	// metrics during an incident (Q318).
@@ -261,6 +268,7 @@ func NewServer(addr, healthAddr string, dialTimeout time.Duration, log *slog.Log
 		dialErrors:        dialErr,
 		tunnelDuration:    tunnelDur,
 		connectDenied:     denied,
+		connects:          connects,
 		metricsGatherer:   gatherer,
 		ready:             make(chan struct{}),
 		draining:          make(chan struct{}),
@@ -716,35 +724,48 @@ func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
+// Fixed values of the destination label on actions_gateway_proxy_connects_total.
+// Every other value is an allowlist entry as configured, so the label is bounded
+// by the allowlist and never by the hosts workloads ask for.
+const (
+	// destinationUnlisted is a CONNECT no entry matched: a denial, or a CIDR-path
+	// lookup that failed before any address could be checked.
+	destinationUnlisted = "unlisted"
+	// destinationAny is a CONNECT through a proxy with no allowlist configured.
+	destinationAny = "any"
+)
+
 // checkDestination enforces the CONNECT allowlist (Q242 G.1). It returns the
-// address to dial and whether the destination is permitted. With no allowlist
-// configured it is a no-op (transport-only): any destination is permitted and
-// the original host:port is returned. With an allowlist, a hostname matching an
-// allowed suffix is permitted and dialed by name (the FQDN egress policy is the
-// hard gate); otherwise, if it resolves into an allowed CIDR, the validated IP
-// is pinned as the dial target (defeating a rebinding resolver between this
-// check and the dial); a literal-IP target is permitted only if it falls in an
-// allowed CIDR. Anything else is refused.
-func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAddr string, allowed bool) {
+// address to dial, the allowlist entry that permitted it as configured, and whether the
+// destination is permitted. With no allowlist configured it is a no-op
+// (transport-only): any destination is permitted and the original host:port is
+// returned. With an allowlist, a hostname matching an allowed suffix is
+// permitted and dialed by name (the FQDN egress policy is the hard gate);
+// otherwise, if it resolves into an allowed CIDR, the validated IP is pinned as
+// the dial target (defeating a rebinding resolver between this check and the
+// dial); a literal-IP target is permitted only if it falls in an allowed CIDR.
+// Anything else is refused as destinationUnlisted, and lookupErr is the CIDR-path
+// resolver's error when that lookup is what failed.
+func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAddr, entry string, allowed bool, lookupErr error) {
 	if len(s.AllowedHostSuffixes) == 0 && len(s.AllowedCIDRs) == 0 {
-		return hostport, true
+		return hostport, destinationAny, true, nil
 	}
 	host, port, err := net.SplitHostPort(hostport)
 	if err != nil {
-		return "", false
+		return "", destinationUnlisted, false, nil
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
 
 	if ip := net.ParseIP(host); ip != nil {
 		// Literal IP: only a CIDR rule can permit it — a host suffix can't match an IP.
-		if ipInAny(ip, s.AllowedCIDRs) {
-			return hostport, true
+		if c := cidrContaining(ip, s.AllowedCIDRs); c != nil {
+			return hostport, c.String(), true, nil
 		}
-		return "", false
+		return "", destinationUnlisted, false, nil
 	}
 
-	if matchesHostSuffix(host, s.AllowedHostSuffixes) {
-		return hostport, true
+	if suf, ok := matchHostSuffix(host, s.AllowedHostSuffixes); ok {
+		return hostport, suf, true, nil
 	}
 
 	if len(s.AllowedCIDRs) > 0 {
@@ -752,40 +773,42 @@ func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAdd
 		if resolver == nil {
 			resolver = net.DefaultResolver
 		}
-		if addrs, err := resolver.LookupIPAddr(ctx, host); err == nil {
-			for _, a := range addrs {
-				if ipInAny(a.IP, s.AllowedCIDRs) {
-					return net.JoinHostPort(a.IP.String(), port), true
-				}
+		addrs, err := resolver.LookupIPAddr(ctx, host)
+		if err != nil {
+			return "", destinationUnlisted, false, err
+		}
+		for _, a := range addrs {
+			if c := cidrContaining(a.IP, s.AllowedCIDRs); c != nil {
+				return net.JoinHostPort(a.IP.String(), port), c.String(), true, nil
 			}
+		}
+	}
+	return "", destinationUnlisted, false, nil
+}
+
+// matchHostSuffix returns the configured suffix host equals or is a subdomain
+// of (so an allowed "golang.org" permits "proxy.golang.org").
+func matchHostSuffix(host string, suffixes []string) (string, bool) {
+	for _, entry := range suffixes {
+		suf := strings.ToLower(strings.Trim(entry, "."))
+		if suf == "" {
+			continue
+		}
+		if host == suf || strings.HasSuffix(host, "."+suf) {
+			return entry, true
 		}
 	}
 	return "", false
 }
 
-// matchesHostSuffix reports whether host equals or is a subdomain of any suffix
-// (so an allowed "golang.org" permits "proxy.golang.org").
-func matchesHostSuffix(host string, suffixes []string) bool {
-	for _, suf := range suffixes {
-		suf = strings.ToLower(strings.Trim(suf, "."))
-		if suf == "" {
-			continue
-		}
-		if host == suf || strings.HasSuffix(host, "."+suf) {
-			return true
-		}
-	}
-	return false
-}
-
-// ipInAny reports whether ip falls within any of the CIDRs.
-func ipInAny(ip net.IP, cidrs []*net.IPNet) bool {
+// cidrContaining returns the first of cidrs that contains ip, or nil.
+func cidrContaining(ip net.IP, cidrs []*net.IPNet) *net.IPNet {
 	for _, c := range cidrs {
 		if c != nil && c.Contains(ip) {
-			return true
+			return c
 		}
 	}
-	return false
+	return nil
 }
 
 func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
@@ -799,8 +822,13 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		dialTimeout = 10 * time.Second
 	}
 
-	dialAddr, allowed := s.checkDestination(r.Context(), r.Host)
+	dialAddr, destination, allowed, lookupErr := s.checkDestination(r.Context(), r.Host)
 	if !allowed {
+		outcome := "denied"
+		if lookupErr != nil {
+			outcome = "dns_error"
+		}
+		s.connects.WithLabelValues(destinationUnlisted, outcome).Inc()
 		s.connectDenied.WithLabelValues().Inc()
 		s.recordFailure(r, outcomeDenied, nil)
 		s.logger().Warn("CONNECT destination not allowed", "host", truncateHost(r.Host))
@@ -810,6 +838,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
 	if err != nil {
+		s.connects.WithLabelValues(destination, dialOutcome(err)).Inc()
 		s.dialErrors.WithLabelValues().Inc()
 		s.recordFailure(r, outcomeDialFailed, err)
 		s.logger().Error("upstream dial failed", "host", truncateHost(r.Host), "error", truncateLogError(err))
@@ -851,6 +880,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.connectionsTotal.WithLabelValues().Inc()
+	s.connects.WithLabelValues(destination, "tunneled").Inc()
 	s.connectionsActive.WithLabelValues().Inc()
 	defer s.connectionsActive.WithLabelValues().Dec()
 

@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"syscall"
 	"testing"
 	"time"
 
@@ -54,12 +56,15 @@ func TestCheckDestination(t *testing.T) {
 		hostport    string
 		wantAllowed bool
 		wantDial    string // only checked when wantAllowed
+		wantDest    string
+		wantLookErr bool
 	}{
 		{
 			name:        "no allowlist is transport-only: any host allowed, dialed verbatim",
 			hostport:    "anything.example.com:443",
 			wantAllowed: true,
 			wantDial:    "anything.example.com:443",
+			wantDest:    destinationAny,
 		},
 		{
 			name:        "exact host suffix match",
@@ -67,6 +72,7 @@ func TestCheckDestination(t *testing.T) {
 			hostport:    "golang.org:443",
 			wantAllowed: true,
 			wantDial:    "golang.org:443",
+			wantDest:    "golang.org",
 		},
 		{
 			name:        "subdomain of an allowed suffix",
@@ -74,6 +80,7 @@ func TestCheckDestination(t *testing.T) {
 			hostport:    "proxy.golang.org:443",
 			wantAllowed: true,
 			wantDial:    "proxy.golang.org:443",
+			wantDest:    "golang.org",
 		},
 		{
 			name:        "case-insensitive and trailing-dot host normalize to a match",
@@ -81,18 +88,21 @@ func TestCheckDestination(t *testing.T) {
 			hostport:    "Proxy.GoLang.Org.:443",
 			wantAllowed: true,
 			wantDial:    "Proxy.GoLang.Org.:443", // dialed verbatim (FQDN policy is the hard gate)
+			wantDest:    "golang.org",
 		},
 		{
 			name:        "non-matching suffix and no CIDR is denied",
 			suffixes:    []string{"golang.org"},
 			hostport:    "evil.example.com:443",
 			wantAllowed: false,
+			wantDest:    destinationUnlisted,
 		},
 		{
 			name:        "a different suffix is not a partial match (evilgolang.org)",
 			suffixes:    []string{"golang.org"},
 			hostport:    "evilgolang.org:443",
 			wantAllowed: false,
+			wantDest:    destinationUnlisted,
 		},
 		{
 			name:        "literal IP inside an allowed CIDR",
@@ -100,12 +110,14 @@ func TestCheckDestination(t *testing.T) {
 			hostport:    "10.1.2.3:443",
 			wantAllowed: true,
 			wantDial:    "10.1.2.3:443",
+			wantDest:    "10.0.0.0/8",
 		},
 		{
 			name:        "literal IP outside the allowed CIDR is denied",
 			cidrs:       []string{"10.0.0.0/8"},
 			hostport:    "192.168.1.1:443",
 			wantAllowed: false,
+			wantDest:    destinationUnlisted,
 		},
 		{
 			name:        "hostname resolving into an allowed CIDR pins the validated IP",
@@ -114,6 +126,7 @@ func TestCheckDestination(t *testing.T) {
 			hostport:    "private.googleapis.com:443",
 			wantAllowed: true,
 			wantDial:    "199.36.153.10:443", // pinned, not dialed by name
+			wantDest:    "199.36.153.8/30",
 		},
 		{
 			name:        "hostname resolving outside every allowed CIDR is denied",
@@ -121,6 +134,7 @@ func TestCheckDestination(t *testing.T) {
 			resolve:     map[string][]net.IPAddr{"attacker.example.com": ipAddrs("203.0.113.7")},
 			hostport:    "attacker.example.com:443",
 			wantAllowed: false,
+			wantDest:    destinationUnlisted,
 		},
 		{
 			name:        "resolver error denies (fail closed)",
@@ -128,6 +142,8 @@ func TestCheckDestination(t *testing.T) {
 			resolveErr:  errors.New("dns timeout"),
 			hostport:    "unknown.example.com:443",
 			wantAllowed: false,
+			wantDest:    destinationUnlisted,
+			wantLookErr: true,
 		},
 		{
 			name:        "suffix match wins without resolving (no resolver consulted)",
@@ -136,12 +152,22 @@ func TestCheckDestination(t *testing.T) {
 			hostport:    "proxy.golang.org:443",
 			wantAllowed: true,
 			wantDial:    "proxy.golang.org:443",
+			wantDest:    "golang.org",
+		},
+		{
+			name:        "the destination is the suffix as configured, not as normalized",
+			suffixes:    []string{".GoLang.org."},
+			hostport:    "proxy.golang.org:443",
+			wantAllowed: true,
+			wantDial:    "proxy.golang.org:443",
+			wantDest:    ".GoLang.org.",
 		},
 		{
 			name:        "malformed host:port is denied",
 			suffixes:    []string{"golang.org"},
 			hostport:    "no-port",
 			wantAllowed: false,
+			wantDest:    destinationUnlisted,
 		},
 	}
 
@@ -155,9 +181,15 @@ func TestCheckDestination(t *testing.T) {
 				s.dnsResolver = fakeResolver{ips: tc.resolve, err: tc.resolveErr}
 			}
 
-			dial, allowed := s.checkDestination(context.Background(), tc.hostport)
+			dial, dest, allowed, lookupErr := s.checkDestination(context.Background(), tc.hostport)
 			if allowed != tc.wantAllowed {
 				t.Fatalf("allowed = %v, want %v", allowed, tc.wantAllowed)
+			}
+			if dest != tc.wantDest {
+				t.Errorf("destination = %q, want %q", dest, tc.wantDest)
+			}
+			if (lookupErr != nil) != tc.wantLookErr {
+				t.Errorf("lookupErr = %v, want error: %v", lookupErr, tc.wantLookErr)
 			}
 			if tc.wantAllowed && dial != tc.wantDial {
 				t.Errorf("dialAddr = %q, want %q", dial, tc.wantDial)
@@ -186,6 +218,91 @@ func TestHandleConnect_DeniedDestination(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(s.connectDenied.WithLabelValues()); got != 1 {
 		t.Errorf("connect_denied_total = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(s.connects.WithLabelValues(destinationUnlisted, "denied")); got != 1 {
+		t.Errorf("connects_total{destination=unlisted,outcome=denied} = %v, want 1", got)
+	}
+	if got := testutil.CollectAndCount(s.connects); got != 1 {
+		t.Errorf("connects_total has %d series, want 1", got)
+	}
+}
+
+// TestHandleConnect_CIDRLookupFailure pins that a failed lookup on the CIDR path
+// is refused like a denial but counted as its own outcome, and that it still
+// counts on connect_denied_total, whose meaning dashboards and alerts read.
+func TestHandleConnect_CIDRLookupFailure(t *testing.T) {
+	s := NewServer(":0", ":0", time.Second, slog.Default(), prometheus.NewRegistry())
+	s.AllowedCIDRs = []*net.IPNet{mustCIDR(t, "10.0.0.0/8")}
+	s.dnsResolver = fakeResolver{err: errors.New("no such host")}
+
+	req := httptest.NewRequest(http.MethodConnect, "http://unknown.example.com:443", nil)
+	req.Host = "unknown.example.com:443"
+	rec := httptest.NewRecorder()
+
+	s.handleConnect(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if got := testutil.ToFloat64(s.connects.WithLabelValues(destinationUnlisted, "dns_error")); got != 1 {
+		t.Errorf("connects_total{destination=unlisted,outcome=dns_error} = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(s.connects.WithLabelValues(destinationUnlisted, "denied")); got != 0 {
+		t.Errorf("connects_total{destination=unlisted,outcome=denied} = %v, want 0", got)
+	}
+	if got := testutil.ToFloat64(s.connectDenied.WithLabelValues()); got != 1 {
+		t.Errorf("connect_denied_total = %v, want 1", got)
+	}
+}
+
+// TestHandleConnect_DialRefusedCountsTheMatchedEntry covers a dial failure to
+// an allowed destination: the outcome names the class and the destination names
+// the CIDR that permitted it, never the address dialed.
+func TestHandleConnect_DialRefusedCountsTheMatchedEntry(t *testing.T) {
+	// A port that was bound and released refuses the dial.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
+	s := NewServer(":0", ":0", time.Second, slog.Default(), prometheus.NewRegistry())
+	s.AllowedCIDRs = []*net.IPNet{mustCIDR(t, "127.0.0.0/8")}
+
+	req := httptest.NewRequest(http.MethodConnect, "http://"+addr, nil)
+	req.Host = addr
+	rec := httptest.NewRecorder()
+
+	s.handleConnect(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	if got := testutil.ToFloat64(s.connects.WithLabelValues("127.0.0.0/8", "refused")); got != 1 {
+		t.Errorf("connects_total{destination=127.0.0.0/8,outcome=refused} = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(s.dialErrors.WithLabelValues()); got != 1 {
+		t.Errorf("dial_errors_total = %v, want 1", got)
+	}
+}
+
+func TestDialOutcome(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{&net.DNSError{Err: "no such host", IsNotFound: true}, "dns_error"},
+		{&net.OpError{Op: "dial", Err: syscall.ECONNREFUSED}, "refused"},
+		{&net.OpError{Op: "dial", Err: timeoutErr{}}, "timeout"},
+		{&net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.EHOSTUNREACH)}, "unreachable"},
+		{&net.OpError{Op: "dial", Err: os.NewSyscallError("connect", syscall.ENETUNREACH)}, "unreachable"},
+		{errors.New("something else"), "error"},
+	}
+	for _, tc := range tests {
+		if got := dialOutcome(tc.err); got != tc.want {
+			t.Errorf("dialOutcome(%v) = %q, want %q", tc.err, got, tc.want)
+		}
 	}
 }
 
