@@ -339,8 +339,8 @@ Built.
 `checkDestination` returns the allowlist entry that admitted a connection, as written in the allowlist (a host suffix or a CIDR), beside the dial address, where it used to return only whether one did.
 Two defects it fixed on the way:
 
-- **A failed lookup on the CIDR path reads as a policy denial.** A DNS outage then looks like "destination not allowed", which is exactly the misreading that would make a futility check withhold a retry it should make.
-  It is `outcome="dns_error"`.
+- **A failed lookup on the CIDR path read as a policy denial.** A DNS outage then looked like "destination not allowed", which is exactly the misreading that would make a futility check withhold a retry it should make.
+  It is `outcome="dns_error"`, for a lookup that failed without an answer; a name that does not exist (`IsNotFound`) stays `denied`, since a workload probing nonexistent names is still probing.
 - **Every dial failure was one unlabelled counter**, though `errors.As` can tell the kinds apart.
 
 | Metric | Labels |
