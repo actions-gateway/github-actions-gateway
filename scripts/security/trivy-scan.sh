@@ -28,10 +28,11 @@ require_cmd trivy "https://trivy.dev/latest/getting-started/installation/"
 require_cmd docker "https://docs.docker.com/get-docker/"
 
 TRIVY_SEVERITY="${TRIVY_SEVERITY:-HIGH,CRITICAL}"
-TRIVY_IMAGES="${TRIVY_IMAGES:-gmc agc proxy worker wrapper build-runner fakegithub}"
+TRIVY_IMAGES="${TRIVY_IMAGES:-gmc agc proxy worker wrapper build-runner cache-runner fakegithub}"
 # build-runner is `worker` plus a Docker client, so it inherits that image's
 # actions-runner base and its CVE floor; report-only for the same reason.
-TRIVY_REPORT_ONLY="${TRIVY_REPORT_ONLY:-worker build-runner}"
+# cache-runner is build-runner with one patched string, so it follows suit.
+TRIVY_REPORT_ONLY="${TRIVY_REPORT_ONLY:-worker build-runner cache-runner}"
 
 for name in $TRIVY_IMAGES; do
 	code=1

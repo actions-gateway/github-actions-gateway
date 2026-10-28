@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 #
-# Verify the keyless cosign signatures of a published release: the six images
-# (gmc, agc, proxy, worker, wrapper, build-runner) at the version tag, the SPDX
-# SBOM attestation on each image's per-arch manifests (amd64 and arm64 both
-# required), both Helm chart OCI
-# artifacts, and every `*.cosign.bundle` blob signature on the GitHub Release.
+# Verify the keyless cosign signatures of a published release: the seven images
+# (gmc, agc, proxy, worker, wrapper, build-runner, cache-runner) at the version
+# tag, the SPDX SBOM attestation on each image's per-arch manifests (amd64 and
+# arm64 both required), both Helm chart OCI artifacts, and every `*.cosign.bundle` blob signature on the GitHub Release.
 # Backs `make verify-release VERSION=vX.Y.Z` and `make verify-release-compat`;
 # the identity/issuer constraints match what .github/workflows/publish.yml signs
 # with. See docs/operations/release.md.
@@ -113,7 +112,7 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 rc=0
-for img in gmc agc proxy worker wrapper build-runner; do
+for img in gmc agc proxy worker wrapper build-runner cache-runner; do
 	printf '==> %-28s %s ... ' "$img" "$VERSION"
 	check verify "$repo/$img:$VERSION" || rc=1
 	# SBOMs are attested per arch (publish.yml), so the index carries none. The

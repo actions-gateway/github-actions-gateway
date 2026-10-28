@@ -70,7 +70,7 @@ Set `spec.workerImage` when your jobs need more than that:
 
 | What you need | Point it at |
 |---|---|
-| `docker compose`, or a CLI and buildx GAG pins and bumps itself rather than whichever versions the runner release vendored | **`ghcr.io/actions-gateway/build-runner`** — the [`worker` image](release.md#the-worker-images-wrapper-worker-and-build-runner) with that tooling replaced. Keyless-signed and SBOM-attested by the same release pipeline as every other first-party image, so `make verify-release` covers it. Pin it by digest from the release notes of the version you are running. |
+| `docker compose`, or a CLI and buildx GAG pins and bumps itself rather than whichever versions the runner release vendored | **`ghcr.io/actions-gateway/build-runner`** — the [`worker` image](release.md#the-worker-images-wrapper-worker-build-runner-and-cache-runner) with that tooling replaced. Keyless-signed and SBOM-attested by the same release pipeline as every other first-party image, so `make verify-release` covers it. Pin it by digest from the release notes of the version you are running. |
 | A language toolchain, a cloud CLI, your own root CA | An image you build. `scripts/dogfood/e2e-runner/Dockerfile` in this repo is a worked example, and [In-runner image builds](in-runner-image-builds.md) covers the daemonless alternatives. |
 
 ```yaml
