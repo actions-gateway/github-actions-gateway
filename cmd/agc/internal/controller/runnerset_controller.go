@@ -1278,7 +1278,7 @@ func (r *RunnerSetReconciler) workerPodHandler() handler.EventHandler {
 }
 
 // disruptedWorkerRecoveryBudget bounds the synchronous half of a recovery started off a
-// watch event: two cached reads, the claim patch with its bounded conflict retries, and
+// watch event: two cached reads, the claim write with its conflict retries, and
 // the retry-budget reservation. The GitHub re-run itself runs on handleEviction's own
 // detached context, as it does for the scan.
 const disruptedWorkerRecoveryBudget = 30 * time.Second

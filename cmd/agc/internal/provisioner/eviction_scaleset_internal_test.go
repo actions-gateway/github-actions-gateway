@@ -533,9 +533,9 @@ func TestClaimDisruptionRecovery_OutlastsAnotherReplicasBurst(t *testing.T) {
 	assert.Contains(t, ledger.Claims, "runner-gpu-mine")
 }
 
-// TestClaimDisruptionRecovery_ConflictsEndWithTheContext pins what bounds the retry
-// once a count does not: a claim conflicting for as long as its caller waits gives up
-// with the caller's context error.
+// TestClaimDisruptionRecovery_ConflictsEndWithTheContext pins the deadline a caller can
+// put on the uncounted retry: a claim still conflicting when its context ends gives up
+// with the context's error.
 func TestClaimDisruptionRecovery_ConflictsEndWithTheContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

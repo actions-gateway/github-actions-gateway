@@ -110,10 +110,12 @@ func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target
 		reader = p.APIReader
 	}
 
-	// A conflict means another replica's claim landed, so the loop always makes progress
-	// in aggregate, and is bounded by ctx rather than a count: claimMu turns a replica's
-	// claims into a back-to-back burst that wins one round per write, which outlasts any
-	// count sized to the replica set (Q1197; the failure ledger's loop measured it).
+	// A conflict means another replica's claim landed, so the loop retries rather than
+	// counting: claimMu turns a replica's claims into a back-to-back burst that wins one
+	// round per write, which outlasts any count sized to the replica set (Q1197; the
+	// failure ledger's loop measured it). Each round needs a rival write, so the loop ends
+	// when those stop; ctx ends it sooner where the caller set a deadline — the watch
+	// path's disruptedWorkerRecoveryBudget, but not the reconcile scan's.
 	for {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("provisioner: claim recovery of %s: %w", podName, err)
