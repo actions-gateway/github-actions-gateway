@@ -479,16 +479,24 @@ jobs:
           # scripts/fetch/retry.sh absorbs transient GHCR push errors (HTTP/2
           # INTERNAL_ERROR / 5xx) — sign and attest are idempotent.
           #
+          # --new-bundle-format=false --use-signing-config=false, on every sign,
+          # attest and sign-blob in this file, keep cosign v3 writing the v2
+          # format operators and Flux verify: v3.1.4's default stores image
+          # signatures as OCI referrers, which cosign v2.5.2 reports as "no
+          # signatures found" (measured, Q1218). The flags are deprecated in v3,
+          # so a cosign that drops them fails here, at signing, rather than at an
+          # operator's verify. `make cosign-pin-check` requires both.
+          #
           # --recursive signs the index AND each per-arch child manifest, so
           # `cosign verify` succeeds against the index digest (what operators
           # pin) and against the per-arch digest a kubelet reports as imageID.
-          scripts/fetch/retry.sh cosign sign --yes --recursive "${IMAGE}@${INDEX_DIGEST}"
+          scripts/fetch/retry.sh cosign sign --yes --new-bundle-format=false --use-signing-config=false --recursive "${IMAGE}@${INDEX_DIGEST}"
           # Each arch's SBOM is attested onto that arch's manifest digest — the
           # precise binding. Note `cosign verify-attestation` therefore targets
           # a per-arch digest, not the index (see security-operations.md).
-          scripts/fetch/retry.sh cosign attest --yes --type spdxjson \
+          scripts/fetch/retry.sh cosign attest --yes --new-bundle-format=false --use-signing-config=false --type spdxjson \
             --predicate "sbom-${{ matrix.name }}-amd64.spdx.json" "${IMAGE}@${DIGEST_AMD64}"
-          scripts/fetch/retry.sh cosign attest --yes --type spdxjson \
+          scripts/fetch/retry.sh cosign attest --yes --new-bundle-format=false --use-signing-config=false --type spdxjson \
             --predicate "sbom-${{ matrix.name }}-arm64.spdx.json" "${IMAGE}@${DIGEST_ARM64}"
       - name: Record published digest in the run summary
         # Surface the immutable ref@digest (the multi-arch INDEX digest) in the
@@ -639,7 +647,7 @@ jobs:
           fi
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway@${digest}"
           # Keyless: same ambient OIDC → Fulcio → Rekor path as the image signing.
-          scripts/fetch/retry.sh cosign sign --yes "${ref}"
+          scripts/fetch/retry.sh cosign sign --yes --new-bundle-format=false --use-signing-config=false "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Package, push, and sign the v2 CRD chart (keyless)
         id: chart_crds_v2
@@ -669,7 +677,7 @@ jobs:
             exit 1
           fi
           ref="${REGISTRY}/${OWNER}/charts/actions-gateway-crds-v2@${digest}"
-          scripts/fetch/retry.sh cosign sign --yes "${ref}"
+          scripts/fetch/retry.sh cosign sign --yes --new-bundle-format=false --use-signing-config=false "${ref}"
           echo "ref=${ref}" >> "${GITHUB_OUTPUT}"
       - name: Compose and create the GitHub Release (prerelease-aware, Q293)
         env:
@@ -762,7 +770,7 @@ jobs:
           out="${RUNNER_TEMP}/actions-gateway-crds-v2.yaml"
           helm template actions-gateway-crds-v2 charts/actions-gateway-crds-v2 \
             --namespace gmc-system > "${out}"
-          scripts/fetch/retry.sh cosign sign-blob --yes \
+          scripts/fetch/retry.sh cosign sign-blob --yes --new-bundle-format=false --use-signing-config=false \
             --bundle "${out}.cosign.bundle" "${out}"
           # The preceding step already created the Release with full notes; this is
           # a defensive fallback (create a minimal one only if the tag somehow still
@@ -791,7 +799,7 @@ jobs:
           # SHA256SUMS.cosign.bundle SHA256SUMS`, then `sha256sum -c SHA256SUMS`.
           out="${RUNNER_TEMP}/migrate-bin"
           scripts/release/build-migrate-binaries.sh "${out}" "${TAG}"
-          scripts/fetch/retry.sh cosign sign-blob --yes \
+          scripts/fetch/retry.sh cosign sign-blob --yes --new-bundle-format=false --use-signing-config=false \
             --bundle "${out}/SHA256SUMS.cosign.bundle" "${out}/SHA256SUMS"
           # The Release already exists (created above); attach every binary, the
           # checksum manifest, and its signature. --clobber keeps re-publish idempotent.

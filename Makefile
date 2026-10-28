@@ -20,13 +20,14 @@ GOVULNCHECK    := $(REPO_ROOT)/.build/govulncheck
 CRD_REF_DOCS   := $(REPO_ROOT)/.build/crd-ref-docs
 MDREFLOW       := $(REPO_ROOT)/.build/mdreflow
 COSIGN         := $(REPO_ROOT)/.build/cosign
+COSIGN_COMPAT  := $(REPO_ROOT)/.build/cosign-compat
 # COSIGN_VERSION pins the cosign release used to verify published signatures.
 # Held in step with the `cosign-release` pinned in .github/workflows/publish.yml
 # by `make cosign-pin-check`, so a local `make verify-release` uses the same
 # verifier the publish run signed with. A bump also needs the new platform
 # digests in scripts/release/download-cosign.sh; bump deliberately (see
 # docs/operations/release.md).
-COSIGN_VERSION ?= v2.5.2
+COSIGN_VERSION ?= v3.1.4
 
 KIND_CLUSTER  ?= actions-gateway-e2e
 # KIND_CONFIG defaults to the 2-worker config so all test suites work out of the box.
@@ -917,7 +918,7 @@ uses-pinned-check: ## Assert every workflow/action `uses:` is a 40-hex SHA with 
 # asked them to name the same binary. Also fails when a cosign-installer step
 # loses its `cosign-release` input, which floats the signer to latest.
 .PHONY: cosign-pin-check
-cosign-pin-check: ## Assert COSIGN_VERSION matches every `cosign-release` publish.yml signs with (Q903)
+cosign-pin-check: ## Assert COSIGN_VERSION matches every `cosign-release` publish.yml signs with, in the v2 format (Q903, Q1218)
 	scripts/ci/check-cosign-pin.sh
 
 # publish.yml's release build retries, and `no-cache: true` means the retry's
@@ -1418,6 +1419,13 @@ cosign: $(COSIGN) ## Download pinned cosign (COSIGN_VERSION) into .build/
 verify-release: $(COSIGN) ## Verify cosign signatures for a published release: make verify-release VERSION=vX.Y.Z
 	@COSIGN=$(COSIGN) scripts/release/verify-release.sh $(VERSION)
 
+# The same check with the cosign v2 operators verify with (COSIGN_COMPAT_VERSION
+# in pins.env), since verify-release uses the signer's own cosign and would pass
+# a release only v3 can read (Q1218).
+.PHONY: verify-release-compat
+verify-release-compat: $(COSIGN_COMPAT) ## Verify a published release with the cosign v2 compat verifier: make verify-release-compat VERSION=vX.Y.Z
+	@COSIGN=$(COSIGN_COMPAT) scripts/release/verify-release.sh $(VERSION)
+
 # Reads the live site, so it belongs to a release cut rather than to `make check`,
 # and it runs at step 7 after the docs republish, not at step 3 with the signature
 # check. Add ARGS=--no-stable for a backport to an older line.
@@ -1477,3 +1485,10 @@ $(COSIGN_PIN):
 	mkdir -p $(REPO_ROOT)/.build
 	rm -f $(REPO_ROOT)/.build/cosign-*.pin
 	touch $@
+
+# The compat verifier's pin is a file, so it is the prerequisite directly.
+COSIGN_COMPAT_VERSION = $(shell awk -F= '$$1 == "COSIGN_COMPAT_VERSION" {print $$2}' $(REPO_ROOT)/scripts/ci/pins.env)
+
+$(COSIGN_COMPAT): $(REPO_ROOT)/scripts/ci/pins.env
+	mkdir -p $(REPO_ROOT)/.build
+	scripts/release/download-cosign.sh $@ $(COSIGN_COMPAT_VERSION)

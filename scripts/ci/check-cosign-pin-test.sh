@@ -3,8 +3,9 @@
 # Unit tests for scripts/ci/check-cosign-pin.sh (Q903, Q1166): drift between
 # the Makefile's COSIGN_VERSION and scripts/ci/pins.env's fails, agreement
 # passes, an installer step whose cosign-release is not the pins reference fails
-# (a literal, or no input at all), and every shape that would leave the gate
-# comparing nothing refuses with rc 2 instead of reporting green.
+# (a literal, or no input at all), a v3 signing call without the v2-format
+# flags fails (Q1218), and every shape that would leave the gate comparing
+# nothing refuses with rc 2 instead of reporting green.
 #
 # Both directions are asserted because the gate's own failure mode is silence:
 # a pattern that stopped matching would find no pins to compare and — without
@@ -154,6 +155,67 @@ expect workflow-installs-nothing 2 "$mk_in_step" "$FIXTURE_DIR/nocosign.yml" "$p
 expect makefile-missing 2 "$FIXTURE_DIR/no-such-Makefile" "$wf_in_step" "$pins_in_step" 'does not exist'
 expect workflow-missing 2 "$mk_in_step" "$FIXTURE_DIR/no-such.yml" "$pins_in_step" 'does not exist'
 expect pins-env-missing 2 "$mk_in_step" "$wf_in_step" "$FIXTURE_DIR/no-such.env" 'does not exist'
+
+# --- the v2 signing format, from cosign v3 (Q1218) --------------------------
+#
+# write_signing_workflow NAME LINE... — one pinned installer step and a run
+# block holding each LINE verbatim, so wrapped calls and comments can be built.
+write_signing_workflow() {
+	local out="$FIXTURE_DIR/publish.$1.yml" line
+	shift
+	{
+		printf 'jobs:\n  publish:\n    steps:\n'
+		printf '      - name: Install cosign\n'
+		printf '        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2\n'
+		printf '        with:\n          cosign-release: %s\n' "$REF"
+		printf '      - run: |\n'
+		for line in "$@"; do
+			printf '          %s\n' "$line"
+		done
+	} > "$out"
+	printf '%s\n' "$out"
+}
+
+mk_v3="$(write_makefile v3 'COSIGN_VERSION ?= v3.1.4')"
+pins_v3="$(write_pins v3 'COSIGN_VERSION=v3.1.4')"
+F='--new-bundle-format=false --use-signing-config=false'
+
+# The fixture lines are literal workflow text: a trailing backslash and an
+# unexpanded ${IMAGE} are the point.
+# shellcheck disable=SC1003,SC2016
+wf="$(write_signing_workflow v3-flagged \
+	"retry.sh cosign sign --yes $F --recursive \"\${IMAGE}\"" \
+	'retry.sh cosign attest --yes --type spdxjson \' \
+	"  $F --predicate sbom.json \"\${IMAGE}\"" \
+	"retry.sh cosign sign-blob --yes $F \\" \
+	'  --bundle out.bundle out' \
+	'# `cosign sign` fails with UNAUTHORIZED without a docker login')"
+expect v3-every-call-flagged 0 "$mk_v3" "$wf" "$pins_v3" '3 v2-format signing call(s)'
+
+wf="$(write_signing_workflow v3-half-flagged \
+	"retry.sh cosign sign --yes $F \"\${ref}\"" \
+	'retry.sh cosign sign-blob --yes --new-bundle-format=false --bundle b out')"
+expect v3-call-missing-one-flag 1 "$mk_v3" "$wf" "$pins_v3" '--use-signing-config=false'
+
+# shellcheck disable=SC1003,SC2016
+wf="$(write_signing_workflow v3-wrapped-unflagged \
+	"retry.sh cosign sign --yes $F \"\${ref}\"" \
+	'retry.sh cosign attest --yes --type spdxjson \' \
+	'  --predicate sbom.json "${IMAGE}"')"
+expect v3-wrapped-call-unflagged 1 "$mk_v3" "$wf" "$pins_v3" 'cosign attest --yes --type spdxjson'
+
+wf="$(write_signing_workflow v3-attest-blob-unflagged \
+	"retry.sh cosign sign --yes $F \"\${ref}\"" \
+	'retry.sh cosign attest-blob --yes --predicate p.json --bundle b out')"
+expect v3-attest-blob-unflagged 1 "$mk_v3" "$wf" "$pins_v3" 'cosign attest-blob'
+
+wf="$(write_signing_workflow v3-no-calls 'echo nothing signed')"
+expect v3-signs-nothing 2 "$mk_v3" "$wf" "$pins_v3" 'compared nothing'
+
+# cosign v2 rejects both flags as unknown, so an unflagged v2 signer is correct.
+# shellcheck disable=SC2016
+wf="$(write_signing_workflow v2-unflagged 'retry.sh cosign sign --yes "${ref}"')"
+expect v2-unflagged-call 0 "$mk_in_step" "$wf" "$pins_in_step" '0 v2-format signing call(s)'
 
 # --- the tracked tree -------------------------------------------------------
 #
