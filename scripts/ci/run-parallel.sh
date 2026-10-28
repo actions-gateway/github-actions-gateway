@@ -87,6 +87,13 @@ running=0
 reap_one() {
     local pid rc=0
     wait -n -p pid || rc=$?
+    # A trapped signal interrupts the wait with 128+n and reaps nothing: the
+    # runner itself was signalled, so it exits as killed rather than failed.
+    if [[ -z "${pid:-}" ]] && (( rc > 128 )); then
+        printf '%s: received signal %d (exit %d) while waiting; the runner itself was signalled, not a child\n' \
+            "${0##*/}" "$(( rc - 128 ))" "$rc" >&2
+        exit "$rc"
+    fi
     if [[ -z "${pid:-}" || -z "${idx_of[$pid]:-}" ]]; then
         printf '%s: wait -n returned %d with no child of ours to reap\n' "${0##*/}" "$rc" >&2
         exit 1

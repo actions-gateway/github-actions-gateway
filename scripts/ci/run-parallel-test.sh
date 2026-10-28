@@ -384,7 +384,7 @@ fi
 # spawned sends SIGTERM to whatever process holds those pids now. An exported
 # `kill` function shadows the builtin inside the runner and logs every call.
 KILL_LOG="$REPO_ROOT/tmp/run-parallel-test-kills.$$"
-trap 'rm -rf "$TRACE_DIR" "$CAP_DIR" "$KILL_LOG" "$KILL_LOG.started"' EXIT
+trap 'rm -rf "$TRACE_DIR" "$CAP_DIR" "$KILL_LOG" "$KILL_LOG.started" "$KILL_LOG.out"' EXIT
 # shellcheck disable=SC2329 # reached through `export -f`, inside the runner.
 kill() {
 	printf '%s\n' "$*" >>"$KILL_LOG"
@@ -406,14 +406,19 @@ fi
 
 # The other direction: a TERM to the runner still reaches a child that is running.
 : >"$KILL_LOG"
-"$RP" "done:true" "slow:touch '$KILL_LOG.started'; sleep 5" >/dev/null 2>&1 &
+"$RP" "done:true" "slow:touch '$KILL_LOG.started'; sleep 5" >"$KILL_LOG.out" 2>&1 &
 runner=$!
 for ((i = 0; i < 600; i++)); do
 	[[ -e "$KILL_LOG.started" ]] && break
 	sleep 0.1
 done
 builtin kill -TERM "$runner"
-wait "$runner" || true
+rc=0
+wait "$runner" || rc=$?
+out="$(<"$KILL_LOG.out")"
+# The runner itself was signalled, so it reports a kill rather than a failure.
+want_rc 'a TERM to the runner exits 143' 143
+want 'a TERM to the runner is named as such' 'received signal 15 \(exit 143\).*runner itself was signalled'
 if [[ -s "$KILL_LOG" ]]; then
 	printf 'ok   %-42s\n' 'a TERM still signals a running child'
 else
