@@ -745,7 +745,8 @@ const (
 // the dial target (defeating a rebinding resolver between this check and the
 // dial); a literal-IP target is permitted only if it falls in an allowed CIDR.
 // Anything else is refused as destinationUnlisted, and lookupErr is the CIDR-path
-// resolver's error when that lookup is what failed.
+// resolver's error when that lookup failed without an answer. A name that does
+// not exist is an answer, so it is a plain refusal with no lookupErr.
 func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAddr, entry string, allowed bool, lookupErr error) {
 	if len(s.AllowedHostSuffixes) == 0 && len(s.AllowedCIDRs) == 0 {
 		return hostport, destinationAny, true, nil
@@ -774,6 +775,10 @@ func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAdd
 			resolver = net.DefaultResolver
 		}
 		addrs, err := resolver.LookupIPAddr(ctx, host)
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			return "", destinationUnlisted, false, nil
+		}
 		if err != nil {
 			return "", destinationUnlisted, false, err
 		}

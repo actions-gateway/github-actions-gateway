@@ -146,6 +146,14 @@ func TestCheckDestination(t *testing.T) {
 			wantLookErr: true,
 		},
 		{
+			name:        "a name that does not exist is a refusal, not a resolver failure",
+			cidrs:       []string{"10.0.0.0/8"},
+			resolveErr:  &net.DNSError{Err: "no such host", Name: "metadata.google.internal", IsNotFound: true},
+			hostport:    "metadata.google.internal:80",
+			wantAllowed: false,
+			wantDest:    destinationUnlisted,
+		},
+		{
 			name:        "suffix match wins without resolving (no resolver consulted)",
 			suffixes:    []string{"golang.org"},
 			cidrs:       []string{"10.0.0.0/8"},
@@ -227,13 +235,13 @@ func TestHandleConnect_DeniedDestination(t *testing.T) {
 	}
 }
 
-// TestHandleConnect_CIDRLookupFailure pins that a failed lookup on the CIDR path
-// is refused like a denial but counted as its own outcome, and that it still
+// TestHandleConnect_CIDRLookupFailure pins that a CIDR-path lookup that failed
+// without an answer is refused like a denial but counted as its own outcome, and that it still
 // counts on connect_denied_total, whose meaning dashboards and alerts read.
 func TestHandleConnect_CIDRLookupFailure(t *testing.T) {
 	s := NewServer(":0", ":0", time.Second, slog.Default(), prometheus.NewRegistry())
 	s.AllowedCIDRs = []*net.IPNet{mustCIDR(t, "10.0.0.0/8")}
-	s.dnsResolver = fakeResolver{err: errors.New("no such host")}
+	s.dnsResolver = fakeResolver{err: &net.DNSError{Err: "i/o timeout", Name: "unknown.example.com", IsTimeout: true, IsTemporary: true}}
 
 	req := httptest.NewRequest(http.MethodConnect, "http://unknown.example.com:443", nil)
 	req.Host = "unknown.example.com:443"
@@ -252,6 +260,30 @@ func TestHandleConnect_CIDRLookupFailure(t *testing.T) {
 	}
 	if got := testutil.ToFloat64(s.connectDenied.WithLabelValues()); got != 1 {
 		t.Errorf("connect_denied_total = %v, want 1", got)
+	}
+}
+
+// TestHandleConnect_CIDRLookupNotFound pins that a name which does not exist is
+// counted as a denial: probing nonexistent names is a probe, not a DNS outage.
+func TestHandleConnect_CIDRLookupNotFound(t *testing.T) {
+	s := NewServer(":0", ":0", time.Second, slog.Default(), prometheus.NewRegistry())
+	s.AllowedCIDRs = []*net.IPNet{mustCIDR(t, "10.0.0.0/8")}
+	s.dnsResolver = fakeResolver{err: &net.DNSError{Err: "no such host", Name: "metadata.google.internal", IsNotFound: true}}
+
+	req := httptest.NewRequest(http.MethodConnect, "http://metadata.google.internal:80", nil)
+	req.Host = "metadata.google.internal:80"
+	rec := httptest.NewRecorder()
+
+	s.handleConnect(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+	if got := testutil.ToFloat64(s.connects.WithLabelValues(destinationUnlisted, "denied")); got != 1 {
+		t.Errorf("connects_total{destination=unlisted,outcome=denied} = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(s.connects.WithLabelValues(destinationUnlisted, "dns_error")); got != 0 {
+		t.Errorf("connects_total{destination=unlisted,outcome=dns_error} = %v, want 0", got)
 	}
 }
 
