@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1195/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1232/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A reaped scale-set worker leaves an unnamed job with no runner - GitHub Actions Gateway</title>
+        <title>Abandoned arm force-cancels a run a user already cancelled - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-reaped-scale-set-worker-leaves-an-unnamed-job-with-no-runner" class="md-skip">
+        <a href="#abandoned-arm-force-cancels-a-run-a-user-already-cancelled" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A reaped scale-set worker leaves an unnamed job with no runner
+              Abandoned arm force-cancels a run a user already cancelled
             
           </span>
         </div>
@@ -2627,19 +2627,13 @@
   
 
 
-<h1 id="a-reaped-scale-set-worker-leaves-an-unnamed-job-with-no-runner">A reaped scale-set worker leaves an unnamed job with no runner<a class="headerlink" href="#a-reaped-scale-set-worker-leaves-an-unnamed-job-with-no-runner" title="Permanent link">&para;</a></h1>
-<p>A scale-set worker reaped <code>Pending</code> past <code>pendingPodDeadline</code> takes one runner out of its set, so one of the set's assigned jobs is left with no runner to start it.
-Abandoned-run recovery (Q766) force-cancels and re-runs the run of the job the pod was created for.
-Since Q1169 it skips that when another worker's runner started that job, because that run lost nothing (<code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>, <code>assignedJobAccountedFor</code>).
-The job that did lose its runner is then a different one, and nothing names it, so it is recovered by nothing.
-This is the open part Q1169 left: before Q1169 the same job was stranded too, and a live run was cancelled beside it.</p>
-<p><strong>What becomes of the stranded job is unmeasured.</strong> The design doc and the identity-unknown Event say GitHub cancels an unstarted job at its ~15-minute timeout, and that a manual re-run is then required; that is the expected outcome here, not one measured for this shape.</p>
-<p><strong>The likely record is the listener's in-flight set</strong> (<code>scalesetlistener.GuardState.InFlight</code>, Q606), which already holds the run identity of every job whose worker the listener built.
-At the reap, the stranded job is an in-flight entry with no <code>actions-gateway.com/started-job-id</code> on any live worker and no live worker minted for it, the same reading the orphan scan's <code>scaleSetWorkerSet.serving</code> takes after a restart (Q844).
-Two things make it harder than reusing that: the reconciler only reads the guard ConfigMap, once per process, and a job whose <code>JobStarted</code> has not arrived yet reads exactly like a stranded one, so the check needs a settle window or a later re-check.</p>
-<p>Found from source while working Q1169; not observed on a cluster, and the rate is unmeasured.
-It needs a worker stuck <code>Pending</code> past its deadline while another runner of the same set took that worker's job, so it shows on a set whose workers schedule unevenly (a node pool scaling up while others are warm).</p>
-<p><strong>Reach.</strong> Any scale-set tenant hitting that shape: one job's run waits out GitHub's unstarted-job timeout and needs a manual re-run, where Q766 meant it to be force-cancelled and re-run automatically.</p>
+<h1 id="abandoned-arm-force-cancels-a-run-a-user-already-cancelled">Abandoned arm force-cancels a run a user already cancelled<a class="headerlink" href="#abandoned-arm-force-cancels-a-run-a-user-already-cancelled" title="Permanent link">&para;</a></h1>
+<p>On the scale-set tier, <code>forceCancelAbandonedRun</code> reads the run only for its attempt, then records that attempt as GAG's own cancel and force-cancels, whatever the read's conclusion says (<code>cmd/agc/internal/provisioner/abandoned.go:89:   if err := p.recordSelfCancel(ctx, target, runID, run.attempt); err != nil {</code>).
+If a user or a concurrency group had already cancelled that attempt, the ledger now calls the cancel GAG's, so Q1181's <code>run_cancelled</code> check re-runs the run once capacity returns and undoes the user's cancel.
+The design asks for the abandoned arm to read the conclusion <strong>before</strong> force-cancelling and withhold a run already concluded <code>cancelled</code>, not cancel it again (<a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design</a>, its notes on <code>selfCancelledAttempt</code>).
+The read is already there, so the fix is a branch on <code>run.status</code>/<code>run.conclusion</code> before <code>recordSelfCancel</code>, a withhold counted as <code>run_cancelled</code> under <code>cause="abandoned"</code>, and no <code>registerAbandonedRerun</code>.
+Unmeasured: what GitHub's force-cancel answers for a run already concluded, which decides whether today's path registers the re-run at all (a non-202 ends as <code>outcome="error"</code> and registers nothing).
+The mechanism is read from source on 2026-10-27, not reproduced.</p>
 
 
 

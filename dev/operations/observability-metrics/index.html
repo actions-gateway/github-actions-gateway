@@ -3238,7 +3238,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries that deliberately made <strong>no</strong> re-run call. Two shapes. <code>reason="own_limit"</code> with <code>cause="eviction"</code> (Q1177): the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, which a re-run with the same limit repeats; it is decided at detection, so <strong>no</strong> retry slot is spent and <code>eviction_retries_total</code> does not move, and the <code>EvictionRerunWithheld</code> Event quotes the kubelet's message. The fix is the limit, not the cluster. <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> (Q811): the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. On this shape the retry slot is spent, since it is reserved at detection, minutes before GitHub concludes the run, so read it alongside <code>eviction_retries_total</code>, whose increment it explains. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted. A climbing <code>own_limit</code> rate, by contrast, is tenants outgrowing their own limits.</td>
+<td>Disruption recoveries that deliberately made <strong>no</strong> re-run call. <code>reason="own_limit"</code> with <code>cause="eviction"</code> (Q1177): the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, which a re-run with the same limit repeats; it is decided at detection, so <strong>no</strong> retry slot is spent and <code>eviction_retries_total</code> does not move, and the <code>EvictionRerunWithheld</code> Event quotes the kubelet's message. The fix is the limit, not the cluster. <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> (Q811): the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. On this shape the retry slot is usually spent, since it is reserved at detection, minutes before GitHub concludes the run, so read it alongside <code>eviction_retries_total</code>, whose increment it explains. On <code>tier="scaleset"</code> <code>run_cancelled</code> is checked on every <code>cause</code>, and a cancel the failure ledger records as GAG's own force-cancel of an abandoned run is re-run rather than withheld (Q1181). Three more reasons are scale-set only and decided on the run read before the budget is reserved, so <strong>no</strong> slot is spent (Q1181): <code>reason="attempt_limit"</code>, the run is past GitHub's 50 re-runs; <code>reason="run_too_old"</code>, it was created more than 30 days ago, outside GitHub's re-run window; <code>reason="superseded"</code>, a <code>push</code> or <code>pull_request</code> run whose workflow has a newer run on the same branch, event and head repository from a different commit. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted. A climbing <code>own_limit</code> rate, by contrast, is tenants outgrowing their own limits.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
@@ -3570,7 +3570,7 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td><code>actions_gateway_scaleset_jobs_deferred</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
-<td>Assigned jobs the listener is holding for a later re-offer, by why. Each one is a workflow run queued at GitHub with no worker running it, and it is the metric twin of the <code>RunnerSet</code>'s advisory <code>JobProvisionStalled</code> condition, whose message names the job ids. <strong>Alert on the reason, not the total</strong> — the two mean different things. <code>reason="name_conflict"</code>: the runner name will not register — a <code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name could clear (Q551). An anomaly; <strong>any non-zero value is worth alerting on</strong>, fix per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>. <code>reason="ceiling"</code>: the set is already running as many workers as its spec allows (Q576) — expected backpressure that clears as workers finish, so alert only on it being <em>sustained</em>, if at all; see <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>. Both reasons are published on every update, zero included, so a series never freezes at its last non-zero reading. Dropped when the <code>RunnerSet</code> is deleted.</td>
+<td>Assigned jobs the listener is holding for a later re-offer, by why. Each one is a workflow run queued at GitHub with no worker running it, and it is the metric twin of the <code>RunnerSet</code>'s advisory <code>JobProvisionStalled</code> condition, whose message names the job ids. <strong>Alert on the reason, not the total</strong> — the two mean different things. <code>reason="name_conflict"</code>: the runner name will not register — a <code>generate-jitconfig</code> 409 that neither deleting the stale record nor a fresh suffixed name could clear (Q551). An anomaly; <strong>any non-zero value is worth alerting on</strong>, fix per <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>. <code>reason="ceiling"</code>: the set is already running as many workers as its spec allows (Q576) — expected backpressure that clears as workers finish, so alert only on it being <em>sustained</em>, if at all; see <a href="../troubleshooting/#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached">Scale-Set Jobs Waiting at the Worker Ceiling</a>. <code>reason="worker_terminating"</code>: a job replayed to a re-created session while its previous worker pod is still terminating, re-offered once that pod is gone (Q1199). It is brief after an ordinary grace period, so alert only on it being sustained, which usually means a pod stuck on a lost node; see <a href="../troubleshooting/#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating">Scale-Set Job Waiting for Its Previous Worker to Terminate</a>. All three reasons are published on every update, zero included, so a series never freezes at its last non-zero reading. Dropped when the <code>RunnerSet</code> is deleted.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_jobs_abandoned_total</code></td>
@@ -3966,7 +3966,7 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <tr>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Both</td>
-<td>As above: the cancel check sits in that shared path, and both tiers detect the graceful deletion that arms it (Q811); both tiers withhold an own-limit eviction (Q1177).</td>
+<td>As above: the cancel check sits in that shared path, and both tiers detect the graceful deletion that arms it (Q811); both tiers withhold an own-limit eviction (Q1177). The futility reasons are scale-set only (Q1181), listed under <a href="#label-value-reach">Label-value reach</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
@@ -4128,6 +4128,34 @@ Where the file layout cannot prove the claim, because the value is named in a fi
 <td><code>vanished</code></td>
 <td>Scale-set only</td>
 <td>As above: the re-run-refused arm of the same recovery.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td><code>cause</code></td>
+<td><code>vanished</code></td>
+<td>Scale-set only</td>
+<td>As above: the withheld arm of the same recovery, a cancelled run or a futile re-run (Q1181).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td><code>reason</code></td>
+<td><code>attempt_limit</code></td>
+<td>Scale-set only</td>
+<td>The futility checks (<code>cmd/agc/internal/provisioner/rerun_futility.go</code>, Q1181) are called only from <code>handleScaleSetEviction</code> in <code>cmd/agc/internal/provisioner/eviction.go</code>, on the run read the scale-set tier takes before reserving a budget slot. The classic tier reserves from process memory with no read first and takes none of these checks, so a futile classic re-run is attempted.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td><code>reason</code></td>
+<td><code>run_too_old</code></td>
+<td>Scale-set only</td>
+<td>As above: <code>rerun_futility.go</code>, called only from <code>handleScaleSetEviction</code> in <code>cmd/agc/internal/provisioner/eviction.go</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
+<td><code>reason</code></td>
+<td><code>superseded</code></td>
+<td>Scale-set only</td>
+<td>As above: <code>rerun_futility.go</code>, called only from <code>handleScaleSetEviction</code> in <code>cmd/agc/internal/provisioner/eviction.go</code>. A superseded classic run is re-run, which GitHub accepts.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
@@ -4438,6 +4466,11 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td>As above.</td>
 </tr>
 <tr>
+<td><code>WorkerTerminating</code></td>
+<td>Scale-set only</td>
+<td>An assignment replayed while its previous worker pod, which holds the pod name, is still terminating (Q1199). The classic tier names no pod after the job.</td>
+</tr>
+<tr>
 <td><code>WorkersSchedulable</code></td>
 <td>Both</td>
 <td>The cleared form of <code>PodsUnschedulable</code>, evaluated on both.</td>
@@ -4499,7 +4532,7 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Both</td>
-<td>Recorded on the same shared re-run path, from the graceful-deletion arm both tiers detect (Q811), and for an own-limit eviction on either tier (Q1177).</td>
+<td>Recorded on the same shared re-run path, from the graceful-deletion arm both tiers detect (Q811), and for an own-limit eviction on either tier (Q1177). The futility checks that also record it are scale-set only (Q1181).</td>
 </tr>
 <tr>
 <td><code>EvictionRetriesExhausted</code></td>
@@ -4605,6 +4638,11 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <td><code>WorkerPodsReapedOnGatewayTeardown</code></td>
 <td>Both</td>
 <td>Teardown stops both tiers before deleting their worker pods.</td>
+</tr>
+<tr>
+<td><code>WorkerTerminating</code></td>
+<td>Scale-set only</td>
+<td>An assignment waiting for its previous worker pod to finish terminating, normally a grace period, so <code>Normal</code> rather than <code>Warning</code> (Q1199).</td>
 </tr>
 <tr>
 <td><code>WorkersNotStarting</code></td>

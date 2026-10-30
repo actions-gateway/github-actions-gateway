@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1234/">Q1234</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-candidate-covers-main-test.sh">A check-candidate-covers-main-test case exits 2 under load</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Event:</strong> one failure inside <code>make check</code>, on a branch that touches no <code>scripts/release/</code> file, passing on an immediate rerun of the suite …</td>
+</tr>
+<tr>
 <td><a href="Q1239/">Q1239</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/runnerimage/resolver_test.go">TestResolverPendingThenDoneWakes reads the wake before it is delivered</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3036,20 +3044,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
 </tr>
 <tr>
-<td><a href="Q1195/">Q1195</a></td>
-<td><a href="../design/04-operational-flows/">A reaped scale-set worker leaves an unnamed job with no runner</a></td>
+<td><a href="Q1235/">Q1235</a></td>
+<td><a href="../design/04-operational-flows/">Stranded scale-set job named only on the abandoned path, not re-checked</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>A scale-set worker reaped <code>Pending</code> past <code>pendingPodDeadline</code> takes one runner out of its set, so one of the set's assigned jobs is left …</td>
-</tr>
-<tr>
-<td><a href="Q1199/">Q1199</a></td>
-<td><a href="../design/04-operational-flows/">A scale-set replay during its old worker's termination acks with no pod</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A scale-set job replayed while its previous worker pod still exists with a <code>deletionTimestamp</code> gets no worker of its own, and the listener …</td>
+<td>Q1195 gave abandoned-run recovery a walk that names the job a lost scale-set runner left without one (<code>scaleSetWorkerSet.strandedJob</code> …</td>
 </tr>
 <tr>
 <td><a href="Q1230/">Q1230</a></td>
@@ -3076,12 +3076,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Dogfood stores no <code>actions_gateway_*</code> series until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> is applied, so every …</td>
 </tr>
 <tr>
-<td><a href="Q1181/">Q1181</a></td>
-<td><a href="../plan/q555-flaky-job-retry/#known-futile-retries">Skip known-futile re-runs on the existing disruption arms</a></td>
-<td><code>feature</code> <code>2.0-gate</code></td>
+<td><a href="Q1232/">Q1232</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">Abandoned arm force-cancels a run a user already cancelled</a></td>
+<td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>The disruption arms (eviction, preemption, node_shutdown, deletion, abandoned, vanished) spend a slot of <code>maxEvictionRetries</code> on any re-run …</td>
+<td>On the scale-set tier, <code>forceCancelAbandonedRun</code> reads the run only for its attempt, then records that attempt as GAG's own cancel and …</td>
 </tr>
 <tr>
 <td><a href="Q1236/">Q1236</a></td>
@@ -4234,6 +4234,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The per-tenant scrape docs …</td>
+</tr>
+<tr>
+<td><a href="Q1233/">Q1233</a></td>
+<td><a href="../design/04-operational-flows/">A terminating-worker re-offer mints a runner registration each time</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A scale-set job held under <code>reason="worker_terminating"</code> mints a JIT config on every re-offer before the provisioner finds the previous …</td>
 </tr>
 </tbody>
 </table>

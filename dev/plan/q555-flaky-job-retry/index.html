@@ -2920,7 +2920,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>Nothing</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1181/">Q1181</a></td>
+<td>Q1181 (built on the scale-set tier)</td>
 <td>R18's futility checks, on the arms that exist today</td>
 <td>Nothing</td>
 </tr>
@@ -3153,12 +3153,12 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <tr>
 <td>A newer commit superseded the run</td>
 <td>The pull request's head no longer matches the run's <code>head_sha</code>, or the run was cancelled by a concurrency group</td>
-<td>Not checked: nothing in the re-run path reads either. One API call per retry, which is affordable because retries are rare</td>
+<td>Withheld on the scale-set tier as <code>superseded</code> (a newer run of the workflow, event and branch from a different commit) or <code>run_cancelled</code> (Q1181); the classic tier does not check</td>
 </tr>
 <tr>
 <td>GitHub will refuse the re-run</td>
-<td><code>run_attempt</code> at 50, a run older than 30 days, a <code>cancelled</code> conclusion</td>
-<td>The deletion arm already stands down on <code>cancelled</code> (Q811); the other two are unchecked</td>
+<td><code>run_attempt</code> past 50 (GitHub caps a run at 50 re-runs), a run older than 30 days, a <code>cancelled</code> conclusion</td>
+<td>Withheld on the scale-set tier as <code>attempt_limit</code>, <code>run_too_old</code> and <code>run_cancelled</code> on every arm (Q1181); the classic tier checks only <code>cancelled</code>, on the deletion arm (Q811)</td>
 </tr>
 <tr>
 <td>The same class failed this job again</td>

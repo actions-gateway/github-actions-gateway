@@ -1142,6 +1142,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Futile re-runs are withheld before a slot is spent (scale-set)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#detecting-a-disruption-is-not-the-same-as-claiming-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3066,6 +3077,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Futile re-runs are withheld before a slot is spent (scale-set)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#detecting-a-disruption-is-not-the-same-as-claiming-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3583,7 +3605,7 @@ It lives in the set's <code>scaleset-failures-&lt;set&gt;</code> ConfigMap as a 
 A reservation is taken once per disruption, after a run read that names the attempt the job failed in, and does one of four things: it <strong>resumes</strong> a reservation the same worker already holds, <strong>merges</strong> into a re-run already reserved for that attempt (rerun-failed-jobs re-runs every failed job of an attempt, so a second disruption of the same attempt is covered and spends nothing), <strong>refuses</strong> at <code>maxEvictionRetries</code>, or <strong>reserves</strong> a slot.
 Every outcome but a refusal then enters the re-run loop, which reads the run before each call and stands down once its attempt is past the one the job failed in.
 That is what stops two disruptions in one run from each landing a re-run (before it, the second retried against <code>403 This workflow is already running</code> until GAG's first re-run concluded, then re-ran the run again), and what keeps a merge safe: a merged disruption re-runs the attempt itself if the reservation it joined never lands, because that recovery failed or the AGC restarted before it.
-A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; Q1181's <code>already_rerun</code> check closes that.
+A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; the design's <code>already_rerun</code> check, not built, would close that.
 The cap covers every disruption cause, so the <code>cause</code> label splits the reporting but not the cap; it is per set, so a run whose jobs span two sets, or a set and a classic group, has a budget in each.
 A run that cannot be read, or a decision that cannot be written, withholds the re-run, counted as <code>eviction_rerun_failures_total{reason="conclusion_unknown"|"api_error"|"budget_unrecorded"}</code>.
 The ConfigMap's schema and its rules for being shared by two AGC versions are in <a href="../../plan/q555-automatic-recovery-design/#the-storage-shape">the Q555 recovery design</a>.</p>
@@ -3666,8 +3688,48 @@ A conclusion the AGC cannot read is <strong>not</strong> treated as "not cancell
 The failures are split the way the re-run call's already are: a request that never completed and a 5xx are retried inside the same 15-minute window, and a window that closes on one ends as <code>actions_gateway_eviction_rerun_failures_total{reason="conclusion_unknown"}</code> with an <code>EvictionRerunFailed</code> Warning Event.
 A 4xx, and a 2xx carrying something that will not decode as a run, are terminal at once and counted <code>api_error</code>, because neither becomes a verdict inside the window: a 2xx that is not a run means the configured endpoint is not the API, and re-asking it thirty times only delays the Event that says so.
 Either way no re-run is fired, so a job that lost its recovery is visible rather than silently re-queued against a cancel.
-And only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
-The residual is a cancelled run whose worker is <em>also</em> evicted or preempted before it stops, which is re-run as before.</p>
+On the classic tier only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
+The residual there is a cancelled run whose worker is <em>also</em> evicted or preempted before it stops, which is re-run as before.
+On the scale-set tier every arm takes it (Q1181), because that tier already reads the run on every pass, so the check costs no call, and the failure ledger's <code>selfCancelledAttempt</code> tells the abandoned arm's own force-cancel from anyone else's: a user's cancel, or a concurrency group's, is honoured whichever arm the worker was lost to, and GAG's own cancel is re-run with no exemption for any arm.</p>
+<h5 id="futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set">Futile re-runs are withheld before a slot is spent (scale-set)<a class="headerlink" href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" title="Permanent link">&para;</a></h5>
+<p>Some re-runs cannot help, and before Q1181 each one spent a budget slot, a node and queue time, then ended in an Event asking for a manual re-run that would not help either.
+The scale-set tier now judges the run read it takes before reserving a slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/rerun_futility.go"><code>rerun_futility.go</code></a>) and withholds a futile re-run there, so it spends nothing: <code>actions_gateway_eviction_rerun_withheld_total</code> counts the <code>reason</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run, the reason and what would fix it.</p>
+<table>
+<thead>
+<tr>
+<th><code>reason</code></th>
+<th>Withheld when</th>
+<th>What the Event says to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_cancelled</code></td>
+<td>The run concluded <code>cancelled</code> and the ledger does not record GAG force-cancelling that attempt. Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot</td>
+<td>Re-run by hand if the cancel was not intended</td>
+</tr>
+<tr>
+<td><code>attempt_limit</code></td>
+<td><code>run_attempt</code> is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial (<a href="https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/">changelog, 2026-04-10</a>)</td>
+<td>Start a new run</td>
+</tr>
+<tr>
+<td><code>run_too_old</code></td>
+<td>The run was created more than 30 days ago, outside GitHub's re-run window</td>
+<td>Start a new run</td>
+</tr>
+<tr>
+<td><code>superseded</code></td>
+<td>A <code>push</code> or <code>pull_request</code> run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository</td>
+<td>Nothing: the newer commit is building</td>
+</tr>
+</tbody>
+</table>
+<p>A field GitHub did not send skips its check rather than withholding.
+The superseded check is the only one that costs a call (the workflow's runs, filtered to the branch and event, newest first), and a list it cannot read re-runs: that check only ever withholds, so an unreadable answer must not.
+Comparing the head repository keeps a fork's branch from matching upstream's of the same name; whether GitHub's <code>branch</code> filter matches a fork pull request's head branch is unmeasured (M5 in <a href="../../plan/q555-automatic-recovery-design/#measure-before-building">the Q555 design</a>), and a miss there re-runs, the safe direction.
+A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees <code>attempt_limit</code> where GitHub would have accepted the re-run.
+The classic tier reserves from process memory with no run read first and takes none of these checks.</p>
 <h5 id="detecting-a-disruption-is-not-the-same-as-claiming-it">Detecting a disruption is not the same as claiming it<a class="headerlink" href="#detecting-a-disruption-is-not-the-same-as-claiming-it" title="Permanent link">&para;</a></h5>
 <p>The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and recovery reads the pod off the informer (the watch event, or the scan's cached List) while it claims through the live API.
 So a pod can pass the discriminator and still be gone before a claim written <em>on that pod</em> could land.
@@ -3925,8 +3987,15 @@ So the scan that recovers a disrupted scale-set worker cannot recover this one, 
 <p>Three things make this the same capability rather than a lookalike.
 The <strong>identity</strong> is the <code>actions-gateway.com/run-id</code> / <code>actions-gateway.com/repository</code> pair <code>ProvisionScaleSetWorker</code> stamps, the same pair Q417's eviction recovery reads.
 A worker that never ran has no <code>JobStarted</code> to replace it, so it is the identity of the job the pod was created for, which another runner may be running.
-So the recovery first lists the set's workers, and where one carries that job as its <code>actions-gateway.com/started-job-id</code>, the job has a runner and nothing is cancelled (Q1169).
+So the recovery first lists the set's workers, and where one carries that job as its <code>actions-gateway.com/started-job-id</code>, the job has a runner and its run is spared (Q1169).
+The set is still one runner short, though, and the job left without one is a different job, which the recovery names and cancels instead (Q1195).
+It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
+A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
+The recovery names no job while any worker is <code>Running</code> with no start recorded, because that runner may hold the job already with its <code>JobStarted</code> still in flight; a stranded job found then is not recovered, and nothing re-checks it.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
+A finished job leaves the record only in a later save, so its worker pod can be gone first, at once under <code>completedPodTTL: 0s</code>.
+The listener therefore marks a job's record started when its <code>JobStarted</code> arrives, and the walk names no job whose record is marked.
+Two windows stay open: a start not yet saved, either because the guard save keeps failing or because the job started and its pod went within one poll; and the marks a restart drops, since the next listener rebuilds the record from the jobs still assigned.
 The <strong>budget</strong> is the scale-set tier's ledger budget (Q1182), and the force-cancel is recorded in it: before cancelling, the AGC reads the run's attempt and stores it as <code>selfCancelledAttempt</code>, so the graceful-deletion arm's <code>cancelled</code> check reads a cancel of that attempt as GAG's own rather than a user's, and the abandoned run's later re-run merges into one another disruption of the same attempt already reserved.
 And the <strong>wait</strong> is the identical capacity test: a worker pod of the same owner binding after the abandonment.</p>
 <p>A second, narrower seam covers an <em>external</em> delete of a still-<code>Pending</code> worker, a drain catching one before it starts.
@@ -3963,7 +4032,9 @@ A worker that registers but never receives its job therefore waits at <code>List
 <p>The fix makes GitHub's own verdict the deadline.
 When the listener sees the terminal <code>JobCompleted</code> for a job, it stamps <code>actions-gateway.com/job-completed-at</code> on the worker pod whose runner held that job (the same reclaim point that deletes that worker's JIT-config Secret), and the reaper deletes any pod still <code>Running</code> five minutes later.
 The Secret does not depend on that completion arriving while the pod exists: the provisioner makes the pod the Secret's only owner once the pod is created, so the garbage collector deletes the Secret with the pod, however the pod goes (Q1154).
-A job replayed after its worker is deleted, but before the collector has deleted the Secret, gets a new Secret rather than that one: the old Secret holds the old runner's spent JIT config, and the collector can delete it before the new pod is handed it, leaving that pod <code>Pending</code> on a missing mount (Q1174).</p>
+A job replayed after its worker is deleted, but before the collector has deleted the Secret, gets a new Secret rather than that one: the old Secret holds the old runner's spent JIT config, and the collector can delete it before the new pod is handed it, leaving that pod <code>Pending</code> on a missing mount (Q1174).
+A job replayed while its previous worker is still terminating gets no worker until that pod is gone: the pod is named for the job, so the replay's create collides with a pod that will never start the runner the replay registered (Q1199).
+The listener re-offers such a job on the runner-name conflict's backoff (30s doubling to 5 minutes) rather than holding the queue cursor, because a graceful termination lasts seconds to minutes, a pod on a lost node stays terminating until the node is removed, and a held cursor redelivers immediately, registering a runner per pass.</p>
 <p><strong>The worker that held a job is not necessarily the one created for it.</strong> GitHub gives a scale-set job to whichever of the set's runners asks first, so the runner the AGC registered for job A can run job B while A runs elsewhere.
 Measured on dogfood on 2026-09-30: the runner registered for one job ran <code>lint</code> until 17:35:15Z, while the job it was registered for completed at 17:30:11Z.
 An AGC that stamped the pod named for the completed job reaped it at 17:35:12Z with <code>lint</code> three seconds from done (Q1151).

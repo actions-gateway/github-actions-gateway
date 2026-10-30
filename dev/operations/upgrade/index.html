@@ -1737,6 +1737,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3650,6 +3661,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4469,6 +4491,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
+<li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
@@ -4644,6 +4667,14 @@ Label each namespace that <code>kubectl get namespace &lt;namespace&gt; --show-l
 <p>Use <code>actions-gateway.com/tenant=managed</code> instead for a namespace holding only v2 kinds.</p>
 <p><strong>Removing a namespace from the tenants</strong> now has a second step: delete its <code>gmc-tenant-secret-reader</code> RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.</p>
+<h3 id="non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner<a class="headerlink" href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> <code>ScaleSet</code> sets whose workers schedule unevenly, so a worker is reaped <code>Pending</code> after another runner of the set took the job it was created for.
+Nothing to do.</p>
+<p>Since Q1169 such a reap cancels nothing, because the worker's own job is running.
+The set is still one runner short, and the job that lost its runner used to wait out GitHub's unstarted-job timeout and need a manual re-run.
+The AGC now names that job from the listener's in-flight record, force-cancels its run, and re-runs it once capacity returns, as for any abandoned worker (Q1195).
+It names none while a <code>Running</code> worker's job start may not be recorded yet, and then behaves as before.</p>
+<p><strong>Rolling back</strong> returns that job to waiting out the timeout.</p>
 <h3 id="non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run<a class="headerlink" href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> clusters on Spot or preemptible capacity, or anywhere a node can go away while a worker is still <code>Pending</code>, pulling its image.
 Nothing to do.</p>

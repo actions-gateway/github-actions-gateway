@@ -3008,7 +3008,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up (<a href="../../queue/Q1236/">Q1236</a>) and without the proxy's readiness (<a href="../../queue/Q1237/">Q1237</a>); the rest is not.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up (<a href="../../queue/Q1236/">Q1236</a>) and without the proxy's readiness (<a href="../../queue/Q1237/">Q1237</a>); the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3297,7 +3297,7 @@ The <code>EvictionRerunWithheld</code> Event names the reason and the fix.</p>
 </tr>
 <tr>
 <td><code>attempt_limit</code></td>
-<td><code>run_attempt &gt;= 50</code>, GitHub's cap</td>
+<td><code>run_attempt &gt; 50</code>: GitHub caps a run at 50 re-runs, so attempt 51 is the last (changelog, 2026-04-10)</td>
 <td>None</td>
 </tr>
 <tr>
@@ -3685,7 +3685,7 @@ Job-granular avoids that, and costs:</p>
 <ol>
 <li>The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.</li>
 <li>Q1182 (built) created the ledger store, with its version rules, <code>reruns</code> map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as <code>selfCancelledAttempt</code>.</li>
-<li>Q1181: the futility checks on the widened run read, honouring <code>selfCancelledAttempt</code> for <code>run_cancelled</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>.</li>
+<li>Q1181 (built): <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the widened run read, honouring <code>selfCancelledAttempt</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>; <code>already_rerun</code>, <code>run_succeeded</code> and <code>worker_unstartable</code> are not built, and the classic tier takes none.</li>
 <li>Q555 (built) added the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.
    Three departures from Component 1: <code>JobCompleted</code> carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job (<a href="../../design/04-operational-flows/#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">04-operational-flows.md</a>); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.</li>
 <li>Q1183: the <code>pending</code> map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.</li>

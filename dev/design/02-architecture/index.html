@@ -3555,7 +3555,7 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code> (<code>cause="deletion"</code>): the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811); the retry slot is spent, but no manual re-run is wanted. <code>reason="own_limit"</code> (<code>cause="eviction"</code>): the kubelet evicted the worker for exceeding its own storage limit, which a re-run repeats; no slot is spent (Q1177)</td>
+<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code> (<code>cause="deletion"</code>): the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811); the retry slot is spent, but no manual re-run is wanted. <code>reason="own_limit"</code> (<code>cause="eviction"</code>): the kubelet evicted the worker for exceeding its own storage limit, which a re-run repeats; no slot is spent (Q1177). On <code>tier="scaleset"</code>, <code>run_cancelled</code> is checked on every cause and GAG's own force-cancel is told apart by the failure ledger, and three futility reasons are withheld before any slot is spent: <code>attempt_limit</code> (past GitHub's 50 re-runs), <code>run_too_old</code> (outside its 30-day re-run window) and <code>superseded</code> (a newer commit's run of the same workflow, event and branch) (Q1181)</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
@@ -3757,7 +3757,7 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td>No re-run was requested: an externally deleted worker's run had already concluded <code>cancelled</code>, so the cancel stands (Q811), or the kubelet evicted the worker for exceeding its own storage limit and the Event quotes its message (Q1177)</td>
+<td>No re-run was requested: an externally deleted worker's run had already concluded <code>cancelled</code>, so the cancel stands (Q811), or the kubelet evicted the worker for exceeding its own storage limit and the Event quotes its message (Q1177), or on the scale-set tier the re-run would be futile and the Event names the reason and its fix (Q1181)</td>
 </tr>
 <tr>
 <td><code>FlakyJobDetected</code></td>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1181/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1233/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Skip known-futile re-runs on the existing disruption arms - GitHub Actions Gateway</title>
+        <title>A terminating-worker re-offer mints a runner registration each time - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#skip-known-futile-re-runs-on-the-existing-disruption-arms" class="md-skip">
+        <a href="#a-terminating-worker-re-offer-mints-a-runner-registration-each-time" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Skip known-futile re-runs on the existing disruption arms
+              A terminating-worker re-offer mints a runner registration each time
             
           </span>
         </div>
@@ -2627,15 +2627,15 @@
   
 
 
-<h1 id="skip-known-futile-re-runs-on-the-existing-disruption-arms">Skip known-futile re-runs on the existing disruption arms<a class="headerlink" href="#skip-known-futile-re-runs-on-the-existing-disruption-arms" title="Permanent link">&para;</a></h1>
-<p>The disruption arms (eviction, preemption, node_shutdown, deletion, abandoned, vanished) spend a slot of <code>maxEvictionRetries</code> on any re-run they fire, and nothing in the re-run path checks whether a newer commit superseded the run, whether the run is at GitHub's 50-re-run cap (added 2026-04-10), or whether it is past the 30-day re-run window (read from <code>cmd/agc/internal/provisioner</code>, 2026-10-10).
-Only a <code>cancelled</code> conclusion is checked, and only on the deletion arm (Q811).
-A futile re-run costs a node, queue time and a budget slot, and ends in an Event saying a manual re-run is needed when nothing would help.
-Add those checks before a slot is spent, skip with a reason label on a counter, and event the reason and its fix.
-This needs no new retry class: the <code>run_cancelled</code> check honours the ledger's <code>selfCancelledAttempt</code>, the attempt the abandoned arm records before it force-cancels, so GAG's own cancel is not withheld and no arm needs an exemption (<a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design</a>).
-On the scale-set tier the checks run on the run read <code>handleScaleSetEviction</code> already makes, before <code>reserveScaleSetRerun</code>, so a withheld re-run spends nothing; the classic tier makes no read before its in-memory reservation.
-It is R18 of <a href="../../plan/q555-flaky-job-retry/#known-futile-retries">the draft</a> applied to the arms that already exist.
-The futile storage-limit eviction is already withheld as <code>own_limit</code> on the eviction arm (Q1177).</p>
+<h1 id="a-terminating-worker-re-offer-mints-a-runner-registration-each-time">A terminating-worker re-offer mints a runner registration each time<a class="headerlink" href="#a-terminating-worker-re-offer-mints-a-runner-registration-each-time" title="Permanent link">&para;</a></h1>
+<p>A scale-set job held under <code>reason="worker_terminating"</code> mints a JIT config on every re-offer before the provisioner finds the previous worker pod still terminating, so each re-offer registers a runner at GitHub and the next one's name conflict deregisters it (the Q334 reclaim).
+The ceiling path avoids the same cost with <code>CheckCapacity</code>, a pre-check the listener runs before the mint (Q576); the terminating path has none.</p>
+<p>Bounded by the re-offer ladder (30s doubling to 5 minutes), so at most about 12 registrations an hour per held job once the backoff caps.
+That figure is derived from the ladder, not measured.
+It matters only for a pod held terminating for a long time, which usually means a lost node.</p>
+<p><strong>A likely fix</strong>: a pre-check beside <code>CheckCapacity</code> that reads the job's pod by its deterministic name and defers without minting when it carries a <code>deletionTimestamp</code>.</p>
+<p>Not Q1195, which the near-duplicate search names: that row is a reaped <code>Pending</code> worker leaving an unnamed job with no runner, a lost job; this one loses no job and only spends registrations.</p>
+<p><strong>Reach.</strong> Scale-set tenants with a worker stuck terminating while its job is replayed: GitHub API calls and offline runner records, not lost jobs.</p>
 
 
 

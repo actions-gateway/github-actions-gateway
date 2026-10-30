@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1199/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1235/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A scale-set replay during its old worker's termination acks with no pod - GitHub Actions Gateway</title>
+        <title>Stranded scale-set job named only on the abandoned path, not re-checked - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-scale-set-replay-during-its-old-workers-termination-acks-with-no-pod" class="md-skip">
+        <a href="#stranded-scale-set-job-named-only-on-the-abandoned-path-not-re-checked" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A scale-set replay during its old worker's termination acks with no pod
+              Stranded scale-set job named only on the abandoned path, not re-checked
             
           </span>
         </div>
@@ -2627,16 +2627,13 @@
   
 
 
-<h1 id="a-scale-set-replay-during-its-old-workers-termination-acks-with-no-pod">A scale-set replay during its old worker's termination acks with no pod<a class="headerlink" href="#a-scale-set-replay-during-its-old-workers-termination-acks-with-no-pod" title="Permanent link">&para;</a></h1>
-<p>A scale-set job replayed while its previous worker pod still exists with a <code>deletionTimestamp</code> gets no worker of its own, and the listener acks the job anyway.
-<code>ProvisionScaleSetWorker</code> names the pod from the job ID, so the replay's pod create returns <code>AlreadyExists</code> for the terminating pod; that path reads as "the replayed job already has its worker" and returns nil.
-<code>ownerPodsGone</code> reports the terminating pod live (it exists under the owner reference's UID), so the Secret is kept too, still holding the old runner's spent JIT config.
-The runner registered for this delivery (<code>generateJITConfig</code> in <code>scalesetlistener/listener.go</code>, just before <code>Provision</code>) then never starts.</p>
-<p>Unmeasured: read from code by the Q1174 reviewer and confirmed by reading <code>ProvisionScaleSetWorker</code> and <code>ownerPodsGone</code>, not reproduced.
-Whether GitHub hands the job to another of the set's runners in the meantime is also unmeasured, and decides how much this costs.
-A pod's graceful termination lasts seconds to minutes, so this window is likely wider than Q1174's, which lasted only until the garbage collector ran.</p>
-<p><strong>A likely fix</strong>: on the pod create's <code>AlreadyExists</code>, read the pod; one with a <code>deletionTimestamp</code> is not this job's worker, so fail the delivery with an error the listener retries (<code>provisionRetry</code>) until the old pod is gone.</p>
-<p><strong>Reach.</strong> Any scale-set tenant whose session is re-created while one of its workers is terminating: the replayed job's freshly registered runner never gets a pod.</p>
+<h1 id="stranded-scale-set-job-named-only-on-the-abandoned-path-not-re-checked">Stranded scale-set job named only on the abandoned path, not re-checked<a class="headerlink" href="#stranded-scale-set-job-named-only-on-the-abandoned-path-not-re-checked" title="Permanent link">&para;</a></h1>
+<p>Q1195 gave abandoned-run recovery a walk that names the job a lost scale-set runner left without one (<code>scaleSetWorkerSet.strandedJob</code>, reading the listener's in-flight record) and cancels and re-runs that job's run.
+Two shapes still leave the stranded job unrecovered, read from source on 2026-10-27 and not observed on a cluster.
+The disruption path skips a never-started evicted, preempted or drained worker whose own job another runner started (<code>recoverDisruptedScaleSetWorker</code>'s <code>assignedJobAccountedFor</code> check, Q1169), with no walk, so the set is one runner short and the job left without one waits out GitHub's ~15-minute unstarted-job timeout, as Q1195 described for the reaper.
+And the walk declines while any worker is <code>Running</code> with no start recorded, because that runner may already hold the job; nothing re-checks once the start lands, so a stranded job found in that window is never recovered.
+One fix closes both: run the walk on the disruption path too, and re-check a declined walk on a later reconcile, keyed by the lost worker so it fires at most once.
+Recovering the stranded job on the disruption path would force-cancel a run whose job never started, where that path otherwise re-runs, so the cause label and budget slot need deciding there.</p>
 
 
 
