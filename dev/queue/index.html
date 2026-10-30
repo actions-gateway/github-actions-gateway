@@ -3052,12 +3052,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>A scale-set job replayed while its previous worker pod still exists with a <code>deletionTimestamp</code> gets no worker of its own, and the listener …</td>
 </tr>
 <tr>
-<td><a href="Q1198/">Q1198</a></td>
-<td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Pending worker lost to node shutdown re-runs instead of force-cancelling</a></td>
+<td><a href="Q1230/">Q1230</a></td>
+<td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Never-started preemption and eviction victims re-run instead of cancel</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>A worker still <code>Pending</code> when its node shuts down takes the <code>node_shutdown</code> arm (Q1179) and goes straight to <code>rerun-failed-jobs</code>, ahead of …</td>
+<td>A worker preempted while still <code>Pending</code> goes straight to <code>rerun-failed-jobs</code> on both tiers, ahead of the abandoned handling that …</td>
+</tr>
+<tr>
+<td><a href="Q1231/">Q1231</a></td>
+<td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Classic drain of a Pending worker reports failed with no force-cancel</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The design table's never-started row claims both tiers recover a drained <code>Pending</code> worker that publishes a transient <code>Failed</code> with its …</td>
 </tr>
 <tr>
 <td><a href="Q1180/">Q1180</a></td>
@@ -3084,20 +3092,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>claimDisruptionRecovery</code> (<code>recovery_claims.go</code>) retries a conflicting write <code>recoveryClaimConflictRetries = 5</code> times, sized as "the …</td>
 </tr>
 <tr>
-<td><a href="Q555/">Q555</a></td>
-<td><a href="../plan/q555-flaky-job-retry/">Detect flaky jobs and record each failure's platform context</a></td>
-<td><code>tests</code> <code>feature</code> <code>2.0-gate</code></td>
+<td><a href="Q1236/">Q1236</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Measure flaky-job detection on dogfood: result spelling, re-run job IDs</a></td>
+<td><code>dogfood</code> <code>tests</code></td>
 <td>🔲</td>
-<td>M</td>
-<td><strong>Goal:</strong> automatic recovery that cuts human intervention and so operating cost; success is a falling rate of manual re-runs per set (draft …</td>
+<td>S</td>
+<td>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the …</td>
 </tr>
 <tr>
 <td><a href="Q1183/">Q1183</a></td>
 <td><a href="../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">Retry classified platform failures, starting with OOM under right-sizing</a></td>
 <td><code>feature</code> <code>2.0-gate</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked on Q555, whose detection measures each class's retry success rate (R14); the budget a class spends survives a restart …</td>
+<td>Q555's detection measures each class's retry success rate (R14) in <code>actions_gateway_eviction_rerun_outcomes_total</code>, keyed by <code>cause</code>; the …</td>
+</tr>
+<tr>
+<td><a href="Q1237/">Q1237</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#what-a-failed-job-records-r7">Record colocated egress proxy readiness in a failed job's snapshot</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q555's worker snapshot leaves out the readiness of the set's colocated EgressProxy, which the design lists beside the pod's own state (R7) …</td>
 </tr>
 <tr>
 <td><a href="Q1240/">Q1240</a></td>

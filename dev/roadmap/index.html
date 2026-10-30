@@ -2776,8 +2776,8 @@ Some of it is committed to a named release, and a pill beside the title says whi
 No pill means no release is decided for that item yet.</p>
 <ul>
 <li>
-<p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q555,Q1183,Q1181 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
-  Detection counts flaky jobs per runner set first.
+<p><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q1183,Q1181,Q1236 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
+  Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.</p>
 </li>
 <li>

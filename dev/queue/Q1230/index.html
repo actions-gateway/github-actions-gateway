@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1198/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1230/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Pending worker lost to node shutdown re-runs instead of force-cancelling - GitHub Actions Gateway</title>
+        <title>Never-started preemption and eviction victims re-run instead of cancel - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pending-worker-lost-to-node-shutdown-re-runs-instead-of-force-cancelling" class="md-skip">
+        <a href="#never-started-preemption-and-eviction-victims-re-run-instead-of-cancel" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Pending worker lost to node shutdown re-runs instead of force-cancelling
+              Never-started preemption and eviction victims re-run instead of cancel
             
           </span>
         </div>
@@ -2627,15 +2627,15 @@
   
 
 
-<h1 id="pending-worker-lost-to-node-shutdown-re-runs-instead-of-force-cancelling">Pending worker lost to node shutdown re-runs instead of force-cancelling<a class="headerlink" href="#pending-worker-lost-to-node-shutdown-re-runs-instead-of-force-cancelling" title="Permanent link">&para;</a></h1>
-<p>A worker still <code>Pending</code> when its node shuts down takes the <code>node_shutdown</code> arm (Q1179) and goes straight to <code>rerun-failed-jobs</code>, ahead of the abandoned arm that force-cancels a never-started worker's run first (Q691/Q766).
-Read from source, not observed: the kubelet's shutdown manager kills every active pod on the node, <code>Pending</code> ones included, and fails each one (kubernetes v1.35.0, <code>pkg/kubelet/nodeshutdown/nodeshutdown_manager.go:153-166</code>); the classic tier sets <code>DeletedBeforeStart</code> only on its deletion paths, so a terminal <code>Failed</code> never reaches the abandon branch, and the scale-set arm keys on the condition alone.
-Unverified: what GitHub does with a re-run of a run whose job never started.
-The abandoned-row reasoning in the design table predicts a refusal until GitHub's ~15-minute unstarted-job timeout concludes the run, which would end as <code>rerun_failures_total{reason="run_never_concluded"}</code> with a spent retry slot.
-It is no regression, because no arm caught this shape before Q1179.
-A never-started classic worker on a dead node tainted <code>node.kubernetes.io/out-of-service</code> ends the same way, <code>Failed</code> with no recovery: Q1207's arm requires a <code>Running</code> runner container, and on the scale-set tier <code>abandonedAwaitingRecovery</code> takes that pod, by source reading.
-The likely fix is to route a <code>node_shutdown</code> pod with no container start record (<code>podEverStarted</code>) to the abandoned handling on both tiers.
-Raised as a note in the PR #2108 review.</p>
+<h1 id="never-started-preemption-and-eviction-victims-re-run-instead-of-cancel">Never-started preemption and eviction victims re-run instead of cancel<a class="headerlink" href="#never-started-preemption-and-eviction-victims-re-run-instead-of-cancel" title="Permanent link">&para;</a></h1>
+<p>A worker preempted while still <code>Pending</code> goes straight to <code>rerun-failed-jobs</code> on both tiers, ahead of the abandoned handling that force-cancels a never-started worker's run first (Q691/Q766).
+Read from source on 2026-10-27, not observed: on the classic tier <code>provision()</code> sets <code>cause = preemption</code> from <code>outcome.Preempted</code>, and the abandoned case requires <code>cause == ""</code>, so a preemption victim the delete path resolved with <code>DeletedBeforeStart</code> is re-run; on the scale-set tier <code>judgeScaleSetDisruption</code> tries <code>disruptionAwaitingRecovery</code>, whose <code>PreemptedByScheduler</code> arm matches, before <code>abandonedAwaitingRecovery</code>.
+The classic routing is deliberate: its comment says a preemption victim most often never started and that one disruption gets one recovery, and it was written with Q628, before Q683 measured that a never-started job's run has to be concluded before a re-run is legal.
+The kubelet eviction arm is ordered the same way on both tiers; whether the eviction manager ever evicts a still-<code>Pending</code> worker is unmeasured.
+Q1198 moved the node-shutdown arm's never-started pods to the abandoned handling (<code>LostToNodeShutdownBeforeStart</code>) and left these two arms alone, because the preemption routing is a recorded decision and its scale-set shape (a victim deleted while <code>Pending</code>, which may never publish <code>Failed</code>) needs its own evidence.
+Unverified, as on Q1198: what GitHub does with a re-run of a run whose job never started; the design table's abandoned row predicts a refusal until GitHub ends the run on its own, about as long as the 15-minute re-run window.
+The likely fix routes a preemption or eviction victim with no container start record to the abandoned handling on both tiers, keeping <code>cause</code> on the metrics.
+The in-flight row on futile re-runs (skip known-futile re-runs on the existing disruption arms) edits the same arms.</p>
 
 
 

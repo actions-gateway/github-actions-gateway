@@ -1737,6 +1737,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3639,6 +3650,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4447,6 +4469,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
+<li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
 <li><a href="#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run">A worker evicted for its own storage limit is no longer re-run</a></li>
 <li><a href="#non-breaking-the-scale-set-re-run-budget-survives-an-agc-restart-and-one-run-attempt-is-re-run-once">Non-breaking: the scale-set re-run budget survives an AGC restart, and one run attempt is re-run once</a></li>
@@ -4621,6 +4644,15 @@ Label each namespace that <code>kubectl get namespace &lt;namespace&gt; --show-l
 <p>Use <code>actions-gateway.com/tenant=managed</code> instead for a namespace holding only v2 kinds.</p>
 <p><strong>Removing a namespace from the tenants</strong> now has a second step: delete its <code>gmc-tenant-secret-reader</code> RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.</p>
+<h3 id="non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run<a class="headerlink" href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> clusters on Spot or preemptible capacity, or anywhere a node can go away while a worker is still <code>Pending</code>, pulling its image.
+Nothing to do.</p>
+<p>The kubelet's graceful shutdown fails a still-<code>Pending</code> worker the same way it fails a running one, and such a worker used to be re-run under <code>cause="node_shutdown"</code> at once.
+Its job never ran, and GitHub refuses a re-run of a run it has not concluded, so that recovery waited on GitHub's own ending of a run with an unstarted job: about 15 minutes, as long as the re-run window, which risks ending as <code>eviction_rerun_failures_total{reason="run_never_concluded"}</code> with a spent retry slot.
+That outcome is read from source and has not been observed on a cluster.
+It now takes the never-started handling on both tiers: the run is force-cancelled at once and re-run once the owner places a worker again, counted under <code>abandoned_run_force_cancels_total</code> rather than <code>eviction_retries_total{cause="node_shutdown"}</code> (Q1198).
+A classic-tier worker that never started on a dead node you taint out-of-service used to stay failed, and is now recovered the same way.</p>
+<p><strong>Rolling back</strong> returns these workers to the immediate re-run, and the classic out-of-service case to staying failed.</p>
 <h3 id="non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically<a class="headerlink" href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> clusters where nodes go <code>NotReady</code> without being deleted (network failure, kernel panic, power loss, hardware failure) and an admin applies Kubernetes' <code>node.kubernetes.io/out-of-service</code> taint to confirm the node is dead.
 Nothing to do.</p>
@@ -4650,10 +4682,11 @@ The count now lives in a per-<code>RunnerSet</code> ConfigMap, and a second disr
 The field's meaning is unchanged: it counts GAG's own re-runs, never a human's.</p>
 <p>Operational consequences:</p>
 <ul>
-<li><strong>A third ConfigMap per set.</strong> <code>scaleset-failures-&lt;set&gt;</code> appears the first time one of that set's workers is disrupted, beside <code>scaleset-guards-&lt;set&gt;</code> and <code>scaleset-recovery-claims-&lt;set&gt;</code>.
+<li><strong>A third ConfigMap per set.</strong> <code>scaleset-failures-&lt;set&gt;</code> appears the first time one of that set's workers is disrupted, or, from the release after <code>v1.10.0</code>, the first time one of its jobs fails (Q555), beside <code>scaleset-guards-&lt;set&gt;</code> and <code>scaleset-recovery-claims-&lt;set&gt;</code>.
   It carries the same <code>actions-gateway.com/runner-set</code> label and is owner-ref'd to the set.
   Each run's entry expires 30 days after GAG last reserved a re-run for it, GitHub's re-run window, and the object is capped at 512 KiB, about 1,100 runs re-run inside 30 days at the default budget of 2 (measured by the AGC's unit test).
-  Past the cap a new reservation is refused rather than an old budget dropped.</li>
+  Past the cap a new reservation is refused rather than an old budget dropped.
+  From the release after <code>v1.10.0</code> the object also holds failed-job records, evicted oldest first past half the cap, so a <code>v1.10.0</code> AGC sharing it during a rollout or after a rollback, which keeps those records but cannot evict them, still has the other half for re-run budgets.</li>
 <li><strong>Fewer re-runs and fewer <code>eviction_retries_total</code> increments for multi-job runs.</strong> A drain that takes three workers of one run now re-runs it once and counts once; the merged disruptions log <code>a re-run is already reserved for this run attempt</code>, and re-run the attempt themselves only if that re-run never lands.</li>
 <li><strong>Every scale-set recovery now reads the run.</strong> The eviction, preemption and vanished arms did not call GitHub before the re-run; they now <code>GET</code> the run once to learn the attempt the job failed in, and again before each re-run call, standing down once the run is already past that attempt.
   A run that cannot be read, or that names no <code>run_attempt</code>, is not re-run, and counts as <code>eviction_rerun_failures_total{reason="conclusion_unknown"}</code> or <code>{reason="api_error"}</code>.

@@ -3008,7 +3008,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; the rest is not.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up (<a href="../../queue/Q1236/">Q1236</a>) and without the proxy's readiness (<a href="../../queue/Q1237/">Q1237</a>); the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3033,7 +3033,7 @@ Retry classes then fire off that context through the re-run path the disruption 
 <td>M1</td>
 <td>The <code>result</code> vocabulary for a red step, a cancelled run and a timed-out job</td>
 <td>Which completions the ledger records</td>
-<td>The dogfood turn-up <a href="../../queue/Q555/">Q555</a> already names</td>
+<td>The dogfood turn-up <a href="../../queue/Q1236/">Q1236</a> names</td>
 </tr>
 <tr>
 <td>M2</td>
@@ -3152,7 +3152,7 @@ Whether <code>JobCompleted</code> carries them too is inferred from upstream's s
 <li><strong>The cap evicts failures, never budgets.</strong> Past a cap sized so the object stays under 512 KiB, the oldest failure entries go first, except one holding a <code>memoryFloor</code> whose re-run has not completed.
   A <code>reruns</code> or <code>pending</code> entry is never evicted to make room: if those alone reach the cap, new reservations fail and their re-runs are withheld, because evicting one would refill its run's budget.</li>
 <li><strong>The size, measured</strong> by <code>TestRerunLedger_CapHoldsEnoughBudgets</code> with 63-character pod names: a <code>reruns</code> entry is 476 bytes at the default budget of 2 with 40-character job names, so the cap holds about 1,100 runs GAG re-ran inside 30 days on one set, and 2,533 bytes at the field's ceiling of 10 with 100-character names, about 206 runs.
-  Q555 extends the test to the <code>failures</code> map when it adds it.</li>
+  Q555 extended it to the <code>failures</code> map (<code>TestRerunLedger_CapHoldsEnoughFailures</code>), and evicts failure records past <em>half</em> the cap rather than at it, because <code>v1.10.0</code> shares the object and cannot evict them.</li>
 </ul>
 <h3 id="pairing-and-attribution-r1-r2-r8">Pairing and attribution (R1, R2, R8)<a class="headerlink" href="#pairing-and-attribution-r1-r2-r8" title="Permanent link">&para;</a></h3>
 <p>On a completion for a key with a failure entry, the completion is a later attempt of that job (M2):</p>
@@ -3686,7 +3686,8 @@ Job-granular avoids that, and costs:</p>
 <li>The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.</li>
 <li>Q1182 (built) created the ledger store, with its version rules, <code>reruns</code> map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as <code>selfCancelledAttempt</code>.</li>
 <li>Q1181: the futility checks on the widened run read, honouring <code>selfCancelledAttempt</code> for <code>run_cancelled</code>, between the run read and the reservation in <code>handleScaleSetEviction</code>.</li>
-<li>Q555 adds the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.</li>
+<li>Q555 (built) added the <code>failures</code> map, the snapshot, the pairing and the metrics on that store.
+   Three departures from Component 1: <code>JobCompleted</code> carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job (<a href="../../design/04-operational-flows/#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">04-operational-flows.md</a>); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.</li>
 <li>Q1183: the <code>pending</code> map, the breaker and the out-of-memory class, with job-granular re-run if M6 allows it.</li>
 <li>Q1178 (built); Q1184 after its review.</li>
 </ol>

@@ -2870,7 +2870,7 @@
 <h1 id="q555-flaky-job-detection-and-classified-retry-problem-requirements-scope">Q555 flaky-job detection and classified retry: problem, requirements, scope<a class="headerlink" href="#q555-flaky-job-detection-and-classified-retry-problem-requirements-scope" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ draft for a design session, written 2026-10-10.
 Nothing is built and no CRD shape is committed; the work is split across the rows <a href="#how-this-splits-into-backlog-items">below</a>.
-<a href="../../queue/Q555/">Q555</a> is in the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
+Q555, now built, was revived into the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
 <a href="../q555-automatic-recovery-design/">The design</a> proposes how to build it and recommends answers to the <a href="#open-questions-for-the-design-session">open questions</a>, pending sign-off.
 It extends <a href="../../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">G.17</a> rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.</p>
 <h2 id="the-prerequisite-already-exists">The prerequisite already exists<a class="headerlink" href="#the-prerequisite-already-exists" title="Permanent link">&para;</a></h2>
@@ -2905,9 +2905,19 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 </thead>
 <tbody>
 <tr>
-<td><a href="../../queue/Q555/">Q555</a></td>
+<td>Q555 (built)</td>
 <td>Detection, R1 to R8</td>
-<td>A dogfood measurement of the <code>result</code> vocabulary</td>
+<td>Built without the dogfood measurement it named</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1236/">Q1236</a></td>
+<td>The dogfood readings detection rests on (M1, M2, M4)</td>
+<td>Q1180</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1237/">Q1237</a></td>
+<td>The colocated egress proxy's readiness in R7's snapshot</td>
+<td>Nothing</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1181/">Q1181</a></td>
@@ -2917,7 +2927,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <tr>
 <td><a href="../../queue/Q1183/">Q1183</a></td>
 <td>Classified retry, R9 to R17, starting with <code>OOMKilled</code> under right-sizing</td>
-<td>Q555</td>
+<td>Q555 (built)</td>
 </tr>
 <tr>
 <td>Q1177 (closed by the <code>own_limit</code> withhold), Q1179 (closed by the <code>node_shutdown</code> arm)</td>

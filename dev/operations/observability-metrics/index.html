@@ -3241,6 +3241,12 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td>Disruption recoveries that deliberately made <strong>no</strong> re-run call. Two shapes. <code>reason="own_limit"</code> with <code>cause="eviction"</code> (Q1177): the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, which a re-run with the same limit repeats; it is decided at detection, so <strong>no</strong> retry slot is spent and <code>eviction_retries_total</code> does not move, and the <code>EvictionRerunWithheld</code> Event quotes the kubelet's message. The fix is the limit, not the cluster. <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> (Q811): the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. On this shape the retry slot is spent, since it is reserved at detection, minutes before GitHub concludes the run, so read it alongside <code>eviction_retries_total</code>, whose increment it explains. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted. A climbing <code>own_limit</code> rate, by contrast, is tenants outgrowing their own limits.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>event</code>, <code>result</code></td>
+<td>The result of the later attempt of each job GAG re-ran for a disruption, by the <code>cause</code> it re-ran for, the run's triggering <code>event</code> (<code>push</code>, <code>pull_request</code>, <code>pull_request_target</code>, <code>merge_group</code>, <code>schedule</code>, <code>workflow_dispatch</code>, <code>workflow_run</code>, <code>repository_dispatch</code>, <code>release</code>; anything else is <code>other</code>, and a completion that named none is <code>unknown</code>), and <code>result</code> (<code>succeeded</code>, <code>failed</code>). <code>result="failed"</code> over the total is a cause's failure rate: a re-run that fails again was not a recovery. Counted when the job's next attempt completes, from the failure ledger (Q555); a pairing lost to a ledger write that failed, or to another replica's write this process has not read, is not counted. Scale-set tier only.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
@@ -3547,6 +3553,18 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>result</code></td>
 <td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_job_reruns_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>trigger</code></td>
+<td>A later attempt of a failed job completed, by who re-ran it (Q555): <code>trigger="gag"</code> when the job was in GAG's own disruption re-run, <code>gag_collateral</code> when GAG's <code>rerun-failed-jobs</code> re-ran it beside a disrupted job, <code>other</code> for a human or another automation. <strong><code>trigger="other"</code> over <code>…_jobs_completed_total</code> is the manual re-run rate</strong>, the number automatic recovery exists to lower. A job is paired across attempts by run and display name, and its failure is held for 7 days in the set's failure ledger. Undercounts, by design: a re-run more than 7 days later, a failure recorded while the ledger could not be written, and a re-run that lands on another set all count nothing. The completion carries no attempt number, so a job that first fails in an attempt <em>after</em> one GAG re-ran reads as <code>gag_collateral</code> rather than <code>other</code>.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_flaky_jobs_total</code></td>
+<td>Counter</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>trigger</code></td>
+<td>A failed job later succeeded with no disruption attributed to its failure, by the same <code>trigger</code> (<code>gag_collateral</code> or <code>other</code>; a job GAG re-ran for its own disruption is a recovery, not a flake). A disrupted job whose re-run GAG withheld or could not budget is not counted either, since a recovery claim names its cause. Each one also emits a <strong>Normal</strong> <code>FlakyJobDetected</code> Event naming the run and job.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_jobs_deferred</code></td>
@@ -3871,6 +3889,16 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td>The terminal <code>JobCompleted</code> message the classic many-acquirers protocol never delivered, so there is nothing to count on that tier.</td>
 </tr>
 <tr>
+<td><code>actions_gateway_scaleset_job_reruns_total</code></td>
+<td>Scale-set only</td>
+<td>Pairs <code>JobCompleted</code> messages, which the classic protocol never delivers.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_scaleset_flaky_jobs_total</code></td>
+<td>Scale-set only</td>
+<td>As above.</td>
+</tr>
+<tr>
 <td><code>actions_gateway_scaleset_jobs_deferred</code></td>
 <td>Scale-set only</td>
 <td>Assignments held for a later re-offer, which requires a queue cursor the classic protocol does not have.</td>
@@ -3939,6 +3967,11 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Both</td>
 <td>As above: the cancel check sits in that shared path, and both tiers detect the graceful deletion that arms it (Q811); both tiers withhold an own-limit eviction (Q1177).</td>
+</tr>
+<tr>
+<td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
+<td>Scale-set only</td>
+<td>Read from the same <code>JobCompleted</code> pairing, which only the scale-set listener reports. The classic tier's re-runs are counted by <code>eviction_retries_total</code> with no outcome.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
@@ -4474,6 +4507,11 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <td>Both tiers spend a per-run retry budget, each its own (Q417, Q1182).</td>
 </tr>
 <tr>
+<td><code>FlakyJobDetected</code></td>
+<td>Scale-set only</td>
+<td>Flaky-job detection pairs <code>JobCompleted</code> messages, which only the scale-set protocol delivers (Q555).</td>
+</tr>
+<tr>
 <td><code>JobAcquisitionFailed</code></td>
 <td>Classic only</td>
 <td>Counts a failed <code>acquirejob</code>, a call the scale-set protocol does not make. Its counterpart there is <code>ScaleSetListenerStartFailed</code> for a session that cannot start, and <code>actions_gateway_scaleset_provision_errors_total</code> for a job that cannot be provisioned.</td>
@@ -4492,6 +4530,11 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <td><code>OrphanedWorkerRecovered</code></td>
 <td>Scale-set only</td>
 <td>Recovery of a worker already gone at process start, read from the in-flight set the scale-set listener persists (Q844). The classic tier holds that state in process and loses it with the process.</td>
+</tr>
+<tr>
+<td><code>PlatformFaultOnFailedJob</code></td>
+<td>Scale-set only</td>
+<td>As <code>FlakyJobDetected</code>: recorded when a failed <code>JobCompleted</code>'s worker snapshot shows a platform fault (Q555).</td>
 </tr>
 <tr>
 <td><code>QuotaRetriesExhausted</code></td>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q555/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1236/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Detect flaky jobs and record each failure's platform context - GitHub Actions Gateway</title>
+        <title>Measure flaky-job detection on dogfood: result spelling, re-run job IDs - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#detect-flaky-jobs-and-record-each-failures-platform-context" class="md-skip">
+        <a href="#measure-flaky-job-detection-on-dogfood-result-spelling-re-run-job-ids" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Detect flaky jobs and record each failure's platform context
+              Measure flaky-job detection on dogfood: result spelling, re-run job IDs
             
           </span>
         </div>
@@ -2627,14 +2627,17 @@
   
 
 
-<h1 id="detect-flaky-jobs-and-record-each-failures-platform-context">Detect flaky jobs and record each failure's platform context<a class="headerlink" href="#detect-flaky-jobs-and-record-each-failures-platform-context" title="Permanent link">&para;</a></h1>
-<p><strong>Goal:</strong> automatic recovery that cuts human intervention and so operating cost; success is a falling rate of manual re-runs per set (draft R8).
-<strong>Demand:</strong> this repository's own CI, which runs on GAG, is the operator ask (maintainer decision, 2026-10-10).
-This row is phase 1 of <a href="../../plan/q555-flaky-job-retry/">the draft</a>, detection only (R1 to R8): pair a job's <code>failed</code> completion with a later <code>succeeded</code> attempt, record the platform context of each failure in a form that outlives the AGC pod, and report the rate of re-runs nobody automated.
-The job outcome it needs already arrives on the scale-set tier as <code>JobCompleted.result</code>.
-First, one dogfood turn-up reads <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code> for a failed step, a cancelled run and a timed-out job: only a disruption's <code>failed</code> has been observed live.
-<a href="../../plan/q555-automatic-recovery-design/">The design</a> settles the draft's open questions; detection adds the <code>failures</code> map, the snapshot and the pairing to the ledger store in <code>rerun_ledger.go</code>.
-Retry lives in its own rows: Q1183 (classified retry, blocked on this row) and Q1181 (futile re-runs on the existing arms); a blanket flake retry is not scheduled.</p>
+<h1 id="measure-flaky-job-detection-on-dogfood-result-spelling-re-run-job-ids">Measure flaky-job detection on dogfood: result spelling, re-run job IDs<a class="headerlink" href="#measure-flaky-job-detection-on-dogfood-result-spelling-re-run-job-ids" title="Permanent link">&para;</a></h1>
+<p>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the building session was not scoped to it; the design's M1, M2 and M4 are still unmeasured, and each is an assumption the code now rests on.
+- <strong>M1, the <code>result</code> vocabulary.</strong> Read <code>actions_gateway_scaleset_jobs_completed_total</code> by <code>result</code> for a red step, a cancelled run and a timed-out job; only a disruption's <code>failed</code> has been seen live.
+  Detection records any result but <code>succeeded</code> as a failure, and <code>canceled</code> only when a recovery claim names the job, so a timed-out job's spelling decides whether it is recorded.
+- <strong>M2, pairing's key.</strong> Re-run a failed job and read both completions at debug level: detection assumes the re-run carries a new <code>jobId</code> and the same <code>jobDisplayName</code>, and treats a repeat of the same <code>jobId</code> as a replay.
+  A workflow with two jobs sharing a <code>name:</code> would share one record.
+- <strong>M4, where context is read.</strong> Compare the worker pod's terminal transition and its deletion to the completion's arrival.
+  Detection snapshots the pod at its terminal transition and falls back to reading it, so a pod gone before both leaves the record with no context.
+  If the completion usually arrives first, the snapshot is never taken in time: the fallback reads a still-<code>Running</code> pod, so a runner that exits non-zero never reads as a fault, and the snapshots no completion takes fill the 1,024-entry map (independent review of Q555, 2026-10-27).
+  Also unmeasured: whether the runner container exits non-zero when its job fails, which would make every red test a <code>PlatformFaultOnFailedJob</code> Warning (the snapshot's fault reading assumes it exits 0), and whether <code>JobCompleted</code> carries <code>eventName</code> and <code>jobWorkflowRef</code> (decoded from it, never seen on it).
+  The reading needs <code>actions_gateway_*</code> series stored, which Q1180 adds.</p>
 
 
 

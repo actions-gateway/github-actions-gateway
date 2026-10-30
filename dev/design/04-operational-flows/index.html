@@ -1169,6 +1169,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3082,6 +3093,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3600,7 +3622,7 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <td>Node shutdown: a Spot or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted under the worker, or a dead node an admin taints <code>node.kubernetes.io/out-of-service</code></td>
 <td><code>PodFailed</code> with <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code> (the kubelet's graceful shutdown; <code>Status.Reason: Terminated</code>), <code>DisruptionTarget=True</code> / <code>DeletionByPodGC</code> (PodGC failing and force-deleting the orphan of a node already gone), or <code>DisruptionTarget=True</code> / <code>DeletionByTaintManager</code> with the runner container still recorded <code>Running</code> (PodGC failing and force-deleting a pod the taint manager could not finish deleting)</td>
 <td>✅ (Q1179, Q1207)</td>
-<td>All three reasons are written by cluster components, so like preemption the signal needs no conclusion check. No shape reached an older arm: the reason is not <code>Evicted</code>, the condition reason is not <code>PreemptionByScheduler</code>, nothing deletes a gracefully shut-down pod, PodGC writes the orphan's phase before its delete, the order the drain row reads as cleanup, and no kubelet records the out-of-service pod's exit for the drain row to order against. <code>DeletionByTaintManager</code> also follows a human's <code>NoExecute</code> taint on a live node, so the arm takes it only while the runner container is still <code>Running</code>: a live kubelet finishing the same delete records the exit first, and the drain row keeps that pod and its conclusion check. Only the runner counts, because a regular sidecar such as dind can outlive a runner whose job already ended. The AGC's own deletions are excluded here as on the drain row. The out-of-service taint is the admin's confirmation that the node is dead, so re-running carries no risk of a partitioned runner finishing the job twice. A node that goes <code>NotReady</code> and keeps its Node object with no such taint is <strong>not</strong> covered: the taint manager's graceful delete never completes without a kubelet, so the pod stays <code>Running</code> until an admin taints the node or deletes the Node object. The out-of-service shape is measured on kind v1.36.1; the other two are read from kubernetes v1.35.0 source, not yet from a reclaimed dogfood node</td>
+<td>All three reasons are written by cluster components, so like preemption the signal needs no conclusion check. No shape reached an older arm: the reason is not <code>Evicted</code>, the condition reason is not <code>PreemptionByScheduler</code>, nothing deletes a gracefully shut-down pod, PodGC writes the orphan's phase before its delete, the order the drain row reads as cleanup, and no kubelet records the out-of-service pod's exit for the drain row to order against. <code>DeletionByTaintManager</code> also follows a human's <code>NoExecute</code> taint on a live node, so the arm takes it only while the runner container is still <code>Running</code>: a live kubelet finishing the same delete records the exit first, and the drain row keeps that pod and its conclusion check. Only the runner counts, because a regular sidecar such as dind can outlive a runner whose job already ended. The AGC's own deletions are excluded here as on the drain row, and so is a worker none of whose containers ever started: the kubelet's shutdown fails a still-<code>Pending</code> worker too, and that job never ran, so it takes the never-started row below (Q1198). The out-of-service taint is the admin's confirmation that the node is dead, so re-running carries no risk of a partitioned runner finishing the job twice. A node that goes <code>NotReady</code> and keeps its Node object with no such taint is <strong>not</strong> covered: the taint manager's graceful delete never completes without a kubelet, so the pod stays <code>Running</code> until an admin taints the node or deletes the Node object. The out-of-service shape is measured on kind v1.36.1; the other two are read from kubernetes v1.35.0 source, not yet from a reclaimed dogfood node</td>
 </tr>
 <tr>
 <td><code>kubectl drain</code> / eviction API, <code>kubectl delete pod</code></td>
@@ -3615,8 +3637,8 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <td>The AGC deletes pods it gave up on: the reaper's stuck-Pending and orphaned-Running workers, and (Q501) the worker of a job whose lock the renew loop lost, which GitHub has already redelivered to a sibling. Recovering either would turn cleanup into a re-run trigger. The stamp, written before every AGC-issued delete, is the exclusion. It is the pod's, so it dies with the pod: a reaped worker whose completion a previous process never read is re-run by the Q844 path instead, which is the narrow residual recorded below</td>
 </tr>
 <tr>
-<td>Deleted before its container ever ran</td>
-<td>Vanishes, or publishes a transient <code>Failed</code> + mark with <strong>no container exit record</strong> (a drained <em>Pending</em> worker)</td>
+<td>Deleted before its container ever ran, or lost with its node before it did</td>
+<td>Vanishes, or publishes a transient <code>Failed</code> + mark with <strong>no container exit record</strong> (a drained <em>Pending</em> worker), or <code>PodFailed</code> with one of the node-shutdown row's <code>DisruptionTarget</code> reasons and no container start record (Q1198)</td>
 <td>✅ (Q691, both tiers since Q766)</td>
 <td>The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job <code>cancelled</code> in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then <strong>does</strong> accept <code>rerun-failed-jobs</code>, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does <strong>not</strong> enter <code>disruptionAwaitingRecovery</code>, on either tier: a job that never ran has no failed job for <code>rerun-failed-jobs</code> to act on, so the run has to be concluded first. See <a href="#stuck-pending-worker-pod">Stuck-Pending Worker Pod</a> (Q628/Q676/Q683/Q691/Q766)</td>
 </tr>
@@ -3741,6 +3763,43 @@ The withhold is decided at detection, before the budget is touched, so it spends
 They raise the kubelet's <code>memory.available</code> hard threshold on the worker's own node to just under what that node has free, read from its <code>stats/summary</code> at the moment of use, and make the worker hold 1GiB; a low memory request is what makes the kubelet's ranking pick it.
 The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
 Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code>.</p>
+<h4 id="flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)<a class="headerlink" href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" title="Permanent link">&para;</a></h4>
+<p>Detection records what each recovery did, and changes nothing it does.
+The listener reports every terminal <code>JobCompleted</code> once per process, with its result, run identity, triggering event and workflow ref.
+A <code>failed</code> completion, or a <code>canceled</code> one a recovery claim names, is recorded in the set's failure ledger (<code>scaleset-failures-&lt;set&gt;</code>, the ConfigMap that holds the scale-set budget) under <code>failures["&lt;runID&gt;/&lt;job name&gt;"]</code>, for 7 days.
+The record carries the worker's state at its terminal transition, which the pod watch snapshots into a bounded in-memory map (1,024 workers) because the pod may be gone when the completion arrives; the completion falls back to reading the pod, and records no context when neither exists.
+The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.</p>
+<p>A later completion of the same key with a new job ID is the job's next attempt, attributed from GAG's own re-runs of the run in the same ledger:</p>
+<table>
+<thead>
+<tr>
+<th>GAG re-ran the run and</th>
+<th>Trigger</th>
+<th>Flaky when it succeeds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>listed this job</td>
+<td><code>gag</code></td>
+<td>Never; the result counts in <code>eviction_rerun_outcomes_total{cause}</code></td>
+</tr>
+<tr>
+<td>re-ran failed jobs without listing it</td>
+<td><code>gag_collateral</code></td>
+<td>When its failure had no disruption cause</td>
+</tr>
+<tr>
+<td>did neither</td>
+<td><code>other</code></td>
+<td>As above</td>
+</tr>
+</tbody>
+</table>
+<p>A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context, and marks GAG's re-run it was attributed to as spent so a later attempt does not claim it again.
+<code>JobCompleted</code> carries no run attempt, so GAG's re-runs are matched by job name rather than by attempt: a job that first fails in an attempt after one GAG re-ran reads as <code>gag_collateral</code> rather than <code>other</code>.
+A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
+Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: <code>v1.10.0</code> writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.</p>
 <h4 id="why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Why preemption <em>deletes</em> rather than <em>evicts</em>, and what that costs us<a class="headerlink" href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" title="Permanent link">&para;</a></h4>
 <p>A recurring question, because the answer decides three things we measured and could not change: why the worker's disruption-safety annotations did not deflect the preemption, why adding a <code>PodDisruptionBudget</code> would not either, and why scale-set preemption recovery cannot be made restart-safe.</p>
 <p><strong>"Evict" and "delete" are not a gracefulness distinction.</strong> The Eviction API (<code>pods/&lt;name&gt;/eviction</code>) is essentially <em>a DELETE that checks PodDisruptionBudgets first</em> and returns <code>429</code> if the budget would be violated.
