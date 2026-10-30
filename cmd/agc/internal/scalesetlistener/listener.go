@@ -243,6 +243,14 @@ type Job struct {
 // is deferred onto the re-offer backoff instead (Q576).
 var ErrCapacityUnavailable = errors.New("scalesetlistener: no worker capacity for this job")
 
+// ErrWorkerTerminating means the job's worker pod name is held by an earlier worker that
+// is still being deleted, so the job cannot have a worker until that pod is gone (Q1199).
+// ProvisionFunc signals it by returning an error that wraps it. Like
+// ErrCapacityUnavailable it defers the job onto the re-offer backoff rather than holding
+// the cursor: a graceful termination lasts seconds to minutes, and a pod on a lost node
+// stays terminating until the node is removed.
+var ErrWorkerTerminating = errors.New("scalesetlistener: the job's previous worker pod is still terminating")
+
 // ErrRunnerGroupNotFound means Config.RunnerGroupName names a runner group the GitHub
 // installation does not have. Start fails with an error wrapping it so the owning
 // reconciler can report RunnerGroupNotFound rather than a generic session failure.
@@ -258,7 +266,8 @@ var ErrRunnerGroupNotFound = errors.New("scalesetlistener: no such runner group 
 // same job may be handed over more than once, and a duplicate must be a no-op (the
 // provisioner names the pod/Secret deterministically from the jobID). A non-nil error
 // leaves the job un-provisioned so the Listener retries it on a later poll — except an
-// error wrapping ErrCapacityUnavailable, which defers the job instead.
+// error wrapping ErrCapacityUnavailable or ErrWorkerTerminating, which defers the job
+// instead.
 type ProvisionFunc func(ctx context.Context, job Job) error
 
 // CapacityCheckFunc reports whether the owner can run another worker pod right now. The
@@ -432,6 +441,9 @@ const (
 	// DeferReasonNameConflict: the runner name the job needs is held by a registration
 	// that neither a deregister nor a bounded run of fresh names could clear (Q551).
 	DeferReasonNameConflict = "name_conflict"
+	// DeferReasonWorkerTerminating: the job's previous worker pod is still being deleted
+	// and holds the pod name the job's worker needs (Q1199). Clears when that pod is gone.
+	DeferReasonWorkerTerminating = "worker_terminating"
 )
 
 // PollErrorRecorder counts GetMessage failures into the cross-tier
@@ -830,7 +842,7 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 	l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionFalse,
 		v2alpha1.ReasonPollingHealthy, "message polling healthy")
 	l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
-		v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name or on worker capacity")
+		v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
 
 	done := make(chan struct{})
 	go func() {
@@ -1639,14 +1651,20 @@ func (l *Listener) refreshStalled() {
 			l.stalledCond = false
 			l.stalledEventReason = ""
 			l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
-				v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name or on worker capacity")
+				v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
 		}
 		return
 	}
-	// A name conflict outranks a full ceiling whenever both are held: it is the one an
-	// operator can act on, and a ceiling clears itself as workers finish.
+	// A name conflict outranks a terminating worker, which outranks a full ceiling: a name
+	// conflict is the one an operator can act on, and a pod held terminating past its
+	// grace period is the next (a lost node), while a ceiling clears itself as workers
+	// finish.
 	reason := v2alpha1.ReasonWorkerCeilingReached
 	eventType, eventReason := corev1.EventTypeNormal, "WorkerCeilingReached"
+	if counts[DeferReasonWorkerTerminating] > 0 {
+		reason = v2alpha1.ReasonWorkerTerminating
+		eventReason = "WorkerTerminating"
+	}
 	if counts[DeferReasonNameConflict] > 0 {
 		reason = v2alpha1.ReasonRunnerNameConflict
 		eventType, eventReason = corev1.EventTypeWarning, "JobProvisionStalled"
@@ -1674,6 +1692,10 @@ func (l *Listener) stalledMessage(counts map[string]int) string {
 		clauses = append(clauses, fmt.Sprintf("%d cannot register a runner name, re-offered up to every %s (%s)",
 			n, maxDeferredRetryBackoff, strings.Join(l.deferredJobIDs(DeferReasonNameConflict), ", ")))
 	}
+	if n := counts[DeferReasonWorkerTerminating]; n > 0 {
+		clauses = append(clauses, fmt.Sprintf("%d waiting for the previous worker pod to finish terminating, re-offered up to every %s (%s)",
+			n, maxDeferredRetryBackoff, strings.Join(l.deferredJobIDs(DeferReasonWorkerTerminating), ", ")))
+	}
 	if n := counts[DeferReasonCeiling]; n > 0 {
 		clauses = append(clauses, fmt.Sprintf("%d waiting for worker capacity, re-offered every %s (%s)",
 			n, l.capacityInterval, strings.Join(l.deferredJobIDs(DeferReasonCeiling), ", ")))
@@ -1688,13 +1710,16 @@ func stalledEventNote(counts map[string]int) string {
 	if counts[DeferReasonNameConflict] > 0 {
 		return "one or more assigned jobs cannot register a runner name and are being re-offered on a backoff; the JobProvisionStalled condition names them"
 	}
+	if counts[DeferReasonWorkerTerminating] > 0 {
+		return "one or more assigned jobs are waiting for their previous worker pod to finish terminating and are being re-offered on a backoff; the JobProvisionStalled condition names them"
+	}
 	return "assigned jobs are waiting for worker capacity (the set is at its worker ceiling) and are being re-offered; the JobProvisionStalled condition names them"
 }
 
 // deferredCounts tallies the held jobs by DeferReason*, carrying an explicit zero for
 // every reason so the gauge never leaves a series frozen at its last non-zero value.
 func (l *Listener) deferredCounts() map[string]int {
-	counts := map[string]int{DeferReasonCeiling: 0, DeferReasonNameConflict: 0}
+	counts := map[string]int{DeferReasonCeiling: 0, DeferReasonNameConflict: 0, DeferReasonWorkerTerminating: 0}
 	for _, d := range l.deferred {
 		counts[d.reason]++
 	}
@@ -1732,6 +1757,9 @@ const (
 	// provisionDeferCapacity: the owner is at its worker ceiling — same cursor handling,
 	// on the shorter capacity schedule (Q576).
 	provisionDeferCapacity
+	// provisionDeferTerminating: the job's previous worker pod is still terminating — same
+	// cursor handling, on the conflict ladder (Q1199).
+	provisionDeferTerminating
 )
 
 // deferReason maps an outcome to the DeferReason* the job is held under, or "" for an
@@ -1742,6 +1770,8 @@ func (o provisionOutcome) deferReason() string {
 		return DeferReasonNameConflict
 	case provisionDeferCapacity:
 		return DeferReasonCeiling
+	case provisionDeferTerminating:
+		return DeferReasonWorkerTerminating
 	default:
 		return ""
 	}
@@ -1818,6 +1848,9 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 		// counted by the deferred gauge, not the error counter (Q576).
 		if errors.Is(err, ErrCapacityUnavailable) {
 			return provisionDeferCapacity
+		}
+		if errors.Is(err, ErrWorkerTerminating) {
+			return provisionDeferTerminating
 		}
 		l.log.Warn("scaleset: provision worker", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
 		l.metricsIncProvisionError()

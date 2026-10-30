@@ -61,6 +61,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Agent Pool Blocked: Another Tenant Owns the Agent Secret](#agent-pool-blocked-another-tenant-owns-the-agent-secret)
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Scale-Set Jobs Waiting at the Worker Ceiling (WorkerCeilingReached)](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached)
+- [Scale-Set Job Waiting for Its Previous Worker to Terminate (WorkerTerminating)](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating)
 - [Scale-Set Assignments Abandoned (AssignmentAbandoned)](#scale-set-assignments-abandoned-assignmentabandoned)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
@@ -2013,13 +2014,14 @@ kubectl get runnerset <name> -n <namespace> \
   -o jsonpath='{.status.conditions[?(@.type=="JobProvisionStalled")].message}'
 ```
 
-**The condition's three reasons.** `JobProvisionStalled` is advisory — it never gates `Ready` — and it appears only on the scale-set path (`acquisitionProtocol: ScaleSet`):
+**The condition's four reasons.** `JobProvisionStalled` is advisory — it never gates `Ready` — and it appears only on the scale-set path (`acquisitionProtocol: ScaleSet`):
 
 | `status` / `reason` | Meaning |
 |---|---|
 | `True` / `RunnerNameConflict` | At least one held job cannot register its runner name. An anomaly worth acting on — see [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409). Outranks `WorkerCeilingReached` whenever both classes are held at once, because it is the one you can do something about; a full ceiling clears itself. |
+| `True` / `WorkerTerminating` | At least one held job is waiting for its previous worker pod to finish terminating; see [Scale-Set Job Waiting for Its Previous Worker to Terminate](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating). Outranks `WorkerCeilingReached` and is outranked by `RunnerNameConflict`. |
 | `True` / `WorkerCeilingReached` | Every held job is waiting only on worker capacity — this section. |
-| `False` / `JobsProvisioning` | No assigned job is waiting on a runner name or on capacity. Published when the listener opens its session and again the moment the last held job provisions or completes, so a set that has never stalled reports it too. |
+| `False` / `JobsProvisioning` | No assigned job is waiting on a runner name, a terminating worker, or capacity. Published when the listener opens its session and again the moment the last held job provisions or completes, so a set that has never stalled reports it too. |
 
 **When to act.** Only when the wait itself is the problem.
 Either raise the ceiling (`spec.maxWorkers` or the top `priorityTiers` threshold) if the cluster has room, or treat it as the signal that the tenant needs more capacity.
@@ -2028,6 +2030,33 @@ Check first that the ceiling is the real constraint and not a downstream one —
 **What it should NOT look like.** A steady stream of `generate-jitconfig` and runner-deregister calls against GitHub while the set sits at its ceiling.
 Before `v1.3.0`, a ceiling-blocked job was read as a transient failure: the queue message was redelivered immediately, so the listener retried it several times a second and minted (then deregistered) a runner registration on every pass — 704 deregister calls for a single job during one 14-minute window.
 If you see that on an older version, the fix is to upgrade; the ceiling wait itself was never the bug.
+
+---
+
+## Scale-Set Job Waiting for Its Previous Worker to Terminate (WorkerTerminating)
+
+**Symptom.** A ScaleSet `RunnerSet` reports `JobProvisionStalled=True/WorkerTerminating`, `actions_gateway_scaleset_jobs_deferred{reason="worker_terminating"}` is `> 0`, and a `WorkerTerminating` Normal Event is recorded.
+The AGC logs `scale-set worker pod is still terminating; re-offering the job once it is gone` with the pod name.
+
+**What happened.** The listener's session was re-created while one of the set's worker pods was being deleted, and the new session replayed that pod's job.
+A scale-set worker pod is named for its job, so the replay cannot create a new worker until the old pod is gone.
+The listener holds the job and re-offers it after 30 seconds, doubling to every 5 minutes; once the old pod is deleted, the next re-offer creates the job's new worker.
+After an ordinary grace period this clears by itself within a minute.
+
+**When to act.** When it does not clear.
+A pod that stays `Terminating` past its grace period is usually on a node that stopped responding, and stays that way until the node is removed or the pod is force-deleted:
+
+```sh
+kubectl get pod <pod-name> -n <namespace> -o wide
+```
+
+If the node in the `NODE` column is `NotReady`, recover or remove the node, or force-delete the pod once you are sure it is not running anywhere:
+
+```sh
+kubectl delete pod <pod-name> -n <namespace> --grace-period=0 --force
+```
+
+Releases after `v1.10.0` hold the job this way; earlier ones treated the old pod as the job's worker, so the job was acknowledged and no worker ever started for the runner the replay registered (Q1199).
 
 ---
 
@@ -2211,6 +2240,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `FlakyJobDetected` | Normal | A scale-set job failed with no disruption attributed to it, and a later attempt of it succeeded: a flake, re-run by a human or by GAG alongside a disrupted job (Q555). Names the run and the job. Not a fault of the platform; a run of them on one job is a test worth fixing. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
 | `PlatformFaultOnFailedJob` | Warning | A scale-set job failed and its worker shows a platform fault: the pod `Failed`, a `DisruptionTarget` condition, a container `OOMKilled`, or the runner container exiting non-zero (Q555). Names the run, the job, the worker and the fault. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
 | `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
+| `WorkerTerminating` | Normal | A scale-set job replayed to a re-created session is waiting for its previous worker pod to finish terminating; it is re-offered on a backoff until that pod is gone. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Waiting for Its Previous Worker to Terminate](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating) |
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
 | `OrphanedWorkerRecovered` | Warning | A scale-set worker pod for an unconcluded job was already gone when this AGC process started, so the disruption happened while nothing was watching and its cause was lost with the pod (Q844). The run is re-run through the shared per-run retry budget as `cause="vanished"`. Expected after an AGC restart that overlapped a node drain or a preemption; a steady trickle with no restarts is not. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |

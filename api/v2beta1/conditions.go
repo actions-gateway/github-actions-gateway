@@ -127,6 +127,7 @@ const (
 	ReasonGitHubEgressAllowed      = apiconditions.ReasonGitHubEgressAllowed
 	ReasonRunnerNameConflict       = apiconditions.ReasonRunnerNameConflict
 	ReasonWorkerCeilingReached     = apiconditions.ReasonWorkerCeilingReached
+	ReasonWorkerTerminating        = apiconditions.ReasonWorkerTerminating
 	ReasonJobsProvisioning         = apiconditions.ReasonJobsProvisioning
 	ReasonScaleSetNameShared       = apiconditions.ReasonScaleSetNameShared
 	ReasonScaleSetNamesUnique      = apiconditions.ReasonScaleSetNamesUnique
