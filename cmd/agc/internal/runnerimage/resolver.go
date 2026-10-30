@@ -45,7 +45,8 @@ type Request struct {
 	// means the worker ServiceAccount's, as admission would apply them.
 	PullSecrets []string
 	// Wake is called once the lookup's state changes, so the caller can reconcile
-	// again. It must not block.
+	// again. The new state is visible to Lookup before Wake runs, never after. It
+	// must not block.
 	Wake func()
 }
 
