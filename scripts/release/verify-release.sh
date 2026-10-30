@@ -52,19 +52,38 @@ chart_ver="${VERSION#v}"
 COSIGN_TIMEOUT="${COSIGN_TIMEOUT:-180}"
 timed_out=0
 
-# bounded OUT CMD... — run CMD with stdout to OUT, killing it after
-# COSIGN_TIMEOUT seconds; returns CMD's status, or 124 if it was killed. A file
-# rather than $(...): a credential helper orphaned by the kill would hold a
-# command substitution's pipe open.
+# kill_tree PID — SIGKILL PID and every process descended from it. The docker
+# CLI forwards SIGTERM to its buildx plugin and waits on it, so a TERM leaves
+# both blocked on a hung credential helper; KILL cannot be caught. The tree is
+# read before any kill, while the descendants still have PID as an ancestor.
+kill_tree() {
+	local pids
+	pids="$(ps -A -o pid= -o ppid= | awk -v root="$1" '
+		{ parent[$1] = $2 }
+		END {
+			for (p in parent) {
+				q = p
+				while (q != root && q in parent && q > 1) q = parent[q]
+				if (q == root) print p
+			}
+		}')"
+	# shellcheck disable=SC2086 # one PID per word
+	kill -KILL $pids 2>/dev/null || true
+}
+
+# bounded OUT ERR CMD... — run CMD with stdout to OUT and stderr to ERR, killing
+# its process tree after COSIGN_TIMEOUT seconds; returns CMD's status, or 124 if
+# it was killed. Files rather than $(...): a killed process's pipe would hold
+# a command substitution open until every holder exits.
 bounded() {
-	local out="$1" pid waited=0
-	shift
-	"$@" >"$out" 2>/dev/null &
+	local out="$1" err="$2" pid waited=0
+	shift 2
+	"$@" >"$out" 2>"$err" &
 	pid=$!
 	# Polled in tenths of a second, so a fast check is not billed a whole one.
 	while kill -0 "$pid" 2>/dev/null; do
 		if ((waited >= COSIGN_TIMEOUT * 10)); then
-			kill "$pid" 2>/dev/null || true
+			kill_tree "$pid"
 			wait "$pid" 2>/dev/null || true
 			timed_out=1
 			return 124
@@ -81,7 +100,7 @@ bounded() {
 check() {
 	local sub="$1" status=0
 	shift
-	bounded /dev/null "$COSIGN" "$sub" --certificate-identity-regexp "$id_re" \
+	bounded /dev/null /dev/null "$COSIGN" "$sub" --certificate-identity-regexp "$id_re" \
 		--certificate-oidc-issuer "$issuer" "$@" || status=$?
 	case "$status" in
 		0) echo OK ;;
@@ -101,7 +120,7 @@ for img in gmc agc proxy worker wrapper build-runner; do
 	# index lookup calls the same credential helper cosign does, so it gets the
 	# same deadline. Unknown-platform entries are attestation manifests.
 	lookup=0
-	bounded "$work/index.json" docker buildx imagetools inspect "$repo/$img:$VERSION" --raw || lookup=$?
+	bounded "$work/index.json" "$work/index.err" docker buildx imagetools inspect "$repo/$img:$VERSION" --raw || lookup=$?
 	if ((lookup == 124)); then
 		printf '==> %-28s %s ... TIMEOUT (resolving per-arch manifests)\n' "$img sbom" "$VERSION"
 		rc=1
@@ -113,7 +132,8 @@ for img in gmc agc proxy worker wrapper build-runner; do
 			"$work/index.json" 2>/dev/null)" || arches=""
 	fi
 	if [[ -z "$arches" ]]; then
-		printf '==> %-28s %s ... FAIL (no per-arch manifests resolved)\n' "$img sbom" "$VERSION"
+		why="$(head -n 1 "$work/index.err")"
+		printf '==> %-28s %s ... FAIL (no per-arch manifests resolved%s)\n' "$img sbom" "$VERSION" "${why:+: $why}"
 		rc=1
 		continue
 	fi
@@ -163,10 +183,14 @@ for bundle in "${bundles[@]}"; do
 done
 
 if [[ "$rc" -ne 0 ]]; then
+	# A fresh DOCKER_CONFIG drops the credential helper, and the plugin link keeps
+	# buildx, which Docker Desktop installs only under ~/.docker/cli-plugins.
+	# shellcheck disable=SC2016 # printed for the operator to run
+	retry='export DOCKER_CONFIG=$(mktemp -d); ln -s ~/.docker/cli-plugins "$DOCKER_CONFIG/cli-plugins"'
 	if ((timed_out)); then
-		echo "a registry lookup or signature check exceeded ${COSIGN_TIMEOUT}s; a hung Docker credential helper does this, so retry with DOCKER_CONFIG=\$(mktemp -d)" >&2
+		echo "a registry lookup or signature check exceeded ${COSIGN_TIMEOUT}s; a hung Docker credential helper does this" >&2
 	fi
-	echo "signature verification FAILED (if local docker creds are misconfigured, retry with DOCKER_CONFIG=\$(mktemp -d))" >&2
+	echo "signature verification FAILED; if local docker creds are misconfigured, re-run the same target after: $retry" >&2
 	exit 1
 fi
 echo "all signatures verified for $VERSION"

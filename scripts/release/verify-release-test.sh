@@ -84,14 +84,26 @@ STUB
 chmod +x "$FIXTURE_DIR/cosign"
 
 # Stub docker and gh: an index with two arches and one attestation manifest (or
-# amd64 alone under STUB_NO_ARM64, or no answer under STUB_DOCKER_SLEEP), and a
+# amd64 alone under STUB_NO_ARM64, no answer under STUB_DOCKER_SLEEP, or an error
+# under STUB_DOCKER_FAIL), and a
 # Release carrying both blob bundles unless STUB_BUNDLES overrides the list or
 # STUB_GH_VIEW_FAIL makes the listing fail.
 mkdir -p "$FIXTURE_DIR/bin"
 cat > "$FIXTURE_DIR/bin/docker" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ -n "${STUB_DOCKER_SLEEP:-}" ]]; then exec sleep "$STUB_DOCKER_SLEEP"; fi
+# Like the real CLI under a hung credential helper: TERM is ignored (and the
+# child inherits that) while it waits on a child that never returns.
+if [[ -n "${STUB_DOCKER_SLEEP:-}" ]]; then
+	trap '' TERM
+	sleep "$STUB_DOCKER_SLEEP" &
+	wait "$!"
+	exit 0
+fi
+if [[ -n "${STUB_DOCKER_FAIL:-}" ]]; then
+	echo 'ERROR: denied: requested access to the resource is denied' >&2
+	exit 1
+fi
 if [[ -n "${STUB_NO_ARM64:-}" ]]; then
 	echo '{"manifests":[{"digest":"sha256:aaaa","platform":{"os":"linux","architecture":"amd64"}}]}'
 	exit 0
@@ -228,6 +240,14 @@ if [[ "$out_text" == *"signature verification FAILED"* ]]; then
 else
 	fail 'a failed signature is reported' "output: $out_text"
 fi
+# The retry hint swaps out the docker config, which on Docker Desktop is also
+# where buildx is found; without the plugin link the retry fails every lookup.
+# shellcheck disable=SC2016 # matching the literal hint text
+if [[ "$out_text" == *'ln -s ~/.docker/cli-plugins "$DOCKER_CONFIG/cli-plugins"'* ]]; then
+	pass 'the docker-config retry hint keeps the CLI plugins'
+else
+	fail 'the docker-config retry hint keeps the CLI plugins' "output: $out_text"
+fi
 
 # A check that never returns must fail the run rather than stall it: a hung
 # Docker credential helper holds cosign past its own --timeout with no output.
@@ -240,13 +260,29 @@ else
 fi
 
 # The index lookup goes through the same credential helper, so it must hit the
-# same deadline rather than stall the run with no output.
+# same deadline rather than stall the run with no output. Six lookups at a 1 s
+# deadline take about 7 s; a kill the stub can ignore takes 6 x 30 s.
+started=$SECONDS
 STUB_DOCKER_SLEEP=30 COSIGN_TIMEOUT=1 run_verify v1.2.3
+elapsed=$((SECONDS - started))
 expect_rc 'a hung index lookup fails the run' 1
+if ((elapsed < 25)); then
+	pass "a hung index lookup that ignores SIGTERM is killed at the deadline (${elapsed}s)"
+else
+	fail 'a hung index lookup that ignores SIGTERM is killed at the deadline' "took ${elapsed}s"
+fi
 if [[ "$out_text" == *"TIMEOUT (resolving per-arch manifests)"* && "$out_text" == *"credential helper"* ]]; then
 	pass 'a hung index lookup is reported as a timeout'
 else
 	fail 'a hung index lookup is reported as a timeout' "output: $out_text"
+fi
+
+# A failed index lookup names docker's error.
+STUB_DOCKER_FAIL=1 run_verify v1.2.3
+if [[ "$out_text" == *"no per-arch manifests resolved: ERROR: denied"* ]]; then
+	pass 'a failed index lookup reports docker'"'"'s error'
+else
+	fail 'a failed index lookup reports docker'"'"'s error' "output: $out_text"
 fi
 
 # A failed asset listing names gh's error, not a missing bundle.
