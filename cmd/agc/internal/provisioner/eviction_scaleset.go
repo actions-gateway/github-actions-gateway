@@ -247,7 +247,11 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	// takes the force-cancel-then-defer path rather than handleEviction — which also
 	// owns its own identity read and its own identity-unknown reporting.
 	if d.abandoned {
-		return p.recoverAbandoned(ctx, target, pod, abandonedDetectionDeleted)
+		detection := abandonedDetectionDeleted
+		if LostToNodeShutdownBeforeStart(pod) {
+			detection = abandonedDetectionNodeLost
+		}
+		return p.recoverAbandoned(ctx, target, pod, detection)
 	}
 
 	// A worker whose runner started no job carries the identity of the job it was

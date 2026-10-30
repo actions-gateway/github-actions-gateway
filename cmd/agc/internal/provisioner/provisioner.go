@@ -630,6 +630,7 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 		attribute.String("gateway.pod.reason", outcome.Reason),
 		attribute.Bool("gateway.pod.preempted", outcome.Preempted),
 		attribute.Bool("gateway.pod.node_shutdown", outcome.NodeShutdown),
+		attribute.Bool("gateway.pod.node_lost_before_start", outcome.NodeLostBeforeStart),
 		attribute.Bool("gateway.pod.externally_deleted", outcome.ExternallyDeleted),
 		attribute.Bool("gateway.pod.deleted_before_start", outcome.DeletedBeforeStart),
 		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
@@ -637,7 +638,8 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
 	log.Debug("worker pod completed",
 		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted,
-		"nodeShutdown", outcome.NodeShutdown, "externallyDeleted", outcome.ExternallyDeleted,
+		"nodeShutdown", outcome.NodeShutdown, "nodeLostBeforeStart", outcome.NodeLostBeforeStart,
+		"externallyDeleted", outcome.ExternallyDeleted,
 		"deletedBeforeStart", outcome.DeletedBeforeStart, "duration", duration)
 
 	// 6. Disruption recovery. Started here because this goroutine owns the pod and
@@ -691,14 +693,18 @@ func (p *Provisioner) provision(ctx context.Context, target Target, planID strin
 	// (Q645/Q676) — and the run is force-cancelled here so it ends honestly in about
 	// a second rather than at GitHub's ~15-minute unstarted-job timeout (Q683).
 	//
+	// A worker whose node shut down before any container started is the same job that
+	// never ran, failed rather than deleted, so it takes this path too (Q1198); the
+	// node-shutdown arm above excludes it.
+	//
 	// Not when a recovery armed above: those causes already re-run the job, and
 	// preemption's own victim is most often a pod that never started (Q497). One
 	// recovery per disruption, not two.
 	switch {
-	case outcome.DeletedBeforeStart && cause == "":
+	case (outcome.DeletedBeforeStart || outcome.NodeLostBeforeStart) && cause == "":
 		result = broker.TaskResultAbandoned
 		log.Warn("worker pod was removed before it ran; reporting the job as abandoned and force-cancelling its run",
-			"phase", outcome.Phase, "duration", duration)
+			"phase", outcome.Phase, "nodeLost", outcome.NodeLostBeforeStart, "duration", duration)
 		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, evictionTierClassic, log, rerunDisruption{})
 	case outcome.Phase == corev1.PodFailed:
 		result = broker.TaskResultFailed

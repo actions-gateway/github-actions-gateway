@@ -71,6 +71,16 @@ func shutDown(pod *corev1.Pod, reason string) *corev1.Pod {
 	return pod
 }
 
+// ranRunner records the runner container as having run and been killed, as the
+// kubelet does for a worker whose job was cut off.
+func ranRunner(pod *corev1.Pod) *corev1.Pod {
+	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
+		Name:  WorkerContainerName,
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+	}}
+	return pod
+}
+
 // outOfService marks a pod as a dead node's out-of-service taint leaves it (Q1207): the
 // taint manager's DisruptionTarget and graceful delete, then PodFailed from PodGC over a
 // container no kubelet ever recorded stopping.
@@ -106,8 +116,18 @@ func TestLostToNodeShutdown(t *testing.T) {
 		want       bool
 	}{
 		{name: "failed, no conditions", phase: corev1.PodFailed},
-		{name: "kubelet shutdown", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), want: true},
-		{name: "PodGC orphan", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC), want: true},
+		{name: "kubelet shutdown", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), containers: terminated, want: true},
+		{name: "PodGC orphan", phase: corev1.PodFailed, conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC), containers: running, want: true},
+		{
+			// Q1198: the kubelet fails a still-Pending worker too. It ran no job, so it is
+			// the abandoned handling's (LostToNodeShutdownBeforeStart).
+			name: "kubelet shutdown, worker never started", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, corev1.PodReasonTerminationByKubelet), containers: waiting,
+		},
+		{
+			name: "PodGC orphan, worker never started", phase: corev1.PodFailed,
+			conditions: cond(corev1.ConditionTrue, podReasonDeletionByPodGC),
+		},
 		{
 			// PodGC failed the pod over a dead kubelet: the container is still recorded Running.
 			name: "out-of-service node", phase: corev1.PodFailed,
@@ -170,6 +190,58 @@ func TestLostToNodeShutdown(t *testing.T) {
 				pod.Annotations = map[string]string{AnnotationDeletionReason: "job_abandoned"}
 			}
 			assert.Equal(t, tc.want, LostToNodeShutdown(pod))
+		})
+	}
+}
+
+// TestLostToNodeShutdownBeforeStart pins the never-started half of the node-loss shape
+// (Q1198): every node-loss reason on a failed pod no container of which started, and
+// nothing LostToNodeShutdown takes, so no pod reaches both a re-run and a force-cancel.
+func TestLostToNodeShutdownBeforeStart(t *testing.T) {
+	cond := func(reason string) []corev1.PodCondition {
+		return []corev1.PodCondition{{Type: corev1.DisruptionTarget, Status: corev1.ConditionTrue, Reason: reason}}
+	}
+	status := func(st corev1.ContainerState) []corev1.ContainerStatus {
+		return []corev1.ContainerStatus{{Name: "runner", State: st}}
+	}
+	running := status(corev1.ContainerState{Running: &corev1.ContainerStateRunning{}})
+	terminated := status(corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}})
+	waiting := status(corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}})
+	tests := []struct {
+		name       string
+		phase      corev1.PodPhase
+		reason     string
+		conditions []corev1.PodCondition
+		containers []corev1.ContainerStatus
+		agcDeleted bool
+		want       bool
+	}{
+		{name: "kubelet shutdown while pulling", phase: corev1.PodFailed, reason: "Terminated", conditions: cond(corev1.PodReasonTerminationByKubelet), containers: waiting, want: true},
+		{name: "kubelet shutdown, no container status yet", phase: corev1.PodFailed, conditions: cond(corev1.PodReasonTerminationByKubelet), want: true},
+		{name: "PodGC orphan", phase: corev1.PodFailed, conditions: cond(podReasonDeletionByPodGC), want: true},
+		{name: "out-of-service node", phase: corev1.PodFailed, conditions: cond(podReasonDeletionByTaintManager), containers: waiting, want: true},
+		{name: "kubelet shutdown mid-job", phase: corev1.PodFailed, conditions: cond(corev1.PodReasonTerminationByKubelet), containers: terminated},
+		{name: "PodGC orphan mid-job", phase: corev1.PodFailed, conditions: cond(podReasonDeletionByPodGC), containers: running},
+		{
+			// A kubelet eviction stamps TerminationByKubelet too; it keeps its own arm.
+			name: "evicted while pulling", phase: corev1.PodFailed, reason: podReasonEvicted,
+			conditions: cond(corev1.PodReasonTerminationByKubelet), containers: waiting,
+		},
+		{name: "AGC-deleted worker", phase: corev1.PodFailed, conditions: cond(podReasonDeletionByPodGC), agcDeleted: true},
+		{name: "still Pending", phase: corev1.PodPending, conditions: cond(corev1.PodReasonTerminationByKubelet), containers: waiting},
+		{name: "scheduler preemption", phase: corev1.PodFailed, conditions: cond(corev1.PodReasonPreemptionByScheduler)},
+		{name: "failed, no conditions", phase: corev1.PodFailed},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := &corev1.Pod{Status: corev1.PodStatus{Phase: tc.phase, Reason: tc.reason, Conditions: tc.conditions, ContainerStatuses: tc.containers}}
+			if tc.agcDeleted {
+				pod.Annotations = map[string]string{AnnotationDeletionReason: "job_abandoned"}
+			}
+			assert.Equal(t, tc.want, LostToNodeShutdownBeforeStart(pod))
+			if tc.want {
+				assert.False(t, LostToNodeShutdown(pod), "a pod must not reach both the re-run and the force-cancel")
+			}
 		})
 	}
 }
@@ -286,8 +358,13 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			// Q1179: a graceful node shutdown fails the pod with reason Terminated and a
 			// kubelet DisruptionTarget, and deletes nothing.
 			name:      "node shutdown",
-			pod:       shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet),
+			pod:       ranRunner(shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet)),
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
+		},
+		{
+			// Q1198: shut down before any container started; abandonedAwaitingRecovery's.
+			name: "node shutdown, worker never started",
+			pod:  shutDown(scaleSetWorkerPod("p", identityAnnotations()), corev1.PodReasonTerminationByKubelet),
 		},
 		{
 			// The node vanished before its kubelet wrote anything: PodGC patches the
@@ -295,7 +372,7 @@ func TestDisruptionAwaitingRecovery(t *testing.T) {
 			// before any deletion mark, and the deletion arm would read the later delete
 			// as cleanup.
 			name:      "orphan failed by PodGC",
-			pod:       shutDown(scaleSetWorkerPod("p", identityAnnotations()), podReasonDeletionByPodGC),
+			pod:       ranRunner(shutDown(scaleSetWorkerPod("p", identityAnnotations()), podReasonDeletionByPodGC)),
 			wantCause: recoveryCauseNodeShutdown, wantOK: true,
 		},
 		{

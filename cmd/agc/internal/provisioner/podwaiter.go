@@ -43,6 +43,10 @@ type PodOutcome struct {
 	// LostToNodeShutdown). Every writer publishes PodFailed before the pod is removed, so
 	// it is read off the terminal phase only.
 	NodeShutdown bool
+	// NodeLostBeforeStart reports that the pod failed to the same node loss before any of
+	// its containers started (LostToNodeShutdownBeforeStart, Q1198): a job that never
+	// ran, which takes the abandoned handling rather than a re-run.
+	NodeLostBeforeStart bool
 	// ExternallyDeleted reports that the pod's terminal phase published while an
 	// external (non-AGC) deletion that interrupted its running container was in
 	// flight — the drained/deleted-worker discriminator Q459 measured: a human cancel
@@ -78,12 +82,13 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 	switch pod.Status.Phase {
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 		return PodOutcome{
-			Phase:             pod.Status.Phase,
-			Reason:            pod.Status.Reason,
-			OwnLimitEviction:  ownLimitEviction(pod),
-			Preempted:         PreemptedByScheduler(pod),
-			NodeShutdown:      LostToNodeShutdown(pod),
-			ExternallyDeleted: externallyDeletedBeforeTerminal(pod),
+			Phase:               pod.Status.Phase,
+			Reason:              pod.Status.Reason,
+			OwnLimitEviction:    ownLimitEviction(pod),
+			Preempted:           PreemptedByScheduler(pod),
+			NodeShutdown:        LostToNodeShutdown(pod),
+			NodeLostBeforeStart: LostToNodeShutdownBeforeStart(pod),
+			ExternallyDeleted:   externallyDeletedBeforeTerminal(pod),
 		}, true
 	default:
 		return PodOutcome{}, false

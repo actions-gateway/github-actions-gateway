@@ -39,6 +39,8 @@ import (
 //   - abandonedAwaitingRecovery, in the RecoverEvictedScaleSetWorkers scan, for an
 //     external delete of a still-Pending worker. A real kubelet publishes a transient
 //     Failed carrying the deletion mark with no container exit record for that shape.
+//     The same scan takes a still-Pending worker its node's shutdown failed, which
+//     nothing deletes (LostToNodeShutdownBeforeStart, Q1198).
 //
 // Run identity comes off the pod's run-id/repository annotations, the same
 // runIdentityFromPod read the Q417 eviction port relies on. The classic tier reads it
@@ -61,6 +63,9 @@ const (
 	// abandonedDetectionDeleted is an external delete of a still-Pending worker, caught
 	// in the scan by the transient Failed-with-mark it publishes.
 	abandonedDetectionDeleted = "external_deletion"
+	// abandonedDetectionNodeLost is a still-Pending worker failed by its node going away,
+	// caught in the scan by the node-loss DisruptionTarget it carries.
+	abandonedDetectionNodeLost = "node_lost"
 )
 
 // RecoverAbandonedScaleSetWorker is the reaper's entry point: call it after deleting a
@@ -93,8 +98,10 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 
 	// The pod's run identity is that of the job it was created for, which another runner
 	// of the set may have taken. That run lost nothing, so cancelling it would end a live
-	// job (Q1169).
-	if p.assignedJobAccountedFor(ctx, target, pod, false, log) {
+	// job (Q1169). A worker lost with its node was placed, so the idle workers beside it
+	// are not waiting on its capacity and count as able to take the job, as they did when
+	// this shape took the disruption path.
+	if p.assignedJobAccountedFor(ctx, target, pod, detection == abandonedDetectionNodeLost, log) {
 		log.Info("scale-set worker was removed before it ran, but another worker's runner started the job it was created for; not force-cancelling that job's run",
 			"detection", detection, "runID", pod.Annotations[AnnotationRunID])
 		return closedChan()
@@ -139,7 +146,11 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 // rerun-failed-jobs on a job that never ran. Here the run is concluded first, which is
 // what makes the re-run legal (Q683/Q766).
 //
-// Three conditions narrow it, and each rules out a shape that must not be recovered:
+// A worker its node's shutdown failed while still Pending is taken too, without the
+// deletion mark, because nothing deletes it (LostToNodeShutdownBeforeStart, Q1198).
+//
+// Otherwise three conditions narrow it, and each rules out a shape that must not be
+// recovered:
 //
 //   - The AGC's own deletes are excluded by AnnotationDeletionReason. The reaper's
 //     pending_deadline delete reaches the same recovery through reapHooks.recoverAbandoned,
@@ -153,6 +164,9 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 func abandonedAwaitingRecovery(pod *corev1.Pod) bool {
 	if _, handled := pod.Annotations[AnnotationEvictionHandledAt]; handled {
 		return false
+	}
+	if LostToNodeShutdownBeforeStart(pod) {
+		return true
 	}
 	if pod.DeletionTimestamp.IsZero() || deletedByAGC(pod) {
 		return false
@@ -170,9 +184,10 @@ func abandonedAwaitingRecovery(pod *corev1.Pod) bool {
 // set's runners asks first, so the pod's run identity, stamped from that job, names a run
 // that lost nothing where either holds (Q1169).
 //
-// The abandoned path passes idleTakes false. Its worker was reaped for never being
-// placed, and the idle workers beside it are most often waiting on the same capacity, so
-// counting them would suppress the recovery Q766 exists for.
+// The abandoned path passes idleTakes false, except for a worker lost with its node.
+// Its worker was reaped for never being placed, and the idle workers beside it are most
+// often waiting on the same capacity, so counting them would suppress the recovery Q766
+// exists for.
 //
 // A failed List answers false, which keeps the recovery as it was before the check: the
 // check only ever withholds an action, so an unreadable set must not withhold it.

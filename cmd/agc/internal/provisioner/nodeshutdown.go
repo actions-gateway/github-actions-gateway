@@ -63,9 +63,46 @@ const podReasonDeletionByTaintManager = "DeletionByTaintManager"
 //
 // PodFailed is required because the kubelet leaves an already-Succeeded pod's phase
 // alone: a job that finished before the shutdown reported its own success.
+//
+// A worker none of whose containers ever started is excluded on every reason: it ran
+// no job, so there is no failed job for rerun-failed-jobs to act on, and
+// LostToNodeShutdownBeforeStart routes it to the abandoned handling instead (Q1198).
 func LostToNodeShutdown(pod *corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodFailed || deletedByAGC(pod) {
+	reason, ok := nodeLossReason(pod)
+	if !ok || !podEverStarted(pod) {
 		return false
+	}
+	return reason != podReasonDeletionByTaintManager || runnerStillRunning(pod)
+}
+
+// LostToNodeShutdownBeforeStart reports whether pod is a worker whose node went away
+// before any of its containers started: the node-loss shape LostToNodeShutdown takes,
+// on a pod with no container start record, and not a kubelet eviction, which keeps its
+// own arm.
+//
+// The kubelet's shutdown manager kills every pod it has admitted, Pending ones included,
+// and fails each one that has not succeeded (kubernetes v1.35.0,
+// pkg/kubelet/nodeshutdown/nodeshutdown_manager.go killPods over GetActivePods), so a
+// worker still pulling its image when a Spot node is reclaimed takes this shape. Its job
+// never ran, so the run is still in progress at GitHub and refuses a re-run until its
+// unstarted-job timeout concludes it. It is the never-started worker the abandoned
+// handling exists for — force-cancel the run, then re-run it — whatever removed it.
+//
+// DeletionByTaintManager needs no Running-runner check here: a never-started pod has
+// no job for a sidecar to outlive, so a live node's taint delete and a dead node's
+// out-of-service delete are both an abandonment.
+func LostToNodeShutdownBeforeStart(pod *corev1.Pod) bool {
+	if _, ok := nodeLossReason(pod); !ok || podEverStarted(pod) {
+		return false
+	}
+	return pod.Status.Reason != podReasonEvicted
+}
+
+// nodeLossReason returns the DisruptionTarget=True reason a node-loss writer left on
+// pod, where pod is PodFailed and the AGC did not delete it itself.
+func nodeLossReason(pod *corev1.Pod) (string, bool) {
+	if pod.Status.Phase != corev1.PodFailed || deletedByAGC(pod) {
+		return "", false
 	}
 	for i := range pod.Status.Conditions {
 		c := &pod.Status.Conditions[i]
@@ -73,13 +110,11 @@ func LostToNodeShutdown(pod *corev1.Pod) bool {
 			continue
 		}
 		switch c.Reason {
-		case corev1.PodReasonTerminationByKubelet, podReasonDeletionByPodGC:
-			return true
-		case podReasonDeletionByTaintManager:
-			return runnerStillRunning(pod)
+		case corev1.PodReasonTerminationByKubelet, podReasonDeletionByPodGC, podReasonDeletionByTaintManager:
+			return c.Reason, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // runnerStillRunning reports whether pod's runner container is last recorded Running.
