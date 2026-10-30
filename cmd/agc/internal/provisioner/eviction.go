@@ -142,9 +142,9 @@ const runStatusCompleted = "completed"
 // tier's is the owner's failure ledger (handleScaleSetEviction, Q1182), which survives
 // a restart. Within a tier the Q106 cap of maxRetries re-runs per run holds across every
 // disruption cause together, so a run alternately evicted and preempted cannot spend
-// two budgets. cause labels the same surfaces and additionally selects the conclusion
-// check (attemptRerun, Q811), which only recoveryCauseDeletion takes. d names the
-// disruption to the scale-set ledger and is ignored on the classic tier.
+// two budgets. cause labels the same surfaces and, on the classic tier, selects the
+// conclusion check (attemptRerun, Q811), which only recoveryCauseDeletion takes there.
+// d names the disruption to the scale-set ledger and is ignored on the classic tier.
 func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier, cause string, d rerunDisruption) <-chan struct{} {
 	if runID == "0" || runID == "" {
 		log.Warn("worker pod disrupted but run_id unknown; skipping auto-retry", "cause", cause)
@@ -195,10 +195,13 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // it reports is the one the job ran in: GitHub cannot conclude the run, and so cannot
 // accept another disruption's re-run, until this job has concluded too. One detected
 // late — the vanished arm, or a scan after a restart — can read an attempt another
-// re-run already started, and then reserves against that one; Q1181's already_rerun
-// check is what closes it.
+// re-run already started, and then reserves against that one; the design's already_rerun
+// check, not built, is what would close it. A disruption that already knows its attempt
+// (the abandoned arm's) still takes the read, for the futility checks.
 //
-// The reservation then resumes, merges, refuses or reserves (reserveScaleSetRerun).
+// The futility checks (futileRerun, Q1181) run on that read, before the reservation, so
+// a re-run they withhold spends no slot. The reservation then resumes, merges, refuses
+// or reserves (reserveScaleSetRerun).
 // Every outcome but a refusal goes on to the re-run loop, which reads the run before
 // each call and stands down once its attempt has moved past the one the job failed in
 // (errRerunCovered). That is what makes a merge safe: a merged disruption re-runs only
@@ -222,26 +225,30 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		defer close(done)
 		defer cancel()
 
+		if !p.canReadRun(owner, repo) {
+			// Nothing can reach GitHub, so no re-run could be made either; the
+			// same no-op rerunFailedJobs takes.
+			log.Warn("run cannot be addressed; cannot reserve its re-run budget or trigger a rerun",
+				"runID", runID, "cause", cause)
+			return
+		}
+		run, err := p.readRerunCandidate(rctx, owner, repo, runID)
+		if err != nil {
+			reason := rerunFailureReasonAPIError
+			if errors.Is(err, errRunConclusionUnreadable) {
+				reason = rerunFailureReasonConclusionUnknown
+			}
+			log.Error("could not read the disrupted run, so its re-run budget cannot be reserved; manual rerun may be required",
+				"runID", runID, "cause", cause, "reason", reason, "error", err)
+			p.recordRerunFailure(target, runID, tier, cause, reason, err)
+			return
+		}
 		if d.failedAttempt == 0 {
-			if !p.canReadRun(owner, repo) {
-				// Nothing can reach GitHub, so no re-run could be made either; the
-				// same no-op rerunFailedJobs takes.
-				log.Warn("run cannot be addressed; cannot reserve its re-run budget or trigger a rerun",
-					"runID", runID, "cause", cause)
-				return
-			}
-			attempt, err := p.readFailedAttempt(rctx, owner, repo, runID)
-			if err != nil {
-				reason := rerunFailureReasonAPIError
-				if errors.Is(err, errRunConclusionUnreadable) {
-					reason = rerunFailureReasonConclusionUnknown
-				}
-				log.Error("could not read the disrupted run, so its re-run budget cannot be reserved; manual rerun may be required",
-					"runID", runID, "cause", cause, "reason", reason, "error", err)
-				p.recordRerunFailure(target, runID, tier, cause, reason, err)
-				return
-			}
-			d.failedAttempt = attempt
+			d.failedAttempt = run.attempt
+		}
+		// A futile re-run is withheld here, before the reservation, so it spends no slot.
+		if p.futileRerun(rctx, target, owner, repo, runID, tier, cause, run, log) {
+			return
 		}
 
 		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, d, cause, maxRetries)
@@ -274,10 +281,9 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 	return done
 }
 
-// readFailedAttempt reads the run's current attempt, retrying an unreadable answer on
-// the re-run loop's interval until its window closes. A 4xx is terminal at once, as it
-// is in the loop.
-func (p *Provisioner) readFailedAttempt(ctx context.Context, owner, repo, runID string) (int, error) {
+// readRerunCandidate reads the run, retrying an unreadable answer on the re-run loop's
+// interval until its window closes. A 4xx is terminal at once, as it is in the loop.
+func (p *Provisioner) readRerunCandidate(ctx context.Context, owner, repo, runID string) (runState, error) {
 	windowC, stopWindow := p.startRerunWindow()
 	defer stopWindow()
 	for {
@@ -285,19 +291,19 @@ func (p *Provisioner) readFailedAttempt(ctx context.Context, owner, repo, runID 
 		if err == nil && run.attempt == 0 {
 			// Every disruption of every attempt would merge into one key, so a run
 			// that names no attempt cannot be budgeted; it will not name one later.
-			return 0, errors.New("the run carried no run_attempt")
+			return runState{}, errors.New("the run carried no run_attempt")
 		}
 		if err == nil {
-			return run.attempt, nil
+			return run, nil
 		}
 		if !errors.Is(err, errRunConclusionUnreadable) {
-			return 0, err
+			return runState{}, err
 		}
 		select {
 		case <-ctx.Done():
-			return 0, fmt.Errorf("%v: %w", ctx.Err(), err)
+			return runState{}, fmt.Errorf("%v: %w", ctx.Err(), err)
 		case <-windowC:
-			return 0, fmt.Errorf("the run stayed unreadable for %s: %w", p.rerunWindow(), err)
+			return runState{}, fmt.Errorf("the run stayed unreadable for %s: %w", p.rerunWindow(), err)
 		case <-p.rerunRetryTick():
 		}
 	}
@@ -353,10 +359,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 		case errors.Is(err, errRunCancelled):
 			log.Info("the run was cancelled at GitHub, so the disruption auto-retry stands down rather than undoing the cancel",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
-			// Only the deletion arm's conclusion check raises errRunCancelled, so the cause
-			// is stamped rather than passed: the label vocabulary must not claim others.
-			p.recordRerunWithheld(target, runID, tier, recoveryCauseDeletion, rerunWithheldReasonRunCancelled,
-				fmt.Sprintf("worker pod for run %s was lost to %s, but GitHub concluded the run cancelled, so no automatic re-run was requested; re-run it by hand if the cancellation was not intended", runID, recoveryCauseDeletion))
+			p.recordRerunWithheld(target, runID, tier, cause, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
 			return
 		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
@@ -399,8 +402,9 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 // attemptRerun is one pass of the loop above: the conclusion check the cause calls for,
 // then the re-run call itself.
 //
-// The check is the Q811 arm, and it runs only for the graceful-deletion cause, because
-// that is the only one an operator produces deliberately. The cancel runbook's remedy
+// On the classic tier the check is the Q811 arm, and it runs only for the
+// graceful-deletion cause, because that is the only one an operator produces
+// deliberately. The cancel runbook's remedy
 // for a worker that will not stop is to delete its pod, which hand-supplies the deletion
 // mark the arm keys on, and rerun-failed-jobs then re-queues the job the cancel stopped:
 // a `cancelled` conclusion accepts the call where a `success` conclusion refuses it
@@ -420,9 +424,13 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 //
 // The scale-set tier reads the run on every pass, whatever the cause, for the coverage
 // check: a run already past failedAttempt has been re-run for this job (errRerunCovered).
+// It takes the cancel check on every cause too, because selfCancelledAttempt tells GAG's
+// own cancel from anyone else's, so a user's or a concurrency group's cancel is honoured
+// on every arm without an exemption for the abandoned one (Q1181).
 func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, tier, cause string, failedAttempt int) error {
 	covering := failedAttempt > 0
-	if (covering || cause == recoveryCauseDeletion) && p.canReadRun(owner, repo) {
+	checksCancel := cause == recoveryCauseDeletion || tier == evictionTierScaleSet
+	if (covering || checksCancel) && p.canReadRun(owner, repo) {
 		run, err := p.runConclusion(ctx, owner, repo, runID)
 		if err != nil {
 			return fmt.Errorf("read the run's conclusion before re-running it: %w", err)
@@ -430,7 +438,7 @@ func (p *Provisioner) attemptRerun(ctx context.Context, target Target, owner, re
 		if covering && run.attempt > failedAttempt {
 			return errRerunCovered
 		}
-		if cause == recoveryCauseDeletion && run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
+		if checksCancel && run.status == runStatusCompleted && run.conclusion == runConclusionCancelled {
 			if tier != evictionTierScaleSet || run.attempt == 0 ||
 				p.selfCancelledAttempt(ctx, target, runID) != run.attempt {
 				return errRunCancelled
@@ -453,8 +461,10 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 // The Event is Normal, not Warning: the withhold is the correct outcome, but without it
 // the story reads as a recovery that silently did nothing (Q811).
 //
-// Two (cause, reason) pairs reach it: (deletion, run_cancelled) from attemptRerun's
-// conclusion check, and (eviction, own_limit) from withholdOwnLimitRerun (Q1177).
+// Its reasons: run_cancelled from attemptRerun's conclusion check (every cause on the
+// scale-set tier, deletion only on the classic), own_limit from withholdOwnLimitRerun
+// (eviction only, Q1177), and the scale-set tier's pre-reservation futility checks
+// (futileRerun, Q1181).
 func (p *Provisioner) recordRerunWithheld(target Target, runID, tier, cause, reason, message string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunWithheld != nil {
@@ -639,10 +649,18 @@ func evictionShard(runID string) uint32 {
 
 // runState is what runConclusion decodes from a run. conclusion is empty until status
 // is `completed`, so the two are read together; attempt is the run's run_attempt, 1 for
-// a run never re-run and 0 where GitHub sent none.
+// a run never re-run and 0 where GitHub sent none. The rest feed the futility checks
+// (rerun_futility.go), and each is zero where GitHub sent none, which skips its check.
 type runState struct {
 	status, conclusion string
 	attempt            int
+	workflowID         int64
+	createdAt          time.Time
+	event              string
+	headBranch         string
+	headSHA            string
+	// headRepo is head_repository.full_name: a fork's for a pull request from one.
+	headRepo string
 }
 
 // runConclusion calls GET /repos/{owner}/{repo}/actions/runs/{run_id} and returns the
@@ -658,29 +676,82 @@ type runState struct {
 // error page, a misconfigured GHES), and re-asking it thirty times only delays the Event
 // that tells an operator so.
 func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID string) (runState, error) {
-	if !repoSegmentRE.MatchString(owner) || !repoSegmentRE.MatchString(repo) {
-		return runState{}, fmt.Errorf("invalid owner/repo characters: %q/%q", owner, repo)
-	}
-	if p.TokenFunc == nil {
-		return runState{}, fmt.Errorf("TokenFunc is not configured")
-	}
-	token, err := p.TokenFunc(ctx)
-	if err != nil {
-		return runState{}, fmt.Errorf("get installation token: %w", err)
-	}
-	// No silent default, for the same reason as the rerun call (Q504).
-	if p.GitHubAPIURL == "" {
-		return runState{}, fmt.Errorf("GitHubAPIURL is not configured; refusing to guess an endpoint for the run-status call")
+	if err := p.githubReady(owner, repo, "run-status"); err != nil {
+		return runState{}, err
 	}
 	apiURL := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%s",
 		p.GitHubAPIURL,
 		neturl.PathEscape(owner),
 		neturl.PathEscape(repo),
 		neturl.PathEscape(runID))
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
 		return runState{}, fmt.Errorf("build run-status request: %w", err)
+	}
+	status, body, err := p.githubSend(ctx, req)
+	switch {
+	case errors.Is(err, errGitHubUnreachable):
+		return runState{}, fmt.Errorf("run-status API call: %v: %w", err, errRunConclusionUnreadable)
+	case err != nil:
+		return runState{}, err
+	case status >= 500:
+		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
+			status, strings.TrimSpace(string(body)), errRunConclusionUnreadable)
+	case status < 200 || status > 299:
+		return runState{}, fmt.Errorf("run-status API returned %d: %s", status, strings.TrimSpace(string(body)))
+	}
+
+	var run struct {
+		Status         string    `json:"status"`
+		Conclusion     string    `json:"conclusion"`
+		RunAttempt     int       `json:"run_attempt"`
+		WorkflowID     int64     `json:"workflow_id"`
+		CreatedAt      time.Time `json:"created_at"`
+		Event          string    `json:"event"`
+		HeadBranch     string    `json:"head_branch"`
+		HeadSHA        string    `json:"head_sha"`
+		HeadRepository struct {
+			FullName string `json:"full_name"`
+		} `json:"head_repository"`
+	}
+	if err := json.Unmarshal(body, &run); err != nil {
+		return runState{}, fmt.Errorf("decode run status: %w", err)
+	}
+	return runState{
+		status: run.Status, conclusion: run.Conclusion, attempt: run.RunAttempt,
+		workflowID: run.WorkflowID, createdAt: run.CreatedAt, event: run.Event,
+		headBranch: run.HeadBranch, headSHA: run.HeadSHA, headRepo: run.HeadRepository.FullName,
+	}, nil
+}
+
+// errGitHubUnreachable marks a githubSend whose request never completed, which a later
+// attempt could answer differently.
+var errGitHubUnreachable = errors.New("the GitHub API could not be reached")
+
+// githubReady holds the guards every run-scoped GET shares with rerunFailedJobs: a
+// well-formed owner/repo, a token source and an explicit endpoint (no silent default,
+// Q504). call names the request in the error.
+func (p *Provisioner) githubReady(owner, repo, call string) error {
+	if !repoSegmentRE.MatchString(owner) || !repoSegmentRE.MatchString(repo) {
+		return fmt.Errorf("invalid owner/repo characters: %q/%q", owner, repo)
+	}
+	if p.TokenFunc == nil {
+		return fmt.Errorf("TokenFunc is not configured")
+	}
+	if p.GitHubAPIURL == "" {
+		return fmt.Errorf("GitHubAPIURL is not configured; refusing to guess an endpoint for the %s call", call)
+	}
+	return nil
+}
+
+// githubSend authenticates req and sends it, returning the status and up to 1 MiB of
+// the body. A request that never completed is wrapped errGitHubUnreachable. Callers
+// build req themselves, so each GitHub path is composed where the endpoint-parity gate
+// can read it.
+func (p *Provisioner) githubSend(ctx context.Context, req *http.Request) (int, []byte, error) {
+	token, err := p.TokenFunc(ctx)
+	if err != nil {
+		return 0, nil, fmt.Errorf("get installation token: %w", err)
 	}
 	req.Header.Set("Authorization", "token "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -691,27 +762,11 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
-		return runState{}, fmt.Errorf("run-status API call: %v: %w", err, errRunConclusionUnreadable)
+		return 0, nil, fmt.Errorf("%v: %w", err, errGitHubUnreachable)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode >= 500 {
-		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
-			resp.StatusCode, strings.TrimSpace(string(body)), errRunConclusionUnreadable)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return runState{}, fmt.Errorf("run-status API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	var run struct {
-		Status     string `json:"status"`
-		Conclusion string `json:"conclusion"`
-		RunAttempt int    `json:"run_attempt"`
-	}
-	if err := json.Unmarshal(body, &run); err != nil {
-		return runState{}, fmt.Errorf("decode run status: %w", err)
-	}
-	return runState{status: run.Status, conclusion: run.Conclusion, attempt: run.RunAttempt}, nil
+	return resp.StatusCode, body, nil
 }
 
 // rerunFailedJobs calls POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs.

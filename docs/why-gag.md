@@ -212,7 +212,7 @@ Under the per-cell stamp an aging claim degrades to unverified instead of to wro
      fire. The stamp below is what makes that second case a gate rather than a
      request: `make tier-claims-check` digests the tier-bearing lines of the
      section named in it, so a tier move there goes red here. -->
-<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=67e9c239 -->
+<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=81c15971 -->
 **Auto-re-run covers disruption, never failure.** Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray `kubectl delete pod` all come back, on both acquisition tiers, and so does a dead node once an admin taints it `out-of-service`.
 A job that *failed* and a run you *cancelled* never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
 Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run on both tiers once capacity returns.

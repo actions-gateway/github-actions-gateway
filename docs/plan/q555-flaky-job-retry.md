@@ -38,7 +38,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | Q555 (built) | Detection, R1 to R8 | Built without the dogfood measurement it named |
 | [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 |
 | [Q1237](../queue/Q1237.md) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
-| [Q1181](../queue/Q1181.md) | R18's futility checks, on the arms that exist today | Nothing |
+| Q1181 (built on the scale-set tier) | R18's futility checks, on the arms that exist today | Nothing |
 | [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
 | Q1177 (closed by the `own_limit` withhold), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
@@ -235,8 +235,8 @@ It also gives the person who has to act a reason, where today an exhausted budge
 |---|---|---|
 | The worker's *shape* cannot run: an unpullable image, or a pod no node can host | The capacity gate's startup and placeability verdicts ([`worker_startup_verdict.go`](../../cmd/agc/internal/controller/worker_startup_verdict.go), Q714) | Built for intake: the gate stops new work when every next pod would fail the same way. Whether the re-run paths consult it is unverified |
 | The job exceeded its own limit | `OOMKilled` at its limit under `Static` sizing, an `ephemeral-storage` limit eviction, `timeout-minutes` | The eviction arm withholds the storage case as `own_limit` (Q1177); `OOMKilled` and `timeout-minutes` reach no arm |
-| A newer commit superseded the run | The pull request's head no longer matches the run's `head_sha`, or the run was cancelled by a concurrency group | Not checked: nothing in the re-run path reads either. One API call per retry, which is affordable because retries are rare |
-| GitHub will refuse the re-run | `run_attempt` at 50, a run older than 30 days, a `cancelled` conclusion | The deletion arm already stands down on `cancelled` (Q811); the other two are unchecked |
+| A newer commit superseded the run | The pull request's head no longer matches the run's `head_sha`, or the run was cancelled by a concurrency group | Withheld on the scale-set tier as `superseded` (a newer run of the workflow, event and branch from a different commit) or `run_cancelled` (Q1181); the classic tier does not check |
+| GitHub will refuse the re-run | `run_attempt` past 50 (GitHub caps a run at 50 re-runs), a run older than 30 days, a `cancelled` conclusion | Withheld on the scale-set tier as `attempt_limit`, `run_too_old` and `run_cancelled` on every arm (Q1181); the classic tier checks only `cancelled`, on the deletion arm (Q811) |
 | The same class failed this job again | A second failure of the same class on a later attempt, after its cause was judged cleared | Per-run counterpart of R14: the class is wrong for this job, so stop and say so |
 | A correlated outage | A set-wide failure rate past the breaker's threshold | R11's breaker |
 | The platform's own image or config is broken | A setup step the worker image provides exits 127, the same on every pod | 8 `gag-ci` jobs did this 2026-06-28 to 07-12; like an unpullable image, every next pod fails the same way |
