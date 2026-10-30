@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1241/">Q1241</a></td>
+<td>integration-test-gate is cancelled after its steps pass, evicting a PR</td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Event:</strong> a gate job (<code>integration-test-gate</code> or a sibling <code>*-gate</code>) concludes <code>cancelled</code> with every step green, or a PR leaves the merge …</td>
+</tr>
+<tr>
 <td><a href="Q1234/">Q1234</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-candidate-covers-main-test.sh">A check-candidate-covers-main-test case exits 2 under load</a></td>
 <td><code>flake</code> <code>tests</code></td>
