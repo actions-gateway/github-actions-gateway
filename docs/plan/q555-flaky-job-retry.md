@@ -2,7 +2,7 @@
 
 **Status:** ⓘ draft for a design session, written 2026-10-10.
 Nothing is built and no CRD shape is committed; the work is split across the rows [below](#how-this-splits-into-backlog-items).
-[Q555](../queue/Q555.md) is in the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
+Q555, now built, was revived into the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
 [The design](q555-automatic-recovery-design.md) proposes how to build it and recommends answers to the [open questions](#open-questions-for-the-design-session), pending sign-off.
 It extends [G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.
 
@@ -35,9 +35,11 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 
 | Row | Covers | Depends on |
 |---|---|---|
-| [Q555](../queue/Q555.md) | Detection, R1 to R8 | A dogfood measurement of the `result` vocabulary |
+| Q555 (built) | Detection, R1 to R8 | Built without the dogfood measurement it named |
+| [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 |
+| [Q1237](../queue/Q1237.md) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
 | [Q1181](../queue/Q1181.md) | R18's futility checks, on the arms that exist today | Nothing |
-| [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 |
+| [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
 | Q1177 (closed by the `own_limit` withhold), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
 | Q1178, Q1184 (both shipped) | The proxy's outcome metrics, and per-job failure attribution | Nothing |

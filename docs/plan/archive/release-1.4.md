@@ -60,7 +60,7 @@ Four related items from [appendix G](../../design/appendix-g-future-enhancements
 Q566 is a real gap (the CONNECT target host:port is cleartext on the in-cluster hop) and Q567 is L and wants a plan doc before code.
 Splitting them across two releases spends their coherence for nothing; together they are a release theme.
 
-**[Q555](../../queue/Q555.md), opt-in flaky-job retry,** has an unbuilt prerequisite.
+**Q555, opt-in flaky-job retry,** has an unbuilt prerequisite.
 Detection needs a real job outcome, which only the unread exit code carries.
 
 ## Why the scope stops here

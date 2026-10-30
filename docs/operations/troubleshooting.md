@@ -84,6 +84,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [DNS Times Out Under the Egress NetworkPolicy (GKE Dataplane V2 / NodeLocal DNSCache)](#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)
 - [Worker Pod Runner.Worker Fails TLS Handshake With UntrustedRoot](#worker-pod-runnerworker-fails-tls-handshake-with-untrustedroot)
 - [Which Disruptions Auto-Re-Run a Job (and Which Never Do)](#which-disruptions-auto-re-run-a-job-and-which-never-do)
+- [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs)
 - [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget)
 - [Draining a Worker Auto-Re-Runs the Jobs It Interrupts](#draining-a-worker-auto-re-runs-the-jobs-it-interrupts)
 - [A Preempted Worker's Job Is Not Re-Run](#a-preempted-workers-job-is-not-re-run)
@@ -2205,6 +2206,8 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `EvictionRetriesExhausted` | Warning | An evicted worker pod's auto-retry budget (`maxEvictionRetries`) is exhausted; a manual re-run is required. Emitted on both acquisition tiers, each of which keeps its own per-run budget. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) · [Evicted Scale-Set Jobs Are Not Re-Run Automatically](#evicted-scale-set-jobs-are-not-re-run-automatically) |
 | `EvictionRerunFailed` | Warning | A disrupted run's automatic re-run was never accepted by GitHub — refused past the 15-minute re-run window, or a terminal API error (Q503). The budget slot is spent; the named run needs a manual re-run. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |
 | `EvictionRerunWithheld` | Normal | Recovery deliberately did not ask GitHub to re-run. Either an externally deleted worker's run had already concluded `cancelled`, so the cancel stands and the budget slot is spent (Q811); or the kubelet evicted the worker for exceeding its own `ephemeral-storage` or `emptyDir` limit, which a re-run repeats, so no slot is spent and the Event quotes the kubelet's message (Q1177). | [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod); [Which Disruptions Auto-Re-Run a Job](#which-disruptions-auto-re-run-a-job-and-which-never-do) |
+| `FlakyJobDetected` | Normal | A scale-set job failed with no disruption attributed to it, and a later attempt of it succeeded: a flake, re-run by a human or by GAG alongside a disrupted job (Q555). Names the run and the job. Not a fault of the platform; a run of them on one job is a test worth fixing. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
+| `PlatformFaultOnFailedJob` | Warning | A scale-set job failed and its worker shows a platform fault: the pod `Failed`, a `DisruptionTarget` condition, a container `OOMKilled`, or the runner container exiting non-zero (Q555). Names the run, the job, the worker and the fault. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
 | `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
@@ -3278,6 +3281,46 @@ No call is made, `eviction_rerun_withheld_total{reason="run_cancelled"}` increme
 See [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-stop-its-worker-pod).
 
 A quota-blocked job is deliberately absent from this table: it is **never claimed** in the first place, so it stays queued at GitHub with no re-run needed — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).
+
+---
+
+## Flaky Jobs and Platform Faults on Failed Jobs
+
+> **Scale-set tier only.** Detection reads `JobCompleted` messages, which the classic protocol does not deliver.
+> It is on for every scale-set `RunnerSet`, with no field, and changes no behaviour (Q555).
+
+When a scale-set job completes `failed`, the AGC records it in the set's failure ledger, ConfigMap `scaleset-failures-<runnerset>`, key `failures.json`, under `failures["<runID>/<job name>"]`.
+The record holds the worker's state at its terminal transition (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
+A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing.
+
+When a later attempt of the same job (same run, same job name) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
+
+| `trigger` | Means | Flaky? |
+|---|---|---|
+| `gag` | The job was in GAG's own disruption re-run. Its result also counts in `actions_gateway_eviction_rerun_outcomes_total{cause, result}`. | No: a recovery |
+| `gag_collateral` | GAG's `rerun-failed-jobs` re-ran it beside a disrupted job | Yes, if it succeeded and no disruption was recorded for its failure |
+| `other` | A human or another automation re-ran it | As above |
+
+A flaky verdict counts `actions_gateway_scaleset_flaky_jobs_total` and emits a Normal `FlakyJobDetected` Event.
+
+**Read a failure's context** from the AGC log, which carries it on every failed job, at Warn when it shows a platform fault and Info otherwise:
+
+```bash
+kubectl logs -n <agc-namespace> deploy/<agc-deployment> | grep 'scale-set job failed'
+```
+
+or from the ledger while the record is open (7 days, or until the job succeeds):
+
+```bash
+kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='{.data.failures\.json}'
+```
+
+**A `PlatformFaultOnFailedJob` Warning** names the fault.
+`OOMKilled` means the job needs more memory than the worker template gives it; a `DisruptionTarget` condition or a `Failed` pod means the node or the scheduler removed the worker, which the [disruption arms](#which-disruptions-auto-re-run-a-job-and-which-never-do) recover on their own.
+
+**What detection cannot see.** Node conditions are not recorded (the AGC has no `nodes` read), nor is the readiness of the set's egress proxy pool or registry mirror.
+A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no `context`.
+A re-run more than 7 days after the failure, or one that lands on another `RunnerSet`, pairs with nothing and counts nothing.
 
 ---
 

@@ -30,8 +30,8 @@ import (
 // to be rewritten by a version that does not understand all of it: unknown fields and
 // maps survive a rewrite, every map entry ages itself by its own expiresAt, and a
 // writer below minWriterVersion reads but never writes. The operator-facing account is
-// docs/design/04-operational-flows.md §4.2; Q555 and Q1183 add the failures and
-// pending maps.
+// docs/design/04-operational-flows.md §4.2. Q555 adds the failures map (flaky_jobs.go),
+// and Q1183 the pending map.
 
 // rerunLedgerDataKey is the one data key in a failure-ledger ConfigMap.
 const rerunLedgerDataKey = "failures.json"
@@ -49,10 +49,22 @@ const (
 // re-run.
 const rerunRecordTTL = 30 * 24 * time.Hour
 
+// failureRecordTTL keeps a failed job's record long enough for a re-run a day or a
+// weekend later to pair with it.
+const failureRecordTTL = 7 * 24 * time.Hour
+
 // rerunLedgerMaxBytes caps the encoded ledger under the 1 MiB ConfigMap ceiling. A
 // budget entry is never evicted to make room, because evicting one refills its run's
-// budget: a write that would pass the cap fails, and its re-run is withheld.
+// budget: a write the budgets alone would push past the cap fails, and its re-run is
+// withheld.
 const rerunLedgerMaxBytes = 512 << 10
+
+// failureRecordsCeiling is the encoded size past which failure records are evicted,
+// oldest first. It is half the cap, not the cap: v1.10.0 writes this ledger too, keeps
+// failure records it does not know, cannot evict them, and refuses a write past the
+// cap, so records filling the ledger would withhold every re-run it reserves during a
+// rollout or after a rollback.
+const failureRecordsCeiling = rerunLedgerMaxBytes / 2
 
 // Re-run scopes: what one re-run covered. rerun-failed-jobs, the only call GAG makes
 // today, covers every failed job of the attempt; scopeJob is reserved for a
@@ -76,7 +88,10 @@ type rerunLedger struct {
 	Version          int                     `json:"version"`
 	MinWriterVersion int                     `json:"minWriterVersion"`
 	Reruns           map[string]*rerunRecord `json:"reruns,omitempty"`
-	extra            map[string]json.RawMessage
+	// Failures holds each failed scale-set job until a later attempt of it completes,
+	// keyed by failureKey.
+	Failures map[string]*failureRecord `json:"failures,omitempty"`
+	extra    map[string]json.RawMessage
 }
 
 // rerunRecord is one run's budget, keyed by run ID: Count is how many times GAG has
@@ -106,16 +121,19 @@ type rerunAttempt struct {
 // The alias types carry the known fields without the custom marshalers, so the
 // preserving helpers below can encode and decode them with encoding/json.
 type (
-	rerunLedgerFields  rerunLedger
-	rerunRecordFields  rerunRecord
-	rerunAttemptFields rerunAttempt
+	rerunLedgerFields   rerunLedger
+	rerunRecordFields   rerunRecord
+	rerunAttemptFields  rerunAttempt
+	failureRecordFields failureRecord
 )
 
 // The JSON names each type declares, which the preserving helpers keep out of extra.
 var (
-	rerunLedgerNames  = []string{"version", "minWriterVersion", "reruns"}
-	rerunRecordNames  = []string{"expiresAt", "count", "selfCancelledAttempt", "attempts"}
-	rerunAttemptNames = []string{"scope", "cause", "jobs", "disruptions"}
+	rerunLedgerNames   = []string{"version", "minWriterVersion", "reruns", "failures"}
+	rerunRecordNames   = []string{"expiresAt", "count", "selfCancelledAttempt", "attempts"}
+	rerunAttemptNames  = []string{"scope", "cause", "jobs", "disruptions"}
+	failureRecordNames = []string{"expiresAt", "failedAt", "jobID", "cause", "event", "workflowRef",
+		"pairedAttempts", "context"}
 )
 
 func (l *rerunLedger) UnmarshalJSON(b []byte) error {
@@ -140,6 +158,14 @@ func (a *rerunAttempt) UnmarshalJSON(b []byte) error {
 
 func (a rerunAttempt) MarshalJSON() ([]byte, error) {
 	return marshalPreserving(rerunAttemptFields(a), a.extra)
+}
+
+func (f *failureRecord) UnmarshalJSON(b []byte) error {
+	return unmarshalPreserving(b, (*failureRecordFields)(f), failureRecordNames, &f.extra)
+}
+
+func (f failureRecord) MarshalJSON() ([]byte, error) {
+	return marshalPreserving(failureRecordFields(f), f.extra)
 }
 
 // unmarshalPreserving decodes b into known and stores every key not in names in extra.
@@ -201,6 +227,9 @@ func decodeRerunLedger(raw string) (*rerunLedger, error) {
 	if l.Reruns == nil {
 		l.Reruns = map[string]*rerunRecord{}
 	}
+	if l.Failures == nil {
+		l.Failures = map[string]*failureRecord{}
+	}
 	return l, nil
 }
 
@@ -211,6 +240,11 @@ func pruneRerunLedger(l *rerunLedger, now time.Time) {
 	for runID, r := range l.Reruns {
 		if r == nil || r.ExpiresAt.Before(now) {
 			delete(l.Reruns, runID)
+		}
+	}
+	for key, f := range l.Failures {
+		if f == nil || f.ExpiresAt.Before(now) {
+			delete(l.Failures, key)
 		}
 	}
 	for name, raw := range l.extra {
@@ -387,6 +421,7 @@ func (p *Provisioner) readRerunLedger(ctx context.Context, target Target) (*reru
 		return nil, nil, fmt.Errorf("provisioner: failure-ledger ConfigMap %s holds unparseable state "+
 			"(deleting it resets every run's re-run budget): %w", cmKey.Name, err)
 	}
+	p.failureIndex.note(key, l)
 	return l, &cm, nil
 }
 
@@ -402,10 +437,12 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 	p.ledgerMu.Lock()
 	defer p.ledgerMu.Unlock()
 
-	// A conflict means another replica's write landed, so the loop always makes
-	// progress in aggregate, and is bounded by ctx rather than a count: a replica
-	// writing a drain's worth of reservations back to back wins one round per write,
-	// which outlasted a fixed bound of five with two replicas in about one run in 20.
+	// A conflict means another replica's write landed, so the loop retries rather than
+	// counting: a replica writing a drain's worth of reservations back to back wins one
+	// round per write, which outlasted a fixed bound of five with two replicas in about
+	// one run in 20. Each round needs a rival write, so the loop ends when those stop;
+	// ctx ends it sooner where the caller set a deadline, as the watch path's
+	// disruptedWorkerRecoveryBudget does and the reconcile scan does not.
 	for {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("provisioner: write failure ledger: %w", err)
@@ -427,6 +464,9 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 		l.MinWriterVersion = max(l.MinWriterVersion, rerunLedgerMinWriterVersion)
 
 		data, err := json.Marshal(l)
+		for err == nil && len(data) > failureRecordsCeiling && evictOldestFailure(l) {
+			data, err = json.Marshal(l)
+		}
 		if err != nil {
 			return fmt.Errorf("provisioner: encode failure ledger %s: %w", cm.Name, err)
 		}
@@ -448,6 +488,7 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 		}
 		switch {
 		case err == nil:
+			p.failureIndex.note(target.Key(), l)
 			return nil
 		case apierrors.IsConflict(err) || apierrors.IsAlreadyExists(err):
 		default:

@@ -446,6 +446,11 @@ type Provisioner struct {
 	// reason claimMu does (Q1182, rerun_ledger.go).
 	ledgerMu sync.Mutex
 
+	// failureIndex and workerSnapshots are flaky-job detection's in-memory state
+	// (Q555, flaky_jobs.go). Their zero values are ready to use.
+	failureIndex    failureIndex
+	workerSnapshots workerSnapshots
+
 	// orphanScans records which owners have already had their persisted in-flight set
 	// adjudicated by this process (Q844), which is what makes that scan a startup
 	// question rather than a per-reconcile one. Its zero value is ready to use. See
@@ -737,6 +742,10 @@ type ScaleSetJob struct {
 	Repository string
 	RunID      string
 	JobName    string
+	// EventName and WorkflowRef are the run's triggering event and the job's workflow
+	// ref; only RecordScaleSetJobCompleted reads them (Q555).
+	EventName   string
+	WorkflowRef string
 }
 
 // jobMeta converts the job's run identity into the annotation set shared with the

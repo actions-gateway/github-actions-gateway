@@ -215,6 +215,11 @@ type JobMessage struct {
 	WorkflowRunID int64 `json:"workflowRunId,omitempty"`
 	// JobDisplayName is the job's human-readable name from the workflow YAML.
 	JobDisplayName string `json:"jobDisplayName,omitempty"`
+	// EventName is the event that triggered the run ("push", "pull_request", ...), and
+	// JobWorkflowRef the workflow file and ref the job came from. Both are on the wire
+	// in JobMessageBase and are best-effort here like the identity above.
+	EventName      string `json:"eventName,omitempty"`
+	JobWorkflowRef string `json:"jobWorkflowRef,omitempty"`
 }
 
 // RunIdentity returns the workflow run this job belongs to, as the (owner, repo,
