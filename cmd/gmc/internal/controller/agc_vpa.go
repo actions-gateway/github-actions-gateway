@@ -240,7 +240,7 @@ func (r *ActionsGatewayV2Reconciler) applyOrPruneAGCAutoscaler(ctx context.Conte
 	obj.SetNamespace(desired.GetNamespace())
 	obj.SetName(desired.GetName())
 	op, err := controllerutil.CreateOrPatch(ctx, r.Client, obj, func() error {
-		obj.SetLabels(desired.GetLabels())
+		mergeLabels(obj, desired.GetLabels())
 		spec, _, _ := unstructured.NestedMap(desired.Object, "spec")
 		if err := unstructured.SetNestedMap(obj.Object, spec, "spec"); err != nil {
 			return err

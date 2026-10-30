@@ -14,11 +14,11 @@ import (
 // ActionsGateway, and EgressProxy).
 //
 // It keys obj by desired's namespace and name, then creates or patches the live
-// object: it writes the controller-managed labels, invokes copyManaged to copy
-// the type-specific managed fields (nil for a labels-only child), and — only when
-// owner is non-nil — stamps a controller owner reference via
-// controllerutil.SetControllerReference. obj must be an empty shell of desired's
-// concrete type (its namespace/name/labels are overwritten from desired); for an
+// object: it merges the controller-managed labels over the live ones (see
+// mergeLabels), invokes copyManaged to copy the type-specific managed fields (nil
+// for a labels-only child), and — only when owner is non-nil — stamps a controller
+// owner reference via controllerutil.SetControllerReference. obj must be an empty
+// shell of desired's concrete type (its namespace/name are set from desired); for an
 // unstructured child the caller sets the GVK on the shell before calling.
 //
 // The owner argument is load-bearing: it selects whether the child is also
@@ -44,7 +44,7 @@ func applyManagedChild[T client.Object](
 	obj.SetNamespace(desired.GetNamespace())
 	obj.SetName(desired.GetName())
 	_, err := controllerutil.CreateOrPatch(ctx, c, obj, func() error {
-		obj.SetLabels(desired.GetLabels())
+		mergeLabels(obj, desired.GetLabels())
 		if copyManaged != nil {
 			if err := copyManaged(); err != nil {
 				return err
@@ -69,10 +69,25 @@ func applyManagedSecret(ctx context.Context, c client.Client, scheme *runtime.Sc
 	obj.SetNamespace(desired.Namespace)
 	obj.SetName(desired.Name)
 	_, err := controllerutil.CreateOrUpdate(ctx, c, obj, func() error {
-		obj.SetLabels(desired.Labels)
+		mergeLabels(obj, desired.Labels)
 		obj.Type = desired.Type
 		obj.Data = desired.Data
 		return controllerutil.SetControllerReference(owner, obj, scheme)
 	})
 	return err
+}
+
+// mergeLabels writes desired over obj's live labels, leaving every key the GMC does
+// not set untouched, so a label another controller or an operator added survives
+// the apply (Q1215). A key the GMC stops setting is therefore never removed; no
+// child has ever dropped one, and a removal would need a tracked owned-key set.
+func mergeLabels(obj client.Object, desired map[string]string) {
+	labels := obj.GetLabels()
+	if labels == nil {
+		labels = make(map[string]string, len(desired))
+	}
+	for k, v := range desired {
+		labels[k] = v
+	}
+	obj.SetLabels(labels)
 }
