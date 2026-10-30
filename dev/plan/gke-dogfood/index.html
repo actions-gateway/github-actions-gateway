@@ -3702,6 +3702,8 @@ Scraping it ad hoc needs the scraper's client leaf from the <code>&lt;gateway&gt
 <a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span>https://dogfood-agc.gag-dogfood.svc:18443/metrics
 </code></pre></div>
 <p>Used by the §9e/§9f (Q469/Q462) and §9h (Q513) capacity-gate measurements in <a href="../capacity-aware-intake/">capacity-aware-intake.md</a>; since Q514, <code>worker_pods_reaped_total</code> stamps <code>runner_set</code> on scale-set reaps alongside <code>runner_group</code>, so one <code>runner_set</code> filter covers it and the <code>scaleset_*</code> gauges.</p>
+<p>A hand sample is one point in time, and the counters reset with the pod.
+To keep history, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> has Google Managed Prometheus scrape the AGC with the same client Secret; its README lists the namespace label it needs and what is still unmeasured.</p>
 <h3 id="stop-dogfooding">Stop dogfooding<a class="headerlink" href="#stop-dogfooding" title="Permanent link">&para;</a></h3>
 <p>Opt-in dispatches are one-shot, so there is no standing CI route to revert — only the end-state global routing below needs the <code>GAG_RUNNER</code> reset.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nb">export</span><span class="w"> </span>PROJECT<span class="w"> </span>CLUSTER<span class="w"> </span>ZONE<span class="w"> </span>REPO<span class="w">   </span><span class="c1"># from the Variables section</span>

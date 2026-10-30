@@ -3065,7 +3065,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>dogfood</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Google Managed Prometheus is enabled on the dogfood cluster, but its only scrape targets are <code>kube-state-metrics</code> and <code>dcgm</code>: no …</td>
+<td>Dogfood stores no <code>actions_gateway_*</code> series until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> is applied, so every …</td>
 </tr>
 <tr>
 <td><a href="Q1181/">Q1181</a></td>
@@ -4196,14 +4196,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>CI jobs read their tool pins from <code>scripts/ci/pins.env</code> through a <code>pins</code> step running <code>scripts/ci/load-pins.sh</code> (Q1166).</td>
 </tr>
 <tr>
-<td><a href="Q1215/">Q1215</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/apply_helpers.go">GMC child writes strip labels other controllers set</a></td>
-<td><code>bug</code> <code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every child the GMC applies loses any label it did not write itself, on the next reconcile.</td>
-</tr>
-<tr>
 <td><a href="Q1216/">Q1216</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_attribution.go">Version the attribution bundle Secret instead of updating it in place</a></td>
 <td><code>debt</code> <code>open-question</code></td>
@@ -4226,6 +4218,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🚫</td>
 <td>S</td>
 <td>Blocked on a <code>v1.37.*</code> tag in <code>registry.k8s.io/autoscaling/cluster-autoscaler</code>.</td>
+</tr>
+<tr>
+<td><a href="Q1226/">Q1226</a></td>
+<td><a href="../operations/observability-metrics-access/">Operator docs give GKE Managed Prometheus no way to scrape tenants</a></td>
+<td><code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The per-tenant scrape docs …</td>
 </tr>
 </tbody>
 </table>

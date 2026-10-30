@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1215/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1226/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>GMC child writes strip labels other controllers set - GitHub Actions Gateway</title>
+        <title>Operator docs give GKE Managed Prometheus no way to scrape tenants - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gmc-child-writes-strip-labels-other-controllers-set" class="md-skip">
+        <a href="#operator-docs-give-gke-managed-prometheus-no-way-to-scrape-tenants" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GMC child writes strip labels other controllers set
+              Operator docs give GKE Managed Prometheus no way to scrape tenants
             
           </span>
         </div>
@@ -2627,17 +2627,12 @@
   
 
 
-<h1 id="gmc-child-writes-strip-labels-other-controllers-set">GMC child writes strip labels other controllers set<a class="headerlink" href="#gmc-child-writes-strip-labels-other-controllers-set" title="Permanent link">&para;</a></h1>
-<p>Every child the GMC applies loses any label it did not write itself, on the next reconcile.
-<code>applyManagedChild</code> and <code>applyManagedSecret</code> (the Secret path, added by #2151) both call <code>obj.SetLabels(desired.Labels)</code>, which replaces the live label map, so a label another controller or an operator added is dropped.</p>
-<p><strong>Read from source 2026-10-26, not exercised against a cluster.</strong> Both helpers read the object first (controller-runtime v0.25.2 <code>CreateOrPatch</code> and <code>CreateOrUpdate</code> each open with <code>c.Get</code>).
-Annotations, finalizers and other owner references survive, because the mutate function never touches them.
-Labels do not: under <code>CreateOrPatch</code> the merge patch from the read copy turns each dropped key into <code>null</code>, and under <code>CreateOrUpdate</code> the update carries the replaced map.
-So the behaviour predates Q1214's switch to <code>CreateOrUpdate</code> for Secrets and is identical on both paths.
-The foreign label is itself the difference between the read copy and the mutated one, so the helpers' no-op check never skips it: any reconcile of the owner strips it.
-Whether anything in a real cluster labels a GMC child today is unmeasured.</p>
-<p><strong>Done when</strong> both helpers merge the desired labels over the live ones, so a key the GMC owns is set and every other key is left alone, with a unit test that seeds a foreign label on the live object, reconciles, and asserts the foreign label survives.
-Removing a label the GMC used to set is the case a plain merge cannot express; decide whether any child has ever dropped one before choosing merge over a tracked owned-key set.</p>
+<h1 id="operator-docs-give-gke-managed-prometheus-no-way-to-scrape-tenants">Operator docs give GKE Managed Prometheus no way to scrape tenants<a class="headerlink" href="#operator-docs-give-gke-managed-prometheus-no-way-to-scrape-tenants" title="Permanent link">&para;</a></h1>
+<p>The per-tenant scrape docs (<a href="../../operations/observability-metrics-access/#scraping-per-tenant-agc-and-proxy-metrics-mtls">observability-metrics-access.md</a>) describe only the GMC-rendered Prometheus-Operator <code>ServiceMonitor</code>, and Google Managed Prometheus (GMP) managed collection reads <code>PodMonitoring</code> instead, so an operator on GKE's default metrics stack has no documented path to the AGC and proxy metrics.
+Q1180 found this while writing the dogfood scrape: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> is a worked <code>PodMonitoring</code> with the mTLS client Secret, the collector <code>Role</code>, and the <code>metrics=enabled</code> label GMP's <code>gmp-system</code> namespace needs before the tenant NetworkPolicy admits it.
+GMP's API (<code>ScrapeEndpoint.tls.ca</code>/<code>cert</code>/<code>key</code> as Secret references) and its docs (a <code>Role</code> granting the <code>gmp-system/collector</code> ServiceAccount read on the Secret) were read 2026-10-27; whether any GKE version in support lacks the Secret references was not checked.
+The fix is a docs section adapting that example to the v2 names (<code>&lt;gateway&gt;-agc-metrics-client</code>, <code>&lt;ep&gt;-metrics-client</code>), and a note in the <code>ServiceMonitor</code> toggle's text that it does nothing for GMP.
+Whether the GMC should render <code>PodMonitoring</code> itself is a separate question; it is not this row.</p>
 
 
 

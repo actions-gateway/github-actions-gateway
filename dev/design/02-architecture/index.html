@@ -3072,6 +3072,9 @@ Two children break that assumption and so assign fields selectively instead:</p>
   Scale-<em>down</em> below the floor is prevented by the HPA's own <code>spec.minReplicas</code>, which the reconciler does keep in sync with the CR.</li>
 </ul>
 <p>SSA would have made both cases fall out of per-field ownership for free; with <code>CreateOrPatch</code> they are a hand-maintained invariant, enforced by envtest (<code>hpa_scale_preservation</code>) because neither the <code>scale</code> subresource nor <code>.spec.replicas</code> defaulting exists on a fake client.</p>
+<p>Metadata labels are never the GMC's alone, so every child write merges the GMC's labels over the live map instead of replacing it (<code>mergeLabels</code>, Q1215): a label another controller or an operator adds to a GMC child survives every reconcile.
+The cost is that a key the GMC stops setting is never removed.
+No child has dropped one in the project's history, so the merge carries no owned-key record; the first change that retires a label has to add one, or delete the key itself.</p>
 <p><strong>Where SSA remains the right tool:</strong> <code>applyNamespacePSA</code> keeps SSA (field manager <code>actionsgateway-controller-psa</code>) precisely because PSA labels are a security control — SSA records per-field-manager ownership and surfaces a conflict when a human admin changes a field the controller owns, so an out-of-band edit is detected and reported (a <code>PSALabelsOverridden</code> Warning Event) rather than silently re-asserted.
 See <a href="../05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>.</p>
 <hr />

@@ -2628,14 +2628,18 @@
 
 
 <h1 id="dogfood-keeps-no-agc-or-proxy-metrics-past-the-pods-life">Dogfood keeps no AGC or proxy metrics past the pod's life<a class="headerlink" href="#dogfood-keeps-no-agc-or-proxy-metrics-past-the-pods-life" title="Permanent link">&para;</a></h1>
-<p>Google Managed Prometheus is enabled on the dogfood cluster, but its only scrape targets are <code>kube-state-metrics</code> and <code>dcgm</code>: no <code>PodMonitoring</code> covers the AGC or the proxy, so no <code>actions_gateway_*</code> series has ever been stored (read-only survey, 2026-10-10).
-Every retry counter (<code>eviction_retries_total{cause}</code>, <code>eviction_rerun_failures_total</code>, <code>scaleset_jobs_completed_total{result}</code>, the abandoned and startup-verdict counters) dies with the pod, and Cloud Logging's <code>_Default</code> bucket keeps only warn lines, for 30 days.
-That leaves Q555 and Q1179 nothing to measure history against.
-Add a <code>PodMonitoring</code> for the AGC and proxy in the dogfood tenant, using the mTLS client Secret the runbook already uses to sample <code>/metrics</code> by hand.
-GMP's retention is 24 months by default, which is recalled and not checked here.
-Cost estimate (2026-10-10, not measured): GMP bills $0.06 per million samples ingested with no free tier, per Google's pricing page as reported by a search, not read directly. The AGC and proxy define 56 metric families between them (counted from source); assuming 1,000 to 3,000 live series across the dogfood AGC and proxy replicas, a 60-second scrape is 43,200 samples per series per running month, about $2.60 to $7.80 a month if the cluster ran all month, and less while it is stopped (6 active days in 2026-09).
-Measure the real series count from one <code>/metrics</code> sample before relying on it.
-Open: whether a <code>PodMonitoring</code> endpoint can present the client certificate from a Secret, which the AGC's mTLS port requires; if not, a sidecar or a plain-HTTP metrics port inside the namespace is the alternative, and the second needs a security review.</p>
+<p>Dogfood stores no <code>actions_gateway_*</code> series until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> is applied, so every retry counter dies with the pod and Q555 and Q1179 have no history to measure against.
+The scrape is written: a Google Managed Prometheus (GMP) <code>PodMonitoring</code> that presents the GMC-published <code>dogfood-agc-metrics-client</code> bundle over mTLS, plus a <code>Role</code> letting GMP's collector read that one Secret.
+What is left is a change to the prod-classified dogfood cluster, which is why it is a row rather than part of the PR that wrote the manifest:</p>
+<ol>
+<li>Label <code>gmp-system</code> <code>metrics=enabled</code>, which the tenant NetworkPolicy requires before it admits the scrape to <code>:8443</code>.</li>
+<li><code>kubectl apply -k deploy/dogfood-metrics</code>, pinned to the dogfood context.</li>
+<li>Confirm <code>up{namespace="gag-dogfood"}</code> reads <code>1</code> in Cloud Monitoring.</li>
+<li>Count the AGC's live series from one <code>/metrics</code> sample, so a cost estimate rests on a measurement rather than an assumption.</li>
+</ol>
+<p>The README carries the commands and the caveats.
+<code>gmp-system</code> is addon-managed (<code>addonmanager.kubernetes.io/mode=Reconcile</code>), so whether GKE keeps the label is unmeasured; re-check it after a cluster upgrade.
+Dogfood runs no <code>EgressProxy</code>, so there is no proxy to scrape until one is attached.</p>
 
 
 
