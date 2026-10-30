@@ -53,12 +53,6 @@ const recoveryClaimTTL = time.Hour
 // replaces.
 const maxRecoveryClaims = 256
 
-// recoveryClaimConflictRetries bounds the re-read retries a claim makes against a
-// conflicting write. Nothing but another claim writes this object, and claimMu leaves
-// only the other AGC replicas contending, so the bound is the replica count with
-// headroom rather than the number of workers a drain disrupts at once.
-const recoveryClaimConflictRetries = 5
-
 // errRecoveryClaimHeld reports that the pod's recovery is already someone else's — the
 // other detection path, another reconcile, or another replica. The mechanism working,
 // not an error.
@@ -116,7 +110,16 @@ func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target
 		reader = p.APIReader
 	}
 
-	for attempt := 0; ; attempt++ {
+	// A conflict means another replica's claim landed, so the loop retries rather than
+	// counting: claimMu turns a replica's claims into a back-to-back burst that wins one
+	// round per write, which outlasts any count sized to the replica set (Q1197; the
+	// failure ledger's loop measured it). Each round needs a rival write, so the loop ends
+	// when those stop; ctx ends it sooner where the caller set a deadline — the watch
+	// path's disruptedWorkerRecoveryBudget, but not the reconcile scan's.
+	for {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("provisioner: claim recovery of %s: %w", podName, err)
+		}
 		var cm corev1.ConfigMap
 		err := reader.Get(ctx, cmKey, &cm)
 		switch {
@@ -166,9 +169,6 @@ func (p *Provisioner) claimDisruptionRecovery(ctx context.Context, target Target
 		case err == nil:
 			return nil
 		case apierrors.IsConflict(err) || apierrors.IsAlreadyExists(err):
-			if attempt == recoveryClaimConflictRetries {
-				return fmt.Errorf("provisioner: claim recovery of %s: %w", podName, err)
-			}
 		default:
 			return fmt.Errorf("provisioner: claim recovery of %s: %w", podName, err)
 		}

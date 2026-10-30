@@ -489,6 +489,80 @@ func TestClaimDisruptionRecovery_ConcurrentClaimsAllLand(t *testing.T) {
 		"every concurrent claim must survive; a missing one is a disruption two claimants can both recover")
 }
 
+// TestClaimDisruptionRecovery_OutlastsAnotherReplicasBurst is a drain that coincides
+// with a rolling update: two replicas share one ledger, and claimMu serialises only a
+// replica's own claims, so the other replica's back-to-back burst wins a round of the
+// compare-and-swap with every write. The claim here loses a dozen rounds, each to a
+// landed claim, and must still land (Q1197).
+func TestClaimDisruptionRecovery_OutlastsAnotherReplicasBurst(t *testing.T) {
+	ctx := context.Background()
+	const burst = 12
+	rival, target, _, _, _ := recoveryFixture(t)
+	require.NoError(t, rival.claimDisruptionRecovery(ctx, target, "runner-gpu-rival-seed", "", recoveryCauseDeletion))
+
+	var updates, landed atomic.Int64
+	shared, ok := rival.Client.(client.WithWatch)
+	require.True(t, ok, "the fixture's fake client must be wrappable")
+	p := NewProvisioner(interceptor.NewClient(shared, interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if _, isCM := obj.(*corev1.ConfigMap); isCM {
+				updates.Add(1)
+				// The rival's next claim lands between this replica's read and its
+				// write, so the apiserver's own resourceVersion check refuses it.
+				if n := landed.Add(1); n <= burst {
+					if err := rival.claimDisruptionRecovery(ctx, target, fmt.Sprintf("runner-gpu-rival-%d", n), "", recoveryCauseDeletion); err != nil {
+						return err
+					}
+				}
+			}
+			return c.Update(ctx, obj, opts...)
+		},
+	}), evictionRecoveryMetrics(), nil)
+
+	require.NoError(t, p.claimDisruptionRecovery(ctx, target, "runner-gpu-mine", "", recoveryCauseDeletion),
+		"every conflict was another replica's progress, so the claim must keep retrying")
+	assert.Equal(t, int64(burst+1), updates.Load(), "each rival claim must have cost this replica one lost round")
+
+	var cm corev1.ConfigMap
+	require.NoError(t, shared.Get(ctx, client.ObjectKey{
+		Namespace: "team-a", Name: scaleSetRecoveryClaimsConfigMapName("gpu"),
+	}, &cm))
+	ledger, err := decodeRecoveryClaims(cm.Data[recoveryClaimDataKey])
+	require.NoError(t, err)
+	assert.Len(t, ledger.Claims, burst+2, "the seed, the rival's burst and this replica's claim must all survive")
+	assert.Contains(t, ledger.Claims, "runner-gpu-mine")
+}
+
+// TestClaimDisruptionRecovery_ConflictsEndWithTheContext pins the deadline a caller can
+// put on the uncounted retry: a claim still conflicting when its context ends gives up
+// with the context's error.
+func TestClaimDisruptionRecovery_ConflictsEndWithTheContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	const cancelAt = 20
+	var updates atomic.Int64
+	p, target, _, _, _ := recoveryFixtureWith(t, interceptor.Funcs{
+		Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			cm, isCM := obj.(*corev1.ConfigMap)
+			if !isCM {
+				return c.Update(ctx, obj, opts...)
+			}
+			switch n := updates.Add(1); {
+			case n == cancelAt:
+				cancel()
+			case n > cancelAt+5:
+				return errors.New("the claim kept writing after its context ended")
+			}
+			return apierrors.NewConflict(corev1.Resource("configmaps"), cm.Name, errors.New("the object has been modified"))
+		},
+	})
+	require.NoError(t, p.claimDisruptionRecovery(context.Background(), target, "runner-gpu-seed", "", recoveryCauseDeletion))
+
+	err := p.claimDisruptionRecovery(ctx, target, "runner-gpu-contended", "", recoveryCauseDeletion)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Equal(t, int64(cancelAt), updates.Load(), "the claim must stop at the first round after its context ends")
+}
+
 // TestPruneRecoveryClaims_BoundsTheLedger pins both bounds the ledger carries, because
 // it is the one thing in this mechanism that grows with the number of disruptions
 // rather than with the number of RunnerSets: an entry past its TTL goes, and the oldest
