@@ -197,6 +197,11 @@ jobs:
             # the comment above cites is scoped to five directories that hold no
             # Dockerfile, so nothing bumps this image's bases today.
             exit-code: '0'
+          - name: cache-runner
+            # report-only: it is FROM `build-runner` with one patched string in
+            # Runner.Worker.dll, so it adds no packages and inherits that leg's
+            # findings.
+            exit-code: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Load tool pins (scripts/ci/pins.env)
