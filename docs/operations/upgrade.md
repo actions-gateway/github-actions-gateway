@@ -18,6 +18,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
+  - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
   - [A worker evicted for its own storage limit is no longer re-run](#a-worker-evicted-for-its-own-storage-limit-is-no-longer-re-run)
@@ -236,6 +237,18 @@ Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2
 
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
+
+### Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner
+
+**Who is affected:** `ScaleSet` sets whose workers schedule unevenly, so a worker is reaped `Pending` after another runner of the set took the job it was created for.
+Nothing to do.
+
+Since Q1169 such a reap cancels nothing, because the worker's own job is running.
+The set is still one runner short, and the job that lost its runner used to wait out GitHub's unstarted-job timeout and need a manual re-run.
+The AGC now names that job from the listener's in-flight record, force-cancels its run, and re-runs it once capacity returns, as for any abandoned worker (Q1195).
+It names none while a `Running` worker's job start may not be recorded yet, and then behaves as before.
+
+**Rolling back** returns that job to waiting out the timeout.
 
 ### Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run
 

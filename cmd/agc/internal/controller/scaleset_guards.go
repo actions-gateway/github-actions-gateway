@@ -142,20 +142,47 @@ func (r *RunnerSetReconciler) recoverOrphanedScaleSetWorkers(ctx context.Context
 		log.Warn("could not read persisted in-flight jobs; workers lost while this AGC was down will not be recovered", "error", err)
 		return closedChan()
 	}
-	orphans := make([]provisioner.OrphanedWorker, 0, len(state.InFlight))
-	for _, j := range state.InFlight {
-		orphans = append(orphans, provisioner.OrphanedWorker{
-			JobID:      j.JobID,
-			Owner:      j.Owner,
-			Repository: j.Repository,
-			RunID:      j.RunID,
-		})
-	}
-	done, err := r.Provisioner.RecoverOrphanedScaleSetWorkers(ctx, r.provisionerTarget(rs), orphans)
+	done, err := r.Provisioner.RecoverOrphanedScaleSetWorkers(ctx, r.provisionerTarget(rs), orphanedWorkers(state.InFlight))
 	if err != nil {
 		log.Warn("orphaned scale-set worker recovery scan failed", "error", err)
 	}
 	return done
+}
+
+var _ provisioner.InFlightLister = (*runnerSetTarget)(nil)
+
+// InFlightJobs reads the set's persisted in-flight jobs (provisioner.InFlightLister), so
+// abandoned-run recovery can name the job a lost runner left without one (Q1195). Read
+// live, like Load, and read-only: the listener stays the ConfigMap's single writer.
+func (t *runnerSetTarget) InFlightJobs(ctx context.Context) ([]provisioner.OrphanedWorker, error) {
+	reader := t.reader
+	if reader == nil {
+		reader = t.client
+	}
+	store := &scaleSetGuardStore{
+		reader: reader,
+		cmKey:  types.NamespacedName{Namespace: t.key.Namespace, Name: scaleSetGuardConfigMapName(t.key.Name)},
+	}
+	state, err := store.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return orphanedWorkers(state.InFlight), nil
+}
+
+// orphanedWorkers converts the listener's in-flight records into the provisioner's type.
+func orphanedWorkers(inFlight []scalesetlistener.InFlightJob) []provisioner.OrphanedWorker {
+	out := make([]provisioner.OrphanedWorker, 0, len(inFlight))
+	for _, j := range inFlight {
+		out = append(out, provisioner.OrphanedWorker{
+			JobID:      j.JobID,
+			Owner:      j.Owner,
+			Repository: j.Repository,
+			RunID:      j.RunID,
+			Started:    j.Started,
+		})
+	}
+	return out
 }
 
 // closedChan returns an already-closed done channel, for the exits that start no

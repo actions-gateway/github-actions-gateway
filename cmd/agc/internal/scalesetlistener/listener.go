@@ -324,12 +324,17 @@ type GuardState struct {
 // so a name stored at provision time would name the wrong pod whenever GitHub gave the
 // job to another runner. ProvisionedAt bounds the set against a job whose conclusion
 // never arrives at all.
+//
+// Started records that some runner took the job. It is saved in the poll cycle that
+// handled the JobStarted, so a job that has since finished and lost its worker pod
+// does not read as one no runner took while its removal is still unsaved (Q1195).
 type InFlightJob struct {
 	JobID         string    `json:"jobID"`
 	Owner         string    `json:"owner"`
 	Repository    string    `json:"repository"`
 	RunID         string    `json:"runID"`
 	ProvisionedAt time.Time `json:"provisionedAt"`
+	Started       bool      `json:"started,omitempty"`
 }
 
 // GuardStore persists GuardState across a process boundary (Q606). The in-memory
@@ -2527,6 +2532,13 @@ func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) bool {
 			"scaleSet", l.cfg.ScaleSetName, "jobID", sj.JobID, "runner", sj.RunnerName, "err", err)
 		return false
 	}
+	l.mu.Lock()
+	if j, ok := l.inFlight[sj.JobID]; ok && !j.Started {
+		j.Started = true
+		l.inFlight[sj.JobID] = j
+		l.guardsDirty = true
+	}
+	l.mu.Unlock()
 	return true
 }
 
