@@ -1,0 +1,67 @@
+# Q1180: Google Managed Prometheus (GMP) scrape of the dogfood tenant's AGC, so
+# its actions_gateway_* series outlive the pod. GMP's managed collector reads
+# PodMonitoring, not the Prometheus-Operator ServiceMonitor the GMC can render.
+#
+# The AGC's :8443 listener requires a client certificate, so the endpoint
+# presents the scraper bundle the GMC publishes for this gateway, verifies the
+# server cert against the same bundle's CA, and pins serverName to the AGC
+# Service's DNS name (a SAN on the server cert). No insecureSkipVerify.
+#
+# The collector has no secret access of its own: the Role below grants it
+# read on this one Secret, as GMP's managed-collection docs prescribe.
+#
+# Prerequisites not expressible here (namespace labels, the live series
+# count) are in ./README.md.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: dogfood-agc
+  namespace: gag-dogfood
+spec:
+  selector:
+    matchLabels:
+      app: dogfood-agc
+  endpoints:
+    - port: metrics
+      path: /metrics
+      scheme: https
+      interval: 60s
+      tls:
+        serverName: dogfood-agc.gag-dogfood.svc
+        ca:
+          secret:
+            name: dogfood-agc-metrics-client
+            key: ca.crt
+        cert:
+          secret:
+            name: dogfood-agc-metrics-client
+            key: tls.crt
+        key:
+          secret:
+            name: dogfood-agc-metrics-client
+            key: tls.key
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gmp-collector-read-agc-metrics-client
+  namespace: gag-dogfood
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["dogfood-agc-metrics-client"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gmp-collector-read-agc-metrics-client
+  namespace: gag-dogfood
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: gmp-collector-read-agc-metrics-client
+subjects:
+  - kind: ServiceAccount
+    name: collector
+    namespace: gmp-system
