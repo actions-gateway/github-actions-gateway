@@ -2628,14 +2628,15 @@
 
 
 <h1 id="testresolverpendingthendonewakes-reads-the-wake-before-it-is-delivered">TestResolverPendingThenDoneWakes reads the wake before it is delivered<a class="headerlink" href="#testresolverpendingthendonewakes-reads-the-wake-before-it-is-delivered" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
-<p><code>TestResolverPendingThenDoneWakes</code> waits for the lookup to leave <code>Pending</code>, then asserts the <code>Wake</code> callback already ran exactly once.
-The resolver does not promise that ordering: its completion path sets <code>e.state = Done</code> under <code>r.mu</code>, releases the lock, and only then calls the queued wakes, so a reader can see <code>Done</code> while <code>woken</code> is still 0.
-It failed that way in CI on PR #2176's unit-test job (<code>-race</code>, run 40633045071, 2026-10-28, <code>resolver_test.go:41</code> <code>expected: 1 actual: 0</code>, "the caller is woken exactly once per state change"); that push changed only comments and docs, and the same job passed on the PR's previous head.</p>
-<p>Measured 2026-10-27 on a local Mac: 0 failures in 300 runs under <code>-race</code>, so the window is narrow.
-With a 50 ms sleep inserted between <code>r.mu.Unlock()</code> and the wake loop in <code>resolver.go</code>, the test failed 5 of 5 with <code>actual: 0</code>, which is the mechanism this row asserts.</p>
-<p>The likely fix is in the test, since <code>Wake</code>'s godoc promises only that it is called once the state changes, not before the change is visible: wait for <code>woken</code> to reach 1 rather than reading it once, and keep the "exactly once" half by asserting it stays at 1.
-Sweep the idiom across <code>resolver_test.go</code> and its package: any assertion reading a <code>Wake</code> counter straight after <code>waitFor</code> has the same race.</p>
+<p><strong>Event:</strong> <code>TestResolverPendingThenDoneWakes</code> fails on <code>main</code>, in either of its wake assertions ("the caller is woken once the state changes" or "the caller is woken exactly once per state change").</p>
+<p>Sighted once, in CI on PR #2176's unit-test job (<code>-race</code>, run 40633045071, 2026-10-28, <code>expected: 1 actual: 0</code>, "the caller is woken exactly once per state change"); that push changed only comments and docs, and the same job passed on the PR's previous head.</p>
+<p><strong>Mechanism.</strong> The resolver's completion path sets <code>e.state = Done</code> under <code>r.mu</code>, releases the lock, and only then calls the queued wakes, so a waiter can see <code>Done</code> while its wake has not run.
+That order is the correct one: a wake makes the controller reconcile and call <code>Lookup</code> again, so a wake delivered before the state is visible could leave that reconcile reading <code>Pending</code> with no further wake owed.
+<code>Wake</code>'s godoc states the ordering, and the test waits for the first wake with <code>require.Eventually</code> and asserts no second one arrives within 50 ms.</p>
+<p><strong>Measured 2026-10-27 on a local Mac.</strong> With a 50 ms sleep between <code>r.mu.Unlock()</code> and the wake loop, the old single-read assertion failed 5 of 5 with <code>actual: 0</code> and the waiting form passed 5 of 5.
+Without the sleep, the waiting form passed 300 of 300 under <code>-race</code>.
+Deleting the wake loop fails it on "woken once", and calling each wake twice fails it on "exactly once".</p>
+<p><strong>Sweep.</strong> No other test reads a <code>Wake</code> counter after <code>waitFor</code>: <code>TestResolverSettledEntryHoldsNoWakes</code> inspects <code>e.wakes</code> under <code>r.mu</code>, and the controller tests call <code>Wake</code> synchronously on a fake resolver.</p>
 
 
 
