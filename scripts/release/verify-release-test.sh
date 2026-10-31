@@ -78,10 +78,66 @@ cat > "$FIXTURE_DIR/cosign" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$STUB_COSIGN_LOG"
-if [[ -n "${STUB_COSIGN_SLEEP:-}" ]]; then sleep "$STUB_COSIGN_SLEEP"; fi
+if [[ -n "${STUB_COSIGN_SLEEP:-}" ]]; then exec sleep "$STUB_COSIGN_SLEEP"; fi
 exit "${STUB_COSIGN_RC:-0}"
 STUB
 chmod +x "$FIXTURE_DIR/cosign"
+
+# Stub docker and gh: an index with two arches and one attestation manifest (or
+# amd64 alone under STUB_NO_ARM64, no answer under STUB_DOCKER_SLEEP, or an error
+# under STUB_DOCKER_FAIL), and a
+# Release carrying both blob bundles unless STUB_BUNDLES overrides the list or
+# STUB_GH_VIEW_FAIL makes the listing fail.
+mkdir -p "$FIXTURE_DIR/bin"
+cat > "$FIXTURE_DIR/bin/docker" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+# Like the real CLI under a hung credential helper: TERM is ignored (and the
+# child inherits that) while it waits on a child that never returns.
+if [[ -n "${STUB_DOCKER_SLEEP:-}" ]]; then
+	trap '' TERM
+	sleep "$STUB_DOCKER_SLEEP" &
+	wait "$!"
+	exit 0
+fi
+if [[ -n "${STUB_DOCKER_FAIL:-}" ]]; then
+	echo 'ERROR: denied: requested access to the resource is denied' >&2
+	exit 1
+fi
+if [[ -n "${STUB_NO_ARM64:-}" ]]; then
+	echo '{"manifests":[{"digest":"sha256:aaaa","platform":{"os":"linux","architecture":"amd64"}}]}'
+	exit 0
+fi
+cat << 'JSON'
+{"manifests":[
+ {"digest":"sha256:aaaa","platform":{"os":"linux","architecture":"amd64"}},
+ {"digest":"sha256:bbbb","platform":{"os":"linux","architecture":"arm64"}},
+ {"digest":"sha256:cccc","platform":{"os":"unknown","architecture":"unknown"}}]}
+JSON
+STUB
+cat > "$FIXTURE_DIR/bin/gh" << 'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+case "$2" in
+	view)
+		if [[ -n "${STUB_GH_VIEW_FAIL:-}" ]]; then
+			echo 'HTTP 401: Bad credentials' >&2
+			exit 1
+		fi
+		printf '%s\n' ${STUB_BUNDLES-actions-gateway-crds-v2.yaml.cosign.bundle SHA256SUMS.cosign.bundle} ;;
+	download)
+		dir="" pats=()
+		while (($#)); do
+			case "$1" in
+				--dir) dir="$2"; shift ;;
+				--pattern) pats+=("$2"); shift ;;
+			esac
+			shift
+		done
+		for p in "${pats[@]}"; do : > "$dir/$p"; done ;;
+esac
+STUB
+chmod +x "$FIXTURE_DIR/bin/docker" "$FIXTURE_DIR/bin/gh"
 
 out_text=""
 out_rc=0
@@ -91,8 +147,8 @@ out_rc=0
 run_verify() {
 	out_rc=0
 	: > "$COSIGN_LOG"
-	out_text="$(COSIGN="$FIXTURE_DIR/cosign" STUB_COSIGN_LOG="$COSIGN_LOG" \
-		"$SCRIPT" "$@" 2>&1)" || out_rc=$?
+	out_text="$(PATH="$FIXTURE_DIR/bin:$PATH" COSIGN="$FIXTURE_DIR/cosign" \
+		STUB_COSIGN_LOG="$COSIGN_LOG" "$SCRIPT" "$@" 2>&1)" || out_rc=$?
 }
 
 expect_rc() {
@@ -111,17 +167,20 @@ expect_rc 'missing version rejected' 2
 run_verify v1.2.3
 expect_rc 'every signature verified passes' 0
 
-# Every published artifact publish.yml signs must be checked, and the chart
-# artifacts take the tagless chart version.
-want_refs='ghcr.io/actions-gateway/gmc:v1.2.3
-ghcr.io/actions-gateway/agc:v1.2.3
-ghcr.io/actions-gateway/proxy:v1.2.3
-ghcr.io/actions-gateway/worker:v1.2.3
-ghcr.io/actions-gateway/wrapper:v1.2.3
-ghcr.io/actions-gateway/build-runner:v1.2.3
-ghcr.io/actions-gateway/charts/actions-gateway:1.2.3
-ghcr.io/actions-gateway/charts/actions-gateway-crds-v2:1.2.3'
-got_refs="$(awk '{print $NF}' "$COSIGN_LOG")"
+# Every published artifact publish.yml signs must be checked: each image, its
+# SBOM attestation on every per-arch manifest (never the attestation manifest),
+# the chart artifacts at the tagless chart version, and each blob bundle.
+want_refs=""
+for img in gmc agc proxy worker wrapper build-runner; do
+	want_refs+="verify ghcr.io/actions-gateway/$img:v1.2.3"$'\n'
+	want_refs+="verify-attestation ghcr.io/actions-gateway/$img@sha256:aaaa"$'\n'
+	want_refs+="verify-attestation ghcr.io/actions-gateway/$img@sha256:bbbb"$'\n'
+done
+want_refs+='verify ghcr.io/actions-gateway/charts/actions-gateway:1.2.3
+verify ghcr.io/actions-gateway/charts/actions-gateway-crds-v2:1.2.3
+verify-blob actions-gateway-crds-v2.yaml
+verify-blob SHA256SUMS'
+got_refs="$(awk '{ref = $NF; if ($1 == "verify-blob") sub(/.*\//, "", ref); print $1, ref}' "$COSIGN_LOG")"
 if [[ "$got_refs" == "$want_refs" ]]; then
 	pass 'verifies every signed artifact at the release version'
 else
@@ -149,6 +208,29 @@ else
 		"$unconstrained call(s) missing a constraint; calls:"$'\n'"$(< "$COSIGN_LOG")"
 fi
 
+# An attestation check that skipped --type would accept any predicate, and a
+# blob check must name the bundle that signs the subject it verifies.
+if grep -q '^verify-attestation .*--type spdxjson ' "$COSIGN_LOG" &&
+	! grep '^verify-attestation ' "$COSIGN_LOG" | grep -qv -- '--type spdxjson '; then
+	pass 'every attestation check requires the spdxjson predicate'
+else
+	fail 'every attestation check requires the spdxjson predicate' "calls:"$'\n'"$(< "$COSIGN_LOG")"
+fi
+if grep -q -- '--bundle [^ ]*/SHA256SUMS.cosign.bundle [^ ]*/SHA256SUMS$' "$COSIGN_LOG"; then
+	pass 'a blob check pairs each bundle with its own subject'
+else
+	fail 'a blob check pairs each bundle with its own subject' "calls:"$'\n'"$(< "$COSIGN_LOG")"
+fi
+
+# An index that lost a platform fails, though every manifest it has verifies.
+STUB_NO_ARM64=1 run_verify v1.2.3
+expect_rc 'an index without linux/arm64 fails' 1
+
+# A release missing the CRD manifest bundle fails, rather than verifying the
+# bundles it does carry and reporting green.
+STUB_BUNDLES='SHA256SUMS.cosign.bundle' run_verify v1.2.3
+expect_rc 'a release without the CRD bundle fails' 1
+
 # One bad signature must fail the run — the per-artifact OK/FAIL is printed, not
 # returned, so the aggregate exit code is the only thing a release cut reads.
 STUB_COSIGN_RC=1 run_verify v1.2.3
@@ -157,6 +239,14 @@ if [[ "$out_text" == *"signature verification FAILED"* ]]; then
 	pass 'a failed signature is reported'
 else
 	fail 'a failed signature is reported' "output: $out_text"
+fi
+# The retry hint swaps out the docker config, which on Docker Desktop is also
+# where buildx is found; without the plugin link the retry fails every lookup.
+# shellcheck disable=SC2016 # matching the literal hint text
+if [[ "$out_text" == *'ln -s ~/.docker/cli-plugins "$DOCKER_CONFIG/cli-plugins"'* ]]; then
+	pass 'the docker-config retry hint keeps the CLI plugins'
+else
+	fail 'the docker-config retry hint keeps the CLI plugins' "output: $out_text"
 fi
 
 # A check that never returns must fail the run rather than stall it: a hung
@@ -167,6 +257,41 @@ if [[ "$out_text" == *"TIMEOUT"* && "$out_text" == *"credential helper"* ]]; the
 	pass 'a hung signature check is reported as a timeout'
 else
 	fail 'a hung signature check is reported as a timeout' "output: $out_text"
+fi
+
+# The index lookup goes through the same credential helper, so it must hit the
+# same deadline rather than stall the run with no output. Six lookups at a 1 s
+# deadline take about 7 s; a kill the stub can ignore takes 6 x 30 s.
+started=$SECONDS
+STUB_DOCKER_SLEEP=30 COSIGN_TIMEOUT=1 run_verify v1.2.3
+elapsed=$((SECONDS - started))
+expect_rc 'a hung index lookup fails the run' 1
+if ((elapsed < 25)); then
+	pass "a hung index lookup that ignores SIGTERM is killed at the deadline (${elapsed}s)"
+else
+	fail 'a hung index lookup that ignores SIGTERM is killed at the deadline' "took ${elapsed}s"
+fi
+if [[ "$out_text" == *"TIMEOUT (resolving per-arch manifests)"* && "$out_text" == *"credential helper"* ]]; then
+	pass 'a hung index lookup is reported as a timeout'
+else
+	fail 'a hung index lookup is reported as a timeout' "output: $out_text"
+fi
+
+# A failed index lookup names docker's error.
+STUB_DOCKER_FAIL=1 run_verify v1.2.3
+if [[ "$out_text" == *"no per-arch manifests resolved: ERROR: denied"* ]]; then
+	pass 'a failed index lookup reports docker'"'"'s error'
+else
+	fail 'a failed index lookup reports docker'"'"'s error' "output: $out_text"
+fi
+
+# A failed asset listing names gh's error, not a missing bundle.
+STUB_GH_VIEW_FAIL=1 run_verify v1.2.3
+expect_rc 'a failed release listing fails the run' 1
+if [[ "$out_text" == *"gh release view: HTTP 401"* && "$out_text" != *"no actions-gateway-crds-v2.yaml.cosign.bundle"* ]]; then
+	pass 'a failed release listing reports gh'"'"'s error'
+else
+	fail 'a failed release listing reports gh'"'"'s error' "output: $out_text"
 fi
 
 if ((fails > 0)); then

@@ -768,7 +768,7 @@ make verify-release VERSION=vX.Y.Z
 make verify-release-compat VERSION=vX.Y.Z
 ```
 
-The second line runs the same image and chart signature check with the cosign v2 verifier that `COSIGN_COMPAT_VERSION` in `scripts/ci/pins.env` pins.
+The second line runs the same checks with the cosign v2 verifier that `COSIGN_COMPAT_VERSION` in `scripts/ci/pins.env` pins.
 The signer is cosign v3, and a check run with the signer's own version passes signatures that cosign v2 cannot read (Q1218).
 A compat failure is the same stop-ship as a signature failure.
 
@@ -776,33 +776,17 @@ A compat failure is the same stop-ship as a signature failure.
 > Pushing a stable tag whose `chart-publish` job failed therefore fails e2e on **every subsequent PR** until the publish is repaired (re-run the `publish.yml` run for the tag) or the tag is removed.
 > Prerelease (`-rc`) tags are ignored by the gate.
 
-This verifies the six image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`) plus the chart (whose tag is `X.Y.Z`, without the leading `v`) against the publish workflow's keyless identity.
-It needs no credentials once the GHCR packages are public.
-The equivalent explicit commands (and SBOM attestation retrieval) live in [security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification); each is a `cosign verify --certificate-identity-regexp '…/publish\.yml@refs/tags/v.*$' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' <ref>`.
+Each run checks every artifact against the publish workflow's keyless identity:
 
-`make verify-release` covers the OCI artifacts (images + both charts) but not the GitHub Release's **signed v2 CRD manifest** asset (Q276), which is a *blob* signature — verify it against the same identity with `verify-blob`.
-Download the manifest and its bundle from the release, then:
+- the six image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`);
+- the SPDX SBOM attestation on each image's `linux/amd64` and `linux/arm64` manifests, failing if either platform is missing from the index;
+- both chart signatures (tag `X.Y.Z`, without the leading `v`);
+- every `*.cosign.bundle` blob signature on the GitHub Release: the v2 CRD manifest (Q276), which must be present, and `SHA256SUMS` while `gag-migrate` ships.
 
-```bash
-cosign verify-blob --bundle actions-gateway-crds-v2.yaml.cosign.bundle \
-  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  actions-gateway-crds-v2.yaml >/dev/null && echo OK
-```
+It needs `docker` (for `buildx imagetools`), `jq` and an authenticated `gh`, and no registry credentials once the GHCR packages are public.
+The equivalent explicit commands (and SBOM attestation retrieval) live in [security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification); each pins `--certificate-identity-regexp '…/publish\.yml@refs/tags/v.*$' --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'`.
 
-A `cosign verify` failure is a **stop-ship**: do not announce the release until it passes.
-Spot-check one SBOM attestation too so the attestation path is exercised — SBOM attestations are bound to the **per-arch manifest digests**, not the index, so resolve one first (the full command set is in [security-operations.md § Retrieve and inspect the SBOM](security-operations.md#retrieve-and-inspect-the-sbom)):
-
-```bash
-digest="$(docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z --raw \
-  | jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest')"
-cosign verify-attestation --type spdxjson \
-  --certificate-identity-regexp '^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$' \
-  --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  "ghcr.io/actions-gateway/gmc@${digest}" >/dev/null && echo OK
-```
-
-Also spot-check that the index actually carries both platforms (`docker buildx imagetools inspect ghcr.io/actions-gateway/gmc:vX.Y.Z` should list `linux/amd64` and `linux/arm64` manifests).
+A failure in either target is a **stop-ship**: do not announce the release until it passes.
 
 Finally, confirm the **build-provenance attestation** is present and was minted by *this* workflow.
 The attestation binds to the **index** digest (unlike the per-arch SBOMs), so a tag reference resolves correctly:

@@ -731,7 +731,7 @@ jobs:
           done
           {
             printf '\n## Verify\n\n'
-            printf 'Verify every image + chart signature and the SLSA build provenance:\n\n'
+            printf 'Verify every image and chart signature, the per-arch SBOM attestations on each image, and the blob signatures on this release (needs docker, jq and an authenticated gh):\n\n'
             printf '    make verify-release VERSION=%s\n' "${TAG}"
           } >> "${notes}"
           # --prerelease only when the tag says so; gh otherwise auto-marks a
