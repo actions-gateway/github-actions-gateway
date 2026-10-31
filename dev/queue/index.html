@@ -4229,7 +4229,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1218/">Q1218</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Verify the first cosign v3 release candidate with Flux and cosign v2</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Reconcile the first cosign v3 release candidate's chart on Flux</a></td>
 <td><code>security</code> <code>ci</code></td>
 <td>🔲</td>
 <td>S</td>
@@ -4258,6 +4258,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A scale-set job held under <code>reason="worker_terminating"</code> mints a JIT config on every re-offer before the provisioner finds the previous …</td>
+</tr>
+<tr>
+<td><a href="Q1243/">Q1243</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.py">Mergeability watch reports no merge-queue eviction</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
 </tr>
 </tbody>
 </table>
