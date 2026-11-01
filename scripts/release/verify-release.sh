@@ -3,7 +3,8 @@
 # Verify the keyless cosign signatures of a published release: the seven images
 # (gmc, agc, proxy, worker, wrapper, build-runner, cache-runner) at the version
 # tag, the SPDX SBOM attestation on each image's per-arch manifests (amd64 and
-# arm64 both required), both Helm chart OCI artifacts, and every `*.cosign.bundle` blob signature on the GitHub Release.
+# arm64 both required), both Helm chart OCI artifacts, and every
+# `*.cosign.bundle` blob signature on the GitHub Release.
 # Backs `make verify-release VERSION=vX.Y.Z` and `make verify-release-compat`;
 # the identity/issuer constraints match what .github/workflows/publish.yml signs
 # with. See docs/operations/release.md.

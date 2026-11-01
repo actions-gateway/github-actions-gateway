@@ -7,7 +7,7 @@
 # selected with `--target` (docker-bake.hcl for the e2e bake; the publish.yml
 # and security-scan.yml matrices for release and scanning):
 #
-#   gmc  agc  proxy  worker  wrapper  build-runner  fakegithub
+#   gmc  agc  proxy  worker  wrapper  build-runner  cache-runner  fakegithub
 #
 # Why one file rather than six (the layout before this change): all six images
 # compile Go against the same workspace vendor/ tree, and BuildKit can only

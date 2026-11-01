@@ -32,7 +32,7 @@ Every action receives `ACTIONS_RUNTIME_TOKEN`, a JWT GitHub signs.
 Its `ac` claim lists the job's cache scopes with a permission each, and its `repository_id` claim names the repository.
 The claim is undocumented: one decode in [actions/toolkit#1053](https://github.com/actions/toolkit/issues/1053) (2022) shows `{"Scope":"refs/heads/master","Permission":3}`.
 
-[falcondev-oss/github-actions-cache-server](https://github.com/falcondev-oss/github-actions-cache-server) (MIT) verifies that token against the JWKS at `token.actions.githubusercontent.com`, takes the scope set from `ac`, writes only into a scope whose permission carries the write bit (2), and keys every entry by scope and repository (`cache_scope` and `WRITE_PERMISSION` in `src/scope.rs` at v10.0.0).
+[falcondev-oss/github-actions-cache-server](https://github.com/falcondev-oss/github-actions-cache-server) (MIT) verifies that token against the JWKS at `token.actions.githubusercontent.com`, takes the scope set from `ac`, writes only into a scope whose permission carries the write bit (2), and keys every entry by that scope and the token's repository (`cache_scope` and `WRITE_PERMISSION` in `src/scope.rs`, `save_identity` in `src/routes/cache.rs`, at v10.0.0).
 A client-supplied scope is never read.
 
 That makes the server apply GitHub's policy exactly, including whatever GitHub decides for an event an administrator marks untrusted, with no reimplementation in the gateway.

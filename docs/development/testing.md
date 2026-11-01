@@ -4193,7 +4193,7 @@ make vulncheck
 
 A finding usually means bumping the Go toolchain (`go` directive in `go.work` + every `go.mod`, kept in lockstep) for a stdlib CVE, or `go get`-ing the fixed dependency version for a module CVE.
 
-**trivy** — builds each of the seven images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
+**trivy** — builds each of the eight images (the seven published plus `fakegithub`) and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires `trivy` and `docker` on `PATH`) with:
 
 ```
@@ -4201,7 +4201,7 @@ make trivy-scan
 ```
 
 The five images we build from a minimal/distroless or scratch base (`gmc`, `agc`, `proxy`, `fakegithub`, and the `FROM scratch` `wrapper`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
-The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole **report-only** one (findings printed, never blocks).
+The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner, so its leg is **report-only** (findings printed, never blocks), as are those of `build-runner` and `cache-runner`, which are built `FROM` it.
 Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [the backlog](../queue/README.md) as Q70.
 
 The same `trivy` job also generates an **SBOM** (Software Bill of Materials, SPDX-JSON, via [`syft`](https://github.com/anchore/syft)) for each image it builds and uploads it as a `sbom-<image>.spdx.json` build artifact.
