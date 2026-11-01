@@ -33,6 +33,7 @@ type resolvedConfig struct {
 	fqdnBackend                 controller.FQDNBackend
 	podNamespace                string
 	podServiceAccount           string
+	deploymentName              string
 	cacheOptions                cache.Options
 }
 
@@ -103,6 +104,7 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 		fqdnBackend:                 fqdnBackend,
 		podNamespace:                podNamespace,
 		podServiceAccount:           getenv("POD_SERVICE_ACCOUNT"),
+		deploymentName:              getenv("DEPLOYMENT_NAME"),
 		cacheOptions:                cacheOptions,
 	}, nil
 }

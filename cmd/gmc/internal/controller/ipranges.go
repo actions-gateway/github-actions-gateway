@@ -34,9 +34,9 @@ import (
 // tenant CRs created at once would time out waiting for proxy readiness.
 //
 // Reconcile paths must tolerate an empty Snapshot. At startup the cache
-// is empty until IPRangeReconciler.Start completes its initial fetch;
-// any NetworkPolicies created with the empty snapshot will be patched
-// by the periodic reconciler on its next tick.
+// holds only what IPRangeStore seeded, which may be nothing, until
+// IPRangeReconciler.Start completes its initial fetch; any NetworkPolicies
+// created with an empty snapshot are patched once that fetch lands.
 type IPRangeCache struct {
 	mu    sync.RWMutex
 	cidrs []net.IPNet
@@ -46,13 +46,22 @@ type IPRangeCache struct {
 	// staleness window means GitHub may have rotated ranges out from under a frozen
 	// allowlist. Guarded by mu alongside cidrs.
 	lastRefresh time.Time
+	// seedExpiry is when a set restored by Seed stops being served (Q1227). Zero for
+	// a set a fetch returned. Guarded by mu.
+	seedExpiry time.Time
+	// now reads the clock for seedExpiry; nil uses time.Now.
+	now func() time.Time
 }
 
 // Snapshot returns a copy of the currently cached CIDRs. Safe to call
 // concurrently; the returned slice is owned by the caller.
+// A seeded set past its expiry reads as empty, as before any fetch.
 func (c *IPRangeCache) Snapshot() []net.IPNet {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+	if !c.seedExpiry.IsZero() && !c.clock().Before(c.seedExpiry) {
+		return []net.IPNet{}
+	}
 	out := make([]net.IPNet, len(c.cidrs))
 	copy(out, c.cidrs)
 	return out
@@ -66,6 +75,33 @@ func (c *IPRangeCache) Set(cidrs []net.IPNet) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cidrs = out
+	c.seedExpiry = time.Time{}
+}
+
+// Seed fills a cache no fetch has filled yet with a set restored from IPRangeStore,
+// stamping fetchedAt as its last refresh so EgressRulesStale measures the age of
+// the ranges in force rather than of the restart. Snapshot serves the set until
+// expires or until Set replaces it. It reports false, changing nothing, when a
+// refresh has already completed.
+func (c *IPRangeCache) Seed(cidrs []net.IPNet, fetchedAt, expires time.Time) bool {
+	out := make([]net.IPNet, len(cidrs))
+	copy(out, cidrs)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.lastRefresh.IsZero() {
+		return false
+	}
+	c.cidrs = out
+	c.lastRefresh = fetchedAt
+	c.seedExpiry = expires
+	return true
+}
+
+func (c *IPRangeCache) clock() time.Time {
+	if c.now != nil {
+		return c.now()
+	}
+	return time.Now()
 }
 
 // MarkRefreshed records the time of a successful IP-range refresh. Called by
@@ -272,6 +308,9 @@ type IPRangeReconciler struct {
 	// Metrics, when non-nil, counts each successful NetworkPolicy patch via
 	// actions_gateway_ip_range_updates_total. Optional so tests can omit it.
 	Metrics *Metrics
+	// Store, when non-nil, persists each successful fetch so a restart can seed the
+	// cache before its first fetch (Q1227).
+	Store *IPRangeStore
 
 	// APIServerCIDRs scopes the rebuilt direct-egress AGC NetworkPolicy's apiserver
 	// rule (Q145), so a refresh preserves the operator's apiserver scoping rather than
@@ -413,11 +452,19 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		log.Error("failed to fetch GitHub IP ranges", "error", err)
 		return err
 	}
+	fetchedAt := time.Now()
 	if r.Cache != nil {
 		r.Cache.Set(cidrs)
 		// Stamp the successful fetch so the ActionsGateway reconciler can report
 		// EgressRulesStale if this loop later stalls (Q157).
-		r.Cache.MarkRefreshed(time.Now())
+		r.Cache.MarkRefreshed(fetchedAt)
+	}
+	// A failed write costs only the next restart's head start, so it does not fail
+	// the refresh.
+	if r.Store != nil && len(cidrs) > 0 {
+		if err := r.Store.Save(ctx, cidrs, fetchedAt); err != nil {
+			log.Error("failed to persist GitHub IP ranges", "error", err)
+		}
 	}
 
 	// v1 pass (ipranges_v1.go): patch every managed v1 ActionsGateway's proxy

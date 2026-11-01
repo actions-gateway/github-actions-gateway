@@ -126,6 +126,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
+        # DEPLOYMENT_NAME makes this Deployment the owner of the ConfigMap the GMC
+        # persists GitHub IP ranges in, so helm uninstall removes it (Q1227).
+        - name: DEPLOYMENT_NAME
+          value: {{ include "actions-gateway.managerName" . | quote }}
         # AGC_IMAGE / PROXY_IMAGE are injected into every gateway the GMC
         # provisions. Required; digest-pinned unless allowFloatingImageTags.
         - name: AGC_IMAGE

@@ -19,6 +19,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
+  - [Non-breaking: the GMC keeps GitHub egress across a restart](#non-breaking-the-gmc-keeps-github-egress-across-a-restart)
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
@@ -251,6 +252,20 @@ A worker that never left `Pending` because it was never scheduled was already ha
 These workers also stop adding samples to `actions_gateway_job_duration_seconds`, which already skipped a worker that never started a container, so where image pulls are slow or broken the series' count drops and its percentiles shift.
 
 **Rolling back** returns these workers to the unstarted-job timeout.
+
+### Non-breaking: the GMC keeps GitHub egress across a restart
+
+**Who is affected:** every install whose proxy pools or direct-egress gateways use the default `CIDR` egress mode.
+Nothing to do.
+
+A restarted GMC used to give those pools no GitHub egress until its first `api.github.com/meta` fetch succeeded, which a rate-limited fetch could hold off for up to an hour.
+The GMC now writes each successful fetch to a ConfigMap named `actions-gateway-gmc-ip-ranges` in its own namespace and seeds itself from it at startup (Q1227).
+A copy as old as the `EgressRulesStale` window (49 hours on the default refresh) is not used, and a seeded copy stops being used at that age even if no fetch has succeeded.
+The ConfigMap is created on the first successful fetch after the upgrade and is owned by the GMC's Deployment, so `helm uninstall` deletes it with the Deployment.
+An install that does not set the chart's `DEPLOYMENT_NAME` environment variable on the GMC writes it with no owner, and it is left behind on uninstall.
+Anything that recreates the Deployment rather than updating it (`helm upgrade --force-replace`, renaming the release, or `kubectl delete deployment`) deletes the ConfigMap too, so the next GMC start waits for its first fetch.
+
+**Rolling back** returns a restart to waiting for the first fetch; the older GMC ignores the ConfigMap.
 
 ### Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner
 

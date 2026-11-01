@@ -621,6 +621,10 @@ The labels above are what make all of these targetable; the secure floor stays G
 ### Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in
 
 By default the GMC expresses the proxy pool's GitHub allowlist as **IP CIDR ranges**, refreshed from `api.github.com/meta` every 24h (`egressPolicyMode: CIDR`).
+The GMC keeps the last fetched set in the `actions-gateway-gmc-ip-ranges` ConfigMap in its own namespace and seeds itself from it at startup, so a restart keeps GitHub egress.
+Anyone who can write that ConfigMap can set the ranges a restarted GMC serves, up to and including a default route, for every `CIDR`-mode proxy pool until the GMC's first successful fetch replaces them, which a rate-limited `/meta` can delay for up to the 49-hour window.
+The GMC checks only that each entry parses, not its width, so grant write access to ConfigMaps in the GMC namespace only to whoever you trust to administer the GMC itself.
+A copy as old as the `EgressRulesStale` window, or with any unreadable entry, is refused, never partly used.
 This works on every NetworkPolicy-enforcing CNI and needs no DNS awareness.
 If your cluster enforces DNS-based egress, you can instead have the GMC express the allowlist by **hostname** — no CIDR feed to keep current.
 
