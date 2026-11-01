@@ -529,12 +529,17 @@ const (
 	ConditionGitHubEgressIncomplete = "GitHubEgressIncomplete"
 
 	// ReasonRefreshStalled is the EgressRulesStale=True reason (the last successful
-	// GitHub IP-range refresh is older than the staleness window). ReasonRefreshCurrent
-	// clears it (EgressRulesStale=False after a fresh refresh); ReasonRefreshPending is
-	// the False reason in the no-evidence cases (unmanaged/FQDN/first-refresh-pending).
-	ReasonRefreshStalled = "RefreshStalled"
-	ReasonRefreshCurrent = "RefreshCurrent"
-	ReasonRefreshPending = "RefreshPending"
+	// GitHub IP-range refresh is older than the staleness window).
+	// ReasonRefreshNeverSucceeded is the True reason while the GMC holds no ranges at
+	// all, from neither a fetch nor its persisted copy, so a CIDR-mode policy carries
+	// no GitHub rule and GitHub egress is denied (Q1228). ReasonRefreshCurrent clears
+	// it (EgressRulesStale=False after a fresh refresh); ReasonRefreshPending is the
+	// False reason where the policy is not CIDR-refreshed (unmanaged/FQDN) or no
+	// refresh loop is wired.
+	ReasonRefreshStalled        = "RefreshStalled"
+	ReasonRefreshNeverSucceeded = "RefreshNeverSucceeded"
+	ReasonRefreshCurrent        = "RefreshCurrent"
+	ReasonRefreshPending        = "RefreshPending"
 
 	// ReasonApplianceRangesRequired is the GitHubEgressIncomplete=True reason: a GHES
 	// referrer is bound and no destinationCIDRs were supplied. ReasonGitHubEgressAllowed

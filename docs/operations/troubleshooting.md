@@ -782,7 +782,14 @@ If that refresh loop stalls (GitHub meta API unreachable, persistent fetch error
 GitHub periodically rotates its published IP ranges, so a frozen allowlist eventually drops egress to the new ranges silently.
 The condition trips when the last successful refresh is older than the staleness window (just over two refresh cycles), so a single missed/slow refresh does not false-trip it.
 It is advisory and does **not** gate `Ready` — existing egress keeps working until GitHub rotates.
-It is only evaluated for gateways whose proxy `NetworkPolicy` is gateway-managed (`spec.proxy.managedNetworkPolicy` unset or `true`).
+It is only evaluated for gateways whose proxy `NetworkPolicy` is gateway-managed (`spec.proxy.managedNetworkPolicy` unset or `true`), and on an `EgressProxy` only in `CIDR` mode.
+
+The reason says which of two states you are in:
+
+| Reason | Meaning | Where to go |
+|---|---|---|
+| `RefreshStalled` | The ranges in force are older than the staleness window. Existing egress works until GitHub rotates. | The diagnostics below. |
+| `RefreshNeverSucceeded` | The GMC holds no ranges at all, from neither a fetch nor its persisted copy. The policy carries no GitHub rule, so GitHub egress is denied now. | [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start). |
 
 **Diagnostics.**
 
@@ -809,7 +816,8 @@ If GitHub's meta API is down, no action is needed beyond waiting — the allowli
 **Symptoms.** After the GMC starts or restarts, tenants acquire no jobs.
 The proxy pool logs `upstream dial failed` with an `i/o timeout` to a GitHub address, and answers the AGC `502 upstream unavailable`.
 The pool's `NetworkPolicy` has a DNS egress rule and no GitHub rule.
-`EgressRulesStale` does **not** fire: it measures how long ago the last refresh succeeded, and here none has.
+The `EgressProxy` (or v1 `ActionsGateway`) reports `EgressRulesStale=True` with reason `RefreshNeverSucceeded`, and `Ready` stays `True`, because `Ready` measures proxy pods rather than their egress.
+The `ActionsGatewayEgressRulesStale` alert fires once the state has held for 15 minutes.
 
 **Cause.** A fresh GMC has no GitHub IP ranges to program until its first `api.github.com/meta` fetch succeeds, unless it can restore them from its own namespace.
 The GMC writes each successful fetch to the `actions-gateway-gmc-ip-ranges` ConfigMap and seeds itself from that copy at startup, but refuses the copy when it is as old as the `EgressRulesStale` window (49 hours on the default 24-hour refresh), unreadable in any entry, or stamped in the future.
@@ -821,6 +829,10 @@ When several GMCs, or anything else, share one egress IP, that budget can be spe
 **Diagnostics.**
 
 ```sh
+# The condition names this state directly.
+kubectl get egressproxy -n <namespace> <name> \
+  -o jsonpath='{range .status.conditions[?(@.type=="EgressRulesStale")]}{.status} {.reason}: {.message}{"\n"}{end}'
+
 # Whether the start seeded from the persisted copy, and if not, why it was refused.
 kubectl logs -n <gmc-namespace> deploy/<gmc> | grep -i "persisted copy"
 

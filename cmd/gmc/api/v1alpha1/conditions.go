@@ -74,11 +74,14 @@ const (
 	ReasonRunnerGroupsImpaired   = "RunnerGroupsImpaired"
 	ReasonAllRunnerGroupsHealthy = "AllRunnerGroupsHealthy"
 	// ReasonRefreshStalled is the EgressRulesStale=True reason (the last successful
-	// GitHub IP-range refresh is older than the staleness window). ReasonRefreshCurrent
-	// clears it (EgressRulesStale=False). ReasonRefreshPending is the False reason
-	// before the first refresh has completed (startup) or when the gateway's proxy
-	// NetworkPolicy is unmanaged — in both cases no staleness can yet be asserted.
-	ReasonRefreshStalled = "RefreshStalled"
-	ReasonRefreshCurrent = "RefreshCurrent"
-	ReasonRefreshPending = "RefreshPending"
+	// GitHub IP-range refresh is older than the staleness window).
+	// ReasonRefreshNeverSucceeded is the True reason while the GMC holds no ranges at
+	// all, so the proxy NetworkPolicy carries no GitHub rule (Q1228).
+	// ReasonRefreshCurrent clears it (EgressRulesStale=False). ReasonRefreshPending is
+	// the False reason when the gateway's proxy NetworkPolicy is unmanaged or no
+	// refresh loop is wired — no staleness can be asserted.
+	ReasonRefreshStalled        = "RefreshStalled"
+	ReasonRefreshNeverSucceeded = "RefreshNeverSucceeded"
+	ReasonRefreshCurrent        = "RefreshCurrent"
+	ReasonRefreshPending        = "RefreshPending"
 )

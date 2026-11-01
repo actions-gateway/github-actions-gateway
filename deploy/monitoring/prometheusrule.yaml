@@ -215,7 +215,7 @@ spec:
           annotations:
             runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayegressrulesstale"
             summary: "GitHub egress allowlist stale for {{ $labels.name }} in {{ $labels.namespace }}"
-            description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges."
+            description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges. Reason RefreshNeverSucceeded means no ranges have loaded at all and GitHub egress is already denied."
 
         # Ticket: a GHES tenant's egress allowlist can't reach its appliance (Q506, Q537)
         - alert: ActionsGatewayGitHubEgressIncomplete

@@ -354,8 +354,10 @@ type ActionsGatewayStatus struct {
 //                        window (just over two of the ~24h refresh cycles), so a
 //                        stalled refresh loop may have let the proxy NetworkPolicy
 //                        drift from GitHub's published ranges (reason
-//                        RefreshStalled; RefreshCurrent clears it, RefreshPending
-//                        before the first refresh or for an unmanaged NP). Does NOT
+//                        RefreshStalled; RefreshNeverSucceeded while no ranges have
+//                        loaded at all, so the NP carries no GitHub rule (Q1228);
+//                        RefreshCurrent clears it, RefreshPending for an unmanaged
+//                        NP). Does NOT
 //                        gate Ready. Only evaluated for managed proxy NetworkPolicy.
 //                        Exported as the gauge actions_gateway_egress_rules_stale.
 // ProxyQuota{Pressure,Exceeded} are mutually exclusive and do NOT gate Ready —

@@ -200,6 +200,7 @@ See [The Reason Is `PodsNotStarting`: the Image Will Not Pull](troubleshooting.m
 ### ActionsGatewayEgressRulesStale
 
 **Page.** The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy `NetworkPolicy` may drift from GitHub's published ranges.
+With reason `RefreshNeverSucceeded` it is worse: the GMC holds no ranges at all, so GitHub egress is already denied and jobs stay queued.
 See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-reports-egressrulesstale).
 
 ### ActionsGatewayGitHubEgressIncomplete

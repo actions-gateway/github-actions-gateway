@@ -106,6 +106,7 @@ const (
 	ReasonRunnerSetsImpaired       = apiconditions.ReasonRunnerSetsImpaired
 	ReasonAllRunnerSetsHealthy     = apiconditions.ReasonAllRunnerSetsHealthy
 	ReasonRefreshStalled           = apiconditions.ReasonRefreshStalled
+	ReasonRefreshNeverSucceeded    = apiconditions.ReasonRefreshNeverSucceeded
 	ReasonRefreshCurrent           = apiconditions.ReasonRefreshCurrent
 	ReasonRefreshPending           = apiconditions.ReasonRefreshPending
 	ReasonSustainedRateLimit       = apiconditions.ReasonSustainedRateLimit
