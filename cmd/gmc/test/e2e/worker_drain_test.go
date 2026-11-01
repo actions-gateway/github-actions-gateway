@@ -62,8 +62,10 @@ import (
 // stays unrecovered — and it is the spec that caught a mark-only rule crossing it: a
 // real kubelet publishes a transient Failed-with-deletionTimestamp even for a deleted
 // worker whose container never started, so recovery must (and does) additionally
-// require a recorded container exit that the mark predates. This worker has none, no
-// report ever reached GitHub, and "no rerun fired" remains the correct assertion. The
+// require a recorded container exit that the mark predates. This worker has none, so it
+// takes the never-started handling instead (Q1231): its run is force-cancelled and
+// re-run only once the group places a worker again, which nothing in this spec does,
+// so "no rerun fired" remains the correct assertion. The
 // recovered side — a running worker publishing Failed with the mark and the exit — is
 // the envtest TerminalWithMark pair. Design boundary:
 // docs/design/04-operational-flows.md §4.2; operator-facing behaviour:

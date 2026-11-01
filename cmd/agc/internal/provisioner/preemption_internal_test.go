@@ -75,8 +75,9 @@ func shutDown(pod *corev1.Pod, reason string) *corev1.Pod {
 // kubelet does for a worker whose job was cut off.
 func ranRunner(pod *corev1.Pod) *corev1.Pod {
 	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
-		Name:  WorkerContainerName,
-		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+		Name:        WorkerContainerName,
+		State:       corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+		ContainerID: "containerd://runner",
 	}}
 	return pod
 }
@@ -106,6 +107,7 @@ func TestLostToNodeShutdown(t *testing.T) {
 	}
 	running := status(corev1.ContainerState{Running: &corev1.ContainerStateRunning{}})
 	terminated := status(corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 1}})
+	terminated[0].ContainerID = "containerd://runner"
 	waiting := status(corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}})
 	tests := []struct {
 		name       string
@@ -206,6 +208,7 @@ func TestLostToNodeShutdownBeforeStart(t *testing.T) {
 	}
 	running := status(corev1.ContainerState{Running: &corev1.ContainerStateRunning{}})
 	terminated := status(corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}})
+	terminated[0].ContainerID = "containerd://runner"
 	waiting := status(corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}})
 	tests := []struct {
 		name       string

@@ -18,6 +18,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
+  - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
   - [Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically](#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically)
@@ -237,6 +238,19 @@ Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2
 
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
+
+### Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run
+
+**Who is affected:** anyone whose workers can be reaped by `pendingPodDeadline` or drained while scheduled but still `Pending`, typically pulling a large or unpullable image.
+Nothing to do.
+
+A real kubelet deleting such a worker publishes a transient `Failed` and records its never-started container as terminated with no start, exit or container ID (measured on a kind cluster).
+The AGC read that record as a container that had run, so on the classic tier the job was reported failed with no force-cancel and its run waited out GitHub's ~15-minute unstarted-job timeout, and on the `ScaleSet` tier an external delete of such a worker was not recovered at all.
+Both now take the never-started handling: the run is force-cancelled at once and re-run once the owner places a worker again, counted under `abandoned_run_force_cancels_total` (Q1231).
+A worker that never left `Pending` because it was never scheduled was already handled this way.
+These workers also stop adding samples to `actions_gateway_job_duration_seconds`, which already skipped a worker that never started a container, so where image pulls are slow or broken the series' count drops and its percentiles shift.
+
+**Rolling back** returns these workers to the unstarted-job timeout.
 
 ### Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner
 

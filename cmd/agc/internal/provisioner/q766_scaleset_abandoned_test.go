@@ -408,8 +408,9 @@ func TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel(t *testing.T) {
 		AnnotationStartedJobID: "job-222",
 	}), corev1.PodReasonTerminationByKubelet)
 	ran.Status.ContainerStatuses = []corev1.ContainerStatus{{
-		Name:  "runner",
-		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+		Name:        "runner",
+		State:       corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+		ContainerID: "containerd://runner",
 	}}
 
 	f := newAbandonedScaleSetFixture(t, http.StatusAccepted, pulling, ran)
