@@ -85,6 +85,63 @@ func DupeKey(line string) string {
 	return strings.Join(markerIDs(line, lineAnnotRE), ",")
 }
 
+// Rebound refuses a bullet whose binding one side changed unless the other side
+// left the base bullet exactly as it was, or made the identical change.
+//
+// MarkerKey keys a bullet by its whole binding, so a changed binding reaches the
+// set merge as the base bullet deleted and a new one added. Against an untouched
+// other side that is the right answer. Against any other it is wrong without
+// being uncertain: two sides each dropping a different ID both delete the base
+// bullet and each add their own, and a side that deleted the bullet loses to the
+// one that rebound it. Records whose binding MarkerKey cannot read are left for
+// the merge to refuse.
+func Rebound(base, ours, theirs []string) error {
+	index := func(recs []string) map[string]string {
+		m := make(map[string]string, len(recs))
+		for _, rec := range recs {
+			if k := MarkerKey(rec); k != "" {
+				m[k] = rec
+			}
+		}
+		return m
+	}
+	b, o, t := index(base), index(ours), index(theirs)
+
+	for _, s := range []struct {
+		recs        []string
+		side, other map[string]string
+	}{{ours, o, t}, {theirs, t, o}} {
+		for _, rec := range s.recs {
+			k := MarkerKey(rec)
+			if _, kept := b[k]; k == "" || kept || s.other[k] == rec {
+				continue
+			}
+			ids := strings.Split(k, ",")
+			for _, brec := range base {
+				bk := MarkerKey(brec)
+				if _, held := s.side[bk]; bk == "" || held || !sharesID(ids, bk) {
+					continue
+				}
+				if s.other[bk] != brec {
+					return fmt.Errorf("the bullet bound to %s was rebound to %s on one side and changed or removed on the other", bk, k)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func sharesID(ids []string, key string) bool {
+	for _, id := range strings.Split(key, ",") {
+		for _, want := range ids {
+			if id == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // List is one run of annotated bullets: the prose that precedes it, one encoded
 // record per bullet, the blank-line count that follows each of them, and the
 // count that trails the list as a whole.
