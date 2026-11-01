@@ -167,6 +167,15 @@ The server's `cache_requests_total` read `hit` 1 and `miss` 2 after both runs: t
 
 **Not measured.** A fork pull request's scope, which needs a fork; BuildKit's `type=gha` cache, which needs a Docker daemon in the job and rides the same URL by source read only; and the tight-egress profile, since kindnet does not enforce egress negatives.
 
+## The v10.0.0 re-run (2026-11-01)
+
+The same kind setup, fresh, with this branch's gateway images and `cache-runner`, falcondev `10.0.0` by digest, and the server deployed from `deploy/gha-cache/` rather than the spike's hand-written manifests: non-root, read-only root filesystem, and the base's two NetworkPolicies.
+
+- **Save and restore: hold.** [Run 41361268570](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361268570) read `ACTIONS_RESULTS_URL` as the in-cluster server, saved key `q215-41361268570-1`, restored it in a second job on another worker pod, and round-tripped the artifact through the server's forward, `cmp` matching the two.
+  The server counted `cache_uploads_total` 1, a hit of 1, a miss of 0 and 278 bytes stored, and GitHub's cache held no `q215-` key while the same listing returned others.
+- **Sibling branch: holds.** [Run 41361503439](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361503439) asked for the same key from another branch and got `Cache not found`, and the server's miss count went from 0 to 1, so the miss is the server's answer, not a lost connection.
+- **The ingress policy: holds for the API server.** Reading `/metrics` through the API server's service proxy timed out, because the server admits only workload pods; the readings above came through `kubectl port-forward`, which enters through the kubelet.
+
 ## Open decisions
 
 - **Eviction.** falcondev's defaults are 90 days unused and a volume-percentage cap.
