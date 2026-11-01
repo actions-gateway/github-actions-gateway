@@ -755,7 +755,9 @@ So the recovery first lists the set's workers, and where one carries that job as
 The set is still one runner short, though, and the job left without one is a different job, which the recovery names and cancels instead (Q1195).
 It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
 A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
-The recovery names no job while any worker is `Running` with no start recorded, because that runner may hold the job already with its `JobStarted` still in flight; a stranded job found then is not recovered, and nothing re-checks it.
+The recovery names no job while any worker is `Running` with no start recorded, because that runner may hold the job already with its `JobStarted` still in flight.
+It walks once more after that start lands instead, from the abandoned-run sweeper's 30-second tick: at most once per lost worker, and for at most ten minutes after the loss, inside GitHub's ~15-minute unstarted-job timeout (Q1235).
+The waiting walks are in process memory like the sweeper's other set, so a restart drops them and the job then waits out that timeout.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
 A finished job leaves the record only in a later save, so its worker pod can be gone first, at once under `completedPodTTL: 0s`.
 The listener therefore marks a job's record started when its `JobStarted` arrives, and the walk names no job whose record is marked.
@@ -819,6 +821,9 @@ The listener records each `JobStarted` on its runner's pod as `actions-gateway.c
 The same start replaces the pod's `run-id` and `repository` with the started job's run, which is what eviction recovery re-runs (Q1152).
 A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job (Q1169).
 Where its container never ran, the same holds while another worker that can still be given a job has started nothing, since that worker may take it.
+Where no such idle worker exists, a worker whose container never ran and whose job another worker started still leaves the set one runner short, so recovery names the job left without one and force-cancels its run, as for a reaped worker (Q1195, Q1235).
+A `Running` worker with no start recorded counts as idle here, so this walk is never deferred for a re-check.
+That job never started, so it takes the abandoned arm's action rather than `rerun-failed-jobs`: it counts as `cause="abandoned"`, waits for capacity, and spends one slot of its run's re-run budget, keyed by the lost worker.
 A container that ran is not judged that way, because the `started-job-id` stamp lands asynchronously and is never written on a terminal pod, so a runner that took its own job and was disrupted before the stamp also reads as having started nothing.
 A pod marked as a disruption target never counts as able to take a job, so the victims of one preemption do not stand in for each other.
 A start also lifts a deadline set while that runner was idle, and moves it to another idle worker, since the runner that would have taken that job is now the one with nothing to run.

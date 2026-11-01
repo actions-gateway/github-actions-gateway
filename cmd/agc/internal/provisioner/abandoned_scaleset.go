@@ -114,7 +114,7 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 			"detection", detection, "runID", pod.Annotations[AnnotationRunID])
 		return closedChan()
 	} else if workers.startedElsewhere(key.Name, pod.Name) {
-		stranded, found := p.strandedScaleSetJob(ctx, target, workers, pod.Name, log)
+		stranded, found := p.strandedJobFor(ctx, target, workers, pod.Name, log)
 		if !found {
 			log.Info("scale-set worker was removed before it ran, but another worker's runner started the job it was created for, and the job left without a runner could not be named; not force-cancelling",
 				"detection", detection, "runID", pod.Annotations[AnnotationRunID])
@@ -145,14 +145,7 @@ func (p *Provisioner) recoverAbandoned(ctx context.Context, target Target, pod *
 
 	log.Warn("scale-set worker pod was removed before it ran; force-cancelling its run",
 		"detection", detection, "runID", runID)
-	done := make(chan struct{})
-	fctx := context.WithoutCancel(ctx)
-	go func() {
-		defer close(done)
-		p.forceCancelAbandonedRun(fctx, target, owner, repo, runID, evictionTierScaleSet, log,
-			rerunDisruption{key: pod.Name, job: job})
-	}()
-	return done
+	return p.forceCancelInBackground(ctx, target, pod.Name, owner, repo, runID, job, log)
 }
 
 // abandonedAwaitingRecovery reports whether pod is a scale-set worker that was
@@ -211,9 +204,8 @@ type InFlightLister interface {
 // podName's job was created for a job of its own, which some other worker may have
 // started in turn, until a job nobody started. That job's own worker is busy with
 // another job, and the walk declines while any runner's start may be unrecorded
-// (scaleSetWorkerSet.strandedJob), so a job a runner has just taken is not named. That
-// leaves a residual: a stranded job found while such a runner exists is not recovered,
-// and nothing re-checks it.
+// (scaleSetWorkerSet.strandedJob), so a job a runner has just taken is not named;
+// strandedJobFor registers that decline for one re-check (Q1235).
 //
 // A worker's name is a hash of the job it was created for, so the walk reads that job,
 // and the run identity to recover it by, from the listener's in-flight set; the
@@ -229,28 +221,4 @@ func (p *Provisioner) strandedScaleSetJob(ctx context.Context, target Target, wo
 		return OrphanedWorker{}, false
 	}
 	return workers.strandedJob(target.Key().Name, podName, inFlight)
-}
-
-// assignedJobAccountedFor reports whether the job a never-started scale-set worker was
-// created for is held by another worker of its set: one whose runner started it, or,
-// with idleTakes, any live worker whose runner has started nothing and so may yet take
-// it (scaleSetWorkerSet.serving's rule). GitHub gives a scale-set job to whichever of the
-// set's runners asks first, so the pod's run identity, stamped from that job, names a run
-// that lost nothing where either holds (Q1169).
-//
-// The abandoned path passes idleTakes false, except for a worker lost with its node.
-// Its worker was reaped for never being placed, and the idle workers beside it are most
-// often waiting on the same capacity, so counting them would suppress the recovery Q766
-// exists for.
-//
-// A failed List answers false, which keeps the recovery as it was before the check: the
-// check only ever withholds an action, so an unreadable set must not withhold it.
-func (p *Provisioner) assignedJobAccountedFor(ctx context.Context, target Target, pod *corev1.Pod, idleTakes bool, log *slog.Logger) bool {
-	workers, err := p.liveScaleSetWorkers(ctx, target)
-	if err != nil {
-		log.Warn("could not list the set's workers to check whether another one holds this worker's job; recovering it by its own run identity",
-			"error", err)
-		return false
-	}
-	return workers.startedElsewhere(target.Key().Name, pod.Name) || (idleTakes && workers.idleBesides(pod.Name))
 }

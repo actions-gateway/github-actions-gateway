@@ -276,6 +276,11 @@ func (s *AbandonedRerunSweeper) Start(ctx context.Context) error {
 			if n := len(s.p.sweepAbandonedReruns(ctx)); n > 0 {
 				log.Info("re-ran abandoned runs whose capacity returned", "count", n)
 			}
+			// The same tick re-checks stranded-job walks that declined (Q1235), so the
+			// re-check does not depend on a reconcile following the start's stamp.
+			if n := len(s.p.sweepStrandedRechecks(ctx)); n > 0 {
+				log.Info("force-cancelled jobs left without a runner, found on re-check", "count", n)
+			}
 		}
 	}
 }

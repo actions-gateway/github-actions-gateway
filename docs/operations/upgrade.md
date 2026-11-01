@@ -240,13 +240,14 @@ The guard denies the GMC that delete once the namespace is no longer a tenant, s
 
 ### Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner
 
-**Who is affected:** `ScaleSet` sets whose workers schedule unevenly, so a worker is reaped `Pending` after another runner of the set took the job it was created for.
+**Who is affected:** `ScaleSet` sets whose workers schedule unevenly, so a worker is reaped `Pending`, or evicted, preempted or drained before its container ran, after another runner of the set took the job it was created for.
 Nothing to do.
 
 Since Q1169 such a reap cancels nothing, because the worker's own job is running.
 The set is still one runner short, and the job that lost its runner used to wait out GitHub's unstarted-job timeout and need a manual re-run.
 The AGC now names that job from the listener's in-flight record, force-cancels its run, and re-runs it once capacity returns, as for any abandoned worker (Q1195).
-It names none while a `Running` worker's job start may not be recorded yet, and then behaves as before.
+The evicted, preempted and drained shapes take the same path when no idle worker of the set could take a job instead (Q1235).
+It names none while a `Running` worker's job start may not be recorded yet, and walks again once the start lands, for up to ten minutes after the loss (Q1235).
 
 **Rolling back** returns that job to waiting out the timeout.
 

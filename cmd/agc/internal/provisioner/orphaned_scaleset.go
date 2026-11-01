@@ -301,7 +301,8 @@ func (s scaleSetWorkerSet) idleBesides(podName string) bool {
 // verdict is driven by a pod NOT being listed, so an informer cache that has not caught
 // up would read as every worker in the set having been disrupted. Once per process per
 // set, so the uncached read costs nothing in steady state. Recovery of a never-started
-// worker reads it too (assignedJobAccountedFor), once per recovered pod.
+// worker reads it too, once per recovered pod, and so does each stranded-job re-check
+// (sweepStrandedRechecks), once per sweep tick while one waits.
 func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (scaleSetWorkerSet, error) {
 	key := target.Key()
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}
