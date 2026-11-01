@@ -425,6 +425,7 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 		spec.QuotaRetryDelay = rs.Spec.QuotaRetryDelay.Duration
 	}
 	spec.ScaleUp = scaleUpConfigFromV2(rs.Spec.ScaleUp)
+	spec.MemoryRetry = memoryRetryPolicy(rs.Spec.Sizing)
 	return spec, nil
 }
 

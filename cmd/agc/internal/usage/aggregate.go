@@ -25,11 +25,11 @@ const (
 	MinSamplesForDrift = 20
 )
 
-// memLimitHeadroom is the multiplier over the observed maximum per-job memory
+// MemLimitHeadroom is the multiplier over the observed maximum per-job memory
 // peak used for the recommended memory limit — the OOM-headroom factor the
 // dogfood right-sizing exercise validated (peak × 1.3–1.4; the top of that
 // band, since exceeding the limit kills the job).
-const memLimitHeadroom = 1.4
+const MemLimitHeadroom = 1.4
 
 // Rounding steps for recommended values: sizing is bucket-granular, and coarse
 // increments keep the status stable across small distribution shifts.
@@ -210,7 +210,7 @@ func (a *setAgg) recommendations() []agcv2alpha1.ContainerSizingRecommendation {
 			// Memory only — a CPU limit would throttle bursty jobs for no
 			// packing benefit (see the type's doc comment).
 			Limits: corev1.ResourceList{
-				corev1.ResourceMemory: roundUpBytes(c.mem.max*memLimitHeadroom, memStepBytes),
+				corev1.ResourceMemory: roundUpBytes(c.mem.max*MemLimitHeadroom, memStepBytes),
 			},
 			ObservedPeak: corev1.ResourceList{
 				corev1.ResourceCPU:    roundUpCores(c.cpu.max, 1),

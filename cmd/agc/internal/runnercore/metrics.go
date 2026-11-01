@@ -69,7 +69,8 @@ type Metrics struct {
 	// opportunistic work than the tenant sized for, a climbing `node_shutdown` rate means
 	// Spot or preemptible nodes are reclaimed under running jobs (Q1179), and a climbing
 	// `abandoned` rate means workers are not being placed at all before
-	// pendingPodDeadline reaps them (Q691). No diagnosis
+	// pendingPodDeadline reaps them (Q691). A climbing `oom` rate (scale-set only, Q1183)
+	// means jobs are outgrowing the memory a sizing profile gave them. No diagnosis
 	// applies to another. The retry budget is NOT split by cause: it stays one hard cap
 	// per run_id across every cause together.
 	EvictionRetries          *prometheus.CounterVec
@@ -98,7 +99,12 @@ type Metrics struct {
 	//     before the reservation, so no slot is spent.
 	//   - own_limit (cause eviction, Q1177): the kubelet evicted the worker for exceeding
 	//     its own ephemeral-storage or emptyDir limit, which a re-run with the same limit
-	//     repeats. Decided at detection, so no slot is spent.
+	//     repeats. Decided at detection, so no slot is spent. With cause oom (scale-set
+	//     only, Q1183), the runner was killed at a memory limit no sizing profile can
+	//     raise.
+	//   - same_class_again, breaker_open (cause oom, scale-set only, Q1183): the job was
+	//     killed again after a retry raised its limit, or too many runs were killed at
+	//     once. No slot is spent.
 	//
 	// It is counted so a re-run that did not happen is visible rather than
 	// indistinguishable from a recovery that never armed.
@@ -266,22 +272,22 @@ func NewMetrics() *Metrics {
 
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_total",
-			Help: "Jobs automatically re-queued after a worker pod disruption, by acquisition tier (classic, scaleset) and cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished). cause=vanished is scale-set only: it names a worker already gone when the AGC started, which the classic tier cannot observe.",
+			Help: "Jobs automatically re-queued after a worker pod disruption, by acquisition tier (classic, scaleset) and cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom). cause=vanished is scale-set only: it names a worker already gone when the AGC started, which the classic tier cannot observe. cause=oom is scale-set only: a runner killed at its memory limit, re-run with a higher limit under a right-sizing profile.",
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_exhausted_total",
-			Help: "Disrupted jobs where retry budget was exhausted, by acquisition tier (classic, scaleset) and cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished). cause=vanished is scale-set only, as above.",
+			Help: "Disrupted jobs where retry budget was exhausted, by acquisition tier (classic, scaleset) and cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom). cause=vanished and cause=oom are scale-set only, as above.",
 		}, []string{"namespace", "runner_group", "tier", "cause"}),
 
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_failures_total",
-			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished), and reason (run_never_concluded, api_error, conclusion_unknown, budget_unrecorded). cause=vanished is scale-set only, as above; reason=conclusion_unknown is a run read that never reached a verdict inside the window, on the deletion arm's cancel check or, on the scale-set tier, the read before the budget is reserved; reason=budget_unrecorded is scale-set only, a budget decision the failure ledger could not record, so the re-run was withheld.",
+			Help: "Disruption recoveries whose re-run was never accepted by GitHub, so the job requires a manual re-run despite the spent retry slot, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom), and reason (run_never_concluded, api_error, conclusion_unknown, budget_unrecorded). cause=vanished and cause=oom are scale-set only, as above; reason=conclusion_unknown is a run read that never reached a verdict inside the window, on the deletion arm's cancel check or, on the scale-set tier, the read before the budget is reserved; reason=budget_unrecorded is scale-set only, a budget decision the failure ledger could not record, so the re-run was withheld, or for cause=oom a raised memory limit it could not record.",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_withheld_total",
-			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished; classic only ever deletion and eviction), and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q811 on classic's deletion arm, every cause on scaleset, Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit; attempt_limit, run_too_old, superseded: scaleset only, Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom; classic only ever deletion and eviction), and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q811 on classic's deletion arm, every cause on scaleset, Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, scaleset only, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, scaleset only, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were killed within 10 minutes; attempt_limit, run_too_old, superseded: scaleset only, Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -296,12 +302,12 @@ func NewMetrics() *Metrics {
 
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_recovery_identity_unknown_total",
-			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, node_shutdown, deletion, abandoned). cause=abandoned is the worker removed before it ran, whose force-cancel had no run to address.",
+			Help: "Disrupted scale-set worker pods carrying no workflow-run identity, so no automatic re-run could be attempted, by cause (eviction, preemption, node_shutdown, deletion, abandoned, oom). cause=abandoned is the worker removed before it ran, whose force-cancel had no run to address.",
 		}, []string{"namespace", "runner_group", "cause"}),
 
 		EvictionRecoveryEvidenceLost: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_recovery_evidence_lost_total",
-			Help: "Disrupted scale-set worker pods deleted before their recovery could be claimed, so no automatic re-run was attempted and none can be attempted later — the pod is the disruption's only record (Q809). By cause (eviction, preemption, node_shutdown, deletion); preemption, node_shutdown and deletion are the exposed arms, since each can act on a pod that is already terminating.",
+			Help: "Disrupted scale-set worker pods deleted before their recovery could be claimed, so no automatic re-run was attempted and none can be attempted later — the pod is the disruption's only record (Q809). By cause (eviction, preemption, node_shutdown, deletion, oom); preemption, node_shutdown and deletion are the exposed arms, since each can act on a pod that is already terminating.",
 		}, []string{"namespace", "runner_group", "cause"}),
 
 		QuotaRetries: prometheus.NewCounterVec(prometheus.CounterOpts{

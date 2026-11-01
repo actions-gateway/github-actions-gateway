@@ -106,6 +106,32 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2alpha1.Worker
 	return *out
 }
 
+// memoryRetryPolicy is the out-of-memory retry rule of a profile that derives memory
+// limits from history (Q1183): the same headroom over the killed limit that the
+// profile puts over an observed peak, capped at maxRequests. Throughput's own limit is
+// not clamped by maxRequests; the bump is, so a retry never buys memory the profile's
+// clamp would refuse. Nil for every other profile, whose next pod gets the limit that
+// killed the job.
+func memoryRetryPolicy(sizing *v2alpha1.WorkerSizing) *provisioner.MemoryRetryPolicy {
+	if sizing == nil {
+		return nil
+	}
+	policy := &provisioner.MemoryRetryPolicy{Ceiling: sizing.MaxRequests[corev1.ResourceMemory]}
+	switch sizing.Profile {
+	case v2alpha1.SizingProfileBinpack:
+		policy.HeadroomPercent = int64(usage.MemLimitHeadroom * 100)
+		policy.RequestsFollow = true
+	case v2alpha1.SizingProfileThroughput:
+		policy.HeadroomPercent = defaultThroughputHeadroomPercent
+		if sizing.LimitHeadroomPercent != nil {
+			policy.HeadroomPercent = int64(*sizing.LimitHeadroomPercent)
+		}
+	default:
+		return nil
+	}
+	return policy
+}
+
 // applyNodeShare sets the runner container's requests to the declared per-node
 // envelope divided by workersPerNode. Only the runner container: sidecars keep
 // their template ask, and the operator accounts for them when choosing

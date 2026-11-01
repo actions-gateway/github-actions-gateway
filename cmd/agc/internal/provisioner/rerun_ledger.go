@@ -31,7 +31,7 @@ import (
 // maps survive a rewrite, every map entry ages itself by its own expiresAt, and a
 // writer below minWriterVersion reads but never writes. The operator-facing account is
 // docs/design/04-operational-flows.md §4.2. Q555 adds the failures map (flaky_jobs.go),
-// and Q1183 the pending map.
+// and Q1183 the memoryFloors map (oom_class.go).
 
 // rerunLedgerDataKey is the one data key in a failure-ledger ConfigMap.
 const rerunLedgerDataKey = "failures.json"
@@ -91,7 +91,10 @@ type rerunLedger struct {
 	// Failures holds each failed scale-set job until a later attempt of it completes,
 	// keyed by failureKey.
 	Failures map[string]*failureRecord `json:"failures,omitempty"`
-	extra    map[string]json.RawMessage
+	// MemoryFloors holds each job an out-of-memory retry raised the limit of, keyed by
+	// failureKey.
+	MemoryFloors map[string]*memoryFloor `json:"memoryFloors,omitempty"`
+	extra        map[string]json.RawMessage
 }
 
 // rerunRecord is one run's budget, keyed by run ID: Count is how many times GAG has
@@ -125,15 +128,17 @@ type (
 	rerunRecordFields   rerunRecord
 	rerunAttemptFields  rerunAttempt
 	failureRecordFields failureRecord
+	memoryFloorFields   memoryFloor
 )
 
 // The JSON names each type declares, which the preserving helpers keep out of extra.
 var (
-	rerunLedgerNames   = []string{"version", "minWriterVersion", "reruns", "failures"}
+	rerunLedgerNames   = []string{"version", "minWriterVersion", "reruns", "failures", "memoryFloors"}
 	rerunRecordNames   = []string{"expiresAt", "count", "selfCancelledAttempt", "attempts"}
 	rerunAttemptNames  = []string{"scope", "cause", "jobs", "disruptions"}
 	failureRecordNames = []string{"expiresAt", "failedAt", "jobID", "cause", "event", "workflowRef",
 		"pairedAttempts", "context"}
+	memoryFloorNames = []string{"expiresAt", "pod", "container", "killedLimit", "limit", "requestsFollow"}
 )
 
 func (l *rerunLedger) UnmarshalJSON(b []byte) error {
@@ -166,6 +171,14 @@ func (f *failureRecord) UnmarshalJSON(b []byte) error {
 
 func (f failureRecord) MarshalJSON() ([]byte, error) {
 	return marshalPreserving(failureRecordFields(f), f.extra)
+}
+
+func (m *memoryFloor) UnmarshalJSON(b []byte) error {
+	return unmarshalPreserving(b, (*memoryFloorFields)(m), memoryFloorNames, &m.extra)
+}
+
+func (m memoryFloor) MarshalJSON() ([]byte, error) {
+	return marshalPreserving(memoryFloorFields(m), m.extra)
 }
 
 // unmarshalPreserving decodes b into known and stores every key not in names in extra.
@@ -230,6 +243,9 @@ func decodeRerunLedger(raw string) (*rerunLedger, error) {
 	if l.Failures == nil {
 		l.Failures = map[string]*failureRecord{}
 	}
+	if l.MemoryFloors == nil {
+		l.MemoryFloors = map[string]*memoryFloor{}
+	}
 	return l, nil
 }
 
@@ -245,6 +261,11 @@ func pruneRerunLedger(l *rerunLedger, now time.Time) {
 	for key, f := range l.Failures {
 		if f == nil || f.ExpiresAt.Before(now) {
 			delete(l.Failures, key)
+		}
+	}
+	for key, m := range l.MemoryFloors {
+		if m == nil || m.ExpiresAt.Before(now) {
+			delete(l.MemoryFloors, key)
 		}
 	}
 	for name, raw := range l.extra {

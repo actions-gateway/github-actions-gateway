@@ -444,6 +444,7 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 | `kubectl drain` / eviction API, `kubectl delete pod` | `PodFailed` + empty reason, publishing **with** `deletionTimestamp` set | ✅ (Q502) | Measured discriminator: a cancel and a genuine failure publish the same shape with **no** mark. Gated on the mark, not on the `EvictionByEvictionAPI` condition, so a bare delete is covered too. This arm alone also reads the run's conclusion before re-running, and stands down on `cancelled` (Q811), because an operator following the cancel runbook supplies the mark by hand |
 | The AGC's own deletions — reaper, and the job-abandoned reclaim | As above, plus the `actions-gateway.com/deletion-reason` stamp | ❌ | The AGC deletes pods it gave up on: the reaper's stuck-Pending and orphaned-Running workers, and (Q501) the worker of a job whose lock the renew loop lost, which GitHub has already redelivered to a sibling. Recovering either would turn cleanup into a re-run trigger. The stamp, written before every AGC-issued delete, is the exclusion. It is the pod's, so it dies with the pod: a reaped worker whose completion a previous process never read is re-run by the Q844 path instead, which is the narrow residual recorded below |
 | Deleted before its container ever ran, or lost with its node before it did | Vanishes, or publishes a transient `Failed` + mark with **no container start record** (a drained or reaped *Pending* worker, whose waiting container the kubelet rewrites as `Terminated`/`ContainerStatusUnknown` with no start, exit or container ID; measured on kind v1.36.1, Q1231), or `PodFailed` with one of the node-shutdown row's `DisruptionTarget` reasons and no container start record (Q1198) | ✅ (Q691, both tiers since Q766; the transient `Failed` since Q1231) | The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job `cancelled` in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then **does** accept `rerun-failed-jobs`, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does **not** enter `disruptionAwaitingRecovery`, on either tier: a job that never ran has no failed job for `rerun-failed-jobs` to act on, so the run has to be concluded first. See [Stuck-Pending Worker Pod](#stuck-pending-worker-pod) (Q628/Q676/Q683/Q691/Q766) |
+| Runner killed at its own memory limit | `PodFailed`, the runner container terminated `OOMKilled` | Only under a right-sizing profile (Q1183) | Not a disruption: the job outgrew its limit. A retry class re-runs it where the next attempt can get a strictly higher limit, and withholds it everywhere else; see [below](#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183) |
 | Job failed on its own | `PodFailed`, empty reason, no deletion mark | ❌ | Re-running genuinely failing work is a retry loop, not a recovery |
 
 The drain row closed later than preemption, and the reason is worth being precise about.
@@ -556,7 +557,7 @@ That ordering carries two exclusions at once:
 The kubelet writes `PodFailed` + `Evicted` for two causes, and only one is a disruption.
 Node pressure evicts whichever pod the kubelet ranks worst, so a fresh pod on a fresh node clears it.
 A pod that outgrows its own storage limit is evicted by the same code path for a cause its job and template own, and a re-run gets the same limit.
-That is the storage analogue of `OOMKilled`, which the [automatic-recovery design](../plan/q555-automatic-recovery-design.md#the-futility-checks-r18-in-order) withholds as `own_limit`.
+That is the storage analogue of `OOMKilled`, which is withheld as `own_limit` too unless a sizing profile can give the re-run more memory ([below](#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183)).
 Until Q1177 the eviction arm keyed on the reason alone and re-ran these up to `maxEvictionRetries` times.
 
 Two kubelet signals separate them, measured on kind v1.35.5 (2026-10-23) and matching the kubelet source at that version (`pkg/kubelet/eviction/eviction_manager.go`, `helpers.go`):
@@ -576,6 +577,55 @@ The live eviction specs (Q396) evicted through exactly this shape, with a 256Mi 
 They raise the kubelet's `memory.available` hard threshold on the worker's own node to just under what that node has free, read from its `stats/summary` at the moment of use, and make the worker hold 1GiB; a low memory request is what makes the kubelet's ranking pick it.
 The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
 Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, `DisruptionTarget=True` / `TerminationByKubelet`.
+
+#### Out of memory under right-sizing: the first retry class (scale-set, Q1183)
+
+A retry class is a failure GAG recognises as platform-caused from objects it owns, and re-runs on the disruption arms' path: the same recovery claim, the futility checks above, and the run's `maxEvictionRetries` budget in the failure ledger, so a run cannot collect one budget per class.
+Each class declares how its cause clears ([R11](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)).
+This one clears by a value GAG computes: the next attempt's memory limit.
+
+A runner killed at its own memory limit is the tenant's job outgrowing its pod, which a re-run at the same limit repeats.
+Under the `Binpack` and `Throughput` [sizing profiles](../operations/worker-rightsizing.md) GAG chose that limit from history, so it can choose a higher one.
+The history cannot be counted on to move by itself: the sampler records an out-of-memory job's peak at or below the limit that killed it.
+So the class raises the limit from the killed pod's own:
+
+```
+next = min(roundUp64Mi(killed × headroom), ceiling)
+headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
+ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
+```
+
+It fires on a worker whose pod reached `PodFailed` with the **runner** container terminated `OOMKilled`, and which carries the `actions-gateway.com/sizing-profile` annotation, meaning the profile derived its limits when it was built.
+A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.
+
+| Shape | What happens | `reason` on `eviction_rerun_withheld_total{cause="oom"}` |
+|---|---|---|
+| Profile-built worker, `next` above the killed limit | `next` is recorded for the job's later attempts, a **Normal** `MemoryLimitRaisedForRetry` Event names both limits, and the run is re-run as `eviction_retries_total{cause="oom"}` | none: re-run |
+| No right-sizing profile now, or the pod was built before one applied (`Static`, `NodeShare`, `AwaitingSamples`) | Withheld: a re-run gets the same limit | `own_limit` |
+| `next` not above the killed limit: at `maxRequests`, or `limitHeadroomPercent: 100` | Withheld | `own_limit` |
+| The same job killed again after its limit was raised | Withheld: one raise per job, so growth is bounded by the ceiling | `same_class_again` |
+| More than 10 distinct runs fired in 10 minutes | Withheld for 30 minutes, with one **Warning** `AutoRetryPaused` Event when it opens | `breaker_open` |
+| The runner had no memory limit | Not this class: the kernel killed it for the node's memory. No re-run, as before | none: not recognised |
+
+Every withhold spends no slot and emits the **Normal** `EvictionRerunWithheld` Event naming the fix.
+
+**The raised limit is a per-job floor in the failure ledger**, under `memoryFloors["<runID>/<job name>"]` for 7 days.
+Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under `Binpack` the memory request rises with it, since that profile sets the two equal.
+It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
+The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.
+Unlike failure records, floors are never evicted for size.
+
+**What it masks.** A change that doubles a job's memory use gets the memory on its retry, once.
+The `MemoryLimitRaisedForRetry` Event and `cause="oom"` count make each raise visible, `eviction_rerun_outcomes_total{cause="oom"}` gives the class's success rate ([R14](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)), and `SizingDrift` still reports a template below observed peaks.
+
+**The breaker is in memory, one per set and class cause**, so a restart closes it and the per-run budget still bounds what that costs.
+The disruption arms are outside it: a mass Spot preemption is exactly when their recovery is wanted.
+
+**Not built yet** ([Q1244](../queue/Q1244.md)): the design's [deferred wait](../plan/q555-automatic-recovery-design.md#how-it-waits).
+The class re-runs inside the disruption arms' 15-minute window, which covers GitHub concluding a runner it lost (about 10 minutes) but not a sibling job that runs longer: such a run ends `run_never_concluded`, as an evicted job's does today.
+
+**The shape is read from source, not reproduced on dogfood** ([R12](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)).
+What it rests on, from recall of the kubelet rather than measured here: on cgroup v2 the kubelet has the kernel kill a container's whole process group on an out-of-memory kill, which ends the runner along with the step that used the memory; on cgroup v1, or with the kubelet's `singleProcessOOMKill`, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised.
 
 #### Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
 

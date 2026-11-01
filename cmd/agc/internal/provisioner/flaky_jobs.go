@@ -222,10 +222,12 @@ func (w *workerSnapshots) take(key string) *workerSnapshot {
 // failureIndex is the failure keys each set's ledger held at this process's last read
 // or write of it, so a succeeded completion, the common case, costs no API call when
 // its job has no record. A record written by another replica since is missed, and the
-// pairing goes uncounted.
+// pairing goes uncounted. floorsBySet is each set's memoryFloors at the same read, for
+// the out-of-memory class's provisioning lookup (oom_class.go).
 type failureIndex struct {
-	mu    sync.Mutex
-	bySet map[types.NamespacedName]map[string]bool
+	mu          sync.Mutex
+	bySet       map[types.NamespacedName]map[string]bool
+	floorsBySet map[types.NamespacedName]map[string]memoryFloor
 }
 
 func (x *failureIndex) note(set types.NamespacedName, l *rerunLedger) {
@@ -233,12 +235,32 @@ func (x *failureIndex) note(set types.NamespacedName, l *rerunLedger) {
 	for k := range l.Failures {
 		keys[k] = true
 	}
+	floors := make(map[string]memoryFloor, len(l.MemoryFloors))
+	for k, m := range l.MemoryFloors {
+		if m != nil {
+			floors[k] = *m
+		}
+	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	if x.bySet == nil {
 		x.bySet = map[types.NamespacedName]map[string]bool{}
+		x.floorsBySet = map[types.NamespacedName]map[string]memoryFloor{}
 	}
 	x.bySet[set] = keys
+	x.floorsBySet[set] = floors
+}
+
+// floor returns set's memory floor for key, nil where it holds none, and whether this
+// process has read the set's ledger at all.
+func (x *failureIndex) floor(set types.NamespacedName, key string) (*memoryFloor, bool) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	floors, loaded := x.floorsBySet[set]
+	if f, ok := floors[key]; ok {
+		return &f, true
+	}
+	return nil, loaded
 }
 
 // lacks reports whether set's ledger is known not to hold key: false when it holds it

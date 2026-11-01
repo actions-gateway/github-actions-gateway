@@ -18,6 +18,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
 - **[Multi-label runner sets](operations/troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every `runnerLabel` is registered at GitHub, so a job asking for any of them matches and a `runs-on` array migrates unedited.
 - **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to preemption, Spot reclamation, a node drain or shutdown, most evictions, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.
+- **[Out-of-memory re-run under right-sizing](operations/worker-rightsizing.md#when-a-job-runs-out-of-memory)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 2.0</span>: a job killed at a memory limit the `Binpack` or `Throughput` profile chose is re-run once with a higher one, on the same per-run budget.
 - **[Capacity gate for unplaceable workers](operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)**: opt-in.
   Stop claiming jobs while the cluster cannot place the worker shape, instead of claiming and cancelling them.
   Off by default.
