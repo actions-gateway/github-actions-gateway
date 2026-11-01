@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1240/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1247/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Roadmap merge driver duplicates a bullet when both sides edit its q: IDs - GitHub Actions Gateway</title>
+        <title>Roadmap driver hands back a clean git merge that binds one ID twice - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#roadmap-merge-driver-duplicates-a-bullet-when-both-sides-edit-its-q-ids" class="md-skip">
+        <a href="#roadmap-driver-hands-back-a-clean-git-merge-that-binds-one-id-twice" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Roadmap merge driver duplicates a bullet when both sides edit its q: IDs
+              Roadmap driver hands back a clean git merge that binds one ID twice
             
           </span>
         </div>
@@ -2627,15 +2627,13 @@
   
 
 
-<h1 id="roadmap-merge-driver-duplicates-a-bullet-when-both-sides-edit-its-q-ids">Roadmap merge driver duplicates a bullet when both sides edit its q: IDs<a class="headerlink" href="#roadmap-merge-driver-duplicates-a-bullet-when-both-sides-edit-its-q-ids" title="Permanent link">&para;</a></h1>
-<p>When two branches each change the <code>&lt;!-- q: --&gt;</code> IDs on the same <code>docs/roadmap.md</code> bullet, the merge driver keeps both versions: the merged page lists the bullet twice, the rebase reports <code>resolved docs/roadmap.md by backlog ID</code> and raises no conflict.
-Whether <code>make roadmap-check</code> catches the duplicate was not checked.
-Seen on two rebases on 2026-10-27, not reproduced in isolation: Q1181's branch dropped <code>Q1181</code> from the flaky-job bullet's <code>q:Q555,Q1183,Q1181,Q1178</code> while main (Q1178's merge) had dropped <code>Q1178</code>, and Q555's branch did the same against main.
-Each rebase produced the bullet twice, once per side's ID set, and both duplicates were removed by hand.
-The mechanism is read from source, not exercised: <code>keyedrecords.Merge</code> keys a bullet by <code>mdroadmap.MarkerKey</code>, its whole joined ID list, so when both sides change the list the base key is gone from both and each side's new key reads as an added record.
-The page-wide duplicate check <code>duplicateBindings</code> (<code>devtools/git/mergedriver/roadmap.go</code>) keys on the same joined list through <code>mdroadmap.DupeKey</code>, so two bullets sharing some IDs but not all pass it.
-The fix probably keys the duplicate check on each ID rather than the joined list, falling back to git's own merge on any ID bound twice; a <code>git-merge-roadmap-test.sh</code> case with both sides editing one bullet's IDs is the reproduction to write first.
-Until then, two concurrent PRs that close different items behind one bullet will merge cleanly into a page with that bullet twice, and the second PR's author reads only the driver's "review the bullet set" note.</p>
+<h1 id="roadmap-driver-hands-back-a-clean-git-merge-that-binds-one-id-twice">Roadmap driver hands back a clean git merge that binds one ID twice<a class="headerlink" href="#roadmap-driver-hands-back-a-clean-git-merge-that-binds-one-id-twice" title="Permanent link">&para;</a></h1>
+<p>When the roadmap merge driver finds a backlog ID on two bullets of the merged <code>docs/roadmap.md</code>, it falls back to git's own three-way merge, and where that merge is clean it exits 0 with only a stderr note: the duplicate lands with no conflict.
+Measured 2026-11-01 against the driver at #2198's head <code>8b78d52</code>: base <code>X q:Q10,Q11</code> and <code>Y q:Q20</code>, ours rebinds X to <code>q:Q10</code>, theirs rebinds Y to <code>q:Q20,Q10</code>.
+The driver printed <code>the merged page lists a backlog binding more than once: Q10; the plain three-way merge resolved it cleanly</code> and exited 0 with Q10 on both bullets.
+The same fallback-to-clean shape is deliberate for a whole bullet added to two lists (<code>git-merge-roadmap-test.sh</code> asserts rc 0 and git's output verbatim there), so this predates Q1240 and is not reachable by the shapes Q1240 fixed.
+Nothing downstream catches it: on the same day <code>make roadmap-check</code> passed a real page with one bullet duplicated under overlapping IDs (16 bullets, exit 0), so the gate has no one-ID-one-bullet rule.
+Two fixes, unweighed: give <code>devtools/docs/roadmapcheck</code> a uniqueness rule, which catches the duplicate however it arrived, or have the driver exit non-zero on a duplicate even when git's merge is clean.</p>
 
 
 

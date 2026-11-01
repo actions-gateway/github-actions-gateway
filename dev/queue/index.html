@@ -3132,14 +3132,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q555's worker snapshot leaves out the readiness of the set's colocated EgressProxy, which the design lists beside the pod's own state (R7) …</td>
 </tr>
 <tr>
-<td><a href="Q1240/">Q1240</a></td>
-<td><a href="../development/maintaining-backlog/">Roadmap merge driver duplicates a bullet when both sides edit its q: IDs</a></td>
-<td><code>bug</code> <code>docs</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>When two branches each change the <code>&lt;!-- q: --&gt;</code> IDs on the same <code>docs/roadmap.md</code> bullet, the merge driver keeps both versions: the merged …</td>
-</tr>
-<tr>
 <td><a href="Q1229/">Q1229</a></td>
 <td>Plot proxy CONNECT outcomes by allowlist entry on a dashboard</td>
 <td><code>feature</code></td>
@@ -3170,6 +3162,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>GAG cannot tell a fork pull request's job from any other today, so it can neither refuse one nor route it to a tighter runner shape.</td>
+</tr>
+<tr>
+<td><a href="Q1247/">Q1247</a></td>
+<td><a href="../development/maintaining-backlog/">Roadmap driver hands back a clean git merge that binds one ID twice</a></td>
+<td><code>bug</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>When the roadmap merge driver finds a backlog ID on two bullets of the merged <code>docs/roadmap.md</code>, it falls back to git's own three-way …</td>
 </tr>
 <tr>
 <td><a href="Q1221/">Q1221</a></td>
