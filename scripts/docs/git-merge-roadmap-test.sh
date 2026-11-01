@@ -497,7 +497,8 @@ else
 fi
 
 # The same check reads each ID, not the joined binding: two bullets sharing one
-# row of several still bind that row twice.
+# row of several still bind that row twice. git merges this cleanly too, so the
+# driver exits 0 with git's page and only the note says why (Q1247).
 roadmap_page "$A" -- "$F" >"$WORKDIR/pdup-base.md"
 roadmap_page "$A" "$(bullet Q40 'Ours.')" -- "$F" >"$WORKDIR/pdup-ours.md"
 roadmap_page "$A" -- "$F" "$(bullet Q40,Q41 'Theirs.')" >"$WORKDIR/pdup-theirs.md"
@@ -506,8 +507,11 @@ rc=0
 "$DRIVER" "$WORKDIR/pdup-base.md" "$WORKDIR/pdup-driver.md" "$WORKDIR/pdup-theirs.md" \
 	7 "$TARGET" 2>"$WORKDIR/pdup.err" || rc=$?
 	die_if_killed "one row in two overlapping bullets" "$rc"
-if grep -q 'binding more than once: Q40;' "$WORKDIR/pdup.err"; then
-	ok 'one row in two overlapping bullets -> refused'
+cp "$WORKDIR/pdup-ours.md" "$WORKDIR/pdup-git.md"
+git merge-file "$WORKDIR/pdup-git.md" "$WORKDIR/pdup-base.md" "$WORKDIR/pdup-theirs.md" >/dev/null 2>&1 || true
+if (( rc == 0 )) && grep -q 'binding more than once: Q40;' "$WORKDIR/pdup.err" &&
+	cmp -s "$WORKDIR/pdup-driver.md" "$WORKDIR/pdup-git.md"; then
+	ok 'one row in two overlapping bullets -> refused, handed back to git'
 else
 	bad "two bullets sharing one ID should be refused (rc=$rc, err=$(cat "$WORKDIR/pdup.err"))"
 fi
