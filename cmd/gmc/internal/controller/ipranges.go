@@ -449,8 +449,9 @@ func (r *IPRangeReconciler) ReconcileNow(ctx context.Context) {
 func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) error {
 	cidrs, err := r.Fetcher.FetchIPRanges(ctx)
 	if err == nil && len(cidrs) == 0 {
-		// /meta always publishes ranges, so an empty set is a bad response; taking it
-		// would blank the cache while EgressRulesStale reads RefreshCurrent.
+		// Treated as a bad response (/meta published 8,418 api/actions/web ranges when
+		// measured 2026-11-01): taking it would blank the cache while EgressRulesStale
+		// reads RefreshCurrent.
 		err = errors.New("GitHub meta returned no usable IP ranges")
 	}
 	if err != nil {
