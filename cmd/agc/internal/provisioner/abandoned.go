@@ -41,7 +41,12 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // taken for a user's (Q1182), and the re-run it registers is judged against that
 // attempt. Neither step blocks the cancel: without them the run is cancelled as before,
 // and every later scale-set check, this arm's own re-run included, reads the cancel as a
-// user's and withholds the re-run, the safe direction (Q1181). d
+// user's and withholds the re-run, the safe direction (Q1181). A run the read finds
+// already cancelled on an attempt the ledger does not hold as GAG's is not cancelled
+// again: it is withheld as run_cancelled under cause abandoned, and nothing is recorded
+// (Q1232). The conclusion does not say who cancelled, so this covers a user's cancel, a
+// concurrency group's, and GitHub's own unstarted-job timeout, which a pendingPodDeadline
+// past ~15 minutes lets land before the reap. d
 // names the abandoned worker to the ledger, and is ignored on the classic tier.
 func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target, owner, repo, runID, tier string, log *slog.Logger, d rerunDisruption) {
 	outcome := "cancelled"
@@ -52,8 +57,19 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 		if tier == evictionTierScaleSet {
 			// Its own deadline, so a slow ledger write cannot spend the cancel's.
 			rctx, rcancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
-			d.failedAttempt = p.recordAbandonedAttempt(rctx, target, owner, repo, runID, log)
+			attempt, cancelledElsewhere := p.recordAbandonedAttempt(rctx, target, owner, repo, runID, log)
 			rcancel()
+			if cancelledElsewhere {
+				// Recording this attempt as GAG's would turn that cancel into one the
+				// run_cancelled check re-runs (Q1232). No force-cancel, no re-run, and no
+				// force-cancel outcome: the withhold is counted instead.
+				p.recordRerunWithheld(target, runID, tier, recoveryCauseAbandoned, rerunWithheldReasonRunCancelled,
+					runCancelledMessage(runID, recoveryCauseAbandoned))
+				log.Info("the abandoned job's run was already cancelled, and not by GAG; not force-cancelling or re-running it",
+					"runID", runID, "runAttempt", attempt)
+				return
+			}
+			d.failedAttempt = attempt
 		}
 		cctx, cancel := context.WithTimeout(ctx, abandonedForceCancelTimeout)
 		err := p.forceCancelRun(cctx, owner, repo, runID)
@@ -79,19 +95,26 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 
 // recordAbandonedAttempt reads the run's attempt and records it in target's failure
 // ledger as the one GAG is about to force-cancel, returning it, or 0 where either step
-// failed.
-func (p *Provisioner) recordAbandonedAttempt(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) int {
+// failed. cancelledElsewhere reports a run already concluded cancelled on an attempt the
+// ledger does not hold as GAG's, which is recorded nothing: that cancel is a user's, a
+// concurrency group's or GitHub's unstarted-job timeout. A cancel GAG made itself, for
+// another abandoned job of the run, is recorded again and force-cancelled as before.
+func (p *Provisioner) recordAbandonedAttempt(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger) (attempt int, cancelledElsewhere bool) {
 	run, err := p.runConclusion(ctx, owner, repo, runID)
 	if err != nil || run.attempt == 0 {
 		log.Warn("could not read the abandoned job's run attempt; force-cancelling without recording it, so the cancel may read as a user's",
 			"runID", runID, "error", err)
-		return 0
+		return 0, false
+	}
+	if run.status == runStatusCompleted && run.conclusion == runConclusionCancelled &&
+		p.selfCancelledAttempt(ctx, target, runID) != run.attempt {
+		return run.attempt, true
 	}
 	if err := p.recordSelfCancel(ctx, target, runID, run.attempt); err != nil {
 		log.Warn("could not record GAG's own force-cancel in the failure ledger; force-cancelling anyway, so the cancel may read as a user's",
 			"runID", runID, "runAttempt", run.attempt, "error", err)
 	}
-	return run.attempt
+	return run.attempt, false
 }
 
 // forceCancelRun calls POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel.

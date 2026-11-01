@@ -462,7 +462,8 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 // the story reads as a recovery that silently did nothing (Q811).
 //
 // Its reasons: run_cancelled from attemptRerun's conclusion check (every cause on the
-// scale-set tier, deletion only on the classic), own_limit from withholdOwnLimitRerun
+// scale-set tier, deletion only on the classic) and from the scale-set abandoned arm's
+// read before its force-cancel (Q1232), own_limit from withholdOwnLimitRerun
 // (eviction only, Q1177), and the scale-set tier's pre-reservation futility checks
 // (futileRerun, Q1181).
 func (p *Provisioner) recordRerunWithheld(target Target, runID, tier, cause, reason, message string) {
