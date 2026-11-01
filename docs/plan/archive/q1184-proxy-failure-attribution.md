@@ -2,7 +2,7 @@
 
 Builds [05-security.md § Proxy failure attribution](../../design/05-security.md#proxy-failure-attribution), which settles the posture: off by default on two switches, failures only in a per-namespace in-memory buffer, the consumer namespace learned from the port a connection arrives on, and an AGC reading only its own namespace's records over a dedicated mTLS listener.
 The row was Q1184.
-Its consumer, classified retry ([Q1183](../../queue/Q1183.md)), is blocked, so until it lands nothing acts on what this builds.
+Its consumer, classified retry (Q1183), is blocked, so until it lands nothing acts on what this builds.
 
 ## Status
 
@@ -87,7 +87,7 @@ The AGC computes each worker's `HTTPS_PROXY` itself on every acquired job (`cmd/
 ## Phase 3: the AGC reads its records
 
 A new package, `cmd/agc/internal/proxyattribution`, run as a manager runnable on every AGC replica, since each replica's sessions own their own pods.
-Nothing calls its lookup until classified retry ([Q1183](../../queue/Q1183.md)) lands, so this phase's observable output is a counter.
+Nothing calls its lookup until classified retry (Q1183) lands, so this phase's observable output is a counter.
 
 - **It reads only while its own gateway is opted in.** Each poll re-reads the gateway, so turning `proxyFailureAttribution` off stops the reads and drops what is held, with no restart.
 - **Which pools: derived, not listed.** The AGC's Role can `get` ConfigMaps but not `list` them, so it names each projection from the pools its own RunnerSets resolve to (`proxyRef`, else the gateway's `defaultProxyRef`), the same resolution the worker's port comes from.
@@ -119,5 +119,5 @@ The gateway-level reference also carries each AGC's own egress through the pool,
 - **A failure attributed end to end, both lanes.** A pod carrying a RunnerSet's label, so the AGC counts it as its own worker, waits past the reader's two-second edge margin, CONNECTs to an unresolvable host through its namespace's port, and stays Running so its address window is still open when the record is read.
   A dial failure rather than a denial, because a pool refuses a destination only once it is opted in to an allowlist, which takes an extra destination the GMC's platform allowlist has to admit.
   The gateway's `actions_gateway_proxy_failure_records_total{outcome="dial-failed",result="attributed"}` must then rise, which only a read over mTLS, a matched epoch and cursor, and the address-window join together produce.
-  Nothing else observes the join until classified retry ([Q1183](../../queue/Q1183.md)) calls the lookup.
+  Nothing else observes the join until classified retry (Q1183) calls the lookup.
 - **The scrape stays in the cluster.** A pod in the consumer namespace mounts the gateway's metrics client Secret and reads the AGC's metrics endpoint, so no certificate leaves the cluster; the namespace carries the `metrics: enabled` label the AGC's ingress rule admits scrapers from.

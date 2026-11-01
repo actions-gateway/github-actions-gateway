@@ -288,3 +288,43 @@ func TestApplySizingStatusProfileActiveSupersedesDrift(t *testing.T) {
 		t.Fatalf("SizingDrift = %+v, want the normal drift judgment while awaiting samples", cond)
 	}
 }
+
+// TestMemoryRetryPolicy: the out-of-memory retry (Q1183) uses the headroom each
+// history profile already puts over an observed peak, and maxRequests as its ceiling;
+// a profile that derives no memory limit from history gets no retry.
+func TestMemoryRetryPolicy(t *testing.T) {
+	ceiling := resource.MustParse("16Gi")
+	cases := []struct {
+		name     string
+		sizing   *v2alpha1.WorkerSizing
+		headroom int64
+		follow   bool
+	}{
+		{"Binpack", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack,
+			MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}, 140, true},
+		{"Throughput default", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput,
+			MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}, defaultThroughputHeadroomPercent, false},
+		{"Throughput headroom", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput,
+			LimitHeadroomPercent: ptr.To(int32(200)), MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}, 200, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := memoryRetryPolicy(tc.sizing)
+			if got == nil {
+				t.Fatal("want a policy")
+			}
+			if got.HeadroomPercent != tc.headroom || got.RequestsFollow != tc.follow || got.Ceiling.Cmp(ceiling) != 0 {
+				t.Errorf("got %+v, want headroom %d, requestsFollow %v, ceiling %s", got, tc.headroom, tc.follow, ceiling.String())
+			}
+		})
+	}
+	for _, sizing := range []*v2alpha1.WorkerSizing{
+		nil,
+		{Profile: v2alpha1.SizingProfileStatic},
+		{Profile: v2alpha1.SizingProfileNodeShare},
+	} {
+		if got := memoryRetryPolicy(sizing); got != nil {
+			t.Errorf("memoryRetryPolicy(%+v) = %+v, want nil", sizing, got)
+		}
+	}
+}

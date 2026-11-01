@@ -5,6 +5,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -307,12 +308,28 @@ type ResolvedSpec struct {
 	// namespace's Pod Security Admission level (baseline/restricted/privileged).
 	SecurityProfile string
 
+	// MemoryRetry is how an out-of-memory retry raises the killed container's memory
+	// limit (Q1183), or nil where the sizing profile derives no limit from history, so
+	// a re-run would get the limit that killed the job.
+	MemoryRetry *MemoryRetryPolicy
+
 	// ScaleUp is the opt-in worker-pod creation-rate limit (Q223), or nil for no
 	// limit (the default). Nil ⇒ immediate provisioning; non-nil ⇒ the provisioner
 	// gates each pod creation through a per-owner token bucket. The v1/v2 adapters
 	// fill it from RunnerGroup/RunnerSet.spec.scaleUp, defaulting Burst to
 	// MaxPerSecond when the spec omits it.
 	ScaleUp *ScaleUpConfig
+}
+
+// MemoryRetryPolicy is the sizing profile's rule for the next attempt's memory limit
+// after an out-of-memory kill: the killed limit times HeadroomPercent/100, capped at
+// Ceiling, or at twice the killed limit where Ceiling is zero.
+type MemoryRetryPolicy struct {
+	HeadroomPercent int64
+	Ceiling         resource.Quantity
+	// RequestsFollow raises the request with the limit, for a profile that sets them
+	// equal (Binpack).
+	RequestsFollow bool
 }
 
 // ScaleUpConfig is the neutral, already-defaulted worker-pod creation-rate limit,

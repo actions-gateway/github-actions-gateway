@@ -1,7 +1,7 @@
 # Q555 flaky-job detection and classified retry: problem, requirements, scope
 
 **Status:** ⓘ draft for a design session, written 2026-10-10.
-Nothing is built and no CRD shape is committed; the work is split across the rows [below](#how-this-splits-into-backlog-items).
+Detection (Q555) and the first retry class (Q1183) are built on the scale-set tier, and no CRD shape is committed; the work is split across the rows [below](#how-this-splits-into-backlog-items).
 Q555, now built, was revived into the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
 [The design](q555-automatic-recovery-design.md) proposes how to build it and recommends answers to the [open questions](#open-questions-for-the-design-session), pending sign-off.
 It extends [G.17](../design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions) rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.
@@ -39,7 +39,8 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 |
 | [Q1237](../queue/Q1237.md) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
 | Q1181 (built on the scale-set tier) | R18's futility checks, on the arms that exist today | Nothing |
-| [Q1183](../queue/Q1183.md) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
+| Q1183 (built on the scale-set tier) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
+| [Q1244](../queue/Q1244.md), [Q1245](../queue/Q1245.md) | What Q1183 left: the persistent deferred wait, and the misclassification alert with a paused-breaker gauge | Q1183 (built) |
 | Q1177 (closed by the `own_limit` withhold), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
 | Q1178, Q1184 (both shipped) | The proxy's outcome metrics, and per-job failure attribution | Nothing |
@@ -234,7 +235,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 | Futile shape | What GAG would observe | Status |
 |---|---|---|
 | The worker's *shape* cannot run: an unpullable image, or a pod no node can host | The capacity gate's startup and placeability verdicts ([`worker_startup_verdict.go`](../../cmd/agc/internal/controller/worker_startup_verdict.go), Q714) | Built for intake: the gate stops new work when every next pod would fail the same way. Whether the re-run paths consult it is unverified |
-| The job exceeded its own limit | `OOMKilled` at its limit under `Static` sizing, an `ephemeral-storage` limit eviction, `timeout-minutes` | The eviction arm withholds the storage case as `own_limit` (Q1177); `OOMKilled` and `timeout-minutes` reach no arm |
+| The job exceeded its own limit | `OOMKilled` at its limit under `Static` sizing, an `ephemeral-storage` limit eviction, `timeout-minutes` | The eviction arm withholds the storage case as `own_limit` (Q1177); the out-of-memory class withholds a runner killed at a limit no profile can raise as `own_limit` on the scale-set tier (Q1183); `timeout-minutes` reaches no arm |
 | A newer commit superseded the run | The pull request's head no longer matches the run's `head_sha`, or the run was cancelled by a concurrency group | Withheld on the scale-set tier as `superseded` (a newer run of the workflow, event and branch from a different commit) or `run_cancelled` (Q1181); the classic tier does not check |
 | GitHub will refuse the re-run | `run_attempt` past 50 (GitHub caps a run at 50 re-runs), a run older than 30 days, a `cancelled` conclusion | Withheld on the scale-set tier as `attempt_limit`, `run_too_old` and `run_cancelled` on every arm (Q1181); the classic tier checks only `cancelled`, on the deletion arm (Q811) |
 | The same class failed this job again | A second failure of the same class on a later attempt, after its cause was judged cleared | Per-run counterpart of R14: the class is wrong for this job, so stop and say so |
@@ -244,11 +245,12 @@ It also gives the person who has to act a reason, where today an exhausted budge
 
 ### Candidate classes
 
-None is reproduced yet; each needs R12's reproduction before it becomes a class, and the CI history below shows which ones occur.
+R12 asks each candidate for a dogfood reproduction before it becomes a class, and the CI history below shows which ones occur.
+The out-of-memory class was built without one, so that requirement is open for it at merge; the rest wait on theirs.
 
 | Candidate | What GAG would observe | Clears by (R11) | Note |
 |---|---|---|---|
-| Out of memory under a [right-sizing](runner-sizing-profiles.md) profile | Container `OOMKilled` at its limit, on a set whose profile derives limits from history | Observable: GAG computes the next limit | Qualifies under R11 only when the retry's pod gets a strictly higher memory limit; see [below](#oomkilled-under-right-sizing) |
+| Out of memory under a [right-sizing](runner-sizing-profiles.md) profile | Container `OOMKilled` at its limit, on a set whose profile derives limits from history | Observable: GAG computes the next limit | Qualifies under R11 only when the retry's pod gets a strictly higher memory limit; see [below](#oomkilled-under-right-sizing). Built under Q1183 for the runner container, without R12's dogfood reproduction ([§4.2](../design/04-operational-flows.md#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183)) |
 | Setup failure before the first step | The job failed while the runner was registering or downloading actions | Neither, when the cause is GitHub: backoff and breaker | Needs the worker to report where setup ends; unmeasured |
 | Egress proxy pool unavailable | The pool had no ready endpoint during the job's window | Observable: pool readiness | GAG owns the pool |
 | Registry mirror unavailable | The mirror was unready while the job pulled an image | Observable: mirror readiness | Same shape as the proxy |

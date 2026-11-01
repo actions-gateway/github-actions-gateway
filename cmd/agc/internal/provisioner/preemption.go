@@ -74,6 +74,10 @@ func PreemptedByScheduler(pod *corev1.Pod) bool {
 // happened: the worker was gone when the AGC came back, and which of the three deleting
 // causes took it is exactly what the missing pod no longer says (Q844,
 // orphaned_scaleset.go).
+//
+// recoveryCauseOOM is the one a retry class owns rather than a disruption arm: the
+// runner was killed at its own memory limit, which is re-run only where the sizing
+// profile lets the next attempt have a strictly higher one (Q1183, oom_class.go).
 const (
 	recoveryCauseEviction     = "eviction"
 	recoveryCausePreemption   = "preemption"
@@ -81,4 +85,5 @@ const (
 	recoveryCauseNodeShutdown = "node_shutdown"
 	recoveryCauseAbandoned    = "abandoned"
 	recoveryCauseVanished     = "vanished"
+	recoveryCauseOOM          = "oom"
 )

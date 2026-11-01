@@ -459,6 +459,10 @@ type Provisioner struct {
 	failureIndex    failureIndex
 	workerSnapshots workerSnapshots
 
+	// classBreakers is the retry classes' set-wide stampede breaker (Q1183,
+	// oom_class.go). Its zero value is ready to use.
+	classBreakers classBreakers
+
 	// orphanScans records which owners have already had their persisted in-flight set
 	// adjudicated by this process (Q844), which is what makes that scan a startup
 	// question rather than a per-reconcile one. Its zero value is ready to use. See
@@ -811,6 +815,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 		log.Warn("provisioning spec unresolved; not creating a scale-set worker", "error", err)
 		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
 	}
+	spec = p.applyMemoryFloor(ctx, target, spec, job, log)
 
 	secretName := scaleSetSecretName(jobID)
 	podName := scaleSetPodName(key.Name, jobID)

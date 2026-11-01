@@ -180,7 +180,8 @@ type disruptedScaleSetWorker struct {
 }
 
 // judgeScaleSetDisruption classifies one unclaimed scale-set worker pod against the
-// recovery arms. A terminating worker neither arm accepted is logged, and saying so is
+// recovery arms, then the retry classes (Q1183, oom_class.go), which only a pod no
+// disruption took can reach. A terminating worker neither arm accepted is logged, and saying so is
 // the point: an unrecovered pod looks the same whether it was judged or never seen
 // (Q549). Debug because declining is usually right — a cleanup delete of an
 // already-failed pod is exactly what the ordering check exists to reject.
@@ -188,6 +189,8 @@ func judgeScaleSetDisruption(log *slog.Logger, pod *corev1.Pod) (disruptedScaleS
 	switch cause, ok := disruptionAwaitingRecovery(pod); {
 	case ok:
 		return disruptedScaleSetWorker{pod: pod, cause: cause}, true
+	case oomKilledAwaitingRecovery(pod):
+		return disruptedScaleSetWorker{pod: pod, cause: recoveryCauseOOM}, true
 	case abandonedAwaitingRecovery(pod):
 		return disruptedScaleSetWorker{pod: pod, cause: recoveryCauseAbandoned, abandoned: true}, true
 	case externallyDeletedTerminalWorker(pod):
@@ -313,6 +316,9 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 	if msg := ownLimitEviction(pod); cause == recoveryCauseEviction && msg != "" {
 		p.withholdOwnLimitRerun(target, runID, evictionTierScaleSet, podLog, msg)
 		return closedChan()
+	}
+	if cause == recoveryCauseOOM {
+		return p.recoverOOMKilled(ctx, target, spec, pod, owner, repo, runID, podLog)
 	}
 	return p.handleEviction(ctx, target, owner, repo, runID, podLog, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierScaleSet, cause,
 		rerunDisruption{key: pod.Name, job: pod.Annotations[annotationJobName]})
