@@ -21,6 +21,11 @@
 # has no --platform flag predates the containerd store default, so plain
 # `kind load docker-image` is used there.
 #
+# A pull made after loading an image that shares its layers can leave the image
+# without its layer blobs, and the save then fails with "does not provide the
+# specified platform" (Q1242). backfill-image-content.sh fetches them, and the
+# save is retried once.
+#
 # Usage:
 #   scripts/e2e/kind-load-image.sh <cluster> <image-ref>...
 
@@ -34,6 +39,7 @@ fi
 cluster="$1"
 shift
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 platform="$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')"
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
@@ -45,6 +51,10 @@ for img in "$@"; do
     kind load image-archive --name "${cluster}" "${archive}"
   elif grep -q 'unknown flag: --platform' "${work}/save.err"; then
     kind load docker-image --name "${cluster}" "${img}"
+  elif grep -q 'does not provide the specified platform' "${work}/save.err"; then
+    "${script_dir}/../fetch/backfill-image-content.sh" "${platform}" "${img}"
+    docker save --platform "${platform}" -o "${archive}" "${img}"
+    kind load image-archive --name "${cluster}" "${archive}"
   else
     cat "${work}/save.err" >&2
     exit 1

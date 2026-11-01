@@ -80,13 +80,16 @@ set -euo pipefail
 printf '%s\n' "$1" >> "$STUB_DIR/sleeps"
 STUB
 
-# docker: pull and load succeed; save writes the -o path so the cache entry is
+# docker: pull, load and the backfill's probe saves succeed; version prints the
+# daemon platform; a plain save writes the -o path so the cache entry is
 # observable.
 cat > "$FIXTURE_DIR/bin/docker" << 'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$STUB_DIR/docker.calls"
-if [[ "$1" == "save" && "$2" == "-o" ]]; then
+if [[ "$1" == "version" ]]; then
+	echo linux/amd64
+elif [[ "$1" == "save" && "$2" == "-o" ]]; then
 	: > "$3"
 fi
 STUB
@@ -138,6 +141,12 @@ for f in images.tar images.txt manifest.yaml; do
 		fail "recovered fetch writes $f" "missing $cold/$f"
 	fi
 done
+# The cached tar is only complete if every image's layer blobs are present when
+# it is written (Q1242), so each image is probed for the daemon's platform first.
+probes=$(grep -c '^save --platform linux/amd64 ' "$FIXTURE_DIR/docker.calls" || true)
+assert_eq 'each pulled image is backfilled for the daemon platform' 2 "$probes"
+assert_eq 'the backfill runs before the cache is saved' 'save -o' \
+	"$(grep '^save ' "$FIXTURE_DIR/docker.calls" | tail -n 1 | cut -d' ' -f1-2)"
 assert_eq 'image list is extracted from the fetched manifest' \
 	'quay.io/example/controller:v1.0.0 quay.io/example/webhook:v1.0.0' \
 	"$(tr '\n' ' ' < "$cold/images.txt" | sed 's/ $//')"
