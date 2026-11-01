@@ -313,6 +313,9 @@ type rerunDisruption struct {
 	// failedAttempt is the run attempt the job failed in. Zero means unknown, and the
 	// recovery reads the run to learn it before reserving.
 	failedAttempt int
+	// onReserved, where set, runs once the disruption holds a slot: a fresh
+	// reservation, or a merge into one this attempt already holds.
+	onReserved func()
 }
 
 // Reservation outcomes, in the order reserveScaleSetRerun tests them.

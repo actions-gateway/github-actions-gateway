@@ -126,6 +126,28 @@ func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	assert.Equal(t, runnerContainer, f.Container)
 }
 
+// TestRecoverOOMKilled_NoBudgetPromisesNoRerun: a set with no re-run budget reports
+// the run exhausted, never a raised limit "re-run automatically", and the breaker
+// counts it not.
+func TestRecoverOOMKilled_NoBudgetPromisesNoRerun(t *testing.T) {
+	ctx := context.Background()
+	p, target, m, rerunCount, _ := recoveryFixture(t,
+		oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi"))
+	target.spec.MemoryRetry = throughputRetry()
+	target.spec.MaxEvictionRetries = 0
+
+	done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+	require.NoError(t, err)
+	<-done
+
+	assert.Zero(t, rerunCount.Load())
+	assert.Equal(t, float64(1), testutil.ToFloat64(
+		m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)))
+	assert.NotContains(t, target.events, "MemoryLimitRaisedForRetry")
+	assert.Nil(t, p.classBreakers.byKey[classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}],
+		"a run that holds no slot must not count toward the breaker")
+}
+
 // TestRecoverOOMKilled_WithholdsWhatARerunRepeats: every shape whose next attempt
 // would get the limit that killed this one is withheld before any slot is spent.
 func TestRecoverOOMKilled_WithholdsWhatARerunRepeats(t *testing.T) {

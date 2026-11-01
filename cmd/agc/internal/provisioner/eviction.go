@@ -270,6 +270,9 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		default:
 			p.recordRetryStarted(target, runID, log, number, tier, cause)
 		}
+		if d.onReserved != nil && outcome != rerunResumed {
+			d.onReserved()
+		}
 
 		select {
 		case <-rctx.Done():

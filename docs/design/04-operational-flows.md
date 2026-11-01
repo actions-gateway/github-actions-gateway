@@ -600,11 +600,11 @@ A sidecar killed for memory is not covered: the runner survives it to report the
 
 | Shape | What happens | `reason` on `eviction_rerun_withheld_total{cause="oom"}` |
 |---|---|---|
-| Profile-built worker, `next` above the killed limit | `next` is recorded for the job's later attempts, a **Normal** `MemoryLimitRaisedForRetry` Event names both limits, and the run is re-run as `eviction_retries_total{cause="oom"}` | none: re-run |
+| Profile-built worker, `next` above the killed limit | `next` is recorded for the job's later attempts and the run goes to the disruption arms' futility checks and budget. Once it holds a slot, a **Normal** `MemoryLimitRaisedForRetry` Event names both limits and the run is re-run as `eviction_retries_total{cause="oom"}`; a run with no budget left gets `EvictionRetriesExhausted` and no `MemoryLimitRaisedForRetry` | none: re-run |
 | No right-sizing profile now, or the pod was built before one applied (`Static`, `NodeShare`, `AwaitingSamples`) | Withheld: a re-run gets the same limit | `own_limit` |
 | `next` not above the killed limit: at `maxRequests`, or `limitHeadroomPercent: 100` | Withheld | `own_limit` |
 | The same job killed again after its limit was raised | Withheld: one raise per job, so growth is bounded by the ceiling | `same_class_again` |
-| More than 10 distinct runs fired in 10 minutes | Withheld for 30 minutes, with one **Warning** `AutoRetryPaused` Event when it opens | `breaker_open` |
+| More than 10 distinct runs held a slot in 10 minutes | Withheld for 30 minutes, with one **Warning** `AutoRetryPaused` Event when it opens | `breaker_open` |
 | The runner had no memory limit | Not this class: the kernel killed it for the node's memory. No re-run, as before | none: not recognised |
 
 Every withhold spends no slot and emits the **Normal** `EvictionRerunWithheld` Event naming the fix.
@@ -613,6 +613,8 @@ Every withhold spends no slot and emits the **Normal** `EvictionRerunWithheld` E
 Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under `Binpack` the memory request rises with it, since that profile sets the two equal.
 It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
 The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.
+That window is a rolling update in which the new process read the ledger before the old one wrote the floor: the re-run spends a slot at the killed limit, and its kill is then withheld as `same_class_again` though no raise ever applied.
+Closing it means an uncached ledger read for every worker a right-sized set builds, since the assignment carries no run attempt to confine the read to re-runs, so it stays open.
 Unlike failure records, floors are never evicted for size.
 
 **What it masks.** A change that doubles a job's memory use gets the memory on its retry, once.

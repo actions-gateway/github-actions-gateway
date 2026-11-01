@@ -151,6 +151,7 @@ The history alone cannot be relied on to raise it, because a job killed at its l
 **What it does.** When a worker the profile built has its runner container killed `OOMKilled`, the job's next attempt gets the killed limit times the profile's headroom (1.4 under `Binpack`, `limitHeadroomPercent / 100` under `Throughput`), rounded up to 64Mi and capped at `maxRequests.memory`, or at twice the killed limit where you set none.
 Under `Binpack` the memory request rises with it.
 The run is then re-run automatically on the same per-run budget as every other recovery (`maxEvictionRetries`), and a Normal `MemoryLimitRaisedForRetry` Event on the `RunnerSet` names the job, the run and both limits.
+A run whose budget is already spent gets `EvictionRetriesExhausted` instead, with no `MemoryLimitRaisedForRetry`; the raised limit still applies if you re-run it by hand.
 The raised limit stays with that job of that run for 7 days, so a manual re-run gets it too; no other job is affected, and the next run of the workflow starts from the history again.
 
 **When it does not.** Each of these is withheld with a Normal `EvictionRerunWithheld` Event and counted in `actions_gateway_eviction_rerun_withheld_total{cause="oom"}`, with no budget slot spent:
@@ -159,7 +160,7 @@ The raised limit stays with that job of that run for 7 days, so a manual re-run 
 |---|---|---|
 | `own_limit` | The set's profile is `Static` or `NodeShare`, the profile was still `AwaitingSamples` when the pod was built, or the killed limit is already at `maxRequests.memory` | Raise the runner's memory limit, or `maxRequests.memory`, and re-run by hand |
 | `same_class_again` | The job was killed again after a retry raised its limit: one raise per job | The job needs more than the headroom gives it; look at what grew |
-| `breaker_open` | More than 10 runs had a runner killed within 10 minutes, so retries are paused for 30, with one Warning `AutoRetryPaused` Event | Look for a shared cause first: a dependency that grew every job, or nodes packed past their memory |
+| `breaker_open` | More than 10 runs were re-run for memory within 10 minutes, so retries are paused for 30, with one Warning `AutoRetryPaused` Event | Look for a shared cause first: a dependency that grew every job, or nodes packed past their memory |
 
 A sidecar killed for memory, such as `dind`, is not retried: the runner survives it and reports the job's own result.
 Neither is a runner with no memory limit, which the kernel killed for the node's memory rather than its own.

@@ -129,7 +129,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 	}
 	breaker := classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}
 	if p.classBreakers.open(breaker, p.nowFn()) {
-		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonBreakerOpen, fmt.Sprintf("worker pod for run %s had its runner killed at its memory limit, but out-of-memory retries on this set are paused: more than %d runs were killed within %s, which points at a shared cause rather than one job's growth. Retries resume %s after the pause began; re-run it by hand if this job needs it",
+		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonBreakerOpen, fmt.Sprintf("worker pod for run %s had its runner killed at its memory limit, but out-of-memory retries on this set are paused: more than %d runs were re-run for memory within %s, which points at a shared cause rather than one job's growth. Retries resume %s after the pause began; re-run it by hand if this job needs it",
 			runID, classBreakerRuns, classBreakerWindow, classBreakerCooldown))
 		return closedChan()
 	}
@@ -149,19 +149,23 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 			job, runID, prior.KilledLimit.String(), prior.Limit.String()))
 		return closedChan()
 	}
-	if p.classBreakers.record(breaker, runID, p.nowFn()) {
-		log.Warn("out-of-memory retries paused on this set: too many runs killed in a short window",
-			"runs", classBreakerRuns, "window", classBreakerWindow, "pause", classBreakerCooldown)
-		target.RecordEvent(corev1.EventTypeWarning, "AutoRetryPaused", "RetryEvictedJob",
-			fmt.Sprintf("out-of-memory retries are paused for %s: more than %d runs had a runner killed at its memory limit within %s, which points at a shared cause rather than one job's growth",
-				classBreakerCooldown, classBreakerRuns, classBreakerWindow))
+	// The breaker counts, and the Event promises, only a run that holds a slot: a
+	// futile or over-budget one is reported by the recovery path instead.
+	onReserved := func() {
+		if p.classBreakers.record(breaker, runID, p.nowFn()) {
+			log.Warn("out-of-memory retries paused on this set: too many runs killed in a short window",
+				"runs", classBreakerRuns, "window", classBreakerWindow, "pause", classBreakerCooldown)
+			target.RecordEvent(corev1.EventTypeWarning, "AutoRetryPaused", "RetryEvictedJob",
+				fmt.Sprintf("out-of-memory retries are paused for %s: more than %d runs had a runner killed at its memory limit within %s, which points at a shared cause rather than one job's growth",
+					classBreakerCooldown, classBreakerRuns, classBreakerWindow))
+		}
+		log.Info("raising the job's memory limit for its re-run", "runID", runID, "job", job,
+			"container", runnerContainer, "killedLimit", killed.String(), "limit", next.String())
+		target.RecordEvent(corev1.EventTypeNormal, "MemoryLimitRaisedForRetry", "RetryEvictedJob",
+			fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and the run is re-run automatically", job, runID, killed.String(), next.String()))
 	}
-	log.Info("raising the job's memory limit for its re-run", "runID", runID, "job", job,
-		"container", runnerContainer, "killedLimit", killed.String(), "limit", next.String())
-	target.RecordEvent(corev1.EventTypeNormal, "MemoryLimitRaisedForRetry", "RetryEvictedJob",
-		fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and the run is re-run automatically", job, runID, killed.String(), next.String()))
 	return p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay,
-		evictionTierScaleSet, recoveryCauseOOM, rerunDisruption{key: pod.Name, job: job})
+		evictionTierScaleSet, recoveryCauseOOM, rerunDisruption{key: pod.Name, job: job, onReserved: onReserved})
 }
 
 // withholdOOMRerun logs and records one withheld out-of-memory retry.

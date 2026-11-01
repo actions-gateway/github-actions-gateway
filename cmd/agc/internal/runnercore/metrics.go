@@ -103,8 +103,8 @@ type Metrics struct {
 	//     only, Q1183), the runner was killed at a memory limit no sizing profile can
 	//     raise.
 	//   - same_class_again, breaker_open (cause oom, scale-set only, Q1183): the job was
-	//     killed again after a retry raised its limit, or too many runs were killed at
-	//     once. No slot is spent.
+	//     killed again after a retry raised its limit, or too many runs were re-run for
+	//     memory at once. No slot is spent.
 	//
 	// It is counted so a re-run that did not happen is visible rather than
 	// indistinguishable from a recovery that never armed.
@@ -287,7 +287,7 @@ func NewMetrics() *Metrics {
 
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_rerun_withheld_total",
-			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom; classic only ever deletion and eviction), and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q811 on classic's deletion arm, every cause on scaleset, Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, scaleset only, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, scaleset only, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were killed within 10 minutes; attempt_limit, run_too_old, superseded: scaleset only, Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
+			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom; classic only ever deletion and eviction), and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q811 on classic's deletion arm, every cause on scaleset, Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, scaleset only, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, scaleset only, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were re-run for it within 10 minutes; attempt_limit, run_too_old, superseded: scaleset only, Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{

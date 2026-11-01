@@ -245,7 +245,8 @@ It also gives the person who has to act a reason, where today an exhausted budge
 
 ### Candidate classes
 
-None is reproduced yet; each needs R12's reproduction before it becomes a class, and the CI history below shows which ones occur.
+R12 asks each candidate for a dogfood reproduction before it becomes a class, and the CI history below shows which ones occur.
+The out-of-memory class was built without one, so that requirement is open for it at merge; the rest wait on theirs.
 
 | Candidate | What GAG would observe | Clears by (R11) | Note |
 |---|---|---|---|
