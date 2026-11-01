@@ -50,6 +50,41 @@ func TestRecoverEvictedScaleSetWorkers_Q1235_RecoversTheStrandedJob(t *testing.T
 	assert.Equal(t, scaleSetPodName("gpu", "job-a"), e.disruption.key, "its budget slot is keyed by the lost worker")
 }
 
+// TestStrandedJob_Q1235_SparesARunWithAJobRunning: job-a and job-b are legs of one
+// matrix run 111, and job-a runs on job-b's worker. The walk names job-b, but a
+// force-cancel ends the whole run and job-a with it, so nothing is cancelled on either
+// seam.
+func TestStrandedJob_Q1235_SparesARunWithAJobRunning(t *testing.T) {
+	matrix := []OrphanedWorker{
+		inFlight("job-a", "myorg/repo-a", "111"),
+		inFlight("job-b", "myorg/repo-a", "111"),
+	}
+	for _, seam := range []string{"abandoned", "disruption"} {
+		t.Run(seam, func(t *testing.T) {
+			ctx := context.Background()
+			pods := []*corev1.Pod{startedOn(mintedWorker("job-b", "myorg/repo-a", "111"), "job-a")}
+			if seam == "disruption" {
+				pods = append(pods, evicted(mintedWorker("job-a", "myorg/repo-a", "111")))
+			}
+			f := newAbandonedScaleSetFixture(t, http.StatusAccepted, pods...)
+			target := &inFlightTarget{stubTarget: f.target, jobs: matrix}
+
+			if seam == "abandoned" {
+				<-f.p.RecoverAbandonedScaleSetWorker(ctx, target, reapedPendingWorker(scaleSetPodName("gpu", "job-a")))
+			} else {
+				done, err := f.p.RecoverEvictedScaleSetWorkers(ctx, target)
+				require.NoError(t, err)
+				<-done
+			}
+
+			forceCancel, rerun := f.calls.snapshot()
+			assert.Empty(t, forceCancel, "cancelling run 111 would end job-a, which is running")
+			assert.Empty(t, rerun)
+			assert.Empty(t, f.p.pendingStrandedRecheckKeys())
+		})
+	}
+}
+
 // TestRecoverEvictedScaleSetWorkers_Q1235_AWorkerThatRanIsNotWalked is the control: a
 // container that ran may have taken a job before its start was stamped, which may be
 // the very job a walk would name, so the worker is spared as before.

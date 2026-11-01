@@ -754,6 +754,7 @@ A worker that never ran has no `JobStarted` to replace it, so it is the identity
 So the recovery first lists the set's workers, and where one carries that job as its `actions-gateway.com/started-job-id`, the job has a runner and its run is spared (Q1169).
 The set is still one runner short, though, and the job left without one is a different job, which the recovery names and cancels instead (Q1195).
 It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
+A force-cancel ends the whole run, so a job it names whose run has a job a live worker has started, such as another leg of one matrix, is not recovered: cancelling it would end that running job (Q1235).
 A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
 The recovery names no job while any worker is `Running` with no start recorded, because that runner may hold the job already with its `JobStarted` still in flight.
 It walks once more after that start lands instead, from the abandoned-run sweeper's 30-second tick: at most once per lost worker, and for at most ten minutes after the loss (Q1235).

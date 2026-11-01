@@ -272,6 +272,17 @@ func (s scaleSetWorkerSet) strandedJob(ownerName, podName string, inFlight []Orp
 	return OrphanedWorker{}, false
 }
 
+// runStarted reports whether a live worker's runner has started a job of runID, as far
+// as inFlight records the runs of the started jobs.
+func (s scaleSetWorkerSet) runStarted(runID string, inFlight []OrphanedWorker) bool {
+	for _, w := range inFlight {
+		if w.RunID == runID && s.startedJobs[w.JobID] {
+			return true
+		}
+	}
+	return false
+}
+
 // holderOf returns the worker whose runner started the job minted was created for, or
 // "" where none did.
 func (s scaleSetWorkerSet) holderOf(ownerName, minted string) string {

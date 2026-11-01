@@ -220,5 +220,14 @@ func (p *Provisioner) strandedScaleSetJob(ctx context.Context, target Target, wo
 		log.Warn("could not read the set's in-flight jobs to name the job left without a runner", "error", err)
 		return OrphanedWorker{}, false
 	}
-	return workers.strandedJob(target.Key().Name, podName, inFlight)
+	job, ok := workers.strandedJob(target.Key().Name, podName, inFlight)
+	// A force-cancel ends the whole run, so a stranded job sharing a run with a job a live
+	// worker has started, such as another leg of one matrix, is left to GitHub's
+	// unstarted-job timeout rather than recovered by ending that job (Q1235).
+	if ok && workers.runStarted(job.RunID, inFlight) {
+		log.Info("the job left without a runner shares its run with a job another worker is running; not force-cancelling, which would end that job",
+			"jobID", job.JobID, "runID", job.RunID)
+		return OrphanedWorker{}, false
+	}
+	return job, ok
 }

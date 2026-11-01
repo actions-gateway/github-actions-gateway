@@ -1599,6 +1599,7 @@ On the `ScaleSet` tier the cancelled run can belong to a different job than the 
 A worker evicted, preempted or drained before its container ran is handled the same way when no idle worker of its set could take a job instead (Q1235).
 Where it cannot name that job because a `Running` worker has no job start recorded yet, it walks again once the start lands, every 30 seconds for up to ten minutes after the loss, and logs `re-checked the lost worker's walk` (Q1235).
 Where the listener holds no record of the job, or the ten minutes pass, it cancels nothing and that job waits out GitHub's ~15-minute unstarted-job timeout.
+The same holds where that job's run has another job running on a worker, such as a second leg of one matrix: a force-cancel would end the running job too, so the AGC logs `not force-cancelling, which would end that job` and leaves it (Q1235).
 `AGC_FANOUT_COMPLETION` does not affect this path (it gates only the Q260 sibling fan-out).
 
 **Automatic re-run of the cancelled run (Q691).** The cancelled conclusion is recoverable, and the AGC recovers it for you: the run is queued for an automatic `rerun-failed-jobs`, fired once the owning group **places a worker pod again**.
