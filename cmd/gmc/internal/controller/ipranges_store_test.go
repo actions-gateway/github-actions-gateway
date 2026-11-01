@@ -182,3 +182,36 @@ func TestIPRangeReconciler_FailedFetchLeavesStoreAlone(t *testing.T) {
 	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: storeTestNamespace, Name: IPRangeStoreName}, &cm))
 	assert.Equal(t, stamp, cm.Data["fetchedAt"])
 }
+
+// The owner reference is what lets helm uninstall remove the ConfigMap with the
+// GMC's Deployment; one written by a build without it gains it on the next save.
+func TestIPRangeStore_SaveWritesOwner(t *testing.T) {
+	ctx := context.Background()
+	owner := metav1.OwnerReference{APIVersion: "apps/v1", Kind: "Deployment", Name: "gmc", UID: "d-uid"}
+	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
+	read := func(t *testing.T, fc client.Client) []metav1.OwnerReference {
+		t.Helper()
+		var cm corev1.ConfigMap
+		require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: storeTestNamespace, Name: IPRangeStoreName}, &cm))
+		return cm.OwnerReferences
+	}
+
+	t.Run("on create", func(t *testing.T) {
+		store, fc := newTestIPRangeStore(t)
+		store.Owner = &owner
+		require.NoError(t, store.Save(ctx, cidrs, time.Now()))
+		assert.Equal(t, []metav1.OwnerReference{owner}, read(t, fc))
+	})
+	t.Run("added on update, never duplicated", func(t *testing.T) {
+		store, fc := newTestIPRangeStore(t, storeConfigMap(nil))
+		store.Owner = &owner
+		require.NoError(t, store.Save(ctx, cidrs, time.Now()))
+		require.NoError(t, store.Save(ctx, cidrs, time.Now()))
+		assert.Equal(t, []metav1.OwnerReference{owner}, read(t, fc))
+	})
+	t.Run("none without an owner", func(t *testing.T) {
+		store, fc := newTestIPRangeStore(t)
+		require.NoError(t, store.Save(ctx, cidrs, time.Now()))
+		assert.Empty(t, read(t, fc))
+	})
+}

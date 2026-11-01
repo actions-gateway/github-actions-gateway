@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -153,6 +155,14 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	}
 	seedCtx, cancelSeed := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelSeed()
+	if rc.deploymentName != "" {
+		owner, err := deploymentOwnerRef(seedCtx, mgr.GetAPIReader(), rc.podNamespace, rc.deploymentName)
+		if err != nil {
+			setupLog.Error(err, "persisting GitHub IP ranges without an owner; helm uninstall will leave the ConfigMap behind",
+				"configMap", controller.IPRangeStoreName)
+		}
+		ipStore.Owner = owner
+	}
 	if n, err := ipStore.SeedCache(seedCtx, ipCache, time.Now()); err != nil {
 		setupLog.Error(err, "not seeding GitHub IP ranges from the persisted copy; egress waits for the first fetch")
 	} else if n > 0 {
@@ -342,4 +352,14 @@ func setupHealthChecks(mgr ctrl.Manager, enableWebhooks bool) error {
 		}
 	}
 	return nil
+}
+
+// deploymentOwnerRef returns a non-controller owner reference to the named
+// Deployment, or nil and the error when it cannot be read.
+func deploymentOwnerRef(ctx context.Context, r client.Reader, namespace, name string) (*metav1.OwnerReference, error) {
+	var d appsv1.Deployment
+	if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: name}, &d); err != nil {
+		return nil, fmt.Errorf("read Deployment %s/%s: %w", namespace, name, err)
+	}
+	return &metav1.OwnerReference{APIVersion: "apps/v1", Kind: "Deployment", Name: d.Name, UID: d.UID}, nil
 }

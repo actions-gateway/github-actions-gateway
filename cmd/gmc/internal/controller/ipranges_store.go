@@ -47,6 +47,9 @@ type IPRangeStore struct {
 	Writer    client.Writer
 	Namespace string
 	Name      string
+	// Owner, when set, is written as the ConfigMap's owner so the GMC's Deployment
+	// takes it with it on uninstall. Nil writes no owner.
+	Owner *metav1.OwnerReference
 	// MaxAge is the oldest a persisted set may be and still seed the cache, and how
 	// long a seeded set is served. It matches the EgressRulesStale threshold, so a
 	// seeded set never outlives the age at which a running GMC reports its own
@@ -77,13 +80,28 @@ func (s *IPRangeStore) Save(ctx context.Context, cidrs []net.IPNet, fetchedAt ti
 			},
 			Data: data,
 		}
+		s.ensureOwner(&cm)
 		return s.Writer.Create(ctx, &cm)
 	}
 	if err != nil {
 		return err
 	}
 	cm.Data = data
+	s.ensureOwner(&cm)
 	return s.Writer.Update(ctx, &cm)
+}
+
+// ensureOwner adds Owner to cm unless an owner with its UID is already listed.
+func (s *IPRangeStore) ensureOwner(cm *corev1.ConfigMap) {
+	if s.Owner == nil {
+		return
+	}
+	for _, ref := range cm.OwnerReferences {
+		if ref.UID == s.Owner.UID {
+			return
+		}
+	}
+	cm.OwnerReferences = append(cm.OwnerReferences, *s.Owner)
 }
 
 // Load returns the persisted set and its fetch time. No ConfigMap yields an empty

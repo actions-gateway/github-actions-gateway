@@ -261,7 +261,8 @@ Nothing to do.
 A restarted GMC used to give those pools no GitHub egress until its first `api.github.com/meta` fetch succeeded, which a rate-limited fetch could hold off for up to an hour.
 The GMC now writes each successful fetch to a ConfigMap named `actions-gateway-gmc-ip-ranges` in its own namespace and seeds itself from it at startup (Q1227).
 A copy as old as the `EgressRulesStale` window (49 hours on the default refresh) is not used, and a seeded copy stops being used at that age even if no fetch has succeeded.
-The ConfigMap is created on the first successful fetch after the upgrade, and `helm uninstall` leaves it behind.
+The ConfigMap is created on the first successful fetch after the upgrade and is owned by the GMC's Deployment, so `helm uninstall` deletes it with the Deployment.
+An install that does not set the chart's `DEPLOYMENT_NAME` environment variable on the GMC writes it with no owner, and it is left behind on uninstall.
 
 **Rolling back** returns a restart to waiting for the first fetch; the older GMC ignores the ConfigMap.
 
