@@ -756,7 +756,9 @@ The set is still one runner short, though, and the job left without one is a dif
 It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
 A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
 The recovery names no job while any worker is `Running` with no start recorded, because that runner may hold the job already with its `JobStarted` still in flight.
-It walks once more after that start lands instead, from the abandoned-run sweeper's 30-second tick: at most once per lost worker, and for at most ten minutes after the loss, inside GitHub's ~15-minute unstarted-job timeout (Q1235).
+It walks once more after that start lands instead, from the abandoned-run sweeper's 30-second tick: at most once per lost worker, and for at most ten minutes after the loss (Q1235).
+GitHub's ~15-minute unstarted-job timeout runs from the stranded job's queueing, which is earlier than the loss, so it can end the job inside that window: at the default `pendingPodDeadline` of ten minutes, a job queued alongside the reaped worker times out about five minutes after the reap.
+The window therefore bounds how long a walk waits, not whether the recovery beats GitHub's timeout.
 The waiting walks are in process memory like the sweeper's other set, so a restart drops them and the job then waits out that timeout.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
 A finished job leaves the record only in a later save, so its worker pod can be gone first, at once under `completedPodTTL: 0s`.
