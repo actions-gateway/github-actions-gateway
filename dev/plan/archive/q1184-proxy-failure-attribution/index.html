@@ -2704,7 +2704,7 @@
 <h1 id="q1184-proxy-failure-attribution-implementation-plan">Q1184: proxy failure attribution, implementation plan<a class="headerlink" href="#q1184-proxy-failure-attribution-implementation-plan" title="Permanent link">&para;</a></h1>
 <p>Builds <a href="../../../design/05-security/#proxy-failure-attribution">05-security.md § Proxy failure attribution</a>, which settles the posture: off by default on two switches, failures only in a per-namespace in-memory buffer, the consumer namespace learned from the port a connection arrives on, and an AGC reading only its own namespace's records over a dedicated mTLS listener.
 The row was Q1184.
-Its consumer, classified retry (<a href="../../../queue/Q1183/">Q1183</a>), is blocked, so until it lands nothing acts on what this builds.</p>
+Its consumer, classified retry (Q1183), is blocked, so until it lands nothing acts on what this builds.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
@@ -2810,7 +2810,7 @@ The AGC computes each worker's <code>HTTPS_PROXY</code> itself on every acquired
 </ul>
 <h2 id="phase-3-the-agc-reads-its-records">Phase 3: the AGC reads its records<a class="headerlink" href="#phase-3-the-agc-reads-its-records" title="Permanent link">&para;</a></h2>
 <p>A new package, <code>cmd/agc/internal/proxyattribution</code>, run as a manager runnable on every AGC replica, since each replica's sessions own their own pods.
-Nothing calls its lookup until classified retry (<a href="../../../queue/Q1183/">Q1183</a>) lands, so this phase's observable output is a counter.</p>
+Nothing calls its lookup until classified retry (Q1183) lands, so this phase's observable output is a counter.</p>
 <ul>
 <li><strong>It reads only while its own gateway is opted in.</strong> Each poll re-reads the gateway, so turning <code>proxyFailureAttribution</code> off stops the reads and drops what is held, with no restart.</li>
 <li><strong>Which pools: derived, not listed.</strong> The AGC's Role can <code>get</code> ConfigMaps but not <code>list</code> them, so it names each projection from the pools its own RunnerSets resolve to (<code>proxyRef</code>, else the gateway's <code>defaultProxyRef</code>), the same resolution the worker's port comes from.
@@ -2841,7 +2841,7 @@ The gateway-level reference also carries each AGC's own egress through the pool,
 <li><strong>A failure attributed end to end, both lanes.</strong> A pod carrying a RunnerSet's label, so the AGC counts it as its own worker, waits past the reader's two-second edge margin, CONNECTs to an unresolvable host through its namespace's port, and stays Running so its address window is still open when the record is read.
   A dial failure rather than a denial, because a pool refuses a destination only once it is opted in to an allowlist, which takes an extra destination the GMC's platform allowlist has to admit.
   The gateway's <code>actions_gateway_proxy_failure_records_total{outcome="dial-failed",result="attributed"}</code> must then rise, which only a read over mTLS, a matched epoch and cursor, and the address-window join together produce.
-  Nothing else observes the join until classified retry (<a href="../../../queue/Q1183/">Q1183</a>) calls the lookup.</li>
+  Nothing else observes the join until classified retry (Q1183) calls the lookup.</li>
 <li><strong>The scrape stays in the cluster.</strong> A pod in the consumer namespace mounts the gateway's metrics client Secret and reads the AGC's metrics endpoint, so no certificate leaves the cluster; the namespace carries the <code>metrics: enabled</code> label the AGC's ingress rule admits scrapers from.</li>
 </ul>
 

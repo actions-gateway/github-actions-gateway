@@ -2869,7 +2869,7 @@
 
 <h1 id="q555-flaky-job-detection-and-classified-retry-problem-requirements-scope">Q555 flaky-job detection and classified retry: problem, requirements, scope<a class="headerlink" href="#q555-flaky-job-detection-and-classified-retry-problem-requirements-scope" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ draft for a design session, written 2026-10-10.
-Nothing is built and no CRD shape is committed; the work is split across the rows <a href="#how-this-splits-into-backlog-items">below</a>.
+Detection (Q555) and the first retry class (Q1183) are built on the scale-set tier, and no CRD shape is committed; the work is split across the rows <a href="#how-this-splits-into-backlog-items">below</a>.
 Q555, now built, was revived into the Queue: on 2026-10-10 the maintainer ruled that this repository's own CI, which runs on GAG, is the operator demand its trigger waited for.
 <a href="../q555-automatic-recovery-design/">The design</a> proposes how to build it and recommends answers to the <a href="#open-questions-for-the-design-session">open questions</a>, pending sign-off.
 It extends <a href="../../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">G.17</a> rather than replacing it: G.17 holds the original prior-art table and the tenant-signal channel analysis, and this file adds the systems G.17 did not cover, a first-principles pass, and testable requirements.</p>
@@ -2925,9 +2925,14 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>Nothing</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1183/">Q1183</a></td>
+<td>Q1183 (built on the scale-set tier)</td>
 <td>Classified retry, R9 to R17, starting with <code>OOMKilled</code> under right-sizing</td>
 <td>Q555 (built)</td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1244/">Q1244</a>, <a href="../../queue/Q1245/">Q1245</a></td>
+<td>What Q1183 left: the persistent deferred wait, and the misclassification alert with a paused-breaker gauge</td>
+<td>Q1183 (built)</td>
 </tr>
 <tr>
 <td>Q1177 (closed by the <code>own_limit</code> withhold), Q1179 (closed by the <code>node_shutdown</code> arm)</td>
@@ -3148,7 +3153,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <tr>
 <td>The job exceeded its own limit</td>
 <td><code>OOMKilled</code> at its limit under <code>Static</code> sizing, an <code>ephemeral-storage</code> limit eviction, <code>timeout-minutes</code></td>
-<td>The eviction arm withholds the storage case as <code>own_limit</code> (Q1177); <code>OOMKilled</code> and <code>timeout-minutes</code> reach no arm</td>
+<td>The eviction arm withholds the storage case as <code>own_limit</code> (Q1177); the out-of-memory class withholds a runner killed at a limit no profile can raise as <code>own_limit</code> on the scale-set tier (Q1183); <code>timeout-minutes</code> reaches no arm</td>
 </tr>
 <tr>
 <td>A newer commit superseded the run</td>
@@ -3183,7 +3188,8 @@ It also gives the person who has to act a reason, where today an exhausted budge
 </tbody>
 </table>
 <h3 id="candidate-classes">Candidate classes<a class="headerlink" href="#candidate-classes" title="Permanent link">&para;</a></h3>
-<p>None is reproduced yet; each needs R12's reproduction before it becomes a class, and the CI history below shows which ones occur.</p>
+<p>R12 asks each candidate for a dogfood reproduction before it becomes a class, and the CI history below shows which ones occur.
+The out-of-memory class was built without one, so that requirement is open for it at merge; the rest wait on theirs.</p>
 <table>
 <thead>
 <tr>
@@ -3198,7 +3204,7 @@ It also gives the person who has to act a reason, where today an exhausted budge
 <td>Out of memory under a <a href="../runner-sizing-profiles/">right-sizing</a> profile</td>
 <td>Container <code>OOMKilled</code> at its limit, on a set whose profile derives limits from history</td>
 <td>Observable: GAG computes the next limit</td>
-<td>Qualifies under R11 only when the retry's pod gets a strictly higher memory limit; see <a href="#oomkilled-under-right-sizing">below</a></td>
+<td>Qualifies under R11 only when the retry's pod gets a strictly higher memory limit; see <a href="#oomkilled-under-right-sizing">below</a>. Built under Q1183 for the runner container, without R12's dogfood reproduction (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">§4.2</a>)</td>
 </tr>
 <tr>
 <td>Setup failure before the first step</td>

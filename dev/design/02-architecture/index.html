@@ -3543,7 +3543,7 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Jobs automatically re-queued after a worker pod disruption, by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>)</td>
+<td>Jobs automatically re-queued after a worker pod disruption, by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>); <code>cause="oom"</code>, scale-set only, is a runner killed at its own memory limit and re-run with a higher one under a <code>Binpack</code> or <code>Throughput</code> sizing profile (Q1183)</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
@@ -3555,7 +3555,7 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code> (<code>cause="deletion"</code>): the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811); the retry slot is spent, but no manual re-run is wanted. <code>reason="own_limit"</code> (<code>cause="eviction"</code>): the kubelet evicted the worker for exceeding its own storage limit, which a re-run repeats; no slot is spent (Q1177). On <code>tier="scaleset"</code>, <code>run_cancelled</code> is checked on every cause and GAG's own force-cancel is told apart by the failure ledger, and three futility reasons are withheld before any slot is spent: <code>attempt_limit</code> (past GitHub's 50 re-runs), <code>run_too_old</code> (outside its 30-day re-run window) and <code>superseded</code> (a newer commit's run of the same workflow, event and branch) (Q1181)</td>
+<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code> (<code>cause="deletion"</code>): the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811); the retry slot is spent, but no manual re-run is wanted. <code>reason="own_limit"</code> (<code>cause="eviction"</code>): the kubelet evicted the worker for exceeding its own storage limit, which a re-run repeats; no slot is spent (Q1177). On <code>tier="scaleset"</code>, <code>run_cancelled</code> is checked on every cause and GAG's own force-cancel is told apart by the failure ledger, and three futility reasons are withheld before any slot is spent: <code>attempt_limit</code> (past GitHub's 50 re-runs), <code>run_too_old</code> (outside its 30-day re-run window) and <code>superseded</code> (a newer commit's run of the same workflow, event and branch) (Q1181). With <code>cause="oom"</code> (scale-set, Q1183), <code>own_limit</code> is a runner killed at a memory limit no sizing profile can raise, <code>same_class_again</code> a job killed again after a retry raised its limit, and <code>breaker_open</code> a kill while more than 10 runs re-run for memory within 10 minutes have paused the class</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
@@ -3770,6 +3770,18 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td>Warning</td>
 <td>none</td>
 <td>A failed scale-set job's worker showed a platform fault (a failed pod, <code>DisruptionTarget</code>, <code>OOMKilled</code>, or the runner exiting non-zero); names the fault (Q555)</td>
+</tr>
+<tr>
+<td><code>MemoryLimitRaisedForRetry</code></td>
+<td>Normal</td>
+<td><code>actions_gateway_eviction_retries_total{cause="oom"}</code></td>
+<td>A scale-set runner was killed at its own memory limit and the sizing profile gives the job's next attempt a higher one, so the run is re-run; names both limits (Q1183)</td>
+</tr>
+<tr>
+<td><code>AutoRetryPaused</code></td>
+<td>Warning</td>
+<td><code>actions_gateway_eviction_rerun_withheld_total{reason="breaker_open"}</code></td>
+<td>More than 10 runs on the set had a runner killed for memory within 10 minutes, so out-of-memory retries are paused for 30 (Q1183)</td>
 </tr>
 </tbody>
 </table>

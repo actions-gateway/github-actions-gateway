@@ -1180,6 +1180,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of memory under right-sizing: the first retry class (scale-set, Q1183)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3115,6 +3126,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of memory under right-sizing: the first retry class (scale-set, Q1183)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3665,6 +3687,12 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <td>The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job <code>cancelled</code> in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then <strong>does</strong> accept <code>rerun-failed-jobs</code>, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does <strong>not</strong> enter <code>disruptionAwaitingRecovery</code>, on either tier: a job that never ran has no failed job for <code>rerun-failed-jobs</code> to act on, so the run has to be concluded first. See <a href="#stuck-pending-worker-pod">Stuck-Pending Worker Pod</a> (Q628/Q676/Q683/Q691/Q766)</td>
 </tr>
 <tr>
+<td>Runner killed at its own memory limit</td>
+<td><code>PodFailed</code>, the runner container terminated <code>OOMKilled</code></td>
+<td>Only under a right-sizing profile (Q1183)</td>
+<td>Not a disruption: the job outgrew its limit. A retry class re-runs it where the next attempt can get a strictly higher limit, and withholds it everywhere else; see <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a></td>
+</tr>
+<tr>
 <td>Job failed on its own</td>
 <td><code>PodFailed</code>, empty reason, no deletion mark</td>
 <td>❌</td>
@@ -3786,7 +3814,7 @@ Preemption detection matches the full type/status/reason triple; drain detection
 <p>The kubelet writes <code>PodFailed</code> + <code>Evicted</code> for two causes, and only one is a disruption.
 Node pressure evicts whichever pod the kubelet ranks worst, so a fresh pod on a fresh node clears it.
 A pod that outgrows its own storage limit is evicted by the same code path for a cause its job and template own, and a re-run gets the same limit.
-That is the storage analogue of <code>OOMKilled</code>, which the <a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">automatic-recovery design</a> withholds as <code>own_limit</code>.
+That is the storage analogue of <code>OOMKilled</code>, which is withheld as <code>own_limit</code> too unless a sizing profile can give the re-run more memory (<a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a>).
 Until Q1177 the eviction arm keyed on the reason alone and re-ran these up to <code>maxEvictionRetries</code> times.</p>
 <p>Two kubelet signals separate them, measured on kind v1.35.5 (2026-10-23) and matching the kubelet source at that version (<code>pkg/kubelet/eviction/eviction_manager.go</code>, <code>helpers.go</code>):</p>
 <table>
@@ -3827,6 +3855,77 @@ The withhold is decided at detection, before the budget is touched, so it spends
 They raise the kubelet's <code>memory.available</code> hard threshold on the worker's own node to just under what that node has free, read from its <code>stats/summary</code> at the moment of use, and make the worker hold 1GiB; a low memory request is what makes the kubelet's ranking pick it.
 The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
 Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code>.</p>
+<h4 id="out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">Out of memory under right-sizing: the first retry class (scale-set, Q1183)<a class="headerlink" href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183" title="Permanent link">&para;</a></h4>
+<p>A retry class is a failure GAG recognises as platform-caused from objects it owns, and re-runs on the disruption arms' path: the same recovery claim, the futility checks above, and the run's <code>maxEvictionRetries</code> budget in the failure ledger, so a run cannot collect one budget per class.
+Each class declares how its cause clears (<a href="../../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">R11</a>).
+This one clears by a value GAG computes: the next attempt's memory limit.</p>
+<p>A runner killed at its own memory limit is the tenant's job outgrowing its pod, which a re-run at the same limit repeats.
+Under the <code>Binpack</code> and <code>Throughput</code> <a href="../../operations/worker-rightsizing/">sizing profiles</a> GAG chose that limit from history, so it can choose a higher one.
+The history cannot be counted on to move by itself: the sampler records an out-of-memory job's peak at or below the limit that killed it.
+So the class raises the limit from the killed pod's own:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>next = min(roundUp64Mi(killed × headroom), ceiling)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
+</code></pre></div>
+<p>It fires on a worker whose pod reached <code>PodFailed</code> with the <strong>runner</strong> container terminated <code>OOMKilled</code>, and which carries the <code>actions-gateway.com/sizing-profile</code> annotation, meaning the profile derived its limits when it was built.
+A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.</p>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>What happens</th>
+<th><code>reason</code> on <code>eviction_rerun_withheld_total{cause="oom"}</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Profile-built worker, <code>next</code> above the killed limit</td>
+<td><code>next</code> is recorded for the job's later attempts and the run goes to the disruption arms' futility checks and budget. Once it holds a slot, a <strong>Normal</strong> <code>MemoryLimitRaisedForRetry</code> Event names both limits and the run is re-run as <code>eviction_retries_total{cause="oom"}</code>; a run with no budget left gets <code>EvictionRetriesExhausted</code> and no <code>MemoryLimitRaisedForRetry</code></td>
+<td>none: re-run</td>
+</tr>
+<tr>
+<td>No right-sizing profile now, or the pod was built before one applied (<code>Static</code>, <code>NodeShare</code>, <code>AwaitingSamples</code>)</td>
+<td>Withheld: a re-run gets the same limit</td>
+<td><code>own_limit</code></td>
+</tr>
+<tr>
+<td><code>next</code> not above the killed limit: at <code>maxRequests</code>, or <code>limitHeadroomPercent: 100</code></td>
+<td>Withheld</td>
+<td><code>own_limit</code></td>
+</tr>
+<tr>
+<td>The same job killed again after its limit was raised</td>
+<td>Withheld: one raise per job, so growth is bounded by the ceiling</td>
+<td><code>same_class_again</code></td>
+</tr>
+<tr>
+<td>More than 10 distinct runs held a slot in 10 minutes</td>
+<td>Withheld for 30 minutes, with one <strong>Warning</strong> <code>AutoRetryPaused</code> Event when it opens</td>
+<td><code>breaker_open</code></td>
+</tr>
+<tr>
+<td>The runner had no memory limit</td>
+<td>Not this class: the kernel killed it for the node's memory. No re-run, as before</td>
+<td>none: not recognised</td>
+</tr>
+</tbody>
+</table>
+<p>Every withhold spends no slot and emits the <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the fix.</p>
+<p><strong>The raised limit is a per-job floor in the failure ledger</strong>, under <code>memoryFloors["&lt;runID&gt;/&lt;job name&gt;"]</code> for 7 days.
+Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under <code>Binpack</code> the memory request rises with it, since that profile sets the two equal.
+It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
+The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.
+That window is a rolling update in which the new process read the ledger before the old one wrote the floor: the re-run spends a slot at the killed limit, and its kill is then withheld as <code>same_class_again</code> though no raise ever applied.
+Closing it means an uncached ledger read for every worker a right-sized set builds, since the assignment carries no run attempt to confine the read to re-runs, so it stays open.
+Unlike failure records, floors are never evicted for size.</p>
+<p><strong>What it masks.</strong> A change that doubles a job's memory use gets the memory on its retry, once.
+The <code>MemoryLimitRaisedForRetry</code> Event and <code>cause="oom"</code> count make each raise visible, <code>eviction_rerun_outcomes_total{cause="oom"}</code> gives the class's success rate (<a href="../../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">R14</a>), and <code>SizingDrift</code> still reports a template below observed peaks.</p>
+<p><strong>The breaker is in memory, one per set and class cause</strong>, so a restart closes it and the per-run budget still bounds what that costs.
+The disruption arms are outside it: a mass Spot preemption is exactly when their recovery is wanted.</p>
+<p><strong>Not built yet</strong> (<a href="../../queue/Q1244/">Q1244</a>): the design's <a href="../../plan/q555-automatic-recovery-design/#how-it-waits">deferred wait</a>.
+The class re-runs inside the disruption arms' 15-minute window, which covers GitHub concluding a runner it lost (about 10 minutes) but not a sibling job that runs longer: such a run ends <code>run_never_concluded</code>, as an evicted job's does today.</p>
+<p><strong>The shape is read from source, not reproduced on dogfood</strong> (<a href="../../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">R12</a>).
+What it rests on, from recall of the kubelet rather than measured here: on cgroup v2 the kubelet has the kernel kill a container's whole process group on an out-of-memory kill, which ends the runner along with the step that used the memory; on cgroup v1, or with the kubelet's <code>singleProcessOOMKill</code>, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised.</p>
 <h4 id="flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)<a class="headerlink" href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" title="Permanent link">&para;</a></h4>
 <p>Detection records what each recovery did, and changes nothing it does.
 The listener reports every terminal <code>JobCompleted</code> once per process, with its result, run identity, triggering event and workflow ref.
@@ -4012,25 +4111,25 @@ A gateway-teardown reap is dropped because the owner is being deleted: no later 
 And one residual is inherent, the same one preemption and drain recovery carry on this tier: a never-started worker that vanishes without publishing that transient <code>Failed</code> leaves no evidence, so its run needs a manual re-run.</p>
 <hr />
 <h3 id="orphaned-running-worker-pod-scaleset-tier">Orphaned Running Worker Pod (ScaleSet tier)<a class="headerlink" href="#orphaned-running-worker-pod-scaleset-tier" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>  GitHub                AGC (ScaleSet)            K8s API            Worker Pod
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    │                        │                       │                    │
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ├─ JobAssigned ─────────&gt;│                       │                    │
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │                        ├─ create pod ─────────&gt;├─ schedule ────────&gt;│
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    │                        │  (fire-and-forget)    │                    │ Running:
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │                        │                       │                    │ registered,
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    │                        │                       │                    │ "Listening
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs"
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    │  cancelled / completed │                       │                    │
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    │  elsewhere             │                       │                    │
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ├─ JobCompleted ────────&gt;│                       │                    │
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    │  (terminal)            ├─ stamp ──────────────&gt;│  job-completed-at  │
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    │                        │                       │                    │ still Running:
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    │                        │  · 5m grace ·         │                    │ never gets
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    │                        │                       │                    │ its job
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    │                        ├─ delete pod ─────────&gt;├───────────────────&gt;✗
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    │                        │
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    │                        └─ Warning WorkerPodOrphanedRunning
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    │                           worker_pods_reaped_total{reason="orphaned_running"}++
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>  GitHub                AGC (ScaleSet)            K8s API            Worker Pod
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    │                        │                       │                    │
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ├─ JobAssigned ─────────&gt;│                       │                    │
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    │                        ├─ create pod ─────────&gt;├─ schedule ────────&gt;│
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    │                        │  (fire-and-forget)    │                    │ Running:
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    │                        │                       │                    │ registered,
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    │                        │                       │                    │ "Listening
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs"
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    │  cancelled / completed │                       │                    │
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    │  elsewhere             │                       │                    │
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    ├─ JobCompleted ────────&gt;│                       │                    │
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    │  (terminal)            ├─ stamp ──────────────&gt;│  job-completed-at  │
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    │                        │                       │                    │ still Running:
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    │                        │  · 5m grace ·         │                    │ never gets
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    │                        │                       │                    │ its job
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    │                        ├─ delete pod ─────────&gt;├───────────────────&gt;✗
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    │                        │
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    │                        └─ Warning WorkerPodOrphanedRunning
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    │                           worker_pods_reaped_total{reason="orphaned_running"}++
 </code></pre></div>
 <p>The ScaleSet tier provisions fire-and-forget — the runner pulls its own job through its own broker session, so no AGC goroutine owns the pod the way the classic path's <code>provision()</code> does.
 A worker that registers but never receives its job therefore waits at <code>Listening for Jobs</code> indefinitely, and because the reaper counts <code>Running</code> as active with no deadline, it held a concurrency slot and a node until an operator deleted it by hand (Q420; observed on the dogfood cluster, where eight such pods occupied ten of twelve quota slots and all six worker nodes with zero jobs outstanding).</p>

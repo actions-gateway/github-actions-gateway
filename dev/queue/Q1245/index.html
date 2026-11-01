@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1183/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1245/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Retry classified platform failures, starting with OOM under right-sizing - GitHub Actions Gateway</title>
+        <title>Alert on a misclassified retry class and gauge a paused breaker - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#retry-classified-platform-failures-starting-with-oom-under-right-sizing" class="md-skip">
+        <a href="#alert-on-a-misclassified-retry-class-and-gauge-a-paused-breaker" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Retry classified platform failures, starting with OOM under right-sizing
+              Alert on a misclassified retry class and gauge a paused breaker
             
           </span>
         </div>
@@ -2627,11 +2627,12 @@
   
 
 
-<h1 id="retry-classified-platform-failures-starting-with-oom-under-right-sizing">Retry classified platform failures, starting with OOM under right-sizing<a class="headerlink" href="#retry-classified-platform-failures-starting-with-oom-under-right-sizing" title="Permanent link">&para;</a></h1>
-<p>Q555's detection measures each class's retry success rate (R14) in <code>actions_gateway_eviction_rerun_outcomes_total</code>, keyed by <code>cause</code>; the budget a class spends survives a restart (<code>rerun_ledger.go</code>).
-Phase 2 of <a href="../../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">the draft</a>, split out of Q555 so that row stays detection: a framework for failure classes GAG recognises as platform-caused, each declaring how its cause clears (a fresh pod, state GAG can watch, or backoff with a breaker), on the existing re-run arms and budget.
-The first class is <code>OOMKilled</code> under a <code>Throughput</code> or <code>Binpack</code> sizing profile, retried only when the next attempt gets a strictly higher memory limit, computed from the killed pod's own limit rather than the set's history (<a href="../../plan/q555-flaky-job-retry/#oomkilled-under-right-sizing">why</a>).
-The other candidates in the draft's table each need a dogfood reproduction before they become classes.</p>
+<h1 id="alert-on-a-misclassified-retry-class-and-gauge-a-paused-breaker">Alert on a misclassified retry class and gauge a paused breaker<a class="headerlink" href="#alert-on-a-misclassified-retry-class-and-gauge-a-paused-breaker" title="Permanent link">&para;</a></h1>
+<p>Q1183 shipped the out-of-memory class's breaker as a <code>breaker_open</code> withhold plus one <code>AutoRetryPaused</code> Event, and left out three pieces <a href="../../plan/q555-automatic-recovery-design/#the-breaker-r11">the design</a> names.
+A <code>PrometheusRule</code> alert when a cause's failed share of <code>actions_gateway_eviction_rerun_outcomes_total</code> over 7 days passes 50%: R14's reading of a misclassified class, which the per-job <code>same_class_again</code> check cannot see across jobs.
+A gauge, <code>actions_gateway_auto_retry_paused{namespace, runner_group, cause}</code>, reading 1 while a breaker is open, so a dashboard shows the pause rather than a rate of withholds.
+And R16's cost split: an <code>actions-gateway.com/rerun-cause</code> annotation on a re-run's worker pods so <a href="../../operations/cost-attribution/">cost attribution</a> can attribute re-run compute by cause.
+Each new series needs the <code>deploy/monitoring/</code> artifacts per <code>docs/development/doc-update-matrix.md</code>.</p>
 
 
 

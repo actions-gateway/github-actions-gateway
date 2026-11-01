@@ -7154,7 +7154,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>EvictionRerunWithheld</code></td>
 <td>Normal</td>
-<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811; every cause on ScaleSet, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or, on ScaleSet, the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181). Only a cancel seen after detection spends a slot.</td>
+<td>Recovery deliberately did not ask GitHub to re-run. Either the run had already concluded <code>cancelled</code> by someone other than GAG, so the cancel stands (Q811; every cause on ScaleSet, Q1181); or the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> or <code>emptyDir</code> limit, which a re-run repeats, and the Event quotes the kubelet's message (Q1177); or, on ScaleSet, the re-run would be futile: past GitHub's 50 re-runs, older than its 30-day window, or superseded by a newer commit's run (Q1181); or, on ScaleSet, a runner killed for memory that a re-run would repeat, or while out-of-memory retries are paused (Q1183). Only a cancel seen after detection spends a slot.</td>
 <td><a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>; <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a></td>
 </tr>
 <tr>
@@ -7162,6 +7162,18 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <td>Normal</td>
 <td>A scale-set job failed with no disruption attributed to it, and a later attempt of it succeeded: a flake, re-run by a human or by GAG alongside a disrupted job (Q555). Names the run and the job. Not a fault of the platform; a run of them on one job is a test worth fixing.</td>
 <td><a href="#flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs</a></td>
+</tr>
+<tr>
+<td><code>MemoryLimitRaisedForRetry</code></td>
+<td>Normal</td>
+<td>A scale-set worker's runner was killed at its own memory limit, and the <code>Binpack</code> or <code>Throughput</code> profile gives the job's next attempt a higher one, so the run is re-run as <code>cause="oom"</code> (Q1183). Names the job, the run and both limits. One per job: a second kill is withheld. A rising rate is jobs outgrowing their history, or a change that grew one.</td>
+<td><a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
+</tr>
+<tr>
+<td><code>AutoRetryPaused</code></td>
+<td>Warning</td>
+<td>More than 10 distinct runs on this set were re-run after a runner was killed for memory within 10 minutes, so out-of-memory retries are paused for 30 (Q1183). That many at once points at a shared cause, such as a node packed past its memory or a dependency that bloated every job, rather than each job's own growth. Each kill in the pause is withheld as <code>reason="breaker_open"</code>.</td>
+<td><a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
 <tr>
 <td><code>PlatformFaultOnFailedJob</code></td>
@@ -8117,6 +8129,11 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
 <td>same mark as a drain — indistinguishable, by design</td>
 </tr>
 <tr>
+<td>A runner killed at its own memory limit on a <code>Binpack</code> or <code>Throughput</code> set (<code>ScaleSet</code> tier), re-run with a higher limit</td>
+<td><code class="gag-nowrap">oom</code></td>
+<td>pod <code>Failed</code> with the runner container terminated <code>OOMKilled</code>, on a worker the sizing profile built; see <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
+</tr>
+<tr>
 <td>Any of the above that happened while the AGC was down (<code>ScaleSet</code> tier)</td>
 <td><code class="gag-nowrap">vanished</code></td>
 <td>a persisted in-flight record whose worker is no longer there: no pod's runner started that job, and the pod created for it is gone, or is running another job while no other worker that has not exited is idle to take it</td>
@@ -8130,6 +8147,9 @@ It is covered in <a href="#worker-pod-reaped-while-pending-workerpodstuckpending
   The job outgrew a limit its template sets, so a re-run gets the same limit and fails the same way.
   No slot is spent: <code>eviction_rerun_withheld_total{cause="eviction", reason="own_limit"}</code> increments, and a Normal <code>EvictionRerunWithheld</code> Event quotes the kubelet's message.
   Raise the limit, or reduce what the job writes, then re-run it by hand (Q1177).</li>
+<li><strong>A runner killed for memory that a re-run would repeat</strong> (<code>ScaleSet</code> tier).
+  Without a <code>Binpack</code> or <code>Throughput</code> profile, at the profile's memory ceiling, or a second kill after a retry already raised the job's limit, a re-run gets the memory that killed it.
+  No slot is spent: <code>eviction_rerun_withheld_total{cause="oom"}</code> increments with <code>reason="own_limit"</code> or <code>"same_class_again"</code>, and a Normal <code>EvictionRerunWithheld</code> Event names the fix (Q1183).</li>
 <li><strong>A cancelled run.</strong> A cancel is the intended stop — it is the supported way to end a job without triggering recovery (delete the worker pod instead and the job <em>is</em> re-run; see <a href="#cancelling-a-run-does-not-stop-its-worker-pod">Cancelling a Run Does Not Stop Its Worker Pod</a>).</li>
 <li><strong>A node that goes <code>NotReady</code> and keeps its Node object, untainted.</strong> The taint manager stamps <code>DeletionByTaintManager</code> and deletes the worker gracefully without failing it, and the kubelet cannot finish that delete while the node stays unreachable, so the pod stays <code>Running</code> and no arm fires.
   GAG does not force it, because a node that is only partitioned may still be running the job.

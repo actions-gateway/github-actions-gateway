@@ -3084,12 +3084,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the …</td>
 </tr>
 <tr>
-<td><a href="Q1183/">Q1183</a></td>
-<td><a href="../plan/q555-flaky-job-retry/#classified-platform-retry-phase-2">Retry classified platform failures, starting with OOM under right-sizing</a></td>
-<td><code>feature</code> <code>2.0-gate</code></td>
+<td><a href="Q1244/">Q1244</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#how-it-waits">Persist and defer retry-class re-runs until the run concludes</a></td>
+<td><code>feature</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Q555's detection measures each class's retry success rate (R14) in <code>actions_gateway_eviction_rerun_outcomes_total</code>, keyed by <code>cause</code>; the …</td>
+<td>Q1183 built the out-of-memory retry class on the disruption arms' path, which re-runs inside the arms' 15-minute window …</td>
+</tr>
+<tr>
+<td><a href="Q1245/">Q1245</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#the-breaker-r11">Alert on a misclassified retry class and gauge a paused breaker</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q1183 shipped the out-of-memory class's breaker as a <code>breaker_open</code> withhold plus one <code>AutoRetryPaused</code> Event, and left out three pieces …</td>
 </tr>
 <tr>
 <td><a href="Q1237/">Q1237</a></td>
