@@ -1,0 +1,51 @@
+# Both policies are additive, so neither weakens the GMC-managed default-deny
+# that governs worker egress.
+#
+# Both peers are bare podSelectors, which select in the policy's own namespace:
+# the server and the workers share the tenant namespace, so nothing outside it
+# is admitted in either direction.
+---
+# Worker side: workload pods may reach the cache server on 3000.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workload-to-gha-cache
+spec:
+  podSelector:
+    matchLabels:
+      actions-gateway/component: workload
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: gha-cache
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# Server side: only workload pods, only 3000. The kubelet's /health probes reach
+# the pod from the node, outside pod-to-pod policy.
+#
+# Egress is deliberately not restricted. The server carries no
+# `actions-gateway/component=workload` label, so the managed default-deny does
+# not select it, and it needs GitHub's token keys and results service: the
+# first to verify every runtime token, the second for the non-cache calls it
+# forwards, artifacts among them.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gha-cache-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: gha-cache
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              actions-gateway/component: workload
+      ports:
+        - protocol: TCP
+          port: 3000

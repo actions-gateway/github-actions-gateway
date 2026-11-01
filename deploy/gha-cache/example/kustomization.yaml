@@ -1,0 +1,29 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# The tenant kustomization: copy this directory, set `namespace` to the tenant's
+# namespace, and point `resources` at deploy/gha-cache/base.
+#
+# The replacement below must stay in THIS file. It writes the namespace into the
+# server's API_BASE_URL, and kustomize sets `namespace` only after the base and
+# any components have been built, so a replacement there reads no namespace and
+# fails (measured on kustomize v5.8.1).
+namespace: tenant-a
+resources:
+  - ../base
+# Uncomment to keep the cache across pod restarts (a PVC, billed while it exists).
+# components:
+#   - ../components/persistent
+replacements:
+  - source:
+      kind: Service
+      name: gha-cache
+      fieldPath: metadata.namespace
+    targets:
+      - select:
+          kind: Deployment
+          name: gha-cache
+        fieldPaths:
+          - spec.template.spec.containers.[name=server].env.[name=API_BASE_URL].value
+        options:
+          delimiter: "."
+          index: 1

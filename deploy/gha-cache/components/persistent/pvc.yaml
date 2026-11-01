@@ -1,0 +1,14 @@
+# Sized above the base's CACHE_MAX_SIZE_BYTES (10 GiB), for the same reason as
+# the base's emptyDir limit: the budget is enforced after an upload finalizes.
+# No storageClassName, so the cluster default applies.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gha-cache-data
+  labels:
+    app.kubernetes.io/name: gha-cache
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 16Gi
