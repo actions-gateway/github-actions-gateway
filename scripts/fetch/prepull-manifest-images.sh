@@ -120,6 +120,12 @@ for img in "${images[@]}"; do
     "${script_dir}/pull-image-with-retry.sh" "${img}"
 done
 
+# A pull can leave an image without its layer blobs when an image loaded earlier
+# shares its layers, and `docker save` then writes a layerless archive that this
+# cache would keep (Q1242). Fetch them before saving.
+"${script_dir}/backfill-image-content.sh" \
+  "$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')" "${images[@]}"
+
 mkdir -p "${dir}"
 docker save -o "${tar}" "${images[@]}"
 printf '%s\n' "${images[@]}" > "${list}"

@@ -293,7 +293,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  e2e/e2e-github-cleanup-test e2e/e2e-report-summary-test \
                  e2e/progress-watch-test e2e/validate-cluster-test \
                  fetch/download-verified-test fetch/pull-image-with-retry-test \
-                 fetch/prepull-manifest-images-test \
+                 fetch/prepull-manifest-images-test fetch/backfill-image-content-test \
                  manifest/check-promql-test \
                  pages/verify-pages-artifact-test pages/verify-pages-live-test \
                  go/check-codegen-drift-test go/check-v2-api-sync-test \
