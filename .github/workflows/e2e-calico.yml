@@ -192,7 +192,7 @@ jobs:
     needs: [changes, e2e-calico]
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     steps:
       # `always()` above makes a skipped `e2e-calico` a pass, by design (Q675) —
       # so on a PR a green `e2e-calico-gate` reads the same whether the suite ran
