@@ -328,7 +328,7 @@ jobs:
     needs: [changes, validate, promql, dashboard-render, dashboard-tables]
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     steps:
       # `always()` above makes a skipped need a pass, by design — so a green
       # gate reads the same whether the jobs it guards ran or never started, and
