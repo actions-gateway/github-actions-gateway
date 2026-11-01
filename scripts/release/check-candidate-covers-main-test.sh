@@ -197,7 +197,7 @@ if incident_ready; then
 		ok "the same window's Actions bump moves nothing that ships"
 	else
 		bad "the same window's Actions bump moves nothing that ships (got exit $neg_rc)"
-			printf '       %s\n' "$neg_out" >&2
+		printf '       %s\n' "$neg_out" >&2
 	fi
 else
 	skip "incident cases (v1.6.0-rc.1 or 811c670d5 absent — shallow or tagless clone)"
