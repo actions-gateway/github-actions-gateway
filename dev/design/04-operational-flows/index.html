@@ -3660,8 +3660,8 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 </tr>
 <tr>
 <td>Deleted before its container ever ran, or lost with its node before it did</td>
-<td>Vanishes, or publishes a transient <code>Failed</code> + mark with <strong>no container exit record</strong> (a drained <em>Pending</em> worker), or <code>PodFailed</code> with one of the node-shutdown row's <code>DisruptionTarget</code> reasons and no container start record (Q1198)</td>
-<td>✅ (Q691, both tiers since Q766)</td>
+<td>Vanishes, or publishes a transient <code>Failed</code> + mark with <strong>no container start record</strong> (a drained or reaped <em>Pending</em> worker, whose waiting container the kubelet rewrites as <code>Terminated</code>/<code>ContainerStatusUnknown</code> with no start, exit or container ID; measured on kind v1.36.1, Q1231), or <code>PodFailed</code> with one of the node-shutdown row's <code>DisruptionTarget</code> reasons and no container start record (Q1198)</td>
+<td>✅ (Q691, both tiers since Q766; the transient <code>Failed</code> since Q1231)</td>
 <td>The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job <code>cancelled</code> in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then <strong>does</strong> accept <code>rerun-failed-jobs</code>, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does <strong>not</strong> enter <code>disruptionAwaitingRecovery</code>, on either tier: a job that never ran has no failed job for <code>rerun-failed-jobs</code> to act on, so the run has to be concluded first. See <a href="#stuck-pending-worker-pod">Stuck-Pending Worker Pod</a> (Q628/Q676/Q683/Q691/Q766)</td>
 </tr>
 <tr>
