@@ -380,6 +380,57 @@ func TestScaleSetBudget_AbandonedArmRecordsItsCancel(t *testing.T) {
 	assert.Equal(t, rerunDisruption{key: "pod-a", failedAttempt: 4}, e.disruption)
 }
 
+// TestScaleSetBudget_AbandonedArmWithholdsAUsersCancel pins Q1232: a run a user already
+// cancelled is not recorded as GAG's cancel, force-cancelled or registered for a re-run,
+// so no later arm's run_cancelled check takes the user's cancel for GAG's. The run is
+// withheld before the force-cancel POST, so the case holds whatever GitHub would answer
+// a force-cancel of a concluded run.
+func TestScaleSetBudget_AbandonedArmWithholdsAUsersCancel(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		selfCancelled int
+		wantWithheld  bool
+	}{
+		{"a user cancelled this attempt", 0, true},
+		{"a user cancelled a later attempt than GAG did", 2, true},
+		{"GAG cancelled this attempt for another abandoned job", 3, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			c, api, srv, target := ledgerFixture(t)
+			api.set(runConclusionCancelled, 3)
+			p := ledgerProvisioner(c, srv)
+			if tc.selfCancelled > 0 {
+				require.NoError(t, p.recordSelfCancel(ctx, target, "900", tc.selfCancelled))
+			}
+
+			p.forceCancelAbandonedRun(ctx, target, "myorg", "myrepo", "900", evictionTierScaleSet, discardLog,
+				rerunDisruption{key: "pod-a"})
+
+			withheld := testutil.ToFloat64(p.Metrics.EvictionRerunWithheld.WithLabelValues(
+				"team-a", "gpu", evictionTierScaleSet, recoveryCauseAbandoned, rerunWithheldReasonRunCancelled))
+			_, registered := p.peekAbandonedRerun(abandonedRerunKey{owner: target.Key(), runID: "900"})
+			if !tc.wantWithheld {
+				assert.Equal(t, float64(0), withheld)
+				assert.True(t, registered, "GAG's own cancel still registers the re-run")
+				return
+			}
+			assert.Equal(t, float64(1), withheld)
+			assert.Contains(t, target.events, "EvictionRerunWithheld")
+			assert.Equal(t, int64(0), api.reruns.Load(), "no force-cancel POST for a run already cancelled")
+			assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.AbandonedRunForceCancels.WithLabelValues(
+				"team-a", "gpu", evictionTierScaleSet, "cancelled")))
+			assert.False(t, registered, "a user's cancel is not re-run once capacity returns")
+			assert.Equal(t, tc.selfCancelled, p.selfCancelledAttempt(ctx, target, "900"),
+				"the user's attempt is not recorded as GAG's cancel")
+
+			// Another job of the run, lost on the deletion arm, still honours the cancel.
+			evictScaleSet(p, target, "900", 2, recoveryCauseDeletion, rerunDisruption{key: "pod-b"})
+			assert.Equal(t, int64(0), api.reruns.Load(), "the user's cancel is never undone by a re-run")
+		})
+	}
+}
+
 // TestScaleSetBudget_UnwritableLedgerWithholds pins the failure direction: a decision
 // that cannot be recorded withholds the re-run, counted as budget_unrecorded.
 func TestScaleSetBudget_UnwritableLedgerWithholds(t *testing.T) {
