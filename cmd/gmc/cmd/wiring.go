@@ -132,6 +132,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	// IP-range refresh cadence; EgressRulesStale (Q157) trips when a gateway's
 	// allowlist goes unrefreshed for just over two of these intervals.
 	ipInterval := 24 * time.Hour
+	egressStaleThreshold := 2*ipInterval + time.Hour
 
 	// The GMC reads Secrets only through a RoleBinding it creates in each tenant
 	// namespace, naming its own ServiceAccount (Q1188); without that identity no
@@ -140,6 +141,24 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		return fmt.Errorf("POD_NAMESPACE and POD_SERVICE_ACCOUNT must both be set: " +
 			"the GMC binds its own ServiceAccount to read Secrets in tenant namespaces")
 	}
+	// Seed the IP-range cache from the last persisted fetch before any controller
+	// reconciles, so a restart does not strip GitHub egress from every CIDR-mode pool
+	// until a fresh /meta fetch lands (Q1227). A copy too old to trust seeds nothing.
+	ipStore := &controller.IPRangeStore{
+		Reader:    mgr.GetAPIReader(),
+		Writer:    mgr.GetClient(),
+		Namespace: rc.podNamespace,
+		Name:      controller.IPRangeStoreName,
+		MaxAge:    egressStaleThreshold,
+	}
+	seedCtx, cancelSeed := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelSeed()
+	if n, err := ipStore.SeedCache(seedCtx, ipCache, time.Now()); err != nil {
+		setupLog.Error(err, "not seeding GitHub IP ranges from the persisted copy; egress waits for the first fetch")
+	} else if n > 0 {
+		setupLog.Info("seeded GitHub IP ranges from the persisted copy", "cidrs", n)
+	}
+
 	secretWatches := &controller.TenantSecretWatches{
 		Config:     mgr.GetConfig(),
 		HTTPClient: mgr.GetHTTPClient(),
@@ -165,7 +184,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		AGCExtraEnv:                 img.agcExtraEnv,
 		EnableTenantServiceMonitors: cfg.enableTenantServiceMonitors,
 		APIServerCIDRs:              parsedAPIServerCIDRs,
-		EgressStaleThreshold:        2*ipInterval + time.Hour,
+		EgressStaleThreshold:        egressStaleThreshold,
 		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
 		SecretWatches:               secretWatches,
 	}).SetupWithManager(mgr); err != nil {
@@ -201,7 +220,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 			ProxyImage:           img.proxyImage,
 			FQDNBackend:          rc.fqdnBackend,
 			EnableServiceMonitor: cfg.enableTenantServiceMonitors,
-			EgressStaleThreshold: 2*ipInterval + time.Hour,
+			EgressStaleThreshold: egressStaleThreshold,
 			Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create egressproxy controller: %w", err)
@@ -224,6 +243,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		Interval:       ipInterval,
 		Log:            slog.New(logr.ToSlogHandler(ctrl.Log.WithName("ipranges"))),
 		Metrics:        gmcMetrics,
+		Store:          ipStore,
 		APIServerCIDRs: parsedAPIServerCIDRs,
 		// On a v1-only install the v2 EgressProxy / ActionsGateway refresh passes
 		// are disabled to avoid a "no matches for kind" error on every tick (Q228).

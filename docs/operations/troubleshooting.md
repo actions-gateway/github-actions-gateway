@@ -811,13 +811,21 @@ The proxy pool logs `upstream dial failed` with an `i/o timeout` to a GitHub add
 The pool's `NetworkPolicy` has a DNS egress rule and no GitHub rule.
 `EgressRulesStale` does **not** fire: it measures how long ago the last refresh succeeded, and here none has.
 
-**Cause.** The GMC holds GitHub's IP ranges in memory only, so a fresh GMC has none until its first `api.github.com/meta` fetch succeeds.
-That call is unauthenticated, and GitHub allows 60 of them an hour per source IP.
+**Cause.** A fresh GMC has no GitHub IP ranges to program until its first `api.github.com/meta` fetch succeeds, unless it can restore them from its own namespace.
+The GMC writes each successful fetch to the `actions-gateway-gmc-ip-ranges` ConfigMap and seeds itself from that copy at startup, but refuses the copy when it is older than the `EgressRulesStale` window (49 hours on the default 24-hour refresh), unreadable in any entry, or stamped in the future.
+So this symptom means one of three things: a first-ever start, a GMC that has not fetched successfully for over two days, or a copy that was refused.
+The fetch is unauthenticated, and GitHub allows 60 calls an hour per source IP.
 When several GMCs, or anything else, share one egress IP, that budget can be spent before the GMC's fetch, and GitHub answers `403` or `429` until the window resets.
 
 **Diagnostics.**
 
 ```sh
+# Whether the start seeded from the persisted copy, and if not, why it was refused.
+kubectl logs -n <gmc-namespace> deploy/<gmc> | grep -i "persisted copy"
+
+# The persisted copy and the time of the fetch it came from.
+kubectl get configmap -n <gmc-namespace> actions-gateway-gmc-ip-ranges -o jsonpath='{.data.fetchedAt}'
+
 # A rate-limited fetch logs how long the GMC will wait before its next attempt.
 kubectl logs -n <gmc-namespace> deploy/<gmc> | grep -i "ip-range fetch"
 
@@ -828,7 +836,7 @@ curl -sSI https://api.github.com/meta | grep -i '^x-ratelimit'
 **Resolution.** The GMC retries on its own, after the time GitHub names and never sooner than a minute: the `Retry-After` header, or `x-ratelimit-reset` when `x-ratelimit-remaining` is `0`.
 With neither, it waits a minute and doubles the wait on each further limit, up to an hour.
 A `403` that carries neither GitHub's rate-limit headers nor its rate-limit message, such as a forward proxy's deny page, is not treated as a limit: the GMC logs `GitHub meta returned 403` and retries on its ordinary 30 s backoff.
-Restarting the GMC does not help: it starts over with an empty cache and spends a call.
+Restarting the GMC does not help: it restores no more than the refused copy and spends another call.
 To recover sooner, find what else spends the unauthenticated quota from that egress IP.
 
 ---
