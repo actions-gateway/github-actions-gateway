@@ -11,17 +11,22 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // oomKilled marks pod as the kubelet does when its runner container is killed at its
-// memory limit, which with restartPolicy Never fails the pod.
+// memory limit, which with restartPolicy Never fails the pod. The container ran, so it
+// carries an ID and start time and podEverStarted reads it as started.
 func oomKilled(pod *corev1.Pod, limit string) *corev1.Pod {
 	pod.Spec.Containers[0].Resources.Limits = corev1.ResourceList{corev1.ResourceMemory: resource.MustParse(limit)}
 	pod.Status.Phase = corev1.PodFailed
 	pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
-		Name:  runnerContainer,
-		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: containerReasonOOMKilled, ExitCode: 137}},
+		Name:        runnerContainer,
+		ContainerID: "containerd://" + pod.Name,
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			Reason: containerReasonOOMKilled, ExitCode: 137, StartedAt: metav1.NewTime(time.Unix(1700000000, 0)),
+		}},
 	}}
 	return pod
 }
@@ -101,8 +106,9 @@ func TestOOMKilledAwaitingRecovery(t *testing.T) {
 // cause oom.
 func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	ctx := context.Background()
-	p, target, m, rerunCount, paths := recoveryFixture(t,
-		oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi"))
+	pod := oomKilled(scaleSetWorkerPod("runner-gpu-job1", rightSizedAnnotations("4242")), "2Gi")
+	require.True(t, podEverStarted(pod), "the fixture must model a runner that ran, not the never-started arm's shape")
+	p, target, m, rerunCount, paths := recoveryFixture(t, pod)
 	target.spec.MemoryRetry = throughputRetry()
 
 	for i := 0; i < 2; i++ {
