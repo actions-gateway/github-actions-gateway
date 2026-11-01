@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ func TestEvalEgressRulesStale_Fresh(t *testing.T) {
 func TestEvalEgressRulesStale_Stalled(t *testing.T) {
 	now := time.Now()
 	cache := &IPRangeCache{}
+	cache.Set([]net.IPNet{{IP: net.IPv4(140, 82, 112, 0), Mask: net.CIDRMask(20, 32)}})
 	cache.MarkRefreshed(now.Add(-72 * time.Hour))
 	r := &ActionsGatewayReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
 
@@ -64,6 +66,7 @@ func TestEvalEgressRulesStale_ExpiredSeed(t *testing.T) {
 	es := r.evalEgressRulesStale(agWithManagedNP(nil), now)
 	assert.True(t, es.stale)
 	assert.Equal(t, gmcv1alpha1.ReasonRefreshStalled, es.reason)
+	assert.Contains(t, es.message, "GitHub egress is denied", "an expired seed serves nothing, which the message must not understate")
 }
 
 // TestEvalEgressRulesStale_NilCache: no cache wired → pending, never stale.

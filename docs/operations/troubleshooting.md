@@ -788,7 +788,7 @@ The reason says which of two states you are in:
 
 | Reason | Meaning | Where to go |
 |---|---|---|
-| `RefreshStalled` | The ranges in force are older than the staleness window. Existing egress works until GitHub rotates. | The diagnostics below. |
+| `RefreshStalled` | The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied. | The diagnostics below. |
 | `RefreshNeverSucceeded` | The GMC holds no ranges at all, from neither a fetch nor its persisted copy. The policy carries no GitHub rule, so GitHub egress is denied now. | [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start). |
 
 **Diagnostics.**

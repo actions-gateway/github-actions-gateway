@@ -760,10 +760,9 @@ func (r *ActionsGatewayReconciler) evalEgressRulesStale(ag *gmcv1alpha1.ActionsG
 	age := now.Sub(last)
 	if age > threshold {
 		return egressStale{
-			stale:  true,
-			reason: gmcv1alpha1.ReasonRefreshStalled,
-			message: fmt.Sprintf("GitHub egress IP-range allowlist last refreshed %s ago, exceeding the %s staleness window; "+
-				"egress to rotated GitHub ranges may be silently dropped", age.Round(time.Minute), threshold),
+			stale:   true,
+			reason:  gmcv1alpha1.ReasonRefreshStalled,
+			message: refreshStalledMessage(r.IPCache, age, threshold),
 		}
 	}
 	return egressStale{reason: gmcv1alpha1.ReasonRefreshCurrent,
