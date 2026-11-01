@@ -1748,6 +1748,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the GMC keeps GitHub egress across a restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3683,6 +3694,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the GMC keeps GitHub egress across a restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4514,6 +4536,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
 <li><a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run">Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run</a></li>
+<li><a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart</a></li>
 <li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-a-worker-on-a-dead-node-you-taint-out-of-service-is-re-run-automatically">Non-breaking: a worker on a dead node you taint out-of-service is re-run automatically</a></li>
@@ -4699,6 +4722,16 @@ Both now take the never-started handling: the run is force-cancelled at once and
 A worker that never left <code>Pending</code> because it was never scheduled was already handled this way.
 These workers also stop adding samples to <code>actions_gateway_job_duration_seconds</code>, which already skipped a worker that never started a container, so where image pulls are slow or broken the series' count drops and its percentiles shift.</p>
 <p><strong>Rolling back</strong> returns these workers to the unstarted-job timeout.</p>
+<h3 id="non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart<a class="headerlink" href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every install whose proxy pools or direct-egress gateways use the default <code>CIDR</code> egress mode.
+Nothing to do.</p>
+<p>A restarted GMC used to give those pools no GitHub egress until its first <code>api.github.com/meta</code> fetch succeeded, which a rate-limited fetch could hold off for up to an hour.
+The GMC now writes each successful fetch to a ConfigMap named <code>actions-gateway-gmc-ip-ranges</code> in its own namespace and seeds itself from it at startup (Q1227).
+A copy as old as the <code>EgressRulesStale</code> window (49 hours on the default refresh) is not used, and a seeded copy stops being used at that age even if no fetch has succeeded.
+The ConfigMap is created on the first successful fetch after the upgrade and is owned by the GMC's Deployment, so <code>helm uninstall</code> deletes it with the Deployment.
+An install that does not set the chart's <code>DEPLOYMENT_NAME</code> environment variable on the GMC writes it with no owner, and it is left behind on uninstall.
+Anything that recreates the Deployment rather than updating it (<code>helm upgrade --force-replace</code>, renaming the release, or <code>kubectl delete deployment</code>) deletes the ConfigMap too, so the next GMC start waits for its first fetch.</p>
+<p><strong>Rolling back</strong> returns a restart to waiting for the first fetch; the older GMC ignores the ConfigMap.</p>
 <h3 id="non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner<a class="headerlink" href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> <code>ScaleSet</code> sets whose workers schedule unevenly, so a worker is reaped <code>Pending</code>, or evicted, preempted or drained before its container ran, after another runner of the set took the job it was created for.
 Nothing to do.</p>
