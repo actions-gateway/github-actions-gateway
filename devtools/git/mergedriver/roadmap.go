@@ -54,6 +54,9 @@ func (d roadmapDriver) run(in *invocation) {
 		if !clean {
 			in.fallback("the prose before list %d conflicts", i+1)
 		}
+		if err := mdroadmap.Rebound(base.Lists[i].Records, ours.Lists[i].Records, theirs.Lists[i].Records); err != nil {
+			in.fallback("list %d: %s", i+1, err)
+		}
 		merged, err := keyedrecords.Merge(
 			base.Lists[i].Records, ours.Lists[i].Records, theirs.Lists[i].Records, mdroadmap.MarkerKey)
 		if err != nil {
@@ -75,8 +78,9 @@ func (d roadmapDriver) run(in *invocation) {
 
 	// Each list merged on its own, so nothing above can see a bullet that ended
 	// up in two of them — the shape one branch parking an item under
-	// "Exploring" produces while another moves it somewhere else. One binding,
-	// one bullet, whole page.
+	// "Exploring" produces while another moves it somewhere else. One backlog
+	// ID, one bullet, whole page: two bullets sharing some IDs but not all are
+	// the same duplicate.
 	if dupes := duplicateBindings(result); len(dupes) > 0 {
 		in.fallback("the merged page lists a backlog binding more than once: %s", strings.Join(dupes, " "))
 	}
@@ -95,10 +99,12 @@ func duplicateBindings(lines []string) []string {
 		if key == "" {
 			continue
 		}
-		if seen[key] {
-			dupes = append(dupes, key)
+		for _, id := range strings.Split(key, ",") {
+			if seen[id] {
+				dupes = append(dupes, id)
+			}
+			seen[id] = true
 		}
-		seen[key] = true
 	}
 	return dupes
 }

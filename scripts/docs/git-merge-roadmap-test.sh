@@ -394,6 +394,16 @@ expect_resolved 'reorder one side only            -> move kept' \
 	=== "$C" "$A" "$B" -- "$E" "$F" \
 	=== "$A" "$B" "$C" -- "$E" "$F"
 
+# A bullet bound to several rows loses one ID when one of them ships, and the
+# other side left it alone. A changed binding is a delete plus an add to the set
+# merge, which is right exactly when nothing else touched the bullet.
+G="$(bullet Q20,Q21,Q22 'Three rows behind one commitment.')"
+expect_resolved 'rebind one side, other untouched -> rebinding kept' \
+	'Q10 Q20,Q21 Q15' \
+	=== "$A" "$G" -- "$E" "$F" \
+	=== "$A" "$(bullet Q20,Q21 'Three rows behind one commitment.')" -- "$E" "$F" \
+	=== "$A" "$G" -- "$F"
+
 # Additions to two different lists in the same merge.
 expect_resolved 'adds in two different lists      -> both present' \
 	'Q10 Q12 Q14 Q15 Q13' \
@@ -429,6 +439,30 @@ expect_conflict 'reorder on both sides            -> markers' \
 	=== "$C" "$A" "$B" -- "$E" "$F" \
 	=== "$B" "$C" "$A" -- "$E" "$F"
 
+# Q1240: two branches each ship a different row behind one bullet and drop its
+# ID. Keyed by the whole binding, the base bullet reads as deleted on both sides
+# and each side's rebinding as a new bullet, so the page listed it twice.
+expect_conflict 'rebind/rebind the same bullet    -> markers' \
+	=== "$A" "$G" -- "$E" "$F" \
+	=== "$A" "$(bullet Q20,Q21 'Three rows behind one commitment.')" -- "$E" "$F" \
+	=== "$A" "$(bullet Q20,Q22 'Three rows behind one commitment.')" -- "$E" "$F"
+
+# The same with the bullet's two rows split one each, which shares no ID across
+# the two results and so is invisible to any uniqueness check on the page.
+H="$(bullet Q30,Q31 'Two rows behind one commitment.')"
+expect_conflict 'rebind/rebind to disjoint IDs    -> markers' \
+	=== "$A" "$H" -- "$E" "$F" \
+	=== "$A" "$(bullet Q30 'Two rows behind one commitment.')" -- "$E" "$F" \
+	=== "$A" "$(bullet Q31 'Two rows behind one commitment.')" -- "$E" "$F"
+
+# One side rebinds the bullet while the other deletes it outright: a
+# delete/modify, which the whole-binding key would resolve silently in favour of
+# the rebinding.
+expect_conflict 'rebind vs delete the same bullet -> markers' \
+	=== "$A" "$H" -- "$E" "$F" \
+	=== "$A" "$(bullet Q30 'Two rows behind one commitment.')" -- "$E" "$F" \
+	=== "$A" -- "$E" "$F"
+
 # A bullet with no annotation has no key. The run stops being a mergeable list
 # on that side alone, the per-list pairing breaks, and the driver hands the file
 # back to git — which conflicts here, because the other side deleted the
@@ -460,6 +494,26 @@ if (( rc == 0 )) && grep -q 'binding more than once: Q14' "$WORKDIR/dup.err" &&
 	ok 'one bullet in two lists         -> refused, handed back to git'
 else
 	bad "a bullet in two lists should fall back to git verbatim (rc=$rc, err=$(cat "$WORKDIR/dup.err"))"
+fi
+
+# The same check reads each ID, not the joined binding: two bullets sharing one
+# row of several still bind that row twice. git merges this cleanly too, so the
+# driver exits 0 with git's page and only the note says why (Q1247).
+roadmap_page "$A" -- "$F" >"$WORKDIR/pdup-base.md"
+roadmap_page "$A" "$(bullet Q40 'Ours.')" -- "$F" >"$WORKDIR/pdup-ours.md"
+roadmap_page "$A" -- "$F" "$(bullet Q40,Q41 'Theirs.')" >"$WORKDIR/pdup-theirs.md"
+cp "$WORKDIR/pdup-ours.md" "$WORKDIR/pdup-driver.md"
+rc=0
+"$DRIVER" "$WORKDIR/pdup-base.md" "$WORKDIR/pdup-driver.md" "$WORKDIR/pdup-theirs.md" \
+	7 "$TARGET" 2>"$WORKDIR/pdup.err" || rc=$?
+	die_if_killed "one row in two overlapping bullets" "$rc"
+cp "$WORKDIR/pdup-ours.md" "$WORKDIR/pdup-git.md"
+git merge-file "$WORKDIR/pdup-git.md" "$WORKDIR/pdup-base.md" "$WORKDIR/pdup-theirs.md" >/dev/null 2>&1 || true
+if (( rc == 0 )) && grep -q 'binding more than once: Q40;' "$WORKDIR/pdup.err" &&
+	cmp -s "$WORKDIR/pdup-driver.md" "$WORKDIR/pdup-git.md"; then
+	ok 'one row in two overlapping bullets -> refused, handed back to git'
+else
+	bad "two bullets sharing one ID should be refused (rc=$rc, err=$(cat "$WORKDIR/pdup.err"))"
 fi
 
 # --- a side that restructures the page ----------------------------------------

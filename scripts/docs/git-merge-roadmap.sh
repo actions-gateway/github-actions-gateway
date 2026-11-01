@@ -37,11 +37,12 @@
 # WHAT IT REFUSES TO DO. Any uncertainty ends the same way: re-run the plain
 # three-way merge and leave its conflict markers, with a one-line reason on
 # stderr. A bullet changed on both sides, deleted on one side and edited on the
-# other, the same binding added twice with different text, bullets reordered on
-# both sides, a bullet the annotation parser cannot key, a side that added or
-# removed a whole list, a source line that already contains the record
-# separator, or a merged result in which one binding appears twice — all get
-# markers. A conflict marker costs a minute; a wrong silent resolution drops a
+# other, the same binding added twice with different text, a binding changed on
+# one side while the other side changed or deleted that bullet, bullets
+# reordered on both sides, a bullet the annotation parser cannot key, a side that
+# added or removed a whole list, a source line that already contains the record
+# separator, or a merged result in which one backlog ID is on two bullets — all
+# get markers. A conflict marker costs a minute; a wrong silent resolution drops a
 # roadmap commitment.
 #
 # A run holding even one unannotated bullet is prose to this driver, not a

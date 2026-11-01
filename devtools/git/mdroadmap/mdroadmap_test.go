@@ -363,3 +363,39 @@ func TestAMalformedBindingReachesTheMergeAndIsRefusedThere(t *testing.T) {
 		t.Errorf("reason = %q, want it to name the unparseable record", u.Reason)
 	}
 }
+
+// A changed binding reaches the set merge as a delete plus an add, so the other
+// side has to have left the base bullet alone for that reading to be the merge.
+func TestRebound(t *testing.T) {
+	const (
+		ab  = "- **Flaky** <!-- q:Q10,Q11 --> text"
+		a   = "- **Flaky** <!-- q:Q10 --> text"
+		b   = "- **Flaky** <!-- q:Q11 --> text"
+		abc = "- **Flaky** <!-- q:Q10,Q11,Q12 --> text"
+		ac  = "- **Flaky** <!-- q:Q10,Q12 --> text"
+		z   = "- **Other** <!-- q:Q20 --> text"
+	)
+	for _, tc := range []struct {
+		name               string
+		base, ours, theirs []string
+		refused            bool
+	}{
+		{"rebound on one side only", []string{ab, z}, []string{a, z}, []string{ab, z}, false},
+		{"rebound on theirs only", []string{ab, z}, []string{ab, z}, []string{b, z}, false},
+		{"the same rebinding on both sides", []string{ab}, []string{a}, []string{a}, false},
+		{"split into two bullets, other side untouched", []string{ab}, []string{a, b}, []string{ab}, false},
+		{"rebound beside an unrelated delete", []string{ab, z}, []string{a, z}, []string{ab}, false},
+		{"each side drops a different ID", []string{abc}, []string{ab}, []string{ac}, true},
+		{"each side keeps a disjoint ID", []string{ab}, []string{a}, []string{b}, true},
+		{"rebound on one side, deleted on the other", []string{ab, z}, []string{a, z}, []string{z}, true},
+		{"rebound on one side, reworded on the other", []string{ab}, []string{a}, []string{ab + " more"}, true},
+		{"deleted on ours, rebound on theirs", []string{ab, z}, []string{z}, []string{b, z}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Rebound(tc.base, tc.ours, tc.theirs)
+			if (err != nil) != tc.refused {
+				t.Errorf("Rebound = %v, want refused=%v", err, tc.refused)
+			}
+		})
+	}
+}

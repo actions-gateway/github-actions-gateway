@@ -368,13 +368,16 @@ Fewer evictions is a different problem, and the lever is spacing before serializ
 [`scripts/docs/git-merge-roadmap.sh`](../../scripts/docs/git-merge-roadmap.sh) decides the bullets by that **annotation**, normalized to a comma-joined ID list.
 The key is not a new convention either: `devtools/docs/roadmapcheck` already parses the same comment, so the driver and the gate cannot disagree about what a bullet is.
 
-Two things are specific to it:
+Three things are specific to it:
 
+- **A changed annotation is a rebinding, and only an untouched other side lets it through.** Keyed by its whole ID list, a bullet whose IDs changed reads as the old bullet deleted and a new one added.
+  That is right when the other side left the bullet alone.
+  Taken unconditionally, two sides each dropping a different ID would list the bullet twice, so the driver falls back when the other side also changed or deleted it.
 - **A bullet spans several lines**, which the shared record rules do not model, so each one is encoded onto a single line and decoded after the merge.
 - **The blank lines between bullets are held beside the records, not inside them.** Fold the trailing blank into a bullet and deleting a list's last bullet reads as an *edit* of its neighbour, which then collides with the other side deleting that neighbour: the exact merge the driver exists to resolve.
 
 A run of bullets is only merged this way when every bullet in it is annotated, so an ordinary bulleted paragraph elsewhere on the page keeps git's own merge.
-Everything else is the shared behaviour, plus a whole-page check that no binding ended up on two bullets.
+Everything else is the shared behaviour, plus a whole-page check that no backlog ID ended up on two bullets.
 
 `make merge-driver` installs all four drivers ([`scripts/README.md`](../../scripts/README.md#per-clone-setup) lists them).
 None is required: until you run it the `.gitattributes` lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.
