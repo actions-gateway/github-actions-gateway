@@ -247,18 +247,20 @@ assert_params_resolve baseline
 
 # The GMC persists GitHub IP ranges in a ConfigMap it creates at runtime, not one
 # the chart renders, so only an owner reference to the GMC Deployment lets
-# `helm uninstall` remove it (Q1227). It exists once a /meta fetch has succeeded.
+# `helm uninstall` remove it (Q1227). It must exist here: this runs only after a
+# green suite, whose proxy CONNECT spec waits for GitHub CIDRs that only a
+# successful /meta fetch, and so a save, puts in the policy.
 readonly IP_RANGES_CM=actions-gateway-gmc-ip-ranges
-ip_ranges_owner="$(kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" \
-	-o jsonpath='{range .metadata.ownerReferences[*]}{.kind}/{.name}{"\n"}{end}' 2>/dev/null || echo absent)"
-if [[ "${ip_ranges_owner}" == "absent" ]]; then
-	echo "==> ${IP_RANGES_CM}: not created (no /meta fetch succeeded); its removal is not checked"
-elif ! grep -q '^Deployment/' <<<"${ip_ranges_owner}"; then
+if ! ip_ranges_owner="$(kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" \
+	-o jsonpath='{range .metadata.ownerReferences[*]}{.kind}/{.name}{"\n"}{end}')"; then
+	echo "FAIL: cannot read ${IP_RANGES_CM} in ${RELEASE_NS}; the GMC did not persist its IP ranges." >&2
+	exit 1
+fi
+if ! grep -q '^Deployment/' <<<"${ip_ranges_owner}"; then
 	echo "FAIL: ${IP_RANGES_CM} has no Deployment owner, so helm uninstall leaves it behind." >&2
 	exit 1
-else
-	echo "==> ${IP_RANGES_CM}: owned by ${ip_ranges_owner}"
 fi
+echo "==> ${IP_RANGES_CM}: owned by ${ip_ranges_owner}"
 
 echo "==> helm uninstall ${HELM_RELEASE}"
 helm uninstall "${HELM_RELEASE}" --kube-context "${KUBE_CONTEXT}" --namespace "${RELEASE_NS}" >/dev/null
@@ -288,17 +290,15 @@ fi
 
 # Garbage collection removes the owned ConfigMap after the Deployment goes, not
 # within the uninstall call, so give it time before calling it leaked.
-if [[ "${ip_ranges_owner}" != "absent" ]]; then
-	for _ in $(seq 1 30); do
-		kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" >/dev/null 2>&1 || break
-		sleep 2
-	done
-	if kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" >/dev/null 2>&1; then
-		echo "FAIL: ${IP_RANGES_CM} survived helm uninstall for 60s despite its Deployment owner." >&2
-		exit 1
-	fi
-	echo "==> ${IP_RANGES_CM}: removed with the release"
+for _ in $(seq 1 30); do
+	kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" >/dev/null 2>&1 || break
+	sleep 2
+done
+if kc get configmap "${IP_RANGES_CM}" --namespace "${RELEASE_NS}" >/dev/null 2>&1; then
+	echo "FAIL: ${IP_RANGES_CM} survived helm uninstall for 60s despite its Deployment owner." >&2
+	exit 1
 fi
+echo "==> ${IP_RANGES_CM}: removed with the release"
 
 echo "==> helm install ${HELM_RELEASE} (reinstall)"
 helm install "${HELM_RELEASE}" "${CHART_DIR}" \

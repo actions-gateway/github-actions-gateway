@@ -263,6 +263,7 @@ The GMC now writes each successful fetch to a ConfigMap named `actions-gateway-g
 A copy as old as the `EgressRulesStale` window (49 hours on the default refresh) is not used, and a seeded copy stops being used at that age even if no fetch has succeeded.
 The ConfigMap is created on the first successful fetch after the upgrade and is owned by the GMC's Deployment, so `helm uninstall` deletes it with the Deployment.
 An install that does not set the chart's `DEPLOYMENT_NAME` environment variable on the GMC writes it with no owner, and it is left behind on uninstall.
+Anything that recreates the Deployment rather than updating it (`helm upgrade --force`, renaming the release, or `kubectl delete deployment`) deletes the ConfigMap too, so the next GMC start waits for its first fetch.
 
 **Rolling back** returns a restart to waiting for the first fetch; the older GMC ignores the ConfigMap.
 

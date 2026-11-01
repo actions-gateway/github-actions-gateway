@@ -153,16 +153,18 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		Name:      controller.IPRangeStoreName,
 		MaxAge:    egressStaleThreshold,
 	}
-	seedCtx, cancelSeed := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancelSeed()
 	if rc.deploymentName != "" {
-		owner, err := deploymentOwnerRef(seedCtx, mgr.GetAPIReader(), rc.podNamespace, rc.deploymentName)
+		ownerCtx, cancelOwner := context.WithTimeout(context.Background(), 10*time.Second)
+		owner, err := deploymentOwnerRef(ownerCtx, mgr.GetAPIReader(), rc.podNamespace, rc.deploymentName)
+		cancelOwner()
 		if err != nil {
 			setupLog.Error(err, "persisting GitHub IP ranges without an owner; helm uninstall will leave the ConfigMap behind",
 				"configMap", controller.IPRangeStoreName)
 		}
 		ipStore.Owner = owner
 	}
+	seedCtx, cancelSeed := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelSeed()
 	if n, err := ipStore.SeedCache(seedCtx, ipCache, time.Now()); err != nil {
 		setupLog.Error(err, "not seeding GitHub IP ranges from the persisted copy; egress waits for the first fetch")
 	} else if n > 0 {
