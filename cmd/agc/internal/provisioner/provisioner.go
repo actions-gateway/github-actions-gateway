@@ -413,6 +413,13 @@ type Provisioner struct {
 	abandonedReruns   map[abandonedRerunKey]pendingAbandonedRerun
 	abandonedRerunsMu sync.Mutex
 
+	// strandedRechecks holds the lost scale-set workers whose stranded-job walk declined
+	// while a Running worker's start was unrecorded, keyed by owner and lost worker
+	// (Q1235). Bounded by strandedRecheckWindow. strandedRechecksMu guards it; the lock
+	// is never held across a pod list or a GitHub call.
+	strandedRechecks   map[strandedRecheckKey]pendingStrandedRecheck
+	strandedRechecksMu sync.Mutex
+
 	// now returns the current time. nil means time.Now; tests override it to
 	// drive the eviction-counter TTL sweep deterministically.
 	now func() time.Time

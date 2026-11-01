@@ -272,6 +272,17 @@ func (s scaleSetWorkerSet) strandedJob(ownerName, podName string, inFlight []Orp
 	return OrphanedWorker{}, false
 }
 
+// runStarted reports whether a live worker's runner has started a job of runID, as far
+// as inFlight records the runs of the started jobs.
+func (s scaleSetWorkerSet) runStarted(runID string, inFlight []OrphanedWorker) bool {
+	for _, w := range inFlight {
+		if w.RunID == runID && s.startedJobs[w.JobID] {
+			return true
+		}
+	}
+	return false
+}
+
 // holderOf returns the worker whose runner started the job minted was created for, or
 // "" where none did.
 func (s scaleSetWorkerSet) holderOf(ownerName, minted string) string {
@@ -301,7 +312,8 @@ func (s scaleSetWorkerSet) idleBesides(podName string) bool {
 // verdict is driven by a pod NOT being listed, so an informer cache that has not caught
 // up would read as every worker in the set having been disrupted. Once per process per
 // set, so the uncached read costs nothing in steady state. Recovery of a never-started
-// worker reads it too (assignedJobAccountedFor), once per recovered pod.
+// worker reads it too, once per recovered pod, and so does each stranded-job re-check
+// (sweepStrandedRechecks), once per sweep tick while one waits.
 func (p *Provisioner) liveScaleSetWorkers(ctx context.Context, target Target) (scaleSetWorkerSet, error) {
 	key := target.Key()
 	selector := map[string]string{LabelAcquisitionProtocol: AcquisitionProtocolScaleSet}

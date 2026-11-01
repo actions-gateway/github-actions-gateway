@@ -256,14 +256,43 @@ func (p *Provisioner) recoverDisruptedScaleSetWorker(ctx context.Context, target
 
 	// A worker whose runner started no job carries the identity of the job it was
 	// created for. Where another worker started that job, or an idle one can still take
-	// it, its run lost nothing here (Q1169). The idle half needs a container that never
-	// ran: the started-job-id stamp lands asynchronously and is never written on a
-	// terminal pod, so a runner that took its own job and was disrupted before the stamp
-	// also reads as having started nothing.
-	if pod.Annotations[AnnotationStartedJobID] == "" && p.assignedJobAccountedFor(ctx, target, pod, !podEverStarted(pod), podLog) {
-		podLog.Info("scale-set worker was disrupted before its runner started a job, and the job it was created for is running or can still be taken by another worker; not re-running that job's run",
-			"cause", cause, "runID", pod.Annotations[AnnotationRunID])
-		return closedChan()
+	// it, its run lost nothing here (Q1169). Both halves of the never-started case need a
+	// container that never ran: the started-job-id stamp lands asynchronously and is
+	// never written on a terminal pod, so a runner that took its own job and was
+	// disrupted before the stamp also reads as having started nothing, and may itself
+	// have held the job a walk would name.
+	//
+	// A never-started worker whose job another runner started, with no idle worker beside
+	// it, still leaves the set one runner short, so the job left without one is named and
+	// force-cancelled, as on the abandoned path (Q1195, Q1235). The idle check comes
+	// first, as for the abandoned path's node-lost shape: this worker was placed, so an
+	// idle one beside it is not waiting on capacity and can take a job. A Running worker
+	// with no start recorded is idle, so this walk never declines for one and nothing is
+	// deferred for a re-check. A failed List recovers the pod's own run, as before the
+	// check: it only ever withholds an action.
+	if pod.Annotations[AnnotationStartedJobID] == "" {
+		neverStarted := !podEverStarted(pod)
+		workers, err := p.liveScaleSetWorkers(ctx, target)
+		switch {
+		case err != nil:
+			podLog.Warn("could not list the set's workers to check whether another one holds this worker's job; recovering it by its own run identity",
+				"error", err)
+		case (neverStarted && workers.idleBesides(pod.Name)) ||
+			(!neverStarted && workers.startedElsewhere(key.Name, pod.Name)):
+			podLog.Info("scale-set worker was disrupted before its runner started a job, and the job it was created for is running or can still be taken by another worker; not re-running that job's run",
+				"cause", cause, "runID", pod.Annotations[AnnotationRunID])
+			return closedChan()
+		case workers.startedElsewhere(key.Name, pod.Name):
+			stranded, found := p.strandedScaleSetJob(ctx, target, workers, pod.Name, podLog)
+			if !found {
+				podLog.Info("scale-set worker was disrupted before it ran, and another worker's runner started the job it was created for, but the job left without a runner could not be named; not re-running",
+					"cause", cause, "runID", pod.Annotations[AnnotationRunID])
+				return closedChan()
+			}
+			podLog.Info("scale-set worker was disrupted before it ran, and another worker's runner started the job it was created for; recovering the job left without a runner instead",
+				"cause", cause, "jobID", stranded.JobID, "runID", stranded.RunID)
+			return p.forceCancelStranded(ctx, target, pod.Name, stranded, podLog)
+		}
 	}
 
 	owner, repo, runID, ok := runIdentityFromPod(pod)
