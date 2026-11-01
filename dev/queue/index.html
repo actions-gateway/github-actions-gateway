@@ -3092,12 +3092,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Dogfood stores no <code>actions_gateway_*</code> series until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> is applied, so every …</td>
 </tr>
 <tr>
-<td><a href="Q1232/">Q1232</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">Abandoned arm force-cancels a run a user already cancelled</a></td>
+<td><a href="Q1248/">Q1248</a></td>
+<td><a href="../design/04-operational-flows/">Abandoned arm withholds runs GitHub's unstarted-job timeout cancelled</a></td>
 <td><code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>On the scale-set tier, <code>forceCancelAbandonedRun</code> reads the run only for its attempt, then records that attempt as GAG's own cancel and …</td>
+<td>Since Q1232, the scale-set abandoned arm reads the run before force-cancelling.</td>
 </tr>
 <tr>
 <td><a href="Q1236/">Q1236</a></td>

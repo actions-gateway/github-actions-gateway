@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1232/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1248/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Abandoned arm force-cancels a run a user already cancelled - GitHub Actions Gateway</title>
+        <title>Abandoned arm withholds runs GitHub's unstarted-job timeout cancelled - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#abandoned-arm-force-cancels-a-run-a-user-already-cancelled" class="md-skip">
+        <a href="#abandoned-arm-withholds-runs-githubs-unstarted-job-timeout-cancelled" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Abandoned arm force-cancels a run a user already cancelled
+              Abandoned arm withholds runs GitHub's unstarted-job timeout cancelled
             
           </span>
         </div>
@@ -2627,13 +2627,21 @@
   
 
 
-<h1 id="abandoned-arm-force-cancels-a-run-a-user-already-cancelled">Abandoned arm force-cancels a run a user already cancelled<a class="headerlink" href="#abandoned-arm-force-cancels-a-run-a-user-already-cancelled" title="Permanent link">&para;</a></h1>
-<p>On the scale-set tier, <code>forceCancelAbandonedRun</code> reads the run only for its attempt, then records that attempt as GAG's own cancel and force-cancels, whatever the read's conclusion says (<code>cmd/agc/internal/provisioner/abandoned.go:89:   if err := p.recordSelfCancel(ctx, target, runID, run.attempt); err != nil {</code>).
-If a user or a concurrency group had already cancelled that attempt, the ledger now calls the cancel GAG's, so Q1181's <code>run_cancelled</code> check re-runs the run once capacity returns and undoes the user's cancel.
-The design asks for the abandoned arm to read the conclusion <strong>before</strong> force-cancelling and withhold a run already concluded <code>cancelled</code>, not cancel it again (<a href="../../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">design</a>, its notes on <code>selfCancelledAttempt</code>).
-The read is already there, so the fix is a branch on <code>run.status</code>/<code>run.conclusion</code> before <code>recordSelfCancel</code>, a withhold counted as <code>run_cancelled</code> under <code>cause="abandoned"</code>, and no <code>registerAbandonedRerun</code>.
-Unmeasured: what GitHub's force-cancel answers for a run already concluded, which decides whether today's path registers the re-run at all (a non-202 ends as <code>outcome="error"</code> and registers nothing).
-The mechanism is read from source on 2026-10-27, not reproduced.</p>
+<h1 id="abandoned-arm-withholds-runs-githubs-unstarted-job-timeout-cancelled">Abandoned arm withholds runs GitHub's unstarted-job timeout cancelled<a class="headerlink" href="#abandoned-arm-withholds-runs-githubs-unstarted-job-timeout-cancelled" title="Permanent link">&para;</a></h1>
+<p>Since Q1232, the scale-set abandoned arm reads the run before force-cancelling.
+It withholds a run concluded <code>cancelled</code> on an attempt the failure ledger does not hold as GAG's, as <code>run_cancelled</code> with <code>cause="abandoned"</code> (<code>cmd/agc/internal/provisioner/abandoned.go:109:  if run.status == runStatusCompleted &amp;&amp; run.conclusion == runConclusionCancelled &amp;&amp;</code>).
+The conclusion does not say who cancelled, so the check also catches GitHub's own ~15-minute unstarted-job timeout.
+That timeout lands before the <code>pending_deadline</code> reap whenever <code>pendingPodDeadline</code> is set past ~15 minutes, which the CRD godoc recommends for slow GPU pools.
+Such a job is then left for a manual re-run instead of the capacity-gated automatic one.
+The withhold is the safe direction (a user's cancel is never undone), and the case is documented as a known behaviour in the troubleshooting runbook and the metrics reference.
+The fix is to tell a timeout cancel from a user's or a concurrency group's, and re-run only the former.
+Unmeasured: what the run or job object carries that separates the two.
+Candidates are the cancel time against the job's queue time, or a job-level field.
+Whether the timeout concludes the whole <em>run</em> <code>cancelled</code>, rather than only the job, is also unmeasured; it rests on the runbook's own claim.
+Measure on a live run first, against a <code>ScaleSet</code> set whose <code>pendingPodDeadline</code> is past 15 minutes.
+Do not build on a timing heuristic before that.
+Whether <code>main</code> before Q1232 re-ran such a run is unmeasured too: it registered the re-run only on a 2xx force-cancel, and what GitHub answers a force-cancel of a concluded run has not been probed.
+Filed from the independent review of #2196.</p>
 
 
 
