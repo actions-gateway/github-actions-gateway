@@ -21,6 +21,7 @@ func kubeletDeletedPending(t *testing.T) *corev1.Pod {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(raw, &captured))
 	pod := scaleSetWorkerPod("runner-gpu-pending", identityAnnotations())
+	pod.CreationTimestamp = captured.CreationTimestamp
 	pod.DeletionTimestamp = captured.DeletionTimestamp
 	pod.DeletionGracePeriodSeconds = captured.DeletionGracePeriodSeconds
 	pod.Status = captured.Status
@@ -35,6 +36,8 @@ func TestPodEverStarted_KubeletSyntheticTermination(t *testing.T) {
 	require.NotNil(t, pod.Status.ContainerStatuses[0].State.Terminated,
 		"the capture records the waiting container as terminated")
 	assert.False(t, podEverStarted(pod), "a synthetic termination with no start, exit or ID is not a start")
+	_, observed := podLifetime(pod)
+	assert.False(t, observed, "a worker that never started adds no job-duration sample")
 
 	ran := pod.DeepCopy()
 	ran.Status.ContainerStatuses[0].ContainerID = "containerd://runner"

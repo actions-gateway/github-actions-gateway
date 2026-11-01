@@ -248,6 +248,7 @@ A real kubelet deleting such a worker publishes a transient `Failed` and records
 The AGC read that record as a container that had run, so on the classic tier the job was reported failed with no force-cancel and its run waited out GitHub's ~15-minute unstarted-job timeout, and on the `ScaleSet` tier an external delete of such a worker was not recovered at all.
 Both now take the never-started handling: the run is force-cancelled at once and re-run once the owner places a worker again, counted under `abandoned_run_force_cancels_total` (Q1231).
 A worker that never left `Pending` because it was never scheduled was already handled this way.
+These workers also stop adding samples to `actions_gateway_job_duration_seconds`, which already skipped a worker that never started a container, so where image pulls are slow or broken the series' count drops and its percentiles shift.
 
 **Rolling back** returns these workers to the unstarted-job timeout.
 
