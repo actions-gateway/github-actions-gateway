@@ -23,7 +23,7 @@
     
     
       
-        <title>integration-test-gate is cancelled after its steps pass, evicting a PR - GitHub Actions Gateway</title>
+        <title>A hosted runner reporting late timed out the 2-minute gate jobs - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#integration-test-gate-is-cancelled-after-its-steps-pass-evicting-a-pr" class="md-skip">
+        <a href="#a-hosted-runner-reporting-late-timed-out-the-2-minute-gate-jobs" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              integration-test-gate is cancelled after its steps pass, evicting a PR
+              A hosted runner reporting late timed out the 2-minute gate jobs
             
           </span>
         </div>
@@ -2627,26 +2627,34 @@
   
 
 
-<h1 id="integration-test-gate-is-cancelled-after-its-steps-pass-evicting-a-pr">integration-test-gate is cancelled after its steps pass, evicting a PR<a class="headerlink" href="#integration-test-gate-is-cancelled-after-its-steps-pass-evicting-a-pr" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> a gate job (<code>integration-test-gate</code> or a sibling <code>*-gate</code>) concludes <code>cancelled</code> with every step green, or a PR leaves the merge queue with reason <code>failed_checks</code> while every gated job succeeded.</p>
-<p><strong>What was measured, 2026-10-30.</strong> Run 41099353135 is <code>integration-test.yml</code> on the merge_group branch for PR #2190 (Q1239).
-<code>integration-test (agc)</code> and <code>integration-test (gmc)</code> both succeeded (17:38:28Z and 17:39:25Z).
-<code>integration-test-gate</code> (job 124217088825) started at 17:41:43Z on a GitHub-hosted <code>ubuntu-26.04</code> runner, image 20261025.179.1.
-Both of its steps ran green and the log ends <code>needed job results: success success</code>, then <code>Complete job: Cleaning up orphan processes</code>.
-The job concluded <code>cancelled</code> at 17:45:05Z, about 3m20s after it started.
-The run concluded <code>cancelled</code> at 17:56:24Z and #2190 left the queue at 17:56:25Z.
-Every other merge_group workflow for that candidate succeeded, and the dispatcher re-enqueued the PR at the same head, so the rerun supplies the passes-on-rerun half of the evidence.</p>
-<p><strong>The mechanism is unverified.</strong> The log carries no cancellation reason, so the cause is not established.
-Two things are read from <code>integration-test.yml</code>, not from the run: the gate declares <code>timeout-minutes: 2</code>, and the concurrency group's <code>cancel-in-progress</code> is <code>true</code> only for <code>pull_request</code>, so a merge_group job is not cancelled by a newer run.
-The job's 3m22s exceeds the 2-minute cap, so a timeout is a candidate: both steps finished within a second of 17:41:44Z, which would leave the job idle after <code>Complete job</code> until the cap fired.
-That reading is untested, and a runner-side loss after the last step looks the same in the log.</p>
-<p><strong>Sibling, not a duplicate:</strong> <a href="../Q1105/">Q1105</a> is the same eviction shape on <code>unit-test.yml</code>, where a job's <em>timeout</em> cancelled it with every step green and the fix was a longer cap and a split job.
-If the 2-minute cap is what fired here, this is that defect on another gate, and the row may fold into Q1105's trigger; Q1105 is parked as mitigated, so it does not cover this occurrence as written.
-<a href="../Q1196/">Q1196</a> is that workflow's wall-time measurement and is unrelated.</p>
-<p><strong>First step on recurrence:</strong> read the job's check-run annotations and the run's <code>jobs</code> API record for a cancellation reason, and compare the cancel time with <code>started_at</code> plus 2 minutes.
-Record each recurrence's run id, runner image and gap between the last step and the cancel, so a second reading can say whether the gap is constant.
-If one recurs, decide between a gate-side retry and an upstream report to GitHub; a repeat on the same image points at the image.</p>
-<p><strong>Ranked at the top per</strong> <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first</a>, though the rule's outside-service exception (file, don't bump) may apply if the cause proves to be the hosted runner: the first recurrence decides.</p>
+<h1 id="a-hosted-runner-reporting-late-timed-out-the-2-minute-gate-jobs">A hosted runner reporting late timed out the 2-minute gate jobs<a class="headerlink" href="#a-hosted-runner-reporting-late-timed-out-the-2-minute-gate-jobs" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> a <code>*-gate</code> job concludes <code>cancelled</code> with the annotation <code>The job has exceeded the maximum execution time of 10m0s</code>.
+On a sighting, take the readings below for it and return the row to the top of the Queue.</p>
+<p><strong>The sighting, 2026-10-30.</strong> Run 41099353135 is <code>integration-test.yml</code> on the merge_group branch for PR #2190 (Q1239).
+<code>integration-test-gate</code> (job 124217088825) started at 17:41:43Z on a GitHub-hosted runner, labelled <code>ubuntu-latest</code>, image <code>ubuntu-26.04</code> 20261025.179.1.
+Its log runs from <code>17:41:44.195Z Current runner version: '2.338.2'</code> to <code>17:41:44.427Z Cleaning up orphan processes</code> and holds nothing after that; the jobs API records all four steps, <code>Complete job</code> included, as <code>success</code> with <code>completed_at</code> 17:41:44Z.
+The job concluded <code>cancelled</code> at 17:45:05Z, 201 s after its last step completed, and #2190 left the queue at 17:56:25Z.
+The dispatcher re-enqueued it at the same head and it passed.</p>
+<p><strong>The cause is the gate's own 2-minute timeout firing on a runner that reported completion late.</strong> Measured 2026-11-01:</p>
+<ul>
+<li>The check run's annotations, read with <code>gh api repos/actions-gateway/github-actions-gateway/check-runs/124217088825/annotations</code>, carry a <code>failure</code> annotation reading <code>The job has exceeded the maximum execution time of 2m0s</code>.
+  That rules out the workflow's <code>concurrency</code> group, whose <code>cancel-in-progress</code> is <code>true</code> only for <code>pull_request</code> events, and a cancel from outside the run.</li>
+<li>Across every run created since 2026-10-11 of six workflows (<code>integration-test</code>, <code>unit-test</code>, <code>e2e-test</code>, <code>security-scan</code>, <code>doc-links</code>, <code>manifest-validate</code>; about 1,800 runs, read from the Actions jobs API per run), seven gate jobs sat silent after their last step, and all seven started between 17:38Z and 17:55Z on 2026-10-30.
+  Three were cancelled by the cap: <code>security-scan-gate</code> (126 s from last step to cancel), <code>integration-test-gate</code> (201 s) and <code>manifest-validate-gate</code> (311 s).
+  Four reported late inside the cap and succeeded: <code>unit-test-gate</code> (84 s and 112 s) and <code>e2e-gate</code> (107 s and 111 s).
+  Across the whole sweep every workflow's median gate wall time is 3 s, and the per-workflow p99 runs from 5 s to 40 s.</li>
+<li>GitHub opened a major incident, <em>Incident with Actions, Pages, and Webhooks</em>, at 17:50:54Z, reporting delays to Actions workflows; it was resolved at 19:23:40Z.
+  Read from <code>https://www.githubstatus.com/api/v2/incidents.json</code>.</li>
+</ul>
+<p>Whether the three cancelled runners would ever have reported is not measured.</p>
+<p><strong>The mitigation:</strong> the eleven <code>*-gate</code> jobs that carried <code>timeout-minutes: 2</code> now carry 10, which covers the four late reports (112 s at most) and the 126-311 s the three cancelled tails ran before their cancels landed.
+The 2-minute value came in with #606 (Q297), which gives no reason for it.
+A cap still reports a hung gate as a failure, so no real failure is hidden; the cost is that a gate that truly hangs holds its merge-queue slot 8 minutes longer.
+A retry or rerun wrapper was ruled out because it would hide the cancel the gate exists to report.</p>
+<p><strong>Sibling, not a duplicate:</strong> <a href="../Q1105/">Q1105</a> is a timeout eviction on <code>unit-test.yml</code> too, but there the job's own steps ran past the cap.
+Here the steps ran in under a second and the time went to the runner reporting completion.</p>
+<p><strong>On a sighting, record:</strong> the run and job ids, the runner image and version, the gap between the last step's <code>completed_at</code> and the cancel, and whether a GitHub incident covers it.
+A tail longer than 10 minutes is the case for an upstream report to GitHub rather than a longer cap.</p>
 
 
 
