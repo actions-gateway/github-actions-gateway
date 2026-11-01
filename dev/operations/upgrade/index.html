@@ -4668,12 +4668,13 @@ Label each namespace that <code>kubectl get namespace &lt;namespace&gt; --show-l
 <p><strong>Removing a namespace from the tenants</strong> now has a second step: delete its <code>gmc-tenant-secret-reader</code> RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.</p>
 <h3 id="non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner<a class="headerlink" href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner" title="Permanent link">&para;</a></h3>
-<p><strong>Who is affected:</strong> <code>ScaleSet</code> sets whose workers schedule unevenly, so a worker is reaped <code>Pending</code> after another runner of the set took the job it was created for.
+<p><strong>Who is affected:</strong> <code>ScaleSet</code> sets whose workers schedule unevenly, so a worker is reaped <code>Pending</code>, or evicted, preempted or drained before its container ran, after another runner of the set took the job it was created for.
 Nothing to do.</p>
 <p>Since Q1169 such a reap cancels nothing, because the worker's own job is running.
 The set is still one runner short, and the job that lost its runner used to wait out GitHub's unstarted-job timeout and need a manual re-run.
 The AGC now names that job from the listener's in-flight record, force-cancels its run, and re-runs it once capacity returns, as for any abandoned worker (Q1195).
-It names none while a <code>Running</code> worker's job start may not be recorded yet, and then behaves as before.</p>
+The evicted, preempted and drained shapes take the same path when no idle worker of the set could take a job instead (Q1235).
+It names none while a <code>Running</code> worker's job start may not be recorded yet, and walks again once the start lands, for up to ten minutes after the loss (Q1235).</p>
 <p><strong>Rolling back</strong> returns that job to waiting out the timeout.</p>
 <h3 id="non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run<a class="headerlink" href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> clusters on Spot or preemptible capacity, or anywhere a node can go away while a worker is still <code>Pending</code>, pulling its image.

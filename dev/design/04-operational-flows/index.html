@@ -3990,8 +3990,13 @@ A worker that never ran has no <code>JobStarted</code> to replace it, so it is t
 So the recovery first lists the set's workers, and where one carries that job as its <code>actions-gateway.com/started-job-id</code>, the job has a runner and its run is spared (Q1169).
 The set is still one runner short, though, and the job left without one is a different job, which the recovery names and cancels instead (Q1195).
 It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
+A force-cancel ends the whole run, so a job it names whose run has a job a live worker has started, such as another leg of one matrix, is not recovered: cancelling it would end that running job (Q1235).
 A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
-The recovery names no job while any worker is <code>Running</code> with no start recorded, because that runner may hold the job already with its <code>JobStarted</code> still in flight; a stranded job found then is not recovered, and nothing re-checks it.
+The recovery names no job while any worker is <code>Running</code> with no start recorded, because that runner may hold the job already with its <code>JobStarted</code> still in flight.
+It walks once more after that start lands instead, from the abandoned-run sweeper's 30-second tick: at most once per lost worker, and for at most ten minutes after the loss (Q1235).
+GitHub's ~15-minute unstarted-job timeout runs from the stranded job's queueing, which is earlier than the loss, so it can end the job inside that window: at the default <code>pendingPodDeadline</code> of ten minutes, a job queued alongside the reaped worker times out about five minutes after the reap.
+The window therefore bounds how long a walk waits, not whether the recovery beats GitHub's timeout.
+The waiting walks are in process memory like the sweeper's other set, so a restart drops them and the job then waits out that timeout.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
 A finished job leaves the record only in a later save, so its worker pod can be gone first, at once under <code>completedPodTTL: 0s</code>.
 The listener therefore marks a job's record started when its <code>JobStarted</code> arrives, and the walk names no job whose record is marked.
@@ -4046,6 +4051,9 @@ The listener records each <code>JobStarted</code> on its runner's pod as <code>a
 The same start replaces the pod's <code>run-id</code> and <code>repository</code> with the started job's run, which is what eviction recovery re-runs (Q1152).
 A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job (Q1169).
 Where its container never ran, the same holds while another worker that can still be given a job has started nothing, since that worker may take it.
+Where no such idle worker exists, a worker whose container never ran and whose job another worker started still leaves the set one runner short, so recovery names the job left without one and force-cancels its run, as for a reaped worker (Q1195, Q1235).
+A <code>Running</code> worker with no start recorded counts as idle here, so this walk is never deferred for a re-check.
+That job never started, so it takes the abandoned arm's action rather than <code>rerun-failed-jobs</code>: it counts as <code>cause="abandoned"</code>, waits for capacity, and spends one slot of its run's re-run budget, keyed by the lost worker.
 A container that ran is not judged that way, because the <code>started-job-id</code> stamp lands asynchronously and is never written on a terminal pod, so a runner that took its own job and was disrupted before the stamp also reads as having started nothing.
 A pod marked as a disruption target never counts as able to take a job, so the victims of one preemption do not stand in for each other.
 A start also lifts a deadline set while that runner was idle, and moves it to another idle worker, since the runner that would have taken that job is now the one with nothing to run.

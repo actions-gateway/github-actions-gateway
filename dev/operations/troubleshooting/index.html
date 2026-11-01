@@ -6594,7 +6594,10 @@ On the <code>ScaleSet</code> tier the AGC reads the run first, and a run already
 That includes GitHub's own ~15-minute unstarted-job timeout, which the run's conclusion cannot tell from a user's cancel: with <code>pendingPodDeadline</code> set past ~15 minutes, the timeout cancels the run before the reap, and the job needs a manual re-run.
 On the <code>ScaleSet</code> tier the identity comes off the worker pod instead, so a missing one reports as <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}</code> with an <code>EvictionRecoveryIdentityUnknown</code> Warning Event, and means the assignment message carried no <code>workflowRunId</code>.
 On the <code>ScaleSet</code> tier the cancelled run can belong to a different job than the reaped pod's: when another worker's runner took the pod's job, the AGC cancels the run of the job left without a runner instead, and logs <code>recovering the job left without a runner instead</code> with its <code>jobID</code> and <code>runID</code> (Q1195).
-Where it cannot name that job, because a <code>Running</code> worker has no job start recorded yet or the listener holds no record of it, it cancels nothing and that job waits out GitHub's ~15-minute unstarted-job timeout.
+A worker evicted, preempted or drained before its container ran is handled the same way when no idle worker of its set could take a job instead (Q1235).
+Where it cannot name that job because a <code>Running</code> worker has no job start recorded yet, it walks again once the start lands, every 30 seconds for up to ten minutes after the loss, and logs <code>re-checked the lost worker's walk</code> (Q1235).
+Where the listener holds no record of the job, or the ten minutes pass, it cancels nothing and that job waits out GitHub's ~15-minute unstarted-job timeout.
+The same holds where that job's run has another job running on a worker, such as a second leg of one matrix: a force-cancel would end the running job too, so the AGC logs <code>not force-cancelling, which would end that job</code> and leaves it (Q1235).
 <code>AGC_FANOUT_COMPLETION</code> does not affect this path (it gates only the Q260 sibling fan-out).</p>
 <p><strong>Automatic re-run of the cancelled run (Q691).</strong> The cancelled conclusion is recoverable, and the AGC recovers it for you: the run is queued for an automatic <code>rerun-failed-jobs</code>, fired once the owning group <strong>places a worker pod again</strong>.
 The wait is the point.
@@ -8500,7 +8503,7 @@ Either one missing makes recovery inert for that pod.</p>
 </tr>
 <tr>
 <td><code>HANDLED</code> set, no re-run, and the pod has no <code>started-job-id</code></td>
-<td>Deliberate. Another worker has started the job this pod was created for, or the pod's container never ran and an idle worker can still take that job, so that run lost nothing. The AGC logs <code>not re-running that job's run</code> (Q1169)</td>
+<td>Deliberate. Another worker has started the job this pod was created for, or the pod's container never ran and an idle worker can still take that job, so that run lost nothing. The AGC logs <code>not re-running that job's run</code> (Q1169). Where the container never ran, another worker started its job and no worker is idle, the AGC force-cancels the job left without a runner instead and logs <code>recovering the job left without a runner instead</code> (Q1235)</td>
 </tr>
 </tbody>
 </table>

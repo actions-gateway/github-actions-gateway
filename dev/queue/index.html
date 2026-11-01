@@ -3060,14 +3060,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The e2e tenant's <code>NodeShare</code> envelope is pinned at <code>1500m</code> with one worker per node, a lower bound chosen to sit under both variants' …</td>
 </tr>
 <tr>
-<td><a href="Q1235/">Q1235</a></td>
-<td><a href="../design/04-operational-flows/">Stranded scale-set job named only on the abandoned path, not re-checked</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>Q1195 gave abandoned-run recovery a walk that names the job a lost scale-set runner left without one (<code>scaleSetWorkerSet.strandedJob</code> …</td>
-</tr>
-<tr>
 <td><a href="Q1230/">Q1230</a></td>
 <td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Never-started preemption and eviction victims re-run instead of cancel</a></td>
 <td><code>bug</code></td>
