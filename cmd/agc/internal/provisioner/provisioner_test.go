@@ -1067,8 +1067,9 @@ func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
 				Reason: corev1.PodReasonTerminationByKubelet,
 			})
 			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
-				Name:  "runner",
-				State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+				Name:        "runner",
+				State:       corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+				ContainerID: "containerd://runner",
 			}}
 		}},
 		{name: "out-of-service node", shape: func(pod *corev1.Pod) {

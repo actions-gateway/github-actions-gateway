@@ -57,9 +57,9 @@ type PodOutcome struct {
 	ExternallyDeleted bool
 	// DeletedBeforeStart reports that the pod was removed before any of its
 	// containers began executing, so no step of the job ever ran and no runner
-	// registered. Set only on the paths that resolve a wait from a deletion — a pod
-	// that published a terminal phase carries that phase instead — which is where
-	// the outcome was otherwise indistinguishable from a clean run (Q628).
+	// registered. Set on the paths that resolve a wait from a deletion, where the
+	// outcome was otherwise indistinguishable from a clean run (Q628), and on the
+	// transient Failed a deleted pod publishes first (deletedBeforeStart, Q1231).
 	DeletedBeforeStart bool
 }
 
@@ -89,10 +89,22 @@ func terminalPhase(pod *corev1.Pod) (PodOutcome, bool) {
 			NodeShutdown:        LostToNodeShutdown(pod),
 			NodeLostBeforeStart: LostToNodeShutdownBeforeStart(pod),
 			ExternallyDeleted:   externallyDeletedBeforeTerminal(pod),
+			DeletedBeforeStart:  deletedBeforeStart(pod),
 		}, true
 	default:
 		return PodOutcome{}, false
 	}
+}
+
+// deletedBeforeStart reports whether pod reached PodFailed because it was being deleted
+// before any of its containers started: the transient Failed a real kubelet publishes,
+// deletion mark set, for a deleted worker still waiting on its image (Q1231). The
+// waiter resolves on that update before the delete event arrives, so this is the
+// terminal path's reading of what onPodDelete sets for a pod that vanishes. Whoever
+// deleted it, the AGC's own reaper included: on the classic tier the provision
+// goroutine is the only handler.
+func deletedBeforeStart(pod *corev1.Pod) bool {
+	return pod.Status.Phase == corev1.PodFailed && !pod.DeletionTimestamp.IsZero() && !podEverStarted(pod)
 }
 
 // podResult is delivered to a blocked waiter when its pod resolves.
@@ -189,10 +201,22 @@ func workerOwner(pod *corev1.Pod) (string, bool) {
 
 // podEverStarted reports whether any of pod's containers began executing. An
 // unschedulable pod carries no container statuses at all, so it reports false.
+//
+// A terminated record counts only when it carries a start, an exit or a container ID.
+// The kubelet ends a deleted pod by writing each container that has no terminated record
+// as Terminated/ContainerStatusUnknown with none of the three, so a deleted worker still
+// waiting on its image would otherwise read as started (measured on kind v1.36.1,
+// testdata/deleted_pending_pod_failed.json; kubelet TerminatePod in
+// pkg/kubelet/status/status_manager.go). That rewrite replaces only the state, so a
+// container that was running keeps its ID.
 func podEverStarted(pod *corev1.Pod) bool {
 	for i := range pod.Status.ContainerStatuses {
-		st := &pod.Status.ContainerStatuses[i].State
-		if st.Running != nil || st.Terminated != nil {
+		cs := &pod.Status.ContainerStatuses[i]
+		if cs.State.Running != nil {
+			return true
+		}
+		if t := cs.State.Terminated; t != nil &&
+			(!t.StartedAt.IsZero() || !t.FinishedAt.IsZero() || cs.ContainerID != "") {
 			return true
 		}
 	}

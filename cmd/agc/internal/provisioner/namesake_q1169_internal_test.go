@@ -141,8 +141,9 @@ func TestRecoverEvictedScaleSetWorkers_AnUnstampedWorkerThatRanIgnoresIdleOnes(t
 	ctx := context.Background()
 	victim := evicted(mintedWorker("job-a", "myorg/repo-a", "111"))
 	victim.Status.ContainerStatuses = []corev1.ContainerStatus{{
-		Name:  "runner",
-		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+		Name:        "runner",
+		State:       corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
+		ContainerID: "containerd://runner",
 	}}
 	p, target, _, _, paths := recoveryFixture(t, victim, mintedWorker("job-c", "myorg/repo-c", "333"))
 

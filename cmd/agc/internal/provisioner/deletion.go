@@ -71,8 +71,9 @@ func deletedByAGC(pod *corev1.Pod) bool {
 // delete is ordered against the termination record. And a real kubelet publishes a
 // transient Failed-with-mark even for a deleted worker whose container never started
 // (a drain catching a still-Pending pod — the shape the fake-GitHub drain spec pins):
-// such a pod has no termination record at all, and a job that never ran produced no
-// reportable failure for rerun-failed-jobs to act on.
+// such a pod's only termination record is the kubelet's synthetic one, with no exit
+// time (podEverStarted has the shape), and a job that never ran produced no reportable
+// failure for rerun-failed-jobs to act on.
 //
 // The ordering uses the deletion REQUEST time, not deletionTimestamp itself. The
 // apiserver stamps deletionTimestamp as request time PLUS the grace period, so on a

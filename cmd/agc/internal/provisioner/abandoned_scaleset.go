@@ -38,7 +38,8 @@ import (
 //     delete decision rather than racing the object's teardown.
 //   - abandonedAwaitingRecovery, in the RecoverEvictedScaleSetWorkers scan, for an
 //     external delete of a still-Pending worker. A real kubelet publishes a transient
-//     Failed carrying the deletion mark with no container exit record for that shape.
+//     Failed carrying the deletion mark with no container start record for that shape
+//     (podEverStarted reads its synthetic termination, Q1231).
 //     The same scan takes a still-Pending worker its node's shutdown failed, which
 //     nothing deletes (LostToNodeShutdownBeforeStart, Q1198).
 //
