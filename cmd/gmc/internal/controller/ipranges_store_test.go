@@ -215,3 +215,23 @@ func TestIPRangeStore_SaveWritesOwner(t *testing.T) {
 		assert.Empty(t, read(t, fc))
 	})
 }
+
+// An empty /meta response is a failed fetch: it keeps the seed rather than blanking
+// the cache behind a fresh refresh stamp (Q1228).
+func TestIPRangeReconciler_EmptyFetchKeepsSeed(t *testing.T) {
+	ctx := context.Background()
+	store, fc := newTestIPRangeStore(t)
+	seeded := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
+	fetchedAt := time.Now().Add(-time.Hour)
+	cache := &IPRangeCache{}
+	require.True(t, cache.Seed(seeded, fetchedAt, fetchedAt.Add(store.MaxAge)))
+	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{}, Cache: cache, Store: store}
+
+	require.Error(t, r.reconcileAll(ctx, slog.Default()))
+	assert.Equal(t, seeded, cache.Snapshot())
+	last, _ := cache.LastRefresh()
+	assert.True(t, last.Equal(fetchedAt), "an empty fetch must not stamp a refresh")
+	got, _, err := store.Load(ctx, time.Now())
+	require.NoError(t, err)
+	assert.Empty(t, got, "an empty fetch writes nothing to the store")
+}

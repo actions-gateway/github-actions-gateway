@@ -257,7 +257,7 @@ These workers also stop adding samples to `actions_gateway_job_duration_seconds`
 ### Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded
 
 **Who is affected:** anyone alerting on `EgressRulesStale` or `actions_gateway_egress_rules_stale`.
-Nothing to do.
+Nothing to do, unless you alert on reason `RefreshPending`: that reason no longer covers this state, so match `RefreshNeverSucceeded` as well.
 
 A CIDR-mode `EgressProxy` or v1 `ActionsGateway` used to read `EgressRulesStale=False` / `RefreshPending` while the GMC had no GitHub IP ranges at all, which is exactly when its policy denies all GitHub egress.
 It now reads `True` with the new reason `RefreshNeverSucceeded`, so the existing `ActionsGatewayEgressRulesStale` alert fires on it after 15 minutes (Q1228).
