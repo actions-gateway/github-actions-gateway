@@ -812,7 +812,8 @@ The pool's `NetworkPolicy` has a DNS egress rule and no GitHub rule.
 `EgressRulesStale` does **not** fire: it measures how long ago the last refresh succeeded, and here none has.
 
 **Cause.** A fresh GMC has no GitHub IP ranges to program until its first `api.github.com/meta` fetch succeeds, unless it can restore them from its own namespace.
-The GMC writes each successful fetch to the `actions-gateway-gmc-ip-ranges` ConfigMap and seeds itself from that copy at startup, but refuses the copy when it is older than the `EgressRulesStale` window (49 hours on the default 24-hour refresh), unreadable in any entry, or stamped in the future.
+The GMC writes each successful fetch to the `actions-gateway-gmc-ip-ranges` ConfigMap and seeds itself from that copy at startup, but refuses the copy when it is as old as the `EgressRulesStale` window (49 hours on the default 24-hour refresh), unreadable in any entry, or stamped in the future.
+A blank line between entries counts as unreadable; a trailing newline does not.
 So this symptom means one of three things: a first-ever start, a GMC that has not fetched successfully for over two days, or a copy that was refused.
 The fetch is unauthenticated, and GitHub allows 60 calls an hour per source IP.
 When several GMCs, or anything else, share one egress IP, that budget can be spent before the GMC's fetch, and GitHub answers `403` or `429` until the window resets.

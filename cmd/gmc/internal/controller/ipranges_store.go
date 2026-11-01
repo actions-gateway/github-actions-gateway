@@ -34,9 +34,11 @@ const (
 // egress until that fetch lands (Q1227).
 //
 // Loading fails closed: a copy that is unreadable in any entry, empty, stamped in
-// the future, or older than MaxAge seeds nothing, so the cache starts empty exactly
-// as it would with no store. A seeded set is one a past fetch returned, and the
-// cache stops serving it at fetchedAt+MaxAge unless a fetch replaces it first.
+// the future, or MaxAge old or older seeds nothing, so the cache starts empty exactly
+// as it would with no store. The cache stops serving a seed at fetchedAt+MaxAge
+// unless a fetch replaces it first. Entries are not bounded in width: the store
+// trusts whoever can write the ConfigMap, who can therefore widen CIDR-mode egress
+// until the first fetch after a restart.
 type IPRangeStore struct {
 	// Reader reads the ConfigMap uncached: the manager cache watches no ConfigMap
 	// but the egress destination allowlist, so this is the manager's API reader.
@@ -102,12 +104,13 @@ func (s *IPRangeStore) Load(ctx context.Context, now time.Time) ([]net.IPNet, ti
 	if fetchedAt.After(now) {
 		return nil, time.Time{}, fmt.Errorf("persisted ranges are stamped %s, in the future", fetchedAt.Format(time.RFC3339))
 	}
-	if age := now.Sub(fetchedAt); age > s.MaxAge {
+	// At MaxAge the cache would already refuse to serve the seed.
+	if age := now.Sub(fetchedAt); age >= s.MaxAge {
 		return nil, time.Time{}, fmt.Errorf("persisted ranges are %s old, past the %s limit", age.Round(time.Minute), s.MaxAge)
 	}
 
 	var cidrs []net.IPNet
-	for line := range strings.SplitSeq(cm.Data[ipRangeStoreCIDRsKey], "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(cm.Data[ipRangeStoreCIDRsKey]), "\n") {
 		_, cidr, err := net.ParseCIDR(line)
 		if err != nil {
 			return nil, time.Time{}, fmt.Errorf("read %s: %w", ipRangeStoreCIDRsKey, err)

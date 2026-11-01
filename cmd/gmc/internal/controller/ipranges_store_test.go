@@ -72,6 +72,7 @@ func TestIPRangeStore_LoadFailsClosed(t *testing.T) {
 		"unparseable fetch time":         {"cidrs": "140.82.112.0/20", "fetchedAt": "yesterday"},
 		"fetch time in the future":       {"cidrs": "140.82.112.0/20", "fetchedAt": stamp(time.Minute)},
 		"older than the maximum age":     {"cidrs": "140.82.112.0/20", "fetchedAt": stamp(-49*time.Hour - time.Second)},
+		"exactly the maximum age":        {"cidrs": "140.82.112.0/20", "fetchedAt": stamp(-49 * time.Hour)},
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -97,6 +98,17 @@ func TestIPRangeStore_LoadFailsClosed(t *testing.T) {
 		require.Error(t, err)
 		assert.Empty(t, got)
 	})
+}
+
+// A hand-written copy ending in a newline is read, not refused as an empty entry.
+func TestIPRangeStore_LoadToleratesTrailingNewline(t *testing.T) {
+	now := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	store, _ := newTestIPRangeStore(t, storeConfigMap(map[string]string{
+		"cidrs": "140.82.112.0/20\n192.30.252.0/22\n", "fetchedAt": now.Add(-time.Hour).Format(time.RFC3339Nano),
+	}))
+	got, _, err := store.Load(context.Background(), now)
+	require.NoError(t, err)
+	assert.Equal(t, []net.IPNet{parseCIDR(t, "140.82.112.0/20"), parseCIDR(t, "192.30.252.0/22")}, got)
 }
 
 func TestIPRangeStore_SeedCacheServesUntilExpiry(t *testing.T) {
