@@ -3028,6 +3028,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>die_if_killed</code> (scripts/lib/common.sh) draws the line Q1023 asked for: a status above 128 is a signal, not a verdict, so it is handed back …</td>
 </tr>
 <tr>
+<td><a href="Q1246/">Q1246</a></td>
+<td><a href="../plan/q645-abandoned-completion/#q683--the-fast-ending-measurement-2026-08-05">Measure what a run force-cancel does to a multi-job run's healthy jobs</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The never-started handling force-cancels the whole workflow run (<code>forceCancelAbandonedRun</code>, <code>POST …/actions/runs/{id}/force-cancel</code>), then …</td>
+</tr>
+<tr>
 <td><a href="Q1066/">Q1066</a></td>
 <td><a href="../operations/troubleshooting/#worker-image-runner-version">Registry read cannot present node-identity pull credentials (GAR, ECR)</a></td>
 <td><code>feature</code></td>
@@ -3071,9 +3079,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1230/">Q1230</a></td>
 <td><a href="../design/04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">Never-started preemption and eviction victims re-run instead of cancel</a></td>
 <td><code>bug</code></td>
-<td>🔲</td>
+<td>🚫</td>
 <td>S</td>
-<td>A worker preempted while still <code>Pending</code> goes straight to <code>rerun-failed-jobs</code> on both tiers, ahead of the abandoned handling that …</td>
+<td>Blocked by <a href="Q1246/">Q1246</a>: what the never-started handling's whole-run force-cancel does to a multi-job run's healthy jobs is unweighed.</td>
 </tr>
 <tr>
 <td><a href="Q1231/">Q1231</a></td>

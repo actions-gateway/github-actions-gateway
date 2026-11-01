@@ -2628,6 +2628,7 @@
 
 
 <h1 id="never-started-preemption-and-eviction-victims-re-run-instead-of-cancel">Never-started preemption and eviction victims re-run instead of cancel<a class="headerlink" href="#never-started-preemption-and-eviction-victims-re-run-instead-of-cancel" title="Permanent link">&para;</a></h1>
+<p>Blocked by <a href="../Q1246/">Q1246</a>: what the never-started handling's whole-run force-cancel does to a multi-job run's healthy jobs is unweighed.</p>
 <p>A worker preempted while still <code>Pending</code> goes straight to <code>rerun-failed-jobs</code> on both tiers, ahead of the abandoned handling that force-cancels a never-started worker's run first (Q691/Q766).
 Read from source on 2026-10-27, not observed: on the classic tier <code>provision()</code> sets <code>cause = preemption</code> from <code>outcome.Preempted</code>, and the abandoned case requires <code>cause == ""</code>, so a preemption victim the delete path resolved with <code>DeletedBeforeStart</code> is re-run; on the scale-set tier <code>judgeScaleSetDisruption</code> tries <code>disruptionAwaitingRecovery</code>, whose <code>PreemptedByScheduler</code> arm matches, before <code>abandonedAwaitingRecovery</code>.
 The classic routing is deliberate: its comment says a preemption victim most often never started and that one disruption gets one recovery, and it was written with Q628, before Q683 measured that a never-started job's run has to be concluded before a re-run is legal.
