@@ -731,26 +731,25 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 
 > **The docs site publishes this release too (Q238).** A **stable** `vX.Y.Z` tag also triggers [`pages.yml`](../../.github/workflows/pages.yml), which deploys the release's docs as a new version on [actions-gateway.com](https://actions-gateway.com) and moves the `stable` alias + the site's default root redirect to it — so the public docs default to this release, with the unreleased `main` docs kept behind an opt-in `dev` version.
 > Prerelease tags (`0.x`, `-rc`/`-alpha`/`-beta`) do **not** deploy the site.
-> Because each version's docs are built from **its own tag**, the version pins in this tree are what the release publishes as its landing page, and they still name the previous release.
+> Because each version builds from **its own tag**, the version pins in this tree are what the release publishes as its landing page, and they still name the previous release.
 > [Step 7](#the-bump-on-main-does-not-reach-the-published-release) republishes them.
 > The versioned-docs model, and the one-time `mike` seeding of releases cut before it landed, are documented in [website.md § Versioned deploy](../development/website.md#versioned-deploy-mike).
 
 #### The tag push hands the site deploy to `main`
 
-**Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job dispatches `pages` on `main` with the tag's version, `docs_ref` set to the tag, and `stable_tag=true`, and that dispatched run builds, deploys and checks the live site (Q1041).
-Every stable tag from `v1.6.0` to `v1.10.0` that deployed from the tag's own run reported success and never served, while a dispatch of the same content from `main` served each time.
-The ref the deploy ran from is the only difference measured between the two; why Pages ignores the tag one is not known.
+**Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job re-runs `pages` as a `workflow_dispatch` on the same tag, and that run builds, deploys and checks the live site (Q1041).
+Every stable tag from `v1.6.0` to `v1.10.0` deployed from its push, reported success, and never served, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
+Why a push deploy differs from a dispatch is not known.
 
-If the dispatched run fails, re-run it by hand with the same inputs:
+If the dispatched run fails, dispatch it again by hand:
 
 ```bash
-gh workflow run pages --ref main \
-  -f version=X.Y.Z -f docs_ref=vX.Y.Z -f stable_tag=true
+gh workflow run pages --ref vX.Y.Z
 ```
 
-`stable_tag=true` moves `stable` only when `X.Y.Z` is the highest release, so the same command is safe for a backport.
+With no inputs it resolves from the tag the way the push does, so it moves `stable` only when `X.Y.Z` is the highest release and is safe for a backport.
 
-**A backport tag cut from a `release-X.Y` branch older than this change deploys from the tag ref**, because a tag push runs the `pages.yml` on its own commit.
+**A backport tag cut from a `release-X.Y` branch older than this change deploys from its push**, because a tag push runs the `pages.yml` on its own commit.
 `release-1.4` through `release-1.7` predate the hand-off, so a tag cut from one of them needs the command above run by hand.
 
 Then read the site rather than the run:
@@ -760,7 +759,7 @@ curl -fsS https://actions-gateway.com/versions.json | jq -r '.[] | "\(.version) 
 ```
 
 `X.Y.Z` must be listed and must hold `stable`.
-Use `docs_ref=release-X.Y` instead when [step 7](#the-bump-on-main-does-not-reach-the-published-release) applies, that is, when the pins were bumped *after* the tag, so the tag's own tree still names the previous release.
+When [step 7](#the-bump-on-main-does-not-reach-the-published-release) applies, that is, when the pins were bumped *after* the tag, so the tag's own tree still names the previous release, republish from `main` with `docs_ref=release-X.Y` as that step shows instead.
 
 ### 3. Verify the publish
 
@@ -1252,7 +1251,7 @@ This half exists because `v1.3.0` shipped without it too: the 1.3 row read `❌ 
 
 **Bump the pins before the tag and this whole section is a fallback**, which is what [step 2](#2-tag-and-push) tells you to do and what `v1.8.0` was the first release to do.
 [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) accepts a pin naming a release that has a candidate tagged and no stable tag yet, so the bump lands on `main` during the candidate window without reddening `make check` for every PR in it.
-The tag then carries the right pins itself, so the deploy the tag push dispatches publishes them and no republish is needed.
+The tag then carries the right pins itself, so its own deploy publishes them and no republish is needed.
 Confirm it with `make verify-published-docs VERSION=vX.Y.Z`, as below.
 
 **Everything below is the recovery for a bump that landed after the tag**, which is how every release before `v1.8.0` was cut.

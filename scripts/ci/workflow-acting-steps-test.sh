@@ -587,12 +587,13 @@ else
 fi
 
 # ============================================================================
-# pages.yml `handoff` — a tag push dispatching its site deploy on main
+# pages.yml `handoff` — a tag push dispatching its own site deploy
 # ============================================================================
 #
-# The decision under test: a stable tag dispatches the release deploy on `main`
-# with the tag's rule (Q1041), and a prerelease dispatches nothing, because that
-# dispatch publishes the site and moves `stable`.
+# The decision under test: a stable tag re-runs this workflow as a blank
+# dispatch on its own ref (Q1041), and a prerelease dispatches nothing, because
+# that dispatch publishes the site and moves `stable`. Blank matters: an input
+# would be applied verbatim instead of resolving from the tag.
 
 # run_handoff CASE REF [BODY] — echoes the sandbox.
 run_handoff() {
@@ -610,8 +611,9 @@ run_handoff() {
 dir="$(run_handoff pages-handoff-stable refs/tags/v1.10.0)"
 if [[ -n "$dir" ]]; then
 	expect_call pages-handoff-stable "$dir" \
-		'gh workflow run pages.yml --repo o/r --ref main -f version=1.10.0 -f docs_ref=v1.10.0 -f stable_tag=true' &&
-		pass pages-handoff-stable 'a stable tag dispatches its deploy on main with the tag rule'
+		'gh workflow run pages.yml --repo o/r --ref v1.10.0' &&
+		expect_no_call pages-handoff-stable "$dir" ' -f ' &&
+		pass pages-handoff-stable 'a stable tag dispatches a blank deploy on its own ref'
 fi
 
 dir="$(run_handoff pages-handoff-rc refs/tags/v1.10.0-rc.1)"
