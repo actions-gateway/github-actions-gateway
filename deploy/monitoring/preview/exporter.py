@@ -295,6 +295,13 @@ def render():
         # Held below the ProxyConnectDenied alert's 0.1/s threshold so the preview
         # shows the panel populated without the stack rendering a firing alert.
         L.append(f'actions_gateway_proxy_connect_denied_total{{namespace="{ns}"}} {counter_total(0.02, elapsed)}')
+        # CONNECTs by allowlist entry and outcome (Q1178); the tenant dashboard plots every outcome but tunneled.
+        for dest, outcome, rate in (
+            ("github.com", "tunneled", 0.4), ("pipelines.actions.githubusercontent.com", "tunneled", 0.1),
+            ("github.com", "timeout", 0.012), ("pipelines.actions.githubusercontent.com", "dns_error", 0.01),
+            ("unlisted", "denied", 0.02),
+        ):
+            L.append(f'actions_gateway_proxy_connects_total{{namespace="{ns}",destination="{dest}",outcome="{outcome}"}} {counter_total(rate, elapsed)}')
         # tunnel duration: center idx 5 (~60s)
         L += hist_lines("actions_gateway_proxy_tunnel_duration_seconds", f'namespace="{ns}"', PROXY_BUCKETS, 0.5, 5, elapsed)
 

@@ -106,6 +106,7 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 | Proxy dial errors/s | `rate(actions_gateway_proxy_dial_errors_total[5m])` | Time series |
 | Denied CONNECTs/s (SSRF signal) | `rate(actions_gateway_proxy_connect_denied_total[5m])` | Time series |
 | Tunnel duration p95 | `histogram_quantile(0.95, rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m]))` | Time series |
+| CONNECTs by allowlist entry and outcome/s | `sum by (destination, outcome) (rate(actions_gateway_proxy_connects_total{outcome!="tunneled"}[5m]))` | Time series |
 
 **Row 7 — Proxy & Quota (kube-state-metrics)**
 
