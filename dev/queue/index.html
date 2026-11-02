@@ -2828,14 +2828,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>check-release-ladder-test</code> is reported KILLED by <code>make scripts-test</code>, or exits 1 with a shell error from a <code>write_*</code> fixture …</td>
 </tr>
 <tr>
-<td><a href="Q1228/">Q1228</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">Report a GMC IP-range cache that never filled on gateway conditions</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Split out of Q1203, whose rate-limit-aware retry shipped without this part; Q1203 is closed, so it is named here rather than linked.</td>
-</tr>
-<tr>
 <td><a href="Q1201/">Q1201</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">make e2e runs against the ambient kube context, dogfood included</a></td>
 <td><code>debt</code> <code>tests</code> <code>dogfood</code></td>
@@ -2850,6 +2842,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A dogfood e2e overlay's JSON 6902 patch against a shipped <code>ClusterRunnerTemplate</code> selects its target by <code>group</code>/<code>version</code>/<code>kind</code>/<code>name</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1249/">Q1249</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Report stale or missing GitHub ranges on a v2 direct-egress gateway</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A v2 <code>ActionsGateway</code> with no <code>defaultProxyRef</code> egresses directly, and its <code>&lt;gateway&gt;-workload</code> and <code>&lt;gateway&gt;-agc</code> NetworkPolicies carry …</td>
 </tr>
 <tr>
 <td><a href="Q1149/">Q1149</a></td>

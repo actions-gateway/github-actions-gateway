@@ -5968,7 +5968,29 @@ If that refresh loop stalls (GitHub meta API unreachable, persistent fetch error
 GitHub periodically rotates its published IP ranges, so a frozen allowlist eventually drops egress to the new ranges silently.
 The condition trips when the last successful refresh is older than the staleness window (just over two refresh cycles), so a single missed/slow refresh does not false-trip it.
 It is advisory and does <strong>not</strong> gate <code>Ready</code> — existing egress keeps working until GitHub rotates.
-It is only evaluated for gateways whose proxy <code>NetworkPolicy</code> is gateway-managed (<code>spec.proxy.managedNetworkPolicy</code> unset or <code>true</code>).</p>
+It is only evaluated for gateways whose proxy <code>NetworkPolicy</code> is gateway-managed (<code>spec.proxy.managedNetworkPolicy</code> unset or <code>true</code>), and on an <code>EgressProxy</code> only in <code>CIDR</code> mode.</p>
+<p>The reason says which of two states you are in:</p>
+<table>
+<thead>
+<tr>
+<th>Reason</th>
+<th>Meaning</th>
+<th>Where to go</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RefreshStalled</code></td>
+<td>The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied.</td>
+<td>The diagnostics below.</td>
+</tr>
+<tr>
+<td><code>RefreshNeverSucceeded</code></td>
+<td>The GMC holds no ranges at all, from neither a fetch nor its persisted copy. The policy carries no GitHub rule, so GitHub egress is denied now.</td>
+<td><a href="#proxy-pools-have-no-github-egress-after-a-gmc-start">Proxy Pools Have No GitHub Egress After a GMC Start</a>.</td>
+</tr>
+</tbody>
+</table>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Read the condition — its message reports how long ago the last refresh succeeded.</span>
 <a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
@@ -5988,7 +6010,8 @@ If GitHub's meta API is down, no action is needed beyond waiting — the allowli
 <p><strong>Symptoms.</strong> After the GMC starts or restarts, tenants acquire no jobs.
 The proxy pool logs <code>upstream dial failed</code> with an <code>i/o timeout</code> to a GitHub address, and answers the AGC <code>502 upstream unavailable</code>.
 The pool's <code>NetworkPolicy</code> has a DNS egress rule and no GitHub rule.
-<code>EgressRulesStale</code> does <strong>not</strong> fire: it measures how long ago the last refresh succeeded, and here none has.</p>
+The <code>EgressProxy</code> (or v1 <code>ActionsGateway</code>) reports <code>EgressRulesStale=True</code> with reason <code>RefreshNeverSucceeded</code>, and <code>Ready</code> stays <code>True</code>, because <code>Ready</code> measures proxy pods rather than their egress.
+The <code>ActionsGatewayEgressRulesStale</code> alert fires once the state has held for 15 minutes.</p>
 <p><strong>Cause.</strong> A fresh GMC has no GitHub IP ranges to program until its first <code>api.github.com/meta</code> fetch succeeds, unless it can restore them from its own namespace.
 The GMC writes each successful fetch to the <code>actions-gateway-gmc-ip-ranges</code> ConfigMap and seeds itself from that copy at startup, but refuses the copy when it is as old as the <code>EgressRulesStale</code> window (49 hours on the default 24-hour refresh), unreadable in any entry, or stamped in the future.
 A blank line between entries counts as unreadable; a trailing newline does not.
@@ -5996,17 +6019,21 @@ So this symptom means one of three things: a first-ever start, a GMC that has no
 The fetch is unauthenticated, and GitHub allows 60 calls an hour per source IP.
 When several GMCs, or anything else, share one egress IP, that budget can be spent before the GMC's fetch, and GitHub answers <code>403</code> or <code>429</code> until the window resets.</p>
 <p><strong>Diagnostics.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Whether the start seeded from the persisted copy, and if not, why it was refused.</span>
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span>deploy/&lt;gmc&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"persisted copy"</span>
-<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>
-<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="c1"># The persisted copy and the time of the fetch it came from.</span>
-<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span>actions-gateway-gmc-ip-ranges<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.fetchedAt}'</span>
-<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>
-<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="c1"># A rate-limited fetch logs how long the GMC will wait before its next attempt.</span>
-<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span>deploy/&lt;gmc&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"ip-range fetch"</span>
-<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>
-<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a><span class="c1"># Read the quota from a host that shares the GMC's egress IP. This spends one call.</span>
-<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a>curl<span class="w"> </span>-sSI<span class="w"> </span>https://api.github.com/meta<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s1">'^x-ratelimit'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># The condition names this state directly.</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>egressproxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .status.conditions[?(@.type=="EgressRulesStale")]}{.status} {.reason}: {.message}{"\n"}{end}'</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="c1"># Whether the start seeded from the persisted copy, and if not, why it was refused.</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span>deploy/&lt;gmc&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"persisted copy"</span>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a><span class="c1"># The persisted copy and the time of the fetch it came from.</span>
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span>actions-gateway-gmc-ip-ranges<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.fetchedAt}'</span>
+<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a>
+<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a><span class="c1"># A rate-limited fetch logs how long the GMC will wait before its next attempt.</span>
+<a id="__codelineno-35-12" name="__codelineno-35-12" href="#__codelineno-35-12"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span>deploy/&lt;gmc&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">"ip-range fetch"</span>
+<a id="__codelineno-35-13" name="__codelineno-35-13" href="#__codelineno-35-13"></a>
+<a id="__codelineno-35-14" name="__codelineno-35-14" href="#__codelineno-35-14"></a><span class="c1"># Read the quota from a host that shares the GMC's egress IP. This spends one call.</span>
+<a id="__codelineno-35-15" name="__codelineno-35-15" href="#__codelineno-35-15"></a>curl<span class="w"> </span>-sSI<span class="w"> </span>https://api.github.com/meta<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s1">'^x-ratelimit'</span>
 </code></pre></div>
 <p><strong>Resolution.</strong> The GMC retries on its own, after the time GitHub names and never sooner than a minute: the <code>Retry-After</code> header, or <code>x-ratelimit-reset</code> when <code>x-ratelimit-remaining</code> is <code>0</code>.
 With neither, it waits a minute and doubles the wait on each further limit, up to an hour.

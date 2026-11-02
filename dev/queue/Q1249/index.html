@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1228/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1249/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Report a GMC IP-range cache that never filled on gateway conditions - GitHub Actions Gateway</title>
+        <title>Report stale or missing GitHub ranges on a v2 direct-egress gateway - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#report-a-gmc-ip-range-cache-that-never-filled-on-gateway-conditions" class="md-skip">
+        <a href="#report-stale-or-missing-github-ranges-on-a-v2-direct-egress-gateway" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Report a GMC IP-range cache that never filled on gateway conditions
+              Report stale or missing GitHub ranges on a v2 direct-egress gateway
             
           </span>
         </div>
@@ -2627,15 +2627,14 @@
   
 
 
-<h1 id="report-a-gmc-ip-range-cache-that-never-filled-on-gateway-conditions">Report a GMC IP-range cache that never filled on gateway conditions<a class="headerlink" href="#report-a-gmc-ip-range-cache-that-never-filled-on-gateway-conditions" title="Permanent link">&para;</a></h1>
-<p>Split out of Q1203, whose rate-limit-aware retry shipped without this part; Q1203 is closed, so it is named here rather than linked.</p>
-<p>A GMC whose first <code>api.github.com/meta</code> fetch has not succeeded gives proxy pools no GitHub egress, and no gateway condition says so.
-<code>EgressRulesStale</code> is derived from <code>IPRangeCache.LastRefresh</code>, which reports <code>false</code> before the first fetch, so the condition stays silent exactly when egress is entirely missing rather than merely old.</p>
-<p>The operator-visible result, measured 2026-10-24 on the local kind e2e cluster: jobs stayed <code>queued</code> for 10 minutes, the tenant's proxy NetworkPolicy carried only a DNS egress rule, and the GMC's log was the only place the cause showed.
-<code>docs/operations/troubleshooting.md</code> now has a section for this state, but an operator has to suspect it first.</p>
-<p>Whether <code>Ready</code> reads <code>True</code> in this state is unmeasured; read it before choosing between a new condition reason and an existing one.
-Fix shape, unmeasured: when the cache has never filled, set a condition (likely on the <code>EgressRulesStale</code> type with a distinct reason, or <code>Degraded</code>) on every gateway or EgressProxy whose policy is in CIDR mode and gateway-managed.
-A new condition reason is an API change, so read <code>docs/development/api-review.md</code> first.</p>
+<h1 id="report-stale-or-missing-github-ranges-on-a-v2-direct-egress-gateway">Report stale or missing GitHub ranges on a v2 direct-egress gateway<a class="headerlink" href="#report-stale-or-missing-github-ranges-on-a-v2-direct-egress-gateway" title="Permanent link">&para;</a></h1>
+<p>A v2 <code>ActionsGateway</code> with no <code>defaultProxyRef</code> egresses directly, and its <code>&lt;gateway&gt;-workload</code> and <code>&lt;gateway&gt;-agc</code> NetworkPolicies carry the GitHub CIDR allowlist from the shared IP-range cache.
+No condition on that gateway reports the cache's state: it carries no <code>EgressRulesStale</code> at all, so neither a stalled refresh (<code>RefreshStalled</code>) nor a cache that never filled (<code>RefreshNeverSucceeded</code>, added by Q1228 for the v1 <code>ActionsGateway</code> and the CIDR-mode <code>EgressProxy</code>) is visible on a direct-egress tenant.</p>
+<p>Measured 2026-11-01 at <code>76eed6e</code>: <code>git grep -c EgressRulesStale -- 'cmd/gmc/internal/controller/actionsgateway_v2*.go'</code> matched nothing, against 4 lines in <code>egressproxy_quota.go</code>; the v2 type's godoc lists <code>Ready, AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed, RunnerSetsDegraded</code> (<code>api/v2/actionsgateway_types.go:608:  // Conditions are the observed conditions of the gateway. Known types: Ready,</code>).</p>
+<p>The never-filled case is narrower here than on a proxy pool: <code>preserveExistingEgress</code> keeps an already-programmed direct-egress policy's rules while the cache is empty (Q246), so only a first-ever provision or a policy deleted while the cache is empty shows no GitHub rule.
+The stalled case is not narrowed by that.</p>
+<p>Fix shape, unmeasured: add <code>EgressRulesStale</code> to the v2 <code>ActionsGateway</code>'s known condition types, set only in direct mode, with the evaluation the <code>EgressProxy</code> uses, and export it on <code>actions_gateway_egress_rules_stale</code>.
+That is a new condition type on a served API, so read <code>docs/development/api-review.md</code> first.</p>
 
 
 

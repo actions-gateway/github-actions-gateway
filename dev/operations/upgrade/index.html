@@ -1748,6 +1748,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: EgressRulesStale now fires when no GitHub ranges have loaded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3694,6 +3705,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: EgressRulesStale now fires when no GitHub ranges have loaded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4536,6 +4558,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
 <li><a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run">Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run</a></li>
+<li><a href="#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded">Non-breaking: <code>EgressRulesStale</code> now fires when no GitHub ranges have loaded</a></li>
 <li><a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart</a></li>
 <li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
@@ -4722,6 +4745,14 @@ Both now take the never-started handling: the run is force-cancelled at once and
 A worker that never left <code>Pending</code> because it was never scheduled was already handled this way.
 These workers also stop adding samples to <code>actions_gateway_job_duration_seconds</code>, which already skipped a worker that never started a container, so where image pulls are slow or broken the series' count drops and its percentiles shift.</p>
 <p><strong>Rolling back</strong> returns these workers to the unstarted-job timeout.</p>
+<h3 id="non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded">Non-breaking: <code>EgressRulesStale</code> now fires when no GitHub ranges have loaded<a class="headerlink" href="#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone alerting on <code>EgressRulesStale</code> or <code>actions_gateway_egress_rules_stale</code>.
+Nothing to do, unless you alert on reason <code>RefreshPending</code>: that reason no longer covers this state, so match <code>RefreshNeverSucceeded</code> as well.</p>
+<p>A CIDR-mode <code>EgressProxy</code> or v1 <code>ActionsGateway</code> used to read <code>EgressRulesStale=False</code> / <code>RefreshPending</code> while the GMC had no GitHub IP ranges at all, which is exactly when its policy denies all GitHub egress.
+It now reads <code>True</code> with the new reason <code>RefreshNeverSucceeded</code>, so the existing <code>ActionsGatewayEgressRulesStale</code> alert fires on it after 15 minutes (Q1228).
+<code>RefreshPending</code> remains only for an unmanaged or FQDN-mode policy.
+While the state lasts, the GMC re-checks it every minute, so it clears within a minute of the first fetch.</p>
+<p><strong>Rolling back</strong> returns the state to <code>False</code> / <code>RefreshPending</code>.</p>
 <h3 id="non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart<a class="headerlink" href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every install whose proxy pools or direct-egress gateways use the default <code>CIDR</code> egress mode.
 Nothing to do.</p>

@@ -3424,7 +3424,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_egress_rules_stale</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges. Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
+<td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges; also <code>1</code>, with reason <code>RefreshNeverSucceeded</code>, while the GMC holds no ranges at all and GitHub egress is denied (Q1228). Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_github_egress_incomplete</code></td>

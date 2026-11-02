@@ -3944,6 +3944,7 @@ Without <code>spec.capacityGate</code> nothing throttles intake, so each further
 See <a href="../troubleshooting/#the-reason-is-podsnotstarting-the-image-will-not-pull">The Reason Is <code>PodsNotStarting</code>: the Image Will Not Pull</a>.</p>
 <h3 id="actionsgatewayegressrulesstale">ActionsGatewayEgressRulesStale<a class="headerlink" href="#actionsgatewayegressrulesstale" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; the proxy <code>NetworkPolicy</code> may drift from GitHub's published ranges.
+With reason <code>RefreshNeverSucceeded</code> it is worse: the GMC holds no ranges at all, so GitHub egress is already denied and jobs stay queued.
 See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale</a>.</p>
 <h3 id="actionsgatewaygithubegressincomplete">ActionsGatewayGitHubEgressIncomplete<a class="headerlink" href="#actionsgatewaygithubegressincomplete" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> A referring gateway names a GitHub Enterprise Server host the <code>EgressProxy</code> pool's <code>CIDR</code>-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
