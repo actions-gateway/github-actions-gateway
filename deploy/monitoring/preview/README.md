@@ -71,7 +71,7 @@ Common knobs (environment variables):
 | --- | --- | --- |
 | `WAIT` | `660` | Seconds to let metrics accumulate before rendering (rate/histogram windows). Keep it `>=` the `FROM` window, or the time-series panels render mostly empty with a spike at the right edge. |
 | `OUT_DIR` | `.` | Directory the PNGs are written to. |
-| `WIDTH` / `HEIGHT` | `1500` / `2300` | Render dimensions. |
+| `WIDTH` / `HEIGHT` | `1500` / `2800` | Render dimensions. |
 | `FROM` / `TO` | `now-10m` / `now` | Dashboard time range. Matched to `WAIT` so the whole window is backed by data. |
 | `CLUSTER` | `gag-obs` | kind cluster name. Runs sharing it are serialized against each other; set your own to opt out. See [Running two of these at once](#running-two-of-these-at-once). |
 
