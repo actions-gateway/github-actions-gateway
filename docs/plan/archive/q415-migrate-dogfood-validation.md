@@ -17,7 +17,7 @@ Migrate a real, running `v1alpha1` Docker-in-Docker tenant to v2 on the GKE dogf
 
 ## Why the existing e2e is not enough
 
-[Q414](../../../cmd/gmc/test/e2e/migration_v1_to_v2_test.go) already covers the tool on a live `kind` cluster, and covers it well: dry-run fan-out, the `ClusterRunnerTemplate`-vs-`RunnerTemplate` admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
+[Q414](https://github.com/actions-gateway/github-actions-gateway/blob/7012cb4e8/cmd/gmc/test/e2e/migration_v1_to_v2_test.go) already covers the tool on a live `kind` cluster, and covers it well: dry-run fan-out, the `ClusterRunnerTemplate`-vs-`RunnerTemplate` admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
 That spec says so itself — it names this plan as the follow-up.
 
 Three things it deliberately does not do, each of which is where a real migration can still fail:

@@ -104,20 +104,16 @@ func ApplyManifestWithWebhookRetry(yaml string) error {
 // Security Admission labels on it, and tenant-resource-guard before the GMC may
 // create any tenant resource (Deployments, Secrets, RoleBindings, …) in it (see
 // cmd/gmc/config/admission-policy/). Without the marker the GMC reconcile is
-// denied at the PSA-stamping step and never provisions tenant resources. The
-// legacy actions-gateway.github.com/tenant=true marker rides alongside it for the
-// v1 tenant the migration spec applies. A caller may override either marker by
-// passing it in labels, or drop one with UnlabelNamespace.
+// denied at the PSA-stamping step and never provisions tenant resources. A
+// caller may override the marker by passing it in labels, or drop it with
+// UnlabelNamespace.
 func CreateNamespace(name string, labels map[string]string) {
 	cmd := exec.Command("kubectl", "create", "namespace", name, "--dry-run=client", "-o", "yaml")
 	yaml, err := Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "generate namespace yaml")
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply namespace %s", name)
 
-	merged := map[string]string{
-		"actions-gateway.com/tenant":        "managed",
-		"actions-gateway.github.com/tenant": "true",
-	}
+	merged := map[string]string{"actions-gateway.com/tenant": "managed"}
 	for k, v := range labels {
 		merged[k] = v
 	}
