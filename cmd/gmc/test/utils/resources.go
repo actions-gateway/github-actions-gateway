@@ -107,7 +107,7 @@ func ApplyManifestWithWebhookRetry(yaml string) error {
 // denied at the PSA-stamping step and never provisions tenant resources. The
 // legacy actions-gateway.github.com/tenant=true marker rides alongside it for the
 // v1 tenant the migration spec applies. A caller may override either marker by
-// passing it in labels.
+// passing it in labels, or drop one with UnlabelNamespace.
 func CreateNamespace(name string, labels map[string]string) {
 	cmd := exec.Command("kubectl", "create", "namespace", name, "--dry-run=client", "-o", "yaml")
 	yaml, err := Run(cmd)
@@ -125,6 +125,17 @@ func CreateNamespace(name string, labels map[string]string) {
 		cmd = exec.Command("kubectl", "label", "--overwrite", "namespace", name, fmt.Sprintf("%s=%s", k, v))
 		_, err = Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "label namespace %s", name)
+	}
+}
+
+// UnlabelNamespace removes the given label keys from a namespace. A control
+// namespace that must stay outside every tenant selector calls it after
+// CreateNamespace to drop the markers that function stamps.
+func UnlabelNamespace(name string, keys ...string) {
+	for _, k := range keys {
+		cmd := exec.Command("kubectl", "label", "namespace", name, k+"-")
+		_, err := Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "unlabel %s on namespace %s", k, name)
 	}
 }
 

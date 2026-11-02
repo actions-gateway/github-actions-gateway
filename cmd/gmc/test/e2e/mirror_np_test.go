@@ -21,14 +21,15 @@ const (
 
 	// mirrorTenantNS is the tenant namespace the BASE's worker-side policy names in
 	// its metadata.namespace, so the render will not apply without it. Created empty
-	// and left unmarked: nothing probes from it, and marking it would give the
-	// positive below a second namespace it could have been admitted from.
+	// and stripped of the v2 marker: nothing probes from it, and marking it would
+	// give the positive below a second namespace it could have been admitted from.
 	mirrorTenantNS = "gag-dogfood-e2e"
 
 	// The probe client namespaces. mirrorMarkedNS carries the v2 managed-tenant
-	// marker the shared ingress peer selects on; mirrorUnmarkedNS carries only the
-	// v1-domain marker utils.CreateNamespace stamps, which that peer matches on
-	// nothing (the component's own "V1-DOMAIN TENANTS ARE NOT ADMITTED" note).
+	// marker the shared ingress peer selects on; mirrorUnmarkedNS has that marker
+	// removed after utils.CreateNamespace stamps it, keeping only the v1-domain
+	// marker, which that peer matches on nothing (the component's own "V1-DOMAIN
+	// TENANTS ARE NOT ADMITTED" note).
 	//
 	// NEITHER IS gag-dogfood-e2e, and that is the control. The base's ingress admits
 	// that one namespace literally, so a run in which the shared component silently
@@ -118,6 +119,7 @@ var _ = Describe("E2E_Mirror_SharedTenantsNP", Ordered, ContinueOnFailure, func(
 		By("creating the tenant namespace the base's worker-side policy is written into")
 		utils.CreateNamespace(mirrorTenantNS, nil)
 		DeferCleanup(func() { utils.DeleteNamespace(mirrorTenantNS) })
+		utils.UnlabelNamespace(mirrorTenantNS, "actions-gateway.com/tenant")
 
 		By("creating the marked and unmarked probe client namespaces")
 		utils.CreateNamespace(mirrorMarkedNS, map[string]string{
@@ -126,6 +128,7 @@ var _ = Describe("E2E_Mirror_SharedTenantsNP", Ordered, ContinueOnFailure, func(
 		DeferCleanup(func() { utils.DeleteNamespace(mirrorMarkedNS) })
 		utils.CreateNamespace(mirrorUnmarkedNS, nil)
 		DeferCleanup(func() { utils.DeleteNamespace(mirrorUnmarkedNS) })
+		utils.UnlabelNamespace(mirrorUnmarkedNS, "actions-gateway.com/tenant")
 
 		By("applying the shipped shared-tenants overlay (images re-pointed at the lane's local registry)")
 		projectDir, err := utils.GetProjectDir()
