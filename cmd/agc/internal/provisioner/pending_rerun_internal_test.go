@@ -201,6 +201,68 @@ func TestPendingRerun_ExpiresAfterADay(t *testing.T) {
 	assert.Empty(t, l.Pending)
 }
 
+// TestPendingRerun_AdoptedPastADayReadsTheRunFirst is Q1254: a run that concluded while
+// no process swept is released by the process that adopts it past the 24-hour mark,
+// rather than expired unread as never concluding.
+func TestPendingRerun_AdoptedPastADayReadsTheRunFirst(t *testing.T) {
+	ctx := context.Background()
+	before, api, target, concluded, clock, newP := pendingFixture(t)
+	parkOOM(before, target, "pod-a")
+
+	concluded.Store(true)
+	clock.advance(pendingRerunMaxWait + 30*time.Minute)
+	after := newP()
+	require.NoError(t, after.AdoptPendingReruns(ctx, target))
+	sweepPendingAndWait(t, after, ctx, 1)
+
+	assert.Equal(t, int64(1), api.reruns.Load())
+	assert.Zero(t, testutil.ToFloat64(after.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+	l, _, err := after.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Empty(t, l.Pending)
+}
+
+// TestPendingRerun_TheFinalReadIsBounded: the read at the 24-hour mark is the last one. A
+// failed read expires the entry as never concluded instead of releasing it or polling on.
+func TestPendingRerun_TheFinalReadIsBounded(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, concluded, clock, _, faults := pendingFixtureWith(t)
+	parkOOM(p, target, "pod-a")
+
+	concluded.Store(true)
+	faults.failReads(http.StatusForbidden, 1)
+	clock.advance(pendingRerunMaxWait)
+	sweepPendingAndWait(t, p, ctx, 0)
+
+	assert.Zero(t, api.reruns.Load())
+	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Empty(t, l.Pending, "a failed final read ends the wait")
+}
+
+// TestPendingRerun_ReRunAtTheDeadlineIsDropped: a run already re-run past the failed
+// attempt at the 24-hour mark is dropped as at any other read, not reported.
+func TestPendingRerun_ReRunAtTheDeadlineIsDropped(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, concluded, clock, _ := pendingFixture(t)
+	parkOOM(p, target, "pod-a")
+
+	api.set("failure", 2)
+	concluded.Store(true)
+	clock.advance(pendingRerunMaxWait)
+	sweepPendingAndWait(t, p, ctx, 0)
+
+	assert.Zero(t, api.reruns.Load())
+	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Empty(t, l.Pending)
+}
+
 // TestPendingRerun_DroppedWhenTheRunWasReRun: release judges against the attempt the job
 // failed in, so a run someone re-ran while the entry waited is not re-run again, even
 // once that attempt concludes.

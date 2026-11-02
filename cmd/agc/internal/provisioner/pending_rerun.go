@@ -202,9 +202,9 @@ func (s *pendingSets) forget(entry string) {
 }
 
 // sweepPendingReruns is one pass over every parked re-run of every watched set: expire
-// the ones that have waited pendingRerunMaxWait, drop the ones whose run has already
-// been re-run past the attempt they failed in, release the ones whose run has concluded,
-// and leave the rest for a later pass. It returns one done channel per release, closed
+// the ones whose run is still running, or cannot be read, at pendingRerunMaxWait, drop
+// the ones whose run has already been re-run past the attempt they failed in, release
+// the ones whose run has concluded, and leave the rest for a later pass. It returns one done channel per release, closed
 // once the release has finished and its entry is gone.
 func (p *Provisioner) sweepPendingReruns(ctx context.Context) []<-chan struct{} {
 	var released []<-chan struct{}
@@ -238,19 +238,28 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	now := p.nowFn()
 	age := now.Sub(e.FiredAt)
 
-	if age >= pendingRerunMaxWait {
+	// An entry past pendingRerunMaxWait gets one last read, whatever the cadence, so a run
+	// that concluded while no process swept, or since the last due read, is still released.
+	// Every outcome of that read ends the entry, which keeps the wait bounded.
+	final := age >= pendingRerunMaxWait
+	if final {
 		if !p.pendingSets.claimRelease(entry) {
 			return nil, false
 		}
-		defer p.pendingSets.forget(entry)
-		log.Error("the run never concluded while its re-run waited; manual rerun may be required",
-			"runID", e.RunID, "job", e.Job, "cause", e.Cause, "waited", pendingRerunMaxWait)
-		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonNeverConcluded,
-			fmt.Errorf("the run did not conclude within %s of the job failing", pendingRerunMaxWait))
-		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
+	} else if !p.pendingSets.due(entry, age, now) {
 		return nil, false
 	}
-	if !p.pendingSets.due(entry, age, now) {
+	claim := func() bool { return final || p.pendingSets.claimRelease(entry) }
+	expire := func(readErr error) (<-chan struct{}, bool) {
+		defer p.pendingSets.forget(entry)
+		err := fmt.Errorf("the run did not conclude within %s of the job failing", pendingRerunMaxWait)
+		if readErr != nil {
+			err = fmt.Errorf("%w; the last read of the run failed: %w", err, readErr)
+		}
+		log.Error("the run never concluded while its re-run waited; manual rerun may be required",
+			"runID", e.RunID, "job", e.Job, "cause", e.Cause, "waited", pendingRerunMaxWait, "error", err)
+		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonNeverConcluded, err)
+		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
 		return nil, false
 	}
 
@@ -263,7 +272,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	// answer is expected, and the 24-hour expiry bounds a failure that never clears.
 	switch {
 	case errors.Is(err, errRunGone):
-		if !p.pendingSets.claimRelease(entry) {
+		if !claim() {
 			return nil, false
 		}
 		defer p.pendingSets.forget(entry)
@@ -273,10 +282,13 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
 		return nil, false
 	case err != nil:
+		if final {
+			return expire(err)
+		}
 		log.Warn("could not read a parked re-run's run; will retry", "runID", e.RunID, "error", err)
 		return nil, false
 	case run.attempt > e.FailedAttempt:
-		if !p.pendingSets.claimRelease(entry) {
+		if !claim() {
 			return nil, false
 		}
 		defer p.pendingSets.forget(entry)
@@ -285,10 +297,13 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
 		return nil, false
 	case run.status != runStatusCompleted:
+		if final {
+			return expire(nil)
+		}
 		return nil, false
 	}
 
-	if !p.pendingSets.claimRelease(entry) {
+	if !claim() {
 		return nil, false
 	}
 	log.Info("the run concluded; releasing its parked re-run", "runID", e.RunID, "job", e.Job,
