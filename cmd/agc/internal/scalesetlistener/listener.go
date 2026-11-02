@@ -286,6 +286,20 @@ type ProvisionFunc func(ctx context.Context, job Job) error
 // Nil disables the pre-check, leaving the authoritative check as the only one.
 type CapacityCheckFunc func(ctx context.Context) error
 
+// WorkerCheckFunc reports whether jobID's worker pod can be created now. The Listener
+// calls it after CapacityCheckFunc and before minting the job's JIT config, for the same
+// reason: a job re-offered while its previous worker pod is still terminating would
+// otherwise register a runner on every re-offer, which the next attempt's name conflict
+// then deregisters (Q1233).
+//
+// A nil return means provision. An error wrapping ErrWorkerTerminating defers the job
+// onto the re-offer backoff, having registered nothing. Any other error is logged and
+// ignored, as for CapacityCheckFunc: the authoritative check is the pod create
+// ProvisionFunc still makes.
+//
+// Nil disables the pre-check.
+type WorkerCheckFunc func(ctx context.Context, jobID string) error
+
 // CleanupFunc releases the per-job resources ProvisionFunc staged — the worker's
 // JIT-config Secret — once the job is terminally complete (Q373). It is called with
 // the jobID and runnerName of every terminal JobCompleted the queue delivers, and must
@@ -491,6 +505,10 @@ type Config struct {
 	// asked before a job's JIT config is minted so a ceiling-blocked job registers no
 	// runner at GitHub (Q576). Nil disables the pre-check.
 	CheckCapacity CapacityCheckFunc
+	// CheckWorker reports whether the job's worker pod name is free, asked after
+	// CheckCapacity and before the mint, so a job whose previous worker is still
+	// terminating registers no runner at GitHub (Q1233). Nil disables the pre-check.
+	CheckWorker WorkerCheckFunc
 	// Capacity returns the total worker capacity to advertise each poll. Required.
 	Capacity CapacityFunc
 	// Cleanup releases a completed job's staged worker resources (its JIT-config
@@ -1812,6 +1830,12 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	if l.atCapacity(ctx) {
 		return provisionDeferCapacity
 	}
+	// The same holds for a job whose previous worker pod still holds its pod name: the
+	// provisioner would reject the pod create after the mint (Q1199), so each re-offer
+	// would register a runner for nothing (Q1233).
+	if l.workerTerminating(ctx, aj.JobID) {
+		return provisionDeferTerminating
+	}
 
 	jit, runnerName, outcome := l.generateJITConfig(ctx, ssID, aj.JobID)
 	if outcome != provisionAcked {
@@ -1893,6 +1917,24 @@ func (l *Listener) atCapacity(ctx context.Context) bool {
 	}
 	l.log.Warn("scaleset: worker capacity check failed; provisioning anyway",
 		"scaleSet", l.cfg.ScaleSetName, "err", err)
+	return false
+}
+
+// workerTerminating reports whether jobID's previous worker pod is still terminating, via
+// the optional pre-check. Like atCapacity it fails open.
+func (l *Listener) workerTerminating(ctx context.Context, jobID string) bool {
+	if l.cfg.CheckWorker == nil {
+		return false
+	}
+	err := l.cfg.CheckWorker(ctx, jobID)
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrWorkerTerminating) {
+		return true
+	}
+	l.log.Warn("scaleset: worker pod check failed; provisioning anyway",
+		"scaleSet", l.cfg.ScaleSetName, "jobID", jobID, "err", err)
 	return false
 }
 

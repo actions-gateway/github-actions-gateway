@@ -28,6 +28,8 @@ type terminatingPod struct {
 	gone     bool
 	attempts int
 	done     int
+	// checks counts the pre-checks, a re-offer the pre-check held before Provision.
+	checks int
 }
 
 func (p *terminatingPod) provision(context.Context, scalesetlistener.Job) error {
@@ -117,4 +119,75 @@ func TestListener_TerminatingWorkerStallReportsItsOwnConditionAndEvent(t *testin
 		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
 			v2alpha1.ReasonJobsProvisioning)
 	}, 5*time.Second, 10*time.Millisecond, "the stall clears once the job provisions")
+}
+
+// check is a WorkerCheckFunc reading the same pod, so the pre-check and the provisioner's
+// authoritative check agree, as they do in production.
+func (p *terminatingPod) check(context.Context, string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.checks++
+	if !p.gone {
+		return fmt.Errorf("%w: pod linux-job-1 is still terminating", scalesetlistener.ErrWorkerTerminating)
+	}
+	return nil
+}
+
+// reoffers counts the times the listener tried the job, at whichever check held it.
+func (p *terminatingPod) reoffers() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.checks + p.attempts
+}
+
+// Q1233: a job held for a terminating worker is re-offered on the backoff, and minting a
+// JIT config registers a runner at GitHub, so the pod check has to run before the mint.
+// Without it each re-offer registers a runner that the next one's name conflict
+// deregisters.
+func TestListener_TerminatingWorkerRegistersNoRunner(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		preCheck bool
+	}{
+		{name: "with the pre-check", preCheck: true},
+		{name: "without it, each re-offer mints", preCheck: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := scalesettest.New()
+			t.Cleanup(srv.Close)
+
+			m := newCountingMetrics()
+			pod := &terminatingPod{}
+			opts := []func(*scalesetlistener.Config){fastDeferredRetry}
+			if tc.preCheck {
+				opts = append(opts, func(c *scalesetlistener.Config) { c.CheckWorker = pod.check })
+			}
+			_, ssID := startListenerFunc(t, srv, fixedCapacity(5), pod.provision, m, opts...)
+			srv.EnqueueJob(ssID)
+
+			require.Eventually(t, func() bool {
+				return m.deferredFor(scalesetlistener.DeferReasonWorkerTerminating) == 1
+			}, 5*time.Second, 10*time.Millisecond, "the job is held for the terminating worker")
+			// Several re-offers, so a zero below is the pre-check and not a window that
+			// held none.
+			require.Eventually(t, func() bool { return pod.reoffers() >= 3 }, 5*time.Second, 10*time.Millisecond,
+				"the held job must keep being re-offered")
+
+			attempts, _ := pod.counts()
+			if !tc.preCheck {
+				t.Logf("attempts=%d mints=%d deregisters=%d", attempts, srv.GenerateJITCalls(), srv.DeleteRunnerCalls())
+				assert.GreaterOrEqual(t, srv.GenerateJITCalls(), attempts, "every re-offer reaches the mint")
+				assert.GreaterOrEqual(t, srv.DeleteRunnerCalls(), attempts-1, "each later re-offer deregisters the last one's runner")
+				return
+			}
+			assert.Zero(t, srv.GenerateJITCalls(), "no re-offer may mint while the previous worker terminates")
+			assert.Zero(t, srv.DeleteRunnerCalls(), "with nothing registered there is nothing to deregister")
+			assert.Zero(t, attempts, "the pre-check holds the job before Provision")
+
+			pod.finish()
+			require.Eventually(t, func() bool { return m.provisionedCount() == 1 }, 5*time.Second, 10*time.Millisecond,
+				"the re-offer provisions the job once the previous worker is gone")
+			assert.Equal(t, 1, srv.GenerateJITCalls(), "exactly one registration, minted when the job could run")
+		})
+	}
 }
