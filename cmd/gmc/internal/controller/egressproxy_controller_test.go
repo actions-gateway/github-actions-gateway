@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 
@@ -18,7 +19,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 func egressProxyTestScheme(t *testing.T) *runtime.Scheme {
@@ -290,4 +293,34 @@ func TestEgressProxyReconcile_DeletingIsNoOp(t *testing.T) {
 	var dep appsv1.Deployment
 	err = c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared-proxy"}, &dep)
 	assert.Error(t, err, "no Deployment should be provisioned for a deleting EgressProxy")
+}
+
+// TestEgressProxyReconcileResources_PolicyPrecedesDeployment fails the proxy
+// Deployment create and asserts the proxy NetworkPolicy already exists, so a first
+// provision that stops there leaves no proxy pod without a policy (Q1264).
+func TestEgressProxyReconcileResources_PolicyPrecedesDeployment(t *testing.T) {
+	scheme := egressProxyTestScheme(t)
+	ep := newEP("shared", "team-a", nil)
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(ep).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*appsv1.Deployment); ok {
+					return errors.New("deployment create rejected")
+				}
+				return cl.Create(ctx, obj, opts...)
+			},
+		}).
+		Build()
+	r := &EgressProxyReconciler{Client: c, Scheme: scheme, IPCache: &IPRangeCache{}, ProxyImage: "proxy:test"}
+	ctx := context.Background()
+
+	err := r.reconcileResources(ctx, ep, nil, nil)
+	var pe *provisioningError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "apply proxy Deployment", pe.step)
+
+	key := types.NamespacedName{Namespace: "team-a", Name: "shared-proxy"}
+	require.NoError(t, c.Get(ctx, key, &networkingv1.NetworkPolicy{}), "the policy must exist before the Deployment is applied")
 }

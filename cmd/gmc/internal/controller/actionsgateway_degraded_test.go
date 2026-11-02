@@ -8,10 +8,13 @@ import (
 	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -97,4 +100,33 @@ func TestReconcileResources_WrapsFailingStepAsProvisioningError(t *testing.T) {
 	var pe *provisioningError
 	require.ErrorAs(t, err, &pe, "reconcileResources must wrap failures as *provisioningError")
 	assert.NotEmpty(t, pe.step, "the failing step must be recorded")
+}
+
+// TestReconcileResources_PolicyPrecedesProxyDeployment fails the proxy Deployment
+// create and asserts the proxy NetworkPolicy already exists, so a first provision
+// that stops there leaves no proxy pod without a policy (Q1264).
+func TestReconcileResources_PolicyPrecedesProxyDeployment(t *testing.T) {
+	scheme := applyTestScheme(t)
+	ag := applyTestAG()
+	c := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*appsv1.Deployment); ok {
+					return errors.New("deployment create rejected")
+				}
+				return cl.Create(ctx, obj, opts...)
+			},
+		}).
+		Build()
+	r := applyTestReconciler(t, c, scheme)
+	ctx := context.Background()
+
+	err := r.reconcileResources(ctx, ag, nil, "proxy:8080")
+	var pe *provisioningError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "proxy Deployment + Service", pe.step)
+
+	key := types.NamespacedName{Namespace: ag.Namespace, Name: npProxyName}
+	require.NoError(t, c.Get(ctx, key, &networkingv1.NetworkPolicy{}), "the policy must exist before the proxy Deployment is applied")
 }

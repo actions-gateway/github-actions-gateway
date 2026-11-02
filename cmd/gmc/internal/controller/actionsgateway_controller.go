@@ -246,23 +246,11 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 		return fmt.Errorf("metrics TLS certs: %w", err)
 	}
 
-	// 7 & 8. Proxy Deployment + Service (before NetworkPolicy so we can read ClusterIP).
-	step("proxy Deployment + Service")
-	if err := r.applyProxyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
-		return fmt.Errorf("proxy Deployment: %w", err)
-	}
-	if err := r.applyService(ctx, ag, buildProxyService(ag)); err != nil {
-		return fmt.Errorf("proxy Service: %w", err)
-	}
-	// AGC metrics Service — the AGC has no other Service; this exposes its mTLS
-	// metrics port (:8443) so a ServiceMonitor can scrape it (Q72).
-	if err := r.applyService(ctx, ag, buildAGCService(ag)); err != nil {
-		return fmt.Errorf("AGC Service: %w", err)
-	}
-
-	// 5. NetworkPolicies. The workload policy targets the proxy by PodSelector
-	// (kube-proxy rewrites ClusterIP → PodIP before NetworkPolicy enforcement,
-	// so an ipBlock on the ClusterIP would silently drop all proxy-bound traffic).
+	// 5. NetworkPolicies, before the proxy Deployment, so a step failing between
+	// them never leaves proxy pods running with no policy selecting them. The
+	// workload policy targets the proxy by PodSelector (kube-proxy rewrites
+	// ClusterIP → PodIP before NetworkPolicy enforcement, so an ipBlock on the
+	// ClusterIP would silently drop all proxy-bound traffic).
 	step("NetworkPolicies")
 	if err := r.applyNetworkPolicy(ctx, ag, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
 		return fmt.Errorf("proxy NetworkPolicy: %w", err)
@@ -277,6 +265,20 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 	// versions. Best-effort during steady-state reconcile: a failure here is logged by
 	// deleteIfExists and retried on the next reconcile, so it must not fail provisioning.
 	_ = r.deleteIfExists(ctx, &networkingv1.NetworkPolicy{}, ag.Namespace, "actions-gateway")
+
+	// 7 & 8. Proxy Deployment + Service.
+	step("proxy Deployment + Service")
+	if err := r.applyProxyDeployment(ctx, ag, buildProxyDeployment(ag, r.ProxyImage)); err != nil {
+		return fmt.Errorf("proxy Deployment: %w", err)
+	}
+	if err := r.applyService(ctx, ag, buildProxyService(ag)); err != nil {
+		return fmt.Errorf("proxy Service: %w", err)
+	}
+	// AGC metrics Service — the AGC has no other Service; this exposes its mTLS
+	// metrics port (:8443) so a ServiceMonitor can scrape it (Q72).
+	if err := r.applyService(ctx, ag, buildAGCService(ag)); err != nil {
+		return fmt.Errorf("AGC Service: %w", err)
+	}
 
 	// 9. PDB.
 	step("PodDisruptionBudget")
