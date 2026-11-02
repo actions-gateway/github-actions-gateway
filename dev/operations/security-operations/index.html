@@ -4255,7 +4255,7 @@ The <a href="../observability-dashboards/#security-dashboard">security dashboard
 <a id="__codelineno-0-146" name="__codelineno-0-146" href="#__codelineno-0-146"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 <a id="__codelineno-0-147" name="__codelineno-0-147" href="#__codelineno-0-147"></a><span class="w">          </span><span class="no">sum by (name, operation) (</span>
 <a id="__codelineno-0-148" name="__codelineno-0-148" href="#__codelineno-0-148"></a><span class="w">            </span><span class="no">rate(apiserver_admission_webhook_rejection_count{</span>
-<a id="__codelineno-0-149" name="__codelineno-0-149" href="#__codelineno-0-149"></a><span class="w">              </span><span class="no">name=~"v(actionsgateway-v1alpha1|actionsgateway-v2alpha1|clusterrunnertemplate-v2alpha1|egressproxy-v2alpha1|runnerset-v2alpha1|runnertemplate-v2alpha1)\\.kb\\.io",</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149" href="#__codelineno-0-149"></a><span class="w">              </span><span class="no">name=~"v(actionsgateway-v1alpha1|actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)\\.kb\\.io",</span>
 <a id="__codelineno-0-150" name="__codelineno-0-150" href="#__codelineno-0-150"></a><span class="w">              </span><span class="no">error_type="no_error",</span>
 <a id="__codelineno-0-151" name="__codelineno-0-151" href="#__codelineno-0-151"></a><span class="w">              </span><span class="no">rejection_code="403"</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152" href="#__codelineno-0-152"></a><span class="w">            </span><span class="no">}[10m])</span>

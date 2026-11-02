@@ -4209,6 +4209,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>The live <code>1.6.0</code>, <code>1.7.0</code>, <code>1.8.0</code> and <code>1.9.0</code> docs carry links into the source tree that <code>hooks/source_links.py</code> never rewrote, so they …</td>
 </tr>
+<tr>
+<td><a href="Q1268/">Q1268</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/preview/render.sh">Dashboard preview render times out on a slow exporter rollout</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>apply_artifacts</code> in <code>deploy/monitoring/preview/render.sh</code> runs <code>rollout restart</code> on the synthetic exporter and then `rollout status …</td>
+</tr>
+<tr>
+<td><a href="Q1269/">Q1269</a></td>
+<td><a href="../operations/observability-dashboards/">Published dashboard doc renders table-cell queries with a literal |</a></td>
+<td><code>docs</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A pipe inside a table cell is written <code>\\|</code> in Markdown, and GitHub drops the backslash inside a code span, but the MkDocs build does not …</td>
+</tr>
 </tbody>
 </table>
 
