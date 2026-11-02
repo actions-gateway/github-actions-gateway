@@ -35,9 +35,9 @@ import (
 // maxLength of 52 (§H.6), leaving headroom for these suffixes under the 63-char
 // label-value / Service-name ceiling ("<ag>-agc" ≤ 56 as a pod `app` label value).
 //
-// Unlike v1, the v2 ActionsGateway reconciler does NOT provision the egress proxy
-// pool (now a standalone EgressProxy, M2) or stamp Pod Security Admission labels
-// (now the NamespacePSAReconciler, Q175). It provisions only the AGC control plane
+// The v2 ActionsGateway reconciler does NOT provision the egress proxy pool (a
+// standalone EgressProxy, M2) or stamp Pod Security Admission labels (the
+// NamespacePSAReconciler, Q175). It provisions only the AGC control plane
 // and wires its egress through the resolved EgressProxy.
 
 // gatewayComponentLabel carries the owning ActionsGateway's name on every child,
@@ -115,7 +115,7 @@ func v2GatewayLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
 }
 
 // v2WorkerLabels is v2GatewayLabels for the worker (runner) component — the worker
-// ServiceAccount the AGC assigns to v2 worker pods. Mirrors v1's workerLabels.
+// ServiceAccount the AGC assigns to v2 worker pods.
 func v2WorkerLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
 	l := apilabels.Recommended(appNameWorker, ag.Name, componentRunnerLabel, "", labelManagerValue)
 	l[gatewayComponentLabel] = ag.Name
@@ -164,8 +164,8 @@ func buildClusterRunnerTemplateReaderBinding(ag *gmcv2alpha1.ActionsGateway) *rb
 }
 
 // buildAGCRoleBindingV2 binds the per-gateway AGC ServiceAccount to the shipped
-// agc-tenant-role ClusterRole (scoped to this namespace), identical to v1 except
-// the per-gateway SA/binding name.
+// agc-tenant-role ClusterRole (scoped to this namespace), with a per-gateway
+// SA/binding name.
 func buildAGCRoleBindingV2(ag *gmcv2alpha1.ActionsGateway) *rbacv1.RoleBinding {
 	name := agcNameV2(ag)
 	return &rbacv1.RoleBinding{
@@ -177,7 +177,7 @@ func buildAGCRoleBindingV2(ag *gmcv2alpha1.ActionsGateway) *rbacv1.RoleBinding {
 
 // buildAGCServiceV2 builds the per-gateway AGC metrics Service (mTLS metrics port
 // :8443), selecting this gateway's AGC pods so a ServiceMonitor scrapes the right
-// listener. Mirrors v1's buildAGCService.
+// listener.
 func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
 	name := agcNameV2(ag)
 	return &corev1.Service{
@@ -200,9 +200,8 @@ func agcServiceLabelsV2(ag *gmcv2alpha1.ActionsGateway) map[string]string {
 }
 
 // buildAGCServiceMonitorV2 builds the per-gateway ServiceMonitor that scrapes the
-// AGC's mTLS metrics port (Q1101), the v2 counterpart of v1's AGC monitor from
-// buildMetricsServiceMonitor. Like buildEgressProxyServiceMonitor it is unstructured,
-// lives in the gateway's namespace with no namespaceSelector, and presents this
+// AGC's mTLS metrics port (Q1101). Like buildEgressProxyServiceMonitor it is
+// unstructured, lives in the gateway's namespace with no namespaceSelector, and presents this
 // gateway's scraper client bundle ("<ag>-agc-metrics-client"). serverName is the
 // "<ag>-agc.<ns>.svc" DNS name, a SAN on the metrics server cert
 // (metricsServerSANsV2), so the scrape verifies without insecureSkipVerify. The AGC
@@ -253,14 +252,11 @@ func buildAGCServiceMonitorV2(ag *gmcv2alpha1.ActionsGateway) *unstructured.Unst
 }
 
 // buildWorkloadNetworkPolicyV2 is the v2 workload egress lockdown: AGC and worker
-// pods may reach DNS and the proxy on :8080; default-deny ingress. In the proxied
-// case it is identical in shape to v1's buildWorkloadNetworkPolicy, so worker
-// egress-IP attribution is no weaker than v1 — only the proxy peer differs: it
-// selects EgressProxy pool pods by the identity label rather than v1's bare
-// `app: actions-gateway-proxy`, which v2 pods no longer carry (Q582). That is a
-// tightening, not a loosening: the peer covers every EgressProxy pool in the
+// pods may reach DNS and the proxy on :8080; default-deny ingress. The proxy peer
+// selects EgressProxy pool pods by the identity label rather than a bare
+// `app: actions-gateway-proxy` (Q582), and covers every EgressProxy pool in the
 // namespace (a RunnerSet may name its own proxyRef, so no single pool's name will
-// do) and no longer reaches a coexisting v1 pool's pods.
+// do).
 //
 // When the gateway has no defaultProxyRef (direct egress, §H.10) the policy
 // additionally permits the GitHub CIDRs on 443 so proxy-less workers reach GitHub
@@ -299,9 +295,8 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []
 
 // buildAGCNetworkPolicyV2 is the v2 AGC egress policy: additive to the workload
 // policy, it also permits Kubernetes API server egress (443/6443) and admits
-// monitoring-namespace metrics scrapes. In the proxied case it is identical in shape
-// to v1's buildAGCNetworkPolicy (the AGC reaches GitHub through the proxy, admitted
-// by the workload policy's :8080 rule).
+// monitoring-namespace metrics scrapes. In the proxied case the AGC reaches GitHub
+// through the proxy, admitted by the workload policy's :8080 rule.
 //
 // When the gateway has no defaultProxyRef (direct egress, §H.10) it additionally
 // permits the GitHub CIDRs on 443 so the AGC control plane reaches GitHub directly
@@ -422,9 +417,8 @@ func vaultEgressPort(address string) int32 {
 }
 
 // v2ProxyServiceAddr is the in-cluster HTTPS proxy address the AGC egresses
-// through: the resolved EgressProxy's Service. Mirrors v1's buildProxyServiceAddr
-// but keyed on the EgressProxy name (<ep>-proxy) rather than the fixed v1 proxy
-// Service.
+// through: the resolved EgressProxy's Service, keyed on the EgressProxy name
+// (<ep>-proxy).
 func v2ProxyServiceAddr(namespace, epName string) string {
 	return fmt.Sprintf("https://%s-proxy.%s.svc.cluster.local:%d", epName, namespace, proxyPort)
 }
@@ -481,10 +475,10 @@ func agcResources(override *corev1.ResourceRequirements) corev1.ResourceRequirem
 	return res
 }
 
-// buildAGCDeploymentV2 builds the AGC Deployment for a v2 ActionsGateway. It
-// mirrors v1's buildAGCDeployment (credentials mounted as files never env, proxy
-// CA pinning, metrics mTLS mount, hardened SecurityContext, probes) and reads the
-// security profile from the namespace (PSA is namespace-scoped in v2).
+// buildAGCDeploymentV2 builds the AGC Deployment for a v2 ActionsGateway
+// (credentials mounted as files never env, proxy CA pinning, metrics mTLS mount,
+// hardened SecurityContext, probes) and reads the security profile from the
+// namespace (PSA is namespace-scoped in v2).
 //
 // proxy is the resolved EgressProxy, or nil for direct egress (§H.10): when nil the
 // AGC gets no HTTP(S)_PROXY/PROXY_TLS_SECRET_NAME env, so its own control-plane HTTP
@@ -505,7 +499,7 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 		{Name: "GITHUB_ORG_URL", Value: ag.Spec.GitHubURL},
 		// GITHUB_API_BASE_URL is derived from the same githubURL so the AGC's token
 		// exchange addresses the gateway's own GitHub, not api.github.com (Q506).
-		// See the v1 builder for why it precedes extraEnv.
+		// It precedes extraEnv so a testing-gated override still wins on conflict.
 		{Name: "GITHUB_API_BASE_URL", Value: githubapp.DeriveAPIBaseURL(ag.Spec.GitHubURL)},
 		// SECURITY_PROFILE comes from the namespace security-profile label (v2 moved
 		// PSA to the namespace, Q175). The reconciler reads the label; it does not
@@ -560,24 +554,21 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 	env = append(env, tracingEnvV2(ag.Spec.Tracing)...)
 	env = append(env, extraEnv...)
 
-	// The pod spec (credential/proxy-CA/metrics mounts, hardened SecurityContext,
-	// probes) is identical to v1; only the metadata labels, the per-gateway derived
-	// names, the proxy CA source, and the env differ. Share the assembly via
-	// buildAGCDeploymentFrom.
+	// buildAGCDeploymentFrom assembles the pod spec (credential/proxy-CA/metrics
+	// mounts, hardened SecurityContext, probes) from the metadata labels, the
+	// per-gateway derived names, the proxy CA source, and the env.
 	names := agcWorkloadNames{
 		app:              agcNameV2(ag),
 		serviceAccount:   agcNameV2(ag),
 		metricsTLSSecret: metricsTLSSecretNameV2(ag),
 	}
 	dep := buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyCA, agcImage, env, agcResources(ag.Spec.AGCResources))
-	// Placement pass-through (Q282). Applied here rather than threaded through the
-	// v1-shared buildAGCDeploymentFrom: spec.scheduling is a v2-only field, and the
-	// AGC pod carries no built-in affinity, so the block applies verbatim with no
+	// Placement pass-through (Q282). Applied here rather than threaded through
+	// buildAGCDeploymentFrom: the AGC pod carries no built-in affinity, so the block applies verbatim with no
 	// composition rules (unlike the EgressProxy's — see egressProxyAffinity).
 	applyPodSchedulingV2(&dep.Spec.Template.Spec, ag.Spec.Scheduling)
 	// GHES private-CA trust (Q536), applied here for the same reason as scheduling:
-	// spec.githubCABundleRef is v2-only, and the mount composes with nothing the
-	// shared builder already stamps.
+	// the mount composes with nothing the shared builder already stamps.
 	applyGitHubCABundleV2(&dep.Spec.Template.Spec, ag.Spec.GitHubCABundleRef)
 	return dep
 }
@@ -687,8 +678,7 @@ func credentialEnvV2(ag *gmcv2alpha1.ActionsGateway) []corev1.EnvVar {
 }
 
 // tracingEnvV2 translates the v2 spec.tracing into the OTEL_* environment the AGC
-// reads. Mirrors v1's tracingEnv (the field set is identical); auth headers are
-// deliberately not mapped (this project keeps secrets out of env vars).
+// reads. Auth headers are deliberately not mapped (this project keeps secrets out of env vars).
 func tracingEnvV2(t gmcv2alpha1.TracingConfig) []corev1.EnvVar {
 	if t.Endpoint == "" {
 		return nil
@@ -712,9 +702,8 @@ func tracingEnvV2(t gmcv2alpha1.TracingConfig) []corev1.EnvVar {
 // --- metrics mTLS PKI (v2) ---
 
 // metricsServerSANsV2 lists the in-cluster DNS names the v2 metrics server cert
-// must be valid for: this gateway's AGC Service (short + FQDN forms). v1 also
-// covered the proxy Service, but in v2 the proxy is a standalone EgressProxy whose
-// metrics listener is wired separately; the AGC owns this bundle for its own
+// must be valid for: this gateway's AGC Service (short + FQDN forms). The proxy is
+// a standalone EgressProxy whose metrics listener is wired separately; the AGC owns this bundle for its own
 // /metrics endpoint. agcName is the per-gateway AGC Service name.
 func metricsServerSANsV2(namespace, agcName string) []string {
 	return []string{
@@ -726,8 +715,7 @@ func metricsServerSANsV2(namespace, agcName string) []string {
 }
 
 // generateMetricsCertsV2 builds a metrics mTLS bundle (CA + server leaf + client leaf
-// for the scraper). Mirrors v1's generateMetricsCerts, reusing the shared
-// signLeaf/encodeCertPEM helpers; the CA key is not persisted (the whole bundle
+// for the scraper), reusing the shared signLeaf/encodeCertPEM helpers; the CA key is not persisted (the whole bundle
 // regenerates together on renewal). It is keyed on (namespace, Service name) and is
 // used for both the AGC metrics listener (svcName = the AGC Service) and, since Q324,
 // the standalone EgressProxy proxy metrics listener (svcName = the "<ep>-proxy"

@@ -12,10 +12,9 @@ import (
 )
 
 // The certificate primitives and mount layout shared by every GMC-issued PKI: the
-// v1 ActionsGateway's proxy and metrics bundles, the v2 ActionsGateway's per-gateway
-// metrics bundle, and the standalone EgressProxy's proxy and metrics bundles. The
-// per-version pieces are only the Secret *names* (v1 fixed, v2 derived per CR) and
-// the SAN lists, which stay with their version's builder.
+// v2 ActionsGateway's per-gateway metrics bundle and the standalone EgressProxy's
+// proxy and metrics bundles. The per-CR pieces are only the Secret *names* and the
+// SAN lists, which stay with their kind's builder.
 
 const (
 	// proxyTLSVolumeName / proxyTLSMountPath project the proxy's own TLS cert+key

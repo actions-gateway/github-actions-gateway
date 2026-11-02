@@ -10,8 +10,8 @@ import (
 )
 
 // applyManagedChild is the single CreateOrPatch code path shared by every GMC
-// child-object apply* helper across the three reconcilers (v1 ActionsGateway, v2
-// ActionsGateway, and EgressProxy).
+// child-object apply* helper across the reconcilers (v2 ActionsGateway, EgressProxy,
+// and the tenant Secret-access reconciler).
 //
 // It keys obj by desired's namespace and name, then creates or patches the live
 // object: it merges the controller-managed labels over the live ones (see

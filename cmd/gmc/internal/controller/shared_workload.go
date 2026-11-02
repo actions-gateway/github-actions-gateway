@@ -6,8 +6,8 @@ import (
 
 // Pod-level facts every GMC-managed workload shares regardless of the API version
 // that asked for it: the listener ports, the hardened security baseline, the proxy's
-// shutdown budget, and the log-level default. The v1 ActionsGateway, the v2
-// ActionsGateway, and the standalone EgressProxy all build on these.
+// shutdown budget, and the log-level default. The v2 ActionsGateway and the
+// standalone EgressProxy both build on these.
 
 const (
 	// agcContainerName is the AGC control-plane container's name inside the AGC pod.
@@ -71,7 +71,7 @@ func hardenedContainerSecurityContext() *corev1.SecurityContext {
 // nonrootPodSecurityContext returns the pod-level SecurityContext shared by the
 // AGC and proxy Deployments: fsGroup 65532 so the distroless nonroot UID can read
 // group-owned mounted Secrets (cert/key files projected with mode 0o440). See the
-// TLS-mode comment in buildProxyDeployment for the 0o440-vs-0o400 rationale.
+// TLS-mode comment in buildEgressProxyDeployment for the 0o440-vs-0o400 rationale.
 func nonrootPodSecurityContext() *corev1.PodSecurityContext {
 	return &corev1.PodSecurityContext{FSGroup: ptr(int64(65532))}
 }

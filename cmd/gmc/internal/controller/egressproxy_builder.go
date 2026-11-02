@@ -17,8 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// v2 EgressProxy resource derivation. Unlike v1's one-proxy-per-namespace model
-// (fixed gmcnames.ProxyName), v2 permits multiple EgressProxy objects in one
+// v2 EgressProxy resource derivation. v2 permits multiple EgressProxy objects in one
 // namespace, so every derived resource name and pod selector is keyed on the
 // EgressProxy's own name. The derived names stay within the 52-char-name budget
 // the CRD enforces (§H.6): "<ep>-proxy" adds 6 chars, "<ep>-proxy-tls" adds 10.
@@ -26,11 +25,9 @@ const (
 	// egressProxyComponentLabel carries the owning EgressProxy's name on every
 	// child object and pod. It is load-bearing twice over:
 	//   1. Selector isolation — multiple EgressProxy pools in one namespace must not
-	//      collide on a shared selector (v1 could assume a single proxy per
-	//      namespace). It is the SOLE key of every Deployment/Service/PDB/
-	//      NetworkPolicy selector and of the pod anti-affinity term, which is what
-	//      also keeps a pool clear of v1's coexisting one — see
-	//      egressProxyPodSelector (Q582).
+	//      collide on a shared selector. It is the SOLE key of every
+	//      Deployment/Service/PDB/NetworkPolicy selector and of the pod
+	//      anti-affinity term — see egressProxyPodSelector (Q582).
 	//   2. Free observability win (§H.8) — a per-EgressProxy Deployment means proxy
 	//      metrics carry the proxy identity automatically once a scrape is wired.
 	egressProxyComponentLabel = "actions-gateway.com/egress-proxy"
@@ -76,18 +73,14 @@ func egressProxyLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
 
 // egressProxyPodSelector returns the label set used as both the pod template
 // labels and the Deployment/Service/PDB/NetworkPolicy selector. The per-EgressProxy
-// identity is the whole selector, so it never selects another EgressProxy's pods —
-// nor v1's.
+// identity is the whole selector, so it never selects another EgressProxy's pods.
 //
-// It deliberately does NOT carry v1's generic `app: actions-gateway-proxy` (Q582).
-// v1 has one fixed-name pool per namespace and keys its PDB selector, its Deployment
-// selector, and its required hostname anti-affinity term on that bare label, so a v2
-// pod wearing it is claimed by all three throughout a migration's coexistence window:
-// each pool's pods fall under the other's PDB, both HPAs wedge on AmbiguousSelector
-// (the HPA controller reads the scale target's — the Deployment's — selector and
-// refuses to act on pods another HPA also controls, so neither pool autoscales;
-// measured on Kubernetes v1.35.5 and v1.36.1, Q591), and the two pools repel each
-// other off every node. The generic "this is a proxy pod"
+// It deliberately does NOT carry a generic `app: actions-gateway-proxy` (Q582). The
+// pre-v2 API keyed its proxy PDB, Deployment selector, and required hostname
+// anti-affinity on that bare label, so pools sharing it claim each other's pods: each
+// falls under the other's PDB, both HPAs wedge on AmbiguousSelector (measured on
+// Kubernetes v1.35.5 and v1.36.1, Q591), and they repel each other off every node.
+// The generic "this is a proxy pod"
 // identity for humans and tooling is the recommended `app.kubernetes.io/name` label,
 // which is additive metadata that nothing selects on; the v2 workload NetworkPolicy
 // reaches proxy pods via egressProxyPodPeerSelector instead.
@@ -98,8 +91,7 @@ func egressProxyPodSelector(ep *gmcv2alpha1.EgressProxy) map[string]string {
 // egressProxyPodPeerSelector selects the pods of EVERY EgressProxy pool in a
 // namespace — any pod carrying the identity label, whichever pool owns it. It is the
 // v2 workload NetworkPolicy's proxy peer: a gateway's RunnerSets may each name their
-// own proxyRef, so the policy cannot key on one pool's name. No v1 proxy pod carries
-// the label, so v2 workload egress no longer reaches v1's pool either (Q582).
+// own proxyRef, so the policy cannot key on one pool's name (Q582).
 func egressProxyPodPeerSelector() *metav1.LabelSelector {
 	return &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{{
@@ -141,8 +133,7 @@ func egressProxyManagedAutoscaling(ep *gmcv2alpha1.EgressProxy) bool {
 }
 
 // egressProxyResources returns the proxy container's resource requirements: the
-// secure defaults overlaid with any spec.resources overrides — the same defaults
-// and merge semantics as v1's proxyResources, decoupled from ActionsGateway.
+// secure defaults overlaid with any spec.resources overrides.
 func egressProxyResources(ep *gmcv2alpha1.EgressProxy) corev1.ResourceRequirements {
 	res := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
@@ -326,17 +317,16 @@ func egressProxyPriorityClassName(ep *gmcv2alpha1.EgressProxy) string {
 }
 
 // buildEgressProxyDeployment builds the proxy pool Deployment for an EgressProxy.
-// It mirrors v1's buildProxyDeployment (hardened container/pod SecurityContext,
-// cross-node anti-affinity, self-signed proxy TLS mount, /healthz + /readyz probes,
-// 60s graceful drain, mTLS /metrics listener) but is keyed on the EgressProxy: the
+// It carries a hardened container/pod SecurityContext, cross-node anti-affinity, the
+// self-signed proxy TLS mount, /healthz + /readyz probes, a 60s graceful drain, and
+// the mTLS /metrics listener, keyed on the EgressProxy: the
 // pod labels/selector and the anti-affinity term use the per-EgressProxy identity so
-// pools in one namespace stay isolated. Unlike v1's, the anti-affinity is a *default*
+// pools in one namespace stay isolated. The anti-affinity is a *default*
 // the author can override via spec.scheduling.affinity (Q282) — see egressProxyAffinity.
 //
 // Metrics mTLS (Q324): the proxy serves /metrics over mutual TLS on metricsPort,
-// verifying scraper client certs against the per-EgressProxy metrics CA. The three
-// PROXY_METRICS_* env vars mirror the classic proxy exactly; without them the proxy
-// binary falls back to serving /metrics plaintext on the health port, so mounting
+// verifying scraper client certs against the per-EgressProxy metrics CA. Without the
+// three PROXY_METRICS_* env vars the proxy binary falls back to serving /metrics plaintext on the health port, so mounting
 // the bundle is what keeps the endpoint from regressing to unauthenticated plaintext.
 // The bundle is a per-EgressProxy PKI (ensureMetricsCerts), never shared cross-tenant.
 func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, gitHubHosts []string) *appsv1.Deployment {
@@ -354,7 +344,8 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, 
 	apilabels.Merge(podLabels, proxyAppName, ep.Name, componentProxyLabel, "", labelManagerValue)
 
 	// Mode 0o440 + fsGroup 65532: the non-root distroless proxy reads the cert via
-	// group ownership without making it world-readable. See v1 buildProxyDeployment.
+	// group ownership without making it world-readable. Mode 0o400 alone leaves the
+	// root-owned files unreadable to it (`permission denied` on tls.crt in e2e).
 	tlsMode := int32(0o440)
 
 	return &appsv1.Deployment{
@@ -367,8 +358,7 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, 
 				Spec: corev1.PodSpec{
 					SecurityContext: nonrootPodSecurityContext(),
 					// Covers the proxy's whole SIGTERM sequence — see the arithmetic
-					// above proxyDrainBudgetSeconds in builder.go. Shared with v1's
-					// buildProxyDeployment: same image, same shutdown sequence.
+					// above proxyDrainBudgetSeconds in shared_workload.go.
 					TerminationGracePeriodSeconds: ptr(int64(proxyTerminationGracePeriodSeconds)),
 					// Placement pass-through (Q282): spec.scheduling pins the pool to a
 					// tenant's node pool — and thus to that pool's egress IP (Q243).
@@ -482,7 +472,7 @@ func buildEgressProxyService(ep *gmcv2alpha1.EgressProxy) *corev1.Service {
 
 // buildEgressProxyHPA builds the HorizontalPodAutoscaler that scales an
 // EgressProxy's Deployment on CPU utilization, between spec.minReplicas and
-// spec.maxReplicas. Mirrors v1's buildHPA, keyed on the EgressProxy.
+// spec.maxReplicas.
 func buildEgressProxyHPA(ep *gmcv2alpha1.EgressProxy) *autoscalingv2.HorizontalPodAutoscaler {
 	minReplicas := egressProxyMinReplicas(ep)
 	maxReplicas := egressProxyMaxReplicas(ep)
@@ -509,8 +499,8 @@ func buildEgressProxyHPA(ep *gmcv2alpha1.EgressProxy) *autoscalingv2.HorizontalP
 }
 
 // buildEgressProxyPDB builds the PodDisruptionBudget that keeps at least one proxy
-// replica available across voluntary disruptions. Mirrors v1's buildPDB, keyed on
-// the EgressProxy identity selector.
+// replica available across voluntary disruptions, keyed on the EgressProxy
+// identity selector.
 func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBudget {
 	return &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyResourceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
@@ -522,8 +512,7 @@ func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBud
 }
 
 // buildEgressProxyNetworkPolicy builds the egress-lockdown NetworkPolicy for an
-// EgressProxy's pool. It mirrors v1's buildProxyNetworkPolicy and preserves its
-// secure-by-default semantics exactly:
+// EgressProxy's pool. Its secure-by-default semantics:
 //   - Egress: DNS always; GitHub CIDRs on 443 only when managedNetworkPolicy is
 //     true (the default), the egress mode is CIDR (the default), and the IP cache is
 //     populated. managedNetworkPolicy=false omits the GitHub rule so an operator can
@@ -539,8 +528,8 @@ func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBud
 func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{dnsEgressRule()}
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
-	// GitHub-CIDR 443 allowlist: the shared helper (builder.go) is the single
-	// spelling of this rule across v1 and v2, so the proxy and workload policies
+	// GitHub-CIDR 443 allowlist: the shared helper (shared_networkpolicy.go) is the
+	// single spelling of this rule, so the proxy, workload, and AGC policies
 	// cannot silently diverge on which CIDRs may be reached on 443. The helper's
 	// `ok` return encodes the len(githubCIDRs) > 0 fail-closed check; egressUsesCIDR
 	// gates it to CIDR mode (an FQDN mode carries the GitHub allowlist on a
