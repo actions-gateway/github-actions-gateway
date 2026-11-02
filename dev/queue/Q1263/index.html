@@ -2664,7 +2664,7 @@ The second of three PRs that let <a href="../Q1167/">Q1167</a> delete <code>api/
 <p>Once classic is gone the swap is mechanical, measured 2026-11-02: 20 AGC non-test files and 67 tests import <code>v2alpha1</code> or <code>v2beta1</code> off <code>7b292627a</code>, with Q273's deletions and its test port onto <code>api/v2</code> subtracted.
 <code>v2_detect.go</code> then asks the REST mapper about <code>RunnerSet</code> at <code>v2</code>, which every release since 1.9 serves.
 <code>integration/conversion_webhook_test.go</code> and <code>v2alpha1_crd_test.go</code> stay as they are; Q1167 deletes them.
-If time is short this folds into Q1167 as one PR once <a href="../Q1262/">Q1262</a> has landed.</p>
+If time is short this folds into Q1167 as one PR, now that Q1262, the GMC retype, has landed.</p>
 
 
 
