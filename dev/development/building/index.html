@@ -2780,6 +2780,9 @@ That single constant drives, and must stay in lockstep with, three consumers:</p
 </ul>
 <p>Dependabot bumps only the Dockerfile, so the lockstep test <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go"><code>cmd/agc/names/runner_version_test.go</code></a> fails CI (in the unit tier) when the <code>FROM</code> tag/digest and the constants disagree.
 To bump the version, follow the procedure in the Dockerfile header: update the <code>FROM</code> line <strong>and</strong> <code>RunnerVersion</code> + <code>WorkerImageDigest</code> together; <code>DefaultWorkerImage</code> and <code>GITHUB_RUNNER_VERSION</code> then follow automatically.</p>
+<p>GitHub also stops queueing jobs to a runner that has not updated within 30 days of a newer release, without refusing its connection, so a pin that sits unbumped looks like jobs lapsing rather than an error.
+The scheduled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/runner-window-watch.yml"><code>runner-window-watch.yml</code></a> counts the days from the first newer <em>stable</em> release's <code>publishedAt</code> and goes red at day 21; when it does, bump the pin by the procedure above.
+It is a scheduled run and not a <code>make check</code> gate because it reads GitHub's release feed and the date, so it would redden unrelated branches.</p>
 <h3 id="license-attribution-licenses">License attribution (<code>/licenses/</code>)<a class="headerlink" href="#license-attribution-licenses" title="Permanent link">&para;</a></h3>
 <p>Each production image <code>COPY</code>s three license files into <code>/licenses/</code> — the Red Hat/OpenShift container-certification convention, paired with the <code>org.opencontainers.image.licenses="Apache-2.0"</code> label every image carries:</p>
 <ul>
