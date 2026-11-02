@@ -71,6 +71,10 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		longWorkflow   string
 	}
 
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, workerImage).WithNodePressureHeadroom()
+	siblingTenant := utils.RunnerTenant(siblingNS, siblingAGName, secretName, workerImage)
+	agcName := tenant.AGCName()
+
 	BeforeAll(func() {
 		appIDStr := os.Getenv("GITHUB_E2E_APP_ID")
 		installIDStr := os.Getenv("GITHUB_E2E_INSTALLATION_ID")
@@ -129,10 +133,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, creds.appID, creds.installationID, creds.privateKeyPEM)
 
-		By("applying ActionsGateway CR with a RunnerGroup pointing at the worker image")
-		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).
-			WithNodePressureHeadroom().
-			ApplyWithWebhookRetry()
+		By("applying an ActionsGateway with a RunnerSet pointing at the worker image")
+		tenant.ApplyWithWebhookRetry()
 
 		By("waiting for AGC Deployment to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 5*time.Minute)
@@ -191,7 +193,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 	It("E2E_GitHub_ActionsGatewayReachesReady: CR Ready=True with real GitHub", func() {
 		By("verifying ActionsGateway becomes Ready")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.com", agName,
 				"-n", tenantNS,
 				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
 			)
@@ -479,7 +481,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			firstJobStepRecords(repoSlug, runID, 1))
 
 		By("reading what the AGC decided when it saw the eviction")
-		agcLog := agcEvictionLog(tenantNS)
+		agcLog := agcEvictionLogFor(tenantNS, agcName)
 		AddReportEntry("Q396 AGC eviction log lines", agcLog)
 
 		By("asserting the AGC observed the eviction and reached recovery")
@@ -517,7 +519,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// terminal failure instead and must fail this spec rather than become a report
 		// entry — that pass-through is exactly how Q503 went unverified.
 		Eventually(func(g Gomega) {
-			agcLog := agcEvictionLog(tenantNS)
+			agcLog := agcEvictionLogFor(tenantNS, agcName)
 			if strings.Contains(agcLog, "disruption auto-retry failed") {
 				StopTrying("the AGC gave up on the re-run — refused past the re-run window, " +
 					"or a terminal API error. Log:\n" + agcLog).Now()
@@ -532,7 +534,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// immediately", and only the first is the behaviour that shipped. The check is
 		// conditional on the latency measured above, because whether there was a refusal
 		// to absorb is decided by whether the runner reported — see assertRerunLanded.
-		assertRerunLanded(agcEvictionLog(tenantNS), concludedAt.Sub(evictedAt), "Q503")
+		assertRerunLanded(agcEvictionLogFor(tenantNS, agcName), concludedAt.Sub(evictedAt), "Q503")
 
 		By("asserting GitHub actually started a second attempt")
 		// Accepted is necessary but not the deliverable: the deliverable is a second
@@ -778,8 +780,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// container, so the window this spec is accountable for is the suffix past
 		// these counts. Renewal SUCCESS is silent, so there is no pre-cancel control
 		// line to read — what makes the outcome positive either way is the pod, below.
-		renewWarnBase := len(agcLogLines(tenantNS, renewNonFatalLine))
-		renewTeardownBase := len(agcLogLines(tenantNS, renewTeardownLine))
+		renewWarnBase := len(agcLogLines(tenantNS, agcName, renewNonFatalLine))
+		renewTeardownBase := len(agcLogLines(tenantNS, agcName, renewTeardownLine))
 
 		By("cancelling the run in GitHub, the way a human would")
 		cancelledAt := time.Now()
@@ -815,8 +817,8 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			time.Since(cancelledAt).Round(time.Second).String())
 
 		By("recording what the renew loop did across the cancel window (Q501 candidate A)")
-		renewWarns := sinceBaseline(agcLogLines(tenantNS, renewNonFatalLine), renewWarnBase)
-		renewTeardowns := sinceBaseline(agcLogLines(tenantNS, renewTeardownLine), renewTeardownBase)
+		renewWarns := sinceBaseline(agcLogLines(tenantNS, agcName, renewNonFatalLine), renewWarnBase)
+		renewTeardowns := sinceBaseline(agcLogLines(tenantNS, agcName, renewTeardownLine), renewTeardownBase)
 		AddReportEntry("Q501 renewjob failures in the cancel window", strings.Join(renewWarns, "\n"))
 		AddReportEntry("Q501 renewjob definitive losses in the cancel window", strings.Join(renewTeardowns, "\n"))
 
@@ -943,13 +945,14 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		})
 		AddReportEntry("Q422 quota filled at", fmt.Sprintf("pods=%d, all occupied", occupied))
 
-		By("waiting for the RunnerGroup to report WorkerQuotaExceeded=True")
+		By("waiting for the RunnerSet to report WorkerQuotaExceeded=True")
 		// The gate reads the quota through the manager's informer cache, and this
 		// condition is computed from that same read against the same one-worker
 		// footprint. It flipping True is what says the gate now sees zero headroom —
 		// dispatching before it does would race the cache.
 		Eventually(func(g Gomega) {
-			g.Expect(runnerGroupCondition(g, tenantNS, "WorkerQuotaExceeded")).To(Equal("True"))
+			status, _ := runnerSetCondition(g, tenantNS, tenant.RunnerSetName(0), "WorkerQuotaExceeded")
+			g.Expect(status).To(Equal("True"))
 		}, 3*time.Minute, 5*time.Second).Should(Succeed())
 
 		By("confirming the namespace stays full rather than settling back into headroom")
@@ -959,15 +962,16 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		// churn fails as itself instead of surfacing later as "the blocked gateway
 		// provisioned a worker".
 		Consistently(func(g Gomega) {
-			g.Expect(runnerGroupCondition(g, tenantNS, "WorkerQuotaExceeded")).To(Equal("True"))
+			status, _ := runnerSetCondition(g, tenantNS, tenant.RunnerSetName(0), "WorkerQuotaExceeded")
+			g.Expect(status).To(Equal("True"))
 		}, 30*time.Second, 5*time.Second).Should(Succeed())
 
 		// Baselines, all taken before the dispatch: the AGC serves every spec in this
 		// container, so its log is cumulative and the namespace already holds the
 		// terminal worker pods those specs left behind. Only the deltas are this
 		// spec's.
-		declinesBefore := countAGCLogLines(tenantNS, admissionDeclinedLine)
-		quotaRetriesBefore := countAGCLogLines(tenantNS, quotaRetryLine)
+		declinesBefore := countAGCLogLines(tenantNS, agcName, admissionDeclinedLine)
+		quotaRetriesBefore := countAGCLogLines(tenantNS, agcName, quotaRetryLine)
 		blockedWorkersBefore := allWorkerPods(Default, tenantNS)
 
 		By(fmt.Sprintf("dispatching %q with the only gateway on this runner group out of quota", creds.workflow))
@@ -982,11 +986,11 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 
 		By("waiting for the blocked gateway to decline a delivery for quota")
 		Eventually(func(g Gomega) {
-			g.Expect(countAGCLogLines(tenantNS, admissionDeclinedLine)-declinesBefore).
+			g.Expect(countAGCLogLines(tenantNS, agcName, admissionDeclinedLine)-declinesBefore).
 				To(BeNumerically(">=", 1), "the gateway has not declined a delivery yet")
 		}, 8*time.Minute, 10*time.Second).Should(Succeed())
 
-		admissionLog := agcAdmissionLog(tenantNS)
+		admissionLog := agcAdmissionLog(tenantNS, agcName)
 		AddReportEntry("Q422 blocked gateway admission log", admissionLog)
 
 		By("asserting the decline named quota, not the configured ceiling")
@@ -1002,7 +1006,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("asserting the job was left at GitHub rather than claimed and abandoned")
 		// See the spec's header: this, not the absence of a pod, is what separates the
 		// pre-claim rung from the post-claim backstop it exists to make unnecessary.
-		Expect(countAGCLogLines(tenantNS, quotaRetryLine)).To(Equal(quotaRetriesBefore),
+		Expect(countAGCLogLines(tenantNS, agcName, quotaRetryLine)).To(Equal(quotaRetriesBefore),
 			"the gateway claimed the job and then hit the quota on pod creation — the pre-claim rung "+
 				"did not fire, and the job is claim-and-stalled")
 
@@ -1014,7 +1018,7 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("bringing up a sibling gateway on the same runner group, with quota headroom")
 		utils.CreateNamespace(siblingNS, nil)
 		utils.CreateGitHubAppSecret(siblingNS, secretName, creds.appID, creds.installationID, creds.privateKeyPEM)
-		utils.RunnerTenant(siblingNS, siblingAGName, secretName, workerImage).ApplyWithWebhookRetry()
+		siblingTenant.ApplyWithWebhookRetry()
 		DeferCleanup(func() {
 			// The CR first and the namespace second, while the AGC is still up: the
 			// agentpool-cleanup finalizer is what deregisters this gateway's runners,
@@ -1022,19 +1026,19 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			// registrations that go on taking job assignments (Q511).
 			if CurrentSpecReport().Failed() {
 				out, _ := utils.Run(exec.Command("kubectl", "logs", "-n", siblingNS,
-					"deployment/"+agcName, "--tail=300"))
+					"deployment/"+siblingTenant.AGCName(), "--tail=300"))
 				_, _ = fmt.Fprintln(GinkgoWriter, out)
 			}
 			utils.DeleteActionsGatewayCR(siblingNS, siblingAGName)
 			utils.DeleteNamespace(siblingNS)
 		})
-		utils.WaitForDeploymentReady(siblingNS, agcName, 5*time.Minute)
+		utils.WaitForDeploymentReady(siblingNS, siblingTenant.AGCName(), 5*time.Minute)
 		// Deployment readiness is only the health server binding. The sibling cannot be
 		// offered anything until its token fetch, agent registration and listener
 		// multiplexer are all up, which is what observedGeneration reports (Q134) — and
 		// without this gate that whole startup would be charged to the worker wait below
 		// and surface as "the sibling never picked the job up".
-		utils.WaitForRunnerGroupReconciled(siblingNS, 5*time.Minute)
+		utils.WaitForRunnerSetReconciled(siblingNS, 5*time.Minute)
 
 		By("waiting for the sibling to provision a worker for the job the blocked gateway declined")
 		// Any phase, not Running: the fixture job is an echo, so its worker can reach
@@ -1535,23 +1539,12 @@ func allWorkerPods(g Gomega, ns string) []string {
 	return strings.Fields(out)
 }
 
-// runnerGroupCondition returns the status of one condition on the namespace's sole
-// RunnerGroup, or "" when the condition is absent. Each fixture tenant declares one
-// group, so indexing the list is unambiguous.
-func runnerGroupCondition(g Gomega, ns, condType string) string {
-	out, err := utils.Run(exec.Command("kubectl", "get", "runnergroups.actions-gateway.github.com",
-		"-n", ns, "-o", fmt.Sprintf(
-			`jsonpath={.items[0].status.conditions[?(@.type=="%s")].status}`, condType)))
-	g.Expect(err).NotTo(HaveOccurred())
-	return strings.TrimSpace(out)
-}
-
 // agcAdmissionLog returns the AGC's log lines about admission decisions, scoped so the
 // report entry is readable rather than the whole controller log.
-func agcAdmissionLog(ns string) string {
+func agcAdmissionLog(ns, deploy string) string {
 	GinkgoHelper()
 	var kept []string
-	for _, line := range strings.Split(agcLog(ns), "\n") {
+	for _, line := range strings.Split(agcDeploymentLog(ns, deploy), "\n") {
 		if strings.Contains(line, "admission") || strings.Contains(line, "quota") {
 			kept = append(kept, line)
 		}
@@ -1562,19 +1555,19 @@ func agcAdmissionLog(ns string) string {
 // countAGCLogLines counts the AGC log lines containing substr. Counting rather than
 // matching, because these assertions are deltas against a baseline read before the
 // work starts: the AGC serves every spec in this container and its log is cumulative.
-func countAGCLogLines(ns, substr string) int {
+func countAGCLogLines(ns, deploy, substr string) int {
 	GinkgoHelper()
-	return strings.Count(agcLog(ns), substr)
+	return strings.Count(agcDeploymentLog(ns, deploy), substr)
 }
 
 // agcLogLines returns the AGC log lines containing substr, in order — one entry per
 // matching line, where countAGCLogLines counts occurrences and so counts a line twice
 // if substr appears in it twice. Like that helper it reads a cumulative log, so a
 // caller measuring one window takes the suffix past a baseline count.
-func agcLogLines(ns, substr string) []string {
+func agcLogLines(ns, deploy, substr string) []string {
 	GinkgoHelper()
 	var out []string
-	for _, line := range strings.Split(agcLog(ns), "\n") {
+	for _, line := range strings.Split(agcDeploymentLog(ns, deploy), "\n") {
 		if strings.Contains(line, substr) {
 			out = append(out, line)
 		}
@@ -1590,14 +1583,6 @@ func sinceBaseline(lines []string, baseline int) []string {
 		return lines
 	}
 	return lines[baseline:]
-}
-
-// agcLog reads the tenant AGC's full log. The v1 tenant's AGC Deployment carries the
-// fixed controller name; a v2 gateway's is named after the gateway, so that tier reads
-// its log through agcDeploymentLog.
-func agcLog(ns string) string {
-	GinkgoHelper()
-	return agcDeploymentLog(ns, agcName)
 }
 
 // agcDeploymentLog reads the full log of a named AGC Deployment.
@@ -2101,16 +2086,9 @@ type workerLogSource struct {
 	ok   bool
 }
 
-// agcEvictionLog returns the AGC's log lines about eviction handling. Scoped to the
-// handful of messages handleEviction emits so the report entry is readable, rather
-// than the whole controller log.
-func agcEvictionLog(ns string) string {
-	GinkgoHelper()
-	return agcEvictionLogFor(ns, agcName)
-}
-
-// agcEvictionLogFor is agcEvictionLog against a named AGC Deployment, for the v2
-// scale-set tenant whose Deployment is named after its gateway.
+// agcEvictionLogFor returns the named AGC Deployment's log lines about eviction
+// handling. Scoped to the handful of messages handleEviction emits so the report entry
+// is readable, rather than the whole controller log.
 func agcEvictionLogFor(ns, deployment string) string {
 	GinkgoHelper()
 	var kept []string

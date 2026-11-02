@@ -106,13 +106,11 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 	var (
 		drainPFCmd  *exec.Cmd
 		drainedNode string
-		// rgName is resolved from the cluster, not composed from agName. The GMC
-		// derives a bootstrap RunnerGroup's name as "<gateway>-<first label>-<hash>",
-		// and the hash is what both the worker-pod label selector and the drain's
-		// --pod-selector key on — compose the name by hand and both silently match
-		// nothing, which reads as "the job never produced a worker".
-		rgName string
 	)
+
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, unpullableImage).
+		WithLifecycle("30m", pendingDeadline)
+	agcName, rsName := tenant.AGCName(), tenant.RunnerSetName(0)
 
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
@@ -123,20 +121,11 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		// after the GMC rollout, before its validating webhook is serving, and the
 		// bare apply then fails with a webhook context-deadline rather than anything
 		// this spec is about.
-		utils.RunnerTenant(tenantNS, agName, secretName, unpullableImage).
-			WithLifecycle("30m", pendingDeadline).
-			ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 
 		By("waiting for the AGC to be ready and fully reconciled")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
-		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
-
-		By("resolving the RunnerGroup name the GMC actually created")
-		out, err := utils.Run(exec.Command("kubectl", "get", "runnergroup",
-			"-n", tenantNS, "-o", "jsonpath={.items[0].metadata.name}"))
-		Expect(err).NotTo(HaveOccurred())
-		rgName = strings.TrimSpace(out)
-		Expect(rgName).NotTo(BeEmpty(), "no RunnerGroup in %s to drain workers of", tenantNS)
+		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
 		By("starting port-forward to the fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19890+GinkgoParallelProcess())
@@ -239,8 +228,8 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		By("enqueuing a job onto this tenant's own session")
 		var sessionID string
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
-			g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerGroup")
+			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
+			g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
 			sessionID = sessions[0]
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		fakegithubEnqueueJob(sessionID, map[string]interface{}{
@@ -252,7 +241,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		By("waiting for the worker pod to be scheduled onto a node")
 		var podName string
 		Eventually(func(g Gomega) {
-			podName, drainedNode = workerPodAndNode(g, tenantNS, rgName)
+			podName, drainedNode = workerPodAndNode(g, tenantNS, rsName)
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod yet")
 			g.Expect(drainedNode).NotTo(BeEmpty(), "worker pod %s is not scheduled yet", podName)
 		}, 4*time.Minute, 1*time.Second).Should(Succeed())
@@ -293,18 +282,18 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		stopSampling := observed.start(200 * time.Millisecond)
 
 		By("cordoning the node and draining this tenant's worker pods off it")
-		// A real `kubectl drain`, scoped by --pod-selector to this RunnerGroup's
+		// A real `kubectl drain`, scoped by --pod-selector to this RunnerSet's
 		// workers. The scope is what keeps a shared e2e cluster usable: an unscoped
 		// drain would also evict the GMC, cert-manager and fakegithub onto the other
 		// node and destabilise every spec that follows. The per-pod action is
 		// identical either way — cordon, then POST the eviction subresource — and
 		// that action is the whole subject of the experiment.
 		//
-		// --force is required because a worker pod's controller is a RunnerGroup CR,
+		// --force is required because a worker pod's controller is a RunnerSet CR,
 		// which kubectl cannot resolve as a known controller kind; an operator
 		// draining a node with GAG workers on it hits the same requirement.
 		drainOut, drainErr := utils.Run(exec.Command("kubectl", "drain", drainedNode,
-			"--pod-selector", "actions-gateway/runner-group="+rgName,
+			"--pod-selector", "actions-gateway.com/runner-set="+rsName,
 			"--ignore-daemonsets",
 			"--delete-emptydir-data",
 			"--force",
@@ -345,7 +334,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 })
 
 // agcEnvValue reads one env var off an AGC Deployment's manager container —
-// the shared v1 deployment (agcName) or a v2 per-gateway "<gw>-agc" one.
+// a v2 per-gateway "<gw>-agc" Deployment.
 func agcEnvValue(ns, deploy, name string) string {
 	GinkgoHelper()
 	out, err := utils.Run(exec.Command("kubectl", "get", "deployment", deploy,
@@ -389,12 +378,12 @@ func podAnnotation(ns, name, key string) string {
 	return strings.TrimSpace(out)
 }
 
-// workerPodAndNode returns the first worker pod of rgName in ns and the node it
-// is bound to (empty while unscheduled).
-func workerPodAndNode(g Gomega, ns, rgName string) (podName, nodeName string) {
+// workerPodAndNode returns the first worker pod of RunnerSet rsName in ns and the
+// node it is bound to (empty while unscheduled).
+func workerPodAndNode(g Gomega, ns, rsName string) (podName, nodeName string) {
 	out, err := utils.Run(exec.Command("kubectl", "get", "pods",
 		"-n", ns,
-		"-l", "actions-gateway/runner-group="+rgName,
+		"-l", "actions-gateway.com/runner-set="+rsName,
 		"-o", "jsonpath={.items[0].metadata.name} {.items[0].spec.nodeName}",
 	))
 	g.Expect(err).NotTo(HaveOccurred())

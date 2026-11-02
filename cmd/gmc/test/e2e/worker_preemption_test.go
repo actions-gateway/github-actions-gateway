@@ -22,7 +22,7 @@ import (
 // displaced by a higher-priority `priorityTiers` tier gets its run re-run automatically,
 // with no human in the loop.
 //
-// `priorityTiers` maps a PriorityClass onto a RunnerGroup's worker pods so low-priority
+// `priorityTiers` maps a PriorityClass onto a RunnerSet's worker pods so low-priority
 // CI can be packed into capacity reserved for higher-priority work, and the claim is
 // that this is safe *because* a displaced job recovers automatically. The packing half
 // was already covered elsewhere; this spec is the recovery half.
@@ -105,7 +105,7 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		// before the preemption ran.
 		pendingDeadline = "30m"
 
-		// tenantPriorityClass is the tier the RunnerGroup declares — an opportunistic,
+		// tenantPriorityClass is the tier the RunnerSet declares — an opportunistic,
 		// low-value class of exactly the kind the oversubscription story puts CI in. It
 		// is created preemptionPolicy: Never, which is what values.yaml tells platform
 		// admins to do for a tenant-nameable class: a tenant's own workers must not be
@@ -129,14 +129,26 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		// slotNode is the node carrying the single preempt slot, resolved from the
 		// cluster rather than named: which workers exist depends on the kind config.
 		slotNode string
-		// rgName is resolved from the cluster, not composed from agName — the GMC
-		// derives it as "<gateway>-<first label>-<hash>", and the hash is what the
-		// worker-pod label selector keys on.
-		rgName string
 		// allowlistName is the PriorityClassAllowlist CR the GMC watches, read off its
 		// own flag so the spec augments the object the GMC is actually reading.
 		allowlistName string
 	)
+
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, unpullableImage).
+		WithLifecycle("30m", pendingDeadline).
+		WithPriorityTier(tenantPriorityClass, 1, corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:                resource.MustParse("50m"),
+				corev1.ResourceMemory:             resource.MustParse("64Mi"),
+				corev1.ResourceName(slotResource): resource.MustParse("1"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:                resource.MustParse("50m"),
+				corev1.ResourceMemory:             resource.MustParse("64Mi"),
+				corev1.ResourceName(slotResource): resource.MustParse("1"),
+			},
+		})
+	agcName, rsName := tenant.AGCName(), tenant.RunnerSetName(0)
 
 	BeforeAll(func() {
 		By("resolving the PriorityClassAllowlist the GMC watches")
@@ -166,32 +178,11 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
 		By("applying a tenant whose workers run in the opportunistic tier")
-		utils.RunnerTenant(tenantNS, agName, secretName, unpullableImage).
-			WithLifecycle("30m", pendingDeadline).
-			WithPriorityTier(tenantPriorityClass, 1, corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:                resource.MustParse("50m"),
-					corev1.ResourceMemory:             resource.MustParse("64Mi"),
-					corev1.ResourceName(slotResource): resource.MustParse("1"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:                resource.MustParse("50m"),
-					corev1.ResourceMemory:             resource.MustParse("64Mi"),
-					corev1.ResourceName(slotResource): resource.MustParse("1"),
-				},
-			}).
-			ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 
 		By("waiting for the AGC to be ready and fully reconciled")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
-		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
-
-		By("resolving the RunnerGroup name the GMC actually created")
-		out, err := utils.Run(exec.Command("kubectl", "get", "runnergroup",
-			"-n", tenantNS, "-o", "jsonpath={.items[0].metadata.name}"))
-		Expect(err).NotTo(HaveOccurred())
-		rgName = strings.TrimSpace(out)
-		Expect(rgName).NotTo(BeEmpty(), "no RunnerGroup in %s to provision workers from", tenantNS)
+		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
 		By("starting port-forward to the fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19990+GinkgoParallelProcess())
@@ -223,11 +214,10 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		//
 		// The priorityclass-allowlist-guard policy re-validates STORED objects on
 		// update, which is the point of it (a webhook only sees writes). Tearing the
-		// tenant down is a sequence of updates: the GMC clears its gmc-cleanup finalizer
-		// from the ActionsGateway and the AGC clears agentpool-cleanup from the
-		// RunnerGroup. Both objects still name tenantPriorityClass. Narrow the allowlist
-		// first and every one of those updates is denied — the finalizers can never be
-		// removed, and the namespace wedges in Terminating with no controller able to
+		// tenant down is a sequence of updates, among them the AGC clearing its
+		// agentpool-cleanup finalizer from the RunnerSet, which still names
+		// tenantPriorityClass. Narrow the allowlist first and every one of those updates
+		// is denied — the finalizer can never be removed, and the namespace wedges in Terminating with no controller able to
 		// free it. Observed exactly that way while building this spec; recovering needs
 		// a human to re-widen the allowlist and strip the finalizer by hand.
 		utils.DeleteActionsGatewayCR(tenantNS, agName)
@@ -306,8 +296,8 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		By("enqueuing a job onto this tenant's own session")
 		var sessionID string
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
-			g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerGroup")
+			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
+			g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
 			sessionID = sessions[0]
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		fakegithubEnqueueJob(sessionID, map[string]interface{}{
@@ -320,7 +310,7 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		var podName string
 		var podNode string
 		Eventually(func(g Gomega) {
-			podName, podNode = workerPodAndNode(g, tenantNS, rgName)
+			podName, podNode = workerPodAndNode(g, tenantNS, rsName)
 			g.Expect(podName).NotTo(BeEmpty(), "no worker pod yet")
 			g.Expect(podNode).NotTo(BeEmpty(), "worker pod %s is not scheduled yet", podName)
 		}, 4*time.Minute, 1*time.Second).Should(Succeed())

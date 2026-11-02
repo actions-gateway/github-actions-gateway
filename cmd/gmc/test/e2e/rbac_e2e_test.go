@@ -20,10 +20,13 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
+	tenant := utils.BaseTenant(tenantNS, agName, secretName)
+	agcName, proxyName := tenant.AGCName(), tenant.ProxyName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 11111, 99999, testRSAKeyPEM)
-		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 
@@ -41,7 +44,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	})
 
 	It("E2E_GMC_AGCServiceAccountHasRole: AGC ServiceAccount is bound to expected Role", func() {
-		By("checking RoleBinding subjects include actions-gateway-controller ServiceAccount")
+		By("checking RoleBinding subjects include the AGC ServiceAccount")
 		cmd := exec.Command("kubectl", "get", "rolebinding", agcName,
 			"-n", tenantNS,
 			"-o", "jsonpath={.subjects[0].name}",
@@ -55,7 +58,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	It("E2E_GMC_AGCCanManagePods: AGC ServiceAccount can create and delete pods", func() {
 		By("checking that the agc role allows pod management")
 		cmd := exec.Command("kubectl", "auth", "can-i", "create", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-controller",
+			"--as", "system:serviceaccount:"+tenantNS+":"+agcName,
 			"-n", tenantNS,
 		)
 		out, err := utils.Run(cmd)
@@ -63,7 +66,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 		Expect(out).To(ContainSubstring("yes"), "AGC SA should be able to create pods")
 
 		cmd = exec.Command("kubectl", "auth", "can-i", "delete", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-controller",
+			"--as", "system:serviceaccount:"+tenantNS+":"+agcName,
 			"-n", tenantNS,
 		)
 		out, err = utils.Run(cmd)
@@ -90,7 +93,7 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 	It("E2E_GMC_AGCCannotAccessOtherNamespaces: AGC SA has no access to other namespaces", func() {
 		By("checking AGC SA cannot create pods in gmc-system")
 		cmd := exec.Command("kubectl", "auth", "can-i", "create", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":actions-gateway-controller",
+			"--as", "system:serviceaccount:"+tenantNS+":"+agcName,
 			"-n", gmcNamespace,
 		)
 		out, _ := utils.Run(cmd)

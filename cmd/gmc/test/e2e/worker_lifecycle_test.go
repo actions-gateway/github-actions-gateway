@@ -20,7 +20,7 @@ import (
 // real cluster — the tier where kubelet-set phases, image-pull failures, and
 // the live Kubernetes GC controller exist:
 //
-//   - worker pods carry a controller OwnerReference to their RunnerGroup;
+//   - worker pods carry a controller OwnerReference to their RunnerSet;
 //   - a completed worker pod is deleted once completedPodTTL elapses, along
 //     with its job Secret;
 //   - a stuck-Pending worker pod (unpullable image) is reaped once
@@ -31,13 +31,13 @@ import (
 // sure both of its tenants got one, and it would have handed other suites'
 // tenants jobs they never asked for. fakegithub's control API grew an owner
 // filter since (GET /control/sessions?owner=<prefix>), so the enqueue below
-// scopes to this suite's own RunnerGroups and the specs can run in the parallel
+// scopes to this suite's own RunnerSets and the specs can run in the parallel
 // phase. That matters: Ginkgo runs Serial specs after every parallel spec
 // completes, so these three were 60s of pure tail on the suite's wall time.
 //
 // The two tenants therefore need ActionsGateway names distinct from each other
 // AND from every other session-registering suite's — session ownerName is
-// "<runnerGroup>-<agentIndex>" and RunnerGroup name is "<ag>-<first label>", so
+// "rs-<runnerSet>-<agentIndex>" and RunnerSet name is "<ag>-<first label>", so
 // the ActionsGateway name is what makes the owner prefix selective. Sharing
 // "test-ag" with job_lifecycle is exactly what made the spray unavoidable.
 var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
@@ -58,6 +58,9 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 
 	var lifecyclePFCmd *exec.Cmd
 
+	cleanTenant := utils.RunnerTenant(cleanNS, cleanAG, secretName, agcImage).WithLifecycle(cleanTTL, "10m")
+	stuckTenant := utils.RunnerTenant(stuckNS, stuckAG, secretName, stuckImage).WithLifecycle("5m", stuckDeadline)
+
 	BeforeAll(func() {
 		for _, ns := range []string{cleanNS, stuckNS} {
 			utils.CreateNamespace(ns, nil)
@@ -65,13 +68,13 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 			utils.ApplyFakegithubEgressNetworkPolicy(ns)
 		}
 		By("applying a tenant whose workers complete fast and are reaped on a short TTL")
-		utils.RunnerTenant(cleanNS, cleanAG, secretName, agcImage).WithLifecycle(cleanTTL, "10m").ApplyWithWebhookRetry()
+		cleanTenant.ApplyWithWebhookRetry()
 		By("applying a tenant whose workers can never pull their image")
-		utils.RunnerTenant(stuckNS, stuckAG, secretName, stuckImage).WithLifecycle("5m", stuckDeadline).ApplyWithWebhookRetry()
+		stuckTenant.ApplyWithWebhookRetry()
 
 		By("waiting for both AGCs to be ready")
-		utils.WaitForDeploymentReady(cleanNS, agcName, 4*time.Minute)
-		utils.WaitForDeploymentReady(stuckNS, agcName, 4*time.Minute)
+		utils.WaitForDeploymentReady(cleanNS, cleanTenant.AGCName(), 4*time.Minute)
+		utils.WaitForDeploymentReady(stuckNS, stuckTenant.AGCName(), 4*time.Minute)
 
 		By("starting port-forward to fakegithub control API")
 		// fakegithubLocalPort is the package-level var the control helpers read.
@@ -103,7 +106,7 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 			fakegithubServiceName, infraNamespace, fakegithubServicePort)
 		enqueued := map[string]bool{}
 		Eventually(func(g Gomega) {
-			for _, ownerPrefix := range []string{cleanAG + "-", stuckAG + "-"} {
+			for _, ownerPrefix := range []string{cleanTenant.SessionOwnerPrefix(), stuckTenant.SessionOwnerPrefix()} {
 				for _, id := range fakegithubActiveSessionsForOwner(g, ownerPrefix) {
 					if !enqueued[id] {
 						fakegithubEnqueueJob(id, map[string]interface{}{
@@ -131,9 +134,9 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 		if !CurrentSpecReport().Failed() {
 			return
 		}
-		for _, ns := range []string{stuckNS, cleanNS} {
-			dumpWorkerPodReapState(ns)
-			utils.DumpAGCSessionDiagnostics(ns, agcName, infraNamespace, fakegithubServiceName)
+		for _, t := range []utils.TenantFixture{stuckTenant, cleanTenant} {
+			dumpWorkerPodReapState(t.Namespace)
+			utils.DumpAGCSessionDiagnostics(t.Namespace, t.AGCName(), infraNamespace, fakegithubServiceName)
 		}
 	})
 
@@ -147,22 +150,12 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 		}
 	})
 
-	It("E2E_AGC_WorkerPodOwnerRef: worker pods carry a controller ownerRef to the RunnerGroup", func() {
-		// Resolve the bootstrapped RunnerGroup's actual name rather than
-		// predicting it: the GMC builds it as <ag>-<labelSafe(first label)>,
-		// and labelSafe appends a 7-char hash suffix.
-		cmd := exec.Command("kubectl", "get", "runnergroups",
-			"-n", stuckNS,
-			"-o", "jsonpath={.items[0].metadata.name}",
-		)
-		rgName, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred())
-		rgName = strings.TrimSpace(rgName)
-		Expect(rgName).NotTo(BeEmpty(), "expected a bootstrapped RunnerGroup in %s", stuckNS)
+	It("E2E_AGC_WorkerPodOwnerRef: worker pods carry a controller ownerRef to the RunnerSet", func() {
+		rsName := stuckTenant.RunnerSetName(0)
 
 		// Inspect the stuck tenant's pod: it stays Pending well past this
 		// assertion (deadline 45s), so there is no race with the reaper.
-		cmd = exec.Command("kubectl", "get", "pods",
+		cmd := exec.Command("kubectl", "get", "pods",
 			"-n", stuckNS,
 			"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
 			"-o", `jsonpath={range .items[*]}{.metadata.ownerReferences[0].kind}/{.metadata.ownerReferences[0].name}/{.metadata.ownerReferences[0].controller}{"\n"}{end}`,
@@ -172,8 +165,8 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 		lines := utils.GetNonEmptyLines(out)
 		Expect(lines).NotTo(BeEmpty(), "expected at least one worker pod with ownerReferences")
 		for _, line := range lines {
-			Expect(line).To(Equal("RunnerGroup/"+rgName+"/true"),
-				"worker pod must carry a controller ownerRef to the tenant RunnerGroup")
+			Expect(line).To(Equal("RunnerSet/"+rsName+"/true"),
+				"worker pod must carry a controller ownerRef to the tenant RunnerSet")
 		}
 	})
 
@@ -203,7 +196,7 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 			g.Expect(workerPodNames(g, stuckNS)).To(BeEmpty(), "stuck-Pending worker pods should be reaped")
 		}, 3*time.Minute, 3*time.Second).Should(Succeed())
 
-		By("verifying the WorkerPodStuckPending Warning event was emitted on the RunnerGroup")
+		By("verifying the WorkerPodStuckPending Warning event was emitted on the RunnerSet")
 		// Avoid --field-selector: the events.k8s.io v1 recorder's reason field
 		// mapping into the core events view varies by server version.
 		Eventually(func(g Gomega) {

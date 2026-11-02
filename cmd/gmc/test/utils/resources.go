@@ -99,20 +99,25 @@ func ApplyManifestWithWebhookRetry(yaml string) error {
 // CreateNamespace creates a namespace and applies the given labels.
 //
 // Every namespace created here is a GMC-managed tenant namespace, so it is
-// stamped with the actions-gateway.github.com/tenant=true marker label that the
-// GMC admission policies require: namespace-psa-guard before the GMC may patch
-// Pod Security Admission labels on it, and tenant-resource-guard before the GMC
-// may create any tenant resource (Deployments, Secrets, RoleBindings, …) in it
-// (see cmd/gmc/config/admission-policy/). Without the marker the GMC reconcile is
-// denied at the PSA-stamping step and never provisions tenant resources. A caller
-// may override the marker by passing it in labels.
+// stamped with the actions-gateway.com/tenant=managed marker label that the GMC
+// admission policies require: namespace-psa-guard before the GMC may patch Pod
+// Security Admission labels on it, and tenant-resource-guard before the GMC may
+// create any tenant resource (Deployments, Secrets, RoleBindings, …) in it (see
+// cmd/gmc/config/admission-policy/). Without the marker the GMC reconcile is
+// denied at the PSA-stamping step and never provisions tenant resources. The
+// legacy actions-gateway.github.com/tenant=true marker rides alongside it for the
+// v1 tenant the migration spec applies. A caller may override either marker by
+// passing it in labels.
 func CreateNamespace(name string, labels map[string]string) {
 	cmd := exec.Command("kubectl", "create", "namespace", name, "--dry-run=client", "-o", "yaml")
 	yaml, err := Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "generate namespace yaml")
 	Expect(ApplyManifest(yaml)).To(Succeed(), "apply namespace %s", name)
 
-	merged := map[string]string{"actions-gateway.github.com/tenant": "true"}
+	merged := map[string]string{
+		"actions-gateway.com/tenant":        "managed",
+		"actions-gateway.github.com/tenant": "true",
+	}
 	for k, v := range labels {
 		merged[k] = v
 	}
@@ -204,11 +209,21 @@ spec:
 	Expect(ApplyManifest(manifest)).To(Succeed(), "apply fakegithub egress NP in %s", ns)
 }
 
-// DeleteActionsGatewayCR deletes an ActionsGateway CR and waits for the finalizer to clear.
-// A 5-minute timeout prevents hangs if the controller is unavailable.
+// DeleteActionsGatewayCR deletes a namespace's RunnerSets and then its ActionsGateway,
+// waiting on each so their finalizers clear while the controller that owns them is
+// still running.
+//
+// The order is load-bearing. A RunnerSet's agentpool-cleanup finalizer is cleared by
+// the gateway's AGC, and v2's gateway teardown deliberately leaves RunnerSets alone
+// (they reference the gateway, they are not owned by it), so deleting the gateway
+// first removes the only controller that could release them and wedges the namespace
+// in Terminating (Q585). Every caller tears down its own namespace, so the RunnerSet
+// delete is namespace-wide. Timeouts prevent hangs if a controller is unavailable.
 func DeleteActionsGatewayCR(ns, name string) {
-	cmd := exec.Command("kubectl", "delete", "actionsgateways.actions-gateway.github.com", name, "-n", ns, "--ignore-not-found", "--timeout=5m")
-	_, _ = Run(cmd)
+	_, _ = Run(exec.Command("kubectl", "delete", "runnersets.actions-gateway.com", "--all",
+		"-n", ns, "--ignore-not-found", "--timeout=2m"))
+	_, _ = Run(exec.Command("kubectl", "delete", "actionsgateways.actions-gateway.com", name,
+		"-n", ns, "--ignore-not-found", "--timeout=5m"))
 }
 
 // WaitForDeploymentReady waits until a Deployment reaches the desired ready replica count.
@@ -225,12 +240,14 @@ func WaitForDeploymentReady(ns, name string, timeout time.Duration) {
 	}, timeout, 2*time.Second).Should(Succeed(), "deployment %s/%s not ready", ns, name)
 }
 
-// WaitForRunnerGroupReconciled waits until at least one RunnerGroup in ns has a
-// populated .status.observedGeneration. The AGC sets observedGeneration only at
-// the end of a full reconcile — after the installation-token fetch, agent-pool
-// registration (EnsureAgents), and listener-multiplexer start have all
-// succeeded — so this is the signal that the AGC is operationally past startup
-// and a broker session is imminent.
+// WaitForRunnerSetReconciled waits until at least one RunnerSet in ns has a
+// populated .status.observedGeneration and a Ready condition that is not a
+// reference-resolution failure. The AGC sets observedGeneration at the end of a full
+// reconcile — after the installation-token fetch, agent-pool registration
+// (EnsureAgents), and listener-multiplexer start have all succeeded — so this is the
+// signal that the AGC is operationally past startup and a broker session is
+// imminent. It also sets it when a template, proxy, or gateway reference fails to
+// resolve, which is why a Ready reason ending in NotFound does not count.
 //
 // Deployment readiness (readyReplicas>=1, WaitForDeploymentReady) is a far
 // weaker signal and must not be mistaken for it: the AGC's health server binds
@@ -245,23 +262,28 @@ func WaitForDeploymentReady(ns, name string, timeout time.Duration) {
 // misleading "no session registered" timeout (Q134). Waiting for this stronger
 // signal first separates "AGC still starting up" from "session failed to
 // register" and keeps each phase within its own budget.
-func WaitForRunnerGroupReconciled(ns string, timeout time.Duration) {
+func WaitForRunnerSetReconciled(ns string, timeout time.Duration) {
 	EventuallyWithOffset(1, func(g Gomega) {
-		cmd := exec.Command("kubectl", "get", "runnergroup",
+		cmd := exec.Command("kubectl", "get", "runnersets.actions-gateway.com",
 			"-n", ns,
-			"-o", `jsonpath={range .items[*]}{.status.observedGeneration}{"\n"}{end}`,
+			"-o", `jsonpath={range .items[*]}{.status.observedGeneration}{" "}{.status.conditions[?(@.type=="Ready")].reason}{"\n"}{end}`,
 		)
 		out, err := Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
 		reconciled := false
 		for _, line := range GetNonEmptyLines(out) {
-			if strings.TrimSpace(line) != "0" {
-				reconciled = true
-				break
+			fields := strings.Fields(line)
+			if len(fields) == 0 || fields[0] == "0" {
+				continue
 			}
+			if len(fields) > 1 && strings.HasSuffix(fields[1], "NotFound") {
+				continue
+			}
+			reconciled = true
+			break
 		}
-		g.Expect(reconciled).To(BeTrue(), "no RunnerGroup in %s has a reconciled status yet", ns)
-	}, timeout, 2*time.Second).Should(Succeed(), "no RunnerGroup in %s reached a reconciled status", ns)
+		g.Expect(reconciled).To(BeTrue(), "no RunnerSet in %s has a reconciled status yet: %q", ns, out)
+	}, timeout, 2*time.Second).Should(Succeed(), "no RunnerSet in %s reached a reconciled status", ns)
 }
 
 // WaitForCondition waits until the given jsonpath expression on a resource equals expectedValue.

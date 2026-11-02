@@ -31,15 +31,18 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, agcImage)
+	agcName := tenant.AGCName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		// Use a RunnerGroup so AGC has something to reconcile and can register
+		// Use a RunnerSet so AGC has something to reconcile and can register
 		// broker sessions with fakegithub. The worker image is the agc image
 		// (already loaded into the cluster); it acts as a placeholder since
 		// job-lifecycle tests only verify session registration and pod creation,
 		// not that runner pods complete successfully.
-		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		// The GMC-built workload NP restricts 8080 egress to proxy pods only
@@ -54,10 +57,10 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 
 		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
 		// Deployment-ready only means the health server is up; it is decoupled
-		// from token acquisition. Gate on a reconciled RunnerGroup so the session
+		// from token acquisition. Gate on a reconciled RunnerSet so the session
 		// waits start from an operational AGC rather than absorbing the AGC's
 		// whole startup budget (Q134).
-		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
+		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
 		By("starting persistent port-forward to fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19090+GinkgoParallelProcess())
@@ -101,7 +104,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	It("E2E_AGC_SessionRegistered: AGC creates broker sessions after startup", func() {
 		By("waiting for at least one active session to appear in fakegithub")
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
+			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
 			g.Expect(sessions).NotTo(BeEmpty(), "no sessions registered yet")
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 	})
@@ -110,7 +113,7 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		By("getting the first active session ID")
 		var sessionID string
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
+			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
 			g.Expect(sessions).NotTo(BeEmpty())
 			sessionID = sessions[0]
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
@@ -172,8 +175,8 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 			var session string
 			By(fmt.Sprintf("job %d: picking a live session", i))
 			Eventually(func(g Gomega) {
-				sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
-				g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerGroup")
+				sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
+				g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
 				session = sessions[0]
 			}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
@@ -205,10 +208,9 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 
 // fakegithubActiveSessionsForOwner queries active sessions whose ownerName has
 // the given prefix. A session's ownerName is the listener's own registered runner
-// name, which is kind-scoped (Q677): "<runnerGroup>-<agentIndex>" for a RunnerGroup,
-// whose name is "<agName>-<first runner label>", so "<agName>-" scopes to one spec's
-// ActionsGateway; "rs-<runnerSet>-<agentIndex>" for a RunnerSet, so a RunnerSet spec
-// passes "rs-<runnerSet>-". fakegithub is shared across parallel specs and tenants —
+// name, which is kind-scoped (Q677): "rs-<runnerSet>-<agentIndex>" for a RunnerSet,
+// so a spec passes "rs-<runnerSet>-", or a fixture tenant's SessionOwnerPrefix to
+// scope to all of its gateway's sets. fakegithub is shared across parallel specs and tenants —
 // an unfiltered sessions[0] can belong to another spec, sending its enqueued job to
 // the wrong tenant.
 func fakegithubActiveSessionsForOwner(g Gomega, ownerPrefix string) []string {

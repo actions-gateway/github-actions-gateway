@@ -21,8 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
-	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
@@ -36,10 +34,6 @@ const (
 
 	fakegithubServiceName = "fakegithub"
 	fakegithubServicePort = "8080"
-
-	agcName      = agcnames.ControllerName
-	proxyName    = gmcnames.ProxyName
-	workloadName = gmcnames.WorkloadNetworkPolicyName
 )
 
 var (
@@ -327,7 +321,7 @@ func v2CRDChartDir() string {
 // tenantNamespaceMarker is the label every GMC-managed tenant namespace carries
 // (see utils.CreateNamespace). drainTenantNamespaces selects on it to find the
 // namespaces whose finalizers must be cleared before the controllers go away.
-const tenantNamespaceMarker = "actions-gateway.github.com/tenant=true"
+const tenantNamespaceMarker = "actions-gateway.com/tenant=managed"
 
 // drainTenantNamespaces deletes every GMC-managed tenant namespace and blocks
 // until each has finished terminating. It MUST run before teardownGMC().

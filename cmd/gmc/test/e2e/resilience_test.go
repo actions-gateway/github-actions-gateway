@@ -20,10 +20,13 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
+	tenant := utils.BaseTenant(tenantNS, agName, secretName)
+	agcName, proxyName := tenant.AGCName(), tenant.ProxyName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 77777, 88888, testRSAKeyPEM)
-		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 
 		By("waiting for initial provisioning")
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
@@ -47,7 +50,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 
 	It("E2E_GMC_ProxyRecoversAfterPodDelete: proxy pod recovers after manual deletion", func() {
 		By("getting the current proxy pod name")
-		podName := getPodName(tenantNS, "app=actions-gateway-proxy")
+		podName := getPodName(tenantNS, tenant.ProxyPodSelector())
 		Expect(podName).NotTo(BeEmpty(), "no proxy pod found")
 
 		By("deleting the proxy pod")
@@ -86,7 +89,7 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 
 		By("verifying ActionsGateway Ready condition is still True")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.com", agName,
 				"-n", tenantNS,
 				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
 			)

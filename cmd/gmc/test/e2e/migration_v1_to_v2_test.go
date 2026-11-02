@@ -15,6 +15,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
@@ -27,7 +28,7 @@ import (
 // webhook rejects, so `--apply` failed after the EgressProxy was already created and
 // left the namespace half-migrated.
 //
-// The tenant here is deliberately the DinD shape (utils.DinDTenant): a runner
+// The tenant here is deliberately the DinD shape (utils.V1DinDTenant): a runner
 // container driving a privileged `docker:dind` native sidecar, matching what the
 // dogfood e2e tenant actually runs. It is the shape that exercises the
 // RunnerTemplate-vs-ClusterRunnerTemplate split, and it is the tenant Q415 migrates
@@ -46,7 +47,9 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		// name, its AGC control plane is <gateway>-agc, and the EgressProxy the fan-out
 		// extracts from the inline proxy is <gateway>-egress (whose pool Deployment is
 		// in turn <proxy>-proxy).
-		migratedAGC   = agName + "-agc"
+		migratedAGC = agName + "-agc"
+		// v1AGC is the v1 tenant's shared, fixed-name AGC Deployment.
+		v1AGC         = agcnames.ControllerName
 		migratedProxy = agName + "-egress"
 		proxyDeploy   = migratedProxy + "-proxy"
 	)
@@ -62,7 +65,7 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		// The privileged-profile grant is platform-applied and fail-closed: without it
 		// the GMC webhook rejects securityProfile: privileged and the v1 DinD tenant
 		// never provisions at all.
-		utils.CreateNamespace(tenantNS, utils.PrivilegedTenantNamespaceLabels())
+		utils.CreateNamespace(tenantNS, utils.V1PrivilegedTenantNamespaceLabels())
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
@@ -72,13 +75,13 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		// label, so they repelled each other by hostname anti-affinity and a v1 pool
 		// free to autoscale left the migrated pool nowhere to schedule. Keeping the pin
 		// would also keep this spec blind to a regression of exactly that.
-		utils.DinDTenant(tenantNS, agName, secretName, workerImage).
+		utils.V1DinDTenant(tenantNS, agName, secretName, workerImage).
 			ApplyWithWebhookRetry()
 
 		By("waiting for the v1 AGC control plane to be ready")
 		// Migrating a tenant that never came up would prove nothing: the point is that
 		// a LIVE v1 tenant migrates, so establish it first.
-		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
+		utils.WaitForDeploymentReady(tenantNS, v1AGC, 4*time.Minute)
 
 		By("building gag-migrate")
 		_, err := utils.Run(exec.Command("make", "build-migrate"))
@@ -87,7 +90,7 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
-			utils.DumpAGCSessionDiagnostics(tenantNS, agcName, infraNamespace, fakegithubServiceName)
+			utils.DumpAGCSessionDiagnostics(tenantNS, v1AGC, infraNamespace, fakegithubServiceName)
 		}
 	})
 
@@ -112,7 +115,8 @@ var _ = Describe("E2E_Migration_V1ToV2", Ordered, func() {
 		// Then the v1 gateway, which coexisted with v2 through the migration. Its own
 		// teardown deletes the v1 RunnerGroups and waits them out before removing the
 		// v1 AGC, so the v1 pools need no separate delete.
-		utils.DeleteActionsGatewayCR(tenantNS, agName)
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "actionsgateways.actions-gateway.github.com", agName,
+			"-n", tenantNS, "--ignore-not-found", "--timeout=5m"))
 
 		// Cluster-scoped objects are NOT garbage-collected by deleting the namespace —
 		// the whole reason the tool stamps a provenance label. Reclaim them by that

@@ -235,32 +235,35 @@ spec:
 		utils.CreateNamespace(webhookNPNamespace, nil)
 		DeferCleanup(func() { utils.DeleteNamespace(webhookNPNamespace) })
 
-		// Negative admission: an ActionsGateway carrying a cross-namespace
-		// gitHubAppRef.namespace must be REJECTED by the validating webhook's own
-		// logic. This case is chosen deliberately: it passes the CRD's OpenAPI/CEL
-		// schema validation (the namespace field is a plain optional string with no
-		// schema rule), so the apiserver forwards the request to the :9443 webhook
-		// rather than rejecting it earlier — making the rejection genuine proof the
-		// webhook was reached and ran. (A non-https gitHubURL, by contrast, is
-		// caught by the CRD schema's `^https://` pattern before the webhook is ever
-		// called, so it proves nothing about :9443.) The error message is the proof
-		// of reachability: only the webhook code emits "gitHubAppRef.namespace is
-		// not supported". If the NP had blocked :9443, failurePolicy: Fail would
-		// surface a webhook *call* error ("failed calling webhook"/"context deadline
-		// exceeded") instead. Create the invalid CR FIRST, in an otherwise-empty
-		// namespace, so the singleton check (which runs before the appRef check)
-		// can't pre-empt the rejection.
+		// Negative admission: an ActionsGateway naming an infra PriorityClass that is
+		// not on the platform allowlist must be REJECTED by the validating webhook's
+		// own logic. This case is chosen deliberately: it passes the CRD's
+		// OpenAPI/CEL schema validation (spec.scheduling.priorityClassName is a plain
+		// optional string), and no ValidatingAdmissionPolicy covers ActionsGateways
+		// (priorityclass-allowlist-guard matches RunnerSets and RunnerTemplates), so
+		// the apiserver forwards the request to the :9443 webhook and only the
+		// webhook can reject it — making the rejection genuine proof the webhook was
+		// reached and ran. (A non-https githubURL, by contrast, is caught by the CRD
+		// schema's `^https://` pattern before the webhook is ever called, so it
+		// proves nothing about :9443.) The error message is the proof of
+		// reachability: only the webhook code emits "is not in the platform infra
+		// allowlist". If the NP had blocked :9443, failurePolicy: Fail would surface a
+		// webhook *call* error ("failed calling webhook"/"context deadline exceeded")
+		// instead.
 		By("negative admission: an invalid ActionsGateway is rejected by the webhook (proves it ran)")
-		invalidAG := fmt.Sprintf(`apiVersion: actions-gateway.github.com/v1alpha1
+		invalidAG := fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
   name: np-webhook-invalid
   namespace: %s
 spec:
-  gitHubAppRef:
-    name: nonexistent
-    namespace: some-other-namespace
-  gitHubURL: https://github.com/e2e-org
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: nonexistent
+  githubURL: https://github.com/e2e-org
+  scheduling:
+    priorityClassName: np-webhook-not-allowlisted
 `, webhookNPNamespace)
 		// Retry until the webhook returns its validation verdict. The first calls
 		// after a fresh deploy can race the webhook server's TLS listener coming up
@@ -274,7 +277,7 @@ spec:
 			g.Expect(err).To(HaveOccurred(), "invalid ActionsGateway was admitted; webhook validation did not run:\n%s", out)
 			g.Expect(out).NotTo(MatchRegexp(`(?i)failed calling webhook|context deadline exceeded|connection refused|no route to host`),
 				"admission failed with a webhook-call/transport error — webhook on :9443 not (yet) reachable; output:\n%s", out)
-			g.Expect(out).To(ContainSubstring("gitHubAppRef.namespace is not supported"),
+			g.Expect(out).To(ContainSubstring("is not in the platform infra allowlist"),
 				"invalid ActionsGateway was not rejected by the webhook's own validation logic; output:\n%s", out)
 			rejectOut = out
 		}, 2*time.Minute, 5*time.Second).Should(Succeed(),
@@ -285,18 +288,17 @@ spec:
 		// failurePolicy: Fail this can only succeed if the webhook was reached AND
 		// returned allow — itself strong evidence the NP leaves :9443 open.
 		By("positive admission: a valid ActionsGateway is admitted")
-		validAG := fmt.Sprintf(`apiVersion: actions-gateway.github.com/v1alpha1
+		validAG := fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
 kind: ActionsGateway
 metadata:
   name: np-webhook-valid
   namespace: %s
 spec:
-  gitHubAppRef:
-    name: nonexistent
-  gitHubURL: https://github.com/e2e-org
-  proxy:
-    minReplicas: 1
-    maxReplicas: 3
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: nonexistent
+  githubURL: https://github.com/e2e-org
 `, webhookNPNamespace)
 		out, err := utils.ApplyManifestOutput(validAG)
 		Expect(err).NotTo(HaveOccurred(),
