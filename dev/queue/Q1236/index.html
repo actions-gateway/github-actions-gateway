@@ -2667,7 +2667,7 @@
   Detection snapshots the pod at its terminal transition and falls back to reading it, so a pod gone before both leaves the record with no context.
   If the completion usually arrives first, the snapshot is never taken in time: the fallback reads a still-<code>Running</code> pod, so a runner that exits non-zero never reads as a fault, and the snapshots no completion takes fill the 1,024-entry map (independent review of Q555, 2026-10-27).
   Also unmeasured: whether the runner container exits non-zero when its job fails, which would make every red test a <code>PlatformFaultOnFailedJob</code> Warning (the snapshot's fault reading assumes it exits 0), and whether <code>JobCompleted</code> carries <code>eventName</code> and <code>jobWorkflowRef</code> (decoded from it, never seen on it).
-  The reading needs <code>actions_gateway_*</code> series stored, which Q1180 adds.</p>
+  The <code>actions_gateway_*</code> series are stored in Google Managed Prometheus while dogfood runs (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a>, applied 2026-11-02).</p>
 
 
 

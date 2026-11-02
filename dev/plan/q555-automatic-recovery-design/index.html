@@ -3266,7 +3266,7 @@ Per occurrence, the names go to:</p>
 <li><strong>a Normal Event, <code>FlakyJobDetected</code>,</strong> on the set when a pairing reaches the flaky verdict, naming the run, the job and the trigger;</li>
 <li><strong>a Warning Event, <code>PlatformFaultOnFailedJob</code>,</strong> when a failed job's snapshot shows a fault (a non-zero or <code>OOMKilled</code> container, a <code>DisruptionTarget</code> condition, an unready colocated proxy), not on every red test;</li>
 <li><strong>a log line per failed job carrying the snapshot</strong>, at Warn when the snapshot shows a fault and Info otherwise.
-  A log store that keeps only warnings, as dogfood's does (<a href="../../queue/Q1180/">Q1180</a>), still keeps every platform fault.</li>
+  A log store that keeps only warnings, as dogfood's does, still keeps every platform fault.</li>
 </ul>
 <h2 id="component-2-one-run-read-before-every-re-run-q1182-budget-q1181-futility">Component 2: one run read before every re-run (Q1182 budget, Q1181 futility)<a class="headerlink" href="#component-2-one-run-read-before-every-re-run-q1182-budget-q1181-futility" title="Permanent link">&para;</a></h2>
 <h3 id="what-the-read-decodes">What the read decodes<a class="headerlink" href="#what-the-read-decodes" title="Permanent link">&para;</a></h3>

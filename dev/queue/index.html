@@ -3074,14 +3074,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Blocked by <a href="Q1246/">Q1246</a>: what the never-started handling's whole-run force-cancel does to a multi-job run's healthy jobs is unweighed.</td>
 </tr>
 <tr>
-<td><a href="Q1180/">Q1180</a></td>
-<td><a href="../plan/gke-dogfood/">Dogfood keeps no AGC or proxy metrics past the pod's life</a></td>
-<td><code>dogfood</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Dogfood stores no <code>actions_gateway_*</code> series until <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md"><code>deploy/dogfood-metrics/</code></a> is applied, so every …</td>
-</tr>
-<tr>
 <td><a href="Q1248/">Q1248</a></td>
 <td><a href="../design/04-operational-flows/">Abandoned arm withholds runs GitHub's unstarted-job timeout cancelled</a></td>
 <td><code>bug</code></td>

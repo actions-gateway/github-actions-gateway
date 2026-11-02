@@ -2979,10 +2979,10 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1180/">Q1180</a></td>
+<td>Q1180</td>
 <td>Dogfood keeps no AGC or proxy metrics past the pod's life</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open: the scrape is written, the apply is owed</td>
+<td>✅ applied 2026-11-02: all 15 scrapes in a 15-minute window landed with <code>up</code> at <code>1</code>, and one scrape carried 405 samples, 77 of them <code>actions_gateway_*</code>; dogfood runs no <code>EgressProxy</code>, so the proxy half has nothing to scrape (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md#applied-and-what-it-measured">measurements</a>)</td>
 </tr>
 <tr>
 <td>-</td>

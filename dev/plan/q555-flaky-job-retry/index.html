@@ -2942,7 +2942,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <tr>
 <td><a href="../../queue/Q1236/">Q1236</a></td>
 <td>The dogfood readings detection rests on (M1, M2, M4)</td>
-<td>Q1180</td>
+<td>Q1180 (applied)</td>
 </tr>
 <tr>
 <td>Q1237 (built)</td>
@@ -2970,7 +2970,7 @@ The classic tier gets no <code>JobCompleted</code>, but classic is terminal (<a 
 <td>A measurement each</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1180/">Q1180</a></td>
+<td>Q1180 (applied)</td>
 <td>Keeping dogfood's retry metrics at all</td>
 <td>Nothing</td>
 </tr>
@@ -3130,7 +3130,7 @@ A blanket retry of unclassified failures is <a href="#unclassified-retry-not-sch
   Calls are for the rare case (a failure, or a re-run), never the common one.</li>
 <li><strong>R7.</strong> For each failed attempt, detection MUST record the platform context GAG could read at the time: the pod's phase, reason and message, each container's termination reason and restart count (sidecars included), the node's conditions, and the readiness of the set's egress proxy pool and registry mirror.
   The record of failures that later passed is the evidence that proposes new classes; without it, a candidate is a guess.
-  It MUST outlive the AGC pod: on dogfood today no AGC metric is scraped and Cloud Logging keeps warn lines for 30 days (<a href="../../queue/Q1180/">Q1180</a>), so one structured line per concluded job, carrying run, job, result, cause and node, is the cheapest durable form.</li>
+  It MUST outlive the AGC pod: on dogfood the AGC's metrics are scraped only while the cluster runs (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-metrics/README.md">since Q1180</a>) and Cloud Logging keeps warn lines for 30 days, so one structured line per concluded job, carrying run, job, result, cause and node, is the cheapest durable form.</li>
 <li><strong>R8.</strong> Detection MUST tell the re-runs GAG triggered from the ones it did not, and report per set the rate of re-runs nobody automated.
   That rate is this feature's success metric: each class shipped should lower it, and a class that does not is not paying for itself.</li>
 </ul>
