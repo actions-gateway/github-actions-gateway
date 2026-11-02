@@ -24,6 +24,8 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$BIN" "$REPO_DIR"
 
 git -C "$REPO_DIR" init -q
+git -C "$REPO_DIR" config maintenance.auto false
+git -C "$REPO_DIR" config gc.auto 0
 git -C "$REPO_DIR" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m c
 git -C "$REPO_DIR" tag v1.9.0-rc.3
 SHA="$(git -C "$REPO_DIR" rev-parse HEAD)"
