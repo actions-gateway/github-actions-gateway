@@ -2762,6 +2762,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1270/">Q1270</a></td>
+<td>EgressProxy envtests wait on a NetworkPolicy no longer applied last</td>
+<td><code>flake</code> <code>tests</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> a test in <code>cmd/gmc/internal/controller/integration/v2_egressproxy_test.go</code> fails on <code>main</code> with a <code>not found</code> read of a proxy …</td>
+</tr>
+<tr>
 <td><a href="Q1252/">Q1252</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease-fake.sh">Flake: lease-test's another-holder renewer loses its lock and survives</a></td>
 <td><code>flake</code> <code>tests</code></td>
