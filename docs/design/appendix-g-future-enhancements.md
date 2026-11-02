@@ -343,7 +343,7 @@ Operator guidance: [tenant-onboarding.md § worker scale-up rate limit](../opera
 ## G.12. Warm Worker Pool (`minIdleWorkers`)
 
 > **Not the same as node-/workspace-layer warmth.** This is about holding **pre-created worker pods** so a job skips pod scheduling.
-> It is *not* image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see [G.11](#g11-worker-scale-up-rate-limiting-anti-stampede) and the Q211 guide) and *not* build-/model-cache warmth (a cache volume mounted in the worker `podTemplate` — a raw PVC works today; a *managed* backend is Q215).
+> It is *not* image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see [G.11](#g11-worker-scale-up-rate-limiting-anti-stampede) and the Q211 guide) and *not* build-/model-cache warmth (a cache volume mounted in the worker `podTemplate` — a raw PVC works today; for `actions/cache`, the [in-cluster cache server](../operations/in-cluster-cache.md)).
 > Those cheaper layers should be exhausted first; this item is the residual.
 
 **Current behavior.** Worker pods are created **reactively** the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion ([§2 architecture](02-architecture.md)).
@@ -359,7 +359,7 @@ So GAG is already "warm" at the layer ARC's `minRunners > 0` exists to warm; onl
 |---|---|
 | Runner **registration** | Already eliminated — goroutine session pool. |
 | **Image** pull | P2P image mirror (Spegel/Dragonfly) / pre-pull DaemonSet. |
-| Build cache / **model weights** (the real GPU/ML startup cost) | Cache volume in the `podTemplate` (raw PVC works today; managed backend = Q215). |
+| Build cache / **model weights** (the real GPU/ML startup cost) | Cache volume in the `podTemplate` (raw PVC works today); `actions/cache` and BuildKit's `type=gha` can use the [in-cluster cache server](../operations/in-cluster-cache.md). |
 | **Pod scheduling** | *This item* — the only layer a warm pod pool uniquely addresses. |
 
 Only teams for whom pod-schedule latency is a large fraction of job time (sub-minute, high-frequency, human-waited CPU jobs) *after* exhausting the rows above are candidates.

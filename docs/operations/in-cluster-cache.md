@@ -87,7 +87,7 @@ Run a workflow that saves and then restores a cache on the tenant's runners, and
 - **Eviction.** An entry unused for 7 days is deleted, as on GitHub.
   The server's total is capped at 10 GiB, evicting the least recently read entry first.
   GitHub caps 10 GB per repository, which this server cannot express, so the cap covers every repository the tenant runs.
-- **Network.** Worker pods may reach the server on port 3000, and nothing else may, the API server's service proxy included.
+- **Network.** Worker pods may reach the server on port 3000, and no other pod may, nor the API server's service proxy.
   The server's own egress is open, because it checks every token against GitHub's signing keys and forwards non-cache calls to GitHub.
 - **Security.** Token validation is on and the management API is off.
   The pod runs as a non-root user with a read-only root filesystem and no capabilities.

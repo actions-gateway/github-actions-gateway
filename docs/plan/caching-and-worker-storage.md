@@ -28,8 +28,8 @@ Do not read this table as three deployments.
 | | What it holds | Where it lives today | Row |
 |---|---|---|---|
 | **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | Q408, Q539, Q540 |
-| **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works** | Q215 |
-| **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere. Workers are storage-less | Q215 |
+| **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works**; opt-in, a per-tenant in-cluster server (Q215) | [Q1225](../queue/Q1225.md) |
+| **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere by default, since workers are storage-less; BuildKit's `type=gha` can use the same per-tenant server, unmeasured | [Q1225](../queue/Q1225.md) |
 
 Alongside them, and not a cache at all:
 
@@ -150,7 +150,7 @@ Open, with rows: [Q1225](../queue/Q1225.md) (sharing that server across tenants)
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.
 Grade the four contract properties **per content class**, not once: a backend that refuses non-GET for images has said nothing about what it does for a cache save.
-Q539 has answered its half ([q539 §5](q539-dragonfly-mirror-backend.md#5-per-content-class)): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class stays Q215's.
+Q539 has answered its half ([q539 §5](q539-dragonfly-mirror-backend.md#5-per-content-class)): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class belongs to the per-tenant cache server (Q215).
 Q540 shipped image-only as well: its node client carries the kubelet's pulls and no job content.
 
 ## Gaps with no row yet

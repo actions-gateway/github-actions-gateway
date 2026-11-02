@@ -187,7 +187,7 @@ The worker reported kernel `6.18.35`, the Kata guest's rather than the node's.
 - **Sibling branch: holds.** [Run 41372555845](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372555845) got `Cache not found` for the same key, and the server's miss count went from 0 to 1.
 - **The server and GitHub answer; the open internet does not.** From the Kata worker, the server's `/health` and `api.github.com` returned 200, and `example.com` returned nothing within 20 seconds.
 - **Azure blob storage answers.** `productionresultssa0` and `productionresultssa19.blob.core.windows.net` both returned HTTP 400 from the worker, in [run 41371432425](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41371432425), which gated on them being blocked.
-  Their addresses fall in `20.209.226.0/23` and `20.209.112.0/23`, two of the 8,419 ranges the GMC's workload policy admits on 443, which it takes from the `actions` key of GitHub's `/meta` (`cmd/gmc/internal/controller/ipranges.go`).
+  Their addresses fall in `20.209.226.0/23` and `20.209.112.0/23`, two of the 8,419 ranges the GMC's workload policy admitted on 443 that evening; the GMC merges the `api`, `actions` and `web` keys of GitHub's `/meta` (`cmd/gmc/internal/controller/ipranges.go`), and both ranges come from `actions`.
   That is by design: the runner itself uploads to blob storage, and [network-architecture.md](../design/network-architecture.md) lists `*.blob.core.windows.net` among the GitHub hostnames for every egress backend.
   So a worker under this profile can reach GitHub's own cache storage, and the premise that it cannot does not hold.
 
@@ -200,6 +200,7 @@ Each job printed its runtime token's `ac` claim, the cache scopes it may read (1
   It found the base branch's entry and saved its own; falcondev accepted the save.
 - **The base branch cannot restore it.** [Run 41375417452](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375417452), a second push to the base, got `Cache not found` for the pull request's key while finding its own.
 - **The entry is there, under the pull request's scope.** [Run 41375766235](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375766235), the pull request's next push, found it.
+- **The base branch's first push** ([run 41375018321](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375018321)) saved the base entry the pull request read, with write on its own branch and read on `main`.
 - The server counted 2 uploads, 4 hits and 4 misses across the four runs, and GitHub's cache held no `q215-fork` key.
 
 ## Open decisions
