@@ -883,7 +883,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 24, "x": 0, "y": 60 },
       "id": 66,
-      "description": "Every CONNECT by the allowlist entry that matched (destination) and how it ended (outcome), excluding successful tunnels so a failing destination stands out. Outcome denied with destination unlisted is an allowlist refusal; dns_error, refused, timeout, unreachable and error are failed upstream dials to an allowed destination.",
+      "description": "Every CONNECT by the allowlist entry that matched (destination) and how it ended (outcome), excluding successful tunnels so a failing destination stands out. Destination unlisted is a refusal: outcome denied is an allowlist refusal, and dns_error is a CONNECT whose DNS lookup failed before any entry matched. For a named destination, dns_error, refused, timeout, unreachable and error are failed upstream dials to an allowed destination.",
       "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {

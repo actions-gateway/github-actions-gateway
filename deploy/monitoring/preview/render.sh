@@ -21,7 +21,7 @@
 #   CLUSTER=gag-obs  RELEASE=kps  MON_NS=monitoring
 #   OUT_DIR=.        # directory the per-dashboard PNGs are written to
 #   WAIT=660         # seconds to let counters/histograms accumulate before render
-#   WIDTH=1500  HEIGHT=2300  FROM=now-10m  TO=now
+#   WIDTH=1500  HEIGHT=2800  FROM=now-10m  TO=now
 # Runs against one CLUSTER are serialized against each other; see "concurrency"
 # below. Set CLUSTER to opt out into a cluster of your own.
 # WAIT and FROM are matched on purpose: the render window (FROM..TO) must fit
@@ -43,7 +43,7 @@ MON_NS="${MON_NS:-monitoring}"
 OUT_DIR="${OUT_DIR:-.}"
 WAIT="${WAIT:-660}"
 WIDTH="${WIDTH:-1500}"
-HEIGHT="${HEIGHT:-2300}"
+HEIGHT="${HEIGHT:-2800}"
 FROM="${FROM:-now-10m}"
 TO="${TO:-now}"
 readonly CHART="prometheus-community/kube-prometheus-stack"
