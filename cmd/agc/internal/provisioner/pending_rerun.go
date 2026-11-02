@@ -258,19 +258,22 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	rctx, cancel := context.WithTimeout(ctx, evictionRecoveryAPIBudget)
 	run, err := p.runConclusion(rctx, owner, repo, e.RunID)
 	cancel()
+	// Only a run that is gone ends the wait. Every other failure, a token that would not
+	// mint, a rate limit, a 5xx, retries at the next poll: over a day of polling one bad
+	// answer is expected, and the 24-hour expiry bounds a failure that never clears.
 	switch {
-	case errors.Is(err, errRunConclusionUnreadable):
-		log.Debug("could not read a parked re-run's run; will retry", "runID", e.RunID, "error", err)
-		return nil, false
-	case err != nil:
+	case errors.Is(err, errRunGone):
 		if !p.pendingSets.claimRelease(entry) {
 			return nil, false
 		}
 		defer p.pendingSets.forget(entry)
-		log.Error("could not read a parked re-run's run; manual rerun may be required",
+		log.Error("a parked re-run's run is gone at GitHub; manual rerun may be required",
 			"runID", e.RunID, "cause", e.Cause, "error", err)
 		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonAPIError, err)
 		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
+		return nil, false
+	case err != nil:
+		log.Warn("could not read a parked re-run's run; will retry", "runID", e.RunID, "error", err)
 		return nil, false
 	case run.attempt > e.FailedAttempt:
 		if !p.pendingSets.claimRelease(entry) {

@@ -94,6 +94,11 @@ var errRerunCovered = errors.New("the run was already re-run past the attempt th
 // marked with this — see runConclusion.
 var errRunConclusionUnreadable = errors.New("the run's conclusion could not be read")
 
+// errRunGone marks a run-status read GitHub answered 404 or 410: the run, or GAG's access
+// to it, is gone, which no amount of waiting changes. Only the pending sweep tells it
+// from any other 4xx.
+var errRunGone = errors.New("the run is gone")
+
 // Reason label values for the EvictionRerunFailures counter: the recovery's re-run
 // window closed with GitHub still refusing, the window closed with the run's conclusion
 // still unreadable, or the API answered with a terminal failure (anything other than
@@ -716,6 +721,9 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	case status >= 500:
 		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
 			status, strings.TrimSpace(string(body)), errRunConclusionUnreadable)
+	case status == http.StatusNotFound || status == http.StatusGone:
+		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
+			status, strings.TrimSpace(string(body)), errRunGone)
 	case status < 200 || status > 299:
 		return runState{}, fmt.Errorf("run-status API returned %d: %s", status, strings.TrimSpace(string(body)))
 	}

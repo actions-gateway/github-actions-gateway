@@ -2,6 +2,8 @@ package provisioner
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -51,17 +53,58 @@ func (c *testClock) advance(d time.Duration) {
 // of its jobs failed, until concluded is set.
 func pendingFixture(t *testing.T) (*Provisioner, *ledgerRunAPI, *stubTarget, *atomic.Bool, *testClock, func() *Provisioner) {
 	t.Helper()
-	c, api, srv, target := ledgerFixture(t)
+	p, api, target, concluded, clock, newP, _ := pendingFixtureWith(t)
+	return p, api, target, concluded, clock, newP
+}
+
+// pendingFaults are failures pendingFixtureWith's GitHub serves ahead of the run API:
+// readStatus, where non-zero, answers that many run reads with its status code, and a
+// rerun POST waits on rerunGate, where set, before it is answered.
+type pendingFaults struct {
+	mu         sync.Mutex
+	readStatus int
+	reads      int
+	rerunGate  chan struct{}
+}
+
+func (f *pendingFaults) failReads(status, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.readStatus, f.reads = status, n
+}
+
+func pendingFixtureWith(t *testing.T) (*Provisioner, *ledgerRunAPI, *stubTarget, *atomic.Bool, *testClock, func() *Provisioner, *pendingFaults) {
+	t.Helper()
+	c, api, _, target := ledgerFixture(t)
 	target.spec = &ResolvedSpec{MaxEvictionRetries: 2}
 	concluded := &atomic.Bool{}
 	api.holdUntil = concluded.Load
+	faults := &pendingFaults{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		faults.mu.Lock()
+		status, gate := 0, faults.rerunGate
+		if r.Method == http.MethodGet && faults.reads > 0 {
+			status = faults.readStatus
+			faults.reads--
+		}
+		faults.mu.Unlock()
+		if status != 0 {
+			w.WriteHeader(status)
+			return
+		}
+		if r.Method == http.MethodPost && gate != nil {
+			<-gate
+		}
+		api.handle(w, r)
+	}))
+	t.Cleanup(srv.Close)
 	clock := newTestClock()
 	newP := func() *Provisioner {
 		p := ledgerProvisioner(c, srv)
 		p.now = clock.now
 		return p
 	}
-	return newP(), api, target, concluded, clock, newP
+	return newP(), api, target, concluded, clock, newP, faults
 }
 
 func parkOOM(p *Provisioner, target Target, pod string) {
@@ -189,4 +232,85 @@ func TestPendingRerun_PollCadenceBoundsTheReads(t *testing.T) {
 		}
 	}
 	assert.InDelta(t, 175, reads, 5)
+}
+
+// TestPendingRerun_AFailedReadRetries is the review finding on #2216: over a day of
+// polling a run read will fail now and then, a rate limit or a token that would not
+// mint, and that must cost the entry one poll rather than its re-run.
+func TestPendingRerun_AFailedReadRetries(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, concluded, clock, _, faults := pendingFixtureWith(t)
+	parkOOM(p, target, "pod-a")
+
+	for _, status := range []int{http.StatusForbidden, http.StatusTooManyRequests, http.StatusUnauthorized} {
+		faults.failReads(status, 1)
+		clock.advance(time.Hour)
+		sweepPendingAndWait(t, p, ctx, 0)
+	}
+	tokenFails := &atomic.Bool{}
+	tokenFails.Store(true)
+	p.TokenFunc = func(context.Context) (string, error) {
+		if tokenFails.CompareAndSwap(true, false) {
+			return "", assert.AnError
+		}
+		return "tok", nil
+	}
+	clock.advance(time.Hour)
+	sweepPendingAndWait(t, p, ctx, 0)
+
+	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonAPIError)))
+	concluded.Store(true)
+	clock.advance(time.Hour)
+	sweepPendingAndWait(t, p, ctx, 1)
+	assert.Equal(t, int64(1), api.reruns.Load(), "the entry survived every failed read and re-ran")
+}
+
+// TestPendingRerun_ARunThatIsGoneEndsTheWait: a 404 will not change in a day, so it is
+// reported at once rather than polled to expiry.
+func TestPendingRerun_ARunThatIsGoneEndsTheWait(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, _, clock, _, faults := pendingFixtureWith(t)
+	parkOOM(p, target, "pod-a")
+
+	faults.failReads(http.StatusNotFound, 1)
+	clock.advance(time.Minute)
+	sweepPendingAndWait(t, p, ctx, 0)
+
+	assert.Zero(t, api.reruns.Load())
+	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonAPIError)))
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Empty(t, l.Pending)
+}
+
+// TestPendingRerun_TheEntryOutlivesItsRelease: the entry leaves the ledger only once the
+// release has finished, so a process that stops mid-release leaves it for its successor
+// to release again, and that release resumes the same slot.
+func TestPendingRerun_TheEntryOutlivesItsRelease(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, concluded, clock, newP, faults := pendingFixtureWith(t)
+	parkOOM(p, target, "pod-a")
+	gate := make(chan struct{})
+	faults.mu.Lock()
+	faults.rerunGate = gate
+	faults.mu.Unlock()
+
+	concluded.Store(true)
+	clock.advance(time.Minute)
+	released := p.sweepPendingReruns(ctx)
+	require.Len(t, released, 1)
+
+	successor := newP()
+	l, _, err := successor.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	require.Contains(t, l.Pending, failureKey("4242", "build"), "the entry is still parked while its release is in flight")
+
+	close(gate)
+	<-released[0]
+	assert.Equal(t, int64(1), api.reruns.Load())
+	l, _, err = successor.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Empty(t, l.Pending)
 }

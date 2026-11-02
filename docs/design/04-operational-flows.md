@@ -628,10 +628,11 @@ The disruption arms' 15-minute window covers GitHub concluding a runner it lost,
 So the class takes its slot when it fires, with the run read and the futility checks the arms take, and parks the re-run in the failure ledger under `pending["<runID>/<job name>"]` in the same write, recording the attempt the job failed in.
 A sweep on the abandoned-run sweeper's 30-second tick reads each parked run every 30 seconds for its first 5 minutes, every 2 minutes to its first hour, then every 10, about 175 reads in a day.
 A run already past the recorded attempt has been re-run by someone, and the entry is dropped.
+A read that fails retries at the next poll, whatever the failure, since over a day of polling a rate limit or a token that would not mint is expected; only a 404 or 410 ends the wait early, as `eviction_rerun_failures_total{reason="api_error"}`.
 A concluded run is released into the arms' path with no delay: it reads the run and takes the futility checks again, its reservation resumes the slot already held, and the entry leaves the ledger once the re-run has finished.
 An entry that waits 24 hours is dropped as `eviction_rerun_failures_total{reason="run_never_concluded"}` with an `EvictionRerunFailed` Event; it is kept an hour past that so a prune on another write does not drop it unreported.
 **A restart loses no parked re-run.** The entries are in the ledger; what a new process lacks is which sets to sweep, since the AGC runs no ConfigMap informer and a ledger does not hold the owner the release needs.
-The `RunnerSet` reconciler hands every scale-set set to the sweep once per process, which reads that set's ledger and adds the set where it holds entries; the reconciler's initial list reaches every set at startup.
+The `RunnerSet` reconciler hands every scale-set set to the sweep once per process, ahead of resolving its references so a set whose template or proxy is missing is found too, which reads that set's ledger and adds the set where it holds entries; the reconciler's initial list reaches every set at startup.
 Two replicas can both release one entry: the second reservation resumes the same slot and its re-run loop stands down once the first re-run moves the run past the recorded attempt, as for any resumed disruption.
 The disruption arms keep their 15-minute window.
 
