@@ -74,7 +74,8 @@ CHECK_FAST_GATES := roadmap-check \
                     registry-mirror-wiring-check \
                     registry-mirror-catalog-deny-check \
                     webhook-versions-check \
-                    gate-needs-check
+                    gate-needs-check \
+                    gha-cache-render-check
 
 CHECK_HEAVY_GATES := build-tags-check api-fields-check lint cover-check
 
@@ -331,4 +332,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  lib/merge-driver-common-test \
                  ci/check-gate-needs-test \
                  agent/record-launch-guard-test \
-                 lib/retry-test
+                 lib/retry-test \
+                 manifest/check-gha-cache-render-test

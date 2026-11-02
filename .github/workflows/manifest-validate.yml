@@ -111,6 +111,10 @@ jobs:
               # mirrors, which `make registry-mirror-wiring-check` reconciles
               # against them (Q408 Phase 3).
               - 'deploy/dogfood-e2e/**'
+              # The Q215 per-tenant actions/cache server: yamllint'd and
+              # kubeconform'd as hand-authored operator YAML, and rendered by
+              # gha-cache-render-check below.
+              - 'deploy/gha-cache/**'
               - '.yamllint.yaml'
               - 'Makefile'
               # scripts/manifest/ is exactly this gate's backends — the validator
@@ -258,6 +262,11 @@ jobs:
       # checking nothing, the shape the gate exists to close.
       - name: every registry-mirror kustomize target renders (registry-mirror-render-check)
         run: scripts/manifest/check-registry-mirror-render.sh --require-render
+      # The same question for the Q215 tenant example, with --require-render for
+      # the reason above: its replacement can write a wrong server address at
+      # exit 0, which only a render shows.
+      - name: the gha-cache tenant example renders (gha-cache-render-check)
+        run: scripts/manifest/check-gha-cache-render.sh --require-render
 
   # Parse the shipped PromQL — the rule file's expressions and both dashboards'
   # panel queries (Q910) — and reconcile the alert rules with the docs that

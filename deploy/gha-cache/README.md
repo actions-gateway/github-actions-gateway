@@ -35,3 +35,9 @@ A worker on any other image ignores the server and keeps using GitHub's cache.
 - **Network:** workload pods may reach the server on port 3000, and nothing else may.
   The server's own egress is open, because it verifies every token against GitHub's keys and forwards non-cache calls, artifacts among them, to GitHub.
 - **Security:** token validation is on, the management API is off, and the pod runs non-root with a read-only root filesystem.
+
+## What CI checks
+
+[`scripts/manifest/check-gha-cache-render.sh`](../../scripts/manifest/check-gha-cache-render.sh) renders `example/` as shipped and with its `components` entry uncommented, on every change to this tree.
+It fails when either render does not build, when `API_BASE_URL` is not `http://gha-cache.<namespace>.svc.cluster.local:3000`, when the volume is not the one the render asks for, when a NetworkPolicy is missing, or when `CACHE_MAX_SIZE_BYTES` is not below the disk.
+A wrong replacement still renders, so the address check is the one that catches it.

@@ -320,6 +320,13 @@ registry-mirror-catalog-deny-check: ## Fail when a registry mirror is not fronte
 registry-mirror-render-check: ## Fail when a shipped registry-mirror kustomize target does not render, or a render lost a rule its base declares (Q1024)
 	scripts/manifest/check-registry-mirror-render.sh
 
+# deploy/gha-cache/example/ is what a tenant copies and applies with `kubectl
+# apply -k`, and its replacement can write the namespace into the wrong label of
+# the server's address at exit 0 (Q215).
+.PHONY: gha-cache-render-check
+gha-cache-render-check: ## Fail when the gha-cache tenant example does not render, or renders a wrong server address, volume, or budget (Q215)
+	scripts/manifest/check-gha-cache-render.sh
+
 # Capability parity between the two acquisition tiers rested on a one-time seam
 # walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
 # classic-only from birth with nothing re-walking it. This inverts the
