@@ -37,7 +37,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 |---|---|---|
 | Q555 (built) | Detection, R1 to R8 | Built without the dogfood measurement it named |
 | [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 |
-| [Q1237](../queue/Q1237.md) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
+| Q1237 (built) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
 | Q1181 (built on the scale-set tier) | R18's futility checks, on the arms that exist today | Nothing |
 | Q1183 (built on the scale-set tier) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
 | [Q1244](../queue/Q1244.md), [Q1245](../queue/Q1245.md) | What Q1183 left: the persistent deferred wait, and the misclassification alert with a paused-breaker gauge | Q1183 (built) |

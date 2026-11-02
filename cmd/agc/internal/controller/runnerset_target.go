@@ -531,12 +531,7 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 	// no longer a fail-closed ProxyNotFound. A proxyRef/defaultProxyRef that names a
 	// *missing* proxy is still fail-closed ProxyNotFound: an explicit reference to a
 	// not-yet-applied proxy must not silently fall back to direct egress.
-	proxyName, proxyNS := "", ""
-	if rs.Spec.ProxyRef != nil {
-		proxyName, proxyNS = rs.Spec.ProxyRef.Name, rs.Spec.ProxyRef.Namespace
-	} else if gw.Spec.DefaultProxyRef != nil {
-		proxyName, proxyNS = gw.Spec.DefaultProxyRef.Name, gw.Spec.DefaultProxyRef.Namespace
-	}
+	proxyName, proxyNS := proxyRefOf(rs, gw)
 	if proxyName == "" {
 		return refs, refResolution{} // direct egress: refs.proxy == nil
 	}
@@ -572,6 +567,56 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 	}
 
 	return refs, refResolution{}
+}
+
+// proxyRefOf returns the EgressProxy a set's workers egress through: its proxyRef,
+// else the gateway's defaultProxyRef, "" for direct egress. proxyNS is "" where the
+// reference names no namespace.
+func proxyRefOf(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (proxyName, proxyNS string) {
+	if rs.Spec.ProxyRef != nil {
+		return rs.Spec.ProxyRef.Name, rs.Spec.ProxyRef.Namespace
+	}
+	if gw.Spec.DefaultProxyRef != nil {
+		return gw.Spec.DefaultProxyRef.Name, gw.Spec.DefaultProxyRef.Namespace
+	}
+	return "", ""
+}
+
+var _ provisioner.EgressProxyReader = (*runnerSetTarget)(nil)
+
+// EgressProxyReadiness reads the set's egress proxy pool for a failed job's worker
+// snapshot (Q555 R7), from the cache the RunnerSet controller's EgressProxy watch
+// fills. A pool in another namespace is outside that cache, so it is reported shared
+// with no readiness; a colocated pool the cache does not hold is reported with none.
+// Nil for direct egress, or where the set or its gateway cannot be read.
+func (t *runnerSetTarget) EgressProxyReadiness(ctx context.Context) *provisioner.ProxySnapshot {
+	rs := &v2alpha1.RunnerSet{}
+	if err := t.client.Get(ctx, t.key, rs); err != nil {
+		return nil
+	}
+	gw := &v2alpha1.ActionsGateway{}
+	if rs.Spec.ProxyRef == nil {
+		if err := t.client.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}, gw); err != nil {
+			return nil
+		}
+	}
+	name, ns := proxyRefOf(rs, gw)
+	if name == "" {
+		return nil
+	}
+	if ns != "" && ns != rs.Namespace {
+		return &provisioner.ProxySnapshot{Name: name, Mode: provisioner.ProxyModeShared}
+	}
+	out := &provisioner.ProxySnapshot{Name: name, Mode: provisioner.ProxyModeColocated}
+	proxy := &v2alpha1.EgressProxy{}
+	if err := t.client.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: name}, proxy); err != nil {
+		return out
+	}
+	if c := meta.FindStatusCondition(proxy.Status.Conditions, v2alpha1.ConditionReady); c != nil {
+		out.Ready, out.Reason = string(c.Status), c.Reason
+	}
+	out.ReadyReplicas = ptr.To(proxy.Status.ReadyReplicas)
+	return out
 }
 
 // applyAttributedPort moves a worker onto the CONNECT port the pool gave this
