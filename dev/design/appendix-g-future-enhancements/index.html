@@ -1682,6 +1682,8 @@
       
         
       
+        
+      
     
     
     
@@ -2079,6 +2081,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2246,10 +2276,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2267,8 +2297,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3484,7 +3514,7 @@ Operator guidance: <a href="../../operations/tenant-onboarding/#step-2-create-th
 <h2 id="g12-warm-worker-pool-minidleworkers">G.12. Warm Worker Pool (<code>minIdleWorkers</code>)<a class="headerlink" href="#g12-warm-worker-pool-minidleworkers" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p><strong>Not the same as node-/workspace-layer warmth.</strong> This is about holding <strong>pre-created worker pods</strong> so a job skips pod scheduling.
-It is <em>not</em> image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> and the Q211 guide) and <em>not</em> build-/model-cache warmth (a cache volume mounted in the worker <code>podTemplate</code> — a raw PVC works today; a <em>managed</em> backend is <a href="../../queue/Q215/">Q215</a>).
+It is <em>not</em> image warmth (a peer-to-peer mirror / pre-pull DaemonSet — see <a href="#g11-worker-scale-up-rate-limiting-anti-stampede">G.11</a> and the Q211 guide) and <em>not</em> build-/model-cache warmth (a cache volume mounted in the worker <code>podTemplate</code> — a raw PVC works today; for <code>actions/cache</code>, the <a href="../../operations/in-cluster-cache/">in-cluster cache server</a>).
 Those cheaper layers should be exhausted first; this item is the residual.</p>
 </blockquote>
 <p><strong>Current behavior.</strong> Worker pods are created <strong>reactively</strong> the moment a job is acquired from the broker long-poll, with a just-in-time (JIT) runner config bound to that job, and released on completion (<a href="../02-architecture/">§2 architecture</a>).
@@ -3511,7 +3541,7 @@ So GAG is already "warm" at the layer ARC's <code>minRunners &gt; 0</code> exist
 </tr>
 <tr>
 <td>Build cache / <strong>model weights</strong> (the real GPU/ML startup cost)</td>
-<td>Cache volume in the <code>podTemplate</code> (raw PVC works today; managed backend = <a href="../../queue/Q215/">Q215</a>).</td>
+<td>Cache volume in the <code>podTemplate</code> (raw PVC works today); <code>actions/cache</code> and BuildKit's <code>type=gha</code> can use the <a href="../../operations/in-cluster-cache/">in-cluster cache server</a>.</td>
 </tr>
 <tr>
 <td><strong>Pod scheduling</strong></td>

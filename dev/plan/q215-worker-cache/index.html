@@ -1398,6 +1398,8 @@
       
         
       
+        
+      
     
     
     
@@ -1795,6 +1797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1962,10 +1992,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1983,8 +2013,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2766,6 +2796,39 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-v1000-re-run-2026-11-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The v10.0.0 re-run (2026-11-01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-kata-run-2026-11-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Kata run (2026-11-01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-fork-pull-request-run-2026-11-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The fork pull request run (2026-11-01)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#open-decisions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2798,7 +2861,7 @@
 
 <h1 id="in-cluster-worker-cache--q215">In-Cluster Worker Cache — Q215<a class="headerlink" href="#in-cluster-worker-cache--q215" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: design settled and spiked 2026-10-27; the opt-in <code>cache-runner</code> image is built, nothing else is.</strong> Revived on a tenant's request for an in-cluster cache.
+<p><strong>Status: design settled and spiked 2026-10-27; the opt-in <code>cache-runner</code> image is built and published with each release, and falcondev v10.0.0 closes the upload gap that phase 1 waited on.</strong> Revived on a tenant's request for an in-cluster cache.
 The primary case is the untrusted-PR tenant, where a shared cache is a vector for compromise by cache poisoning.
 The same design serves a trusted tenant's <code>actions/cache</code> and a Docker build's layer cache, on every profile in <a href="../../operations/reference-architectures/">reference-architectures.md</a>.
 The umbrella goal and its definition of done are in <a href="../caching-and-worker-storage/">caching-and-worker-storage.md</a>; this file is the design that goal calls for.</p>
@@ -2823,7 +2886,7 @@ That holds for the cache entries themselves; the transport that carries their by
 <p>Every action receives <code>ACTIONS_RUNTIME_TOKEN</code>, a JWT GitHub signs.
 Its <code>ac</code> claim lists the job's cache scopes with a permission each, and its <code>repository_id</code> claim names the repository.
 The claim is undocumented: one decode in <a href="https://github.com/actions/toolkit/issues/1053">actions/toolkit#1053</a> (2022) shows <code>{"Scope":"refs/heads/master","Permission":3}</code>.</p>
-<p><a href="https://github.com/falcondev-oss/github-actions-cache-server">falcondev-oss/github-actions-cache-server</a> (MIT) verifies that token against the JWKS at <code>token.actions.githubusercontent.com</code>, takes the scope set from <code>ac</code>, writes only into a scope whose permission is at least 2, and keys every entry by scope and repository (<code>lib/scope.ts</code>, <code>CreateCacheEntry.post.ts</code> at v9.8.0).
+<p><a href="https://github.com/falcondev-oss/github-actions-cache-server">falcondev-oss/github-actions-cache-server</a> (MIT) verifies that token against the JWKS at <code>token.actions.githubusercontent.com</code>, takes the scope set from <code>ac</code>, writes only into a scope whose permission carries the write bit (2), and keys every entry by that scope and the token's repository (<code>cache_scope</code> and <code>WRITE_PERMISSION</code> in <code>src/scope.rs</code>, <code>save_identity</code> in <code>src/routes/cache.rs</code>, at v10.0.0).
 A client-supplied scope is never read.</p>
 <p>That makes the server apply GitHub's policy exactly, including whatever GitHub decides for an event an administrator marks untrusted, with no reimplementation in the gateway.
 The spike confirmed the claim is present on a live token: see <a href="#the-spike-2026-10-27">the spike</a>.</p>
@@ -2855,7 +2918,7 @@ The build fails unless the literal is in that assembly alone, exactly once, befo
 Earlier attempts, <a href="https://github.com/actions/runner/pull/3411">actions/runner#3411</a> and <a href="https://github.com/actions/runner/pull/3906">#3906</a>, were closed without a maintainer reply.</p>
 <h2 id="design">Design<a class="headerlink" href="#design" title="Permanent link">&para;</a></h2>
 <ol>
-<li><strong>A per-tenant cache server</strong>, falcondev's, in the tenant namespace, with token validation on.
+<li><strong>A per-tenant cache server</strong>, falcondev's, in the tenant namespace, with token validation on, pinned to <code>10.0.0@sha256:05c4d9e7169f525f2b74d412c4a081aeec5446a017ec88bae668e63ebfb16aa9</code>.
    It serves <code>CacheService</code> from its own storage and forwards every other results call to <code>https://results-receiver.actions.githubusercontent.com</code>, so artifacts keep working.</li>
 <li><strong>Workers point at it</strong> by running <code>cache-runner</code> with <code>ACTIONS_RESULTS_URL</code> set to the server's <code>svc.cluster.local</code> name, which the default <code>NO_PROXY</code> keeps off the egress proxy.</li>
 <li><strong>NetworkPolicy</strong> admits worker pods to the server's port and nothing else to it.
@@ -2866,19 +2929,19 @@ Earlier attempts, <a href="https://github.com/actions/runner/pull/3411">actions/
 <ol>
 <li><strong>Selectable by NetworkPolicy</strong>, as the mirror is.</li>
 <li><strong>Scope from GitHub's signed token.</strong> The three <code>CacheService</code> calls (reserve an entry, finalize it, look one up) are checked against the scopes and repository in a verified <code>ACTIONS_RUNTIME_TOKEN</code>; an unverifiable token gets nothing.
-   The byte transfers those calls hand out are not, as the residuals below say.</li>
+   The uploads those calls hand out are authorized by a per-upload capability instead, and downloads by an unguessable ID, as the residuals below say.</li>
 <li><strong>Writes land only in a scope the token grants write.</strong> GitHub grants a fork pull request <code>refs/pull/&lt;n&gt;/merge</code> alone, and the default-branch scope only to its listed triggers.</li>
 <li><strong>Tenant-local storage.</strong> One server holds one tenant's entries, in the per-tenant mode; the shared modes give this up, as <a href="#tenancy-modes">tenancy modes</a> says.</li>
 </ol>
-<p>Residuals, each read from falcondev v9.8.0 (<code>c866ae4</code>) and none measured:</p>
+<p>Residuals, each read from falcondev v10.0.0 (<code>c829dd6</code>), the first Rust release; the upload's is also measured:</p>
 <ul>
 <li><strong>The ref boundary's own gap is GitHub's:</strong> a workflow that runs fork code in a default-branch context can write that scope.
   This design reproduces the boundary and does not claim more.</li>
-<li><strong>The blob transport takes no token.</strong> <code>PUT /upload/&lt;id&gt;</code> and <code>PUT /devstoreaccount1/upload/&lt;id&gt;</code> read no <code>Authorization</code> header, so while an upload is open its ID is the only credential: 10 decimal digits from <code>customAlphabet</code> in <code>lib/helpers.ts</code>, about 33 bits.
-  An unknown ID gets <code>201</code> with nothing written, so a guess learns nothing from the reply.
-  <code>GET /download/&lt;id&gt;</code> is tokenless too, keyed by a random UUID.
-  GitHub hands out signed SAS URLs for the same step, so whether a job can plant parts into another job's open upload has to be measured or closed before <a href="../../queue/Q215/">Q215</a> ships <code>deploy/gha-cache/</code>.</li>
-<li><strong>The server holds every job's runtime token in flight.</strong> It forwards each non-cache results call to GitHub with the caller's bearer token (<code>routes/[...path].ts</code>), so compromising the server exposes those tokens until they expire.</li>
+<li><strong>Uploads need a per-upload capability, and downloads need none.</strong> <code>CreateCacheEntry</code> appends 256 random bits to the upload URL as <code>?sig=</code>, and a <code>PUT</code> without the matching value gets <code>403</code> (<code>authorize_upload</code> in <code>src/storage.rs</code>, a constant-time compare against a stored SHA-256).
+  <code>GET /download/&lt;id&gt;</code> takes no token, keyed by a random UUID.
+  Measured on both releases in a local container with a fixture token: on v9.8.0 (2026-10-27) a <code>PUT</code> carrying no credential got <code>201</code> and its bytes were what the entry restored; on v10.0.0 (2026-11-01) a <code>PUT</code> without the <code>sig</code> or with a wrong one got <code>403</code>, and the issued URL got <code>201</code> and round-tripped.
+  The fix is falcondev #308, which closed #299 and shipped in v10.0.0.</li>
+<li><strong>The server holds every job's runtime token in flight.</strong> It forwards each non-cache results call to GitHub with the caller's bearer token (<code>forwardable</code> in <code>src/routes/passthrough.rs</code> drops only hop-by-hop headers), so compromising the server exposes those tokens until they expire.</li>
 <li><strong>No job-lifetime credentials.</strong> A token stays valid until its own expiry, as it does against GitHub.</li>
 </ul>
 <h3 id="tenancy-modes">Tenancy modes<a class="headerlink" href="#tenancy-modes" title="Permanent link">&para;</a></h3>
@@ -2897,16 +2960,16 @@ So, as §H.9 says of a shared proxy, the shared modes are for cooperating tenant
 <h3 id="delivery-phases">Delivery phases<a class="headerlink" href="#delivery-phases" title="Permanent link">&para;</a></h3>
 <h4 id="phase-1-per-tenant-q215">Phase 1: per tenant (Q215)<a class="headerlink" href="#phase-1-per-tenant-q215" title="Permanent link">&para;</a></h4>
 <p>One stock falcondev server per tenant, in the tenant namespace.
-Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream.
-The steps are on <a href="../../queue/Q215/">Q215</a>, the tokenless upload first.</p>
+Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream that v10.0.0 does not already ship.
+It shipped with Q215, validated on kind, under Kata and with a fork pull request (<a href="#the-v1000-re-run-2026-11-01">the runs below</a>).</p>
 <h4 id="phase-2-sharing-q1225">Phase 2: sharing (Q1225)<a class="headerlink" href="#phase-2-sharing-q1225" title="Permanent link">&para;</a></h4>
 <p>Phase 2 adds the shared and platform-operated modes once phase 1 ships.
-Of what a shared server needs, falcondev v9.8.0 has only storage isolation, read from source and not measured:</p>
+Of what a shared server needs, falcondev v10.0.0 has only storage isolation, read from source and not measured:</p>
 <table>
 <thead>
 <tr>
 <th>A shared server needs</th>
-<th>falcondev v9.8.0</th>
+<th>falcondev v10.0.0</th>
 </tr>
 </thead>
 <tbody>
@@ -2916,15 +2979,15 @@ Of what a shared server needs, falcondev v9.8.0 has only storage isolation, read
 </tr>
 <tr>
 <td>A budget per tenant</td>
-<td>No: <code>CACHE_MAX_SIZE_BYTES</code> is one budget for the whole server, evicted least-recently-read first (<code>enforceStorageBudget</code> in <code>lib/storage.ts</code>), so one tenant's saves evict another's entries.</td>
+<td>No: <code>CACHE_MAX_SIZE_BYTES</code> is one budget for the whole server, evicted least-recently-read first (<code>enforce_storage_budget</code> in <code>src/storage.rs</code>), so one tenant's saves evict another's entries.</td>
 </tr>
 <tr>
 <td>Metrics per tenant</td>
-<td>No: <code>cache_requests_total</code>, <code>cache_uploads_total</code> and <code>cache_storage_bytes</code> carry no repository or owner label (<code>lib/metrics.ts</code>).</td>
+<td>No: <code>cache_requests_total</code>, <code>cache_uploads_total</code> and <code>cache_storage_bytes</code> carry no repository or owner label (<code>src/metrics.rs</code>).</td>
 </tr>
 <tr>
 <td>Admitting only granted owners</td>
-<td>No: it accepts a token from any repository GitHub signs, checking the signature and claims but not the owner (<code>getCacheScope</code> in <code>lib/scope.ts</code>), so the NetworkPolicy grant is the only caller boundary.</td>
+<td>No: it accepts a token from any repository GitHub signs, checking the signature and claims but not the owner (<code>cache_scope</code> in <code>src/scope.rs</code>), so the NetworkPolicy grant is the only caller boundary.</td>
 </tr>
 </tbody>
 </table>
@@ -2932,7 +2995,8 @@ Of what a shared server needs, falcondev v9.8.0 has only storage isolation, read
 None of the three gaps is requested upstream: the titles of falcondev's last 200 issues and pull requests, searched 2026-10-27, hold two metrics requests (#72, #297) and one on storage rotation (#219), none of them per tenant.</p>
 <p>The work, in order:</p>
 <ol>
-<li><strong>Feature requests upstream</strong> for an owner allowlist, a budget per owner, and an owner label on the metrics, offering the pull requests.
+<li><strong>Feature requests upstream</strong> for an owner allowlist, a budget per owner, and an owner label on the metrics, one issue each.
+   Since v9.10.0 falcondev takes no outside pull requests (its <code>AGENTS.md</code>: "External contributions are disabled"), so the issues are the whole upstream ask.
    An owner label rather than a repository one keeps the series count to the number of tenants.</li>
 <li><strong>A CRD shaped like <code>EgressProxy</code></strong> that grants a provider's server to other namespaces, as <a href="#tenancy-modes">tenancy modes</a> describes, configuring each grant's owner on the server once upstream supports it.</li>
 <li><strong>If upstream declines</strong>, the CRD runs one stock server per granted tenant instead, in the provider namespace and on the provider's bill: per-tenant budget, metrics and admission at the cost of a pod and a volume per grant, the cache's counterpart of <code>EgressProxy</code>'s <code>PerConsumerPort</code>.
@@ -2954,6 +3018,39 @@ The fixture workflows ran on throwaway branches and were never merged.</p>
 The toolkit prints that only when the server answers a lookup with no match; an unreachable server prints <code>Failed to restore</code> instead.
 The server's <code>cache_requests_total</code> read <code>hit</code> 1 and <code>miss</code> 2 after both runs: the hit is S1's restore and one miss is this lookup; the second miss is unattributed.</p>
 <p><strong>Not measured.</strong> A fork pull request's scope, which needs a fork; BuildKit's <code>type=gha</code> cache, which needs a Docker daemon in the job and rides the same URL by source read only; and the tight-egress profile, since kindnet does not enforce egress negatives.</p>
+<h2 id="the-v1000-re-run-2026-11-01">The v10.0.0 re-run (2026-11-01)<a class="headerlink" href="#the-v1000-re-run-2026-11-01" title="Permanent link">&para;</a></h2>
+<p>The same kind setup, fresh, with this branch's gateway images and <code>cache-runner</code>, falcondev <code>10.0.0</code> by digest, and the server deployed from <code>deploy/gha-cache/</code> rather than the spike's hand-written manifests: non-root, read-only root filesystem, and the base's two NetworkPolicies.</p>
+<ul>
+<li><strong>Save and restore: hold.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361268570">Run 41361268570</a> read <code>ACTIONS_RESULTS_URL</code> as the in-cluster server, saved key <code>q215-41361268570-1</code>, restored it in a second job on another worker pod, and round-tripped the artifact through the server's forward, <code>cmp</code> matching the two.
+  The server counted <code>cache_uploads_total</code> 1, a hit of 1, a miss of 0 and 278 bytes stored, and GitHub's cache held no <code>q215-</code> key while the same listing returned others.</li>
+<li><strong>Sibling branch: holds.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361503439">Run 41361503439</a> asked for the same key from another branch and got <code>Cache not found</code>, and the server's miss count went from 0 to 1, so the miss is the server's answer, not a lost connection.</li>
+<li><strong>The ingress policy: holds for the API server.</strong> Reading <code>/metrics</code> through the API server's service proxy timed out, because the server admits only workload pods; the readings above came through <code>kubectl port-forward</code>, which enters through the kubelet.</li>
+</ul>
+<h2 id="the-kata-run-2026-11-01">The Kata run (2026-11-01)<a class="headerlink" href="#the-kata-run-2026-11-01" title="Permanent link">&para;</a></h2>
+<p>The dogfood GKE cluster's e2e tenant (<code>gag-dogfood-e2e</code>), brought up by <code>e2e-start.sh</code> with the Kata overlay, so its workers carry only the GMC's direct-mode default-deny and the mirror egress policy.
+A temporary namespaced <code>RunnerTemplate</code> ran <code>cache-runner</code> (this branch at <code>0494e0c</code>) under <code>runtimeClassName: kata</code> on the e2e pool, and the API server admitted it; the server came from a copy of <code>deploy/gha-cache/example/</code> in that namespace.
+The worker reported kernel <code>6.18.35</code>, the Kata guest's rather than the node's.</p>
+<ul>
+<li><strong>Save, restore and artifacts: hold.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372318482">Run 41372318482</a> saved <code>q215-kata-41372318482</code>, restored it in a second job on another worker pod, and round-tripped an artifact.
+  The server counted 1 upload, a hit of 1, a miss of 0 and 279 bytes stored, and GitHub's cache held no <code>q215-kata</code> key while the same listing returned others.</li>
+<li><strong>Sibling branch: holds.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372555845">Run 41372555845</a> got <code>Cache not found</code> for the same key, and the server's miss count went from 0 to 1.</li>
+<li><strong>The server and GitHub answer; the open internet does not.</strong> From the Kata worker, the server's <code>/health</code> and <code>api.github.com</code> returned 200, and <code>example.com</code> returned nothing within 20 seconds.</li>
+<li><strong>Azure blob storage answers.</strong> <code>productionresultssa0</code> and <code>productionresultssa19.blob.core.windows.net</code> both returned HTTP 400 from the worker, in <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41371432425">run 41371432425</a>, which gated on them being blocked.
+  Their addresses fall in <code>20.209.226.0/23</code> and <code>20.209.112.0/23</code>, two of the 8,419 ranges the GMC's workload policy admitted on 443 that evening; the GMC merges the <code>api</code>, <code>actions</code> and <code>web</code> keys of GitHub's <code>/meta</code> (<code>cmd/gmc/internal/controller/ipranges.go</code>), and both ranges come from <code>actions</code>.
+  That is by design: the runner itself uploads to blob storage, and <a href="../../design/network-architecture/">network-architecture.md</a> lists <code>*.blob.core.windows.net</code> among the GitHub hostnames for every egress backend.
+  So a worker under this profile can reach GitHub's own cache storage, and the premise that it cannot does not hold.</li>
+</ul>
+<h2 id="the-fork-pull-request-run-2026-11-01">The fork pull request run (2026-11-01)<a class="headerlink" href="#the-fork-pull-request-run-2026-11-01" title="Permanent link">&para;</a></h2>
+<p>The kind setup again, fresh at <code>6513cf2</code>, with a public fork (<code>karlkfi/gag-q215-fork</code>) opening draft PR #2222 against a spike base branch carrying one workflow.
+Each job printed its runtime token's <code>ac</code> claim, the cache scopes it may read (1) or write (3), and looked up two fixed keys without downloading them.</p>
+<ul>
+<li><strong>A fork pull request writes its own scope and reads its base's.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375170369">Run 41375170369</a>, from <code>karlkfi/gag-q215-fork</code> with <code>fork=true</code>, carried <code>refs/pull/2222/merge</code> at 3 and the base branch and <code>main</code> at 1.
+  It found the base branch's entry and saved its own; falcondev accepted the save.</li>
+<li><strong>The base branch cannot restore it.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375417452">Run 41375417452</a>, a second push to the base, got <code>Cache not found</code> for the pull request's key while finding its own.</li>
+<li><strong>The entry is there, under the pull request's scope.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375766235">Run 41375766235</a>, the pull request's next push, found it.</li>
+<li><strong>The base branch's first push</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375018321">run 41375018321</a>) saved the base entry the pull request read, with write on its own branch and read on <code>main</code>.</li>
+<li>The server counted 2 uploads, 4 hits and 4 misses across the four runs, and GitHub's cache held no <code>q215-fork</code> key.</li>
+</ul>
 <h2 id="open-decisions">Open decisions<a class="headerlink" href="#open-decisions" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Eviction.</strong> falcondev's defaults are 90 days unused and a volume-percentage cap.

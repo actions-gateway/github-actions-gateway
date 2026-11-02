@@ -1398,6 +1398,8 @@
       
         
       
+        
+      
     
     
     
@@ -1795,6 +1797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1962,10 +1992,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1983,8 +2013,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2926,7 +2956,7 @@ Kata already makes Docker-in-Docker unprivileged, so closing Q727 moves the untr
 Bundling them would give 1.6 two <code>L</code> items on unrelated axes and a tag waiting on the slower.</p>
 <p><strong>Two rows on that axis need a decision before 1.7 is scoped, and neither is this release's.</strong></p>
 <ul>
-<li><a href="../../../queue/Q215/">Q215</a> reads as revived and has not been moved.
+<li>Q215 reads as revived and has not been moved.
   Its trigger is demand for an in-cluster cache <strong>or</strong> Q408 Phase 1 landing and removing the working one, and Phase 1 gated every <code>actions/cache</code> step and the bake's <code>type=gha</code> cache to the hosted lane on 2026-08-05.
   Whether that counts as the trigger firing turns on whether "the working one" means GAG's own self-hosted lane or a tenant's, which the row does not say.
   1.7 scoping has to settle it; leaving a <code>deferred</code> row whose trigger may have fired is the failure mode <a href="../../release-ladder/#the-rule-this-establishes">release-ladder.md</a> names.</li>

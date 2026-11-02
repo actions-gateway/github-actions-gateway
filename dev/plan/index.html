@@ -1398,6 +1398,8 @@
       
         
       
+        
+      
     
     
     
@@ -1795,6 +1797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1962,10 +1992,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1983,8 +2013,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2748,11 +2778,6 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>⚠️ Packaging (Q12) now live-validated end-to-end (Q219, §1.5 — found+fixed an egress-proxy registration bug); load harness (Q13), polaris + kube-bench (Q14) shipped. Only staging-cluster residuals remain: 1,000-session proxy-HPA-under-burst + gVisor isolation (<a href="../queue/Q15/">Q15</a>, deferred)</td>
 </tr>
 <tr>
-<td><a href="release-1.7/">release-1.7.md</a></td>
-<td>The 1.7 release gate: untrusted-PR CI on Kata, via Q408 Phases 2 to 5 (the in-cluster registry pull-through mirror, the job-side wiring, and deleting the e2e tenant's open-egress NetworkPolicy), plus the three questions 1.6 left for this scope</td>
-<td>✅ Shipped as <code>v1.7.0</code> on 2026-08-30, validated on <code>rc.3</code>. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Of 1.6's three hand-offs, <a href="../queue/Q215/">Q215</a>'s trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), Q986 has landed, so Definition of Done #5 is claimed rather than narrowed, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in. Three candidates: <code>rc.1</code> failed the admission ladder's quota rung on a real product defect (Q1035, the advertisement recomputed every long-poll but published only by a reconcile an idle set never triggered), <code>rc.2</code> passed with the fix, and <code>rc.3</code> was cut because Q1026 narrowed the shared mirror set's ingress peer afterwards, a manifest that ships in no image and no chart and so is invisible to <code>check-artifact-unchanged.sh</code></td>
-</tr>
-<tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
 <td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: <a href="../queue/Q1167/">Q1167</a>, <a href="../queue/Q273/">Q273</a> and <a href="../queue/Q264/">Q264</a>, blocked behind it; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, blocked on all four</td>
@@ -2802,17 +2827,17 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a></td>
 <td>The umbrella goal: a map, a threat model for the untrusted contributor, a definition of done, and the residual risk accepted. Delegates all design to q408 and does not restate it</td>
-<td>ⓘ Ongoing goal doc. Kernel isolation, the pod floor, the metadata assertion and now the network layer are shipped (Q408, validated 2026-08-28), taking Definition of Done items 1 to 3; the evidence layer closed with Q986 (Definition of Done #5), and the cache layer stays open on <a href="../queue/Q215/">Q215</a></td>
+<td>ⓘ Ongoing goal doc. Kernel isolation, the pod floor, the metadata assertion and now the network layer are shipped (Q408, validated 2026-08-28), taking Definition of Done items 1 to 3; the evidence layer closed with Q986 (Definition of Done #5), and the cache layer's per-tenant server shipped with Q215, though whether tight egress reaches GitHub's own cache is open on <a href="../queue/Q1253/">Q1253</a></td>
 </tr>
 <tr>
 <td><a href="caching-and-worker-storage/">caching-and-worker-storage.md</a></td>
 <td>The umbrella goal for the three caches routinely conflated as one (image pulls, <code>actions/cache</code>, build layers) plus RWX job storage: why closing untrusted-PR egress removes the cache that works today, why one backend can still serve several content classes, and why the read-only mirror contract cannot cover a writable job cache</td>
-<td>ⓘ Ongoing goal doc. The RWX storage half closed 2026-08-24 (Q719); every cache half is unbuilt. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes <a href="../queue/Q215/">Q215</a>'s isolation review as the design, and widens Q539/Q540 to grade the contract per content class</td>
+<td>ⓘ Ongoing goal doc. The RWX storage half closed 2026-08-24 (Q719), and the <code>actions/cache</code> half's per-tenant server with Q215 on 2026-11-01; build layers ride the same server unmeasured. States that <code>actions/cache</code> already works and the roadmap said otherwise; reframes Q215's isolation review as the design, and widens Q539/Q540 to grade the contract per content class</td>
 </tr>
 <tr>
 <td><a href="q215-worker-cache/">q215-worker-cache.md</a></td>
 <td>The in-cluster <code>actions/cache</code> and build-layer cache: a per-tenant cache server that takes each job's scope from GitHub's signed runtime token, reached through an opt-in runner image patched to take <code>ACTIONS_RESULTS_URL</code> from the pod, and the kind spike against real GitHub</td>
-<td>⚠️ Designed and spiked 2026-10-27; the <code>cache-runner</code> image is built. Publishing it, the reference architecture and the fork-PR scope reading are open on <a href="../queue/Q215/">Q215</a>; retiring the patch is <a href="../queue/Q1224/">Q1224</a></td>
+<td>ⓘ Phase 1 shipped with Q215: <code>cache-runner</code> published, the <code>deploy/gha-cache/</code> base and its operator page, validated on kind, under Kata and with a fork pull request on 2026-11-01. Phase 2, sharing, is <a href="../queue/Q1225/">Q1225</a>; retiring the patch is <a href="../queue/Q1224/">Q1224</a></td>
 </tr>
 <tr>
 <td><a href="gpu-and-accelerated-ci/">gpu-and-accelerated-ci.md</a></td>
@@ -3090,6 +3115,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/release-1.6/">archive/release-1.6.md</a></td>
 <td>The 1.6 release gate: the last <a href="arc-parity/">ARC parity</a> row a scheduled release can close (Q727, the non-privileged <code>container:</code> path), the nine merged changes the release already carries, and why untrusted-PR CI moved to 1.7</td>
 <td>Archived 2026-09-12, Q894. Shipped as <code>v1.6.0</code> on 2026-08-26, validated on <code>rc.2</code>. Q727 closed 2026-08-25 as a permanent decline of ARC's <code>containerMode: kubernetes</code> mechanism, costed in <a href="q727-container-steps/">q727-container-steps.md</a>, so 1.6's parity content is a docs change on top of nine merged features; Q719 closed 2026-08-24 and settled the storage half. Criterion 4 needed no work: <a href="../queue/Q765/">Q765</a>'s appliance trigger has not fired and the untested markers that satisfy its fallback are intact. <code>rc.1</code> was superseded before it was ever validated, when three dependency bumps moved 11 files of the released surface and <code>check-artifact-unchanged.sh</code> caught it; <code>rc.2</code> passed the dogfood gate at 75 passed, 0 failed and 13 skipped, with both sizing profiles Active and the signed v2 CRD artifact verifying</td>
+</tr>
+<tr>
+<td><a href="archive/release-1.7/">archive/release-1.7.md</a></td>
+<td>The 1.7 release gate: untrusted-PR CI on Kata, via Q408 Phases 2 to 5 (the in-cluster registry pull-through mirror, the job-side wiring, and deleting the e2e tenant's open-egress NetworkPolicy), plus the three questions 1.6 left for this scope</td>
+<td>✅ Shipped as <code>v1.7.0</code> on 2026-08-30, validated on <code>rc.3</code>. Q408 was the only <code>1.7-gate</code> row and it closed 2026-08-28 with all five phases done: the mirrors measured serving, the wiring measured riding them, the enforcement measured by in-job negatives on a <code>runtimeClassName: kata</code> worker, and the docs flipped so the recipe is the supported posture. Of 1.6's three hand-offs, Q215's trigger is settled as unfired (the tenant path it names still works through the proxy allowlist), Q986 has landed, so Definition of Done #5 is claimed rather than narrowed, and the default-versus-opt-in conflict is resolved in Phase 5: enforcement shipped as a policy deletion with no template change, so the network posture is the default while the pod shape stays opt-in. Three candidates: <code>rc.1</code> failed the admission ladder's quota rung on a real product defect (Q1035, the advertisement recomputed every long-poll but published only by a reconcile an idle set never triggered), <code>rc.2</code> passed with the fix, and <code>rc.3</code> was cut because Q1026 narrowed the shared mirror set's ingress peer afterwards, a manifest that ships in no image and no chart and so is invisible to <code>check-artifact-unchanged.sh</code></td>
 </tr>
 <tr>
 <td><a href="archive/release-1.8/">archive/release-1.8.md</a></td>

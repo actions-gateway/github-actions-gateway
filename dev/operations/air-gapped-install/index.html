@@ -1406,6 +1406,8 @@
       
         
       
+        
+      
     
     
     
@@ -1952,6 +1954,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2122,10 +2152,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -2143,8 +2173,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2957,12 +2987,12 @@ Only the GMC image is pulled by the chart itself; the AGC, proxy, wrapper, and w
 <blockquote>
 <p>The <strong>wrapper</strong> is on by default: the chart always sets <code>WRAPPER_IMAGE</code>, and the GMC rejects a floating wrapper tag at startup exactly as it does for <code>agc</code>/<code>proxy</code>, so you must mirror it and pin <code>wrapper.image.digest</code> like the others.
 It is a tiny (~2 MB) <code>FROM scratch</code> image the AGC injects into each worker pod, letting the runner container be the unmodified upstream <code>actions-runner</code>.
-See <a href="../release/#the-worker-images-wrapper-worker-and-build-runner">release.md § The worker images</a>.</p>
+See <a href="../release/#the-worker-images-wrapper-worker-build-runner-and-cache-runner">release.md § The worker images</a>.</p>
 <p>The worker default is the upstream digest-pinned <code>ghcr.io/actions/actions-runner</code>.
-The project also publishes two first-party runner images: <code>ghcr.io/actions-gateway/worker</code>, and <code>ghcr.io/actions-gateway/build-runner</code> for jobs needing <code>docker compose</code> or a Docker CLI and buildx GAG pins itself (<a href="../runner-template-library/">runner templates</a>).
-If a tenant uses either, mirror that ref instead.
+The project also publishes three first-party runner images: <code>ghcr.io/actions-gateway/worker</code>, <code>ghcr.io/actions-gateway/build-runner</code> for jobs needing <code>docker compose</code> or a Docker CLI and buildx GAG pins itself (<a href="../runner-template-library/">runner templates</a>), and <code>ghcr.io/actions-gateway/cache-runner</code> for jobs using an in-cluster cache.
+If a tenant uses one of them, mirror that ref instead.
 Either way the worker image is set per tenant on the <code>RunnerGroup</code>, so it is configured during tenant onboarding, not at chart install.
-See <a href="../release/#the-worker-images-wrapper-worker-and-build-runner">release.md § The worker images</a>.</p>
+See <a href="../release/#the-worker-images-wrapper-worker-build-runner-and-cache-runner">release.md § The worker images</a>.</p>
 </blockquote>
 <p>Copy the four chart-referenced image digests (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>wrapper</code>) from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases">release notes</a> for the version you are installing; that is the count the mirror loop below uses.
 The worker image is the fifth row of the table above and is chosen per tenant rather than by the chart, so mirror whichever ref your tenants set.

@@ -1519,6 +1519,8 @@
       
         
       
+        
+      
     
     
     
@@ -1916,6 +1918,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2083,10 +2113,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2104,8 +2134,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2995,20 +3025,13 @@ ARC models the first two as one person, which is coherent for a single-owner clu
 <td><a href="../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">declined 2026-08-25</a>; Kata DinD is the answer, and needs nested virtualization</td>
 </tr>
 <tr>
-<td>In-cluster cache</td>
-<td>GitLab Runner, managed services. <strong>Not ARC</strong></td>
-<td><a href="../roadmap/">worker cache backend</a></td>
-</tr>
-<tr>
 <td>GHES tested on a real appliance</td>
 <td>ARC</td>
 <td><a href="../features/">flagged untested</a>; needs an operator with one</td>
 </tr>
 </tbody>
 </table>
-<p>Two footnotes on that table.</p>
-<p><strong>Cache is usually misread.</strong> <code>actions/cache</code> works on GAG today; what is missing is a cache <em>inside</em> the cluster.
-ARC has none either, so this is not a reason to prefer ARC.</p>
+<p>One footnote on that table.</p>
 <p><strong>Install base has no engineering answer.</strong> If being the first production deployment is unacceptable, that settles it.
 The only counterweight is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a <a href="../design/appendix-a-capacity-slos/">published retraction</a> of the project's own best number once it proved unmeasurable.</p>
 <h2 id="reading-further">Reading further<a class="headerlink" href="#reading-further" title="Permanent link">&para;</a></h2>

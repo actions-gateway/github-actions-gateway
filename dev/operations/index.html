@@ -1406,6 +1406,8 @@
       
         
       
+        
+      
     
     
     
@@ -1806,6 +1808,34 @@
   
   
     <li class="md-nav__item">
+      <a href="in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1976,10 +2006,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1997,8 +2027,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2727,6 +2757,11 @@
 <td><a href="worker-shared-storage/">worker-shared-storage.md</a></td>
 <td>Tenant operator, Platform engineer</td>
 <td>Reference architecture for a <code>ReadWriteMany</code> volume several jobs share: the <code>podTemplate</code> shape, the <code>fsGroup</code> that decides whether the runner can write, which storage classes it has been exercised against, and what ARC's <code>containerMode: kubernetes</code> does and does not port to.</td>
+</tr>
+<tr>
+<td><a href="in-cluster-cache/">in-cluster-cache.md</a></td>
+<td>Tenant operator, Platform engineer</td>
+<td>Serve <code>actions/cache</code> and BuildKit's <code>type=gha</code> cache from a per-tenant server in the tenant's own namespace: how a job reaches it, deploying it from <code>deploy/gha-cache/</code>, checking it works, its defaults and its limits.</td>
 </tr>
 <tr>
 <td><a href="in-runner-image-builds/">in-runner-image-builds.md</a></td>

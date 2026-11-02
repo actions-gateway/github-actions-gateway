@@ -233,6 +233,10 @@
          <lastmod>2026-11-02</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/operations/in-cluster-cache/</loc>
+         <lastmod>2026-11-02</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/operations/in-runner-image-builds/</loc>
          <lastmod>2026-11-02</lastmod>
     </url>
@@ -474,10 +478,6 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/q727-container-steps/</loc>
-         <lastmod>2026-11-02</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/plan/release-1.7/</loc>
          <lastmod>2026-11-02</lastmod>
     </url>
     <url>
@@ -986,6 +986,10 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/plan/archive/release-1.6/</loc>
+         <lastmod>2026-11-02</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/plan/archive/release-1.7/</loc>
          <lastmod>2026-11-02</lastmod>
     </url>
     <url>
@@ -1505,6 +1509,10 @@
          <lastmod>2026-11-02</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1253/</loc>
+         <lastmod>2026-11-02</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1254/</loc>
          <lastmod>2026-11-02</lastmod>
     </url>
@@ -1534,10 +1542,6 @@
     </url>
     <url>
          <loc>https://actions-gateway.com/dev/queue/Q214/</loc>
-         <lastmod>2026-11-02</lastmod>
-    </url>
-    <url>
-         <loc>https://actions-gateway.com/dev/queue/Q215/</loc>
          <lastmod>2026-11-02</lastmod>
     </url>
     <url>

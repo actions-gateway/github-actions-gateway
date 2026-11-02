@@ -1398,6 +1398,8 @@
       
         
       
+        
+      
     
     
     
@@ -1795,6 +1797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1962,10 +1992,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1983,8 +2013,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2799,7 +2829,7 @@ That is deliberate: parity is about removing surprises for a migrating team, and
 <li><strong>Matching ARC's API shape.</strong> The v2 decomposition into <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerSet</code>, and <code>RunnerTemplate</code> is the product, not an accident to be reconciled.
   The intentional v1 to v2 differences are recorded in <a href="../v2-api-gap-analysis/">v2-api-gap-analysis.md</a>.</li>
 <li><strong>Commercial support.</strong> See above.</li>
-<li><strong>In-cluster cache.</strong> It appears on the comparison table as something GAG lacks, but ARC lacks it too (<a href="../../queue/Q215/">Q215</a> tracks it against managed services and GitLab Runner, not ARC).</li>
+<li><strong>In-cluster cache.</strong> ARC has none, so it was never a parity gap; GAG ships an opt-in one per tenant (Q215, <a href="../../operations/in-cluster-cache/">in-cluster-cache.md</a>).</li>
 </ul>
 <h2 id="what-the-site-may-claim-today">What the site may claim today<a class="headerlink" href="#what-the-site-may-claim-today" title="Permanent link">&para;</a></h2>
 <p>The comparison surfaces may say GAG is an ARC alternative for shared, multi-tenant clusters, and that a single-name <code>runs-on</code> carries over unchanged.</p>

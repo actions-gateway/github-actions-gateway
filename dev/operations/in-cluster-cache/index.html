@@ -10,9 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q215/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/operations/in-cluster-cache/">
       
       
+        <link rel="prev" href="../worker-shared-storage/">
+      
+      
+        <link rel="next" href="../in-runner-image-builds/">
       
       
         
@@ -23,7 +27,7 @@
     
     
       
-        <title>Ship the in-cluster worker cache as a reference architecture - GitHub Actions Gateway</title>
+        <title>In-cluster actions/cache server - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#ship-the-in-cluster-worker-cache-as-a-reference-architecture" class="md-skip">
+        <a href="#in-cluster-actionscache-server" class="md-skip">
           Skip to content
         </a>
       
@@ -142,7 +146,7 @@
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
   <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
-    <a href="../">See the working backlog.</a>
+    <a href="../../queue/">See the working backlog.</a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -174,7 +178,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Ship the in-cluster worker cache as a reference architecture
+              In-cluster actions/cache server
             
           </span>
         </div>
@@ -440,11 +444,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../operations/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
           
   
   
@@ -1331,6 +1337,8 @@
       
   
   
+    
+  
   
   
     
@@ -1398,24 +1406,29 @@
       
         
       
+        
+      
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../operations/" class="md-nav__link ">
+            <a href="../" class="md-nav__link ">
               
   
   
@@ -1433,13 +1446,13 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1459,7 +1472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/personas/" class="md-nav__link">
+      <a href="../personas/" class="md-nav__link">
         
   
   
@@ -1487,7 +1500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/install/" class="md-nav__link">
+      <a href="../install/" class="md-nav__link">
         
   
   
@@ -1515,7 +1528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+      <a href="../air-gapped-install/" class="md-nav__link">
         
   
   
@@ -1543,7 +1556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/gitops/" class="md-nav__link">
+      <a href="../gitops/" class="md-nav__link">
         
   
   
@@ -1571,7 +1584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/upgrade/" class="md-nav__link">
+      <a href="../upgrade/" class="md-nav__link">
         
   
   
@@ -1599,7 +1612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+      <a href="../migration-from-arc/" class="md-nav__link">
         
   
   
@@ -1627,7 +1640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+      <a href="../migration-v1-to-v2/" class="md-nav__link">
         
   
   
@@ -1655,7 +1668,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+      <a href="../v1alpha1-deprecation/" class="md-nav__link">
         
   
   
@@ -1683,7 +1696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+      <a href="../tenant-onboarding/" class="md-nav__link">
         
   
   
@@ -1711,7 +1724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+      <a href="../resourcequota-sizing/" class="md-nav__link">
         
   
   
@@ -1739,7 +1752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runner-template-library/" class="md-nav__link">
+      <a href="../runner-template-library/" class="md-nav__link">
         
   
   
@@ -1767,7 +1780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+      <a href="../worker-shared-storage/" class="md-nav__link">
         
   
   
@@ -1792,10 +1805,173 @@
                 
   
   
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-job-reaches-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a job reaches the server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deploy-it-for-a-tenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deploy it for a tenant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#check-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check it works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-defaults-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the defaults do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
   
   
     <li class="md-nav__item">
-      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+      <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
   
@@ -1823,7 +1999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+      <a href="../kata-dind-workloads/" class="md-nav__link">
         
   
   
@@ -1851,7 +2027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+      <a href="../p2p-image-distribution/" class="md-nav__link">
         
   
   
@@ -1879,7 +2055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/reference-architectures/" class="md-nav__link">
+      <a href="../reference-architectures/" class="md-nav__link">
         
   
   
@@ -1907,7 +2083,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+      <a href="../service-mesh-coexistence/" class="md-nav__link">
         
   
   
@@ -1955,17 +2131,20 @@
       
       
         
+          
+          
+        
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1983,8 +2162,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2001,7 +2180,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability/" class="md-nav__link">
+      <a href="../observability/" class="md-nav__link">
         
   
   
@@ -2029,7 +2208,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics/" class="md-nav__link">
+      <a href="../observability-metrics/" class="md-nav__link">
         
   
   
@@ -2057,7 +2236,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+      <a href="../observability-metrics-access/" class="md-nav__link">
         
   
   
@@ -2085,7 +2264,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-alerting/" class="md-nav__link">
+      <a href="../observability-alerting/" class="md-nav__link">
         
   
   
@@ -2113,7 +2292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+      <a href="../observability-dashboards/" class="md-nav__link">
         
   
   
@@ -2141,7 +2320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/observability-logging/" class="md-nav__link">
+      <a href="../observability-logging/" class="md-nav__link">
         
   
   
@@ -2177,7 +2356,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/cost-attribution/" class="md-nav__link">
+      <a href="../cost-attribution/" class="md-nav__link">
         
   
   
@@ -2205,7 +2384,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+      <a href="../worker-rightsizing/" class="md-nav__link">
         
   
   
@@ -2233,7 +2412,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+      <a href="../node-shutdown-budgets/" class="md-nav__link">
         
   
   
@@ -2261,7 +2440,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/runbook/" class="md-nav__link">
+      <a href="../runbook/" class="md-nav__link">
         
   
   
@@ -2289,7 +2468,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/backup-restore/" class="md-nav__link">
+      <a href="../backup-restore/" class="md-nav__link">
         
   
   
@@ -2317,7 +2496,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+      <a href="../velero-backup-restore/" class="md-nav__link">
         
   
   
@@ -2345,7 +2524,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/troubleshooting/" class="md-nav__link">
+      <a href="../troubleshooting/" class="md-nav__link">
         
   
   
@@ -2373,7 +2552,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/security-operations/" class="md-nav__link">
+      <a href="../security-operations/" class="md-nav__link">
         
   
   
@@ -2401,7 +2580,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/admission-policies/" class="md-nav__link">
+      <a href="../admission-policies/" class="md-nav__link">
         
   
   
@@ -2429,7 +2608,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/release/" class="md-nav__link">
+      <a href="../release/" class="md-nav__link">
         
   
   
@@ -2457,7 +2636,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+      <a href="../kata-ci-spike-runbook/" class="md-nav__link">
         
   
   
@@ -2609,6 +2788,102 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-a-job-reaches-the-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a job reaches the server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deploy-it-for-a-tenant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deploy it for a tenant
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#check-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check it works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-defaults-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the defaults do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2627,33 +2902,140 @@
   
 
 
-<h1 id="ship-the-in-cluster-worker-cache-as-a-reference-architecture">Ship the in-cluster worker cache as a reference architecture<a class="headerlink" href="#ship-the-in-cluster-worker-cache-as-a-reference-architecture" title="Permanent link">&para;</a></h1>
-<p>A tenant asked for an in-cluster cache on 2026-10-27, which fired this row's trigger, and the design is settled and spiked in <a href="../../plan/q215-worker-cache/">q215-worker-cache.md</a>.
-The untrusted-PR tenant is the case it exists for: under the tight egress posture <code>actions/cache</code> has no store to reach, and a cache shared across jobs is a poisoning vector unless the server enforces GitHub's ref scope.</p>
-<p>What is built: the opt-in <code>cache-runner</code> target in the root <code>Dockerfile</code>, which patches <code>Runner.Worker.dll</code> so actions take <code>ACTIONS_RESULTS_URL</code> from the pod, with a build check that fails when a runner bump moves the literal.
-The spike ran it on kind against real GitHub with falcondev-oss's cache server: save, restore and artifacts all worked through the in-cluster server, GitHub's cache held nothing, and a sibling branch could not restore the entry.</p>
-<p>What is left, in order:</p>
+<h1 id="in-cluster-actionscache-server">In-cluster <code>actions/cache</code> server<a class="headerlink" href="#in-cluster-actionscache-server" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Audience:</strong> Tenant operator, Platform engineer</p>
+</blockquote>
+<p>A tenant's jobs can keep their <code>actions/cache</code> entries, and BuildKit's <code>type=gha</code> layer cache, on a cache server in the tenant's own namespace instead of on GitHub.
+This matters most for a tenant that runs untrusted fork pull requests, where a cache shared between jobs is a way to plant content that a trusted job later restores.</p>
+<p>The server is <a href="https://github.com/falcondev-oss/github-actions-cache-server">falcondev-oss/github-actions-cache-server</a> (MIT), deployed from <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/gha-cache"><code>deploy/gha-cache/</code></a>.
+It takes each job's cache scope from the runtime token GitHub signs for that job, so it applies GitHub's own rule: a fork pull request can write only to its own <code>refs/pull/&lt;n&gt;/merge</code> scope, which the base branch and other pull requests never restore from.</p>
+<p><strong>Scope:</strong> v2 <code>RunnerSet</code> workers, one cache server per tenant.
+Sharing one server between tenants is not supported.</p>
+<h2 id="how-a-job-reaches-the-server">How a job reaches the server<a class="headerlink" href="#how-a-job-reaches-the-server" title="Permanent link">&para;</a></h2>
+<p>Three pieces, and a job uses the server only when all three are in place:</p>
 <ol>
-<li><strong>Close or measure the tokenless blob transport.</strong> falcondev v9.8.0 authenticates its three <code>CacheService</code> calls by the job's token, but the uploads they hand out (<code>PUT /upload/&lt;id&gt;</code>) take none, and an upload ID is 10 decimal digits, about 33 bits.
-   Measure whether one job can plant parts into another's open upload, and close it upstream or in front of the server if it can, before anything below ships it (<a href="../../plan/q215-worker-cache/#the-write-path-is-a-contract">the residuals</a>).</li>
-<li><strong>Publish <code>cache-runner</code></strong> as a seventh image: the <code>publish.yml</code> matrix and its verify loop, <code>verify-release.sh</code>, <code>trivy-scan.sh</code>, <code>security-scan.yml</code>, <code>dockerfile-lint.yml</code>, and the image lists in <code>release.md</code>, <code>air-gapped-install.md</code> and <code>security-operations.md</code> (every file naming <code>build-runner</code> today).</li>
-<li><strong>A <code>deploy/gha-cache/</code> base</strong> shaped like <code>deploy/registry-mirror/</code>: the server pinned by digest, its Service, the two NetworkPolicies from the spike, an <code>emptyDir</code> default and a persistent overlay.</li>
-<li><strong>An operator page</strong> under <code>docs/operations/</code> and a runner template library entry, saying that the image is opt-in and that a pod running it without <code>ACTIONS_RESULTS_URL</code> loses cache and artifacts.</li>
-<li><strong>Validate on the untrusted pull requests profile</strong> (Kata, tight egress): the server answers from a worker, <code>*.blob.core.windows.net</code> does not.</li>
-<li><strong>Measure a fork pull request's scope</strong>, which the spike could not: its saves must land in <code>refs/pull/&lt;n&gt;/merge</code> and a push to the base branch must not restore them.</li>
-<li><strong>Eviction</strong>: set <code>CACHE_CLEANUP_OLDER_THAN_DAYS</code> to GitHub's 7 days, and pick a default for <code>CACHE_MAX_SIZE_BYTES</code>, which caps the whole server rather than GitHub's 10 GB per repository.</li>
+<li><strong>The server</strong>, a Deployment and Service named <code>gha-cache</code> in the tenant namespace.</li>
+<li><strong>The <code>cache-runner</code> worker image</strong>, <code>ghcr.io/actions-gateway/cache-runner</code>.
+   The stock GitHub runner overwrites <code>ACTIONS_RESULTS_URL</code> with GitHub's address on every job, so no pod setting can redirect it.
+   <code>cache-runner</code> is the <a href="../release/#the-worker-images-wrapper-worker-build-runner-and-cache-runner"><code>build-runner</code> image</a> with that overwrite disabled.</li>
+<li><strong><code>ACTIONS_RESULTS_URL</code></strong> on the runner container, set to the server's address.</li>
 </ol>
-<p>The server goes in the tenant namespace, so the tenant's <code>ResourceQuota</code> pays for it; the shared and platform-operated modes in <a href="../../plan/q215-worker-cache/#tenancy-modes">tenancy modes</a> are <a href="../Q1225/">Q1225</a>.
-The patch itself is temporary; <a href="../Q1224/">Q1224</a> retires it once upstream takes an override.</p>
+<p>A worker on any other image ignores the server and keeps using GitHub's cache.
+A worker on <code>cache-runner</code> without <code>ACTIONS_RESULTS_URL</code> loses both cache and artifacts, because that one URL carries both.
+Artifacts still reach GitHub: the server forwards every call it does not serve itself.</p>
+<h2 id="deploy-it-for-a-tenant">Deploy it for a tenant<a class="headerlink" href="#deploy-it-for-a-tenant" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Copy <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/gha-cache/example"><code>deploy/gha-cache/example/</code></a> and set <code>namespace</code> to the tenant's namespace.
+   Keep the <code>replacements</code> block in that copy.
+   It writes the namespace into the server's own address, and kustomize applies the namespace too late for the replacement to work anywhere else.</li>
+<li>To keep the cache across a server restart, uncomment the <code>components</code> entry, which swaps the default <code>emptyDir</code> for a 16 GiB <code>PersistentVolumeClaim</code>.
+   The claim is billed while it exists and counts against the tenant's storage quota.</li>
+<li>Apply it:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-k<span class="w"> </span>path/to/your/copy
+</code></pre></div>
+<ol>
+<li>Point a <code>RunnerTemplate</code> at the server, replacing <code>team-a</code> with the tenant namespace and the digest with the one from the release notes of the version you run:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RunnerTemplate</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cache-runner</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/actions-gateway/cache-runner@sha256:&lt;digest from the release notes&gt;</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">          </span><span class="nt">env</span><span class="p">:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ACTIONS_RESULTS_URL</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">              </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://gha-cache.team-a.svc.cluster.local:3000/</span>
+</code></pre></div>
+<ol>
+<li>Point the tenant's <code>RunnerSet</code> at it with <code>templateRef: {name: cache-runner, kind: RunnerTemplate}</code>.</li>
+</ol>
+<p>Use the full <code>svc.cluster.local</code> name.
+The worker's default <code>NO_PROXY</code> exempts <code>svc.cluster.local</code> and nothing shorter, so a bare <code>gha-cache</code> would be sent to the egress proxy.</p>
+<h2 id="check-it-works">Check it works<a class="headerlink" href="#check-it-works" title="Permanent link">&para;</a></h2>
+<p>Run a workflow that saves and then restores a cache on the tenant's runners, and read three things:</p>
+<ul>
+<li><strong>The job log.</strong> <code>actions/cache/save</code> prints <code>Cache saved with key: …</code> and a later restore prints <code>Cache hit for: …</code>.</li>
+<li><strong>GitHub's cache.</strong> It should hold no entry for that key: <code>gh cache list --repo &lt;owner&gt;/&lt;repo&gt; --key &lt;key&gt;</code> prints nothing.</li>
+<li><strong>The server's counters.</strong> The server admits only worker pods, so read them through the kubelet:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>port-forward<span class="w"> </span>svc/gha-cache<span class="w"> </span><span class="m">13999</span>:3000
+</code></pre></div>
+<p>Then, from another shell:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>curl<span class="w"> </span>-s<span class="w"> </span>http://127.0.0.1:13999/metrics<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>^cache_
+</code></pre></div>
+<p><code>cache_uploads_total</code> and <code>cache_requests_total{result="hit"}</code> should count your runs.</p>
+<h2 id="what-the-defaults-do">What the defaults do<a class="headerlink" href="#what-the-defaults-do" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Eviction.</strong> An entry unused for 7 days is deleted, as on GitHub.
+  The server's total is capped at 10 GiB, evicting the least recently read entry first.
+  GitHub caps 10 GB per repository, which this server cannot express, so the cap covers every repository the tenant runs.</li>
+<li><strong>Network.</strong> Worker pods may reach the server on port 3000, and no other pod may, nor the API server's service proxy.
+  The server's own egress is open, because it checks every token against GitHub's signing keys and forwards non-cache calls to GitHub.</li>
+<li><strong>Security.</strong> Token validation is on and the management API is off.
+  The pod runs as a non-root user with a read-only root filesystem and no capabilities.</li>
+</ul>
+<h2 id="limits">Limits<a class="headerlink" href="#limits" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>It reproduces GitHub's rule, and GitHub's gap with it.</strong> A workflow that runs fork code in a default-branch context, such as <code>pull_request_target</code> checking out the fork, can write the default branch's scope, here exactly as on GitHub.</li>
+<li><strong>The server sees every job's runtime token.</strong> It forwards non-cache calls to GitHub with the job's own token, so whoever compromises the server holds those tokens until they expire.</li>
+<li><strong>Downloads take no token.</strong> A download URL is protected only by a random identifier, which the server hands out to a job that passed the token check.</li>
+<li><strong>The <code>cache-runner</code> image is a patched GitHub runner.</strong> It changes one string in the runner's own code, and its build fails if a runner upgrade moves that string.
+  It goes away once GitHub's runner lets an operator set <code>ACTIONS_RESULTS_URL</code> itself.</li>
+</ul>
+<h2 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">&para;</a></h2>
+<p>Measured against real GitHub on 2026-11-01, falcondev 10.0.0 deployed from this base, first on kind and then on GKE under Kata workers with the untrusted-PR egress profile: a save and a restore on two worker pods, an artifact through the server's forward, and a restore from a sibling branch that the server refused.
+On kind, a pull request from a fork saved under its own <code>refs/pull/&lt;n&gt;/merge</code> scope and read its base branch's entries, and the base branch could not restore what it saved.
+The details are in the design (<a href="../../plan/q215-worker-cache/#the-v1000-re-run-2026-11-01">kind</a>, <a href="../../plan/q215-worker-cache/#the-kata-run-2026-11-01">Kata</a>, <a href="../../plan/q215-worker-cache/#the-fork-pull-request-run-2026-11-01">fork</a>).</p>
+<p>Under that profile a worker can still reach GitHub's own cache storage, because Azure blob storage is in the address ranges GitHub requires runners to reach.
+The server keeps cache traffic in the cluster; it does not make GitHub's cache unreachable.</p>
+<p>Not yet measured: BuildKit's <code>type=gha</code> cache, which uses the same address but has not been run against it.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What you see</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Saves land in GitHub's cache, not the server</td>
+<td>The worker is not running <code>cache-runner</code>, or <code>ACTIONS_RESULTS_URL</code> is unset on the <code>runner</code> container.</td>
+</tr>
+<tr>
+<td>A restore prints <code>Failed to restore</code>, and artifact steps fail too</td>
+<td>The worker cannot reach the server. Check the address is the full <code>svc.cluster.local</code> name, and that both NetworkPolicies from the base are present.</td>
+</tr>
+<tr>
+<td><code>cache write denied</code> as a warning in a save step</td>
+<td>The job's token grants no write to that scope, as for a fork pull request writing outside its own scope. This is the server enforcing GitHub's rule.</td>
+</tr>
+<tr>
+<td>The server pod restarts and the cache is empty</td>
+<td>The default <code>emptyDir</code> is cleared on restart. Use the persistent component.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related">Related<a class="headerlink" href="#related" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../runner-template-library/">Runner template library</a>: the other worker images and pod shapes</li>
+<li><a href="../kata-dind-workloads/">Kata DinD / image-build workloads</a>: the isolation untrusted pull requests run under</li>
+<li><a href="../reference-architectures/">Reference architectures</a>: the deployment profiles</li>
+<li><a href="../resourcequota-sizing/">ResourceQuota sizing</a>: what the server and its claim cost a tenant</li>
+</ul>
 
 
 
 
 
 
-
-  
-  
 
 
 
@@ -2680,6 +3062,44 @@ The patch itself is temporary; <a href="../Q1224/">Q1224</a> retires it once ups
       
         <footer class="md-footer">
   
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../worker-shared-storage/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Shared worker storage (RWX)">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Shared worker storage (RWX)
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../in-runner-image-builds/" class="md-footer__link md-footer__link--next" aria-label="Next: In-runner image builds">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                In-runner image builds
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
     
   
   <div class="md-footer-meta md-typeset">

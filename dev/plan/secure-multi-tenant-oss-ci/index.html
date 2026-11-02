@@ -1398,6 +1398,8 @@
       
         
       
+        
+      
     
     
     
@@ -1795,6 +1797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1962,10 +1992,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1983,8 +2013,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2805,8 +2835,8 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 </tr>
 <tr>
 <td>Cross-job cache</td>
-<td>none in-cluster</td>
-<td><strong>This posture removes the cache that works.</strong> <code>actions/cache</code> reaches its Azure-blob store through the default egress allowlist today; closing egress to GitHub plus mirror plus DNS takes it away, so an in-cluster cache stops being an optimisation and becomes the only cache an untrusted job can have. Q215 is blocked on that review, which <a href="../caching-and-worker-storage/">caching-and-worker-storage.md</a> reframes as the design</td>
+<td>One in-cluster <code>actions/cache</code> server per tenant, its scope taken from GitHub's token per job</td>
+<td><strong>Shipped (Q215, validated 2026-11-01)</strong> on kind, under Kata with this posture, and with a fork pull request, whose entries the base branch could not restore. See <a href="../../operations/in-cluster-cache/">in-cluster-cache.md</a>. The posture does not make GitHub's own cache unreachable: a Kata worker reached Azure blob storage inside GitHub's published ranges, and what that admits is <a href="../../queue/Q1253/">Q1253</a></td>
 </tr>
 <tr>
 <td>Evidence</td>
@@ -2872,14 +2902,15 @@ What is not yet demonstrated is the cross-tenant cache boundary, so we describe 
 </blockquote>
 <p>Q408 closing moves items 1, 2 and 3 of the definition of done to demonstrated, and item 6 holds as long as the section below stays current, which a layer change is the moment to re-check.
 Item 5 closed with Q986.
-Item 4 is open on <a href="../../queue/Q215/">Q215</a>, and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> is what they choose on.
+Item 4's cache half shipped with Q215 as one server per tenant, whose ingress admits only that namespace's workers, and the part of it the mirror itself introduced now has its basis written down: a shared mirror and a mirror per tenant are both defensible, so the platform admin chooses, and <a href="../../operations/kata-dind-workloads/#choosing-a-mirror-topology">Choosing a mirror topology</a> is what they choose on.
 The guest timing reading confirmed that guidance rather than changing it: a shared set does expose whether another tenant pulled an image, which is a timing channel and no more, so tenants who must not learn what each other build take isolation.
 The secrets and job-payload halves of item 4 have no demonstration recorded yet.
 Do not claim untrusted-PR readiness until all six hold.
 The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), TLS on the proxy hop, and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28), and per-runner-set proxy pools (Q567).</p>
-<p>Open, with rows: Q215 (cache backend, designed and spiked in <a href="../q215-worker-cache/">q215-worker-cache.md</a>, with publishing and the reference architecture left), and the three decisions below.</p>
+<p>Shipped since: the per-tenant <code>actions/cache</code> server (Q215, <a href="../q215-worker-cache/">q215-worker-cache.md</a>).</p>
+<p>Open, with rows: <a href="../../queue/Q1253/">Q1253</a> (what admitting Azure blob storage lets a worker reach), and the three decisions below.</p>
 <h2 id="open-decisions-the-map-surfaced">Open decisions the map surfaced<a class="headerlink" href="#open-decisions-the-map-surfaced" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture; each is a decision before it is work:</p>
 <ol>

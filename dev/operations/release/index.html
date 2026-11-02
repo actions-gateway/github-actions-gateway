@@ -1406,6 +1406,8 @@
       
         
       
+        
+      
     
     
     
@@ -1806,6 +1808,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1976,10 +2006,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1997,8 +2027,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2903,10 +2933,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-worker-images-wrapper-worker-and-build-runner" class="md-nav__link">
+  <a href="#the-worker-images-wrapper-worker-build-runner-and-cache-runner" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The worker images: wrapper, worker, and build-runner
+        The worker images: wrapper, worker, build-runner and cache-runner
       
     </span>
   </a>
@@ -3549,10 +3579,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-worker-images-wrapper-worker-and-build-runner" class="md-nav__link">
+  <a href="#the-worker-images-wrapper-worker-build-runner-and-cache-runner" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The worker images: wrapper, worker, and build-runner
+        The worker images: wrapper, worker, build-runner and cache-runner
       
     </span>
   </a>
@@ -3653,7 +3683,7 @@ Operators <em>consuming</em> a release pin the published digests at install time
 </blockquote>
 <p>A release is a <code>vX.Y.Z</code> git tag plus its outputs:</p>
 <ul>
-<li>The six first-party images — <code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code> — pushed to GHCR (<code>ghcr.io/actions-gateway/&lt;name&gt;</code>), each tagged <code>vX.Y.Z</code> and by long commit SHA.
+<li>The seven first-party images — <code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code> — pushed to GHCR (<code>ghcr.io/actions-gateway/&lt;name&gt;</code>), each tagged <code>vX.Y.Z</code> and by long commit SHA.
   Each is <strong>multi-arch</strong> (<code>linux/amd64</code> + <code>linux/arm64</code>): the pushed artifact is an OCI image <strong>index</strong>, and the digest recorded everywhere (run summary, release notes, chart pins) is the index digest — the kubelet resolves the per-arch manifest from it at pull time, so one pinned digest schedules on both amd64 and arm64 (e.g.
   Graviton) nodes.</li>
 <li>A keyless <strong>cosign signature</strong> on every image (sigstore/Fulcio via GitHub Actions OIDC — no signing key, no stored secret), signed <strong>recursively</strong> — the index <em>and</em> each per-arch manifest — and an <strong>SPDX-JSON SBOM per architecture</strong> attached as a keyless cosign attestation to that architecture's manifest.</li>
@@ -3674,7 +3704,7 @@ Operators <em>consuming</em> a release pin the published digests at install time
 <li>The <strong><code>gag-migrate</code> CLI binaries</strong> (Q306), cross-compiled by <code>chart-publish</code> for the operator platform matrix (<code>linux/amd64</code>, <code>linux/arm64</code>, <code>darwin/amd64</code>, <code>darwin/arm64</code>, <code>windows/amd64</code>) via <code>scripts/release/build-migrate-binaries.sh</code> and attached to the <strong>GitHub Release</strong> as <code>gag-migrate-&lt;tag&gt;-&lt;os&gt;-&lt;arch&gt;</code> assets.
   A single <code>SHA256SUMS</code> manifest is keyless <strong>cosign <code>sign-blob</code></strong>-signed (<code>SHA256SUMS.cosign.bundle</code>) — the same no-secret Fulcio/Rekor path as the v2 CRD manifest — so one signature covers the whole set (verify the manifest signature, then <code>sha256sum -c</code>).
   This is the one-shot v1→v2 migration tool, previously source-build-only.</li>
-<li>The <strong>GitHub Release</strong> itself (Q293), composed by <code>chart-publish</code>: the six image index digests, the <code>make verify-release</code> command, a generated changelog, and a tag-derived <code>--prerelease</code> flag.
+<li>The <strong>GitHub Release</strong> itself (Q293), composed by <code>chart-publish</code>: the seven image index digests, the <code>make verify-release</code> command, a generated changelog, and a tag-derived <code>--prerelease</code> flag.
   It is created only if the tag has no Release yet, so a maintainer's pre-tag curated notes are never clobbered.</li>
 </ul>
 <p>Both the image and chart work are automated by the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow, which triggers on the <code>v*</code> tag push (the <code>chart-publish</code> job runs after every image leg succeeds).
@@ -3688,7 +3718,8 @@ The verification step below is therefore not optional on the first release — i
 <li><strong>GHCR package visibility.</strong> The first publish <em>creates</em> the <code>ghcr.io/actions-gateway/{gmc,agc,proxy,worker,wrapper}</code> image packages <strong>and the <code>ghcr.io/actions-gateway/charts/actions-gateway</code> chart package</strong>.
    They inherit the repository's visibility and may start <strong>private</strong>.
    For third parties to run <code>cosign verify</code> / <code>helm pull</code> (and for an air-gapped operator to pull), set each package to <strong>public</strong> in the org's GHCR package settings, or keep them private and distribute pull credentials.
-   Verification by <em>this project's</em> CI and by anyone with pull access works either way — but the <strong>released-chart upgrade gate</strong> (<code>make chart-released-upgrade-check</code>, run by every e2e CI pass) pulls the chart and the released <code>gmc</code> image <strong>anonymously</strong>, so those two packages must be public for PR CI to stay green.</li>
+   Verification by <em>this project's</em> CI and by anyone with pull access works either way — but the <strong>released-chart upgrade gate</strong> (<code>make chart-released-upgrade-check</code>, run by every e2e CI pass) pulls the chart and the released <code>gmc</code> image <strong>anonymously</strong>, so those two packages must be public for PR CI to stay green.
+   An image added in a later release creates its package on that release's publish, so this step recurs then: <code>build-runner</code> is public already, and <code>cache-runner</code> needs it on the first release that publishes it.</li>
 <li><strong>Workflow permissions</strong> are already declared in <code>publish.yml</code> (<code>packages: write</code> to push, <code>id-token: write</code> for keyless cosign and provenance, <code>attestations: write</code> for the build-provenance attestation).
    No repo secret is required — that is the point of keyless signing.</li>
 </ol>
@@ -4315,7 +4346,7 @@ Prerelease (<code>-rc</code>) tags are ignored by the gate.</p>
 </blockquote>
 <p>Each run checks every artifact against the publish workflow's keyless identity:</p>
 <ul>
-<li>the six image signatures (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>);</li>
+<li>the seven image signatures (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code>);</li>
 <li>the SPDX SBOM attestation on each image's <code>linux/amd64</code> and <code>linux/arm64</code> manifests, failing if either platform is missing from the index;</li>
 <li>both chart signatures (tag <code>X.Y.Z</code>, without the leading <code>v</code>);</li>
 <li>every <code>*.cosign.bundle</code> blob signature on the GitHub Release: the v2 CRD manifest (Q276), which must be present, and <code>SHA256SUMS</code> while <code>gag-migrate</code> ships.</li>
@@ -4633,7 +4664,7 @@ A copy-pasteable <code>helm</code> command with a <code>v</code> in it fails.</p
 A curated draft is exactly that condition, so the step logs <code>already exists; leaving its notes and flags untouched</code> and the digests never appear.
 They also cannot be written in advance: the images are built <em>from</em> the tag.</p>
 <p>So after <code>publish.yml</code> goes green, resolve them and amend the notes file:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="w"> </span>build-runner<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="k">for</span><span class="w"> </span>img<span class="w"> </span><span class="k">in</span><span class="w"> </span>gmc<span class="w"> </span>agc<span class="w"> </span>proxy<span class="w"> </span>worker<span class="w"> </span>wrapper<span class="w"> </span>build-runner<span class="w"> </span>cache-runner<span class="p">;</span><span class="w"> </span><span class="k">do</span>
 <a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="w">  </span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span><span class="s2">"ghcr.io/actions-gateway/</span><span class="si">${</span><span class="nv">img</span><span class="si">}</span><span class="s2">:vX.Y.Z"</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a><span class="w">    </span>--format<span class="w"> </span><span class="s1">'{{json .Manifest.Digest}}'</span>
 <a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a><span class="k">done</span>
@@ -4871,8 +4902,8 @@ No docs-specific branch is ever required beyond what the release itself needs.</
 <p>A release is just a tag and a set of immutable, digest-addressed images — nothing is destructive.
 To roll an <em>installed</em> release back, re-pin the previous digests and <code>helm rollback</code>/<code>helm upgrade</code>; the procedure and post-rollback validation are in <a href="../upgrade/">upgrade.md</a>.
 A bad tag can be superseded by a higher patch release; do not retag an existing <code>vX.Y.Z</code> (it would break the digest↔tag binding consumers rely on).</p>
-<h2 id="the-worker-images-wrapper-worker-and-build-runner">The worker images: <code>wrapper</code>, <code>worker</code>, and <code>build-runner</code><a class="headerlink" href="#the-worker-images-wrapper-worker-and-build-runner" title="Permanent link">&para;</a></h2>
-<p><code>publish.yml</code> builds and signs <strong>three</strong> worker-related images, all holding the same <code>cmd/worker</code> wrapper that feeds the job payload into <code>Runner.Worker</code>:</p>
+<h2 id="the-worker-images-wrapper-worker-build-runner-and-cache-runner">The worker images: <code>wrapper</code>, <code>worker</code>, <code>build-runner</code> and <code>cache-runner</code><a class="headerlink" href="#the-worker-images-wrapper-worker-build-runner-and-cache-runner" title="Permanent link">&para;</a></h2>
+<p><code>publish.yml</code> builds and signs <strong>four</strong> worker-related images, all holding the same <code>cmd/worker</code> wrapper that feeds the job payload into <code>Runner.Worker</code>:</p>
 <ul>
 <li><strong><code>ghcr.io/actions-gateway/wrapper</code></strong> — a ~2 MB <code>FROM scratch</code> image with just the wrapper binary.
   The GMC forwards it to every AGC (<code>WRAPPER_IMAGE</code>), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the <strong>unmodified upstream <code>ghcr.io/actions/actions-runner</code></strong> (or any tenant <code>workerImage</code>).
@@ -4885,6 +4916,9 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
   What it adds is <code>docker compose</code>, which the base ships in no form, and a CLI and buildx GAG pins and bumps rather than whichever versions the runner release vendored.
   The buildx plugin is written to <code>/usr/local/lib/docker/cli-plugins</code>, the directory docker/cli searches first, so it replaces the base's rather than sitting behind it.
   Opted into per tenant via <code>workerImage</code>, exactly like <code>worker</code>, and pinned by digest from these notes.</li>
+<li><strong><code>ghcr.io/actions-gateway/cache-runner</code></strong>: <code>build-runner</code> with one string in <code>Runner.Worker.dll</code> renamed, so actions take <code>ACTIONS_RESULTS_URL</code> from the pod instead of from the job, which is what lets a job reach an in-cluster cache (<a href="../../plan/q215-worker-cache/#why-the-hook-is-a-patched-runner">design</a>).
+  Its build fails unless that string occurs once in that assembly and nowhere else, so a runner bump that moves it cannot publish an unpatched image.
+  Opted into per tenant via <code>workerImage</code> like <code>build-runner</code>, and only together with <code>ACTIONS_RESULTS_URL</code> set on the runner container: without it, jobs lose both cache and artifacts.</li>
 </ul>
 <p>Only <code>wrapper</code> is digest-pinned in the chart (<code>wrapper.image.digest</code>, like <code>agc</code>/<code>proxy</code>), so a release must publish the <code>wrapper</code> image and pin its digest for the default install to run jobs.
 The <code>worker</code> image has no chart <code>image</code> block — it is the optional batteries-included image a tenant opts into via its per-RunnerGroup <code>workerImage</code>, not a chart-provisioned one — so nothing in the chart pins it.</p>

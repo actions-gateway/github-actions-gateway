@@ -1528,6 +1528,8 @@
       
         
       
+        
+      
     
     
     
@@ -1925,6 +1927,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2092,10 +2122,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2113,8 +2143,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2960,6 +2990,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/troubleshooting/">Troubleshooting</a></strong>: symptom to diagnosis to remediation, organised by observable failure mode.</li>
 <li><strong><a href="../operations/runbook/">Production runbook</a></strong>: the operational procedures the platform team needs on call.</li>
 <li><strong><a href="../operations/p2p-image-distribution/">P2P image distribution</a></strong>: add a Spegel or Dragonfly mirror to survive ephemeral-worker pull storms.</li>
+<li><strong><a href="../operations/in-cluster-cache/">In-cluster <code>actions/cache</code> server</a></strong>: one cache server per tenant, in its namespace, that keeps cache traffic in the cluster and enforces GitHub's own ref scope from each job's token, so a fork pull request cannot plant entries the base branch restores.</li>
 </ul>
 <h2 id="api-surface-and-migration">API surface and migration<a class="headerlink" href="#api-surface-and-migration" title="Permanent link">&para;</a></h2>
 <ul>

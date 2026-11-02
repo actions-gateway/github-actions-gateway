@@ -1406,6 +1406,8 @@
       
         
       
+        
+      
     
     
     
@@ -1986,6 +1988,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2156,10 +2186,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -2177,8 +2207,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3048,7 +3078,11 @@ Both entries run a job as applied.</p>
 <tbody>
 <tr>
 <td><code>docker compose</code>, or a CLI and buildx GAG pins and bumps itself rather than whichever versions the runner release vendored</td>
-<td><strong><code>ghcr.io/actions-gateway/build-runner</code></strong> — the <a href="../release/#the-worker-images-wrapper-worker-and-build-runner"><code>worker</code> image</a> with that tooling replaced. Keyless-signed and SBOM-attested by the same release pipeline as every other first-party image, so <code>make verify-release</code> covers it. Pin it by digest from the release notes of the version you are running.</td>
+<td><strong><code>ghcr.io/actions-gateway/build-runner</code></strong> — the <a href="../release/#the-worker-images-wrapper-worker-build-runner-and-cache-runner"><code>worker</code> image</a> with that tooling replaced. Keyless-signed and SBOM-attested by the same release pipeline as every other first-party image, so <code>make verify-release</code> covers it. Pin it by digest from the release notes of the version you are running.</td>
+</tr>
+<tr>
+<td><code>actions/cache</code> and BuildKit's <code>type=gha</code> cache served from the tenant's own namespace</td>
+<td><strong><code>ghcr.io/actions-gateway/cache-runner</code></strong> — <code>build-runner</code> with the runner's <code>ACTIONS_RESULTS_URL</code> overwrite disabled, used together with a per-tenant cache server. It is not a library entry, because no CI job runs it as a template; <a href="../in-cluster-cache/">In-cluster <code>actions/cache</code> server</a> has the template to copy.</td>
 </tr>
 <tr>
 <td>A language toolchain, a cloud CLI, your own root CA</td>

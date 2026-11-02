@@ -1398,6 +1398,8 @@
       
         
       
+        
+      
     
     
     
@@ -1795,6 +1797,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1962,10 +1992,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1983,8 +2013,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -7998,7 +8028,8 @@ So the shards go warm only once a <code>push</code> to main has written the scop
 Take that total with <code>--limit 200</code> or higher: <code>gh cache list</code> defaults to 30 and silently truncates, and a capped sum reads as a repo total while omitting exactly the entries this paragraph is about.
 That pool is shared with the <code>actions/cache</code> pre-pulls above, whose whole job is keeping this lane off registry.k8s.io and quay.io under rate limits, and evicting one of those surfaces as a registry-pull flake attributed to the registry rather than as a cache miss.
 Re-check with <code>gh cache list</code> if e2e pull flakes rise.</p>
-<p>All of this runner-side caching is <strong>hosted-lane-only</strong>: on a self-hosted runner the <code>actions/cache</code> steps, the bake's <code>GHA_CACHE</code>, and <code>azure/setup-helm</code> are skipped (<code>runner.environment</code> gates in <code>e2e-reusable.yml</code>), because the Actions cache data plane and <code>get.helm.sh</code> are job-time egress the managed GitHub egress rule does not admit (the Kata untrusted-PR posture keeps that lane's non-registry fetches GitHub-only, Q408).
+<p>All of this runner-side caching is <strong>hosted-lane-only</strong>: on a self-hosted runner the <code>actions/cache</code> steps, the bake's <code>GHA_CACHE</code>, and <code>azure/setup-helm</code> are skipped (<code>runner.environment</code> gates in <code>e2e-reusable.yml</code>), because Q408's egress inventory counted the Actions cache data plane and <code>get.helm.sh</code> as job-time egress outside GitHub.
+<code>get.helm.sh</code> is outside the managed rule; the cache's Azure blob storage is inside GitHub's published ranges, and a Kata worker reached it (Q1253 owns what that admits).
 The pull steps fall back to retried upstream pulls there (helm is baked into the e2e runner image), and the in-cluster registry mirror is what will serve those pulls warm.</p>
 <h4 id="runnergithub-egress-attribution-q352">Runner→GitHub egress attribution (Q352)<a class="headerlink" href="#runnergithub-egress-attribution-q352" title="Permanent link">&para;</a></h4>
 <p>A handful of specs deliberately reach the <strong>live</strong> <code>api.github.com</code> (see the <code>real-github-egress</code> label above), so a transient outage of the CI runner's own GitHub egress kills them with signatures that look like product regressions — observed as a proxy CONNECT 502 (kindnet lane, 2026-07-14) and curl exit-28 timeouts including the proxy-less DirectEgress spec (Calico lane, 2026-07-19), both green on re-run.
@@ -8148,16 +8179,16 @@ Run it locally with:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>make vulncheck
 </code></pre></div>
 <p>A finding usually means bumping the Go toolchain (<code>go</code> directive in <code>go.work</code> + every <code>go.mod</code>, kept in lockstep) for a stdlib CVE, or <code>go get</code>-ing the fixed dependency version for a module CVE.</p>
-<p><strong>trivy</strong> — builds each of the seven images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
+<p><strong>trivy</strong> — builds each of the eight images (the seven published plus <code>fakegithub</code>) and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires <code>trivy</code> and <code>docker</code> on <code>PATH</code>) with:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>make trivy-scan
 </code></pre></div>
 <p>The five images we build from a minimal/distroless or scratch base (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>fakegithub</code>, and the <code>FROM scratch</code> <code>wrapper</code>) <strong>block</strong> the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
-The <code>worker</code> image is built <code>FROM</code> the upstream <code>ghcr.io/actions/actions-runner</code> and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole <strong>report-only</strong> one (findings printed, never blocks).
+The <code>worker</code> image is built <code>FROM</code> the upstream <code>ghcr.io/actions/actions-runner</code> and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner, so its leg is <strong>report-only</strong> (findings printed, never blocks), as are those of <code>build-runner</code> and <code>cache-runner</code>, which are built <code>FROM</code> it.
 Runner-base CVEs are reduced by bumping the pinned tag — automated via the <code>docker</code> ecosystem in <code>dependabot.yml</code> and tracked in <a href="../../queue/">the backlog</a> as Q70.</p>
 <p>The same <code>trivy</code> job also generates an <strong>SBOM</strong> (Software Bill of Materials, SPDX-JSON, via <a href="https://github.com/anchore/syft"><code>syft</code></a>) for each image it builds and uploads it as a <code>sbom-&lt;image&gt;.spdx.json</code> build artifact.
 This runs on every code PR purely so the SBOM-generation path can't silently break before a release — it does <strong>not</strong> sign or publish anything.
-On a <code>v*</code> release tag, the separate <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow pushes the six first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>) to GHCR, regenerates each SBOM for the pushed image, signs every image <strong>keyless</strong> with <a href="https://docs.sigstore.dev/"><code>cosign</code></a> (sigstore/Fulcio via GitHub Actions OIDC — no signing key or stored secret), and attaches the SBOM as a keyless cosign attestation.
+On a <code>v*</code> release tag, the separate <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> workflow pushes the seven first-party images (<code>gmc</code>, <code>agc</code>, <code>proxy</code>, <code>worker</code>, <code>wrapper</code>, <code>build-runner</code>, <code>cache-runner</code>) to GHCR, regenerates each SBOM for the pushed image, signs every image <strong>keyless</strong> with <a href="https://docs.sigstore.dev/"><code>cosign</code></a> (sigstore/Fulcio via GitHub Actions OIDC — no signing key or stored secret), and attaches the SBOM as a keyless cosign attestation.
 Operator-facing verification (<code>cosign verify</code>, SBOM retrieval) is documented in <a href="../../operations/security-operations/#image-provenance-signature--sbom-verification">security-operations.md § Image provenance</a>.
 The signing/attestation steps run only on publish, so PR CI does not exercise them.</p>
 <p><strong>polaris</strong> — audits the Kubernetes security/best-practice posture of the <strong>shipped install artifact</strong>: it renders the <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/charts/actions-gateway">Helm chart</a> (digest-pinned, matching the production posture) and checks the rendered manifests.
