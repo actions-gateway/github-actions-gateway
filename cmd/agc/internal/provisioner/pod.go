@@ -339,6 +339,10 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	if v, ok := template.ObjectMeta.Annotations[AnnotationSizingProfile]; ok {
 		annotations[AnnotationSizingProfile] = v
 	}
+	// The same, for the re-run cause the scale-set path stamps on the template (Q1245).
+	if v, ok := template.ObjectMeta.Annotations[AnnotationRerunCause]; ok {
+		annotations[AnnotationRerunCause] = v
+	}
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

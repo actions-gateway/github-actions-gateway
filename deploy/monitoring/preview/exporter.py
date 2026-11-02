@@ -206,6 +206,8 @@ def render():
         L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="eviction"}} {counter_total(0.02, elapsed)}')
         L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="preemption"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="eviction"}} 0')
+        # The out-of-memory class's breaker is closed in a healthy fleet (Q1245).
+        L.append(f'actions_gateway_auto_retry_paused{{namespace="{ns}",runner_group="{rg}",cause="oom"}} 0')
         L.append(f'actions_gateway_quota_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_quota_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
         # single-use JIT agent recycling: routine post-job recycles, no errors

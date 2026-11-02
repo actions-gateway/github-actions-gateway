@@ -169,7 +169,9 @@ A sidecar killed for memory, such as `dind`, is not retried: the runner survives
 Neither is a runner with no memory limit, which the kernel killed for the node's memory rather than its own.
 
 **What it hides.** A change that doubles a job's memory gets the memory on its one retry instead of failing.
-Watch `actions_gateway_eviction_retries_total{cause="oom"}` and the `MemoryLimitRaisedForRetry` Events; `actions_gateway_eviction_rerun_outcomes_total{cause="oom"}` says how often the raised retry passed.
+Watch `actions_gateway_eviction_retries_total{cause="oom"}` and the `MemoryLimitRaisedForRetry` Events; `actions_gateway_eviction_rerun_outcomes_total{cause="oom"}` says how often the raised retry passed, and the `ActionsGatewayRetryCauseMisclassified` alert fires when more than half of them fail over 7 days (Q1245).
+`actions_gateway_auto_retry_paused{cause="oom"}` reads 1 while the breaker has retries paused.
+The re-run's worker pods carry `actions-gateway.com/rerun-cause: oom`, so [cost attribution](cost-attribution.md#the-labels-and-namespaces-to-query) can count what the retries cost.
 
 ### Getting Guaranteed QoS out of `NodeShare`
 

@@ -93,6 +93,7 @@ For **abuse and compromise** detection (eviction-retry loops, proxy slowloris, c
 | `actions_gateway_pod_creation_latency_seconds` p95 | > 15s | Ticket | SLO target from Appendix A |
 | `actions_gateway_pod_creation_latency_seconds` p99 | > 60s | Page | Indicates scheduling stall or quota exhaustion |
 | `actions_gateway_eviction_retries_exhausted_total` | rate > 0 | Ticket | Each increment requires a manual re-run |
+| `actions_gateway_eviction_rerun_outcomes_total` `result="failed"` share per cause | > 50% over 7d, at least 5 re-runs | Ticket | Re-running is not clearing that cause: it is misclassified (Q1245) |
 | `actions_gateway_active_sessions` | = 0 for a RunnerGroup | Page | No listener polling; jobs queue indefinitely |
 | `controller_runtime_reconcile_errors_total` | rate > 1/5min | Ticket | Persistent reconcile failure; resources may be stale |
 | `ActionsGateway` condition `RateLimited=True` | duration > 10 minutes | Page | Installation is over API budget |
@@ -151,6 +152,13 @@ Triage with [`pod_creation_latency_seconds p95 > 15s`](#pod_creation_latency_sec
 
 **Ticket.** A job's eviction-retry budget is exhausted and the job requires a manual re-run.
 See [Evicted Worker Pods Exhausting Retry Budget](troubleshooting.md#evicted-worker-pods-exhausting-retry-budget).
+
+### ActionsGatewayRetryCauseMisclassified
+
+**Ticket.** More than half of GAG's re-runs for one cause on a set failed again over 7 days, counting at least 5, so re-running is not clearing what the cause names (Q1245).
+For `cause="oom"` the raised memory limit is not enough, or the jobs fail for something else after their limit was raised: read the jobs behind the `MemoryLimitRaisedForRetry` Events, and see [When a job runs out of memory](worker-rightsizing.md#when-a-job-runs-out-of-memory).
+For a disruption cause, the re-runs are being disrupted again or the jobs fail on their own; see [Which Disruptions Auto-Re-Run a Job](troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
+The per-job `same_class_again` withhold already stops one job being retried twice for memory; this alert is the same reading across jobs.
 
 ### ActionsGatewayQuotaRetriesExhausted
 
