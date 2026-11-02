@@ -366,8 +366,8 @@ write_behind_lock() {
 	done
 }
 
-# A timed break needs at least the 5s of 500 tries 10ms apart, so 10s catches
-# one on a quiet host; a loaded one can stretch it past 10s and miss it.
+# Both cases wait 10s, which brackets a timed break: one finishing inside 10s
+# breaks this live lock, and one taking longer leaves the killed holder's below.
 reset_leases
 hold_lock
 write_behind_lock 10
