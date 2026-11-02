@@ -61,15 +61,13 @@ func TestUpdateStatus_RequeuesOnConflict(t *testing.T) {
 
 	r := &ActionsGatewayReconciler{Client: statusUpdateClient(t, ag, conflict)}
 
-	// Compare against the whole expected Result (reflection-based) rather than
-	// reading the deprecated Result.Requeue field directly (staticcheck SA1019).
 	res, err := r.updateStatus(context.Background(), ag)
 	require.NoError(t, err, "conflict must not surface as an error")
-	assert.Equal(t, ctrl.Result{Requeue: true}, res, "conflict must requeue updateStatus")
+	assert.Equal(t, ctrl.Result{RequeueAfter: statusConflictRequeue}, res, "conflict must requeue updateStatus")
 
 	res, err = r.setCredentialUnavailable(context.Background(), ag, "secret missing")
 	require.NoError(t, err, "conflict must not surface as an error")
-	assert.Equal(t, ctrl.Result{Requeue: true}, res, "conflict must requeue setCredentialUnavailable")
+	assert.Equal(t, ctrl.Result{RequeueAfter: statusConflictRequeue}, res, "conflict must requeue setCredentialUnavailable")
 }
 
 // A non-conflict error on Status().Update must still propagate as an error.

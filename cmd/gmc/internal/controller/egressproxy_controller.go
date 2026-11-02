@@ -152,7 +152,7 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	res, err := r.updateStatus(ctx, &ep, gitHubHosts)
-	if err != nil || res.Requeue {
+	if err != nil {
 		return res, err
 	}
 	// A held attribution port is released by a reconcile, so one is due when it expires.
@@ -630,7 +630,7 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 
 	if err := r.Status().Update(ctx, ep); err != nil {
 		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: statusConflictRequeue}, nil
 		}
 		return ctrl.Result{}, err
 	}
@@ -704,7 +704,7 @@ func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2alpha1
 	ep.Status.ObservedGeneration = gen
 	if err := r.Status().Update(ctx, ep); err != nil {
 		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: statusConflictRequeue}, nil
 		}
 		// Return the status error; the original cause is already recorded in-memory
 		// and will be retried on the requeue.

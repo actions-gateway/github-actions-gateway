@@ -193,7 +193,9 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// began provisioning.
 		r.recordEvent(&ag, corev1.EventTypeNormal, "Provisioning", "Reconcile",
 			"started provisioning the AGC control plane")
-		return ctrl.Result{Requeue: true}, nil
+		// The Update fires the primary watch, which carries no predicate, so the
+		// next reconcile is already queued.
+		return ctrl.Result{}, nil
 	}
 
 	// Credential check, by union member (Q196/Q197):
@@ -311,7 +313,7 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	res, err := r.updateStatus(ctx, &ag, proxy, autoscaler)
-	if err != nil || res.Requeue {
+	if err != nil {
 		return res, err
 	}
 	// A pool holding this namespace's attribution port releases it on a deadline,
@@ -836,7 +838,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	ag.Status.ObservedGeneration = gen
 	if err := r.Status().Update(ctx, ag); err != nil {
 		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: statusConflictRequeue}, nil
 		}
 		return ctrl.Result{}, err
 	}
@@ -956,7 +958,7 @@ func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2a
 	ag.Status.ObservedGeneration = gen
 	if err := r.Status().Update(ctx, ag); err != nil {
 		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: statusConflictRequeue}, nil
 		}
 		return ctrl.Result{}, err
 	}

@@ -62,7 +62,7 @@ func TestV2SetDegraded_WritesConditionAndReturnsCause(t *testing.T) {
 // TestV2SetDegraded_ConflictRequeuesWithoutError verifies the v2-specific
 // conflict behaviour: unlike v1 (which always returns the cause), a status
 // write conflict on the v2 reconciler swallows the cause and instead signals
-// a plain requeue — the next reconcile will recompute from the fresher object.
+// a short fixed requeue — the next reconcile will recompute from the fresher object.
 func TestV2SetDegraded_ConflictRequeuesWithoutError(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "gh-app-creds", "")
 	cause := errors.New("boom")
@@ -73,7 +73,7 @@ func TestV2SetDegraded_ConflictRequeuesWithoutError(t *testing.T) {
 	r := &ActionsGatewayV2Reconciler{Client: v2StatusUpdateClient(t, ag, conflict)}
 	res, err := r.setDegraded(context.Background(), ag, cause)
 	require.NoError(t, err, "a status-write conflict must not surface as an error")
-	assert.Equal(t, ctrl.Result{Requeue: true}, res)
+	assert.Equal(t, ctrl.Result{RequeueAfter: statusConflictRequeue}, res)
 }
 
 // TestV2SetDegraded_OtherStatusErrorPropagates verifies a non-conflict status

@@ -347,7 +347,9 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err := r.Update(ctx, &rs); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		// The Update fires the primary watch, which carries no predicate, so the
+		// next reconcile is already queued.
+		return ctrl.Result{}, nil
 	}
 
 	// The gateway going away takes this AGC with it, and it is the only reaper the
