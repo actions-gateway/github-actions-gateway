@@ -54,22 +54,29 @@ Match that pattern in ad-hoc commands.
 The same ambient-state hazard applies to **`gcloud`**: the active project/account/region live in the shared `~/.config/gcloud` active configuration, so a parallel `gcloud config set` repoints your invocations too.
 Pass `--project`, `--account`, and `--zone`/`--region` explicitly on each command rather than depending on `gcloud config` (or scope a private config with `CLOUDSDK_ACTIVE_CONFIG_NAME` / `gcloud --configuration=<name>`).
 
-#### The e2e suite has no `--context` to pin — give it a private `KUBECONFIG`
+#### The e2e suite runs on a private `KUBECONFIG` and refuses any other cluster
 
-`make e2e` threads `KIND_CLUSTER` through for the scripts that read it, but the suite's own `kubectl` calls (`utils.Run(exec.Command("kubectl", …))`) carry no `--context`, so they follow whatever `current-context` happens to be.
-There is nothing to pin per-command, and `kubectl config use-context` is exactly the shared-state write the rule above forbids — it repoints every parallel session.
+The suite's own `kubectl` and `helm` calls (`utils.Run(exec.Command("kubectl", …))`) carry no `--context`, so they act on whatever context kubectl resolves.
+A run that followed a context switched to the dogfood cluster once installed cert-manager, metrics-server and the CRDs there (Q1201).
+Two things now stop that:
 
-Point the run at its own kubeconfig instead:
+- `make e2e` writes `kind get kubeconfig --name $(KIND_CLUSTER)` to `tmp/e2e-kubeconfig-<cluster>` and runs the suite with `KUBECONFIG` pointing at it, so a parallel session's `use-context` cannot redirect the run mid-flight.
+  The file holds the cluster's client key and is deleted when the run exits.
+  A `KIND_CLUSTER` with no kind cluster behind it fails the target before the suite starts.
+- The suite's `SynchronizedBeforeSuite` refuses to start unless `kubectl config current-context` reads `kind-$KIND_CLUSTER` (default `kind-actions-gateway-e2e`).
+  An unset or unreadable context refuses too, with `refusing to run e2e …` in the failure.
+  Teardown repeats the check before `make undeploy`, because Ginkgo runs `SynchronizedAfterSuite` even when the BeforeSuite failed.
+
+The refusal is the gate, and it also catches a hand-run `ginkgo`.
+Give a hand-run the same private kubeconfig rather than running `kubectl config use-context`, which repoints every parallel session:
 
 ```bash
-kind get kubeconfig --name actions-gateway-e2e > tmp/kubeconfig
+(umask 077 && kind get kubeconfig --name actions-gateway-e2e > tmp/kubeconfig)
 ```
 
-then set `KUBECONFIG=$PWD/tmp/kubeconfig` on the `ginkgo`/`make e2e` invocation.
-The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's `use-context` cannot steal the run mid-flight.
+then set `KUBECONFIG=$PWD/tmp/kubeconfig` and `KIND_CLUSTER=actions-gateway-e2e` on the `ginkgo` invocation.
 `tmp/` at the repo root is gitignored and inside the workspace, which is where scratch files belong.
-
-Without it the first `kubectl` fails against the empty default — `dial tcp [::1]:8080: connect: connection refused`, usually surfacing as a cert-manager install failure in `SynchronizedBeforeSuite` rather than as anything about contexts.
+The file holds the cluster's client key, so delete it (`rm tmp/kubeconfig`) when the run is done.
 
 ### Verify the resolved target before any mutating command
 

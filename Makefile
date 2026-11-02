@@ -1223,6 +1223,12 @@ RUN ?=
 # something else reads. Set empty to disable both halves.
 E2E_PROGRESS_FILE ?= $(REPO_ROOT)/tmp/e2e-progress.jsonl
 
+# The suite runs against a private kubeconfig written from the kind cluster, so a
+# peer switching the shared ~/.kube/config context mid-run cannot redirect it
+# (Q1201). It holds the cluster's client key, so the recipe deletes it on exit.
+# The suite's own BeforeSuite context check is the gate; this narrows the window.
+E2E_KUBECONFIG ?= $(REPO_ROOT)/tmp/e2e-kubeconfig-$(KIND_CLUSTER)
+
 # Whole-suite budget, not a per-spec one: Ginkgo interrupts the running spec when it
 # elapses and skips everything after it, so an under-set value reads as a spec failure
 # rather than as a budget problem. 30m fits the parallel fake-GitHub suite with room to
@@ -1241,7 +1247,7 @@ E2E_TIMEOUT ?= $(if $(filter live-github live-github-scaleset,$(SUITE)),90m,30m)
 # --label-filter selects no spec, so a typo reports a green e2e run. ./test/e2e
 # holds one suite and a full run always has specs, so this can only fire on a
 # filter that missed.
-_GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
+_GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) KUBECONFIG=$(E2E_KUBECONFIG) \
 	GMC_IMG=$(GMC_IMG) AGC_IMG=$(AGC_IMG) PROXY_IMG=$(PROXY_IMG) FAKEGITHUB_IMG=$(FAKEGITHUB_IMG) WORKER_IMG=$(WORKER_IMG) WRAPPER_IMG=$(WRAPPER_IMG) \
 	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) \
 	$(GINKGO) run --tags e2e --timeout $(E2E_TIMEOUT) --github-output --poll-progress-after 30s --fail-on-empty
@@ -1257,9 +1263,11 @@ _GINKGO_RUN = cd cmd/gmc && KIND_CLUSTER=$(KIND_CLUSTER) \
 e2e: $(GINKGO) ## Run e2e tests; SUITE=single-node|multi-node|live-github selects a subset, RUN='regex' narrows to matching specs, both unset runs all
 	@mkdir -p $(REPO_ROOT)/tmp
 	@: >$(E2E_PROGRESS_FILE)
+	trap 'rm -f $(E2E_KUBECONFIG)' EXIT INT TERM; \
+	(umask 077 && kind get kubeconfig --name $(KIND_CLUSTER) >$(E2E_KUBECONFIG)) || exit; \
 	E2E_PROGRESS_FILE=$(E2E_PROGRESS_FILE) scripts/e2e/progress-watch.sh & \
 	watcher=$$!; \
-	trap 'kill -TERM $$watcher 2>/dev/null; wait $$watcher 2>/dev/null; true' EXIT INT TERM; \
+	trap 'kill -TERM $$watcher 2>/dev/null; wait $$watcher 2>/dev/null; rm -f $(E2E_KUBECONFIG); true' EXIT INT TERM; \
 	$(_GINKGO_RUN) $(if $(_SUITE_FILTER),--label-filter '$(_SUITE_FILTER)',) \
 		$(if $(RUN),--focus '$(RUN)',) \
 		--procs 6 --junit-report $(REPO_ROOT)/tmp/e2e-report.xml ./test/e2e/...

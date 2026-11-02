@@ -3586,8 +3586,7 @@ Read the outcome from `E2E_EXIT`/the `Ran N of M Specs` line, never from the she
 
 **Run live-GitHub on a throwaway cluster, not the shared `actions-gateway-e2e` one.** The live-GitHub container swaps the GMC's GitHub env vars cluster-wide and holds them for the length of the run, and that `kubectl set env` is itself what makes a later `helm upgrade` conflict on server-side-apply field ownership.
 A parallel session reinstalling the chart underneath it (observed 2026-07-29) invalidates the run either way.
-Create one per run — `make e2e-cluster KIND_CLUSTER=<name>` shares the existing local registry, so no image rebuild is needed — and point the run at it with a private `KUBECONFIG` (`kind get kubeconfig --name <name>`) rather than the ambient context, which every other session shares.
-A private `KUBECONFIG` is not optional either: the suite's own `kubectl` calls carry no `--context`, so they follow `current-context` in the file every parallel session shares.
+Create one per run — `make e2e-cluster KIND_CLUSTER=<name>` shares the existing local registry, so no image rebuild is needed — and run `make e2e KIND_CLUSTER=<name>`, which points the suite at a private `KUBECONFIG` for that cluster and refuses any other context ([kind-iteration.md](kind-iteration.md#the-e2e-suite-runs-on-a-private-kubeconfig-and-refuses-any-other-cluster)).
 
 **live-GitHub is a singleton, enforced at suite start.** A throwaway cluster per run removes only half the collision.
 The other half is on GitHub's side: two concurrent runs dispatch the same fixture workflows in the same repo and register identically-named runners, and because runner names are unique per registration scope, the second registration *deletes the first*.
