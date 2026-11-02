@@ -84,9 +84,10 @@ const (
 // resolveFQDNEmitter maps the tenant intent (egressPolicyMode) and the operator backend
 // (--fqdn-policy-backend) to the concrete CNI-native emitter — the single decision point
 // that replaces the old per-CNI enum switch (Q245). The intent value FQDN defers to the
-// operator backend, and FQDN+none emits nothing. That last case is rejected at
-// admission, so it is not reached in practice — and if it were, the base NetworkPolicy
-// still default-denies GitHub egress, so it fails closed rather than opening wide.
+// operator backend, and FQDN+none emits nothing. Admission rejects a new FQDN pool
+// without a backend, so a stored alias, which reads as FQDN at v2, is the one way to
+// reach that case; the base NetworkPolicy still default-denies GitHub egress, so it
+// fails closed rather than opening wide.
 func resolveFQDNEmitter(mode gmcv2.EgressPolicyMode, backend FQDNBackend) fqdnEmitterKind {
 	switch mode {
 	case gmcv2.EgressPolicyModeFQDN:
@@ -171,8 +172,8 @@ func toUnstructuredLabels(in map[string]string) map[string]interface{} {
 	return out
 }
 
-// buildEgressProxyCiliumNetworkPolicy builds the CiliumNetworkPolicy emitted in
-// CiliumFQDN mode. It selects this pool's proxy pods and allows exactly two egress
+// buildEgressProxyCiliumNetworkPolicy builds the CiliumNetworkPolicy emitted for FQDN
+// intent under the cilium backend. It selects this pool's proxy pods and allows exactly two egress
 // flows: DNS to cluster DNS (with a DNS-visibility rule so Cilium's FQDN proxy learns
 // the resolved IPs) and TCP/443 to the GitHub FQDNs via toFQDNs. A CiliumNetworkPolicy
 // makes its selected endpoints default-deny for egress, so everything else is denied —
@@ -252,7 +253,7 @@ func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2.EgressProxy, gitHubHosts []st
 }
 
 // buildEgressProxyCalicoNetworkPolicy builds the Calico (projectcalico.org/v3)
-// NetworkPolicy emitted in CalicoFQDN mode. It selects this pool's proxy pods and
+// NetworkPolicy emitted for FQDN intent under the calico backend. It selects this pool's proxy pods and
 // allows DNS to cluster DNS plus TCP/443 to the GitHub destination domains. The policy
 // declares types: [Egress] with no Allow rule beyond these, so Calico default-denies
 // all other egress — matching the CIDR default's posture.

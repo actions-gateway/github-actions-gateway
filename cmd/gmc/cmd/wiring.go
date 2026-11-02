@@ -96,7 +96,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	// later requires a GMC restart to enable the v2 controllers (Q228).
 	v2Enabled, err := controller.V2Installed(mgr.GetRESTMapper())
 	if err != nil {
-		return fmt.Errorf("detect actions-gateway.com/v2alpha1 CRDs: %w", err)
+		return fmt.Errorf("detect actions-gateway.com/v2 CRDs: %w", err)
 	}
 	if v2Enabled {
 		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")

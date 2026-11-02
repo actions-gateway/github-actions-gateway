@@ -20,9 +20,11 @@ import (
 // intent on a cluster that declares no FQDN egress backend (--fqdn-policy-backend=none,
 // the secure default). This is the fail-closed-and-loud contract of the intent/backend
 // split (Q245): the operator learns at apply time, not from a stranded proxy pool that
-// silently goes Degraded. The deprecated CiliumFQDN/CalicoFQDN intents pin their own
-// backend and so are never gated here; mode is egressPolicyModeOf's, so a stored alias
-// the v2 view shows as FQDN is recognised as one.
+// silently goes Degraded. A stored CiliumFQDN/CalicoFQDN alias is never gated here, so
+// re-applying or migrating it stays admitted (Q1085); mode is egressPolicyModeOf's, so a
+// stored alias the v2 view shows as FQDN is recognised as one. The controller reads the
+// pool at v2 as plain FQDN, so under backend none it emits no CNI-native policy. No
+// v2.0.0 cluster can store an alias, so that gap lasts only until Q1167.
 func validateFQDNBackend(mode agcv2.EgressPolicyMode, backend controller.FQDNBackend) error {
 	// Only an explicitly-configured cilium/calico/gke backend admits FQDN intent; none,
 	// the empty zero value, and any other value all fail closed (main.go normalizes the
