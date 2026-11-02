@@ -3092,14 +3092,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q1183 shipped the out-of-memory class's breaker as a <code>breaker_open</code> withhold plus one <code>AutoRetryPaused</code> Event, and left out three pieces …</td>
 </tr>
 <tr>
-<td><a href="Q1237/">Q1237</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#what-a-failed-job-records-r7">Record colocated egress proxy readiness in a failed job's snapshot</a></td>
-<td><code>feature</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Q555's worker snapshot leaves out the readiness of the set's colocated EgressProxy, which the design lists beside the pod's own state (R7) …</td>
-</tr>
-<tr>
 <td><a href="Q1229/">Q1229</a></td>
 <td>Plot proxy CONNECT outcomes by allowlist entry on a dashboard</td>
 <td><code>feature</code></td>
@@ -3322,14 +3314,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The one double that does not hold the poll, against this repo's own rule.</td>
-</tr>
-<tr>
-<td><a href="Q1162/">Q1162</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">Make the CI release gate wait for the candidate's images to publish</a></td>
-<td><code>ci</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>validate-candidate.yml</code> dispatches the gate the moment a candidate tag is pushed, and <code>publish.yml</code> starts from the same push, so nothing …</td>
 </tr>
 <tr>
 <td><a href="Q1143/">Q1143</a></td>
@@ -4156,14 +4140,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> the release gate's wall clock becomes the thing that delays a release, or a fourth e2e leg is proposed.</td>
 </tr>
 <tr>
-<td><a href="Q1172/">Q1172</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/scripts/fetch">Four scripts hand-copy one exponential jittered retry loop</a></td>
-<td><code>debt</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The same retry schedule is written out four times: base delay doubled after each sleep, capped, plus up to half again in jitter.</td>
-</tr>
-<tr>
 <td><a href="Q1189/">Q1189</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/validate-candidate.yml">Backport candidates run gate legs their release line never had</a></td>
 <td><code>ci</code> <code>dogfood</code> <code>retro</code></td>
@@ -4226,14 +4202,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The per-tenant scrape docs …</td>
-</tr>
-<tr>
-<td><a href="Q1233/">Q1233</a></td>
-<td><a href="../design/04-operational-flows/">A terminating-worker re-offer mints a runner registration each time</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A scale-set job held under <code>reason="worker_terminating"</code> mints a JIT config on every re-offer before the provisioner finds the previous …</td>
 </tr>
 <tr>
 <td><a href="Q1243/">Q1243</a></td>

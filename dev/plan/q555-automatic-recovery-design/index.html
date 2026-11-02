@@ -3008,7 +3008,7 @@
 
 <h1 id="q555-automatic-recovery-design">Q555 automatic recovery: design<a class="headerlink" href="#q555-automatic-recovery-design" title="Permanent link">&para;</a></h1>
 <p><strong>Status:</strong> ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up (<a href="../../queue/Q1236/">Q1236</a>) and without the proxy's readiness (<a href="../../queue/Q1237/">Q1237</a>); the rest is not.
+Q1182's part is built (<code>cmd/agc/internal/provisioner/rerun_ledger.go</code>): the ledger store with its version rules, the <code>reruns</code> map, the reservation and <code>selfCancelledAttempt</code>; so is Q1181's <code>run_cancelled</code>, <code>attempt_limit</code>, <code>run_too_old</code> and <code>superseded</code> on the scale-set tier (<code>rerun_futility.go</code>); so is Q555's detection (<code>flaky_jobs.go</code>): the <code>failures</code> map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up (<a href="../../queue/Q1236/">Q1236</a>), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns <a href="../q555-flaky-job-retry/">the requirements draft</a> into components against the code as it stands, one per backlog row, and answers the draft's <a href="../q555-flaky-job-retry/#open-questions-for-the-design-session">open questions</a>.
 Each answer is marked <strong>Decided</strong> (the maintainer chose it, 2026-10-12), <strong>Decide</strong> (a recommendation still awaiting sign-off) or <strong>Research</strong> (needs a measurement before anyone can choose).
 The draft says <em>what</em> and <em>why</em>; this says <em>how</em>.
@@ -3093,7 +3093,7 @@ So the runner-set controller, whose pod watch already sees every worker reach a 
   The pod's own <code>DisruptionTarget</code> condition and phase carry what a node-lost class needs.</li>
 <li><strong>Registry mirror readiness.</strong> It joins the snapshot with the mirror candidate's reproduction, once that settles which object reports it.</li>
 </ul>
-<p>A <strong>shared</strong> proxy pool lives in another namespace, which the AGC's cache cannot see, so its readiness is absent too: the snapshot says <code>proxy: shared</code>.</p>
+<p>A <strong>shared</strong> proxy pool lives in another namespace, which the AGC's cache cannot see, so its readiness is absent too: the snapshot's <code>proxy</code> says <code>mode: shared</code>.</p>
 <p>A restart loses snapshots for workers that finished before it, and their records say <code>context: unknown</code>.
 That is one of R5's stated blind spots.</p>
 <h3 id="where-the-ledger-lives-open-question-1">Where the ledger lives (open question 1)<a class="headerlink" href="#where-the-ledger-lives-open-question-1" title="Permanent link">&para;</a></h3>

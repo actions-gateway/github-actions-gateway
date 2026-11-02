@@ -3769,7 +3769,7 @@ Each <code>Reason</code> mirrors the corresponding metric name so the two correl
 <td><code>PlatformFaultOnFailedJob</code></td>
 <td>Warning</td>
 <td>none</td>
-<td>A failed scale-set job's worker showed a platform fault (a failed pod, <code>DisruptionTarget</code>, <code>OOMKilled</code>, or the runner exiting non-zero); names the fault (Q555)</td>
+<td>A failed scale-set job's worker showed a platform fault (a failed pod, <code>DisruptionTarget</code>, <code>OOMKilled</code>, the runner exiting non-zero, or a colocated EgressProxy not <code>Ready</code> or with no ready replica); names the fault (Q555, Q1237)</td>
 </tr>
 <tr>
 <td><code>MemoryLimitRaisedForRetry</code></td>

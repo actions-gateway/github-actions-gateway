@@ -7205,7 +7205,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>PlatformFaultOnFailedJob</code></td>
 <td>Warning</td>
-<td>A scale-set job failed and its worker shows a platform fault: the pod <code>Failed</code>, a <code>DisruptionTarget</code> condition, a container <code>OOMKilled</code>, or the runner container exiting non-zero (Q555). Names the run, the job, the worker and the fault.</td>
+<td>A scale-set job failed and its worker shows a platform fault: the pod <code>Failed</code>, a <code>DisruptionTarget</code> condition, a container <code>OOMKilled</code>, the runner container exiting non-zero, or the set's colocated EgressProxy not <code>Ready</code> or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault.</td>
 <td><a href="#flaky-jobs-and-platform-faults-on-failed-jobs">Flaky Jobs and Platform Faults on Failed Jobs</a></td>
 </tr>
 <tr>
@@ -8251,8 +8251,12 @@ A <code>canceled</code> completion is recorded only when a disruption recovery c
 <div class="highlight"><pre><span></span><code><a id="__codelineno-140-1" name="__codelineno-140-1" href="#__codelineno-140-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>scaleset-failures-&lt;runnerset&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.failures\.json}'</span>
 </code></pre></div>
 <p><strong>A <code>PlatformFaultOnFailedJob</code> Warning</strong> names the fault.
-<code>OOMKilled</code> means the job needs more memory than the worker template gives it; a <code>DisruptionTarget</code> condition or a <code>Failed</code> pod means the node or the scheduler removed the worker, which the <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">disruption arms</a> recover on their own.</p>
-<p><strong>What detection cannot see.</strong> Node conditions are not recorded (the AGC has no <code>nodes</code> read), nor is the readiness of the set's egress proxy pool or registry mirror.
+<code>OOMKilled</code> means the job needs more memory than the worker template gives it; a <code>DisruptionTarget</code> condition or a <code>Failed</code> pod means the node or the scheduler removed the worker, which the <a href="#which-disruptions-auto-re-run-a-job-and-which-never-do">disruption arms</a> recover on their own.
+<code>EgressProxy &lt;name&gt; has no ready replicas</code> means no proxy pod could carry the job's egress when the worker finished.
+<code>EgressProxy &lt;name&gt; not Ready</code>, with its ready count, means the pool had fewer ready pods than its floor (<code>spec.minReplicas</code>, or the Deployment's replicas under bring-your-own autoscaling), as during a rolling update or after an eviction, so the remaining pods may still have carried the job's egress.
+Read the pool with <code>kubectl get egressproxy -n &lt;namespace&gt; &lt;name&gt;</code>.</p>
+<p><strong>What detection cannot see.</strong> Node conditions are not recorded (the AGC has no <code>nodes</code> read), nor is a registry mirror's readiness.
+A proxy pool shared from another namespace is recorded as <code>proxy.mode: shared</code> with no readiness, since the AGC's cache does not reach that namespace.
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no <code>context</code>.
 A re-run more than 7 days after the failure, or one that lands on another <code>RunnerSet</code>, pairs with nothing and counts nothing.</p>
 <hr />

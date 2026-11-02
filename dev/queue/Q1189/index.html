@@ -2637,7 +2637,7 @@ So the failed leg is never required, and the cost is one extra billable dogfood 
 No <code>release-1.8</code> or <code>release-1.9</code> branch exists (2026-10-13), so nothing has paid this cost yet; the first backport RC cut after a new leg lands will.</p>
 <p>A mechanical fix would default an empty <code>legs</code> to the candidate tag's own <code>scripts/dogfood/lib/gate-legs.sh</code> (<code>git show &lt;tag&gt;:…</code>), so the gate runs exactly the legs that tag's publish will demand.
 Unmeasured: whether every leg main's script runs is also defined for an older tag's list, and how a tag predating <code>gate-legs.sh</code> should resolve.</p>
-<p>Separate from Q1162, which makes the gate wait for a candidate's images to publish, and from Q1161, which runs the e2e legs in parallel across projects: neither changes which legs a candidate runs.</p>
+<p>Separate from the gate's wait for a candidate's images to publish, and from Q1161, which runs the e2e legs in parallel across projects: neither changes which legs a candidate runs.</p>
 <p>Filed from the Q1171 retro.</p>
 
 
