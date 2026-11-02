@@ -378,6 +378,7 @@ Three things are specific to it:
 
 A run of bullets is only merged this way when every bullet in it is annotated, so an ordinary bulleted paragraph elsewhere on the page keeps git's own merge.
 Everything else is the shared behaviour, plus a whole-page check that no backlog ID ended up on two bullets.
+That check falls back to git's own merge, which can come back clean with the duplicate in it, so `make roadmap-check` enforces the same rule (rule 14) on whatever page results, however the duplicate arrived.
 
 `make merge-driver` installs all four drivers ([`scripts/README.md`](../../scripts/README.md#per-clone-setup) lists them).
 None is required: until you run it the `.gitattributes` lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.

@@ -171,6 +171,19 @@ expect "multi-ID, one shipped" 1 \
     "$(roadmap '- **Near thing.** <!-- q:Q1,Q3 --> Body. [d](plan/t.md)' -- "$EXPL")" \
     "$(status "Q1" "Q2")" 'names Q3'
 
+# Rule 14: one row backs one bullet. The shape a clean three-way merge leaves
+# when two edits each rebind a different bullet to the same ID (Q1247), here in
+# both sections so the rule is not scoped to one.
+expect "one ID on two near-term bullets" 1 \
+    "$(roadmap "$NEAR" '- **Other thing.** <!-- q:Q1,Q3 --> Body. [d](plan/t.md)' -- "$EXPL")" \
+    "$(status "Q1 Q3" "Q2")" 'already binds'
+expect "one ID across both sections" 1 \
+    "$(roadmap "$NEAR" -- "$EXPL" '- **Other far thing.** <!-- q:Q2 --> Body. [d](plan/t.md)')" \
+    "$(status "Q1" "Q2")" 'already binds'
+expect "one ID twice in one annotation" 1 \
+    "$(roadmap '- **Near thing.** <!-- q:Q1,Q1 --> Body. [d](plan/t.md)' -- "$EXPL")" \
+    "$(status "Q1" "Q2")" 'twice in one annotation'
+
 # The annotation may sit on any line of the bullet, not just the first.
 expect "annotation on continuation line" 0 \
     "$(roadmap '- **Near thing.** Body text runs on' '  and ends here. <!-- q:Q1 --> [d](plan/t.md)' -- "$EXPL")" \

@@ -52,6 +52,9 @@
 //     enforce it here: mdreflow declines every paragraph carrying the
 //     `<!-- q:QN -->` annotation rule 1 requires, so this page is the one place
 //     the formatter never reaches.
+//  14. A backlog ID is named by one roadmap bullet. Two bullets binding the
+//     same row promise one piece of work twice, and a merge of two edits can
+//     leave them that way without a conflict (Q1247).
 //
 // Rules 7 and 8 reconcile the one promise this page makes with a date attached.
 // A release gate lives on an item as an `X.Y-gate` label, meaning the item
@@ -220,6 +223,7 @@ func run(cfg config, findings, summary io.Writer) int {
 		c.checkRoadmapBullet(roadmapName, b, bound)
 		c.checkSentencePerLine(roadmapName, srcLines[roadmapPath], b)
 	}
+	c.checkOneBulletPerID(roadmapName, bullets)
 	c.checkGateCoverage(roadmapName, bound)
 
 	features := featureBullets(docs[featuresPath])
@@ -443,6 +447,30 @@ func (c *checker) checkRoadmapBullet(file string, b bullet, bound map[string]boo
 	}
 
 	c.checkHandTypedRelease(file, b, gates)
+}
+
+// checkOneBulletPerID is rule 14: each ID is named by at most one roadmap
+// bullet. It reads the annotation alone, so it holds however the duplicate
+// arrived, including a clean three-way merge no driver can see.
+func (c *checker) checkOneBulletPerID(file string, bullets []bullet) {
+	first := map[string]bullet{}
+	for _, b := range bullets {
+		seen := map[string]bool{}
+		for _, id := range b.ids {
+			if seen[id] {
+				c.report(file, b.line, fmt.Sprintf("%q names %s twice in one annotation.", b.label, id))
+				continue
+			}
+			seen[id] = true
+			if prior, dup := first[id]; dup {
+				c.report(file, b.line, fmt.Sprintf(
+					"%q names %s, which %q (line %d) already binds. One row backs one bullet: drop %s from one of them, or merge the bullets.",
+					b.label, id, prior.label, prior.line, id))
+				continue
+			}
+			first[id] = b
+		}
+	}
 }
 
 // checkHandTypedRelease is rule 8: a version written into the bullet agrees
