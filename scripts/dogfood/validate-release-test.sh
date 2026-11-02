@@ -110,6 +110,7 @@ scripted_gh() {
 	fi
 	[[ "${head}" == "EMPTY" ]] || printf '%s\n' "${head}"
 }
+# shellcheck disable=SC2329  # reached through retry_backoff in gh_retry
 gh() { scripted_gh "$@"; }
 
 check() {
@@ -1986,6 +1987,7 @@ check "e2e report: no leg is skipped as missing" "0" "$(grep -c 'skipping the re
 # The evidence publish reads (Q880): the candidate's commit, then each leg as it
 # passes. The commit is the remote's answer for the tag.
 EVIDENCE_COMMIT=1111111111111111111111111111111111111111
+# shellcheck disable=SC2329  # reached through retry_backoff in gh_retry
 gh() {
 	case "$*" in
 	*"/commits/v9.9.0-rc.1"*) echo "${EVIDENCE_COMMIT}" ;;
@@ -2024,6 +2026,7 @@ check "local notice: a CI run prints nothing" "" "${notice}"
 
 # A commit the gate cannot resolve stops the run before it spends: evidence that
 # names no commit is evidence publish cannot use.
+# shellcheck disable=SC2329  # reached through retry_backoff in gh_retry
 gh() { return 1; }
 rc=0
 GH_RETRIES=0 GH_RETRY_DELAY=0 evidence_start 2>/dev/null || rc=$?

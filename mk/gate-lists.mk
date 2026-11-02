@@ -330,4 +330,5 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  e2e/egress-negatives-test e2e/mirror-timing-test \
                  lib/merge-driver-common-test \
                  ci/check-gate-needs-test \
-                 agent/record-launch-guard-test
+                 agent/record-launch-guard-test \
+                 lib/retry-test
