@@ -3128,6 +3128,11 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <td><code>histogram_quantile(0.95, rate(actions_gateway_proxy_tunnel_duration_seconds_bucket[5m]))</code></td>
 <td>Time series</td>
 </tr>
+<tr>
+<td>CONNECTs by allowlist entry and outcome/s</td>
+<td><code>sum by (destination, outcome) (rate(actions_gateway_proxy_connects_total{outcome!="tunneled"}[5m]))</code></td>
+<td>Time series</td>
+</tr>
 </tbody>
 </table>
 <p><strong>Row 7 — Proxy &amp; Quota (kube-state-metrics)</strong></p>
