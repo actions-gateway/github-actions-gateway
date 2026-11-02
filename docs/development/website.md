@@ -128,8 +128,10 @@ Each version is a full built copy under its own path on the `gh-pages` branch, a
 **What deploys when** (`.github/workflows/pages.yml`):
 
 - **push to `main`** → `mike deploy dev` (refreshes the unreleased `dev` docs).
-- **stable `v*` tag push** → deploys that release's docs, and **only if it is the highest released version** also moves the `stable` alias + the default root redirect to it (`mike set-default stable`).
+- **stable `v*` tag push** → re-runs `pages.yml` as a `workflow_dispatch` on the same tag (the `handoff` job), which deploys that release's docs, and **only if it is the highest released version** also moves the `stable` alias + the default root redirect to it (`mike set-default stable`).
   This is the same tag push that runs `publish.yml`.
+  The push hands off rather than deploying because no deploy made by a tag push has been seen to serve (Q1041): `v1.6.0` to `v1.10.0` each reported success and kept the previous tree live, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
+  Why the push differs is not known.
 - **prerelease tag** (`0.x`, `-rc`/`-alpha`/`-beta`) → **no deploy** (the same prerelease test `publish.yml` uses, Q293).
 - **`workflow_dispatch`** → deploys the `version`/`alias` inputs verbatim (or derives from the ref when blank) — used for **seeding** already-released versions and manual redeploys.
   The `docs_ref` input picks which ref the docs *content* is built from, independently of the ref the workflow logic runs from (see § Seeding below).
@@ -172,6 +174,7 @@ No assertion over `_site` can stand in for this, and `v1.6.0` is the proof.
 Every tree-side signal in that run was correct: `mike` pushed the right commit, `git archive` picked it up, the uploaded artifact carried `1.6.0` with the `stable` alias, and the Pages deployment reported success and became the active one.
 The site served `1.5.0` for roughly 25 minutes regardless, until a manual republish.
 Re-reading the retained artifact afterwards is what settled it, so the failure was on the serving side and nothing the run could assert about its own tree would have caught it.
+Every stable tag through `v1.10.0` failed the same way, and every one was a deploy from a tag push, which is why a tag push now hands its deploy to a dispatch (§ above).
 Each poll uses a fresh query string, because Pages caches on the full URL and re-reading one URL reports whatever the edge already holds.
 
 `dev` is excluded from the live check.
@@ -222,9 +225,9 @@ Four things are deliberately **not** taken from the tag:
 | `site_url` and `docs/CNAME` | Where the site lives is a property of the site, not of the release. `v1.0.0` predates the custom domain: it has no `docs/CNAME`, and its `site_url` still points at the retired `actions-gateway.github.io/github-actions-gateway/` subpath, which would give that version dead canonical URLs, sitemap, and announce-bar links. |
 | `overrides/` | Site chrome, not release documentation. The [announce bar](#the-announce-bar) advertises the newest release site-wide, which is the signal a visitor reading older docs wants. Taking it from the tag pins each version to the highlight prose written the day it was cut. |
 | `extra.version` | A pre-versioning tag has no version block, so its pages would render with no selector and strand a visitor on an old release. |
-| `hooks` | A tag cut before Q393 does not wire `hooks/release_version.py`, so its announce bar would render the version-free fallback instead of naming the newest release. |
+| `hooks` | A tag cut before Q393 does not wire `hooks/release_version.py`, so its announce bar would render the version-free fallback instead of naming the newest release. The whole list is copied, because `INHERIT` replaces a list rather than merging it: a one-entry list left `source_links.py` out, so `1.8.0` and `1.9.0` shipped `.github/` links that 404 (Q1041). |
 
-**That safety net covers seeds only.** A stable tag push has a blank `docs_ref` and builds the tag wholesale, `overrides/` included.
+**That safety net covers seeds only.** A stable tag's deploy has a blank `docs_ref` and builds the tag wholesale, `overrides/` included.
 That is safe for the announce bar's *version*, which the hook derives from the tag list at build time rather than from a string in the checkout; only the optional highlight prose is pinned to the tag.
 Refreshing it is an optional pre-flight step in [release.md](../operations/release.md#1-pre-flight).
 

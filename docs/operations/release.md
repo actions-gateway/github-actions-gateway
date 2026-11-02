@@ -735,18 +735,22 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 > [Step 7](#the-bump-on-main-does-not-reach-the-published-release) republishes them.
 > The versioned-docs model, and the one-time `mike` seeding of releases cut before it landed, are documented in [website.md § Versioned deploy](../development/website.md#versioned-deploy-mike).
 
-#### The site deploy fails on a stable tag, and the republish is a step
+#### The tag push hands the site deploy to a dispatch
 
-**Expect `pages` to go red on the tag and plan to re-run it.** Every stable tag since `v1.6.0` has failed this way: `v1.6.0`, `v1.7.0` and `v1.8.0`, three for three.
-The deploy step reports success, `verify-pages-live` then polls for five minutes and fails, and the site goes on serving the previous release.
-The cause is open ([Q1041](../queue/Q1041.md)); what is established is that the tag's deploy lands one to two minutes behind the `main` merge's deploy of the same commit, and that a later solo deploy of the same content publishes.
+**Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job re-runs `pages` as a `workflow_dispatch` on the same tag, and that run builds, deploys and checks the live site (Q1041).
+Every stable tag from `v1.6.0` to `v1.10.0` deployed from its push, reported success, and never served, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
+Why a push deploy differs from a dispatch is not known.
 
-Re-run it from `main`, pointing the content at the tag:
+If the dispatched run fails, dispatch it again by hand:
 
 ```bash
-gh workflow run pages --ref main \
-  -f version=X.Y.Z -f alias=stable -f set_default=true -f docs_ref=vX.Y.Z
+gh workflow run pages --ref vX.Y.Z
 ```
+
+With no inputs it resolves from the tag the way the push does, so it moves `stable` only when `X.Y.Z` is the highest release and is safe for a backport.
+
+**A backport tag cut from a `release-X.Y` branch older than this change deploys from its push**, because a tag push runs the `pages.yml` on its own commit.
+`release-1.4` through `release-1.7` predate the hand-off, so a tag cut from one of them needs the command above run by hand.
 
 Then read the site rather than the run:
 
@@ -755,7 +759,7 @@ curl -fsS https://actions-gateway.com/versions.json | jq -r '.[] | "\(.version) 
 ```
 
 `X.Y.Z` must be listed and must hold `stable`.
-Use `docs_ref=release-X.Y` instead when [step 7](#the-bump-on-main-does-not-reach-the-published-release) applies, that is, when the pins were bumped *after* the tag, so the tag's own tree still names the previous release.
+When [step 7](#the-bump-on-main-does-not-reach-the-published-release) applies, that is, when the pins were bumped *after* the tag, so the tag's own tree still names the previous release, republish from `main` with `docs_ref=release-X.Y` as that step shows instead.
 
 ### 3. Verify the publish
 
@@ -1247,14 +1251,8 @@ This half exists because `v1.3.0` shipped without it too: the 1.3 row read `❌ 
 
 **Bump the pins before the tag and this whole section is a fallback**, which is what [step 2](#2-tag-and-push) tells you to do and what `v1.8.0` was the first release to do.
 [`check-release-pins.sh`](../../scripts/docs/check-release-pins.sh) accepts a pin naming a release that has a candidate tagged and no stable tag yet, so the bump lands on `main` during the candidate window without reddening `make check` for every PR in it.
-The tag then carries the right pins itself and the republish needs no branch:
-
-```bash
-gh workflow run pages --ref main \
-  -f version=X.Y.Z -f alias=stable -f set_default=true -f docs_ref=vX.Y.Z
-```
-
-Then confirm it with `make verify-published-docs VERSION=vX.Y.Z`, as below.
+The tag then carries the right pins itself, so its own deploy publishes them and no republish is needed.
+Confirm it with `make verify-published-docs VERSION=vX.Y.Z`, as below.
 
 **Everything below is the recovery for a bump that landed after the tag**, which is how every release before `v1.8.0` was cut.
 
