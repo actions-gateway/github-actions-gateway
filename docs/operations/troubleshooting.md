@@ -788,8 +788,8 @@ The reason says which of two states you are in:
 
 | Reason | Meaning | Where to go |
 |---|---|---|
-| `RefreshStalled` | The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied. | The diagnostics below. |
-| `RefreshNeverSucceeded` | The GMC holds no ranges at all, from neither a fetch nor its persisted copy. The policy carries no GitHub rule, so GitHub egress is denied now. | [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start). |
+| `RefreshStalled` | The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied, except through a direct-egress policy the message names as keeping its ranges. | The diagnostics below. |
+| `RefreshNeverSucceeded` | The GMC holds no ranges at all, from neither a fetch nor its persisted copy. On an `EgressProxy` or v1 `ActionsGateway` the policy carries no GitHub rule, so GitHub egress is denied now. On a direct-egress v2 `ActionsGateway` a policy may still carry the ranges it was last programmed with; the message says which (below). | [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start). |
 
 **A direct-egress v2 gateway can still be reaching GitHub when the GMC serves no ranges.** The GMC does not blank a direct-egress `NetworkPolicy` that already carries GitHub ranges, so after a restart with no usable persisted copy, or once that copy expires, those policies keep the ranges they were last programmed with.
 The condition stays `True`, because nothing is refreshing them, and its message says which policies keep their ranges and which carry no GitHub rule.
