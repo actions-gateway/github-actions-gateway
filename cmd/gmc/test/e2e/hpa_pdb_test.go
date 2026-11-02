@@ -22,10 +22,13 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
+	tenant := utils.BaseTenant(tenantNS, agName, secretName)
+	proxyName := tenant.ProxyName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 33333, 44444, testRSAKeyPEM)
-		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
 	})
 
@@ -50,7 +53,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 
 	// This test used to patch the HPA's spec.minReplicas directly, which made it
 	// flaky (Q176) for a reason no timeout increase could fix. The GMC owns the
-	// HPA's whole spec, derived from the ActionsGateway's spec.proxy.minReplicas
+	// HPA's whole spec, derived from the EgressProxy's spec.minReplicas
 	// (1 here) — and it reconciles on every proxy Deployment event because it
 	// Owns(&appsv1.Deployment{}). So the HPA's own scale-out write was what
 	// triggered the reconcile that reset spec.minReplicas back to 1 (and, before
@@ -59,7 +62,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 	// the assertion polled every 5s hoping to land in it. Once the window closed
 	// it never reopened, so a longer Eventually could not help.
 	//
-	// Drive the floor through the ActionsGateway CR instead: that is the supported
+	// Drive the floor through the EgressProxy CR instead: that is the supported
 	// path, the GMC keeps the HPA's minReplicas at 2 rather than fighting it, and
 	// the resulting state is steady rather than transient.
 	It("E2E_GMC_HPADrivesScaleUp: HPA drives proxy Deployment replica count", func() {
@@ -75,14 +78,14 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			g.Expect(out).To(Equal("True"), "HPA not yet scaling-active")
 		}, 5*time.Minute, 10*time.Second).Should(Succeed())
 
-		By("raising ActionsGateway spec.proxy.minReplicas to 2 to trigger scale-up")
-		cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
-			"-n", tenantNS, "--type=merge", "-p", `{"spec":{"proxy":{"minReplicas":2}}}`)
+		By("raising EgressProxy spec.minReplicas to 2 to trigger scale-up")
+		cmd := exec.Command("kubectl", "patch", "egressproxies.actions-gateway.com", tenant.EgressProxyName(),
+			"-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":2}}`)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
 		DeferCleanup(func() {
-			cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
-				"-n", tenantNS, "--type=merge", "-p", `{"spec":{"proxy":{"minReplicas":1}}}`)
+			cmd := exec.Command("kubectl", "patch", "egressproxies.actions-gateway.com", tenant.EgressProxyName(),
+				"-n", tenantNS, "--type=merge", "-p", `{"spec":{"minReplicas":1}}`)
 			_, _ = utils.Run(cmd)
 		})
 
@@ -104,7 +107,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 				"-n", tenantNS, "-o", "jsonpath={.spec.minReplicas}")
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(out).To(Equal("2"), "GMC has not propagated proxy.minReplicas to the HPA yet")
+			g.Expect(out).To(Equal("2"), "GMC has not propagated the EgressProxy minReplicas to the HPA yet")
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
 		// minReplicas is a hard floor the HPA enforces via its
@@ -152,7 +155,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			utils.WaitForDeploymentReady(tenantNS, proxyName, 2*time.Minute)
 
 			// The preceding Ordered/Serial test (HPADrivesScaleUp) patches the
-			// ActionsGateway's proxy.minReplicas back to 1 in its DeferCleanup,
+			// EgressProxy's minReplicas back to 1 in its DeferCleanup,
 			// which lowers the HPA's floor and eventually triggers an HPA-driven
 			// scale-down from 2 → 1 that runs asynchronously (the HPA's 5-minute
 			// downscale stabilisation window means the pool usually still has two
@@ -168,7 +171,7 @@ var _ = Describe("E2E_GMC_HPA_PDB", Ordered, Serial, func() {
 			By("evicting a proxy pod and asserting PDB outcome (retries on transient NotFound)")
 			var evictionSucceeded bool
 			Eventually(func(g Gomega) {
-				podName := getPodName(tenantNS, "app=actions-gateway-proxy")
+				podName := getPodName(tenantNS, tenant.ProxyPodSelector())
 				g.Expect(podName).NotTo(BeEmpty(), "no proxy pod found yet")
 
 				evictJSON := fmt.Sprintf(`{"apiVersion":"policy/v1","kind":"Eviction","metadata":{"name":"%s","namespace":"%s"}}`,

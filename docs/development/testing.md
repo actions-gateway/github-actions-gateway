@@ -3545,9 +3545,9 @@ Raising the wait does nothing: the pod is deadlocked, not slow, and `kubectl des
 That was Q570's proximate cause: the v1 pool's HPA scaled to 2 about 15 s in, and the v2 pool `gag-migrate` created a minute later was unschedulable for good.
 A v2 pool is now selected solely by `actions-gateway.com/egress-proxy: <proxy>`, which no v1 pod carries, so each anti-affinity term repels only its own pool's replicas and two coexisting pools fit on `max(v1, v2)` nodes rather than `v1+v2`.
 
-**Waiting for the AGC, not just its Deployment.** A spec that waits for a broker session (or anything else that needs the AGC operational) must gate on `utils.WaitForRunnerGroupReconciled`, not only `utils.WaitForDeploymentReady`.
+**Waiting for the AGC, not just its Deployment.** A spec that waits for a broker session (or anything else that needs the AGC operational) must gate on `utils.WaitForRunnerSetReconciled`, not only `utils.WaitForDeploymentReady`.
 Deployment readiness means only that the AGC's health server is up — it binds within seconds of pod start and is deliberately decoupled from the GitHub-App token fetch (`cmd/agc/main.go`), whose budget alone is up to ~2 minutes.
-`WaitForRunnerGroupReconciled` waits for `RunnerGroup.status.observedGeneration` to be set, which the AGC does only after token + agent registration + listener-multiplexer start all succeed.
+`WaitForRunnerSetReconciled` waits for `RunnerSet.status.observedGeneration` to be set with a Ready reason that is not a reference-resolution failure, which the AGC reaches only after token + agent registration + listener-multiplexer start all succeed.
 Gating on Deployment readiness alone folds the AGC's whole startup into the session wait's budget, which under parallel CI load (token/registration/session round-trips to the shared single-replica fakegithub) can exhaust it and surface as a misleading "no session registered" timeout (Q134).
 
 **An `AfterAll` deletes the tenant CRs in dependency order — waiting on each — before the namespace.** `utils.DeleteNamespace` is `--wait=false`, so a bare namespace delete races the cascade against the tenant's own AGC pod.

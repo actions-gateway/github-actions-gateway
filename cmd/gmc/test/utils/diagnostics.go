@@ -10,7 +10,7 @@ import (
 
 // DumpAGCSessionDiagnostics writes best-effort cluster state to the Ginkgo
 // output for debugging an AGC broker-session-registration failure — the
-// "no session registered for this RunnerGroup yet" / "no worker pod scheduled
+// "no session registered for this RunnerSet yet" / "no worker pod scheduled
 // yet" e2e timeouts (Q134/Q135).
 //
 // The session-registration specs poll fakegithub (the source of truth) for a
@@ -18,7 +18,7 @@ import (
 // no hint whether the AGC listener never started, started but failed
 // createSession / the OAuth token exchange and is backing off, or hit a
 // non-retriable exit that nothing revived (Q137). This dumps the signals that
-// distinguish those: the RunnerGroup status (activeSessions, conditions,
+// distinguish those: the RunnerSet status (activeSessions, conditions,
 // observedGeneration), the AGC pod logs (where the listener logs broker-call
 // errors), pod/Deployment descriptions (scheduling + image-pull events), every
 // ReplicaSet's pod template (the only surviving record of a revision a mid-run
@@ -35,8 +35,8 @@ func DumpAGCSessionDiagnostics(tenantNS, agcDeployment, infraNS, fakegithubDeplo
 
 	dumpCommand("workloads in "+tenantNS,
 		"kubectl", "get", "all", "-n", tenantNS)
-	dumpCommand("runnergroup status in "+tenantNS,
-		"kubectl", "get", "runnergroup", "-n", tenantNS, "-o", "yaml")
+	dumpCommand("runnerset status in "+tenantNS,
+		"kubectl", "get", "runnersets.actions-gateway.com", "-n", tenantNS, "-o", "yaml")
 	dumpCommand("pod descriptions in "+tenantNS,
 		"kubectl", "describe", "pods", "-n", tenantNS)
 	// A roll scales the superseded ReplicaSet to zero, so its pods — and the
@@ -120,8 +120,9 @@ func DumpProvisioningDiagnostics(managerNS, managerDeployment string, namespaces
 			"kubectl", "get", "namespace", ns, "-o", "yaml")
 		dumpCommand("workloads in "+ns,
 			"kubectl", "get", "all", "-n", ns)
-		dumpCommand("actionsgateway status in "+ns,
-			"kubectl", "get", "actionsgateways.actions-gateway.github.com", "-n", ns, "-o", "yaml")
+		dumpCommand("actionsgateway and egressproxy status in "+ns,
+			"kubectl", "get", "actionsgateways.actions-gateway.com,egressproxies.actions-gateway.com",
+			"-n", ns, "-o", "yaml")
 		dumpNetworkPolicies("networkpolicies in "+ns, ns)
 		// describe over `-o yaml`: it renders the scheduling and probe events
 		// without the status bulk, and prints a Secret-backed volume or env var

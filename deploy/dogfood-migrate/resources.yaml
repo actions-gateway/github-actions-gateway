@@ -2,7 +2,7 @@
 #
 # This is the LEGACY shape on purpose: `actions-gateway.github.com/v1alpha1`, one
 # monolithic ActionsGateway carrying its runner group, its inline proxy, and its
-# security profile. It mirrors the `utils.DinDTenant` fixture the Q414 e2e migrates
+# security profile. It mirrors the `utils.V1DinDTenant` fixture the Q414 e2e migrates
 # on kind, so the live run exercises the same fan-out the spec covers — the
 # privileged worker shape that must land on a CLUSTER-scoped ClusterRunnerTemplate.
 #

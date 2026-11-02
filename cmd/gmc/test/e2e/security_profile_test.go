@@ -4,13 +4,14 @@
 package e2e
 
 import (
+	"fmt"
 	"os/exec"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
@@ -23,10 +24,11 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 
 	BeforeAll(func() {
 		// The privileged-profile label is the platform-applied eligibility gate for
-		// securityProfile: privileged (Q133); the privileged sub-test below patches
-		// the CR to privileged, which the validating webhook rejects without it.
+		// the privileged security profile (Q133); the privileged sub-test below
+		// relabels the namespace to privileged, which the
+		// namespace-security-profile-guard policy rejects without it.
 		utils.CreateNamespace(ns, map[string]string{
-			gmcv1alpha1.PrivilegedProfileLabel: gmcv1alpha1.PrivilegedProfileAllowed,
+			v2alpha1.PrivilegedProfileLabel: v2alpha1.PrivilegedProfileAllowed,
 		})
 		utils.CreateGitHubAppSecret(ns, secretName, 55555, 66666, testRSAKeyPEM)
 		utils.BaseTenant(ns, agName, secretName).ApplyWithWebhookRetry()
@@ -79,17 +81,17 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 		Expect(out).To(Equal("baseline"), "namespace must have pod-security.kubernetes.io/audit=baseline")
 	})
 
-	It("E2E_GMC_PSALabelPrivileged: privileged securityProfile stamps pod-security enforce=privileged", func() {
-		// baseline -> privileged is a downgrade (privileged is the least
-		// restrictive profile), so the GMC validating webhook requires the
+	It("E2E_GMC_PSALabelPrivileged: privileged security profile stamps pod-security enforce=privileged", func() {
+		// v2 keeps the security profile on the namespace, not the gateway. baseline
+		// -> privileged is a downgrade (privileged is the least restrictive
+		// profile), so the namespace-security-profile-guard policy requires the
 		// explicit allow-profile-downgrade annotation. Set it in the same merge
 		// patch; this also exercises the opt-in path end-to-end.
-		By("patching ActionsGateway to privileged securityProfile with the downgrade opt-in annotation")
-		cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
-			"-n", ns,
-			"--type=merge",
-			"-p", `{"metadata":{"annotations":{"actions-gateway.github.com/allow-profile-downgrade":"true"}},"spec":{"securityProfile":"privileged"}}`,
-		)
+		By("relabelling the namespace to the privileged security profile with the downgrade opt-in annotation")
+		patch := fmt.Sprintf(`{"metadata":{"annotations":{%q:%q},"labels":{%q:%q}}}`,
+			v2alpha1.AllowProfileDowngradeAnnotation, v2alpha1.AllowProfileDowngradeAllowed,
+			v2alpha1.SecurityProfileLabel, v2alpha1.SecurityProfilePrivileged)
+		cmd := exec.Command("kubectl", "patch", "namespace", ns, "--type=merge", "-p", patch)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -101,7 +103,7 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 			out, err := utils.Run(cmd)
 			g.Expect(err).NotTo(HaveOccurred())
 			g.Expect(out).To(Equal("privileged"),
-				"namespace enforce label must update to 'privileged' after spec change")
+				"namespace enforce label must update to 'privileged' after the profile change")
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 })

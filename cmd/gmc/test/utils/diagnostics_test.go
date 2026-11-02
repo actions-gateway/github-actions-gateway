@@ -83,7 +83,8 @@ func TestDumpProvisioningDiagnosticsCapturesGatewayStatusAndManagerLogs(t *testi
 	dumped := out.String()
 	for _, want := range []string{
 		"--- namespace tenant-a ---",
-		"--- actionsgateway status in tenant-a ---",
+		"--- actionsgateway and egressproxy status in tenant-a ---",
+		"get actionsgateways.actions-gateway.com,egressproxies.actions-gateway.com -n tenant-a",
 		"--- networkpolicies in tenant-a ---",
 		"--- pod descriptions in tenant-a ---",
 		"--- pod/proxy-0 logs in tenant-a ---",

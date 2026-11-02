@@ -9,7 +9,7 @@ This tree is deleted at that cut along with the rest of the v1 surface.
 ## Why it is the legacy shape
 
 The whole point is to have something to migrate.
-It is deliberately the monolithic v1 object — one `ActionsGateway` carrying its runner group, its inline proxy, and its `securityProfile` — mirroring the `utils.DinDTenant` fixture that the [Q414 e2e](../../cmd/gmc/test/e2e/migration_v1_to_v2_test.go) migrates on `kind`, so the live run exercises the same fan-out that spec covers.
+It is deliberately the monolithic v1 object — one `ActionsGateway` carrying its runner group, its inline proxy, and its `securityProfile` — mirroring the `utils.V1DinDTenant` fixture that the [Q414 e2e](../../cmd/gmc/test/e2e/migration_v1_to_v2_test.go) migrates on `kind`, so the live run exercises the same fan-out that spec covers.
 
 The privileged DinD worker shape is what makes it representative: it is the case that distinguishes the namespaced `RunnerTemplate` from the cluster-scoped `ClusterRunnerTemplate` on the v2 side, and it is the shape that already hid one real defect (a privileged tenant fanned out to a namespaced template the v2 webhook rejects, leaving the namespace half-migrated).
 

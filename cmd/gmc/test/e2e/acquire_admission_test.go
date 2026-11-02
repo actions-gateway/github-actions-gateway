@@ -33,7 +33,7 @@ import (
 // fakegithub models the broker. Its Q154 lease/redelivery mode (opt-in,
 // owner-scoped) gives the two paths distinct, observable outcomes: an acquired
 // job is consumed and never redelivered; a delivered-but-unacquired job is
-// redelivered once its lease expires. The RunnerGroup pins worker pods Pending
+// redelivered once its lease expires. The RunnerSet pins worker pods Pending
 // (unschedulable) so capacity is held deterministically and freed by deleting a
 // pod — the InformerPodWaiter treats deletion as completion, releasing the slot.
 var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
@@ -47,11 +47,10 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 		leaseMs = 1500
 	)
 
-	var (
-		admitPFCmd *exec.Cmd
-		rgName     string
-		ownerScope = agName + "-"
-	)
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, agcImage).WithWorkerCeiling(1)
+	agcName, rsName, ownerScope := tenant.AGCName(), tenant.RunnerSetName(0), tenant.SessionOwnerPrefix()
+
+	var admitPFCmd *exec.Cmd
 
 	fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 		fakegithubServiceName, infraNamespace, fakegithubServicePort)
@@ -82,7 +81,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 
 	liveSession := func(g Gomega) string {
 		sessions := fakegithubActiveSessionsForOwner(g, ownerScope)
-		g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerGroup")
+		g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
 		return sessions[0]
 	}
 
@@ -104,7 +103,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).WithWorkerCeiling(1).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
@@ -113,17 +112,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
 		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
-		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
-
-		By("capturing the RunnerGroup name for the ceiling label")
-		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "runnergroup",
-				"-n", tenantNS, "-o", "jsonpath={.items[0].metadata.name}")
-			out, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred())
-			rgName = strings.TrimSpace(out)
-			g.Expect(rgName).NotTo(BeEmpty(), "no RunnerGroup found")
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
+		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
 		By("starting persistent port-forward to fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19590+GinkgoParallelProcess())
@@ -142,7 +131,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 
-		By("enabling the Q154 lease/redelivery model scoped to this RunnerGroup")
+		By("enabling the Q154 lease/redelivery model scoped to this RunnerSet")
 		fakegithubControlRequest(Default, "POST",
 			fmt.Sprintf("/control/redelivery?enabled=true&owner=%s&leaseMs=%d", ownerScope, leaseMs), nil)
 	})
@@ -151,12 +140,12 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpAGCSessionDiagnostics(tenantNS, agcName, infraNamespace, fakegithubServiceName)
 		}
-		// Free capacity between specs: delete every pod carrying this group's
+		// Free capacity between specs: delete every pod carrying this set's
 		// ceiling label (worker pods and the decoy), so each It starts with an
 		// empty gate.
 		cmd := exec.Command("kubectl", "delete", "pods",
 			"-n", tenantNS,
-			"-l", "actions-gateway/runner-group="+rgName,
+			"-l", "actions-gateway.com/runner-set="+rsName,
 			"--ignore-not-found", "--wait=false")
 		_, _ = utils.Run(cmd)
 	})
@@ -174,7 +163,7 @@ var _ = Describe("E2E_AGC_AcquireAdmissionControl", Ordered, func() {
 	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_AGC_CeilingHeldJobIsCancelledNotRedelivered: a ceiling-held acquired job is not redelivered", func() {
-		// Pre-create a Pending decoy pod carrying the group's ceiling label. It
+		// Pre-create a Pending decoy pod carrying the set's ceiling label. It
 		// counts toward the maxWorkers=1 ceiling but is unknown to the gate's
 		// in-memory reservation counter — exactly the gate/ceiling divergence the
 		// post-acquire ceilingCheck backstop exists for (e.g. a pod from before an
@@ -190,7 +179,7 @@ metadata:
   namespace: %s
   labels:
     app.kubernetes.io/managed-by: actions-gateway-controller
-    actions-gateway/runner-group: %s
+    actions-gateway.com/runner-set: %s
 spec:
   nodeSelector:
     q154.actions-gateway/never-schedules: "true"
@@ -206,7 +195,7 @@ spec:
       allowPrivilegeEscalation: false
       capabilities:
         drop: ["ALL"]
-`, tenantNS, rgName, agcImage)
+`, tenantNS, rsName, agcImage)
 		Expect(utils.ApplyManifest(decoy)).To(Succeed(), "create decoy pod")
 
 		By("waiting for the decoy to be Pending")
@@ -267,7 +256,7 @@ spec:
 		// E2E_GMC_HPADrivesScaleUp waits on.
 		By("waiting for the proxy HPA to be scaling-active (metrics-server serving) before the tight redelivery window")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "hpa", proxyName,
+			cmd := exec.Command("kubectl", "get", "hpa", tenant.ProxyName(),
 				"-n", tenantNS, "-o",
 				`jsonpath={.status.conditions[?(@.type=="ScalingActive")].status}`)
 			out, err := utils.Run(cmd)
@@ -305,7 +294,7 @@ spec:
 		By("freeing capacity by deleting the busy worker pod")
 		Expect(utils.Run(exec.Command("kubectl", "delete", "pods",
 			"-n", tenantNS,
-			"-l", "actions-gateway/runner-group="+rgName,
+			"-l", "actions-gateway.com/runner-set="+rsName,
 			"--wait=false"))).Error().NotTo(HaveOccurred())
 
 		By("confirming the previously skipped job is now acquired")

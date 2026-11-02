@@ -23,10 +23,13 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
+	tenant := utils.BaseTenant(tenantNS, agName, secretName)
+	agcName, proxyName, workloadName := tenant.AGCName(), tenant.ProxyName(), tenant.WorkloadPolicyName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.BaseTenant(tenantNS, agName, secretName).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 	})
 
 	// Dump before AfterAll deletes the namespace (Q666). The enforcer state goes
@@ -59,19 +62,19 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	SetDefaultEventuallyPollingInterval(2 * time.Second)
 
 	It("E2E_GMC_ProvisionsProxyDeployment: proxy Deployment reaches ready", func() {
-		By("waiting for actions-gateway-proxy Deployment to have ready replicas")
+		By("waiting for the proxy Deployment to have ready replicas")
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 3*time.Minute)
 	})
 
 	It("E2E_GMC_ProvisionsAGCDeployment: AGC Deployment reaches ready", func() {
-		By("waiting for actions-gateway-controller Deployment to have ready replicas")
+		By("waiting for the AGC Deployment to have ready replicas")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 3*time.Minute)
 	})
 
 	It("E2E_GMC_ReadyConditionTrue: ActionsGateway Ready condition becomes True", func() {
 		By("checking ActionsGateway Ready condition")
 		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.github.com", agName,
+			cmd := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.com", agName,
 				"-n", tenantNS,
 				"-o", `jsonpath={.status.conditions[?(@.type=="Ready")].status}`,
 			)
@@ -89,21 +92,21 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	})
 
 	It("E2E_GMC_ServiceAccountAndRBACCreated: ServiceAccount and RoleBinding are present", func() {
-		By("checking ServiceAccount actions-gateway-controller")
+		By("checking the AGC ServiceAccount")
 		Expect(utils.ResourceExists("serviceaccount", tenantNS, agcName)).To(BeTrue())
-		By("checking RoleBinding actions-gateway-controller")
+		By("checking the AGC RoleBinding")
 		Expect(utils.ResourceExists("rolebinding", tenantNS, agcName)).To(BeTrue())
 	})
 
 	It("E2E_GMC_ProxyServiceCreated: proxy Service is present", func() {
-		By("verifying Service actions-gateway-proxy exists")
+		By("verifying the proxy Service exists")
 		Expect(utils.ResourceExists("service", tenantNS, proxyName)).To(BeTrue())
 	})
 
 	It("E2E_GMC_HPAAndPDBCreated: HPA and PDB are present", func() {
-		By("checking HPA actions-gateway-proxy")
+		By("checking the proxy HPA")
 		Expect(utils.ResourceExists("horizontalpodautoscaler", tenantNS, proxyName)).To(BeTrue())
-		By("checking PDB actions-gateway-proxy")
+		By("checking the proxy PDB")
 		Expect(utils.ResourceExists("poddisruptionbudget", tenantNS, proxyName)).To(BeTrue())
 	})
 
@@ -112,7 +115,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",
 				"-n", tenantNS,
-				"-l", "app=actions-gateway-proxy",
+				"-l", tenant.ProxyPodSelector(),
 				"-o", `jsonpath={.items[0].spec.nodeName}`,
 			)
 			out, err := utils.Run(cmd)
@@ -129,7 +132,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		Eventually(func(g Gomega) {
 			cmd := exec.Command("kubectl", "get", "pods",
 				"-n", tenantNS,
-				"-l", "app=actions-gateway-controller",
+				"-l", tenant.AGCPodSelector(),
 				"--field-selector=status.phase=Running",
 				"-o", "jsonpath={.items[0].metadata.name}",
 			)
@@ -177,11 +180,11 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 	})
 
 	It("E2E_GMC_ReconcileAfterUpdate: changing spec triggers reconcile", func() {
-		By("patching ActionsGateway proxy.minReplicas to 2")
-		cmd := exec.Command("kubectl", "patch", "actionsgateways.actions-gateway.github.com", agName,
+		By("patching EgressProxy minReplicas to 2")
+		cmd := exec.Command("kubectl", "patch", "egressproxies.actions-gateway.com", tenant.EgressProxyName(),
 			"-n", tenantNS,
 			"--type=merge",
-			"-p", `{"spec":{"proxy":{"minReplicas":2}}}`,
+			"-p", `{"spec":{"minReplicas":2}}`,
 		)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())
@@ -233,7 +236,7 @@ var _ = Describe("E2E_GMC_Provisioning", Ordered, func() {
 		//   actions-gateway/component=workload — matches the workload NP, so
 		//     kindnet permits egress to the proxy pods on port 8080.
 		// Volume:
-		//   The actions-gateway-proxy-tls Secret holds the self-signed leaf cert
+		//   The EgressProxy's "<ep>-proxy-tls" Secret holds the self-signed leaf cert
 		//   served by the proxy. We mount only tls.crt (not tls.key) and pass it
 		//   to curl via --proxy-cacert so the CONNECT handshake to the proxy is
 		//   TLS-verified end-to-end.
@@ -320,11 +323,11 @@ spec:
   volumes:
   - name: proxy-ca
     secret:
-      secretName: actions-gateway-proxy-tls
+      secretName: %s-tls
       items:
       - key: tls.crt
         path: tls.crt
-`, curlPodName, tenantNS, curlImage, proxyURL)
+`, curlPodName, tenantNS, curlImage, proxyURL, proxyName)
 
 		Expect(utils.ApplyManifest(manifest)).To(Succeed())
 		DeferCleanup(func() {
@@ -432,14 +435,14 @@ spec:
 		Expect(workloadYAML).To(ContainSubstring("k8s-app: node-local-dns"),
 			"workload NP DNS rule missing the node-local-dns peer (Q229: GKE Dataplane V2 redirect target):\n%s", workloadYAML)
 
-		// Proxy egress rule: port 8080 to pods matching app=actions-gateway-proxy.
+		// Proxy egress rule: port 8080 to pods carrying the EgressProxy identity label.
 		// A regression that dropped the podSelector and allowed 8080 to any
 		// destination would defeat the per-tenant egress-IP guarantee; the
 		// `MatchRegexp` here keeps the port and the podSelector tied together.
 		Expect(workloadYAML).To(ContainSubstring("port: 8080"),
 			"workload NP missing port-8080 egress rule:\n%s", workloadYAML)
-		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*8080.*podSelector:.*matchLabels:.*app:\s*actions-gateway-proxy`),
-			"workload NP port-8080 egress rule missing podSelector app=actions-gateway-proxy (regression: rule broadened to any destination):\n%s", workloadYAML)
+		Expect(workloadYAML).To(MatchRegexp(`(?s)port:\s*8080.*podSelector:.*matchExpressions:.*key:\s*actions-gateway\.com/egress-proxy`),
+			"workload NP port-8080 egress rule missing the actions-gateway.com/egress-proxy podSelector (regression: rule broadened to any destination):\n%s", workloadYAML)
 
 		// The workload NP must NOT contain egress to GitHub CIDRs — that is the
 		// proxy NP's job. The only ipBlock permitted is the link-local block
@@ -460,10 +463,10 @@ spec:
 			"-n", tenantNS, "-o", "yaml"))
 		Expect(err).NotTo(HaveOccurred(), "fetch AGC NP YAML")
 
-		// AGC NP must select app=actions-gateway-controller pods only — worker
-		// pods (workload-labelled, no AGC label) must not be selected here.
-		Expect(agcYAML).To(MatchRegexp(`(?s)podSelector:.*matchLabels:.*app:\s*actions-gateway-controller`),
-			"AGC NP must select pods labelled app=actions-gateway-controller:\n%s", agcYAML)
+		// AGC NP must select this gateway's AGC pods only — worker pods
+		// (workload-labelled, no AGC label) must not be selected here.
+		Expect(agcYAML).To(MatchRegexp(`(?s)podSelector:.*matchLabels:.*app:\s*`+regexp.QuoteMeta(agcName)),
+			"AGC NP must select pods labelled app=%s:\n%s", agcName, agcYAML)
 
 		// AGC NP egress must include both 443 and 6443. See
 		// docs/development/networkpolicy-port-matching.md: kind exposes the
@@ -481,8 +484,7 @@ spec:
 	// in-cluster destination other than the proxy pods. The probe target is
 	// the fakegithub Service in e2e-infra — a real, reachable pod that the
 	// workload NP does not authorise (its only non-DNS egress rule is
-	// port 8080 *to pods labelled app=actions-gateway-proxy in the tenant
-	// namespace*). An unlabelled control pod proves the destination is up, so
+	// port 8080 *to EgressProxy pods in the tenant namespace*). An unlabelled control pod proves the destination is up, so
 	// a connect failure from the labelled pod is attributable to NP
 	// enforcement, not a dead backend.
 	//

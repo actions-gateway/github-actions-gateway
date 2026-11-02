@@ -44,23 +44,26 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 
 	var secPFCmd *exec.Cmd
 
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, workerImage)
+	agcName := tenant.AGCName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
-		By("applying a tenant whose RunnerGroup uses the REAL worker image (non-numeric USER runner)")
-		utils.RunnerTenant(tenantNS, agName, secretName, workerImage).ApplyWithWebhookRetry()
+		By("applying a tenant whose RunnerSet uses the REAL worker image (non-numeric USER runner)")
+		tenant.ApplyWithWebhookRetry()
 
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
 		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
 		// Deployment-ready only means the health server is up; it is decoupled
-		// from token acquisition. Gate on a reconciled RunnerGroup so the session
+		// from token acquisition. Gate on a reconciled RunnerSet so the session
 		// wait below starts from an operational AGC rather than absorbing the
 		// AGC's whole startup budget (Q134).
-		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
+		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
 		By("starting port-forward to fakegithub control API")
 		// Distinct port base from job_lifecycle (19090) and worker_lifecycle
@@ -106,8 +109,8 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 		By("waiting for an owner-scoped session, then enqueuing a job to trigger a worker pod")
 		var sessionID string
 		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, agName+"-")
-			g.Expect(sessions).NotTo(BeEmpty(), "no session registered for this RunnerGroup yet")
+			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
+			g.Expect(sessions).NotTo(BeEmpty(), "no session registered for this RunnerSet yet")
 			sessionID = sessions[0]
 		}, 3*time.Minute, 2*time.Second).Should(Succeed())
 

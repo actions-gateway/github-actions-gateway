@@ -31,10 +31,13 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 
 	var selfhealPFCmd *exec.Cmd
 
+	tenant := utils.RunnerTenant(tenantNS, agName, secretName, agcImage)
+	agcName := tenant.AGCName()
+
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		utils.RunnerTenant(tenantNS, agName, secretName, agcImage).ApplyWithWebhookRetry()
+		tenant.ApplyWithWebhookRetry()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
@@ -44,10 +47,10 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 
 		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
 		// Deployment-ready only means the health server is up; it is decoupled
-		// from token acquisition. Gate on a reconciled RunnerGroup so the session
+		// from token acquisition. Gate on a reconciled RunnerSet so the session
 		// waits start from an operational AGC rather than absorbing the AGC's
 		// whole startup budget (Q134).
-		utils.WaitForRunnerGroupReconciled(tenantNS, 4*time.Minute)
+		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
 		By("starting persistent port-forward to fakegithub control API")
 		fakegithubLocalPort = fmt.Sprintf("%d", 19390+GinkgoParallelProcess())
@@ -66,13 +69,13 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 			return nil
 		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
 
-		// Scope the single-use simulation to this spec's RunnerGroup only
-		// (session ownerName is "<group>-<index>" and the group name is
-		// "<agName>-<first runner label>"), so specs running in parallel
-		// against the shared fakegithub are unaffected.
-		By("enabling single-use JIT simulation for this RunnerGroup")
+		// Scope the single-use simulation to this spec's RunnerSet only (session
+		// ownerName is "rs-<set>-<index>" and the set name is "<agName>-<first
+		// runner label>"), so specs running in parallel against the shared
+		// fakegithub are unaffected.
+		By("enabling single-use JIT simulation for this RunnerSet")
 		fakegithubControlRequest(Default, "POST",
-			"/control/singleuse?enabled=true&owner="+agName+"-", nil)
+			"/control/singleuse?enabled=true&owner="+tenant.SessionOwnerPrefix(), nil)
 	})
 
 	// On failure, dump AGC + fakegithub state before AfterAll tears down the
@@ -103,9 +106,9 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 
 		// All session queries are owner-filtered: fakegithub is shared across
 		// parallel specs and tenants, so an unfiltered sessions[0] could belong
-		// to another spec's RunnerGroup.
+		// to another spec's RunnerSet.
 		ownSessions := func(g Gomega) []string {
-			out := fakegithubControlRequest(g, "GET", "/control/sessions?owner="+agName+"-", nil)
+			out := fakegithubControlRequest(g, "GET", "/control/sessions?owner="+tenant.SessionOwnerPrefix(), nil)
 			var sessions []string
 			g.Expect(json.Unmarshal([]byte(out), &sessions)).To(Succeed(), "parse sessions response: %s", out)
 			return sessions
@@ -131,7 +134,7 @@ var _ = Describe("E2E_AGC_SingleUseSelfHeal", Ordered, func() {
 			By(fmt.Sprintf("job %d: picking a live session", i))
 			Eventually(func(g Gomega) {
 				sessions := ownSessions(g)
-				g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerGroup")
+				g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
 				session = sessions[0]
 			}, 4*time.Minute, 2*time.Second).Should(Succeed())
 

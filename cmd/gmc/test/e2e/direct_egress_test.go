@@ -67,7 +67,7 @@ var _ = Describe("E2E_V2_DirectEgress", Ordered, func() {
 		Expect(utils.ApplyManifestWithWebhookRetry(directEgressManifest(tenantNS, secretName, agcImage))).To(Succeed())
 
 		// Deployment readiness is decoupled from GitHub reachability (the AGC binds
-		// its health server early — see WaitForRunnerGroupReconciled's comment), so
+		// its health server early — see WaitForRunnerSetReconciled's comment), so
 		// this succeeds even though the e2e AGC is redirected to fakegithub, which
 		// the direct-egress AGC NetworkPolicy does NOT allow (fakegithub is an
 		// in-cluster pod, not a GitHub CIDR). That is intentional: this suite probes

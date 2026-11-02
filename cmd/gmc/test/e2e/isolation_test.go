@@ -23,6 +23,11 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 	)
 
+	// Both tenants share agName, so their derived object names are the same in each
+	// namespace.
+	names := utils.BaseTenant(nsA, agName, secretName)
+	agcName, proxyName, workloadName := names.AGCName(), names.ProxyName(), names.WorkloadPolicyName()
+
 	BeforeAll(func() {
 		for _, ns := range []string{nsA, nsB} {
 			utils.CreateNamespace(ns, nil)
@@ -68,12 +73,17 @@ var _ = Describe("E2E_GMC_Isolation", Ordered, func() {
 	})
 
 	It("E2E_GMC_NetworkPolicyScopedToNamespace: NetworkPolicies exist in each namespace", func() {
-		Expect(utils.ResourceExists("networkpolicy", nsA, proxyName)).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsA, workloadName)).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsA, agcName)).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsB, proxyName)).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsB, workloadName)).To(BeTrue())
-		Expect(utils.ResourceExists("networkpolicy", nsB, agcName)).To(BeTrue())
+		// Polled rather than read once: the proxy policy is the EgressProxy's and the
+		// workload and AGC policies are the ActionsGateway's, and the two reconcile
+		// independently, so a ready proxy pool says nothing about the gateway's.
+		Eventually(func(g Gomega) {
+			for _, ns := range []string{nsA, nsB} {
+				for _, name := range []string{proxyName, workloadName, agcName} {
+					g.Expect(utils.ResourceExists("networkpolicy", ns, name)).To(BeTrue(),
+						"NetworkPolicy %s/%s not present", ns, name)
+				}
+			}
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_CrossTenantNetworkBlocked: pod in nsA cannot reach proxy in nsB", func() {
