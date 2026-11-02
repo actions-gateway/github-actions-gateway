@@ -181,6 +181,14 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	if err != nil {
 		return &provisioningError{step: "reconcile failure attribution", err: err}
 	}
+	// The policy precedes the Deployment, so a step failing between them never
+	// leaves proxy pods running with no policy selecting them. It is fail-closed on
+	// its own in every egress mode; the FQDN policy below only widens it.
+	np := buildEgressProxyNetworkPolicy(ep, githubCIDRs)
+	applyAttributionToNetworkPolicy(np, ep, attribution.ports, attribution.held)
+	if err := r.applyNetworkPolicy(ctx, ep, np); err != nil {
+		return &provisioningError{step: "apply proxy NetworkPolicy", err: err}
+	}
 	dep := buildEgressProxyDeployment(ep, r.ProxyImage, gitHubHosts)
 	applyAttributionToDeployment(dep, ep, attribution)
 	if err := r.applyDeployment(ctx, ep, dep); err != nil {
@@ -196,11 +204,6 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	}
 	if err := r.applyPDB(ctx, ep, buildEgressProxyPDB(ep)); err != nil {
 		return &provisioningError{step: "apply proxy PDB", err: err}
-	}
-	np := buildEgressProxyNetworkPolicy(ep, githubCIDRs)
-	applyAttributionToNetworkPolicy(np, ep, attribution.ports, attribution.held)
-	if err := r.applyNetworkPolicy(ctx, ep, np); err != nil {
-		return &provisioningError{step: "apply proxy NetworkPolicy", err: err}
 	}
 	if err := r.reconcileFQDNPolicy(ctx, ep, gitHubHosts); err != nil {
 		return &provisioningError{step: "reconcile FQDN egress policy", err: err}
@@ -234,7 +237,7 @@ func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmc
 	// Each CNI-native policy shares the "<ep>-proxy-fqdn" name, so at most one is applied
 	// and the others are deleted — that convergence is what makes a mode/backend switch
 	// clean. The GKE FQDNNetworkPolicy is additive-allow, so its fail-closed guarantee
-	// relies on the base standard NetworkPolicy (always applied above) default-denying
+	// relies on the base standard NetworkPolicy (always applied first) default-denying
 	// GitHub egress; the GKE object only ever widens the union (Q245).
 	policies := []struct {
 		gvk   schema.GroupVersionKind
