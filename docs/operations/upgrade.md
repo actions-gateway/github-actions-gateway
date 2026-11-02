@@ -14,6 +14,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
+  - [Before upgrading to v2.0.0: no v1alpha1 object is left](#before-upgrading-to-v200-no-v1alpha1-object-is-left)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
@@ -145,6 +146,23 @@ kubectl get crd actionsgateways.actions-gateway.com egressproxies.actions-gatewa
 ```
 
 Any other value means the cluster still holds objects written at an older version: run [the storage sweep](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting) first.
+
+### Before upgrading to `v2.0.0`: no `v1alpha1` object is left
+
+`v2.0.0` has no `actions-gateway.github.com` controller, so migrate every tenant with [`gag-migrate`](migration-v1-to-v2.md) and [decommission v1](migration-v1-to-v2.md#step-4--decommission-v1-when-ready) while your 1.x release still runs.
+The `v2.0.0` chart no longer ships the two `v1alpha1` CRDs, and Helm keeps them (`helm.sh/resource-policy: keep`), so a leftover object stays stored with nothing reconciling it.
+A `RunnerGroup`'s finalizer then never clears, and its agent Secrets and GitHub registrations are never cleaned up.
+Run this and expect `No resources found`:
+
+```sh
+kubectl get actionsgateways.actions-gateway.github.com,runnergroups.actions-gateway.github.com -A
+```
+
+After upgrading, delete the two CRDs the chart left behind:
+
+```sh
+kubectl delete crd actionsgateways.actions-gateway.github.com runnergroups.actions-gateway.github.com
+```
 
 Also check the release notes for the new version before upgrading, particularly:
 - CRD schema changes (new required fields, removed fields, validation tightening).
@@ -1405,7 +1423,7 @@ The following upgrade-time behaviors are specific to this chart:
   `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build.
   See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest).
   Dev/test only: `allowFloatingImageTags=true` opts out.
-- **Most CRDs upgrade with the release; one does not, so apply the chart's CRDs every time.** The `ActionsGateway` and `RunnerGroup` CRDs ship as templates under `templates/crds/` with `helm.sh/resource-policy: keep`, so `helm upgrade` applies their additive field changes automatically and `helm uninstall` preserves them (and every tenant's objects) rather than cascade-deleting.
+- **Most CRDs upgrade with the release; one does not, so apply the chart's CRDs every time.** The `RunnerGroup` CRD ships as a template under `templates/crds/` with `helm.sh/resource-policy: keep`, so `helm upgrade` applies its additive field changes automatically and `helm uninstall` preserves it (and every tenant's objects) rather than cascade-deleting.
   The `PriorityClassAllowlist` CRD cannot: the same release *creates* a `PriorityClassAllowlist` object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright.
   It therefore ships in the chart-root `crds/` directory — which Helm installs on `helm install` **only, never on upgrade**.
 
