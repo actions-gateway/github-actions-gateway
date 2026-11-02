@@ -635,6 +635,7 @@ Detection records what each recovery did, and changes nothing it does.
 The listener reports every terminal `JobCompleted` once per process, with its result, run identity, triggering event and workflow ref.
 A `failed` completion, or a `canceled` one a recovery claim names, is recorded in the set's failure ledger (`scaleset-failures-<set>`, the ConfigMap that holds the scale-set budget) under `failures["<runID>/<job name>"]`, for 7 days.
 The record carries the worker's state at its terminal transition, which the pod watch snapshots into a bounded in-memory map (1,024 workers) because the pod may be gone when the completion arrives; the completion falls back to reading the pod, and records no context when neither exists.
+The snapshot also carries the set's egress proxy pool as `proxy`, read from the AGC's cache: a colocated pool's `Ready` condition and `readyReplicas`, or `mode: shared` alone for a pool in another namespace, which that cache cannot see (Q1237).
 The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.
 
 A later completion of the same key with a new job ID is the job's next attempt, attributed from GAG's own re-runs of the run in the same ledger:

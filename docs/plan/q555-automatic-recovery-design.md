@@ -1,7 +1,7 @@
 # Q555 automatic recovery: design
 
 **Status:** ⓘ proposed design, written 2026-10-10, revised 2026-10-11 after an independent review, and revised again 2026-10-12 with the maintainer's decisions.
-Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up ([Q1236](../queue/Q1236.md)) and without the proxy's readiness ([Q1237](../queue/Q1237.md)); the rest is not.
+Q1182's part is built (`cmd/agc/internal/provisioner/rerun_ledger.go`): the ledger store with its version rules, the `reruns` map, the reservation and `selfCancelledAttempt`; so is Q1181's `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the scale-set tier (`rerun_futility.go`); so is Q555's detection (`flaky_jobs.go`): the `failures` map, the worker snapshot, the pairing and its metrics, built before the dogfood turn-up ([Q1236](../queue/Q1236.md)), with the colocated proxy's readiness added by Q1237; the rest is not.
 It turns [the requirements draft](q555-flaky-job-retry.md) into components against the code as it stands, one per backlog row, and answers the draft's [open questions](q555-flaky-job-retry.md#open-questions-for-the-design-session).
 Each answer is marked **Decided** (the maintainer chose it, 2026-10-12), **Decide** (a recommendation still awaiting sign-off) or **Research** (needs a measurement before anyone can choose).
 The draft says *what* and *why*; this says *how*.
@@ -59,7 +59,7 @@ A snapshot holds only bounded fields, all read from objects the AGC can already 
   The pod's own `DisruptionTarget` condition and phase carry what a node-lost class needs.
 - **Registry mirror readiness.** It joins the snapshot with the mirror candidate's reproduction, once that settles which object reports it.
 
-A **shared** proxy pool lives in another namespace, which the AGC's cache cannot see, so its readiness is absent too: the snapshot says `proxy: shared`.
+A **shared** proxy pool lives in another namespace, which the AGC's cache cannot see, so its readiness is absent too: the snapshot's `proxy` says `mode: shared`.
 
 A restart loses snapshots for workers that finished before it, and their records say `context: unknown`.
 That is one of R5's stated blind spots.

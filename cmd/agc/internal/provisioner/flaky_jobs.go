@@ -12,6 +12,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -78,6 +79,9 @@ func failureKey(runID, jobName string) string {
 // objects the AGC already reads. Node conditions are not in it: the AGC has no nodes
 // RBAC, and the pod's DisruptionTarget condition carries what a node loss shows.
 type workerSnapshot struct {
+	// Proxy is the set's egress proxy pool, nil for direct egress or where no reader
+	// was supplied.
+	Proxy      *ProxySnapshot      `json:"proxy,omitempty"`
 	Pod        string              `json:"pod"`
 	Phase      string              `json:"podPhase,omitempty"`
 	Reason     string              `json:"reason,omitempty"`
@@ -93,6 +97,32 @@ type workerSnapshot struct {
 	// carries no identity of its own.
 	runID, jobName string
 	takenAt        time.Time
+}
+
+// Proxy modes in a snapshot.
+const (
+	// ProxyModeColocated: the pool is in the set's namespace, and its readiness is read.
+	ProxyModeColocated = "colocated"
+	// ProxyModeShared: the pool is in another namespace, which the AGC's cache cannot
+	// see, so its readiness is absent.
+	ProxyModeShared = "shared"
+)
+
+// ProxySnapshot is the readiness of a worker's egress proxy pool. Ready and
+// ReadyReplicas are set only for a colocated pool the cache holds.
+type ProxySnapshot struct {
+	Name string `json:"name"`
+	Mode string `json:"mode"`
+	// Ready is the EgressProxy's Ready condition status, "" where it has none.
+	Ready         string `json:"ready,omitempty"`
+	Reason        string `json:"readyReason,omitempty"`
+	ReadyReplicas *int32 `json:"readyReplicas,omitempty"`
+}
+
+// EgressProxyReader reads the readiness of a set's egress proxy pool from the AGC's
+// cache, nil for direct egress. The v2 Target implements it; v1 has no scale-set tier.
+type EgressProxyReader interface {
+	EgressProxyReadiness(ctx context.Context) *ProxySnapshot
 }
 
 type snapshotCondition struct {
@@ -158,9 +188,10 @@ func truncate(s string, n int) string {
 }
 
 // faults lists what in the snapshot points at the platform rather than the job: a
-// failed pod, a DisruptionTarget condition, any container killed for memory, or the
-// runner container exiting non-zero. A sidecar's non-zero exit is not one, since
-// sidecars are routinely killed when the runner finishes.
+// failed pod, a DisruptionTarget condition, any container killed for memory, the
+// runner container exiting non-zero, or a colocated proxy pool that is not Ready or
+// has no ready replica. A sidecar's non-zero exit is not one, since sidecars are
+// routinely killed when the runner finishes.
 func (s *workerSnapshot) faults() []string {
 	if s == nil {
 		return nil
@@ -180,6 +211,14 @@ func (s *workerSnapshot) faults() []string {
 			out = append(out, "container "+c.Name+" OOMKilled")
 		case c.Name == runnerContainer && !c.sidecar && c.ExitCode != 0:
 			out = append(out, fmt.Sprintf("container %s exited %d", c.Name, c.ExitCode))
+		}
+	}
+	if px := s.Proxy; px != nil && px.Mode == ProxyModeColocated {
+		switch {
+		case px.Ready == string(metav1.ConditionFalse):
+			out = append(out, strings.TrimSpace("EgressProxy "+px.Name+" not Ready "+px.Reason))
+		case px.ReadyReplicas != nil && *px.ReadyReplicas == 0:
+			out = append(out, "EgressProxy "+px.Name+" has no ready replicas")
 		}
 	}
 	return out
@@ -356,8 +395,9 @@ type completionPairing struct {
 
 // SnapshotScaleSetWorker records a scale-set worker's platform context at its
 // terminal transition, for its job's completion to take: a terminal phase, or a
-// deletion of a pod that never reached one. It is in-memory only and never fails.
-func (p *Provisioner) SnapshotScaleSetWorker(pod *corev1.Pod) {
+// deletion of a pod that never reached one. proxy, which may be nil, supplies the
+// set's egress proxy readiness. It is in-memory only and never fails.
+func (p *Provisioner) SnapshotScaleSetWorker(ctx context.Context, proxy EgressProxyReader, pod *corev1.Pod) {
 	if pod.Labels[LabelAcquisitionProtocol] != AcquisitionProtocolScaleSet {
 		return
 	}
@@ -371,7 +411,11 @@ func (p *Provisioner) SnapshotScaleSetWorker(pod *corev1.Pod) {
 	if terminal == (pod.DeletionTimestamp != nil) {
 		return
 	}
-	p.workerSnapshots.put(pod.Namespace+"/"+runner, snapshotOf(pod, p.nowFn()))
+	s := snapshotOf(pod, p.nowFn())
+	if proxy != nil {
+		s.Proxy = proxy.EgressProxyReadiness(ctx)
+	}
+	p.workerSnapshots.put(pod.Namespace+"/"+runner, s)
 }
 
 // RecordScaleSetJobCompleted records a scale-set job's completion in target's failure
@@ -407,6 +451,9 @@ func (p *Provisioner) RecordScaleSetJobCompleted(ctx context.Context, target Tar
 		if snap == nil && job.RunnerName != "" {
 			if pod, err := p.scaleSetWorkerByRunner(ctx, target, job.RunnerName); err == nil && pod != nil {
 				snap = snapshotOf(pod, p.nowFn())
+				if proxy, ok := target.(EgressProxyReader); ok {
+					snap.Proxy = proxy.EgressProxyReadiness(ctx)
+				}
 			}
 		}
 		if snap != nil {

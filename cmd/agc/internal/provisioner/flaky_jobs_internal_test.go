@@ -167,7 +167,7 @@ func TestFlakyJobs_ALaterFailureUpdatesTheRecord(t *testing.T) {
 		return true
 	}))
 	claimDisruption(t, p, target, "job-1", recoveryCauseEviction)
-	p.SnapshotScaleSetWorker(scaleSetWorker("runner-1", corev1.PodFailed, "Evicted"))
+	p.SnapshotScaleSetWorker(context.Background(), nil, scaleSetWorker("runner-1", corev1.PodFailed, "Evicted"))
 
 	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
 	first := readFailures(t, p, target)["900/build"]
@@ -262,7 +262,7 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 	oom := scaleSetWorker("runner-1", corev1.PodFailed, "")
 	oom.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: runnerContainer,
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "OOMKilled", ExitCode: 137}}}}
-	p.SnapshotScaleSetWorker(oom)
+	p.SnapshotScaleSetWorker(context.Background(), nil, oom)
 	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events)
 	var snap workerSnapshot
@@ -274,11 +274,70 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}}}
 	red.Status.InitContainerStatuses = []corev1.ContainerStatus{{Name: "proxy-sidecar",
 		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Error", ExitCode: 143}}}}
-	p.SnapshotScaleSetWorker(red)
+	p.SnapshotScaleSetWorker(context.Background(), nil, red)
 	job := buildJob(1)
 	job.JobID, job.RunnerName, job.JobName = "job-x", "runner-x", "test"
 	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, job, "failed"))
 	assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, target.events, "a red test on a healthy worker is not a fault")
+}
+
+// staticProxy is an EgressProxyReader returning one readiness.
+type staticProxy struct{ snap *ProxySnapshot }
+
+func (s staticProxy) EgressProxyReadiness(context.Context) *ProxySnapshot { return s.snap }
+
+// proxyTarget is a Target that reads its proxy's readiness, as the v2 one does.
+type proxyTarget struct {
+	*stubTarget
+	staticProxy
+}
+
+// TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault (Q1237): a red test on a
+// healthy worker is a platform fault when its colocated proxy pool was not Ready or
+// had no ready replica, and never for a shared pool, whose readiness is unread.
+func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
+	colocated := func(ready string, replicas int32) *ProxySnapshot {
+		return &ProxySnapshot{Name: "ep", Mode: ProxyModeColocated, Ready: ready, Reason: "PodsUnavailable", ReadyReplicas: &replicas}
+	}
+	for _, tc := range []struct {
+		name      string
+		proxy     *ProxySnapshot
+		wantFault string
+	}{
+		{name: "not Ready", proxy: colocated("False", 1), wantFault: "EgressProxy ep not Ready PodsUnavailable"},
+		{name: "no ready replicas", proxy: colocated("True", 0), wantFault: "EgressProxy ep has no ready replicas"},
+		{name: "ready", proxy: colocated("True", 2)},
+		{name: "unread colocated pool", proxy: &ProxySnapshot{Name: "ep", Mode: ProxyModeColocated}},
+		{name: "shared pool", proxy: &ProxySnapshot{Name: "ep", Mode: ProxyModeShared}},
+		{name: "direct egress"},
+	} {
+		for _, path := range []string{"snapshot", "completion"} {
+			t.Run(tc.name+" via "+path, func(t *testing.T) {
+				ctx := context.Background()
+				c, p, stub := flakyFixture(t)
+				target := proxyTarget{stub, staticProxy{tc.proxy}}
+				red := scaleSetWorker("runner-1", corev1.PodSucceeded, "")
+				red.Status.ContainerStatuses = []corev1.ContainerStatus{{Name: runnerContainer,
+					State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed"}}}}
+				if path == "snapshot" {
+					p.SnapshotScaleSetWorker(ctx, staticProxy{tc.proxy}, red)
+				} else {
+					require.NoError(t, c.Create(ctx, red))
+				}
+				require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, buildJob(1), "failed"))
+
+				var snap workerSnapshot
+				require.NoError(t, json.Unmarshal(readFailures(t, p, stub)["900/build"].Context, &snap))
+				assert.Equal(t, tc.proxy, snap.Proxy)
+				if tc.wantFault == "" {
+					assert.Empty(t, stub.events)
+					return
+				}
+				assert.Equal(t, []string{tc.wantFault}, snap.faults())
+				assert.Equal(t, []string{"PlatformFaultOnFailedJob"}, stub.events)
+			})
+		}
+	}
 }
 
 // TestFlakyJobs_ACompletionWithNoIdentityTakesThePods: the run and job come from the
@@ -286,7 +345,7 @@ func TestFlakyJobs_ASnapshotNamesThePlatformFault(t *testing.T) {
 func TestFlakyJobs_ACompletionWithNoIdentityTakesThePods(t *testing.T) {
 	ctx := context.Background()
 	_, p, target := flakyFixture(t)
-	p.SnapshotScaleSetWorker(scaleSetWorker("runner-1", corev1.PodSucceeded, ""))
+	p.SnapshotScaleSetWorker(context.Background(), nil, scaleSetWorker("runner-1", corev1.PodSucceeded, ""))
 	require.NoError(t, p.RecordScaleSetJobCompleted(ctx, target, ScaleSetJob{JobID: "job-1", RunnerName: "runner-1"}, "failed"))
 	assert.Contains(t, readFailures(t, p, target), "900/build")
 }
@@ -321,7 +380,7 @@ func TestFlakyJobs_SnapshotsOnlyTerminalTransitions(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := flakyProvisioner(nil)
-			p.SnapshotScaleSetWorker(tc.pod())
+			p.SnapshotScaleSetWorker(context.Background(), nil, tc.pod())
 			assert.Equal(t, tc.want, p.workerSnapshots.take("team-a/r") != nil)
 		})
 	}
