@@ -2764,14 +2764,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>E2E_V2_ProxyAttribution</code>'s <code>BeforeAll</code> times out on <code>main</code> at <code>v2_proxy_attribution_test.go:56</code>, waiting for …</td>
 </tr>
 <tr>
-<td><a href="Q1205/">Q1205</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lease-test.sh">lease-test's renewer-exit check reads a zombie as alive on GAG runners</a></td>
-<td><code>tests</code> <code>ci</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>**Deterministic on GitHub Actions Gateway (GAG) runners, not a flake, so this row does not follow the [flake …</td>
-</tr>
-<tr>
 <td><a href="Q1173/">Q1173</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/ci/run-parallel.sh">Gates under <code>make check</code> killed by a stray SIGTERM mid-run</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3810,14 +3802,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>scripts/docs/rank-vectors-test.sh</code> came out of <code>karlkfi/claude-skills</code> in <code>bbc2578f5</code>, beside the four files …</td>
-</tr>
-<tr>
-<td><a href="Q1063/">Q1063</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Migrate the ctrl.Result{Requeue: true} returns off the deprecated field</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>controller-runtime v0.24 deprecates <code>Result.Requeue</code> ("Use <code>RequeueAfter</code> instead"): a rate-limited requeue reuses a limiter meant for …</td>
 </tr>
 <tr>
 <td><a href="Q1097/">Q1097</a></td>
