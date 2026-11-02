@@ -2668,10 +2668,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#the-e2e-suite-has-no---context-to-pin--give-it-a-private-kubeconfig" class="md-nav__link">
+  <a href="#the-e2e-suite-runs-on-a-private-kubeconfig-and-refuses-any-other-cluster" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The e2e suite has no --context to pin — give it a private KUBECONFIG
+        The e2e suite runs on a private KUBECONFIG and refuses any other cluster
       
     </span>
   </a>
@@ -2915,16 +2915,25 @@ When multiple sessions run on one machine, any session's <code>kind create</code
 Match that pattern in ad-hoc commands.</p>
 <p>The same ambient-state hazard applies to <strong><code>gcloud</code></strong>: the active project/account/region live in the shared <code>~/.config/gcloud</code> active configuration, so a parallel <code>gcloud config set</code> repoints your invocations too.
 Pass <code>--project</code>, <code>--account</code>, and <code>--zone</code>/<code>--region</code> explicitly on each command rather than depending on <code>gcloud config</code> (or scope a private config with <code>CLOUDSDK_ACTIVE_CONFIG_NAME</code> / <code>gcloud --configuration=&lt;name&gt;</code>).</p>
-<h4 id="the-e2e-suite-has-no---context-to-pin--give-it-a-private-kubeconfig">The e2e suite has no <code>--context</code> to pin — give it a private <code>KUBECONFIG</code><a class="headerlink" href="#the-e2e-suite-has-no---context-to-pin--give-it-a-private-kubeconfig" title="Permanent link">&para;</a></h4>
-<p><code>make e2e</code> threads <code>KIND_CLUSTER</code> through for the scripts that read it, but the suite's own <code>kubectl</code> calls (<code>utils.Run(exec.Command("kubectl", …))</code>) carry no <code>--context</code>, so they follow whatever <code>current-context</code> happens to be.
-There is nothing to pin per-command, and <code>kubectl config use-context</code> is exactly the shared-state write the rule above forbids — it repoints every parallel session.</p>
-<p>Point the run at its own kubeconfig instead:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kind<span class="w"> </span>get<span class="w"> </span>kubeconfig<span class="w"> </span>--name<span class="w"> </span>actions-gateway-e2e<span class="w"> </span>&gt;<span class="w"> </span>tmp/kubeconfig
+<h4 id="the-e2e-suite-runs-on-a-private-kubeconfig-and-refuses-any-other-cluster">The e2e suite runs on a private <code>KUBECONFIG</code> and refuses any other cluster<a class="headerlink" href="#the-e2e-suite-runs-on-a-private-kubeconfig-and-refuses-any-other-cluster" title="Permanent link">&para;</a></h4>
+<p>The suite's own <code>kubectl</code> and <code>helm</code> calls (<code>utils.Run(exec.Command("kubectl", …))</code>) carry no <code>--context</code>, so they act on whatever context kubectl resolves.
+A run that followed a context switched to the dogfood cluster once installed cert-manager, metrics-server and the CRDs there (Q1201).
+Two things now stop that:</p>
+<ul>
+<li><code>make e2e</code> writes <code>kind get kubeconfig --name $(KIND_CLUSTER)</code> to <code>tmp/e2e-kubeconfig-&lt;cluster&gt;</code> and runs the suite with <code>KUBECONFIG</code> pointing at it, so a parallel session's <code>use-context</code> cannot redirect the run mid-flight.
+  The file holds the cluster's client key and is deleted when the run exits.
+  A <code>KIND_CLUSTER</code> with no kind cluster behind it fails the target before the suite starts.</li>
+<li>The suite's <code>SynchronizedBeforeSuite</code> refuses to start unless <code>kubectl config current-context</code> reads <code>kind-$KIND_CLUSTER</code> (default <code>kind-actions-gateway-e2e</code>).
+  An unset or unreadable context refuses too, with <code>refusing to run e2e …</code> in the failure.
+  Teardown repeats the check before <code>make undeploy</code>, because Ginkgo runs <code>SynchronizedAfterSuite</code> even when the BeforeSuite failed.</li>
+</ul>
+<p>The refusal is the gate, and it also catches a hand-run <code>ginkgo</code>.
+Give a hand-run the same private kubeconfig rather than running <code>kubectl config use-context</code>, which repoints every parallel session:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="o">(</span><span class="nb">umask</span><span class="w"> </span><span class="m">077</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>kind<span class="w"> </span>get<span class="w"> </span>kubeconfig<span class="w"> </span>--name<span class="w"> </span>actions-gateway-e2e<span class="w"> </span>&gt;<span class="w"> </span>tmp/kubeconfig<span class="o">)</span>
 </code></pre></div>
-<p>then set <code>KUBECONFIG=$PWD/tmp/kubeconfig</code> on the <code>ginkgo</code>/<code>make e2e</code> invocation.
-The suite and everything it shells out to inherit it, no shared file is touched, and a parallel session's <code>use-context</code> cannot steal the run mid-flight.
-<code>tmp/</code> at the repo root is gitignored and inside the workspace, which is where scratch files belong.</p>
-<p>Without it the first <code>kubectl</code> fails against the empty default — <code>dial tcp [::1]:8080: connect: connection refused</code>, usually surfacing as a cert-manager install failure in <code>SynchronizedBeforeSuite</code> rather than as anything about contexts.</p>
+<p>then set <code>KUBECONFIG=$PWD/tmp/kubeconfig</code> and <code>KIND_CLUSTER=actions-gateway-e2e</code> on the <code>ginkgo</code> invocation.
+<code>tmp/</code> at the repo root is gitignored and inside the workspace, which is where scratch files belong.
+The file holds the cluster's client key, so delete it (<code>rm tmp/kubeconfig</code>) when the run is done.</p>
 <h3 id="verify-the-resolved-target-before-any-mutating-command">Verify the resolved target before any mutating command<a class="headerlink" href="#verify-the-resolved-target-before-any-mutating-command" title="Permanent link">&para;</a></h3>
 <p>An explicit <code>--context</code> still points <em>somewhere</em>.
 Before a destructive verb (<code>apply</code>/<code>delete</code>/<code>scale</code>/<code>patch</code>/<code>rollout</code> on kubectl, <code>upgrade</code>/<code>uninstall</code> on helm, <code>delete</code>/<code>destroy</code> on gcloud/terraform), confirm the effective target isn't a live/prod environment — echo it and stop if it looks like prod (the shared GKE dogfood cluster counts):</p>

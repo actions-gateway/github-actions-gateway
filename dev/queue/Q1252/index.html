@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1244/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1252/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Persist and defer retry-class re-runs until the run concludes - GitHub Actions Gateway</title>
+        <title>Flake: lease-test's another-holder renewer loses its lock and survives - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#persist-and-defer-retry-class-re-runs-until-the-run-concludes" class="md-skip">
+        <a href="#flake-lease-tests-another-holder-renewer-loses-its-lock-and-survives" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Persist and defer retry-class re-runs until the run concludes
+              Flake: lease-test's another-holder renewer loses its lock and survives
             
           </span>
         </div>
@@ -2627,13 +2627,22 @@
   
 
 
-<h1 id="persist-and-defer-retry-class-re-runs-until-the-run-concludes">Persist and defer retry-class re-runs until the run concludes<a class="headerlink" href="#persist-and-defer-retry-class-re-runs-until-the-run-concludes" title="Permanent link">&para;</a></h1>
-<p>Q1183 built the out-of-memory retry class on the disruption arms' path, which re-runs inside the arms' 15-minute window (<code>defaultEvictionRerunWindow</code>, <code>cmd/agc/internal/provisioner/eviction.go</code>).
-That window covers GitHub concluding a runner it lost, about 10 minutes, and not a sibling job that runs longer: <code>rerun-failed-jobs</code> answers <code>403 This workflow is already running</code> until the whole run concludes, so such a run ends <code>run_never_concluded</code> and its raised memory floor is never used by GAG's re-run.
-The disruption arms have the same limit today; the class makes it more likely, because a job that outgrows its memory is often one of a long matrix.
-<a href="../../plan/q555-automatic-recovery-design/#how-it-waits">The design's deferred wait</a> is the fix: pending re-runs in the failure ledger's <code>pending</code> map keyed by run and job, recording the attempt the job failed in, polled for the run's conclusion on a widening cadence and expired after 24 hours, then released into <code>handleScaleSetEviction</code>.
-Unmeasured: how often a dogfood run's siblings outlast the window; the <code>run_never_concluded</code> count on <code>actions_gateway_eviction_rerun_failures_total</code> is the reading once Q1180 keeps those metrics.
-The open design question is how a sweeper finds the sets that hold pending entries after a restart, since the abandoned arm's in-memory waiting set holds a <code>Target</code> and a ConfigMap does not.</p>
+<h1 id="flake-lease-tests-another-holder-renewer-loses-its-lock-and-survives">Flake: lease-test's another-holder renewer loses its lock and survives<a class="headerlink" href="#flake-lease-tests-another-holder-renewer-loses-its-lock-and-survives" title="Permanent link">&para;</a></h1>
+<p><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that finds another holder TERMs its gate</code> on a tree that changes nothing under <code>scripts/dogfood/</code>.</p>
+<p>Observed 2026-11-02 at 01:04Z in CI <code>scripts-test</code> (job 125038110299, run 41369763048) on a GitHub-hosted <code>ubuntu-26.04</code> runner, on PR 2212's head <code>ae1082f</code>, whose diff touches only the gmc e2e suite, the <code>Makefile</code> e2e target and docs.
+The same suite passed in a local <code>make check</code> of that tree on macOS.
+Three lines failed together:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[lease-test] FAIL a renewer that finds another holder TERMs its gate: want '143', got '0'
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[lease-test] FAIL the renewer says why it stopped the gate: 'another holder took' not in 'rmdir: failed to remove '/tmp/tmp.wCwpjk66D2/lease/fake-dogfood-proj-us-east1-b-gag-dogfood.lease.lock': No such file or directory
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>survived'
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[lease-test] FAIL the stopped gate leaves the new holder's record: want 'ci-runner-7/4242', got 'owner-host/65490'
+</code></pre></div>
+<p><strong>Mechanism, unverified.</strong> <code>lease_fake_locked</code> breaks the lock after 500 failed <code>mkdir</code> tries 10 ms apart, which assumes a lock held for 5 s belongs to a renewer killed mid-write.
+A renewer that is merely starved inside its locked write would have its lock broken by the test's <code>remote_lease</code> write.
+Its own <code>rmdir</code> would then fail under <code>set -e</code>, so the renewer dies without TERMing its gate, the gate sleeps out its 10 s and prints <code>survived</code>, and the renewer's write lands over the test's.
+That chain fits all three lines, but nothing here measured the renewer's hold time on the runner or reproduced it.</p>
+<p>This is a different case and a different mechanism from Q1202, which is the lost-lease renewer racing the owner's sleep.
+It is also not the zombie <code>kill -0</code> failure that PR 2207 (Q1205) fixes, which happens on GAG runners and not GitHub-hosted ones.</p>
 
 
 

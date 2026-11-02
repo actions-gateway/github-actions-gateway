@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1201/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1255/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>make e2e runs against the ambient kube context, dogfood included - GitHub Actions Gateway</title>
+        <title>Make increase()-based alerts see a lazily created counter's first count - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#make-e2e-runs-against-the-ambient-kube-context-dogfood-included" class="md-skip">
+        <a href="#make-increase-based-alerts-see-a-lazily-created-counters-first-count" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              make e2e runs against the ambient kube context, dogfood included
+              Make increase()-based alerts see a lazily created counter's first count
             
           </span>
         </div>
@@ -2627,37 +2627,12 @@
   
 
 
-<h1 id="make-e2e-runs-against-the-ambient-kube-context-dogfood-included">make e2e runs against the ambient kube context, dogfood included<a class="headerlink" href="#make-e2e-runs-against-the-ambient-kube-context-dogfood-included" title="Permanent link">&para;</a></h1>
-<p><code>make e2e</code> and <code>make e2e-cluster</code> never name a cluster.
-The ginkgo suite, its <code>setup.sh</code> steps and its teardown all read the current context from the shared <code>~/.kube/config</code>.
-Any session on this machine can switch that context, and a dogfood script does it on every run (Q1019). prod-guard inspects the agent's own Bash command, so it sees <code>make e2e</code> and nothing the suite runs inside it.</p>
-<p><strong>Measured 2026-10-24</strong> working Q1177.
-Four <code>make e2e SUITE=live-github</code> runs between 00:56Z and about 01:10Z failed in setup waiting on fakegithub.
-<code>kubectl config current-context</code> then read <code>gke_actions-gateway-dogfood_us-east1-b_gag-dogfood</code>.
-A peer session's <code>scripts/dogfood/start.sh</code> started at 00:52:54Z, which fits the switch, though nothing recorded which call made it.
-On the dogfood cluster, which is hard-classified prod, the suite did the following:</p>
-<ul>
-<li>It installed upstream metrics-server v0.8.1 into <code>kube-system</code> beside GKE's own.
-  The two deployments share the <code>k8s-app=metrics-server</code> label, so GKE's Service selected both.</li>
-<li>It installed cert-manager v1.20.2.
-  The first run's teardown then uninstalled it, and the next run installed it again.</li>
-<li>It created namespace <code>e2e-infra</code> and deployed fakegithub into it.
-  Its images point at <code>127.0.0.1:5000</code>, so they never pulled, and that pull failure is the only reason setup failed.</li>
-<li>It server-side applied main's five actions-gateway CRDs with <code>--force-conflicts</code>.
-  That moved storage from <code>v2beta1</code> to <code>v2</code> under a <code>v1.9.0-rc.2</code> GMC, and <code>status.storedVersions</code> now reads <code>[v2beta1 v2]</code>.</li>
-<li>Its teardown ran <code>make undeploy</code>, which happened to be a no-op only because dogfood's release is named <code>gag</code>.</li>
-</ul>
-<p>All of it was removed or restored by hand afterwards.</p>
-<p>The failure was loud only by luck: fakegithub's image could not pull.
-A suite whose images resolved would have run its specs, tenants and all, on prod.</p>
-<p>Fix shape, unmeasured:</p>
-<ul>
-<li>Have the <code>e2e</code> targets export a private <code>KUBECONFIG</code> from <code>kind get kubeconfig --name $(KIND_CLUSTER)</code>, so the run never reads or writes the shared context.</li>
-<li>Have the suite's <code>BeforeSuite</code> refuse to start unless the context it resolves is <code>kind-$(KIND_CLUSTER)</code>.
-  That catches a hand-run <code>ginkgo</code> as well.</li>
-</ul>
-<p>The second half is the gate; the first only narrows the window.
-Q1186 is the same hazard in the dashboard preview harness.</p>
+<h1 id="make-increase-based-alerts-see-a-lazily-created-counters-first-count">Make increase()-based alerts see a lazily created counter's first count<a class="headerlink" href="#make-increase-based-alerts-see-a-lazily-created-counters-first-count" title="Permanent link">&para;</a></h1>
+<p>Several alerts in <code>deploy/monitoring/prometheusrule.yaml</code> fire on <code>increase(&lt;counter&gt;[window]) &gt; 0</code>, among them <code>ActionsGatewayEvictionRetriesExhausted</code>, and the counters behind them are created the first time the AGC increments a label set (<code>WithLabelValues</code> at the write site, <code>cmd/agc/internal/provisioner/eviction.go</code> for that one).
+Prometheus computes <code>increase()</code> from samples inside the window, so a series whose first scraped sample is already 1 has no earlier sample to rise from, and its first event may read as no increase at all: a set's first exhausted budget would not page.
+The retry-class misclassification alert Q1245 adds has the same shape with a five-re-run floor, where five failed re-runs spread over two series could read as about three and hold the alert silent at a 100% failure rate.
+This is the independent reviewer's reading of the Q1245 review, unmeasured: no <code>promtool</code> is installed here, so no rule test has shown the missed count, and the affected list above is from reading the rule file, not from a run.
+Measure first, with a <code>promtool test rules</code> case that scrapes a counter appearing at 1, then fix whichever alerts it confirms: initialise each label set at 0 when the AGC learns of it, or rewrite the expression to count a series' appearance.</p>
 
 
 

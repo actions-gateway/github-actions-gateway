@@ -3120,6 +3120,9 @@ The history alone cannot be relied on to raise it, because a job killed at its l
 <p><strong>What it does.</strong> When a worker the profile built has its runner container killed <code>OOMKilled</code>, the job's next attempt gets the killed limit times the profile's headroom (1.4 under <code>Binpack</code>, <code>limitHeadroomPercent / 100</code> under <code>Throughput</code>), rounded up to 64Mi and capped at <code>maxRequests.memory</code>, or at twice the killed limit where you set none.
 Under <code>Binpack</code> the memory request rises with it.
 The run is then re-run automatically on the same per-run budget as every other recovery (<code>maxEvictionRetries</code>), and a Normal <code>MemoryLimitRaisedForRetry</code> Event on the <code>RunnerSet</code> names the job, the run and both limits.
+The re-run waits until GitHub concludes the run, because GitHub refuses one while any other job of the run is still going, so a long matrix is re-run only after its last job finishes.
+It waits up to 24 hours, then gives up with an <code>EvictionRerunFailed</code> Warning Event and <code>actions_gateway_eviction_rerun_failures_total{cause="oom",reason="run_never_concluded"}</code>; re-run it by hand then.
+An AGC restart does not lose the wait (Q1244).
 A run whose budget is already spent gets <code>EvictionRetriesExhausted</code> instead, with no <code>MemoryLimitRaisedForRetry</code>; the raised limit still applies if you re-run it by hand.
 The raised limit stays with that job of that run for 7 days, so a manual re-run gets it too; no other job is affected, and the next run of the workflow starts from the history again.</p>
 <p><strong>When it does not.</strong> Each of these is withheld with a Normal <code>EvictionRerunWithheld</code> Event and counted in <code>actions_gateway_eviction_rerun_withheld_total{cause="oom"}</code>, with no budget slot spent:</p>

@@ -2732,6 +2732,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1252/">Q1252</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease-fake.sh">Flake: lease-test's another-holder renewer loses its lock and survives</a></td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that finds another holder TERMs its gate</code> on a tree that changes nothing under <code>scripts/dogfood/</code>.</td>
+</tr>
+<tr>
 <td><a href="Q1242/">Q1242</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/backfill-image-content.sh">e2e metrics-server preload fails on a cache miss beside cert-manager</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -2818,14 +2826,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> <code>check-release-ladder-test</code> is reported KILLED by <code>make scripts-test</code>, or exits 1 with a shell error from a <code>write_*</code> fixture …</td>
-</tr>
-<tr>
-<td><a href="Q1201/">Q1201</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Makefile">make e2e runs against the ambient kube context, dogfood included</a></td>
-<td><code>debt</code> <code>tests</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>make e2e</code> and <code>make e2e-cluster</code> never name a cluster.</td>
 </tr>
 <tr>
 <td><a href="Q1249/">Q1249</a></td>
@@ -3068,12 +3068,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the …</td>
 </tr>
 <tr>
-<td><a href="Q1244/">Q1244</a></td>
-<td><a href="../plan/q555-automatic-recovery-design/#how-it-waits">Persist and defer retry-class re-runs until the run concludes</a></td>
+<td><a href="Q1254/">Q1254</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#how-it-waits">Read the run before expiring a parked re-run adopted past 24 h</a></td>
 <td><code>feature</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>Q1183 built the out-of-memory retry class on the disruption arms' path, which re-runs inside the arms' 15-minute window …</td>
+<td>S</td>
+<td>Q1244 parks an out-of-memory re-run in the failure ledger's <code>pending</code> map until GitHub concludes the run, and expires an entry at 24 hours …</td>
+</tr>
+<tr>
+<td><a href="Q1255/">Q1255</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml">Make increase()-based alerts see a lazily created counter's first count</a></td>
+<td><code>debt</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Several alerts in <code>deploy/monitoring/prometheusrule.yaml</code> fire on <code>increase(&lt;counter&gt;[window]) &gt; 0</code>, among them …</td>
 </tr>
 <tr>
 <td><a href="Q1245/">Q1245</a></td>
@@ -4194,6 +4202,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
+</tr>
+<tr>
+<td><a href="Q1251/">Q1251</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/e2e_suite_test.go">e2e context check trusts a context named kind-<cluster> on any server</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The suite's <code>requireKindContext</code> compares only the context <em>name</em> with <code>kind-$KIND_CLUSTER</code>.</td>
 </tr>
 </tbody>
 </table>
