@@ -11,7 +11,8 @@ It changes no code; the background is [v2-ga.md](v2-ga.md) Phase 3.
 
 | Step | Row | Scope | Depends on | Status |
 |---|---|---|---|---|
-| 0 | Q273 (in flight) | Remove `v1alpha1` and `gag-migrate` | none | in flight |
+| 0a | Q273's test port (in flight, ID not yet allocated) | Port the e2e tenant fixtures, the RunnerGroup-driven AGC envtests and `cmd/agc/test/load` onto `v2` tenants typed on `api/v2` | none | in flight |
+| 0b | Q273 (in flight) | Remove `v1alpha1` and `gag-migrate`'s v1→v2 fan-out | 0a | in flight |
 | 1 | [Q1262](../queue/Q1262.md) | Retype the GMC onto `api/v2` | Q273 | ❌ open |
 | 2 | Q264 | Remove classic acquisition | Q273 | ❌ open |
 | 3 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` | Q273, Q264 | ❌ open |
@@ -123,20 +124,24 @@ Non-Go files naming `actions-gateway.com/v2alpha1` or `v2beta1` (charts, `deploy
 
 ## The tree this plan assumes, after Q273
 
-Q273 is in flight and lands first, so the counts below assume its deletions.
-The assumption is that Q273 deletes these five directories outright:
+Q273 is in flight as two PRs, and both land first, so the counts below assume them.
+Its plan as relayed by the batch's orchestrator on 2026-11-02, not read from a branch:
 
-```text
-cmd/agc/api/v1alpha1/   cmd/gmc/api/v1alpha1/   cmd/gmc/internal/webhook/v1alpha1/
-cmd/gmc/migrate/        cmd/gmc/internal/migrate/
-```
+- **A test port lands first.** The e2e tenant fixture (`cmd/gmc/test/utils/fixtures.go`), the AGC envtests that run through the RunnerGroup reconciler, and the load harness under `cmd/agc/test/load` move onto `v2` tenants typed on `api/v2`, so neither retype redoes them.
+- **The removal deletes** `cmd/agc/api/v1alpha1/`, `cmd/gmc/api/v1alpha1/`, `cmd/gmc/internal/webhook/v1alpha1/` and `gag-migrate`'s v1→v2 fan-out (`cmd/gmc/internal/migrate/migrate.go` and its tests).
+- **`gag-migrate` survives `v2.0.0` with `storage-version` only.**
 
-Thirteen files importing `v2alpha1` or `v2beta1` sit in them.
-If Q273 keeps the `storage-version` sweep (`cmd/gmc/internal/migrate/storageversion.go`, a `v2beta1` importer), Q1167 owns retyping or deleting it.
+The counts take the deleted paths above out, and take out the test files the port is assumed to cover: the e2e and load files, and the AGC envtests importing `v1alpha1`.
+That assumption removes six files from the retypes' scope that import an older `v2` version (five AGC envtests and one e2e test) and changes no non-test count.
+The removal leaves six more files importing one gone.
 
-**31 surviving files import both `v1alpha1` and `v2alpha1`/`v2beta1`.** Q273 edits each to drop its `v1alpha1` half, and Q1262 or Q1263 then edits the same file, so each retype starts by rebasing onto Q273's edits.
-Six are non-test: `cmd/agc/main.go`, `cmd/agc/internal/controller/runnerset_controller.go`, `cmd/gmc/cmd/main.go`, `cmd/gmc/internal/agentidentity/agentidentity.go`, `cmd/gmc/internal/webhook/v2/runnerset_read.go` and `cmd/gmc/internal/webhook/validation/validation.go`.
-The other 25 are tests, mostly under the two `internal/controller/integration` suites.
+**What survives of `gag-migrate` is in scope, and the sweep is the exception.** `cmd/gmc/migrate/main.go` and any fan-out helper Q273 keeps (`cmd/gmc/internal/migrate/names.go` takes `v2alpha1.RunnerTemplateSpec`) retype with the GMC in Q1262.
+`cmd/gmc/internal/migrate/storageversion.go` does not: it reads `EgressProxy` at `v2beta1` on purpose, because the sweep runs against a 1.10 cluster before the upgrade and only `v2beta1` still shows a stored alias.
+It cannot retype onto `v2` and keep that check, so Q1167 replaces its import of the deleted package with the version string and the two alias values held locally; it already reads through unstructured objects.
+
+**34 surviving files import both `v1alpha1` and `v2alpha1`/`v2beta1`, 29 after the test port.** Q273 edits each to drop its `v1alpha1` half, and Q1262 or Q1263 then edits the same file, so each retype starts by rebasing onto Q273's edits.
+Seven are non-test: `cmd/agc/main.go`, `cmd/agc/internal/controller/runnerset_controller.go`, `cmd/gmc/cmd/main.go`, `cmd/gmc/internal/agentidentity/agentidentity.go`, `cmd/gmc/internal/webhook/v2/runnerset_read.go`, `cmd/gmc/internal/webhook/validation/validation.go` and `cmd/gmc/migrate/main.go`.
+The rest are tests, mostly under the two `internal/controller/integration` suites.
 
 ## Sizes, measured
 
@@ -153,12 +158,12 @@ Counted off `origin/main` at `7b292627a` on 2026-11-02: tracked `.go` files outs
 The row's 2026-10-09 figures were 43 non-test and 180 in all; the tree has grown since, to 204.
 The batch's own count of 37 files importing both `v1alpha1` and an older `v2` version is two short of the 39 here; the difference was not reconciled, so read either as approximate.
 
-After Q273's assumed deletions, the files each retype edits:
+After Q273's two PRs as assumed above, the files each retype edits:
 
 | Step | Non-test | Test | Note |
 |---|---|---|---|
-| Q1262 (GMC) | 29 | 74 | the test count includes conversion tests (`v2_conversion_test.go`, `v2_ga_conversion_test.go` and others), which Q1167 deletes rather than Q1262 retyping them |
-| Q1263 (AGC) | 20 | 72 | the test count includes `integration/conversion_webhook_test.go` and `v2alpha1_crd_test.go`, which go to Q1167 likewise |
+| Q1262 (GMC) | 32 | 77 | the non-test count includes `storageversion.go`, which goes to Q1167 instead; the test count includes conversion tests (`v2_conversion_test.go`, `v2_ga_conversion_test.go` and others), which Q1167 deletes rather than Q1262 retyping them |
+| Q1263 (AGC) | 20 | 67 | the test count includes `integration/conversion_webhook_test.go` and `v2alpha1_crd_test.go`, which go to Q1167 likewise |
 | Q1167 (drop) | `api/` 2, plus what the retypes left | `api/` 5, plus conversion tests | most of the diff is deleted packages and generated CRDs |
 
 These count files that name a version, not every reader of the change: generated CRDs, chart templates and the admission policies above read the served set without importing Go.
