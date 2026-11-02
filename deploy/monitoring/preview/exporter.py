@@ -39,12 +39,11 @@ GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
 RATE_LIMITED_SCALESETS = {("team-a", "cpu-standard")}
 
 # Every validating webhook the chart ships, as (path, apiserver name, requests/s,
-# denials/s). All six are listed rather than a sample because the security
+# denials/s). All five are listed rather than a sample because the security
 # dashboard sums across them: a preview carrying a subset renders totals below
 # what any real install produces, and a legend sized against the wrong series
 # count (Q1061).
 WEBHOOKS = (
-    ("/validate-actions-gateway-github-com-v1alpha1-actionsgateway", "vactionsgateway-v1alpha1.kb.io", 0.02, 0.010),
     ("/validate-actions-gateway-com-v2-actionsgateway", "vactionsgateway-v2.kb.io", 0.02, 0.010),
     ("/validate-actions-gateway-com-v2-clusterrunnertemplate", "vclusterrunnertemplate-v2.kb.io", 0.01, 0.010),
     ("/validate-actions-gateway-com-v2-egressproxy", "vegressproxy-v2.kb.io", 0.02, 0.010),
@@ -101,7 +100,7 @@ JOB_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 PROXY_BUCKETS = [0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600]
 # (namespace, gateway-name) for the GMC-exported fleet condition gauges.
 GATEWAYS = [("team-a", "team-a"), ("team-b", "team-b")]
-CONTROLLERS = ["actionsgateway", "runnergroup", "runnerset"]
+CONTROLLERS = ["actionsgateway-v2", "runnerset"]
 
 
 def jitter(seed, amp):
@@ -224,10 +223,6 @@ def render():
         L.append(f'actions_gateway_jobs_duplicate_delivery_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.03, elapsed)}')
         L.append(f'actions_gateway_abandoned_delivery_completions_total{{namespace="{ns}",runner_group="{rg}",outcome="completed"}} {counter_total(0.03, elapsed)}')
         L.append(f'actions_gateway_fanout_loser_recycle_deferred_total{{namespace="{ns}",runner_group="{rg}",outcome="winner_concluded"}} {counter_total(0.03, elapsed)}')
-        # tenant health-condition gauges all healthy (0)
-        L.append(f'actions_gateway_worker_quota_pressure{{namespace="{ns}",runner_group="{rg}"}} 0')
-        L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="{rg}"}} 0')
-        L.append(f'actions_gateway_workers_unschedulable{{namespace="{ns}",runner_group="{rg}"}} 0')
 
     # Scale-set acquisition tier (Q264/Q311): one Listener per ScaleSet-protocol
     # RunnerSet. Assigned drives demand 1:1 (no sibling fan-out); provisioned
@@ -308,7 +303,7 @@ def render():
     # GMC fleet rollups.
     L.append("actions_gateway_managed_gateways 4")
     for ns, name in GATEWAYS:
-        L.append(f'actions_gateway_runnergroups_degraded{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_runnersets_degraded{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_egress_rules_stale{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_proxy_quota_pressure{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_proxy_quota_exceeded{{namespace="{ns}",name="{name}"}} 0')

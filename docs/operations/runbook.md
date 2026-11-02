@@ -188,7 +188,7 @@ See [GMC Not Provisioning Tenant Resources](troubleshooting.md#gmc-not-provision
 ### ActionsGatewayWorkersUnschedulable
 
 **Page.** Worker pods are stuck `Pending` past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing.
-See [RunnerGroup Reports WorkersUnschedulable](troubleshooting.md#runnergroup-reports-workersunschedulable) and [Worker Pods Stuck Pending](troubleshooting.md#worker-pods-stuck-pending).
+See [RunnerSet Reports WorkersUnschedulable](troubleshooting.md#runnerset-reports-workersunschedulable) and [Worker Pods Stuck Pending](troubleshooting.md#worker-pods-stuck-pending).
 
 ### ActionsGatewayWorkersNotStarting
 

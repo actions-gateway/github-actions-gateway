@@ -24,9 +24,9 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [GMC Exits at Startup: an Installed CRD Schema Is Older Than the GMC](#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts)
-- [ActionsGateway Reports RunnerGroupsDegraded](#actionsgateway-reports-runnergroupsdegraded)
+- [ActionsGateway Reports RunnerSetsDegraded](#actionsgateway-reports-runnersetsdegraded)
 - [Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy](#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy)
-- [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable)
+- [RunnerSet Reports WorkersUnschedulable](#runnerset-reports-workersunschedulable)
 - [RunnerSet Reports WorkerCapacityDeclined (the Gateway Stopped Claiming Jobs)](#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)
 - [Worker / Proxy / AGC Pods Rejected by a Cluster Policy Engine](#worker--proxy--agc-pods-rejected-by-a-cluster-policy-engine)
 - [ActionsGateway Reports EgressRulesStale](#actionsgateway-reports-egressrulesstale)
@@ -466,49 +466,39 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 
 ---
 
-## ActionsGateway Reports RunnerGroupsDegraded
+## ActionsGateway Reports RunnerSetsDegraded
 
-**Symptoms.** `kubectl get actionsgateway` shows a `RunnerGroupsDegraded=True` condition, or the `actions_gateway_runnergroups_degraded` gauge is `1`.
-The gateway infrastructure itself (proxy, AGC) may still be `Ready=True` — this condition rolls **child RunnerGroup** health up to the gateway so you don't have to inspect each group individually.
+**Symptoms.** `kubectl get actionsgateway` shows a `RunnerSetsDegraded=True` condition, or the `actions_gateway_runnersets_degraded` gauge is `1`.
+The gateway infrastructure itself (proxy, AGC) may still be `Ready=True` — this condition rolls **child `RunnerSet`** health up to the gateway (Q304) so you don't have to inspect each set individually.
 
-**Cause.** One or more of the gateway's owned `RunnerGroup`s reports an *impairing* condition — `CredentialUnavailable` (the AGC can't obtain an installation token), `Degraded` (an unhealthy/unauthorized listener session), `RunnerVersionTooOld` (the worker image ships a runner below GitHub's enforced minimum, or GitHub rejected the configured version outright; see [Worker Image Runner Version](#worker-image-runner-version)), or `WorkersUnschedulable` (worker pods can't be scheduled).
-Advisory capacity/throughput conditions (`WorkerQuotaPressure`/`WorkerQuotaExceeded`, `RateLimited`) are deliberately **not** rolled up here — they have their own signals.
-`RunnerGroupsDegraded` does **not** gate `Ready`: the gateway can keep serving healthy groups while one is impaired.
+**Cause.** One or more of the `RunnerSet`s bound to the gateway is impaired, on either of two axes.
+It is not `Ready` for a non-transient reason — a reference or provisioning failure, which a `RunnerSet` folds into `Ready=False` (anything but the benign startup `NoActiveSessions`) — **or** any of its abnormal-is-True impairing conditions is `True`: `Degraded` (revoked or invalid credentials), `CredentialUnavailable` (the AGC can't obtain an installation token), `RunnerVersionTooOld` (the worker image ships a runner below GitHub's enforced minimum, or GitHub rejected the configured version outright; see [Worker Image Runner Version](#worker-image-runner-version)), or `WorkersUnschedulable` (worker pods can't be scheduled).
+The second axis matters because the shared listener pushes `Degraded`/`RunnerVersionTooOld` independently of `Ready` (Q330): a classic set whose sessions are all rejected as unauthorized converges to the benign `Ready=NoActiveSessions` while `Degraded=True` sits on its own condition.
+Advisory throughput signals (`RateLimited`, the `WorkerQuota` ladder) are deliberately excluded so the rollup does not flap on normal load.
+A set targeting a *different* gateway is never counted.
+`RunnerSetsDegraded` does **not** gate `Ready`: the gateway can keep serving healthy sets while one is impaired.
 
 **Diagnostics.**
 
 ```sh
-# Read the rollup — its message names the impaired groups and their tripped conditions.
+# Read the rollup — its message names the impaired sets and their tripped signals.
 kubectl get actionsgateway -n <namespace> <name> \
-  -o jsonpath='{range .status.conditions[?(@.type=="RunnerGroupsDegraded")]}{.status} {.reason}: {.message}{"\n"}{end}'
+  -o jsonpath='{range .status.conditions[?(@.type=="RunnerSetsDegraded")]}{.status} {.reason}: {.message}{"\n"}{end}'
 
-# Drill into a named RunnerGroup's own conditions.
-kubectl get runnergroup -n <namespace> <runner-group> -o jsonpath='{.status.conditions}' | jq .
+# Drill into a named RunnerSet's own conditions.
+kubectl get runnerset -n <namespace> <runner-set> -o jsonpath='{.status.conditions}' | jq .
 ```
 
-**Resolution.** Resolve the underlying per-group condition, then the rollup clears automatically on the next reconcile (the GMC watches the owned RunnerGroups):
+**Resolution.** Resolve the underlying per-set condition, then the rollup clears automatically on the next reconcile (the GMC watches bound `RunnerSet`s):
 - `CredentialUnavailable` → see [GitHub App Secret Misconfiguration](#github-app-secret-misconfiguration).
 - `Degraded` / `RunnerVersionTooOld` → see [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs).
-- `WorkersUnschedulable` → see [RunnerGroup Reports WorkersUnschedulable](#runnergroup-reports-workersunschedulable).
-
-> **v2 `ActionsGateway`: `RunnerSetsDegraded`.** The v2 `ActionsGateway` reports the same rollup as `RunnerSetsDegraded` (Q304), rolling **child `RunnerSet`** health up to the gateway.
-> A set counts as impaired on either of two axes: it is not `Ready` for a non-transient reason — a reference or provisioning failure, which a v2 `RunnerSet` folds into `Ready=False` (anything but the benign startup `NoActiveSessions`) — **or** any of its abnormal-is-True impairing conditions is `True`: `Degraded` (revoked or invalid credentials), `CredentialUnavailable`, `RunnerVersionTooOld`, or `WorkersUnschedulable`.
-> The second axis matters because the shared listener pushes `Degraded`/`RunnerVersionTooOld` independently of `Ready` (Q330): a classic set whose sessions are all rejected as unauthorized converges to the benign `Ready=NoActiveSessions` while `Degraded=True` sits on its own condition.
-> Advisory throughput signals (`RateLimited`, the `WorkerQuota` ladder) are deliberately excluded so the rollup does not flap on normal load.
-> The message names the impaired sets and their tripped signals; a set targeting a *different* gateway is never counted.
-> It is advisory (does **not** gate `Ready`) and clears automatically once the children recover (the GMC watches bound `RunnerSet`s).
-> Read it with:
->
-> ```sh
-> kubectl get actionsgateway -n <namespace> <name> \
->   -o jsonpath='{range .status.conditions[?(@.type=="RunnerSetsDegraded")]}{.status} {.reason}: {.message}{"\n"}{end}'
-> ```
+- `WorkersUnschedulable` → see [RunnerSet Reports WorkersUnschedulable](#runnerset-reports-workersunschedulable).
 
 ---
 
 ## Runners Never Appear Online — AGC `unknown authority` Through the Egress Proxy
 
-**Symptoms.** A freshly onboarded tenant reaches `Ready=True` with the proxy (`PROXYREADY`) and AGC pods running, but **no runner ever appears** in the repo/org runner list, the `RunnerGroup` shows `ActiveSessions` empty/0, the gateway reports `RunnerGroupsDegraded`, and the AGC log repeats:
+**Symptoms.** A freshly onboarded tenant reaches `Ready=True` with the proxy (`PROXYREADY`) and AGC pods running, but **no runner ever appears** in the repo/org runner list, the `RunnerSet` shows `ActiveSessions` empty/0, the gateway reports `RunnerSetsDegraded`, and the AGC log repeats:
 
 ```
 EnsureAgents failed ... register agent: generate jit config:
@@ -529,27 +519,24 @@ There is no clean configuration workaround on `rc.4` for a proxied tenant; switc
 
 ---
 
-## RunnerGroup Reports WorkersUnschedulable
+## RunnerSet Reports WorkersUnschedulable
 
-**Symptoms.** `kubectl get runnergroup` shows a `WorkersUnschedulable=True` condition, or the `actions_gateway_workers_unschedulable` gauge is `1` — on a v2 `RunnerSet`, `kubectl get runnerset` and the per-set twin `actions_gateway_runnerset_workers_unschedulable`.
+**Symptoms.** `kubectl get runnerset` shows a `WorkersUnschedulable=True` condition, or the `actions_gateway_runnerset_workers_unschedulable` gauge is `1`.
 Jobs are acquired but never start; worker pods sit `Pending`.
-Each pod the reaper eventually gives up on also emits a `WorkersUnschedulable` Warning event and a `WorkerPodStuckPending` event on the RunnerGroup.
+Each pod the reaper eventually gives up on also emits a `WorkersUnschedulable` Warning event and a `WorkerPodStuckPending` event on the RunnerSet.
 
-**Cause.** The Kubernetes scheduler cannot place the group's worker pods on any node — `PodScheduled=False` with reason `Unschedulable`.
+**Cause.** The Kubernetes scheduler cannot place the set's worker pods on any node — `PodScheduled=False` with reason `Unschedulable`.
 Typical reasons: no node has enough allocatable CPU/memory for the pod's requests, the pod's `nodeSelector` / affinity matches no node, or every candidate node carries a taint the pod does not tolerate.
-The condition trips once a pod has been Pending+Unschedulable for longer than the scheduling grace (half the group's `pendingPodDeadline`), giving an early warning before the reaper deletes the pod at the full deadline.
+The condition trips once a pod has been Pending+Unschedulable for longer than the scheduling grace (half the set's `pendingPodDeadline`), giving an early warning before the reaper deletes the pod at the full deadline.
 
 This is **not** a quota problem: a `ResourceQuota` rejection blocks pod *admission* so the pod is never created — that path is the separate `WorkerQuotaExceeded` condition.
 The two never both fire for the same cause.
-
-> **v2 `RunnerSet`.** The same `WorkersUnschedulable` condition is set on a v2 `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset` in the commands below.
-> Its gauge is the per-set twin `actions_gateway_runnerset_workers_unschedulable` (Q319), keyed on `namespace`/`runner_set` rather than `namespace`/`runner_group`; the v1 `actions_gateway_workers_unschedulable` stays `RunnerGroup`-only, so `actions_gateway_workers_unschedulable == 1 or actions_gateway_runnerset_workers_unschedulable == 1` is the query that covers both while `v1alpha1` is still served.
 
 **Diagnostics.**
 
 ```sh
 # Read the condition — its message names the stuck pods and the scheduler verdict.
-kubectl get runnergroup -n <namespace> <runner-group> \
+kubectl get runnerset -n <namespace> <runner-set> \
   -o jsonpath='{range .status.conditions[?(@.type=="WorkersUnschedulable")]}{.status} {.reason}: {.message}{"\n"}{end}'
 
 # Inspect a stuck worker pod's scheduler events for the exact reason.
@@ -557,7 +544,7 @@ kubectl describe pod -n <namespace> <worker-pod>   # look for "FailedScheduling"
 ```
 
 **Resolution.** Match the scheduler verdict to the fix:
-- *Insufficient cpu/memory* → add nodes / scale the cluster autoscaler, or lower the worker pod's resource requests in the group's `podTemplate`.
+- *Insufficient cpu/memory* → add nodes / scale the cluster autoscaler, or lower the worker pod's resource requests in the set's `podTemplate`.
 - *node(s) didn't match nodeSelector / affinity* → correct the `podTemplate`'s `nodeSelector`/affinity, or label the intended nodes.
 - *node(s) had untolerated taint* → add the matching toleration to the `podTemplate`, or remove the taint from the target nodes.
 
@@ -582,7 +569,7 @@ The condition's `reason` names which one decided:
 | `reason` | Gateway says | What was observed |
 |---|---|---|
 | `ScaleUpDeclined` | `nodeAutoscaling: Present` (default) | The cluster autoscaler itself recorded, on a stuck worker pod, that it will **not** add a node for it. The message carries the autoscaler's own per-node-group text. |
-| `PodsUnschedulable` | `nodeAutoscaling: Absent` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable). |
+| `PodsUnschedulable` | `nodeAutoscaling: Absent` | The scheduler's own verdict — the same `PodScheduled=False`/`Unschedulable` fact behind [`WorkersUnschedulable`](#runnerset-reports-workersunschedulable). |
 | `PodsNotStarting` | either | A worker pod **was** placed on a node and then could not be started: the kubelet is in `ImagePullBackOff` on its image (Q714). The message carries the kubelet's own text, which names the image. Almost always an unpullable or misspelled `workerImage`; see [below](#the-reason-is-podsnotstarting-the-image-will-not-pull). |
 | `AwaitingProbe` | either | The stuck pods that produced the verdict were reaped at `pendingPodDeadline`, and nothing has yet shown that capacity returned, so the decline is **retained** (Q512). Intake is limited to **one probe job** per deadline window, not closed; the message carries the reaped verdict. Clears when a worker pod **starts**: a container that has actually run, not merely a pod that has been scheduled. |
 | `CapacityAvailable` (status `False`) | either | The gate is engaged and is **not** refusing intake. |
@@ -639,7 +626,7 @@ kubectl get events -n <namespace> \
 > So the gate reads a declination as superseding a scale-up only when it lands more than a second after it; anything closer is one loop's own output and leaves the gate open, because a node is in fact arriving.
 > If the events above show a `NotTriggerScaleUp` (or Karpenter `FailedScheduling`) close behind a `TriggeredScaleUp`/`Nominated` while the condition reads `False`, that is the rule working, not a stale condition.
 
-**Resolution.** The gate is reporting a real cluster condition, so fix the placement problem — the resolutions are the same ones listed under [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable) (allocatable capacity, `nodeSelector`/affinity, tolerations).
+**Resolution.** The gate is reporting a real cluster condition, so fix the placement problem — the resolutions are the same ones listed under [`WorkersUnschedulable`](#runnerset-reports-workersunschedulable) (allocatable capacity, `nodeSelector`/affinity, tolerations).
 Under `nodeAutoscaling: Present` the autoscaler has already told you which one in the condition message: a node-group ceiling (`max node group size reached`, `max total nodes in cluster reached`), an untolerated taint, a cloud quota, or — for Karpenter — no instance type with enough resources, or requirements no pool is compatible with.
 The condition clears on the next reconcile once a worker pod schedules, or once the autoscaler records that it *is* scaling up for one.
 
@@ -749,7 +736,7 @@ admission webhook "validate.kyverno.svc-fail" denied the request:
 **Cause.** A cluster-wide admission policy rejects the GAG pod for violating a rule it does not satisfy.
 The usual culprits: a policy requiring `drop: [ALL]` capabilities or `allowPrivilegeEscalation: false` on *all* pods (the default `baseline` worker profile sets neither — baseline CI relies on in-job `sudo`); a `readOnlyRootFilesystem` requirement (no worker profile sets it — the runner needs a writable root filesystem); a registry allowlist that omits GAG's registries; or a "require resource limits" rule (AGC v1alpha1 pods carry none).
 
-This is distinct from [`WorkersUnschedulable`](#runnergroup-reports-workersunschedulable) (scheduler can't place a *created* pod) and from `WorkerQuotaExceeded` (`ResourceQuota` blocks admission): here the policy engine blocks pod creation *before* either applies.
+This is distinct from [`WorkersUnschedulable`](#runnerset-reports-workersunschedulable) (scheduler can't place a *created* pod) and from `WorkerQuotaExceeded` (`ResourceQuota` blocks admission): here the policy engine blocks pod creation *before* either applies.
 
 **Diagnostics.**
 
@@ -2193,7 +2180,7 @@ A failed read is not an incident: the AGC logs it at warning level, retries on a
 
 `Unknown` is deliberately not `False`: a custom image is exactly where a stale runner hides, and reporting "current" for an image nothing has checked would be worse than saying so.
 
-**A `True` verdict makes the set impaired**, so it rolls up into the gateway's `RunnerGroupsDegraded`/`RunnerSetsDegraded` condition.
+**A `True` verdict makes the set impaired**, so it rolls up into the gateway's `RunnerSetsDegraded` condition.
 `Unknown` and `False` do not.
 
 **Resolution.**
@@ -3810,7 +3797,7 @@ kubectl get pod -n <namespace> <worker-pod> \
 
 ## Jobs Failing Due to Namespace ResourceQuota Exhaustion
 
-**Symptoms.** Jobs sit queued in GitHub while the `RunnerGroup`/`RunnerSet` reports `WorkerQuotaExceeded=True` (and `actions_gateway_worker_quota_exceeded` reads `1` — on a `RunnerSet`, the per-set twin `actions_gateway_runnerset_worker_quota_exceeded`) — the AGC is declining to take on work it cannot place.
+**Symptoms.** Jobs sit queued in GitHub while the `RunnerSet` reports `WorkerQuotaExceeded=True` (and `actions_gateway_runnerset_worker_quota_exceeded` reads `1`) — the AGC is declining to take on work it cannot place.
 Which metric shows it depends on the acquisition tier:
 
 | Tier | What climbs |
@@ -3834,19 +3821,16 @@ How that refusal is expressed differs by tier, and the difference is worth knowi
   The cost is granularity: the decision is per poll for the whole set, so restored headroom reopens assignment within one long-poll (~50s) rather than instantly.
 - **`Classic` (deprecated).** The AGC skips `acquirejob` per delivered job, leaving it queued at GitHub for redelivery to a sibling with capacity.
 
-The AGC surfaces two non-blocking conditions on each `RunnerGroup` for the namespace-quota axis (Q82), each exported as a gauge so you can alert without kube-state-metrics.
+The AGC surfaces two non-blocking conditions on each `RunnerSet` for the namespace-quota axis (Q82, Q303), each exported as a gauge so you can alert without kube-state-metrics.
 Distinguish them from Q59's configured-ceiling backpressure (`actions_gateway_jobs_admission_rejected_total{reason="ceiling"}`), which is normal load-shedding to a sibling, not a quota problem:
 
 | Condition / metric | Meaning | Severity |
 |---|---|---|
-| `WorkerQuotaPressure` — `actions_gateway_worker_quota_pressure`, v2 twin `actions_gateway_runnerset_worker_quota_pressure` | Workers can't scale to the configured ceiling (`maxWorkers` / max `priorityTiers` threshold) within the quota's remaining headroom. | warning (don't page) |
-| `WorkerQuotaExceeded` — `actions_gateway_worker_quota_exceeded`, v2 twin `actions_gateway_runnerset_worker_quota_exceeded` | The quota can't admit even one more worker pod — the next acquired job's pod will be rejected. | error (page) |
-
-> **v2 `RunnerSet`.** Both `WorkerQuotaPressure` and `WorkerQuotaExceeded` are set on a v2 `RunnerSet` (Q303) with identical semantics — swap `runnergroup` for `runnerset` in the commands below.
-> Their gauges are the per-set twins `actions_gateway_runnerset_worker_quota_pressure` and `actions_gateway_runnerset_worker_quota_exceeded` (Q319), keyed on `namespace`/`runner_set` rather than `namespace`/`runner_group`; the v1 `actions_gateway_worker_quota_*` families stay `RunnerGroup`-only, so `actions_gateway_worker_quota_exceeded == 1 or actions_gateway_runnerset_worker_quota_exceeded == 1` is the query that covers both while `v1alpha1` is still served.
+| `WorkerQuotaPressure` — `actions_gateway_runnerset_worker_quota_pressure` | Workers can't scale to the configured ceiling (`maxWorkers` / max `priorityTiers` threshold) within the quota's remaining headroom. | warning (don't page) |
+| `WorkerQuotaExceeded` — `actions_gateway_runnerset_worker_quota_exceeded` | The quota can't admit even one more worker pod — the next acquired job's pod will be rejected. | error (page) |
 
 ```sh
-kubectl get runnergroup -n <namespace> <name> \
+kubectl get runnerset -n <namespace> <name> \
   -o jsonpath='{range .status.conditions[?(@.type=="WorkerQuotaExceeded")]}{.status} {.reason}: {.message}{"\n"}{end}'
 ```
 
