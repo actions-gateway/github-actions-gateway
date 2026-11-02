@@ -6,12 +6,9 @@
 # Each module's `make generate` regenerates its CRD/RBAC/webhook YAML and its
 # zz_generated.deepcopy.go from the kubebuilder markers, but nothing ran that on a
 # contributor's behalf — the committed output was only ever as fresh as the last
-# person who remembered. For manifests the gap is worst ACROSS modules: cmd/gmc's
-# ActionsGateway CRD embeds AGC types (RunnerGroupSpec), so a doc comment edited
-# in cmd/agc/api changes the GMC manifest, and only `make -C cmd/gmc manifests`
-# propagates it. #793 edited a quotaRetryDelay doc comment in the AGC type and the
-# GMC CRD never caught up, so every later GMC contributor got that hunk as
-# unrelated diff noise the moment they regenerated (Q440).
+# person who remembered. #793 edited a quotaRetryDelay doc comment and the CRD
+# never caught up, so every later contributor got that hunk as unrelated diff
+# noise the moment they regenerated (Q440).
 #
 # This regenerates every registered module's output into a scratch tree and diffs
 # it against the committed copies. It NEVER writes into the working tree, so it

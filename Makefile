@@ -650,11 +650,9 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC/webhook manifests for all mo
 
 # Fail if committed controller-gen output — CRD/RBAC/webhook manifests, or a
 # zz_generated.deepcopy.go — is stale relative to the Go types behind it (Q440,
-# Q477). Nothing ran `make generate` on a contributor's behalf, and for manifests
-# the gap is worst ACROSS modules: cmd/gmc's ActionsGateway CRD embeds AGC types,
-# so a doc comment edited in cmd/agc/api reaches the GMC manifest only when
-# someone runs the GMC's own manifests target — #793 edited one and the GMC CRD
-# never caught up, handing every later GMC contributor that hunk as diff noise.
+# Q477). Nothing ran `make generate` on a contributor's behalf: #793 edited a
+# doc comment and the CRD never caught up, handing every later contributor that
+# hunk as diff noise.
 # The DeepCopy half was left out on the reasoning that missing DeepCopy fails to
 # compile; it does not for an ADDED type, and ClusterCapacity (#917) shipped with
 # none, so ActionsGateway.DeepCopy() aliased the informer cache (Q477).
