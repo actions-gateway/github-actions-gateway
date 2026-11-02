@@ -658,11 +658,9 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC/webhook manifests for all mo
 
 # Fail if committed controller-gen output — CRD/RBAC/webhook manifests, or a
 # zz_generated.deepcopy.go — is stale relative to the Go types behind it (Q440,
-# Q477). Nothing ran `make generate` on a contributor's behalf, and for manifests
-# the gap is worst ACROSS modules: cmd/gmc's ActionsGateway CRD embeds AGC types,
-# so a doc comment edited in cmd/agc/api reaches the GMC manifest only when
-# someone runs the GMC's own manifests target — #793 edited one and the GMC CRD
-# never caught up, handing every later GMC contributor that hunk as diff noise.
+# Q477). Nothing ran `make generate` on a contributor's behalf: #793 edited a
+# doc comment and the CRD never caught up, handing every later contributor that
+# hunk as diff noise.
 # The DeepCopy half was left out on the reasoning that missing DeepCopy fails to
 # compile; it does not for an ADDED type, and ClusterCapacity (#917) shipped with
 # none, so ActionsGateway.DeepCopy() aliased the informer cache (Q477).
@@ -1047,7 +1045,7 @@ chart-crds: ## Regenerate the Helm chart CRD templates from the controller-gen s
 	scripts/manifest/sync-chart-crds.sh
 
 .PHONY: chart-crds-check
-chart-crds-check: ## Fail if the chart CRD templates drifted from their sources, or the GMC-bundled RunnerGroup CRD drifted from the AGC copy (Q73)
+chart-crds-check: ## Fail if the chart CRD templates drifted from their controller-gen sources (Q73)
 	scripts/manifest/sync-chart-crds.sh --check
 
 .PHONY: chart-rbac
@@ -1133,14 +1131,13 @@ chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall c
 
 # Q475 — the day-2 `helm upgrade` gate. `make deploy` runs `helm upgrade
 # --install`, but never against a prior release, so upgrade over a LIVE release
-# was untested; in particular nothing proved that CRD field changes still reach
-# an existing install (they only do because the CRDs ship under templates/crds/,
-# not the chart-root crds/ Helm never upgrades). Unlike chart-reinstall-check
-# this one IS wired into CI (e2e-reusable.yml, after the suite). Run it against a
-# cluster with the release already installed (after the e2e suite under
-# E2E_SKIP_TEARDOWN, or a manual `make deploy`).
+# was untested: this proves a template change rolls the manager out and admission
+# still enforces after it. Unlike chart-reinstall-check this one IS wired into
+# CI (e2e-reusable.yml, after the suite). Run it against a cluster with the
+# release already installed (after the e2e suite under E2E_SKIP_TEARDOWN, or a
+# manual `make deploy`).
 .PHONY: chart-upgrade-check
-chart-upgrade-check: ## Verify `helm upgrade` delivers chart + CRD changes to a live release (needs the release installed)
+chart-upgrade-check: ## Verify `helm upgrade` delivers chart changes to a live release (needs the release installed)
 	KIND_CLUSTER=$(KIND_CLUSTER) scripts/e2e/chart-upgrade-check.sh
 
 # Q507 — the released-chart upgrade gate. chart-upgrade-check proves HEAD's

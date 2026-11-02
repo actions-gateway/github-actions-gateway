@@ -5,14 +5,13 @@ This chart deploys the GMC and its cluster prerequisites only.
 Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are **provisioned by the GMC at runtime** from each `ActionsGateway` CR; they are not chart resources.
 
 > This chart is the **sole** install path (Q142) — there is no kustomize overlay.
-> The plain-YAML files under `cmd/gmc/config/` and `cmd/agc/config/` are the controller-gen codegen + envtest substrate (they back `make manifests` and envtest) and the single-source inputs to this chart's CRD/RBAC generators; they are not an install vehicle.
+> The plain-YAML files under `cmd/gmc/config/` and `cmd/agc/config/` are the controller-gen codegen + envtest substrate (they back `make manifests` and envtest) and the single-source inputs to this chart's RBAC/webhook generators; they are not an install vehicle.
 > Helm was chosen over a Kustomize overlay for versioned releases and a real day-2 `helm upgrade`/`rollback` lifecycle (decision D-M5-1).
 
 ## What it installs
 
-- The `v1alpha1` `RunnerGroup` CRD under `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall` preserves tenant objects.
-  The `ActionsGateway` kind ships in the separate `actions-gateway-crds-v2` chart.
-- The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`** dir: the chart also renders a `PriorityClassAllowlist` CR (the `priorityclass-allowlist-guard` policy's param).
+- No tenant CRDs: the v2 kinds (`ActionsGateway`, `EgressProxy`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`) ship in the separate [`actions-gateway-crds-v2`](../actions-gateway-crds-v2/README.md) chart.
+- The `PriorityClassAllowlist` CRD, under the chart-root **`crds/`** dir: the chart also renders a `PriorityClassAllowlist` CR (the `priorityclass-allowlist-guard` policy's param).
   Helm resolves REST mappings for the entire manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install with `no matches for kind`.
   Only `crds/` is installed ahead of that resolution.
 
@@ -31,13 +30,13 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
   The chart preflights the CRD's presence and fails with that command if it is skipped.
   Fresh installs are unaffected; Helm applies `crds/` for you.
 
-  **All CRD files here are generated** from the authoritative controller-gen sources (`cmd/*/config/crd`, `api/config/crd`) by `make chart-crds` — do not hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall out of sync.
+  **The CRD file here is generated** from the authoritative controller-gen source (`api/config/crd`) by `make chart-crds` — do not hand-edit them; a CI drift gate (`make chart-crds-check`) fails if they fall out of sync.
   See [code-generation.md](../../docs/development/code-generation.md).
 - The GMC `Deployment` (HA: 2 replicas + leader election + PDB), `ServiceAccount`, cluster/namespaced RBAC, and the `agc-tenant-role` ClusterRole.
   The manager ClusterRole's **rules are generated** from the controller-gen output of the GMC's `+kubebuilder:rbac` markers (`cmd/gmc/config/rbac/role.yaml`) into `files/manager-role-rules.yaml` by `make chart-rbac`; a CI drift gate (`make chart-rbac-check`) fails if they fall out of sync.
   Do not hand-edit them.
 - The validating webhook (`ValidatingWebhookConfiguration` + Service) and its serving cert (cert-manager or self-signed — see below).
-- Three ValidatingAdmissionPolicies: `namespace-psa-guard` (the namespace PSA-label patch) and `tenant-resource-guard` (create/update/delete of Deployments, Secrets, RoleBindings, NetworkPolicies, etc.) confine the GMC's cluster-wide write grants to marked tenant namespaces; `priorityclass-allowlist-guard` backstops the PriorityClass allowlist on direct `runnergroups` writes that bypass the GMC webhooks.
+- Three ValidatingAdmissionPolicies: `namespace-psa-guard` (the namespace PSA-label patch) and `tenant-resource-guard` (create/update/delete of Deployments, Secrets, RoleBindings, NetworkPolicies, etc.) confine the GMC's cluster-wide write grants to marked tenant namespaces; `priorityclass-allowlist-guard` backstops the PriorityClass allowlist on `runnersets`/`runnertemplates` writes, should the GMC webhooks be bypassed.
   Its parameter is the cluster-scoped `PriorityClassAllowlist` CR rendered from `allowedPriorityClasses`, which the GMC also watches — a CRD rather than a ConfigMap because a core-type `paramKind` is destroyed by a kube-apiserver defect on `helm uninstall` (Q444/Q492).
 - NetworkPolicies (default-deny ingress + metrics/webhook allows) and the metrics Service / optional ServiceMonitor.
 
@@ -141,7 +140,7 @@ PINS="$PINS --set-string proxy.image.digest=$DIGEST --set-string wrapper.image.d
 helm lint charts/actions-gateway $PINS
 helm template gag charts/actions-gateway --namespace gmc-system $PINS | \
   kubeconform -strict -summary -kubernetes-version 1.30.0 \
-    -skip CustomResourceDefinition,ActionsGateway,RunnerGroup,Certificate,Issuer,ServiceMonitor
+    -skip CustomResourceDefinition,PriorityClassAllowlist,Certificate,Issuer,ServiceMonitor
 ```
 
 The `-skip` list covers the CRDs and the CRs whose schemas (cert-manager, Prometheus Operator) are not in kubeconform's default store.

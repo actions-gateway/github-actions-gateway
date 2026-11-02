@@ -107,7 +107,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   `SecurityProfile` enum on `ActionsGatewaySpec` (default `baseline`); `applyNamespacePSA` in actionsgateway_controller.go:509 stamps `pod-security.kubernetes.io/{enforce,warn,audit}` labels on the tenant namespace at every reconcile.
   The in-tree PodSecurity admission plugin rejects any worker pod that violates the profile, including pods built by the AGC from a tenant's PodTemplate.
   A CEL `XValidation` on `RunnerGroupSpec.PodTemplate` also rejects `privileged: true` at `kubectl apply` time for the kinder failure path (per D-7).
-- **Location:** [cmd/agc/api/v1alpha1/runnergroup_types.go:30-60](../../cmd/agc/api/v1alpha1/runnergroup_types.go), [cmd/agc/internal/provisioner/provisioner.go:349-439](../../cmd/agc/internal/provisioner/provisioner.go), cmd/gmc/internal/controller/actionsgateway_controller.go
+- **Location:** [cmd/agc/api/v1alpha1/runnergroup_types.go:30-60](https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/api/v1alpha1/runnergroup_types.go), [cmd/agc/internal/provisioner/provisioner.go:349-439](../../cmd/agc/internal/provisioner/provisioner.go), cmd/gmc/internal/controller/actionsgateway_controller.go
 - **Category:** OWASP A04:2025 — Insecure Design / OWASP A01:2025 — Broken Access Control
 - **Why Critical:** Container breakout via privileged PodSpec fields is a direct path from "tenant author" to "root on the node".
   On any cluster that co-locates tenant workers on shared nodes (the common case for GPU capacity), `privileged: true` is cross-tenant impact.

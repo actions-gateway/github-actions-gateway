@@ -37,8 +37,6 @@ import (
 func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 	env := &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			"../../../config/crd/bases",
-			"testdata/agc-crd",
 			"testdata/crd",
 		},
 		ErrorIfCRDPathMissing: true,

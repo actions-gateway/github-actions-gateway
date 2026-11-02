@@ -31,19 +31,11 @@ import (
 // hole: the next call sees the new-scheme Secret, returns early, and the stale legacy
 // copy is reaped by its owner's cleanup. The reverse order could lose an agent's only
 // copy of its private key.
-//
-// claimedByRunnerGroup is the safety gate and is required. Before Q466 the v1 and v2
-// pools wrote byte-identical names and labels, so nothing about a legacy Secret says
-// which API created it — the caller must answer "is a live v1 RunnerGroup of this name
-// using these?" from the API types it owns. Adopting a RunnerGroup's Secrets would
-// re-create the very collision this fixes, pointed the other way, so it is consulted
-// before anything is touched and any error fails closed (nothing is adopted).
 func AdoptLegacyRunnerSetSecrets(
 	ctx context.Context,
 	c client.Client,
 	namespace, name string,
 	owner []metav1.OwnerReference,
-	claimedByRunnerGroup func(context.Context) (bool, error),
 ) (int, error) {
 	// Already migrated (or a set that never had legacy Secrets): the RunnerSet-scheme
 	// Secrets are authoritative, so never look at the legacy names again. This is also
@@ -64,17 +56,6 @@ func AdoptLegacyRunnerSetSecrets(
 		return 0, fmt.Errorf("agentpool: list legacy agent Secrets: %w", err)
 	}
 	if len(legacy) == 0 {
-		return 0, nil
-	}
-
-	claimed, err := claimedByRunnerGroup(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("agentpool: check whether a v1 RunnerGroup owns the legacy agent Secrets: %w", err)
-	}
-	if claimed {
-		slog.Info("agentpool: leaving legacy agent Secrets to the v1 RunnerGroup of the same name; "+
-			"this RunnerSet provisions its own under the runner-set naming scheme",
-			"namespace", namespace, "name", name, "secrets", len(legacy))
 		return 0, nil
 	}
 

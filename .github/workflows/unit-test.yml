@@ -317,9 +317,8 @@ jobs:
       # controller-gen generates from today's Go types (Q440). It belongs in this
       # job, not manifest-validate.yml: the drift is caused by a GO TYPE change,
       # and that workflow's `manifests` filter is deliberately scoped to the
-      # generated YAML. cmd/gmc's ActionsGateway CRD embeds AGC types, so an edit
-      # in cmd/agc/api goes stale in the GMC manifest with neither module's YAML
-      # touched — exactly the diff this job's `code` filter sees.
+      # generated YAML, so a type edit that leaves the YAML untouched is exactly
+      # the diff this job's `code` filter sees.
       - name: controller-gen manifest drift (make codegen-check)
         run: make codegen-check
 

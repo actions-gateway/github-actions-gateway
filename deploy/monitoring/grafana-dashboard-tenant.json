@@ -650,7 +650,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max(actions_gateway_worker_quota_exceeded{namespace=~\"$namespace\", runner_group=~\"$runner_group\"} or actions_gateway_runnerset_worker_quota_exceeded{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
+          "expr": "max(actions_gateway_runnerset_worker_quota_exceeded{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
           "legendFormat": "worker quota exceeded",
           "refId": "A"
         }
@@ -678,7 +678,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max(actions_gateway_workers_unschedulable{namespace=~\"$namespace\", runner_group=~\"$runner_group\"} or actions_gateway_runnerset_workers_unschedulable{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
+          "expr": "max(actions_gateway_runnerset_workers_unschedulable{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
           "legendFormat": "workers unschedulable",
           "refId": "A"
         }
@@ -734,7 +734,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "max(actions_gateway_worker_quota_pressure{namespace=~\"$namespace\", runner_group=~\"$runner_group\"} or actions_gateway_runnerset_worker_quota_pressure{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
+          "expr": "max(actions_gateway_runnerset_worker_quota_pressure{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
           "legendFormat": "worker quota pressure",
           "refId": "A"
         }

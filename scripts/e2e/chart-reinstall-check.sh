@@ -26,8 +26,8 @@
 #     a FRESH install fails with the binding pointing at an object that
 #     demonstrably exists.
 #   - Under parameterNotFoundAction: Deny, params resolve before per-object
-#     matching, so EVERY matched write is denied cluster-wide — runnergroups,
-#     runnersets and runnertemplates alike, class-naming or not.
+#     matching, so EVERY matched write is denied cluster-wide — runnersets and
+#     runnertemplates alike, class-naming or not.
 #
 # The guard's paramKind is now the cluster-scoped PriorityClassAllowlist CRD, for
 # which the apiserver allocates a fresh dynamic informer per context. A regression
@@ -71,21 +71,21 @@ trap cleanup EXIT
 
 kc() { kubectl --context "${KUBE_CONTEXT}" "$@"; }
 
-# probe_write attempts a RunnerGroup CREATE and echoes the apiserver's answer.
-# RunnerGroups have no validating webhook — the PriorityClass allowlist policy is
-# the only admission gate on them — so the answer is unambiguously the policy's.
+# probe_write attempts a RunnerTemplate CREATE and echoes the apiserver's answer.
+# The GMC webhook also rejects an off-allowlist class, but in its own words ("not
+# in the platform allowlist"), and ValidatingAdmissionPolicy runs ahead of
+# ValidatingAdmissionWebhook (the default plugin order kube-apiserver 1.35.0's
+# --help lists), so a policy denial is the answer the probe sees.
 probe_write() {
 	local name="$1" class="${2:-}" pc=""
 	[[ -n "${class}" ]] && pc="      priorityClassName: ${class}"
 	kc create -f - 2>&1 <<-EOF || true
-		apiVersion: actions-gateway.github.com/v1alpha1
-		kind: RunnerGroup
+		apiVersion: actions-gateway.com/v2
+		kind: RunnerTemplate
 		metadata:
 		  name: ${name}
 		  namespace: ${PROBE_NS}
 		spec:
-		  maxListeners: 1
-		  runnerLabels: ["self-hosted"]
 		  podTemplate:
 		    spec:
 		${pc}
@@ -152,9 +152,14 @@ assert_params_resolve() {
 			# recovers: the state is per-apiserver-process and only a restart of
 			# kube-apiserver clears it, so every probe in the budget answers this way.
 			;;
+		*"not in the platform allowlist"*)
+			# The GMC webhook answered instead of the policy: either the policy is
+			# not bound yet, or the plugin order changed. Keep polling; the verdict
+			# below names it if it persists.
+			;;
 		*created*)
 			# Enforcement not propagated yet; drop the object and keep polling.
-			kc delete runnergroup -n "${PROBE_NS}" "probe-${phase}-class-${i}" \
+			kc delete runnertemplate -n "${PROBE_NS}" "probe-${phase}-class-${i}" \
 				--ignore-not-found >/dev/null 2>&1 || true
 			;;
 		esac
@@ -163,7 +168,7 @@ assert_params_resolve() {
 	if [[ "${answer}" == *"no params found"* ]]; then
 		echo "FAIL [${phase}]: the policy binding never resolved its param object." >&2
 		echo "  ${answer}" >&2
-		echo "  Every runnergroups/runnersets/runnertemplates write is denied cluster-wide in" >&2
+		echo "  Every runnersets/runnertemplates write is denied cluster-wide in" >&2
 		echo "  this state. It is Q444 if the objects below all look correct — that means the" >&2
 		echo "  apiserver, not the manifest, is failing to resolve them, and only a" >&2
 		echo "  kube-apiserver restart clears it." >&2
@@ -173,14 +178,24 @@ assert_params_resolve() {
 	if [[ "${answer}" != *"not in the platform PriorityClassAllowlist"* ]]; then
 		echo "FAIL [${phase}]: the guard never denied an off-allowlist PriorityClass; last answer:" >&2
 		echo "  ${answer}" >&2
+		if [[ "${answer}" == *"not in the platform allowlist"* ]]; then
+			echo "  That is the GMC webhook's denial, not the policy's: the policy never denied" >&2
+			echo "  first, so it is unbound or now runs after the webhook." >&2
+		fi
 		return 1
 	fi
 
 	# ...and ordinary writes must still get through, so a guard that denies
-	# everything (the Q444 blast radius) cannot pass as healthy.
-	plain="$(probe_write "probe-${phase}-plain")"
+	# everything (the Q444 blast radius) cannot pass as healthy. Retried: this
+	# write reaches the GMC webhook, which is unreachable until the reinstalled
+	# manager is serving.
+	for ((i = 1; i <= 45; i++)); do
+		plain="$(probe_write "probe-${phase}-plain-${i}")"
+		[[ "${plain}" == *created* || "${plain}" == *"no params found"* ]] && break
+		sleep 2
+	done
 	if [[ "${plain}" != *created* ]]; then
-		echo "FAIL [${phase}]: a class-free RunnerGroup was not admitted; answer:" >&2
+		echo "FAIL [${phase}]: a class-free RunnerTemplate was not admitted; answer:" >&2
 		echo "  ${plain}" >&2
 		return 1
 	fi

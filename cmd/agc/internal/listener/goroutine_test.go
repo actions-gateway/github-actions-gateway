@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/prometheus/client_golang/prometheus"
@@ -392,10 +392,10 @@ func TestListener_CreateSessionVersionTooOld(t *testing.T) {
 	// latest, not Has: since Q795 the goroutine also publishes this type as a
 	// False/VersionAccepted baseline, so Has could no longer tell the rejection
 	// from the healthy start.
-	rv, ok := conds.latest(v1alpha1.ConditionRunnerVersionTooOld)
+	rv, ok := conds.latest(apiconditions.ConditionRunnerVersionTooOld)
 	require.True(t, ok, "expected RunnerVersionTooOld condition")
 	assert.Equal(t, metav1.ConditionTrue, rv.Status)
-	assert.Equal(t, v1alpha1.ReasonVersionTooOld, rv.Reason)
+	assert.Equal(t, apiconditions.ReasonVersionTooOld, rv.Reason)
 
 	// The non-retriable session failure also surfaces as a Warning Event on the
 	// owner, complementing the condition (Q170).
@@ -507,8 +507,8 @@ func TestListener_RunnerVersionAcceptedBaseline(t *testing.T) {
 	done := runAndWait(ctx, cfg)
 
 	require.Eventually(t, func() bool {
-		rv, ok := conds.latest(v1alpha1.ConditionRunnerVersionTooOld)
-		return ok && rv.Status == metav1.ConditionFalse && rv.Reason == v1alpha1.ReasonVersionAccepted
+		rv, ok := conds.latest(apiconditions.ConditionRunnerVersionTooOld)
+		return ok && rv.Status == metav1.ConditionFalse && rv.Reason == apiconditions.ReasonVersionAccepted
 	}, 4*time.Second, 20*time.Millisecond,
 		"expected RunnerVersionTooOld=False/VersionAccepted on the healthy baseline")
 
@@ -869,32 +869,32 @@ func TestListener_RateLimitedConditionClearsOnRecovery(t *testing.T) {
 	// Healthy baseline on start: RateLimited=False/PollingHealthy and
 	// Degraded=False/SessionAuthorized are published before any failure.
 	require.Eventually(t, func() bool {
-		rl, ok := conds.latest(v1alpha1.ConditionRateLimited)
-		if !ok || rl.Status != metav1.ConditionFalse || rl.Reason != v1alpha1.ReasonPollingHealthy {
+		rl, ok := conds.latest(apiconditions.ConditionRateLimited)
+		if !ok || rl.Status != metav1.ConditionFalse || rl.Reason != apiconditions.ReasonPollingHealthy {
 			return false
 		}
-		dg, ok := conds.latest(v1alpha1.ConditionDegraded)
-		if !ok || dg.Status != metav1.ConditionFalse || dg.Reason != v1alpha1.ReasonSessionAuthorized {
+		dg, ok := conds.latest(apiconditions.ConditionDegraded)
+		if !ok || dg.Status != metav1.ConditionFalse || dg.Reason != apiconditions.ReasonSessionAuthorized {
 			return false
 		}
 		// Q795 joined RunnerVersionTooOld to the same baseline.
-		rv, ok := conds.latest(v1alpha1.ConditionRunnerVersionTooOld)
-		return ok && rv.Status == metav1.ConditionFalse && rv.Reason == v1alpha1.ReasonVersionAccepted
+		rv, ok := conds.latest(apiconditions.ConditionRunnerVersionTooOld)
+		return ok && rv.Status == metav1.ConditionFalse && rv.Reason == apiconditions.ReasonVersionAccepted
 	}, 4*time.Second, 20*time.Millisecond, "expected healthy baseline conditions on start")
 
 	// Sustained 429 past 10 minutes trips RateLimited=True/SustainedRateLimit.
 	require.Eventually(t, func() bool {
 		clk.Advance(11 * time.Minute)
-		rl, ok := conds.latest(v1alpha1.ConditionRateLimited)
-		return ok && rl.Status == metav1.ConditionTrue && rl.Reason == v1alpha1.ReasonSustainedRateLimit
+		rl, ok := conds.latest(apiconditions.ConditionRateLimited)
+		return ok && rl.Status == metav1.ConditionTrue && rl.Reason == apiconditions.ReasonSustainedRateLimit
 	}, 8*time.Second, 50*time.Millisecond, "expected RateLimited=True after 10 min of 429s")
 
 	// Recovery: the broker starts answering 202. The first successful poll must
 	// clear the condition back to False/PollingHealthy (the Q332 fix).
 	rateLimited.Store(false)
 	require.Eventually(t, func() bool {
-		rl, ok := conds.latest(v1alpha1.ConditionRateLimited)
-		return ok && rl.Status == metav1.ConditionFalse && rl.Reason == v1alpha1.ReasonPollingHealthy
+		rl, ok := conds.latest(apiconditions.ConditionRateLimited)
+		return ok && rl.Status == metav1.ConditionFalse && rl.Reason == apiconditions.ReasonPollingHealthy
 	}, 4*time.Second, 20*time.Millisecond, "expected RateLimited cleared to False/PollingHealthy on recovery")
 
 	cancel()

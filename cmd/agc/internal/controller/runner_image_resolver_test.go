@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -13,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/events"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
 // fakeImageResolver answers with a scripted lookup and records the requests it saw.
@@ -96,37 +94,4 @@ func TestRunnerSetRunnerVersionStatusFromRegistry(t *testing.T) {
 		assert.Equal(t, metav1.ConditionUnknown, cond.Status)
 		assert.NotContains(t, cond.Message, "registry")
 	})
-}
-
-func TestRunnerGroupRunnerVersionStatusFromRegistry(t *testing.T) {
-	resolver := &fakeImageResolver{lookup: runnerimage.Lookup{State: runnerimage.Done, Result: runnerimage.Reading{
-		Digest: "sha256:f2387135856decdecbf780a2bfbc9debe9c2dffd742f150302444b3775474681", Version: "2.335.1", Found: true}}}
-	r := &RunnerGroupReconciler{Provisioner: &provisioner.Provisioner{}, ImageResolver: resolver}
-	r.ensureMaps()
-	rg := &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "grp", Namespace: "ns"},
-		Spec: v1alpha1.RunnerGroupSpec{
-			WorkerImage: digestOnlyImage,
-			PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
-				ImagePullSecrets: []corev1.LocalObjectReference{{Name: "regcred"}},
-			}},
-		},
-	}
-
-	r.setRunnerVersionStatus(rg)
-
-	cond := versionCondition(rg.Status.Conditions)
-	require.NotNil(t, cond)
-	assert.Equal(t, metav1.ConditionFalse, cond.Status)
-	assert.Equal(t, v1alpha1.ReasonWorkerImageCurrent, cond.Reason)
-	require.Len(t, resolver.requests, 1)
-	assert.Equal(t, []string{"regcred"}, resolver.requests[0].PullSecrets)
-	resolver.requests[0].Wake()
-	var got event.GenericEvent
-	select {
-	case got = <-r.wakeCh:
-	case <-time.After(time.Second):
-		t.Fatal("the wake did not reach the reconciler's channel")
-	}
-	assert.Equal(t, "grp", got.Object.GetName())
 }

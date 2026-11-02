@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
@@ -31,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -137,7 +137,6 @@ func (f *fakeEventRecorder) withReason(reason string) []recordedEvent {
 func newScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(s)
-	_ = v1alpha1.AddToScheme(s)
 	return s
 }
 
@@ -148,14 +147,105 @@ func newProvisioner(c client.Client) *provisioner.Provisioner {
 	return p
 }
 
-func newRG(name, ns string) *v1alpha1.RunnerGroup {
-	return &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v1alpha1.RunnerGroupSpec{
-			MaxListeners: 1,
-			RunnerLabels: []string{"self-hosted"},
-		},
+func newRG(name, ns string) *testGroup {
+	return &testGroup{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}}
+}
+
+// testGroup is the owner the classic-tier provisioning tests drive Handle through: a
+// spec the testGroup adapter resolves the way an owner adapter does, defaulting from
+// the Provisioner's process-wide fields.
+type testGroup struct {
+	metav1.ObjectMeta
+	Spec testGroupSpec
+
+	// events receives the group's owner-scoped provisioning Events; nil drops them.
+	events runnercore.EventRecorder
+}
+
+type testGroupSpec struct {
+	PodTemplate        corev1.PodTemplateSpec
+	WorkerImage        string
+	MaxWorkers         *int32
+	PriorityTiers      []provisioner.TierThreshold
+	MaxEvictionRetries *int32
+	EvictionRetryDelay *metav1.Duration
+	MaxQuotaRetries    *int32
+	QuotaRetryDelay    *metav1.Duration
+	CompletedPodTTL    *metav1.Duration
+	MaxWorkerLifetime  *metav1.Duration
+}
+
+// handler returns the job handler p provisions g's workers through.
+func (g *testGroup) handler(p *provisioner.Provisioner) listener.JobHandlerFunc {
+	return p.Handle(&testGroupTarget{g: g, p: p})
+}
+
+type testGroupTarget struct {
+	g *testGroup
+	p *provisioner.Provisioner
+}
+
+func (t *testGroupTarget) Key() client.ObjectKey {
+	return client.ObjectKey{Namespace: t.g.Namespace, Name: t.g.Name}
+}
+func (t *testGroupTarget) OwnerRef() metav1.OwnerReference {
+	return metav1.OwnerReference{
+		APIVersion: "actions-gateway.com/v2alpha1", Kind: "RunnerSet",
+		Name: t.g.Name, UID: t.g.UID, Controller: ptr.To(true),
 	}
+}
+func (t *testGroupTarget) PodOwnerLabels() map[string]string {
+	return map[string]string{provisioner.LabelRunnerSet: t.g.Name}
+}
+func (t *testGroupTarget) RecordEvent(eventtype, reason, action, note string) {
+	if t.g.events != nil {
+		t.g.events.Event(t.g.Namespace, t.g.Name, eventtype, reason, action, note)
+	}
+}
+func (t *testGroupTarget) Ceiling(context.Context) (int32, bool) {
+	return provisioner.WorkerCeilingFromTiers(t.g.Spec.PriorityTiers, t.g.Spec.MaxWorkers)
+}
+func (t *testGroupTarget) QuotaExhausted(ctx context.Context) (bool, string) {
+	return provisioner.WorkerQuotaExhausted(ctx, t.p.Client, t.g.Namespace, &t.g.Spec.PodTemplate.Spec)
+}
+func (t *testGroupTarget) QuotaCapacity(context.Context, int32) (int32, bool) { return 0, false }
+func (t *testGroupTarget) CapacityDeclined(context.Context) (bool, string)    { return false, "" }
+func (t *testGroupTarget) DeclinedCapacity(context.Context, int32) (int32, bool) {
+	return 0, false
+}
+func (t *testGroupTarget) ScaleUpLimit(context.Context) *provisioner.ScaleUpConfig { return nil }
+func (t *testGroupTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, error) {
+	g, p := t.g, t.p
+	spec := &provisioner.ResolvedSpec{
+		PodTemplate:        g.Spec.PodTemplate,
+		WorkerImage:        g.Spec.WorkerImage,
+		MaxWorkers:         g.Spec.MaxWorkers,
+		PriorityTiers:      g.Spec.PriorityTiers,
+		MaxEvictionRetries: p.MaxEvictionRetries,
+		EvictionRetryDelay: p.EvictionRetryDelay,
+		MaxQuotaRetries:    p.MaxQuotaRetries,
+		QuotaRetryDelay:    p.QuotaRetryDelay,
+		CompletedPodTTL:    provisioner.CompletedPodTTLOrDefault(g.Spec.CompletedPodTTL),
+		MaxWorkerLifetime:  provisioner.MaxWorkerLifetimeOrDefault(g.Spec.MaxWorkerLifetime),
+		HTTPProxy:          p.HTTPProxy,
+		HTTPSProxy:         p.HTTPSProxy,
+		NoProxy:            p.NoProxy,
+		ProxyTLSSecretName: p.ProxyTLSSecretName,
+		SecurityProfile:    p.SecurityProfile,
+	}
+	if g.Spec.MaxEvictionRetries != nil {
+		spec.MaxEvictionRetries = int(*g.Spec.MaxEvictionRetries)
+	}
+	if g.Spec.EvictionRetryDelay != nil && g.Spec.EvictionRetryDelay.Duration > 0 {
+		spec.EvictionRetryDelay = g.Spec.EvictionRetryDelay.Duration
+	}
+	if g.Spec.MaxQuotaRetries != nil {
+		spec.MaxQuotaRetries = int(*g.Spec.MaxQuotaRetries)
+	}
+	if g.Spec.QuotaRetryDelay != nil && g.Spec.QuotaRetryDelay.Duration > 0 {
+		spec.QuotaRetryDelay = g.Spec.QuotaRetryDelay.Duration
+	}
+	return spec, nil
 }
 
 func stubPayload(runID int64) []byte {
@@ -280,13 +370,13 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 	// Run provisioner in background; complete pod immediately.
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "http://run-svc", "plan-abc-123", payload, "")
+		done <- errOnly(rg.handler(p))(ctx, "http://run-svc", "plan-abc-123", payload, "")
 	}()
 
 	// Wait for the pod to appear, then complete it.
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	assert.Equal(t, agcnames.ControllerName, pod.Labels["app.kubernetes.io/managed-by"])
-	assert.Equal(t, "mygroup", pod.Labels["actions-gateway/runner-group"])
+	assert.Equal(t, "mygroup", pod.Labels[provisioner.LabelRunnerSet])
 
 	secret := findSecret(ctx, t, fc, "team-a", "job-")
 	require.NotNil(t, secret)
@@ -312,7 +402,7 @@ func TestProvisioner_ForwardsJITConfigIntoSecret(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-jit", stubPayload(7), jitBlob)
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-jit", stubPayload(7), jitBlob)
 	}()
 
 	// Wait for the Pod (created strictly after the Secret) so the findSecret
@@ -450,7 +540,7 @@ func TestProvisioner_OmitsJITKeyWhenEmpty(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-nojit", stubPayload(8), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-nojit", stubPayload(8), "")
 	}()
 
 	// Wait for the Pod (created strictly after the Secret) so the findSecret
@@ -476,7 +566,7 @@ func TestProvisioner_DeletesSecretOnCompletion(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-del", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-del", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -503,7 +593,7 @@ func TestProvisioner_MaxWorkersHolds(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("existing-%d", i),
 				Namespace: "team-a",
-				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels:    map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		}
@@ -524,7 +614,7 @@ func TestProvisioner_MaxWorkersHolds(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-hold", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-hold", stubPayload(1), "")
 	assert.ErrorContains(t, err, "ceiling")
 
 	// No new pod created, but the existing 3 are still there.
@@ -542,7 +632,7 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 	ctx := context.Background()
 
 	rg := newRG("mygroup", "team-a")
-	rg.Spec.PriorityTiers = []v1alpha1.PriorityTier{
+	rg.Spec.PriorityTiers = []provisioner.TierThreshold{
 		{PriorityClassName: "runner-critical", Threshold: 5},
 		{PriorityClassName: "runner-standard", Threshold: 10},
 	}
@@ -554,7 +644,7 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("existing-%d", i),
 				Namespace: "team-a",
-				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels:    map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		}
@@ -576,7 +666,7 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-tier", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-tier", stubPayload(1), "")
 	}()
 
 	// Wait specifically for a pod that is NOT one of the pre-existing ones.
@@ -607,7 +697,7 @@ func TestProvisioner_PriorityTiersCeiling(t *testing.T) {
 	ctx := context.Background()
 
 	rg := newRG("mygroup", "team-a")
-	rg.Spec.PriorityTiers = []v1alpha1.PriorityTier{
+	rg.Spec.PriorityTiers = []provisioner.TierThreshold{
 		{PriorityClassName: "runner-critical", Threshold: 5},
 		{PriorityClassName: "runner-standard", Threshold: 10},
 	}
@@ -619,7 +709,7 @@ func TestProvisioner_PriorityTiersCeiling(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("existing-%d", i),
 				Namespace: "team-a",
-				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels:    map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		}
@@ -638,7 +728,7 @@ func TestProvisioner_PriorityTiersCeiling(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-ceil", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-ceil", stubPayload(1), "")
 	assert.ErrorContains(t, err, "ceiling")
 
 	var list corev1.PodList
@@ -658,7 +748,7 @@ func TestProvisioner_WorkerImageFallback(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-img", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-img", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -686,7 +776,7 @@ func TestProvisioner_NamedImagelessRunnerGapFilled(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-gapfill", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-gapfill", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -712,7 +802,7 @@ func TestProvisioner_NamedRunnerImageNotOverridden(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-nooverride", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-nooverride", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -739,7 +829,7 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-reserved", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-reserved", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -778,7 +868,7 @@ func TestProvisioner_SecretCleanupOnPodCreateFailure(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-conflict", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-conflict", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// Secret must be cleaned up even though pod creation failed.
@@ -799,7 +889,7 @@ func TestProvisioner_ContextCancellation(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-cancel", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-cancel", stubPayload(1), "")
 	}()
 
 	// Wait for pod to be created, then cancel.
@@ -825,7 +915,7 @@ func TestProvisioner_PodNameDNSSafe(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "PLAN/ID:with:COLONS/and/SLASHES", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "PLAN/ID:with:COLONS/and/SLASHES", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -851,7 +941,7 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-mount", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-mount", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -916,7 +1006,7 @@ func TestProvisioner_EvictionAutoRetry(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-evict", payload, "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-evict", payload, "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -962,15 +1052,15 @@ func TestProvisioner_OwnLimitEvictionIsWithheld(t *testing.T) {
 	m := newTestMetrics()
 	p.Metrics = m
 	rec := &fakeEventRecorder{}
-	p.Events = rec
 	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
 	p.GitHubAPIURL = srv.URL
 	p.HTTPClient = srv.Client()
 
 	rg := newRG("mygroup", "team-a")
+	rg.events = rec
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-evict", stubPayloadFull("myorg", "myrepo", 99), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-evict", stubPayloadFull("myorg", "myrepo", 99), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1027,7 +1117,7 @@ func TestProvisioner_PreemptionAutoRetry(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-preempt", payload, "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-preempt", payload, "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1112,7 +1202,7 @@ func testNodeShutdownAutoRetry(t *testing.T, shape func(*corev1.Pod)) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-shutdown", payload, "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-shutdown", payload, "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1179,7 +1269,7 @@ func TestProvisioner_Q1198_NodeShutdownBeforeStartForceCancels(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				r, err := p.HandlerFor(newRG("mygroup", "team-a"))(ctx, "", "plan-q1198", stubPayloadFull("myorg", "myrepo", 78), "")
+				r, err := newRG("mygroup", "team-a").handler(p)(ctx, "", "plan-q1198", stubPayloadFull("myorg", "myrepo", 78), "")
 				done <- result{r, err}
 			}()
 
@@ -1229,7 +1319,7 @@ func TestProvisioner_OrdinaryCompletionIsNotRetried(t *testing.T) {
 	// broken job produces, and it shares a phase with a kubelet eviction.
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-plain", stubPayloadFull("myorg", "myrepo", 78), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-plain", stubPayloadFull("myorg", "myrepo", 78), "")
 	}()
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodFailed)
@@ -1262,13 +1352,13 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	m := newTestMetrics()
 	p.Metrics = m
 	rec := &fakeEventRecorder{}
-	p.Events = rec
 	p.MaxEvictionRetries = 1
 	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
 	p.GitHubAPIURL = srv.URL
 	p.HTTPClient = srv.Client()
 
 	rg := newRG("mygroup", "ns")
+	rg.events = rec
 	payload := stubPayloadFull("org", "repo", 7)
 
 	// Helper: run one provision cycle with unique planID; returns after pod eviction.
@@ -1277,7 +1367,7 @@ func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
 	runCycle := func(planID string) {
 		t.Helper()
 		done := make(chan error, 1)
-		go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, payload, "") }()
+		go func() { done <- errOnly(rg.handler(p))(ctx, "", planID, payload, "") }()
 
 		var podToEvict *corev1.Pod
 		require.Eventually(t, func() bool {
@@ -1349,7 +1439,7 @@ func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
 	payload := stubPayloadFull("org5xx", "repo5xx", 55)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-5xx", payload, "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-5xx", payload, "") }()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	evictPod(ctx, t, fc, "team-a", pod.Name)
@@ -1383,7 +1473,7 @@ func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
 	ctx := context.Background()
 
 	rg := newRG("mygroup", "team-a")
-	rg.Spec.PriorityTiers = []v1alpha1.PriorityTier{
+	rg.Spec.PriorityTiers = []provisioner.TierThreshold{
 		{PriorityClassName: "runner-critical", Threshold: 5},
 		{PriorityClassName: "runner-standard", Threshold: 10},
 	}
@@ -1395,7 +1485,7 @@ func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("existing-%d", i),
 				Namespace: "team-a",
-				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels:    map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		}
@@ -1416,7 +1506,7 @@ func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
 	p := newProvisioner(fc)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-tier2", stubPayload(1), "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-tier2", stubPayload(1), "") }()
 
 	require.Eventually(t, func() bool {
 		var list corev1.PodList
@@ -1452,7 +1542,7 @@ func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
 	ctx := context.Background()
 
 	rg := newRG("mygroup", "team-a")
-	rg.Spec.PriorityTiers = []v1alpha1.PriorityTier{
+	rg.Spec.PriorityTiers = []provisioner.TierThreshold{
 		{PriorityClassName: "runner-critical", Threshold: 5},
 		{PriorityClassName: "runner-standard", Threshold: 10},
 	}
@@ -1464,7 +1554,7 @@ func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      fmt.Sprintf("boundary-%d", i),
 				Namespace: "team-a",
-				Labels:    map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels:    map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		}
@@ -1485,7 +1575,7 @@ func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
 	p := newProvisioner(fc)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-boundary", stubPayload(1), "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-boundary", stubPayload(1), "") }()
 
 	require.Eventually(t, func() bool {
 		var list corev1.PodList
@@ -1526,21 +1616,21 @@ func TestProvisioner_PendingPodsCountTowardCeiling(t *testing.T) {
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "running-0", Namespace: "team-a",
-				Labels: map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels: map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "running-1", Namespace: "team-a",
-				Labels: map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels: map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodRunning},
 		},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "pending-0", Namespace: "team-a",
-				Labels: map[string]string{"actions-gateway/runner-group": "mygroup"},
+				Labels: map[string]string{provisioner.LabelRunnerSet: "mygroup"},
 			},
 			Status: corev1.PodStatus{Phase: corev1.PodPending},
 		},
@@ -1561,7 +1651,7 @@ func TestProvisioner_PendingPodsCountTowardCeiling(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-pending-ceil", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-pending-ceil", stubPayload(1), "")
 	// M3: ceiling is enforced because Pending pods count as active.
 	assert.ErrorContains(t, err, "ceiling")
 
@@ -1599,7 +1689,7 @@ func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
 	payload := stubPayloadFull("org-del", "repo-del", 77)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-extdel", payload, "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-extdel", payload, "") }()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -1642,7 +1732,7 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-proxy", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-proxy", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1688,7 +1778,7 @@ func TestBuildPod_MountsProxyCASecret(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-proxy-ca", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-proxy-ca", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1748,7 +1838,7 @@ func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1814,7 +1904,7 @@ func TestProvisioner_RerunURLRejectsAdversarialRepository(t *testing.T) {
 			payload := stubPayloadFull(tc.owner, tc.repo, 42)
 
 			done := make(chan error, 1)
-			go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-adv-repo", payload, "") }()
+			go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-adv-repo", payload, "") }()
 
 			pod := waitForPodCreated(ctx, t, fc, "team-a")
 			evictPod(ctx, t, fc, "team-a", pod.Name)
@@ -1846,7 +1936,7 @@ func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-overwrite", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-overwrite", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -1888,7 +1978,7 @@ func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
 	payload := stubPayloadFull("org", "repo", 42)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-zero-retry", payload, "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-zero-retry", payload, "") }()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	evictPod(ctx, t, fc, "team-a", pod.Name)
@@ -1939,7 +2029,7 @@ func TestProvisioner_RGMaxEvictionRetriesOne(t *testing.T) {
 	runCycle := func(planID string) {
 		t.Helper()
 		done := make(chan error, 1)
-		go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, payload, "") }()
+		go func() { done <- errOnly(rg.handler(p))(ctx, "", planID, payload, "") }()
 		var podToEvict *corev1.Pod
 		require.Eventually(t, func() bool {
 			var list corev1.PodList
@@ -1998,7 +2088,7 @@ func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
 	payload := stubPayloadFull("org", "repo", 11)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-delay", payload, "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-delay", payload, "") }()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	evictAt := time.Now()
@@ -2033,7 +2123,7 @@ func TestProvisioner_QuotaRetrySucceeds(t *testing.T) {
 	payload := stubPayload(1)
 
 	done := make(chan error, 1)
-	go func() { done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-ok", payload, "") }()
+	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-quota-ok", payload, "") }()
 
 	// Pod appears after the first (failed) attempt retries.
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -2059,13 +2149,13 @@ func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
 	m := newTestMetrics()
 	p.Metrics = m
 	rec := &fakeEventRecorder{}
-	p.Events = rec
 	p.MaxQuotaRetries = 2
 	p.QuotaRetryDelay = 1 * time.Millisecond
 
 	rg := newRG("mygroup", "team-a")
+	rg.events = rec
 
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-exhaust", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-quota-exhaust", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// No pod created; Secret cleaned up.
@@ -2099,13 +2189,13 @@ func TestProvisioner_QuotaRetryDisabled(t *testing.T) {
 	m := newTestMetrics()
 	p.Metrics = m
 	rec := &fakeEventRecorder{}
-	p.Events = rec
 
 	zero := int32(0)
 	rg := newRG("mygroup", "team-a")
+	rg.events = rec
 	rg.Spec.MaxQuotaRetries = &zero
 
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-quota-disabled", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-quota-disabled", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// No pod; no retry counters incremented.
@@ -2131,7 +2221,7 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := errOnly(p.HandlerFor(rg))(ctx, "", "plan-nonquota", stubPayload(1), "")
+	err := errOnly(rg.handler(p))(ctx, "", "plan-nonquota", stubPayload(1), "")
 	assert.Error(t, err)
 
 	// No quota retries attempted.
@@ -2142,11 +2232,11 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 // runAndGetPod fires the provisioner's job handler for rg in a goroutine,
 // waits for the worker pod to be created, then completes it so the handler
 // returns cleanly (keeping goleak happy). It returns the created pod.
-func runAndGetPod(ctx context.Context, t *testing.T, p *provisioner.Provisioner, fc client.Client, rg *v1alpha1.RunnerGroup, planID, ns string) *corev1.Pod {
+func runAndGetPod(ctx context.Context, t *testing.T, p *provisioner.Provisioner, fc client.Client, rg *testGroup, planID, ns string) *corev1.Pod {
 	t.Helper()
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", planID, stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", planID, stubPayload(1), "")
 	}()
 	pod := waitForPodCreated(ctx, t, fc, ns)
 	completePod(ctx, t, fc, ns, pod.Name, corev1.PodSucceeded)
@@ -2378,8 +2468,8 @@ func TestBuildPod_DisruptionSafetyTenantOverride(t *testing.T) {
 func defaultCPU() string { return "500m" }
 
 // TestProvisioner_SetsOwnerReferences verifies the worker pod and job Secret
-// carry a controller OwnerReference to the RunnerGroup, so deleting the
-// RunnerGroup (or its namespace) cascade-deletes both — including objects
+// carry the target's controller OwnerReference, so deleting the owner (or its
+// namespace) cascade-deletes both — including objects
 // orphaned by an AGC crash (Q95).
 func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 	defer goleak.VerifyNone(t)
@@ -2392,7 +2482,7 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-ownerref", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-ownerref", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -2405,8 +2495,8 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 	} {
 		require.Len(t, refs, 1, "%s must have exactly one ownerReference", name)
 		ref := refs[0]
-		assert.Equal(t, "actions-gateway.github.com/v1alpha1", ref.APIVersion, name)
-		assert.Equal(t, "RunnerGroup", ref.Kind, name)
+		assert.Equal(t, "actions-gateway.com/v2alpha1", ref.APIVersion, name)
+		assert.Equal(t, "RunnerSet", ref.Kind, name)
 		assert.Equal(t, "mygroup", ref.Name, name)
 		assert.Equal(t, types.UID("rg-uid-123"), ref.UID, name)
 		require.NotNil(t, ref.Controller, name)
@@ -2433,7 +2523,7 @@ func TestProvisioner_DeletesPodOnCompletionWhenTTLZero(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-ttl0", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-ttl0", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
@@ -2460,7 +2550,7 @@ func TestProvisioner_RetainsPodOnCompletionByDefault(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- errOnly(p.HandlerFor(rg))(ctx, "", "plan-retain", stubPayload(1), "")
+		done <- errOnly(rg.handler(p))(ctx, "", "plan-retain", stubPayload(1), "")
 	}()
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")

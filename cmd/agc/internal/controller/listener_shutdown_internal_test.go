@@ -117,7 +117,7 @@ func TestStopListeners_WaitsForTheScaleSetTierToo(t *testing.T) {
 // snapshot empties the map under the mutex: a reconcile racing the drain must not
 // find — and keep feeding — a multiplexer that is already being stopped.
 func TestSnapshotMultiplexers_ClearsMapSoAReconcileCannotResurrect(t *testing.T) {
-	r := &RunnerGroupReconciler{
+	r := &RunnerSetReconciler{
 		multiplexers: map[types.NamespacedName]*listener.Multiplexer{
 			{Namespace: "ns", Name: "a"}: listener.NewMultiplexer(nil, 1, slog.Default()),
 			{Namespace: "ns", Name: "b"}: listener.NewMultiplexer(nil, 1, slog.Default()),

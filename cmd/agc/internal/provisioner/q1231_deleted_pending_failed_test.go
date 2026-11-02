@@ -57,7 +57,7 @@ func TestProvisioner_Q1231_KubeletFailedOnDeletedPendingWorkerForceCancelsRun(t 
 	}
 	done := make(chan result, 1)
 	go func() {
-		r, err := p.HandlerFor(rg)(ctx, "", "plan-q1231", stubPayloadFull("o", "r", 4242), "")
+		r, err := rg.handler(p)(ctx, "", "plan-q1231", stubPayloadFull("o", "r", 4242), "")
 		done <- result{r, err}
 	}()
 

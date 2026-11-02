@@ -15,7 +15,6 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
@@ -105,88 +104,6 @@ func runAttemptBody(reruns int64) map[string]int64 {
 	return map[string]int64{"run_attempt": reruns + 1}
 }
 
-// TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun measures the classic tier's
-// no-terminal-phase deletion path. The provisioner is wired with the production
-// InformerPodWaiter — not the poll fallback — because the two are only interchangeable
-// for a pod that reaches a terminal phase, and this pod never does.
-//
-// The measured outcome: the eviction removes the pod, the waiter reports the vanished
-// pod as PodSucceeded with no deletion mark, provision() takes no recovery branch, and
-// no rerun is requested. This is the side of the Q502 boundary that stays unrecovered:
-// a worker that vanished without a terminal phase never ran its job to a reportable
-// end, so there is no failed job for rerun-failed-jobs to act on. The recovered side —
-// the terminal phase publishing while the deletion is in flight — is
-// TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns below.
-func TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun(t *testing.T) {
-	const nsName = "agc-drain-classic"
-	const rgName = "drain-rg"
-	createNSForAGC(t, nsName)
-
-	fakeGitHub, rerunCalls := rerunCounter(t)
-
-	rg := newRunnerGroup(nsName, rgName, 2)
-	require.NoError(t, k8sClient.Create(ctx, rg))
-	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
-
-	startAGCReconcilerWithProvisioner(t, provisionerOptions{
-		githubAPIURL: fakeGitHub.URL,
-		// A budget of 2 means an absent rerun is the drain path's own doing, not a
-		// budget the test starved. The eviction test next door fires on the same
-		// wiring with maxEvictionRetries=1.
-		maxEvictionRetries: 2,
-		informerWaiter:     true,
-	})
-
-	require.Eventually(t, func() bool {
-		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 1
-	}, 15*time.Second, time.Millisecond, "%s session should register", rgName)
-
-	// A complete run identity, so a missing rerun cannot be explained away as
-	// handleEviction's runID == "" early return.
-	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan":        map[string]string{"planId": "drain-plan-1"},
-		"contextData": runIdentityContext("owner/repo", "4210"),
-	})
-	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
-
-	sid := enqueueJobOnOwnerSession(15*time.Second, rgName, map[string]bool{}, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, sid, "should have found %s session to enqueue on", rgName)
-
-	pod := waitForWorkerPod(t, nsName, rgName)
-	require.Empty(t, pod.Status.Reason,
-		"the worker pod must start out with no Status.Reason, or the assertion below proves nothing")
-
-	// Drain the node the pod is on, as far as this pod is concerned.
-	evictPod(t, &pod)
-	requirePodGone(t, nsName, pod.Name)
-
-	// The job Secret is deleted on provision()'s way out, so its absence is the signal
-	// that the whole handler ran to completion — including step 7, the eviction branch.
-	require.Eventually(t, func() bool {
-		var secrets corev1.SecretList
-		if err := k8sClient.List(ctx, &secrets,
-			client.InNamespace(nsName),
-			client.MatchingLabels{"actions-gateway/runner-group": rgName},
-		); err != nil {
-			return false
-		}
-		for _, s := range secrets.Items {
-			if strings.HasPrefix(s.Name, "job-") {
-				return false
-			}
-		}
-		return true
-	}, 20*time.Second, 50*time.Millisecond,
-		"the job Secret must be reclaimed, which is how we know provision() reached its eviction branch")
-
-	// The measurement. handleEviction waits out evictionRetryDelay before calling
-	// GitHub, so give a fired rerun room to appear before concluding none did.
-	assert.Never(t, func() bool { return rerunCalls.Load() > 0 }, 3*time.Second, 100*time.Millisecond,
-		"a classic worker deleted without ever running its container must not reach "+
-			"disruption recovery: Q502's deletion arm requires a recorded container exit "+
-			"that the mark predates, and this pod has neither a terminal phase nor an exit")
-}
-
 // holdWithFinalizer pins the pod in the API through its deletion, so the object
 // sequence a real kubelet produces on a drained running worker — deletionTimestamp
 // first, terminal phase second — can be reproduced on an apiserver that has no kubelet
@@ -242,59 +159,6 @@ func publishTerminalFailure(t *testing.T, namespace, name string) {
 	}}
 	require.NoError(t, k8sClient.Status().Update(ctx, &pod),
 		"the drained worker's terminal phase must be writable, or the test cannot pose its question")
-}
-
-// TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns is the classic half of Q502: the
-// recovered side of the drain boundary. The worker's terminal phase publishes while its
-// deletion is in flight — the shape Q459 measured a real drain of a running worker
-// producing — and the InformerPodWaiter carries the mark out of the wait, provision()
-// takes the deletion arm, and the interrupted run is re-run.
-func TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns(t *testing.T) {
-	const nsName = "agc-drain-classic-mark"
-	const rgName = "drain-mark-rg"
-	createNSForAGC(t, nsName)
-
-	fakeGitHub, rerunCalls := rerunCounter(t)
-
-	rg := newRunnerGroup(nsName, rgName, 2)
-	require.NoError(t, k8sClient.Create(ctx, rg))
-	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rg) })
-
-	startAGCReconcilerWithProvisioner(t, provisionerOptions{
-		githubAPIURL:       fakeGitHub.URL,
-		maxEvictionRetries: 2,
-		informerWaiter:     true,
-	})
-
-	require.Eventually(t, func() bool {
-		return len(brokerStub.ActiveSessionsForOwner(rgName)) >= 1
-	}, 15*time.Second, time.Millisecond, "%s session should register", rgName)
-
-	brokerStub.SetAcquireJobResponse(map[string]interface{}{
-		"plan":        map[string]string{"planId": "drain-mark-plan-1"},
-		"contextData": runIdentityContext("owner/repo", "5020"),
-	})
-	t.Cleanup(func() { brokerStub.SetAcquireJobResponse(nil) })
-
-	sid := enqueueJobOnOwnerSession(15*time.Second, rgName, map[string]bool{}, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, sid, "should have found %s session to enqueue on", rgName)
-
-	pod := waitForWorkerPod(t, nsName, rgName)
-
-	// The kubelet's sequence, reproduced: the drain's eviction sets the deletion mark
-	// (the finalizer stands in for the kubelet keeping the object alive), then the
-	// container exits and the terminal phase publishes.
-	holdWithFinalizer(t, nsName, pod.Name)
-	evictPod(t, &pod)
-	publishTerminalFailure(t, nsName, pod.Name)
-
-	// The measurement: the run is re-run — the whole point of Q502 — and exactly once,
-	// one drain spending one slot of the run's retry budget.
-	require.Eventually(t, func() bool { return rerunCalls.Load() >= 1 }, 20*time.Second, 50*time.Millisecond,
-		"a drained classic worker whose terminal phase published with the deletion mark "+
-			"must have its run re-run automatically")
-	assert.Never(t, func() bool { return rerunCalls.Load() > 1 }, 3*time.Second, 100*time.Millisecond,
-		"one drain must spend exactly one slot of the run's retry budget")
 }
 
 // TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover is the no-terminal-phase

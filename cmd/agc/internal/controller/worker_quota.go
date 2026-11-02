@@ -3,19 +3,13 @@ package controller
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	"github.com/prometheus/client_golang/prometheus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
-	crmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -27,14 +21,7 @@ import (
 // silent failure mode Q59's configured-ceiling admission gate does not cover
 // (when the quota is tighter than maxWorkers, the gate never fires but worker
 // pod creates are quota-rejected).
-// The condition types are defined as exported consts in the api package so the
-// reconciler, metrics collector, and tests share one source of truth (Q156).
-// These package-local aliases keep the existing call sites terse.
-const (
-	conditionWorkerQuotaPressure = v1alpha1.ConditionWorkerQuotaPressure
-	conditionWorkerQuotaExceeded = v1alpha1.ConditionWorkerQuotaExceeded
-)
-
+//
 // workerQuotaConditions carries the computed status of the two worker
 // namespace-quota conditions (mutually exclusive; error supersedes warning).
 type workerQuotaConditions struct {
@@ -47,7 +34,7 @@ type workerQuotaConditions struct {
 }
 
 // workerQuotaPool is the owner-shaped half of the worker-quota evaluation: the facts
-// that differ between a v1 RunnerGroup and a v2 RunnerSet. The caller resolves them
+// that differ between owners. The caller resolves them
 // from its own spec; everything downstream of that is common.
 type workerQuotaPool struct {
 	namespace string
@@ -57,8 +44,7 @@ type workerQuotaPool struct {
 	// ceiling is the pool's configured worker ceiling; bounded is false when it has none.
 	ceiling int32
 	bounded bool
-	// label and name select this pool's worker pods (LabelRunnerGroup for v1,
-	// LabelRunnerSet for v2).
+	// label and name select this pool's worker pods.
 	label string
 	name  string
 }
@@ -134,33 +120,11 @@ func evalWorkerQuotaFor(ctx context.Context, c client.Client, pool workerQuotaPo
 	return st
 }
 
-// evalWorkerQuota computes the worker namespace-quota conditions for a RunnerGroup:
-// the footprint comes from spec.podTemplate, and the ceiling from the same
-// WorkerCeiling the admission gate enforces. See evalWorkerQuotaFor.
-func (r *RunnerGroupReconciler) evalWorkerQuota(ctx context.Context, rg *v1alpha1.RunnerGroup) workerQuotaConditions {
-	ceiling, bounded := provisioner.WorkerCeiling(rg)
-	return evalWorkerQuotaFor(ctx, r.Client, workerQuotaPool{
-		namespace: rg.Namespace,
-		podSpec:   &rg.Spec.PodTemplate.Spec,
-		ceiling:   ceiling,
-		bounded:   bounded,
-		label:     provisioner.LabelRunnerGroup,
-		name:      rg.Name,
-	})
-}
-
-// countActiveWorkerPods counts this RunnerGroup's worker pods that count toward
-// its ceiling. See countActiveWorkerPodsByLabel.
-func (r *RunnerGroupReconciler) countActiveWorkerPods(ctx context.Context, rg *v1alpha1.RunnerGroup) int32 {
-	return countActiveWorkerPodsByLabel(ctx, r.Client, rg.Namespace, provisioner.LabelRunnerGroup, rg.Name)
-}
-
 // countActiveWorkerPodsByLabel counts the worker pods in namespace ns selected by
 // label==name that count toward a pool's ceiling: non-terminal (Pending/Running)
 // and not being deleted. Terminal pods awaiting reaping do not count toward the
 // ceiling (they still consume the quota's `used`, which the headroom check reads
-// separately and conservatively). Owner-agnostic (LabelRunnerGroup for v1,
-// LabelRunnerSet for v2) so both capacity checks count the same way.
+// separately and conservatively).
 func countActiveWorkerPodsByLabel(ctx context.Context, c client.Reader, ns, label, name string) int32 {
 	var pods corev1.PodList
 	if err := c.List(ctx, &pods,
@@ -186,59 +150,6 @@ func countActiveWorkerPodsByLabel(ctx context.Context, c client.Reader, ns, labe
 
 // --- metrics ---------------------------------------------------------------
 
-// workerQuotaCollector exports the worker ResourceQuota conditions (Q82) as
-// gauges so operators can alert on them without kube-state-metrics scraping CRD
-// conditions. It reads at scrape time from the cached reader: a deleted
-// RunnerGroup stops being listed, so its series disappears with no reconcile-path
-// cost and no stale-series cleanup. The value mirrors the condition the
-// reconciler wrote to .status.conditions (1 when True, 0 otherwise).
-type workerQuotaCollector struct {
-	reader   client.Reader
-	pressure *prometheus.Desc
-	exceeded *prometheus.Desc
-}
-
-func newWorkerQuotaCollector(reader client.Reader) *workerQuotaCollector {
-	return &workerQuotaCollector{
-		reader: reader,
-		pressure: prometheus.NewDesc(
-			"actions_gateway_worker_quota_pressure",
-			"1 when the RunnerGroup WorkerQuotaPressure condition is True (workers cannot scale to the configured ceiling within the namespace ResourceQuota headroom), else 0.",
-			[]string{"namespace", "runner_group"}, nil,
-		),
-		exceeded: prometheus.NewDesc(
-			"actions_gateway_worker_quota_exceeded",
-			"1 when the RunnerGroup WorkerQuotaExceeded condition is True (the namespace ResourceQuota cannot admit another worker pod), else 0.",
-			[]string{"namespace", "runner_group"}, nil,
-		),
-	}
-}
-
-func (c *workerQuotaCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.pressure
-	ch <- c.exceeded
-}
-
-func (c *workerQuotaCollector) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var list v1alpha1.RunnerGroupList
-	if err := c.reader.List(ctx, &list); err != nil {
-		return
-	}
-	for i := range list.Items {
-		rg := &list.Items[i]
-		if !rg.DeletionTimestamp.IsZero() {
-			continue
-		}
-		ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
-			conditionGaugeValue(rg.Status.Conditions, conditionWorkerQuotaPressure), rg.Namespace, rg.Name)
-		ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
-			conditionGaugeValue(rg.Status.Conditions, conditionWorkerQuotaExceeded), rg.Namespace, rg.Name)
-	}
-}
-
 // conditionGaugeValue maps a status condition to a gauge value: 1 when present
 // and True, 0 otherwise — the project convention for exporting an alertable CRD
 // condition as a controller-owned metric.
@@ -255,24 +166,6 @@ func boolConditionStatus(b bool) metav1.ConditionStatus {
 		return metav1.ConditionTrue
 	}
 	return metav1.ConditionFalse
-}
-
-// quotaToRunnerGroups maps a ResourceQuota event to every RunnerGroup in the same
-// namespace, so an admin changing the namespace quota refreshes the worker-quota
-// conditions (Q82).
-func (r *RunnerGroupReconciler) quotaToRunnerGroups(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list v1alpha1.RunnerGroupList
-	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
-		return nil
-	}
-	reqs := make([]ctrl.Request, 0, len(list.Items))
-	for i := range list.Items {
-		reqs = append(reqs, ctrl.Request{NamespacedName: types.NamespacedName{
-			Namespace: list.Items[i].Namespace,
-			Name:      list.Items[i].Name,
-		}})
-	}
-	return reqs
 }
 
 // quotaHardChangedPredicate enqueues ResourceQuota create/delete and only those
@@ -304,15 +197,4 @@ func resourceListEqual(a, b corev1.ResourceList) bool {
 		}
 	}
 	return true
-}
-
-// registerWorkerQuotaMetrics registers the worker-quota condition collector with
-// the controller-runtime registry. It tolerates double registration (e.g. across
-// test managers) by ignoring AlreadyRegisteredError.
-func registerWorkerQuotaMetrics(reader client.Reader) {
-	if err := crmetrics.Registry.Register(newWorkerQuotaCollector(reader)); err != nil {
-		if _, ok := err.(prometheus.AlreadyRegisteredError); !ok {
-			panic(err)
-		}
-	}
 }

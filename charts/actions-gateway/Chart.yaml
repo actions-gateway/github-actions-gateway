@@ -3,8 +3,8 @@ name: actions-gateway
 description: |-
   Gateway Manager Controller (GMC) for running GitHub Actions self-hosted
   runners in a shared Kubernetes cluster with zero idle compute. Installs the
-  GMC, its CRDs (ActionsGateway, RunnerGroup), RBAC, validating webhook, and
-  admission policy. Per-tenant AGC instances and egress proxy pools are
+  GMC, its RBAC, validating webhook, and admission policy; the v2 tenant CRDs
+  ship in the separate actions-gateway-crds-v2 chart. Per-tenant AGC instances and egress proxy pools are
   provisioned by the GMC at runtime from each ActionsGateway CR — they are not
   installed by this chart.
 type: application

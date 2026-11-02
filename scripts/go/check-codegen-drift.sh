@@ -6,12 +6,9 @@
 # Each module's `make generate` regenerates its CRD/RBAC/webhook YAML and its
 # zz_generated.deepcopy.go from the kubebuilder markers, but nothing ran that on a
 # contributor's behalf — the committed output was only ever as fresh as the last
-# person who remembered. For manifests the gap is worst ACROSS modules: cmd/gmc's
-# ActionsGateway CRD embeds AGC types (RunnerGroupSpec), so a doc comment edited
-# in cmd/agc/api changes the GMC manifest, and only `make -C cmd/gmc manifests`
-# propagates it. #793 edited a quotaRetryDelay doc comment in the AGC type and the
-# GMC CRD never caught up, so every later GMC contributor got that hunk as
-# unrelated diff noise the moment they regenerated (Q440).
+# person who remembered. #793 edited a quotaRetryDelay doc comment and the CRD
+# never caught up, so every later contributor got that hunk as unrelated diff
+# noise the moment they regenerated (Q440).
 #
 # This regenerates every registered module's output into a scratch tree and diffs
 # it against the committed copies. It NEVER writes into the working tree, so it
@@ -65,8 +62,8 @@ CONTROLLER_GEN="${CONTROLLER_GEN:-$REPO_ROOT/.build/controller-gen}"
 # committed dir named here so this gate can redirect it away from the tree.
 MODULES=(
 	"api|crd|crd=config/crd"
-	"cmd/agc|crd rbac:roleName=agc-role|crd=config/crd rbac=config/rbac"
-	"cmd/gmc|rbac:roleName=manager-role crd webhook|crd=config/crd/bases rbac=config/rbac webhook=config/webhook"
+	"cmd/agc|rbac:roleName=agc-role|rbac=config/rbac"
+	"cmd/gmc|rbac:roleName=manager-role webhook|rbac=config/rbac webhook=config/webhook"
 )
 
 # One entry per module whose `deepcopy:` target regenerates zz_generated.deepcopy.go.
@@ -105,12 +102,7 @@ COPY_SKIP=(.git .build .claude tmp vendor tools)
 # Committed files that live under a generated output dir but are NOT produced by
 # that module's controller-gen run. Each entry needs a reason: an unexplained one
 # is indistinguishable from a manifest whose type was deleted.
-EXEMPT=(
-	# A bundled copy of the AGC-owned RunnerGroup CRD, not GMC controller-gen
-	# output — controller-gen walks only the GMC module's own packages. It is held
-	# byte-identical to cmd/agc/config/crd/ by `make chart-crds-check` (Q73).
-	"cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml"
-)
+EXEMPT=()
 
 # Scratch tree for the regenerated manifests, and — under $GEN_TMP/tree — the
 # working-tree copy the DeepCopy half regenerates into. Created by main() rather

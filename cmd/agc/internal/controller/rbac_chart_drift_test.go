@@ -192,10 +192,8 @@ func TestClusterReaderFragmentMatchesRBACMarkers(t *testing.T) {
 // then 403s at runtime in a real install. Every (group, resource) the AGC
 // declares must be granted by one of the two ClusterRoles the chart ships.
 //
-// The comparison is per (group, resource), not per verb: agc-tenant-role
-// deliberately withholds verbs the markers grant (runnergroups create/delete) for
-// least privilege, so verb equality holds only for the cluster reader — which the
-// test above asserts.
+// The comparison is per (group, resource), not per verb: verb equality holds only
+// for the cluster reader, which the test above asserts.
 func TestRBACMarkersAreShippedByAChartRole(t *testing.T) {
 	shipped := grantKeys(readChartRules(t, agcTenantRoleRulesFile))
 	for key, verbs := range grantKeys(readChartRules(t, agcClusterReaderRulesFile)) {

@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -162,7 +163,7 @@ func TestWorkerQuotaCapacity_FailsOpen(t *testing.T) {
 
 	t.Run("quota unreadable", func(t *testing.T) {
 		// The scheme omits core/v1, so the List fails as a lost cache would.
-		fc := fake.NewClientBuilder().WithScheme(admissionTestScheme()).Build()
+		fc := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
 		_, bounded := WorkerQuotaCapacity(ctx, fc, "ns", halfCPUWorker(), 0, 10)
 		assert.False(t, bounded, "an unreadable quota must impose no bound")
 	})

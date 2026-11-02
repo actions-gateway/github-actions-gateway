@@ -253,3 +253,38 @@ func TestV2_RunnerSet_QuotaEditRetriggersReconcile(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond,
 		"raising the quota's .spec.hard must promptly clear WorkerQuotaExceeded via the watch predicate (Q326)")
 }
+
+// TestV2_RunnerSet_WorkersUnschedulable_NotTrippedForPlainPending proves a worker pod
+// that is merely Pending — no PodScheduled=Unschedulable verdict, which models an
+// image pull or a pod not yet scheduled — does NOT trip WorkersUnschedulable once the
+// grace has passed. A quota-blocked set presents the same shape at the scheduler, so
+// this guards the non-double-report property.
+func TestV2_RunnerSet_WorkersUnschedulable_NotTrippedForPlainPending(t *testing.T) {
+	const ns = "v2-rs-unsched-plain"
+	createNSForAGC(t, ns)
+
+	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
+	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
+	rs := newRunnerSet("plain-set", ns, "gw")
+	// The same 6s grace as the Tripped case, so the window asserted below runs past
+	// it and ends before the reaper deletes the pod at 12s.
+	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
+	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 12 * time.Second}
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), rs)
+		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
+		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+	})
+
+	startRunnerSetReconciler(t)
+	waitForSetReadyReason(t, ns, "plain-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+
+	createV2WorkerPod(t, ns, "plain-set", "worker-plain")
+
+	require.Never(t, func() bool {
+		c := setCondition(t, ns, "plain-set", v2alpha1.ConditionWorkersUnschedulable)
+		return c != nil && c.Status == metav1.ConditionTrue
+	}, 9*time.Second, 200*time.Millisecond,
+		"a plain-Pending worker pod (no Unschedulable verdict) must not trip the condition")
+}

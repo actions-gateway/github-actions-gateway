@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -15,13 +15,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// unschedRG builds a RunnerGroup with the given pendingPodDeadline (controls the
+// unschedRG builds a RunnerSet with the given pendingPodDeadline (controls the
 // scheduling grace, which is half the deadline).
-func unschedRG(ns, name string, deadline time.Duration) *v1alpha1.RunnerGroup {
-	return &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec:       v1alpha1.RunnerGroupSpec{PendingPodDeadline: &metav1.Duration{Duration: deadline}},
-	}
+func unschedRG(ns, name string, deadline time.Duration) *v2alpha1.RunnerSet {
+	return rsObj(name, ns, func(rs *v2alpha1.RunnerSet) {
+		rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: deadline}
+	})
 }
 
 // pendingPod builds a Pending worker pod for rgName created at `created`, with an
@@ -31,7 +30,7 @@ func pendingPod(ns, rgName, name string, created time.Time, schedStatus corev1.C
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              name,
 			Namespace:         ns,
-			Labels:            map[string]string{provisioner.LabelRunnerGroup: rgName},
+			Labels:            map[string]string{provisioner.LabelRunnerSet: rgName},
 			CreationTimestamp: metav1.NewTime(created),
 		},
 		Status: corev1.PodStatus{Phase: corev1.PodPending},
@@ -47,9 +46,9 @@ func pendingPod(ns, rgName, name string, created time.Time, schedStatus corev1.C
 	return p
 }
 
-func unschedReconciler(t *testing.T, now time.Time, objs ...client.Object) *RunnerGroupReconciler {
+func unschedReconciler(t *testing.T, now time.Time, objs ...client.Object) *RunnerSetReconciler {
 	t.Helper()
-	return &RunnerGroupReconciler{
+	return &RunnerSetReconciler{
 		Client: fake.NewClientBuilder().WithScheme(wqScheme(t)).WithObjects(objs...).Build(),
 		Now:    func() time.Time { return now },
 	}
@@ -60,9 +59,9 @@ func TestEvalUnschedulable_NoPods(t *testing.T) {
 	now := time.Now()
 	rg := unschedRG("ns", "rg", 10*time.Minute)
 	r := unschedReconciler(t, now)
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable)
-	assert.Equal(t, v1alpha1.ReasonWorkersSchedulable, st.reason)
+	assert.Equal(t, v2alpha1.ReasonWorkersSchedulable, st.reason)
 }
 
 // TestEvalUnschedulable_PastGrace: a Pending+Unschedulable pod older than the
@@ -74,9 +73,9 @@ func TestEvalUnschedulable_PastGrace(t *testing.T) {
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "0/3 nodes are available: 3 node(s) had untolerated taint")
 	r := unschedReconciler(t, now, pod)
 
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.True(t, st.unschedulable)
-	assert.Equal(t, v1alpha1.ReasonPodsUnschedulable, st.reason)
+	assert.Equal(t, v2alpha1.ReasonPodsUnschedulable, st.reason)
 	assert.Contains(t, st.message, "worker-stuck")
 	assert.Contains(t, st.message, "untolerated taint")
 }
@@ -90,7 +89,7 @@ func TestEvalUnschedulable_WithinGrace(t *testing.T) {
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "no nodes")
 	r := unschedReconciler(t, now, pod)
 
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable)
 	assert.InDelta(t, (3 * time.Minute).Seconds(), st.requeueAfter.Seconds(), 1,
 		"should re-check ~3m from now (5m grace − 2m age)")
@@ -108,7 +107,7 @@ func TestEvalUnschedulable_PendingButNotUnschedulable(t *testing.T) {
 		corev1.ConditionTrue, "", "")
 	r := unschedReconciler(t, now, pod)
 
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable, "only a PodScheduled=Unschedulable verdict trips the condition")
 }
 
@@ -121,7 +120,7 @@ func TestEvalUnschedulable_NotUnschedulableReason(t *testing.T) {
 		corev1.ConditionFalse, "SchedulerError", "transient")
 	r := unschedReconciler(t, now, pod)
 
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable)
 }
 
@@ -143,7 +142,7 @@ func TestEvalUnschedulable_QuotaExhaustionDoesNotTrigger(t *testing.T) {
 	}
 	r := unschedReconciler(t, now, quota)
 
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable, "quota exhaustion must not surface as WorkersUnschedulable")
 }
 
@@ -156,15 +155,15 @@ func TestEvalUnschedulable_RunningPodIgnored(t *testing.T) {
 	pod.Status.Phase = corev1.PodRunning
 	r := unschedReconciler(t, now, pod)
 
-	st := r.evalWorkersUnschedulable(context.Background(), rg)
+	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable)
 }
 
 // TestUnschedulableGrace_HalfDeadline verifies the grace is half the effective
 // pending-pod deadline and never non-positive.
 func TestUnschedulableGrace_HalfDeadline(t *testing.T) {
-	assert.Equal(t, 5*time.Minute, unschedulableGrace(unschedRG("ns", "rg", 10*time.Minute)))
+	assert.Equal(t, 5*time.Minute, runnerSetUnschedulableGrace(unschedRG("ns", "rg", 10*time.Minute)))
 	// Default deadline (10m) when unset → 5m grace.
 	assert.Equal(t, provisioner.DefaultPendingPodDeadline/2,
-		unschedulableGrace(&v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "rg", Namespace: "ns"}}))
+		runnerSetUnschedulableGrace(rsObj("rg", "ns", nil)))
 }

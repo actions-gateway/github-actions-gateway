@@ -2,7 +2,7 @@
 # ValidatingAdmissionPolicy that confines the GMC ServiceAccount's cluster-wide
 # write grants for tenant provisioning resources (Deployments, Services,
 # ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, VPAs,
-# PodDisruptionBudgets, RunnerGroups, and Secret create/update) to namespaces marked
+# PodDisruptionBudgets, and Secret create/update) to namespaces marked
 # actions-gateway.github.com/tenant=true — the gate RBAC cannot express (Q121/Q122).
 # It also restricts the GMC's ClusterRoleBinding writes to the
 # agc-clusterrunnertemplate-reader role, so its reader `bind` grants cannot be
@@ -57,10 +57,6 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["clusterrolebindings"]
-      - apiGroups: ["actions-gateway.github.com"]
-        apiVersions: ["v1alpha1"]
-        operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["runnergroups"]
       - apiGroups: ["actions-gateway.com"]
         apiVersions: ["v2alpha1"]
         operations: ["CREATE", "UPDATE", "DELETE"]

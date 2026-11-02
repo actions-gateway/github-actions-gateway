@@ -44,9 +44,6 @@ For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix
 The following Prometheus alerting rules map to the SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md).
 Adjust thresholds to match your environment.
 
-> **The three worker-capacity alerts fire for both owners.** Each `or`s the v1 `RunnerGroup` gauge with its `actions_gateway_runnerset_*` v2 twin (Q319), because the two are separate metric families keyed on `runner_group` and `runner_set` respectively — an alert naming only the v1 family never fires on a v2-only deploy.
-> Their summaries print `{{ $labels.runner_group }}{{ $labels.runner_set }}` for the same reason: a given series carries exactly one of the two, so concatenating names the owner without needing a separate rule per kind.
-
 ```yaml
 groups:
   - name: actions-gateway
@@ -159,14 +156,13 @@ groups:
       # Page: the namespace ResourceQuota is rejecting worker pods now (Q82)
       - alert: ActionsGatewayWorkerQuotaExceeded
         expr: |
-          actions_gateway_worker_quota_exceeded == 1
-            or actions_gateway_runnerset_worker_quota_exceeded == 1
+          actions_gateway_runnerset_worker_quota_exceeded == 1
         for: 5m
         labels:
           severity: critical
         annotations:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayworkerquotaexceeded"
-          summary: "Worker pods being rejected by ResourceQuota for {{ $labels.runner_group }}{{ $labels.runner_set }} in {{ $labels.namespace }}"
+          summary: "Worker pods being rejected by ResourceQuota for {{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "The namespace ResourceQuota cannot admit another worker pod; acquired jobs will fail to schedule. Raise the quota or reduce maxWorkers."
 
       # Page: the ResourceQuota is rejecting proxy replicas now (Q82)
@@ -184,8 +180,7 @@ groups:
       # Ticket: capacity can't reach the configured ceiling within quota headroom (Q82)
       - alert: ActionsGatewayQuotaPressure
         expr: |
-          actions_gateway_worker_quota_pressure == 1
-            or actions_gateway_runnerset_worker_quota_pressure == 1
+          actions_gateway_runnerset_worker_quota_pressure == 1
             or actions_gateway_proxy_quota_pressure == 1
         for: 15m
         labels:
@@ -210,14 +205,13 @@ groups:
       # Page: worker pods can't be scheduled — capacity is not materializing (Q157)
       - alert: ActionsGatewayWorkersUnschedulable
         expr: |
-          actions_gateway_workers_unschedulable == 1
-            or actions_gateway_runnerset_workers_unschedulable == 1
+          actions_gateway_runnerset_workers_unschedulable == 1
         for: 10m
         labels:
           severity: critical
         annotations:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayworkersunschedulable"
-          summary: "Worker pods unschedulable for {{ $labels.runner_group }}{{ $labels.runner_set }} in {{ $labels.namespace }}"
+          summary: "Worker pods unschedulable for {{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "Worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — not quota). Capacity is not materializing; acquired jobs will not start."
 
       # Page: worker pods bound to a node and the kubelet cannot start them (Q906)

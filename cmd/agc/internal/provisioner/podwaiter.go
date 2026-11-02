@@ -184,16 +184,12 @@ func podLifetime(pod *corev1.Pod) (time.Duration, bool) {
 	return d, true
 }
 
-// workerOwner returns the name of the RunnerGroup or RunnerSet a worker pod
-// belongs to, and whether the pod is a worker pod at all. It is the pod-side
-// reading of Target.PodOwnerLabels — v1 stamps LabelRunnerGroup, v2
-// LabelRunnerSet — and is what lets a pod event be labelled without the Target
+// workerOwner returns the name of the RunnerSet a worker pod belongs to, and
+// whether the pod is a worker pod at all. It is the pod-side reading of
+// Target.PodOwnerLabels, and is what lets a pod event be labelled without the Target
 // that created it, which a fire-and-forget scale-set worker no longer has.
 func workerOwner(pod *corev1.Pod) (string, bool) {
 	if v := pod.Labels[LabelRunnerSet]; v != "" {
-		return v, true
-	}
-	if v := pod.Labels[LabelRunnerGroup]; v != "" {
 		return v, true
 	}
 	return "", false

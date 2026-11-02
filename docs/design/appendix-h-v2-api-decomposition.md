@@ -881,7 +881,7 @@ The asset covers the default-namespace case; a GMC in a non-default namespace, o
 Argo CD renders the chart itself and never builds a release Secret, so it is unaffected by the 1 MiB limit; Flux `HelmRelease` *does* build one and uses the rendered manifest or a Kustomization instead.
 
 The properties this forgoes — `helm upgrade` revision history, `helm rollback`, `helm uninstall` cleanup — are **low-value for CRDs specifically** and partly anti-patterns: rolling a CRD schema *backward* can strand stored objects (removing a served/storage version or field is a deliberate migration, never a casual rollback), and cascading `helm uninstall` of a CRD deletes every custom resource with it (data loss — exactly what `resource-policy: keep` prevents).
-The operator-facing upgrade/rollback/uninstall runbook is [install.md § the v2 API CRDs](../operations/install.md#optional-the-v2-api-crds).
+The operator-facing upgrade/rollback/uninstall runbook is [install.md § the v2 API CRDs](../operations/install.md#the-v2-api-crds).
 
 Alternatives, each measured by reconstructing Helm's stored-Secret encoding:
 

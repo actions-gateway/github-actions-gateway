@@ -85,24 +85,14 @@ var boundarySpecs = []boundarySpec{
 		whatItPins: "a drained worker that never ran its container is left unrecovered (Q421)",
 	},
 	{
-		name:       "TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns",
-		path:       "../controller/integration/drain_eviction_test.go",
-		whatItPins: "the recovered side of the boundary, classic tier",
-	},
-	{
 		name:       "TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers",
 		path:       "../controller/integration/drain_eviction_test.go",
-		whatItPins: "the recovered side of the boundary, scale-set tier",
-	},
-	{
-		name:       "TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun",
-		path:       "../controller/integration/drain_eviction_test.go",
-		whatItPins: "the unrecovered side of the boundary, classic tier",
+		whatItPins: "the recovered side of the boundary",
 	},
 	{
 		name:       "TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover",
 		path:       "../controller/integration/drain_eviction_test.go",
-		whatItPins: "the unrecovered side of the boundary, scale-set tier",
+		whatItPins: "the unrecovered side of the boundary",
 	},
 	{
 		name:       "E2E_AGC_PreemptedWorkerIsRecovered",
@@ -151,9 +141,8 @@ var heavyTierRoots = []string{
 // count" is the judgement a sweep exists to make explicit.
 var nonBoundaryFiles = map[string]string{
 	"testdata/gmc/test/e2e/e2e_test.go":                                      "a jsonpath readiness template filters out pods that are mid-delete; no assertion about the mark",
-	"../controller/integration/q260_late_redelivery_test.go":                 "filters live worker pods with DeletionTimestamp.IsZero(); the subject is delivery dedup",
 	"testdata/gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
-	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerGroup CR is held deleting by its finalizer; an admission-policy subject",
+	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerSet CR is held deleting by its finalizer; an admission-policy subject",
 	"testdata/gmc/internal/controller/integration/reconcile_counter_test.go": "reconcileCounter skips an EgressProxy CR that is mid-deletion; no worker pods",
 }
 

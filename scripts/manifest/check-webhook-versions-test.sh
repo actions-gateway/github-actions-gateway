@@ -22,7 +22,6 @@ CHECKER="${REPO_ROOT}/scripts/manifest/check-webhook-versions.py"
 
 WEBHOOKS=cmd/gmc/config/webhook/manifests.yaml
 V2_CRDS=api/config/crd
-V1_CRDS=cmd/gmc/config/crd/bases
 
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "${WORKDIR}"' EXIT
@@ -34,10 +33,9 @@ rc=0
 # fixture — a fresh copy of the webhook rules and every CRD under a throwaway root, printed.
 fixture() {
 	local root="${WORKDIR}/case.$$.${RANDOM}"
-	mkdir -p "${root}/$(dirname "${WEBHOOKS}")" "${root}/${V2_CRDS}" "${root}/${V1_CRDS}"
+	mkdir -p "${root}/$(dirname "${WEBHOOKS}")" "${root}/${V2_CRDS}"
 	cp "${REPO_ROOT}/${WEBHOOKS}" "${root}/${WEBHOOKS}"
 	cp "${REPO_ROOT}/${V2_CRDS}"/*.yaml "${root}/${V2_CRDS}/"
-	cp "${REPO_ROOT}/${V1_CRDS}"/*.yaml "${root}/${V1_CRDS}/"
 	printf '%s' "${root}"
 }
 
@@ -88,7 +86,7 @@ PY
 
 root="$(fixture)"
 run_checker "${root}"
-expect 'the shipped tree matches' 0 'webhook rules match a served version: 5 rules over 7 CRDs'
+expect 'the shipped tree matches' 0 'webhook rules match a served version: 5 rules over 6 CRDs'
 
 # --- the v2.0.0 removal: v2alpha1 is no longer served ------------------------
 #
@@ -134,8 +132,8 @@ expect 'a rule that also names a served version passes' 0 'match a served versio
 
 # --- a whole CRD removed -----------------------------------------------------
 #
-# Deleting a CRD outright leaves its webhook as unmatched as dropping one version
-# does, and the kind no longer appears anywhere to compare against.
+# Deleting a CRD outright leaves its webhook as unmatched as dropping one
+# version does, and the resource no longer appears anywhere to compare against.
 
 root="$(fixture)"
 rm "${root}/${V2_CRDS}/actions-gateway.com_runnersets.yaml"
@@ -150,7 +148,7 @@ run_checker "${root}"
 expect 'a manifest with no webhooks is refused' 2 'no webhook rules extracted'
 
 root="$(fixture)"
-rm "${root}/${V2_CRDS}"/*.yaml "${root}/${V1_CRDS}"/*.yaml
+rm "${root}/${V2_CRDS}"/*.yaml
 run_checker "${root}"
 expect 'no CRDs at all is refused' 2 'no CRDs under'
 

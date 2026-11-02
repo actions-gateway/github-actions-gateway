@@ -14,7 +14,7 @@
       }
     ]
   },
-  "description": "Platform/fleet reference dashboard for github-actions-gateway (Q186). Sourced from the GMC manager metrics (single cluster-wide TLS scrape): managed gateways, GMC reconcile health, and the cross-tenant condition rollups (RunnerGroupsDegraded, EgressRulesStale, Proxy quota). The Cross-tenant Throughput row additionally requires the per-tenant AGC scrapes. For a single tenant's detail see grafana-dashboard-tenant.json. See docs/operations/observability.md.",
+  "description": "Platform/fleet reference dashboard for github-actions-gateway (Q186). Sourced from the GMC manager metrics (single cluster-wide TLS scrape): managed gateways, GMC reconcile health, and the cross-tenant condition rollups (RunnerSetsDegraded, EgressRulesStale, Proxy quota). The Cross-tenant Throughput row additionally requires the per-tenant AGC scrapes. For a single tenant's detail see grafana-dashboard-tenant.json. See docs/operations/observability.md.",
   "editable": true,
   "graphTooltip": 1,
   "links": [],
@@ -236,7 +236,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
       "id": 21,
-      "description": "GMC-exported condition gauges (1=firing) per gateway: RunnerGroupsDegraded, EgressRulesStale, ProxyQuotaPressure, ProxyQuotaExceeded, GitHubEgressIncomplete (v2 EgressProxy only), ScaleSetNameCollision (v2 only).",
+      "description": "GMC-exported condition gauges (1=firing) per gateway: RunnerSetsDegraded, EgressRulesStale, ProxyQuotaPressure, ProxyQuotaExceeded, GitHubEgressIncomplete (v2 EgressProxy only), ScaleSetNameCollision (v2 only).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },

@@ -180,11 +180,11 @@ Do **not** work around the admission rejection by clearing `priorityClassName` �
 To install the chart declaratively from Git instead of running `helm install` by hand, see [gitops.md](gitops.md).
 It gives ready-to-apply Argo CD `Application` and Flux `HelmRelease` examples (with the CRD-pruning gotcha handled) and shows how to source the GitHub App credential Secret securely — External Secrets Operator or Sealed Secrets — so the private key is never committed to Git.
 
-### Optional: the v2 API CRDs
+### The v2 API CRDs
 
-The main chart installs the `v1alpha1` (`actions-gateway.github.com`) `RunnerGroup` CRD, [deprecated](v1alpha1-deprecation.md); the `ActionsGateway` kind is served only at `actions-gateway.com`.
-The v2 (`actions-gateway.com`) API that new tenants onboard on ships its five CRDs in a **separate chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
-Install it alongside the main chart: without it the GMC has no `ActionsGateway` kind to reconcile.
+The main chart installs no tenant CRD.
+The `actions-gateway.com` API ships its five CRDs in a **separate chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
+Install it alongside the main chart: without it neither controller has a kind to reconcile.
 
 Each v2 CRD is served at **three versions**: **`v2beta1`** (the graduated, ScaleSet-only shape, and the conversion hub), **`v2`** (the General Availability (GA) version, identical but for the dropped `CiliumFQDN`/`CalicoFQDN` aliases, and the storage version from 1.10), and **`v2alpha1`** (served as the `gag-migrate` on-ramp, deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md)).
 An unpinned `kubectl get` returns `v2`, the version the apiserver prefers ([what that changes](upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)).
@@ -197,12 +197,11 @@ Two consequences for an operator:
 - **Create v2 objects only once the GMC is running.** The CRDs may be installed in any order, but a `RunnerSet`/`RunnerTemplate`/… create is routed through `/convert`, so it fails until the GMC (the conversion webhook server) is `Ready`.
   On a fresh install this resolves itself; on an existing cluster, install the CRDs and let the GMC roll out before applying v2 objects.
 
-They are genuinely optional:
+Installing them:
 
-- **You do not need them for v1.** A plain `helm install` of the main chart (without `actions-gateway-crds-v2`) is a complete, supported v1-only install.
-  The GMC **detects the v2 CRDs at startup**: when they are absent it logs a single info line — `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled` — and does **not** start the v2 controllers or the v2 IP-range refresh passes.
-  Each per-tenant AGC does the same for its v2 RunnerSet reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed; v1-only mode, v2 RunnerSet reconciler disabled` and running only the v1 RunnerGroup reconciler. v1alpha1 tenants reconcile normally.
-- **To use v2,** apply the CRDs server-side — do **not** `helm install` the chart.
+- **Without them, nothing reconciles.** The GMC **detects the v2 CRDs at startup**: when they are absent it logs a single info line — `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled` — and starts no tenant controller or IP-range refresh pass.
+  A per-tenant AGC exits at startup with an error naming the missing `RunnerSet` CRD.
+- **Apply them server-side** — do **not** `helm install` the chart.
   The two `RunnerTemplate` CRDs each embed a full `PodTemplateSpec`, so the rendered chart (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit and `helm install` cannot store it.
   Applying the CRDs server-side is the **supported, deliberate install/upgrade path**, not a stopgap (see below for why, and the [design decision](../design/appendix-h-v2-api-decomposition.md#h132-installupgrade-lifecycle--apply-render-not-helm-install-q276) for the rejected alternatives).
   Two equivalent ways:
@@ -276,7 +275,7 @@ The knobs an operator is most likely to override:
 | `networkPolicy.enabled` | `true` | Leave on; needs an enforcing CNI (see prerequisites). |
 | `vpa.enabled` | `false` | Set `true` to let a Vertical Pod Autoscaler right-size the GMC instead of tuning `resources` by hand. Requires the Kubernetes vertical-pod-autoscaler installed (the `autoscaling.k8s.io` CRDs) — enabling it without them fails `helm install`, same as `metrics.serviceMonitor.enabled`. `vpa.updateMode` defaults to `Off` (recommendation only); it moves requests only, so `resources.limits` stays your hard ceiling. The per-tenant equivalent is `ActionsGateway.spec.agcAutoscaling` ([tenant-onboarding](tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)). |
 | `systemCriticalPriorityQuota.enabled` | `true` | Leave on; ships the scoped `ResourceQuota` that lets the GMC's `system-cluster-critical` pods schedule under GKE's restricted PriorityClass admission (see [GKE and other restricted-PriorityClass clusters](#gke-and-other-restricted-priorityclass-clusters)). Set `false` only if you provision that quota out-of-band. |
-| `admissionPolicy.enabled` | `true` | Leave it on. It ships the `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy`, the backstop that gates direct `runnergroups` writes (which have no webhook) against the PriorityClass allowlist. The managed-control-plane caveat that used to sit here is [resolved](#the-policy-parameter-is-a-crd-not-a-configmap-q492). Set `false` to rely on the GMC webhook allowlist alone. |
+| `admissionPolicy.enabled` | `true` | Leave it on. It ships the `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy`, the backstop that holds `runnersets` and `runnertemplates` writes to the PriorityClass allowlist if the GMC webhook is bypassed or down. The managed-control-plane caveat that used to sit here is [resolved](#the-policy-parameter-is-a-crd-not-a-configmap-q492). Set `false` to rely on the GMC webhook allowlist alone. |
 
 A `values.schema.json` validates these at install/lint time (digest format, enum values, etc.).
 The **full reference** — every value with its default and description — lives in the [chart README](../../charts/actions-gateway/README.md#values); this table is only the common subset, not a duplicate.
@@ -288,13 +287,13 @@ One object, two consumers, so the webhook and the policy cannot disagree.
 
 That it is a **CRD** and not a `ConfigMap` is load-bearing, not incidental.
 Releases that used a ConfigMap were exposed to a kube-apiserver defect (Q444): the apiserver keys one *shared* parameter informer per core-type `paramKind`, tears it down as soon as no binding names that kind, and never restarts it.
-A `helm uninstall` deletes the guard's only binding and so tripped exactly that, leaving every `runnergroups`/`runnersets`/`runnertemplates` write denied cluster-wide with `no params found for policy binding` — recoverable only by restarting kube-apiserver, which EKS/GKE/AKS do not offer.
+A `helm uninstall` deletes the guard's only binding and so tripped exactly that, leaving every write the guard matched denied cluster-wide with `no params found for policy binding` — recoverable only by restarting kube-apiserver, which EKS/GKE/AKS do not offer.
 It could also fail *open*, silently enforcing a stale allowlist from a frozen cache.
 
 For a CRD `paramKind` the apiserver allocates a fresh dynamic informer per context, so the same uninstall/reinstall cycle is survivable.
 This is measured rather than inferred: `scripts/e2e/vap-param-informer-check.sh` runs the identical empty-binding-set transition against both kinds on one apiserver, and `scripts/e2e/chart-reinstall-check.sh` drives a real uninstall/reinstall in CI.
 
-**One consequence, and it is not install-time.** This CRD ships in the chart-root `crds/` directory rather than `templates/crds/` like the others, because the same release also creates a `PriorityClassAllowlist` object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
+**One consequence, and it is not install-time.** This CRD ships in the chart-root `crds/` directory rather than as a template, because the same release also creates a `PriorityClassAllowlist` object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
 A **fresh `helm install` handles this for you**; `crds/` is applied first.
 
 An **upgrade does not**.
@@ -334,12 +333,12 @@ kubectl get pods -n gmc-system -l app.kubernetes.io/name=actions-gateway
 kubectl get lease -n gmc-system
 # Expected: a lease whose HOLDER is one of the GMC pods
 
-# 3. Both CRDs are installed and Established.
+# 3. The ActionsGateway and RunnerSet CRDs are installed and Established.
 kubectl get crd actionsgateways.actions-gateway.com \
-                runnergroups.actions-gateway.github.com
+                runnersets.actions-gateway.com
 kubectl wait --for=condition=Established \
   crd/actionsgateways.actions-gateway.com \
-  crd/runnergroups.actions-gateway.github.com
+  crd/runnersets.actions-gateway.com
 
 # 4. The validating webhook and the admission policies are present.
 # (Resource names carry the chart namePrefix, default "gmc-".)
@@ -367,14 +366,7 @@ Once the GMC is healthy, continue with [Getting Started](../getting-started.md) 
 helm uninstall gag --namespace gmc-system
 ```
 
-The `RunnerGroup` CRD ships as a template carrying `helm.sh/resource-policy: keep`, so `helm uninstall` **preserves the CRD and every tenant's `RunnerGroup` object** rather than cascade-deleting them; the v2 CRDs, `ActionsGateway` among them, follow the [`actions-gateway-crds-v2` lifecycle](#optional-the-v2-api-crds).
-To fully remove the `RunnerGroup` CRD, delete the tenant objects first, then the CRD explicitly:
-
-```sh
-# Only after confirming no tenant still needs their gateways:
-kubectl delete runnergroups.actions-gateway.github.com --all --all-namespaces
-kubectl delete crd runnergroups.actions-gateway.github.com
-```
+The main chart ships no tenant CRD, so `helm uninstall` leaves every tenant's objects in place; the tenant CRDs follow the [`actions-gateway-crds-v2` lifecycle](#the-v2-api-crds).
 
 The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by `helm uninstall` along with its binding and its parameter object; the `PriorityClassAllowlist` **CRD** is left behind, as `crds/` contents always are.
 Removing the binding used to be the trigger for a cluster-wide outage (Q444) when the parameter was a ConfigMap — a reinstall could not repair it.

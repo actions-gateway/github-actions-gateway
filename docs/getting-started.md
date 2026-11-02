@@ -66,7 +66,7 @@ helm template actions-gateway-crds-v2 \
   | kubectl apply --server-side -f -
 ```
 
-Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the hub version), `v2` (the storage version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds) for signature verification and the full options).
+Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the hub version), `v2` (the storage version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#the-v2-api-crds) for signature verification and the full options).
 The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean with no gateway controllers running (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`).

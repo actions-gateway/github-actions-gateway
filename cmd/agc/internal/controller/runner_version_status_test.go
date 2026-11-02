@@ -3,7 +3,6 @@ package controller
 import (
 	"testing"
 
-	v1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -104,70 +103,6 @@ func TestRunnerSetRunnerVersionStatus(t *testing.T) {
 		require.NotNil(t, cond)
 		assert.Equal(t, v2alpha1.ReasonVersionTooOld, cond.Reason)
 		assert.Equal(t, "GitHub rejected the session", cond.Message)
-	})
-}
-
-func TestRunnerGroupRunnerVersionStatus(t *testing.T) {
-	prov := &provisioner.Provisioner{}
-
-	t.Run("stale workerImage reports too old and warns once", func(t *testing.T) {
-		rec := events.NewFakeRecorder(16)
-		r := &RunnerGroupReconciler{Provisioner: prov, Recorder: rec}
-		rg := &v1alpha1.RunnerGroup{
-			ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns", Generation: 2},
-			Spec:       v1alpha1.RunnerGroupSpec{WorkerImage: staleImage},
-		}
-
-		r.setRunnerVersionStatus(rg)
-
-		cond := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld)
-		require.NotNil(t, cond)
-		assert.Equal(t, metav1.ConditionTrue, cond.Status)
-		assert.Equal(t, v1alpha1.ReasonWorkerImageBelowMinimum, cond.Reason)
-		assert.Equal(t, int64(2), cond.ObservedGeneration)
-		require.Len(t, rec.Events, 1)
-
-		r.setRunnerVersionStatus(rg)
-		assert.Len(t, rec.Events, 1)
-	})
-
-	t.Run("default workerImage reports current", func(t *testing.T) {
-		r := &RunnerGroupReconciler{Provisioner: prov}
-		rg := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns"}}
-
-		r.setRunnerVersionStatus(rg)
-
-		cond := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld)
-		require.NotNil(t, cond)
-		assert.Equal(t, metav1.ConditionFalse, cond.Status)
-		assert.Equal(t, v1alpha1.ReasonWorkerImageCurrent, cond.Reason)
-	})
-
-	t.Run("a session-sourced VersionTooOld is not overwritten", func(t *testing.T) {
-		r := &RunnerGroupReconciler{Provisioner: prov}
-		rg := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns"}}
-		meta.SetStatusCondition(&rg.Status.Conditions, metav1.Condition{
-			Type:   v1alpha1.ConditionRunnerVersionTooOld,
-			Status: metav1.ConditionTrue,
-			Reason: v1alpha1.ReasonVersionTooOld,
-		})
-
-		r.setRunnerVersionStatus(rg)
-
-		cond := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld)
-		require.NotNil(t, cond)
-		assert.Equal(t, v1alpha1.ReasonVersionTooOld, cond.Reason)
-	})
-
-	// A nil Provisioner is the pre-wiring state some unit constructions use; the
-	// reconcile path must not depend on it being set.
-	t.Run("no provisioner publishes nothing", func(t *testing.T) {
-		r := &RunnerGroupReconciler{}
-		rg := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns"}}
-
-		r.setRunnerVersionStatus(rg)
-
-		assert.Nil(t, meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld))
 	})
 }
 
@@ -356,57 +291,4 @@ func TestRunnerVersionClearArbitration(t *testing.T) {
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionFalse, cond.Status)
 	})
-}
-
-// TestRunnerGroupRunnerVersionClearArbitration is the RunnerGroup half of the
-// arbitration, and the half that matters most: the classic tier is the only producer
-// of a session-sourced RunnerVersionTooOld, and a RunnerGroup reconcile has its own
-// early-status-write path (setCredentialUnavailable returns before the image reading
-// runs), so a merged clear would persist there.
-//
-// Added after review found the RunnerGroup drain guard had no coverage at all — the
-// whole controller suite stayed green with it deleted, because the arbitration tests
-// above drive RunnerSetReconciler only.
-func TestRunnerGroupRunnerVersionClearArbitration(t *testing.T) {
-	r := &RunnerGroupReconciler{
-		Provisioner: &provisioner.Provisioner{},
-		conditionCh: make(chan conditionUpdate, 8),
-	}
-	rg := &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns", Generation: 1},
-		Spec:       v1alpha1.RunnerGroupSpec{WorkerImage: staleImage},
-	}
-	r.setRunnerVersionStatus(rg)
-	require.Equal(t, v1alpha1.ReasonWorkerImageBelowMinimum,
-		meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld).Reason)
-
-	r.conditionCh <- conditionUpdate{namespace: "ns", name: "group", condition: metav1.Condition{
-		Type:    v1alpha1.ConditionRunnerVersionTooOld,
-		Status:  metav1.ConditionFalse,
-		Reason:  v1alpha1.ReasonVersionAccepted,
-		Message: "GitHub accepted the runner version at session creation",
-	}}
-	r.drainConditions(rg)
-
-	cond := meta.FindStatusCondition(rg.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld)
-	require.NotNil(t, cond)
-	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, v1alpha1.ReasonWorkerImageBelowMinimum, cond.Reason)
-
-	// The clear must still land when the live condition is session-sourced, or the
-	// guard would be refusing everything rather than only an image-sourced overwrite.
-	rg2 := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "group", Namespace: "ns"}}
-	meta.SetStatusCondition(&rg2.Status.Conditions, metav1.Condition{
-		Type:   v1alpha1.ConditionRunnerVersionTooOld,
-		Status: metav1.ConditionTrue,
-		Reason: v1alpha1.ReasonVersionTooOld,
-	})
-	r.conditionCh <- conditionUpdate{namespace: "ns", name: "group", condition: metav1.Condition{
-		Type:   v1alpha1.ConditionRunnerVersionTooOld,
-		Status: metav1.ConditionFalse,
-		Reason: v1alpha1.ReasonVersionAccepted,
-	}}
-	r.drainConditions(rg2)
-	assert.Equal(t, v1alpha1.ReasonVersionAccepted,
-		meta.FindStatusCondition(rg2.Status.Conditions, v1alpha1.ConditionRunnerVersionTooOld).Reason)
 }

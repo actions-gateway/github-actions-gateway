@@ -111,12 +111,11 @@ scaleset-mem-profile: ## Isolate AGC-only per-scale-set memory on the scale-set 
 		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestScaleSetPerListenerMemory -v ./test/load/...
 
 .PHONY: generate
-generate: manifests deepcopy ## Regenerate CRD/RBAC manifests and DeepCopy methods
+generate: manifests deepcopy ## Regenerate RBAC manifests and DeepCopy methods
 
 .PHONY: manifests
-manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder markers
-	GOWORK=$(CURDIR)/go.work.gen $(CONTROLLER_GEN) crd rbac:roleName=agc-role paths="./..." \
-		output:crd:artifacts:config=config/crd \
+manifests: $(CONTROLLER_GEN) ## Regenerate RBAC manifests from kubebuilder markers
+	GOWORK=$(CURDIR)/go.work.gen $(CONTROLLER_GEN) rbac:roleName=agc-role paths="./..." \
 		output:rbac:artifacts:config=config/rbac
 
 .PHONY: deepcopy

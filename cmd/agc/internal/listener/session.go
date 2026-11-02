@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	corev1 "k8s.io/api/core/v1"
@@ -164,15 +164,15 @@ func createSession(ctx context.Context, cfg Config, log *slog.Logger) (sessionSt
 	if err != nil {
 		var vtooOld *broker.VersionTooOldError
 		if errors.As(err, &vtooOld) {
-			setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
-				v1alpha1.ReasonVersionTooOld, vtooOld.Message)
+			setCondition(cfg, apiconditions.ConditionRunnerVersionTooOld, metav1.ConditionTrue,
+				apiconditions.ReasonVersionTooOld, vtooOld.Message)
 			recordEvent(cfg, corev1.EventTypeWarning, "RunnerVersionTooOld", "CreateSession",
 				fmt.Sprintf("session creation failed permanently — the runner version is too old for GitHub: %s", vtooOld.Message))
 			return sessionState{}, &NonRetriableError{Cause: err}
 		}
 		if isUnauthorized(err) {
-			setCondition(cfg, v1alpha1.ConditionDegraded, metav1.ConditionTrue,
-				v1alpha1.ReasonSessionUnauthorized, err.Error())
+			setCondition(cfg, apiconditions.ConditionDegraded, metav1.ConditionTrue,
+				apiconditions.ReasonSessionUnauthorized, err.Error())
 			recordEvent(cfg, corev1.EventTypeWarning, "SessionUnauthorized", "CreateSession",
 				fmt.Sprintf("session creation rejected as unauthorized; the agent credentials are invalid or revoked: %v", err))
 			return sessionState{}, &NonRetriableError{Cause: err}
@@ -272,7 +272,7 @@ func recycleAndRestart(ctx context.Context, cfg *Config, log *slog.Logger, oldSe
 		// The heal recovered from a credential rejection that may have set
 		// Degraded=True (createSession does so on unauthorized). Clear it so the
 		// RunnerGroup does not carry a stale alarm after self-healing.
-		setCondition(*cfg, v1alpha1.ConditionDegraded, metav1.ConditionFalse,
+		setCondition(*cfg, apiconditions.ConditionDegraded, metav1.ConditionFalse,
 			"AgentRecycled", "Re-registered single-use JIT agent after credential rejection")
 	}
 	return sess, err

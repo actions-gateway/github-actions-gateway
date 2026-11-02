@@ -102,7 +102,7 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"but nothing is wired to scrape them. The chart sets this from metrics.serviceMonitor.enabled.")
 	fs.StringVar(&f.allowedPriorityClasses, "allowed-priority-classes", "",
 		"Comma-separated allowlist of cluster-scoped PriorityClass names that tenant "+
-			"RunnerGroups may reference in priorityTiers. The platform admin pre-creates "+
+			"RunnerSets may reference in priorityTiers. The platform admin pre-creates "+
 			"these classes and lists them here; the admission webhook rejects any other "+
 			"name so a tenant cannot preempt other tenants' worker pods. Empty (default) "+
 			"forbids all priorityTiers PriorityClass references.")

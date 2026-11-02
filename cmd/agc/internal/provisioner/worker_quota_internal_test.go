@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,38 +11,40 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// quotaTestScheme registers the RunnerGroup API types AND core/v1 so the fake
-// client can serve ResourceQuota reads.
+// quotaTestScheme registers core/v1 so the fake client can serve ResourceQuota reads.
 func quotaTestScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
-	_ = v1alpha1.AddToScheme(s)
 	_ = corev1.AddToScheme(s)
 	return s
 }
 
-// quotaRunnerGroup builds a RunnerGroup whose worker container asks for cpu, or —
-// when cpu is empty — declares no resources at all (so the provisioner's
-// gap-fill defaults apply).
-func quotaRunnerGroup(cpu string) *v1alpha1.RunnerGroup {
+// quotaPodSpec builds a worker pod spec whose container asks for cpu, or — when cpu
+// is empty — declares no resources at all (so the provisioner's gap-fill defaults
+// apply).
+func quotaPodSpec(cpu string) *corev1.PodSpec {
 	c := corev1.Container{Name: WorkerContainerName}
 	if cpu != "" {
 		c.Resources = corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(cpu)},
 		}
 	}
-	return &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
-		Spec: v1alpha1.RunnerGroupSpec{
-			MaxWorkers: ptr.To(int32(10)),
-			PodTemplate: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{Containers: []corev1.Container{c}},
-			},
-		},
-	}
+	return &corev1.PodSpec{Containers: []corev1.Container{c}}
+}
+
+// quotaTarget is a rungTarget whose quota rung reads the namespace ResourceQuota for
+// real, through WorkerQuotaExhausted, the way the RunnerSet adapter does.
+type quotaTarget struct {
+	rungTarget
+	c       client.Reader
+	podSpec *corev1.PodSpec
+}
+
+func (q *quotaTarget) QuotaExhausted(ctx context.Context) (bool, string) {
+	return WorkerQuotaExhausted(ctx, q.c, "ns", q.podSpec)
 }
 
 // cpuQuota builds a namespace ResourceQuota with the given hard/used requests.cpu.
@@ -123,9 +124,7 @@ func TestWorkerQuotaExhausted(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fc := fake.NewClientBuilder().WithScheme(quotaTestScheme()).WithRuntimeObjects(tt.objs...).Build()
-			rg := quotaRunnerGroup(tt.cpu)
-
-			exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns", &rg.Spec.PodTemplate.Spec)
+			exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns", quotaPodSpec(tt.cpu))
 			assert.Equal(t, tt.wantExhausted, exhausted)
 			if tt.wantExhausted {
 				assert.Contains(t, detail, "cannot admit another worker pod", "the detail must name the binding resource")
@@ -142,37 +141,35 @@ func TestWorkerQuotaExhausted(t *testing.T) {
 // createPodWithQuotaRetry remaining the backstop. The scheme here omits core/v1, so
 // the List fails the way a lost cache or a missing RBAC rule would.
 func TestWorkerQuotaExhausted_FailsOpenOnReadError(t *testing.T) {
-	fc := fake.NewClientBuilder().WithScheme(admissionTestScheme()).Build()
+	fc := fake.NewClientBuilder().WithScheme(runtime.NewScheme()).Build()
 
-	exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns",
-		&quotaRunnerGroup("500m").Spec.PodTemplate.Spec)
+	exhausted, detail := WorkerQuotaExhausted(context.Background(), fc, "ns", quotaPodSpec("500m"))
 
 	assert.False(t, exhausted, "an unreadable quota must not close the gate")
 	assert.Empty(t, detail)
 }
 
-// TestAdmit_QuotaRungClosesGate verifies the #784 behaviour end to end on the v1
-// Target: with the namespace quota exhausted the AdmitFunc refuses with
+// TestAdmit_QuotaRungClosesGate verifies the #784 behaviour end to end: with the namespace quota exhausted the AdmitFunc refuses with
 // reason=quota, and — critically — reserves nothing, so the ceiling budget is
 // untouched and recovers the moment headroom returns.
 func TestAdmit_QuotaRungClosesGate(t *testing.T) {
-	rg := quotaRunnerGroup("500m")
 	fc := fake.NewClientBuilder().WithScheme(quotaTestScheme()).
-		WithObjects(rg, cpuQuota("2", "2")).Build()
+		WithObjects(cpuQuota("2", "2")).Build()
+	target := &quotaTarget{rungTarget: rungTarget{ceiling: 10, ceilingBounded: true}, c: fc, podSpec: quotaPodSpec("500m")}
 	p := NewProvisioner(fc, nil, nil)
 
-	release, ok, reason := p.AdmitFor(rg)(context.Background())
+	release, ok, reason := p.Admit(target)(context.Background())
 	require.False(t, ok, "an exhausted namespace quota must close the admission gate")
 	assert.Equal(t, runnercore.AdmitReasonQuota, reason)
 	assert.Nil(t, release)
-	assert.Zero(t, p.admission.reservedCount("ns/g"), "a quota refusal must not consume a ceiling slot")
+	assert.Zero(t, p.admission.reservedCount("ns/s"), "a quota refusal must not consume a ceiling slot")
 
 	// Headroom returns (a sibling job finished): the same gate admits again, with no
 	// restart and no reset — the signal is self-clearing.
 	freed := cpuQuota("2", "1")
 	require.NoError(t, fc.Update(context.Background(), freed))
 
-	release, ok, reason = p.AdmitFor(rg)(context.Background())
+	release, ok, reason = p.Admit(target)(context.Background())
 	require.True(t, ok, "freed quota headroom must reopen the gate")
 	assert.Empty(t, reason)
 	require.NotNil(t, release)
@@ -183,13 +180,13 @@ func TestAdmit_QuotaRungClosesGate(t *testing.T) {
 // restores the pre-#784 behaviour: the gate ignores quota entirely and admits on the
 // declared ceiling alone.
 func TestAdmit_QuotaRungOptOut(t *testing.T) {
-	rg := quotaRunnerGroup("500m")
 	fc := fake.NewClientBuilder().WithScheme(quotaTestScheme()).
-		WithObjects(rg, cpuQuota("2", "2")).Build()
+		WithObjects(cpuQuota("2", "2")).Build()
+	target := &quotaTarget{rungTarget: rungTarget{ceiling: 10, ceilingBounded: true}, c: fc, podSpec: quotaPodSpec("500m")}
 	p := NewProvisioner(fc, nil, nil)
 	p.DisableQuotaAdmission = true
 
-	release, ok, reason := p.AdmitFor(rg)(context.Background())
+	release, ok, reason := p.Admit(target)(context.Background())
 	require.True(t, ok, "the opt-out must ignore quota headroom")
 	assert.Empty(t, reason)
 	require.NotNil(t, release)

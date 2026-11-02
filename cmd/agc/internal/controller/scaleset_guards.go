@@ -48,7 +48,7 @@ type scaleSetGuardStore struct {
 }
 
 // scaleSetGuardStore builds the store for one RunnerSet. Falls back to the cached
-// client when no APIReader is wired (tests), like the RunnerGroup probe.
+// client when no APIReader is wired (tests).
 func (r *RunnerSetReconciler) scaleSetGuardStore(rs *v2alpha1.RunnerSet) *scaleSetGuardStore {
 	reader := r.APIReader
 	if reader == nil {
