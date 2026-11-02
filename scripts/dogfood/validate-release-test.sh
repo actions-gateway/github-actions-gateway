@@ -256,6 +256,22 @@ check "a persistent denial still fails" 1 "${retry_rc}"
 check "the retries are bounded at GH_RETRIES+1" 6 "$(cat "${GH_ATTEMPTS}")"
 check_contains "an exhausted retry says how many it tried" "after 6 attempts" "${retry_err}"
 
+# Each variable reaches the schedule. The runs above use the defaults, so they
+# pass even if gh_retry stopped passing one through. 3 attempts gives two
+# sleeps (default: six), a 20s base puts the first in [20, 30] (default 5), and
+# a 20s cap holds the second there too (default 60 gives [40, 60]).
+gh_sleeps=()
+sleep() { gh_sleeps+=("$1"); }
+arm_flaky "run view" 99 ""
+GH_RETRIES=2 GH_RETRY_DELAY=20 GH_RETRY_MAX_DELAY=20 gh_retry run view 999 >/dev/null 2>&1 || true
+sleep() { :; }
+gh_wired=1
+((${#gh_sleeps[@]} == 2)) || gh_wired=0
+for i in 0 1; do
+	[[ "${gh_sleeps[$i]:-}" =~ ^[0-9]+$ ]] && ((gh_sleeps[i] >= 20 && gh_sleeps[i] <= 30)) || gh_wired=0
+done
+check "GH_RETRIES, GH_RETRY_DELAY and GH_RETRY_MAX_DELAY reach the schedule" "1" "${gh_wired}"
+
 # Through the real caller, which is what the 401 actually killed. The assertion
 # is on the answer, not on the exit status: a denied read leaves run_id empty,
 # and an empty run_id reads as a lane with no prior run — settling clean while
