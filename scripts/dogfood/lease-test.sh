@@ -109,15 +109,6 @@ check_fails() {
 state() { lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}"; }
 ownership() { lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}"; }
 record() { cat "$(lease_fake_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" 2>/dev/null || true; }
-# True once a process has exited. A zombie counts: under a PID 1 that does not
-# reap orphans (a GAG worker's wrapper) an exited process stays a zombie, which
-# `kill -0` still reports as alive. `ps -o stat=` works on Linux and macOS.
-proc_exited() {
-	local stat
-	stat="$(ps -o stat= -p "$1" 2>/dev/null)" || true
-	[[ -z "${stat// /}" || "${stat}" == *Z* ]]
-}
-
 holder() { record | cut -d'|' -f1; }
 field_rc() { record | cut -d'|' -f5; }
 
@@ -339,6 +330,67 @@ check "a failed write and read report error, not lost" "error" \
 	"$(lease_renew_once "${PROJECT}" "${ZONE}" "${CLUSTER}")"
 unset LEASE_FAKE_WRITE_FAILS LEASE_FAKE_READ_FAILS
 
+# --- the fake's lock ---------------------------------------------------------
+#
+# A renewer starved inside its locked write still holds the lock. A waiter that
+# broke it on a timer would write under it, and the renewer's write would land
+# over the waiter's. Only a holder that has exited gives its lock up.
+
+# hold_lock — hold the target's lock in the background until release appears.
+hold_lock() {
+	rm -f "${WORKDIR}/release"
+	lease_fake_locked "${PROJECT}" "${ZONE}" "${CLUSTER}" \
+		bash -c "until [[ -e '${WORKDIR}/release' ]]; do sleep 0.05; done" &
+	lock_holder=$!
+	local lock
+	lock="$(lease_fake_path "${PROJECT}" "${ZONE}" "${CLUSTER}").lock"
+	for _ in $(seq 100); do
+		[[ -e "${lock}" || -L "${lock}" ]] && break
+		sleep 0.05
+	done
+}
+
+# write_behind_lock SECONDS — hand-write a record in the background, setting
+# written to landed if it did within SECONDS, else to waiting.
+write_behind_lock() {
+	written=waiting
+	rm -f "${WORKDIR}/written"
+	(
+		remote_lease 1 "ci-runner-7/4242"
+		touch "${WORKDIR}/written"
+	) >/dev/null 2>&1 &
+	lock_waiter=$!
+	for _ in $(seq "$(($1 * 10))"); do
+		[[ -e "${WORKDIR}/written" ]] && written=landed && break
+		sleep 0.1
+	done
+}
+
+# A timed break needs at least the 5s of 500 tries 10ms apart, so 10s catches
+# one on a quiet host; a loaded one can stretch it past 10s and miss it.
+reset_leases
+hold_lock
+write_behind_lock 10
+check "a waiter does not break a live holder's lock" "waiting" "${written}"
+touch "${WORKDIR}/release"
+wait "${lock_holder}" || true
+wait "${lock_waiter}" || true
+check "the waiter writes once the holder lets go" "ci-runner-7/4242" "$(holder)"
+
+# A holder killed inside its locked write, as lease_renew_stop can, leaves a
+# lock that only breaking it clears.
+reset_leases
+hold_lock
+{
+	kill -KILL "${lock_holder}"
+	write_behind_lock 10
+} 2>/dev/null
+check "a waiter breaks the lock of a holder that was killed" "landed" "${written}"
+touch "${WORKDIR}/release"
+wait "${lock_holder}" 2>/dev/null || true
+wait "${lock_waiter}" || true
+check "the killed holder's lock leaves the waiter's record" "ci-runner-7/4242" "$(holder)"
+
 # --- the background renewer --------------------------------------------------
 #
 # Driven in a child bash that plays the gate, since the renewer signals its
@@ -394,7 +446,7 @@ remote_lease 1 "ci-runner-7/4242"
 quiet="$(cat "${WORKDIR}/quiet.pid")"
 quiet_alive=1
 for _ in $(seq 50); do
-	if proc_exited "${quiet}"; then
+	if lease_fake_exited "${quiet}"; then
 		quiet_alive=0
 		break
 	fi
@@ -420,7 +472,7 @@ run_owner "lease_acquire '${PROJECT}' '${ZONE}' '${CLUSTER}' rc
 renewer="$(cat "${WORKDIR}/renewer.pid")"
 gone=0
 for _ in $(seq 30); do
-	if proc_exited "${renewer}"; then
+	if lease_fake_exited "${renewer}"; then
 		gone=1
 		break
 	fi
