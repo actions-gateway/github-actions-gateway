@@ -420,10 +420,10 @@ run_owner "lease_acquire '${PROJECT}' '${ZONE}' '${CLUSTER}' rc
 renewer="$(cat "${WORKDIR}/renewer.pid")"
 gone=0
 for _ in $(seq 30); do
-	kill -0 "${renewer}" 2>/dev/null || {
+	if proc_exited "${renewer}"; then
 		gone=1
 		break
-	}
+	fi
 	sleep 0.1
 done
 check "the renewer exits once its gate is gone" "1" "${gone}"
