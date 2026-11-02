@@ -182,9 +182,9 @@ It gives ready-to-apply Argo CD `Application` and Flux `HelmRelease` examples (w
 
 ### Optional: the v2 API CRDs
 
-The main chart installs the `v1alpha1` (`actions-gateway.github.com`) CRDs — still fully served, but [deprecated](v1alpha1-deprecation.md).
+The main chart installs the `v1alpha1` (`actions-gateway.github.com`) `RunnerGroup` CRD, [deprecated](v1alpha1-deprecation.md); the `ActionsGateway` kind is served only at `actions-gateway.com`.
 The v2 (`actions-gateway.com`) API that new tenants onboard on ships its five CRDs in a **separate, opt-in chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
-Install it alongside the main chart unless you are running v1-only.
+Install it alongside the main chart: without it the GMC has no `ActionsGateway` kind to reconcile.
 
 Each v2 CRD is served at **three versions**: **`v2beta1`** (the graduated, ScaleSet-only shape, and the conversion hub), **`v2`** (the General Availability (GA) version, identical but for the dropped `CiliumFQDN`/`CalicoFQDN` aliases, and the storage version from 1.10), and **`v2alpha1`** (served as the `gag-migrate` on-ramp, deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md)).
 An unpinned `kubectl get` returns `v2`, the version the apiserver prefers ([what that changes](upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)).
@@ -335,10 +335,10 @@ kubectl get lease -n gmc-system
 # Expected: a lease whose HOLDER is one of the GMC pods
 
 # 3. Both CRDs are installed and Established.
-kubectl get crd actionsgateways.actions-gateway.github.com \
+kubectl get crd actionsgateways.actions-gateway.com \
                 runnergroups.actions-gateway.github.com
 kubectl wait --for=condition=Established \
-  crd/actionsgateways.actions-gateway.github.com \
+  crd/actionsgateways.actions-gateway.com \
   crd/runnergroups.actions-gateway.github.com
 
 # 4. The validating webhook and the admission policies are present.
@@ -367,14 +367,13 @@ Once the GMC is healthy, continue with [Getting Started](../getting-started.md) 
 helm uninstall gag --namespace gmc-system
 ```
 
-The two CRDs ship as templates carrying `helm.sh/resource-policy: keep`, so `helm uninstall` **preserves the CRDs and every tenant's `ActionsGateway` / `RunnerGroup` object** rather than cascade-deleting them — uninstalling the GMC does not tear down running tenant gateways.
-To fully remove them, delete the tenant CRs first, then the CRDs explicitly:
+The `RunnerGroup` CRD ships as a template carrying `helm.sh/resource-policy: keep`, so `helm uninstall` **preserves the CRD and every tenant's `RunnerGroup` object** rather than cascade-deleting them; the v2 CRDs, `ActionsGateway` among them, follow the [`actions-gateway-crds-v2` lifecycle](#optional-the-v2-api-crds).
+To fully remove the `RunnerGroup` CRD, delete the tenant objects first, then the CRD explicitly:
 
 ```sh
 # Only after confirming no tenant still needs their gateways:
-kubectl delete actionsgateway --all --all-namespaces
-kubectl delete crd actionsgateways.actions-gateway.github.com \
-                   runnergroups.actions-gateway.github.com
+kubectl delete runnergroups.actions-gateway.github.com --all --all-namespaces
+kubectl delete crd runnergroups.actions-gateway.github.com
 ```
 
 The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by `helm uninstall` along with its binding and its parameter object; the `PriorityClassAllowlist` **CRD** is left behind, as `crds/` contents always are.

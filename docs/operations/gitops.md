@@ -21,9 +21,9 @@ Two things move into Git:
 
 ## The CRD pruning gotcha (read first)
 
-The chart ships the two CustomResourceDefinitions (CRDs) — `actionsgateways.actions-gateway.github.com` and `runnergroups.actions-gateway.github.com` — as templates carrying the `helm.sh/resource-policy: keep` annotation.
-That annotation tells Helm (and both GitOps controllers below) **not** to delete the CRDs when the release is removed, so uninstalling the GMC never cascade-deletes a tenant's `ActionsGateway` / `RunnerGroup` objects.
-(The same applies to the opt-in `actions-gateway-crds-v2` chart if you install it.)
+The chart ships the `runnergroups.actions-gateway.github.com` CustomResourceDefinition (CRD) as a template carrying the `helm.sh/resource-policy: keep` annotation.
+That annotation tells Helm (and both GitOps controllers below) **not** to delete the CRD when the release is removed, so uninstalling the GMC never cascade-deletes a tenant's `RunnerGroup` objects.
+(The same applies to the `actions-gateway-crds-v2` chart, which ships the `ActionsGateway` CRD.)
 
 A GitOps controller that *prunes* resources no longer present in its source can defeat this if you are not careful.
 Two safe outcomes you must preserve:

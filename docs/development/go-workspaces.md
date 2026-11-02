@@ -22,7 +22,7 @@ The **Internal deps** column lists the other workspace modules each one imports 
 The `api/` module holds the v2 (`actions-gateway.com`) `v2alpha1` API kinds shared by both controllers.
 It is a pure API leaf — only `k8s.io/*` and `controller-runtime` scheme deps, no internal deps — so both `agc` and `gmc` import it without inverting the layering.
 It exists to break a would-be module cycle: the AGC's `RunnerSet` reconciler must read the GMC-group `ActionsGateway`/`EgressProxy`, but `gmc` already imports `agc`, so the shared kinds live in this neutral module instead of either controller importing the other's API package (Q164).
-The v1 (`actions-gateway.github.com`) kinds stay in `cmd/agc/api/v1alpha1` and `cmd/gmc/api/v1alpha1`.
+The v1 (`actions-gateway.github.com`) `RunnerGroup` kind stays in `cmd/agc/api/v1alpha1`.
 
 ### Dependency direction
 

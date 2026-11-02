@@ -1190,14 +1190,6 @@ kubectl --context "$CTX" get runnersets.actions-gateway.com -A -o json | jq -r '
   | .metadata.namespace as $ns | .metadata.name as $name
   | (.spec.priorityTiers // [])[]
   | "\($ns)/\($name) -> \(.priorityClassName)"'
-
-# v1 ActionsGateways (the class lives on each runnerGroups[] entry)
-kubectl --context "$CTX" get actionsgateways.actions-gateway.github.com -A -o json | jq -r '
-  .items[]
-  | .metadata.namespace as $ns | .metadata.name as $name
-  | (.spec.runnerGroups // [])[]
-  | select(.podTemplate.spec.priorityClassName != null)
-  | "\($ns)/\($name) -> \(.podTemplate.spec.priorityClassName)"'
 ```
 
 Any class these print that is **not** in your `--allowed-priority-classes` was an open cross-tenant preemption lever; treat a `system-cluster-critical` or `system-node-critical` result as an incident, not a config change.

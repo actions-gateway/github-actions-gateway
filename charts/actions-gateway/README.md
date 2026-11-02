@@ -10,7 +10,8 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
 
 ## What it installs
 
-- The two tenant CRDs — `ActionsGateway` and `RunnerGroup` — under `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall` preserves tenant objects.
+- The `v1alpha1` `RunnerGroup` CRD under `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall` preserves tenant objects.
+  The `ActionsGateway` kind ships in the separate `actions-gateway-crds-v2` chart.
 - The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`** dir: the chart also renders a `PriorityClassAllowlist` CR (the `priorityclass-allowlist-guard` policy's param).
   Helm resolves REST mappings for the entire manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install with `no matches for kind`.
   Only `crds/` is installed ahead of that resolution.
