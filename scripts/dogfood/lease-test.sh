@@ -109,6 +109,15 @@ check_fails() {
 state() { lease_state "${PROJECT}" "${ZONE}" "${CLUSTER}"; }
 ownership() { lease_ownership "${PROJECT}" "${ZONE}" "${CLUSTER}"; }
 record() { cat "$(lease_fake_path "${PROJECT}" "${ZONE}" "${CLUSTER}")" 2>/dev/null || true; }
+# True once a process has exited. A zombie counts: under a PID 1 that does not
+# reap orphans (a GAG worker's wrapper) an exited process stays a zombie, which
+# `kill -0` still reports as alive. `ps -o stat=` works on Linux and macOS.
+proc_exited() {
+	local stat
+	stat="$(ps -o stat= -p "$1" 2>/dev/null)" || true
+	[[ -z "${stat// /}" || "${stat}" == *Z* ]]
+}
+
 holder() { record | cut -d'|' -f1; }
 field_rc() { record | cut -d'|' -f5; }
 
@@ -385,10 +394,10 @@ remote_lease 1 "ci-runner-7/4242"
 quiet="$(cat "${WORKDIR}/quiet.pid")"
 quiet_alive=1
 for _ in $(seq 50); do
-	kill -0 "${quiet}" 2>/dev/null || {
+	if proc_exited "${quiet}"; then
 		quiet_alive=0
 		break
-	}
+	fi
 	sleep 0.1
 done
 check "a renewer that lost its lease stops renewing" "0" "${quiet_alive}"
