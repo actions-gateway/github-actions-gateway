@@ -3755,10 +3755,10 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h3 id="c-1-runnergroup-podtemplate-is-not-validated-tenant-can-ship-privileged-worker-pods">C-1. RunnerGroup <code>PodTemplate</code> is not validated; tenant can ship privileged worker pods<a class="headerlink" href="#c-1-runnergroup-podtemplate-is-not-validated-tenant-can-ship-privileged-worker-pods" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Status (2026-05-23): Done.</strong> Closed by W2.
-  <code>SecurityProfile</code> enum on <code>ActionsGatewaySpec</code> (default <code>baseline</code>); <code>applyNamespacePSA</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go:509</a> stamps <code>pod-security.kubernetes.io/{enforce,warn,audit}</code> labels on the tenant namespace at every reconcile.
+  <code>SecurityProfile</code> enum on <code>ActionsGatewaySpec</code> (default <code>baseline</code>); <code>applyNamespacePSA</code> in actionsgateway_controller.go:509 stamps <code>pod-security.kubernetes.io/{enforce,warn,audit}</code> labels on the tenant namespace at every reconcile.
   The in-tree PodSecurity admission plugin rejects any worker pod that violates the profile, including pods built by the AGC from a tenant's PodTemplate.
   A CEL <code>XValidation</code> on <code>RunnerGroupSpec.PodTemplate</code> also rejects <code>privileged: true</code> at <code>kubectl apply</code> time for the kinder failure path (per D-7).</li>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">cmd/agc/api/v1alpha1/runnergroup_types.go:30-60</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:349-439</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">cmd/gmc/internal/controller/actionsgateway_controller.go</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">cmd/agc/api/v1alpha1/runnergroup_types.go:30-60</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:349-439</a>, cmd/gmc/internal/controller/actionsgateway_controller.go</li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design / OWASP A01:2025 — Broken Access Control</li>
 <li><strong>Why Critical:</strong> Container breakout via privileged PodSpec fields is a direct path from "tenant author" to "root on the node".
   On any cluster that co-locates tenant workers on shared nodes (the common case for GPU capacity), <code>privileged: true</code> is cross-tenant impact.
@@ -3810,10 +3810,10 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h3 id="h-1-github-app-private-key-injected-into-agc-pod-as-an-environment-variable">H-1. GitHub App private key injected into AGC pod as an environment variable<a class="headerlink" href="#h-1-github-app-private-key-injected-into-agc-pod-as-an-environment-variable" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Status (2026-05-23): Done.</strong> Closed by W3.
-  <code>buildAGCDeployment</code> mounts the <code>gitHubAppRef</code> Secret as a volume at <code>/etc/actions-gateway/github-app/</code> with mode <code>0o400</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:33,450,481</a>).
+  <code>buildAGCDeployment</code> mounts the <code>gitHubAppRef</code> Secret as a volume at <code>/etc/actions-gateway/github-app/</code> with mode <code>0o400</code> (builder.go:33,450,481).
   <code>cmd/agc/main.go:91-111</code> reads <code>appId</code>, <code>installationId</code>, and <code>privateKey</code> from files.
   The three <code>GITHUB_APP_*</code> env-var entries are gone; <code>kubectl describe pod</code> no longer shows the key bytes.</li>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:291-321</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">cmd/agc/main.go:42-55</a></li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go:291-321, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">cmd/agc/main.go:42-55</a></li>
 <li><strong>Category:</strong> OWASP A02:2025 — Cryptographic Failures / A05:2025 — Misconfiguration</li>
 <li><strong>Why High:</strong> The control documented in the design <em>does not exist</em> in the code, and the actual control (env-var Secret reference) is weaker.
   Anyone with <code>get pod</code> in the tenant namespace — or any sidecar, debug exec, or crash dump that captures <code>os.Environ()</code> — sees the private key.
@@ -3839,7 +3839,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <p>Invariant after this change: <strong>private key material never appears in any process environment.</strong> <code>kubectl describe pod</code> shows the volume mount, not the key bytes.</p>
 <h3 id="h-2-agc-namespaced-role-grants-broad-secret-readlistwatch--createdelete">H-2. AGC namespaced Role grants broad Secret read/list/watch + create/delete<a class="headerlink" href="#h-2-agc-namespaced-role-grants-broad-secret-readlistwatch--createdelete" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:81-92</a></li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go:81-92</li>
 <li><strong>Category:</strong> OWASP A01:2025 — Broken Access Control</li>
 <li><strong>Why High:</strong> A compromised AGC has more access than the design implies.
   Not cross-tenant (it's still namespace-scoped), but the AGC can enumerate every Secret the tenant owns — including user-managed ones unrelated to GitHub Actions.</li>
@@ -3905,7 +3905,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   The naive implementation — <code>Watches(&amp;corev1.Secret{}, ...)</code> — establishes a full Secret informer, buffering all Secret <code>.data</code> (GitHub App private keys) in the controller's in-process cache indefinitely.
   This was briefly shipped and then reverted when the security intent was confirmed.</li>
 <li><strong>Implementation:</strong></li>
-<li><strong><code>WatchesMetadata(&amp;corev1.Secret{}, ...)</code></strong> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go</a> — registers a metadata-only informer.
+<li><strong><code>WatchesMetadata(&amp;corev1.Secret{}, ...)</code></strong> in actionsgateway_controller.go — registers a metadata-only informer.
      The cache holds only <code>ObjectMeta</code> (name, namespace, resourceVersion, deletionTimestamp); <code>.data</code> is never buffered.
      The controller gets event-driven reconcilation on Secret create/delete.
      The GMC ClusterRole retains <code>list</code>/<code>watch</code> on Secrets (required for the metadata informer).</li>
@@ -3924,8 +3924,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <ul>
 <li><strong>Status (2026-05-23): Done.</strong> Closed by W1.
   The single empty-selector NetworkPolicy was replaced with three <code>podSelector</code>-scoped policies: <code>buildProxyNetworkPolicy</code> (proxy pods → DNS + GitHub CIDRs:443), <code>buildWorkloadNetworkPolicy</code> (AGC + worker pods → DNS + proxy ClusterIP:proxyPort only), and <code>buildAGCNetworkPolicy</code> (AGC additive: also reaches k8s API on 443).
-  Workers are now selected only by the workload policy and cannot egress directly to GitHub (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:112-223</a>).</li>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:103-151</a></li>
+  Workers are now selected only by the workload policy and cannot egress directly to GitHub (builder.go:112-223).</li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go:103-151</li>
 <li><strong>Category:</strong> OWASP A05:2025 — Security Misconfiguration</li>
 <li><strong>Why Medium:</strong> Listed here as a security finding because the gap weakens GitHub-side incident containment (a flag against a node IP affects every tenant whose workers share that node), but the underlying issue is an implementation deviation from a documented design choice, not a privilege boundary failure.
   The design choice (route worker traffic through the proxy) and its rationale, tradeoffs, and acceptance criteria are tracked in <a href="../archive/worker-egress-proxy/">docs/plan/worker-egress-proxy.md</a>.
@@ -3995,7 +3995,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-5-agcproxy-hop-uses-plaintext-http--fixed-w7-2026-05-23">M-5. AGC→proxy hop uses plaintext HTTP — <strong>Fixed (W7, 2026-05-23)</strong><a class="headerlink" href="#m-5-agcproxy-hop-uses-plaintext-http--fixed-w7-2026-05-23" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:243-245</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:298-300</a></li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go:243-245, cmd/gmc/internal/controller/builder.go:298-300</li>
 <li><strong>Category:</strong> OWASP A02:2025 — Cryptographic Failures (Transport)</li>
 <li><strong>Why Medium:</strong> The CONNECT-tunneled payload is itself TLS to GitHub, so the actual job traffic remains end-to-end encrypted.
   Only the CONNECT <em>request line</em> (target hostname:port) is observable on-wire.
@@ -4032,9 +4032,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h3 id="m-7-agc-deployment-lacks-securitycontext">M-7. AGC Deployment lacks SecurityContext<a class="headerlink" href="#m-7-agc-deployment-lacks-securitycontext" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Status (2026-05-23): Done.</strong> Closed by W8.
-  <code>buildAGCDeployment</code> now sets <code>RunAsNonRoot: true</code>, <code>ReadOnlyRootFilesystem: true</code>, <code>AllowPrivilegeEscalation: false</code>, <code>Capabilities.Drop: ALL</code>, and <code>SeccompProfile: RuntimeDefault</code> on the AGC container (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:492-497</a>).
+  <code>buildAGCDeployment</code> now sets <code>RunAsNonRoot: true</code>, <code>ReadOnlyRootFilesystem: true</code>, <code>AllowPrivilegeEscalation: false</code>, <code>Capabilities.Drop: ALL</code>, and <code>SeccompProfile: RuntimeDefault</code> on the AGC container (builder.go:492-497).
   The same hardening was applied to the proxy container (line 323-327) alongside <code>Capabilities</code>/<code>SeccompProfile</code> that were missing there.</li>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:291-321</a></li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go:291-321</li>
 <li><strong>Category:</strong> OWASP A05:2025 — Security Misconfiguration</li>
 <li><strong>Description:</strong> <code>buildAGCDeployment</code> sets no <code>securityContext</code> on the AGC pod or container.
   The proxy Deployment (lines 220-225) correctly sets <code>RunAsNonRoot: true</code>, <code>ReadOnlyRootFilesystem: true</code>, <code>AllowPrivilegeEscalation: false</code>.
@@ -4053,9 +4053,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h3 id="m-8-networkpolicy-ingress-to-proxy-and-agc-is-overly-permissive">M-8. NetworkPolicy ingress to proxy and AGC is overly permissive<a class="headerlink" href="#m-8-networkpolicy-ingress-to-proxy-and-agc-is-overly-permissive" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Status (2026-05-23): Done.</strong> Closed by W1.
-  The proxy NetworkPolicy now selects only proxy pods, and its single ingress rule restricts inbound to pods carrying <code>labelComponent: componentWorkload</code> on <code>proxyPort</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:138-146</a>).
+  The proxy NetworkPolicy now selects only proxy pods, and its single ingress rule restricts inbound to pods carrying <code>labelComponent: componentWorkload</code> on <code>proxyPort</code> (builder.go:138-146).
   Dev/debug pods in the namespace can no longer reach the proxy or AGC.</li>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:137-139</a></li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go:137-139</li>
 <li><strong>Category:</strong> OWASP A05:2025 — Security Misconfiguration</li>
 <li><strong>Description:</strong> <code>proxyIngress</code> allows traffic from any pod in the namespace via an empty <code>PodSelector</code>.
   Combined with M-1, every pod in the tenant namespace can hit the proxy and the AGC, including any user-created pod (a dev's debugging container).</li>
@@ -4078,7 +4078,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-10-untyped-admission-webhook-only-namespace-check-no-spec-validation">M-10. Untyped admission webhook: only namespace check, no spec validation<a class="headerlink" href="#m-10-untyped-admission-webhook-only-namespace-check-no-spec-validation" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go">cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go:50-65</a></li>
+<li><strong>Location:</strong> cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go:50-65</li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design</li>
 <li><strong>Description:</strong> The validating webhook checks only the reserved-namespace list.
   It does not reject:</li>
@@ -4162,7 +4162,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-16-safename-collapses-arbitrary-characters-collisions-possible">M-16. <code>safeName</code> collapses arbitrary characters; collisions possible<a class="headerlink" href="#m-16-safename-collapses-arbitrary-characters-collisions-possible" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:508-526</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:454-466</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">cmd/agc/internal/provisioner/provisioner.go:508-526</a>, cmd/gmc/internal/controller/builder.go:454-466</li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design</li>
 <li><strong>Description:</strong> Both <code>safeName</code> variants replace any non-DNS character with <code>-</code>.
   Two distinct inputs (e.g.
@@ -4283,7 +4283,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   Kubelet probe traffic needs no rule — it originates from the node and is exempted from NetworkPolicy enforcement by every CNI this project targets (and node IPs are not portably expressible as a NetworkPolicy peer).
   Operators must label their Prometheus namespace <code>metrics: enabled</code> to scrape; see <a href="../../operations/troubleshooting/">troubleshooting.md</a>.
   The metrics endpoints remain unauthenticated plain HTTP gated only by the NetworkPolicy; authenticated secure-serving (as the GMC already does) is tracked as a follow-up.</li>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go</a> (NetworkPolicy section)</li>
+<li><strong>Location:</strong> cmd/gmc/internal/controller/builder.go (NetworkPolicy section)</li>
 <li><strong>Category:</strong> OWASP A05:2025 — Security Misconfiguration</li>
 <li><strong>Description:</strong> M-8 narrowed CONNECT-port (<code>:8080</code>) ingress to <code>labelComponent: componentWorkload</code>, but <code>:8081</code> (health + Prometheus metrics) is not the target of an explicit ingress rule.
   The namespace's default-deny posture relies on no NetworkPolicy targeting that port, which means any pod in the namespace that can route to the proxy/AGC's <code>:8081</code> can scrape per-tenant traffic-volume metrics (CONNECT counts, active tunnels, dial errors).

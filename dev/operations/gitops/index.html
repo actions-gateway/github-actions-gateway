@@ -2937,9 +2937,9 @@ It builds on the imperative <a href="../install/">install.md</a> reference — t
 </ol>
 <hr />
 <h2 id="the-crd-pruning-gotcha-read-first">The CRD pruning gotcha (read first)<a class="headerlink" href="#the-crd-pruning-gotcha-read-first" title="Permanent link">&para;</a></h2>
-<p>The chart ships the two CustomResourceDefinitions (CRDs) — <code>actionsgateways.actions-gateway.github.com</code> and <code>runnergroups.actions-gateway.github.com</code> — as templates carrying the <code>helm.sh/resource-policy: keep</code> annotation.
-That annotation tells Helm (and both GitOps controllers below) <strong>not</strong> to delete the CRDs when the release is removed, so uninstalling the GMC never cascade-deletes a tenant's <code>ActionsGateway</code> / <code>RunnerGroup</code> objects.
-(The same applies to the opt-in <code>actions-gateway-crds-v2</code> chart if you install it.)</p>
+<p>The chart ships the <code>runnergroups.actions-gateway.github.com</code> CustomResourceDefinition (CRD) as a template carrying the <code>helm.sh/resource-policy: keep</code> annotation.
+That annotation tells Helm (and both GitOps controllers below) <strong>not</strong> to delete the CRD when the release is removed, so uninstalling the GMC never cascade-deletes a tenant's <code>RunnerGroup</code> objects.
+(The same applies to the <code>actions-gateway-crds-v2</code> chart, which ships the <code>ActionsGateway</code> CRD.)</p>
 <p>A GitOps controller that <em>prunes</em> resources no longer present in its source can defeat this if you are not careful.
 Two safe outcomes you must preserve:</p>
 <ul>

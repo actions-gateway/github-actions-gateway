@@ -2924,7 +2924,7 @@ Three real defects, two ambiguities, the rest legitimate.</p>
 <h3 id="1-the-agcs-github-api-base-url-is-never-derived-from-githuburl">1. The AGC's GitHub API base URL is never derived from <code>gitHubURL</code><a class="headerlink" href="#1-the-agcs-github-api-base-url-is-never-derived-from-githuburl" title="Permanent link">&para;</a></h3>
 <p><strong>The largest finding, and the one Q506 did not anticipate.</strong> The AGC resolves its REST API base from the <code>GITHUB_API_BASE_URL</code> env var, defaulting to <code>https://api.github.com</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go"><code>githubapp/auth.go:202</code></a>).
 The Gateway Manager Controller (GMC) never sets it.
-Both builders inject <code>GITHUB_ORG_URL</code> from <code>spec.gitHubURL</code> and stop there — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go"><code>builder.go:642</code></a> (v1) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go:383</code></a> (v2).
+Both builders inject <code>GITHUB_ORG_URL</code> from <code>spec.gitHubURL</code> and stop there — <code>builder.go:642</code> (v1) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go:383</code></a> (v2).
 There is no CRD field for it, no Helm value, and no other injection site.</p>
 <p>The only route to that variable is <code>AGC_EXTRA_GITHUB_API_BASE_URL</code> behind the GMC's <code>--allow-agc-extra-env</code> flag, whose own help text reads <em>"Intended for testing only"</em> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/flags.go"><code>flags.go:95</code></a>) and which <a href="../../../operations/security-operations/#github-api-base-url-must-be-https">security-operations.md</a> tells operators not to use in production.</p>
 <p>So on a GHES gateway the App JWT is POSTed to <code>https://api.github.com/app/installations/&lt;id&gt;/access_tokens</code> — an App that host has never heard of.
@@ -2970,7 +2970,7 @@ Any fix for #1 should collapse all three.</p>
 <p><code>noproxy.GitHubHosts</code> is a public-only list, but it is never the whole protected set.
 Both callers add the tenant's GHES host:</p>
 <ul>
-<li>v1 parses <code>spec.gitHubURL</code> and appends its hostname (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go"><code>actionsgateway_webhook.go:402</code></a>).</li>
+<li>v1 parses <code>spec.gitHubURL</code> and appends its hostname (<code>actionsgateway_webhook.go:402</code>).</li>
 <li>v2 resolves it from every referrer, in both directions, through the uncached API reader (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/noproxy_referrers.go"><code>noproxy_referrers.go</code></a>) — this was Q322, filed precisely as the GHES residual of the original guard.</li>
 </ul>
 <p>The package doc says so explicitly.

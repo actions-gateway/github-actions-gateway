@@ -3259,9 +3259,9 @@ Do <strong>not</strong> work around the admission rejection by clearing <code>pr
 <p>To install the chart declaratively from Git instead of running <code>helm install</code> by hand, see <a href="../gitops/">gitops.md</a>.
 It gives ready-to-apply Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples (with the CRD-pruning gotcha handled) and shows how to source the GitHub App credential Secret securely — External Secrets Operator or Sealed Secrets — so the private key is never committed to Git.</p>
 <h3 id="optional-the-v2-api-crds">Optional: the v2 API CRDs<a class="headerlink" href="#optional-the-v2-api-crds" title="Permanent link">&para;</a></h3>
-<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) CRDs — still fully served, but <a href="../v1alpha1-deprecation/">deprecated</a>.
-The v2 (<code>actions-gateway.com</code>) API that new tenants onboard on ships its five CRDs in a <strong>separate, opt-in chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
-Install it alongside the main chart unless you are running v1-only.</p>
+<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) <code>RunnerGroup</code> CRD, <a href="../v1alpha1-deprecation/">deprecated</a>; the <code>ActionsGateway</code> kind is served only at <code>actions-gateway.com</code>.
+The v2 (<code>actions-gateway.com</code>) API that new tenants onboard on ships its five CRDs in a <strong>separate chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
+Install it alongside the main chart: without it the GMC has no <code>ActionsGateway</code> kind to reconcile.</p>
 <p>Each v2 CRD is served at <strong>three versions</strong>: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only shape, and the conversion hub), <strong><code>v2</code></strong> (the General Availability (GA) version, identical but for the dropped <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, and the storage version from 1.10), and <strong><code>v2alpha1</code></strong> (served as the <code>gag-migrate</code> on-ramp, deprecated, and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>).
 An unpinned <code>kubectl get</code> returns <code>v2</code>, the version the apiserver prefers (<a href="../upgrade/#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">what that changes</a>).
 The apiserver converts between them through a <strong>conversion webhook hosted by the GMC</strong> (the <code>/convert</code> endpoint on the same <code>webhook-service</code> that fronts the validating webhooks).
@@ -3427,10 +3427,10 @@ Migrating an existing release off the ConfigMap: <a href="../upgrade/#prioritycl
 <a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Expected: a lease whose HOLDER is one of the GMC pods</span>
 <a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
 <a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 3. Both CRDs are installed and Established.</span>
-<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">                </span>runnergroups.actions-gateway.github.com
 <a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Established<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.com<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
 <a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
 <a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
@@ -3452,12 +3452,11 @@ For other failure modes, see <a href="../troubleshooting/">troubleshooting.md</a
 <h2 id="uninstall">Uninstall<a class="headerlink" href="#uninstall" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
 </code></pre></div>
-<p>The two CRDs ship as templates carrying <code>helm.sh/resource-policy: keep</code>, so <code>helm uninstall</code> <strong>preserves the CRDs and every tenant's <code>ActionsGateway</code> / <code>RunnerGroup</code> object</strong> rather than cascade-deleting them — uninstalling the GMC does not tear down running tenant gateways.
-To fully remove them, delete the tenant CRs first, then the CRDs explicitly:</p>
+<p>The <code>RunnerGroup</code> CRD ships as a template carrying <code>helm.sh/resource-policy: keep</code>, so <code>helm uninstall</code> <strong>preserves the CRD and every tenant's <code>RunnerGroup</code> object</strong> rather than cascade-deleting them; the v2 CRDs, <code>ActionsGateway</code> among them, follow the <a href="#optional-the-v2-api-crds"><code>actions-gateway-crds-v2</code> lifecycle</a>.
+To fully remove the <code>RunnerGroup</code> CRD, delete the tenant objects first, then the CRD explicitly:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Only after confirming no tenant still needs their gateways:</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>actionsgateway<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">                   </span>runnergroups.actions-gateway.github.com
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>runnergroups.actions-gateway.github.com
 </code></pre></div>
 <p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by <code>helm uninstall</code> along with its binding and its parameter object; the <code>PriorityClassAllowlist</code> <strong>CRD</strong> is left behind, as <code>crds/</code> contents always are.
 Removing the binding used to be the trigger for a cluster-wide outage (Q444) when the parameter was a ConfigMap — a reinstall could not repair it.

@@ -2679,6 +2679,13 @@ A refuted row that was <a href="../maintaining-backlog/#repurposing-an-id-is-a-c
 </thead>
 <tbody>
 <tr>
+<td>Q797</td>
+<td>Three GMC provisioning integration tests time out under the race run</td>
+<td>none</td>
+<td>2026-11-01</td>
+<td>Obsolete: the three <code>TestGMC_TenantProvisioning_*</code> tests drove the v1alpha1 <code>ActionsGateway</code> reconciler, and the GMC half of Q273 deleted them with <code>provisioning_test.go</code>. One sighting only, 2026-08-11 at a 15 s wait, mechanism unmeasured and no mitigation shipped. The class signal stays with <a href="../../queue/Q1007/">Q1007</a>, whose trigger is any 15 s <code>require.Eventually</code> breach in the GMC integration suite, so a recurrence of the shape in a v2 test fires that row.</td>
+</tr>
+<tr>
 <td>Q541</td>
 <td>EgressProxy watch-isolation test passes with its watch deleted, at times</td>
 <td>#2065</td>

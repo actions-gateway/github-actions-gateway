@@ -3342,12 +3342,12 @@
 <tr>
 <td><code>spec.proxy.maxReplicas</code> change reflected in HPA</td>
 <td>✅ Done in code</td>
-<td><code>buildHPA</code> reads <code>ag.Spec.Proxy.MaxReplicas</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:385</a>); <code>hpa_update_test.go</code> covers it</td>
+<td><code>buildHPA</code> reads <code>ag.Spec.Proxy.MaxReplicas</code> (builder.go:385); <code>hpa_update_test.go</code> covers it</td>
 </tr>
 <tr>
 <td>Webhook rejects CRs in <code>kube-system</code>/<code>kube-public</code>/<code>gmc-system</code>/<code>$POD_NAMESPACE</code></td>
 <td>✅ Done</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go">actionsgateway_webhook.go:21-47</a></td>
+<td>actionsgateway_webhook.go:21-47</td>
 </tr>
 <tr>
 <td>End-to-end job via proxy (green checkmark + <code>HTTPS_PROXY</code> in worker env)</td>
@@ -3367,12 +3367,12 @@
 <tr>
 <td>Worker ServiceAccount <code>actions-gateway-worker</code> created by GMC</td>
 <td>✅ Done</td>
-<td><code>buildWorkerServiceAccount</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:77</a>); injected into AGC via <code>WORKER_SERVICE_ACCOUNT</code> env</td>
+<td><code>buildWorkerServiceAccount</code> (builder.go:77); injected into AGC via <code>WORKER_SERVICE_ACCOUNT</code> env</td>
 </tr>
 <tr>
 <td>Proxy pods: <code>runAsNonRoot</code>, <code>readOnlyRootFilesystem</code>, <code>allowPrivilegeEscalation: false</code></td>
 <td>✅ Done</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:323-327</a>; also <code>Caps Drop ALL</code> + <code>Seccomp RuntimeDefault</code> via W8</td>
+<td>builder.go:323-327; also <code>Caps Drop ALL</code> + <code>Seccomp RuntimeDefault</code> via W8</td>
 </tr>
 <tr>
 <td>IP range reconciler updates NetworkPolicy on 24h tick</td>

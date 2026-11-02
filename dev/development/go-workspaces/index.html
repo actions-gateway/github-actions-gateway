@@ -2895,7 +2895,7 @@ The <strong>Internal deps</strong> column lists the other workspace modules each
 <p>The <code>api/</code> module holds the v2 (<code>actions-gateway.com</code>) <code>v2alpha1</code> API kinds shared by both controllers.
 It is a pure API leaf — only <code>k8s.io/*</code> and <code>controller-runtime</code> scheme deps, no internal deps — so both <code>agc</code> and <code>gmc</code> import it without inverting the layering.
 It exists to break a would-be module cycle: the AGC's <code>RunnerSet</code> reconciler must read the GMC-group <code>ActionsGateway</code>/<code>EgressProxy</code>, but <code>gmc</code> already imports <code>agc</code>, so the shared kinds live in this neutral module instead of either controller importing the other's API package (Q164).
-The v1 (<code>actions-gateway.github.com</code>) kinds stay in <code>cmd/agc/api/v1alpha1</code> and <code>cmd/gmc/api/v1alpha1</code>.</p>
+The v1 (<code>actions-gateway.github.com</code>) <code>RunnerGroup</code> kind stays in <code>cmd/agc/api/v1alpha1</code>.</p>
 <h3 id="dependency-direction">Dependency direction<a class="headerlink" href="#dependency-direction" title="Permanent link">&para;</a></h3>
 <p>The internal-dep edges form a directed acyclic graph that fans out from the two shared libraries (each arrow reads "depends on"):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>probe ─┐

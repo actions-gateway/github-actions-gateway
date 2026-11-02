@@ -2791,12 +2791,12 @@ The site (correctly) says "the platform team caps each tenant," but today:</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="api--crd">API / CRD<a class="headerlink" href="#api--crd" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>NamespaceQuota corev1.ResourceList</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a>); regenerate with <code>make manifests generate</code>.</li>
+<li>Remove <code>NamespaceQuota corev1.ResourceList</code> from <code>ActionsGatewaySpec</code> (actionsgateway_types.go); regenerate with <code>make manifests generate</code>.</li>
 <li>Confirm + document that structural-schema pruning drops the field from existing CRs silently (no apply rejection) pre-1.0.</li>
 </ul>
 <h3 id="controller--builder">Controller / builder<a class="headerlink" href="#controller--builder" title="Permanent link">&para;</a></h3>
 <ul>
-<li>Remove <code>ResourceQuota</code> construction in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a> and its reconcile/teardown in the controller; drop it from the owned-resource set.</li>
+<li>Remove <code>ResourceQuota</code> construction in builder.go and its reconcile/teardown in the controller; drop it from the owned-resource set.</li>
 <li><strong>Keep</strong> <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> — those are the AGC reacting to a <em>full</em> quota (operating within it), not owning it.</li>
 </ul>
 <h3 id="rbac">RBAC<a class="headerlink" href="#rbac" title="Permanent link">&para;</a></h3>
@@ -2827,7 +2827,7 @@ Captured here; may split into its own item after the quota change lands.</p>
 <h2 id="status">Status<a class="headerlink" href="#status" title="Permanent link">&para;</a></h2>
 <p><strong>Implemented (2026-06-14, Q130).</strong> Delivered:</p>
 <ul>
-<li><strong>API/CRD:</strong> removed <code>NamespaceQuota</code> from <code>ActionsGatewaySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a>); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
+<li><strong>API/CRD:</strong> removed <code>NamespaceQuota</code> from <code>ActionsGatewaySpec</code> (actionsgateway_types.go); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
   Structural-schema pruning silently drops the now-unknown field from existing CRs (no apply rejection) pre-1.0.</li>
 <li><strong>Controller/builder:</strong> removed <code>buildResourceQuota</code>, the reconcile apply path, the teardown delete, and the <code>applyResourceQuota</code> helper.
   <code>maxQuotaRetries</code> / <code>quotaRetryDelay</code> (AGC reacting to a <em>full</em> quota) are kept — those are operating <em>within</em> a quota, not owning it.</li>

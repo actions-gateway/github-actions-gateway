@@ -2762,7 +2762,7 @@ Not a second distribution path — the <code>cmd/*/config/</code> kustomize base
 <h2 id="what-the-chart-installs">What the chart installs<a class="headerlink" href="#what-the-chart-installs" title="Permanent link">&para;</a></h2>
 <p>The GMC is the only thing installed.
 <strong>AGC instances and proxy pools are provisioned by the GMC at runtime</strong> from each <code>ActionsGateway</code> CR — they are <em>not</em> chart resources.
-Verified against <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a> (<code>buildAGCDeployment</code>/<code>buildProxyDeployment</code>) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> (<code>AGCImage</code>/<code>ProxyImage</code> injected into the reconciler), and the <code>docs/operations/tenant-onboarding.md</code> flow.</p>
+Verified against builder.go (<code>buildAGCDeployment</code>/<code>buildProxyDeployment</code>) and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/main.go">main.go</a> (<code>AGCImage</code>/<code>ProxyImage</code> injected into the reconciler), and the <code>docs/operations/tenant-onboarding.md</code> flow.</p>
 <p>Resources, sourced 1:1 from the kustomize bases:</p>
 <table>
 <thead>

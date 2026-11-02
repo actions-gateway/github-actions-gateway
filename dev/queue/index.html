@@ -3210,14 +3210,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> the e2e cluster step's <code>make apply-cert-manager</code> fails on <code>main</code> or in the merge queue, either fetching the cert-manager release …</td>
 </tr>
 <tr>
-<td><a href="Q794/">Q794</a></td>
-<td><a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code> no longer needs to pin <code>acquisitionProtocol: Classic</code></a></td>
-<td><code>debt</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>It writes Classic onto every set it emits, whose stated reason — keeping multi-label matching — Q726 removed.</td>
-</tr>
-<tr>
 <td><a href="Q657/">Q657</a></td>
 <td><a href="../plan/eviction-oversubscription-validation/#the-17s-outlier-is-unattributable-q657-2026-08-03">Repeat the eviction measurement now the spec attributes the disruption</a></td>
 <td><code>tests</code></td>
@@ -3533,9 +3525,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q273/">Q273</a></td>
 <td><a href="../plan/q273-v2-front-door/">Complete v1 removal (full v2-only)</a></td>
 <td><code>docs</code> <code>2.0-gate</code></td>
-<td>🚫</td>
-<td>M</td>
-<td>Blocked on the 1.10 tag: <code>v2.0.0</code> is the only breaking release, so once a removal is on <code>main</code> the next tag cut from it is <code>v2.0.0</code>.</td>
+<td>🔲</td>
+<td>L</td>
+<td>The <code>actions-gateway.github.com</code> group (<code>v1alpha1</code>) leaves in two halves, and the GMC half is on <code>main</code>: no v1 <code>ActionsGateway</code> API …</td>
 </tr>
 <tr>
 <td><a href="Q1262/">Q1262</a></td>
@@ -3570,12 +3562,36 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Blocked by <a href="Q273/">Q273</a>: classic is <code>v1alpha1</code>'s only acquisition path, so it cannot go while <code>v1alpha1</code> is served.</td>
 </tr>
 <tr>
+<td><a href="Q1258/">Q1258</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Strip the Q147 legacy tenant-label dual-read once v1alpha1 is gone</a></td>
+<td><code>security</code> <code>2.0-gate</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>Blocked by <a href="Q273/">Q273</a>'s AGC half: once no <code>actions-gateway.github.com</code> kind is served, nothing should still accept that group's …</td>
+</tr>
+<tr>
+<td><a href="Q1259/">Q1259</a></td>
+<td>v2 envtest twins for behaviours only the deleted v1 GMC suites covered</td>
+<td><code>tests</code> <code>security</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The GMC half of <a href="Q273/">Q273</a> deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a …</td>
+</tr>
+<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>S</td>
 <td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>, <a href="Q264/">Q264</a>: the coupled removals land first, after Q1086's storage migration in 1.10 …</td>
+</tr>
+<tr>
+<td><a href="Q1260/">Q1260</a></td>
+<td>Retire v1alpha1 from the design docs and GMC comments after Q273</td>
+<td><code>docs</code> <code>debt</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked by <a href="Q273/">Q273</a>'s AGC half: until the <code>RunnerGroup</code> kind is gone too, half of what these describe still ships.</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>
@@ -3640,14 +3656,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Every assertion runs pattern → repo: the registry is complete, workspace filters cover <code>go.work</code>, patterns pin live paths, duplicated lists …</td>
-</tr>
-<tr>
-<td><a href="Q797/">Q797</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/provisioning_test.go">Three GMC provisioning integration tests time out under the race run</a></td>
-<td><code>flake</code> <code>tests</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> delegated to <a href="Q1007/">Q1007</a>, whose class-wide trigger covers these three; a sighting fires that row and escalates this one …</td>
 </tr>
 <tr>
 <td><a href="Q1021/">Q1021</a></td>

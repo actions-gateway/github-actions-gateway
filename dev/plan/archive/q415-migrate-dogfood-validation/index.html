@@ -2923,7 +2923,7 @@ Closing it needs a live migration, not another test.</p>
 <h2 id="goal-one-sentence">Goal (one sentence)<a class="headerlink" href="#goal-one-sentence" title="Permanent link">&para;</a></h2>
 <p>Migrate a real, running <code>v1alpha1</code> Docker-in-Docker tenant to v2 on the GKE dogfood cluster with <code>gag-migrate</code>, then have the migrated tenant run a real GitHub Actions DinD job — so the GA DoD row can move from ⚠️ Unverified to ✅ on evidence.</p>
 <h2 id="why-the-existing-e2e-is-not-enough">Why the existing e2e is not enough<a class="headerlink" href="#why-the-existing-e2e-is-not-enough" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">Q414</a> already covers the tool on a live <code>kind</code> cluster, and covers it well: dry-run fan-out, the <code>ClusterRunnerTemplate</code>-vs-<code>RunnerTemplate</code> admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/7012cb4e8/cmd/gmc/test/e2e/migration_v1_to_v2_test.go">Q414</a> already covers the tool on a live <code>kind</code> cluster, and covers it well: dry-run fan-out, the <code>ClusterRunnerTemplate</code>-vs-<code>RunnerTemplate</code> admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
 That spec says so itself — it names this plan as the follow-up.</p>
 <p>Three things it deliberately does not do, each of which is where a real migration can still fail:</p>
 <table>
@@ -2969,11 +2969,11 @@ Both describe a path that <strong>ceases to exist at <code>v2.0.0</code></strong
 </thead>
 <tbody>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/README.md"><code>deploy/dogfood-migrate/</code></a></td>
+<td><code>deploy/dogfood-migrate/</code></td>
 <td>The <code>v1alpha1</code> DinD tenant, mirroring the <code>utils.DinDTenant</code> fixture shape the Queue row names, sized for a smoke job rather than the full e2e suite.</td>
 </tr>
 <tr>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dogfood-migrate-validate.yml"><code>.github/workflows/dogfood-migrate-validate.yml</code></a></td>
+<td><code>.github/workflows/dogfood-migrate-validate.yml</code></td>
 <td>A <code>workflow_dispatch</code>-only DinD smoke job targeting the tenant's runner label. Never runs on push or PR.</td>
 </tr>
 </tbody>
@@ -3057,9 +3057,9 @@ The dry-run fans the tenant out to all four expected v2 kinds (<code>ActionsGate
    It must be the v1 domain for an authentic pre-migration tenant — see the defect below for why that distinction is load-bearing.</li>
 </ol>
 <h3 id="defect-found-gag-migrates-grant-detection-does-not-dual-read">Defect found: <code>gag-migrate</code>'s grant detection does not dual-read<a class="headerlink" href="#defect-found-gag-migrates-grant-detection-does-not-dual-read" title="Permanent link">&para;</a></h3>
-<p>The v1 validating webhook <strong>dual-reads</strong> the privileged-eligibility grant across both label domains for the v1/v2 coexistence window — deliberately, per §H.12, so that relabelling a namespace onto the v2 domain does not strand a still-running v1 gateway (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go">actionsgateway_webhook.go:279</a>).</p>
+<p>The v1 validating webhook <strong>dual-reads</strong> the privileged-eligibility grant across both label domains for the v1/v2 coexistence window — deliberately, per §H.12, so that relabelling a namespace onto the v2 domain does not strand a still-running v1 gateway (actionsgateway_webhook.go:279).</p>
 <p><code>gag-migrate</code> does not.
-Its carry-forward check reads only the <strong>v1</strong> domain (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go">migrate.go:387</a>), while the warning it emits on a miss names the <strong>v2</strong> label:</p>
+Its carry-forward check reads only the <strong>v1</strong> domain (migrate.go:387), while the warning it emits on a miss names the <strong>v2</strong> label:</p>
 <blockquote>
 <p>namespace … migrates to securityProfile=privileged but holds no <code>actions-gateway.com/privileged-profile=allowed</code> grant; a platform administrator must apply the v2 eligibility label or the profile will be rejected</p>
 </blockquote>
@@ -3192,7 +3192,7 @@ The GMC now exempts the API server by the address the cluster reports — its ow
 <code>kubernetes.default.svc</code> joins the static half for clusters whose cluster domain is not <code>cluster.local</code>.
 Worker pods lose the range outright and gain nothing: they hold no kubeconfig and never dial the API server.
 The net effect is a <em>narrower</em> default on every distribution — one API server address instead of a /12 of unrelated hosts.
-The workaround <code>noProxyCIDRs: [34.118.224.0/20]</code> was removed from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>deploy/dogfood-migrate/resources.yaml</code></a> so that a clean AGC startup would itself be the verification — <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>
+The workaround <code>noProxyCIDRs: [34.118.224.0/20]</code> was removed from <code>deploy/dogfood-migrate/resources.yaml</code> so that a clean AGC startup would itself be the verification — <a href="#re-validation-on-a-fixed-control-plane-2026-07-31-q472">confirmed live 2026-07-31</a>.</p>
 <h3 id="defect-v1-and-v2-collide-during-coexistence-q466">Defect: v1 and v2 collide during coexistence (Q466)<a class="headerlink" href="#defect-v1-and-v2-collide-during-coexistence-q466" title="Permanent link">&para;</a></h3>
 <p>With both control planes live after the migration, the <strong>migrated v2 AGC was clean (0 warnings/errors) while the v1 AGC errored continuously</strong> (14 errors in 3 minutes), in two distinct ways:</p>
 <ol>
@@ -3275,7 +3275,7 @@ The tenant ran with <code>noProxyCIDRs</code> unset <strong>and</strong> its nat
 <p>Both smoke jobs went green with the natural name — baseline <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647304201">run 30647304201</a> on the v1 classic path (runner <code>dogfood-migrate-gag-migrate-v1-18c32e1-0</code>) and <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647976704">run 30647976704</a> after the migration on the scale-set path (runner <code>gag-migrate-v1-1085497c-…</code>, provisioned via <code>scaleSetPodName</code>).
 The Q231 recreate flipped the stored annotation <code>Classic</code> → <code>ScaleSet</code> as before.
 Teardown followed the documented order and deadlocked nowhere: RunnerSets, gateway, namespace and the cluster-scoped <code>ClusterRunnerTemplate</code> all cleared without a stranded finalizer, leaving no orphan.
-Both workarounds are now removed from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-migrate/resources.yaml"><code>resources.yaml</code></a> permanently.</p>
+Both workarounds are now removed from <code>resources.yaml</code> permanently.</p>
 <p><strong>The workarounds were load-bearing, and removing them proved it.</strong> The natural name is the case Q467 originally failed on: the old derivation cut <code>runner-dogfood-migrate-gag-migrate-v1-18c32e1-&lt;planID&gt;</code> at index 63, landing on the UUID's hyphen at index 8, and every worker pod was rejected.</p>
 <h3 id="defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535">Defect: a v2 AGC also reconciles the v1 RunnerGroups in its namespace (Q535)<a class="headerlink" href="#defect-a-v2-agc-also-reconciles-the-v1-runnergroups-in-its-namespace-q535" title="Permanent link">&para;</a></h3>
 <p>Found by this run, in the window Q466 was being re-checked.

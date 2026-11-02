@@ -3450,7 +3450,7 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
   Decide this before provisioning — see <a href="../service-mesh-coexistence/">Running GAG Alongside a Service Mesh</a>.</li>
 <li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>.
   Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
-<li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.github.com &amp;&amp; kubectl get crd runnergroups.actions-gateway.github.com</code>.</li>
+<li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.com &amp;&amp; kubectl get crd runnergroups.actions-gateway.github.com</code>.</li>
 <li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with the permissions in <a href="#0a-create-the-app-web-ui">Step 0a</a>: <code>Actions: Read and write</code>, plus <code>Self-hosted runners: Read and write</code> (organization <code>gitHubURL</code>) or <code>Administration: Read and write</code> (repository <code>gitHubURL</code>).
   The platform team has the <code>appId</code>, <code>installationId</code>, and private key <code>.pem</code> file.
   First time?

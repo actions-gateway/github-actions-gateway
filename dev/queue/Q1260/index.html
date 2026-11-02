@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q797/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1260/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Three GMC provisioning integration tests time out under the race run - GitHub Actions Gateway</title>
+        <title>Retire v1alpha1 from the design docs and GMC comments after Q273 - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#three-gmc-provisioning-integration-tests-time-out-under-the-race-run" class="md-skip">
+        <a href="#retire-v1alpha1-from-the-design-docs-and-gmc-comments-after-q273" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Three GMC provisioning integration tests time out under the race run
+              Retire v1alpha1 from the design docs and GMC comments after Q273
             
           </span>
         </div>
@@ -2657,13 +2657,15 @@
   
 
 
-<h1 id="three-gmc-provisioning-integration-tests-time-out-under-the-race-run">Three GMC provisioning integration tests time out under the race run<a class="headerlink" href="#three-gmc-provisioning-integration-tests-time-out-under-the-race-run" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> delegated to <a href="../Q1007/">Q1007</a>, whose class-wide trigger covers these three; a sighting fires that row and escalates this one with it.
-First sighting 2026-08-11 (Q726 branch): all three timed out at 15s under <code>make test-integration</code>, then passed in isolation and on a package re-run.
-No mitigation shipped.
-This row holds the first sighting; Q1007 holds the class signal and the measurement.</p>
-<p>Q1007 is a fourth test of this class in the same suite, sighted 2026-08-27, and holds the measurement that machine load reproduces this suite's slowdown without reproducing the failure.
-No second failure of these three has surfaced: a sweep of 1,432 local session transcripts on 2026-08-27 found none, and neither red in <code>integration-test</code>'s last 25 <code>main</code> runs is one of them.</p>
+<h1 id="retire-v1alpha1-from-the-design-docs-and-gmc-comments-after-q273">Retire v1alpha1 from the design docs and GMC comments after Q273<a class="headerlink" href="#retire-v1alpha1-from-the-design-docs-and-gmc-comments-after-q273" title="Permanent link">&para;</a></h1>
+<p>Blocked by <a href="../Q273/">Q273</a>'s AGC half: until the <code>RunnerGroup</code> kind is gone too, half of what these describe still ships.</p>
+<p><strong>The design docs.</strong> <a href="../../design/03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md § 3.1</a> is roughly 790 lines of <code>v1alpha1</code> Go schema, introduced as "authoritative for the running <code>v1alpha1</code> API", and <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H</a> is the v2 shape's source of truth.
+Once neither v1 kind is served, § 3.1 describes nothing that runs and should point at Appendix H, or carry the v2 schema, rather than be edited in place.
+<code>git grep -c "v1alpha1\|actions-gateway.github.com" -- docs/design</code> counts 35 lines in Appendix H, 11 in 03, 8 in 05-security and a handful elsewhere (measured 2026-11-01); some are history that should stay, so each wants reading rather than a sweep.
+This is design docs only; the operator pages under <code>docs/operations/</code> are <a href="../Q1107/">Q1107</a>'s.</p>
+<p><strong>The GMC comments.</strong> The GMC half of Q273 fixed the comments that stated something false once v1 left, and left the ones that only narrate the port: "Mirrors v1's buildHPA", "v1 parity (Q327)", "the v2 counterpart of v1's evalRunnerGroupHealth".
+They name functions that no longer exist, so a reader cannot follow them, and the repo's comment standard is present tense with no history.
+<code>git grep -n -i "v1's\|mirrors v1\|v1 parity\|counterpart of v1" -- cmd/gmc</code> finds them; <code>egressproxy_builder.go</code>, <code>actionsgateway_v2_builder.go</code> and <code>actionsgateway_v2_controller.go</code> hold most.</p>
 
 
 

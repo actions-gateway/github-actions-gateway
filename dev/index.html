@@ -3151,7 +3151,7 @@ Every resource is namespaced, none is cluster-scoped, and no <code>ResourceQuota
 <li>The first 5 GPU pods get the higher-priority <code>PriorityClass</code>; the next tier bursts opportunistically; the final threshold caps total concurrency.
     The <code>priorityClassName</code> values must be on the platform's allowlist (a watched <code>PriorityClassAllowlist</code> CR, grown without a GMC restart; the <code>--allowed-priority-classes</code> flag remains the fail-safe baseline), and whether a tier preempts is set on the platform-owned <code>PriorityClass</code> object, so a tenant cannot name a class that evicts other tenants' pods.</li>
 </ol>
-<p>The legacy single-CR <code>v1alpha1</code> shape, which expresses this whole gateway in one <code>ActionsGateway</code> CR, is still fully served but <strong><a href="operations/v1alpha1-deprecation/">deprecated, and removed at <code>v2.0.0</code></a></strong>; see the <a href="getting-started/#legacy-the-v1alpha1-api-deprecated">getting-started walkthrough</a> for it and the <a href="operations/migration-v1-to-v2/">v1 → v2 migration guide</a> to move across without changing how your jobs are acquired.</p>
+<p>The legacy single-CR <code>v1alpha1</code> shape, which expressed this whole gateway in one <code>ActionsGateway</code> CR, is <strong><a href="operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a></strong>; the <a href="operations/migration-v1-to-v2/">v1 → v2 migration guide</a> moves a v1 tenant across without changing how its jobs are acquired.</p>
 <p>Ready to try it?
 Follow the <a href="getting-started/">getting-started guide</a>.
 Already running ARC?

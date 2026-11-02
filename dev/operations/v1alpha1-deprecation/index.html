@@ -3140,7 +3140,8 @@ Gating on v2 maturity is what lets the commitment be concrete: you are never ask
 <h2 id="before-you-upgrade-past-v200">Before you upgrade past <code>v2.0.0</code><a class="headerlink" href="#before-you-upgrade-past-v200" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a>, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.
-   Do this <em>before</em> upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining <code>v1alpha1</code> objects have no served version.</li>
+   Do this <em>before</em> upgrading, and <a href="../migration-v1-to-v2/#step-4--decommission-v1-when-ready">decommission v1</a> while the 1.x controllers still run: after removal the legacy spellings are no longer honored, and nothing reconciles a remaining <code>v1alpha1</code> object.
+   Helm keeps the two <code>v1alpha1</code> CRDs on upgrade (<code>helm.sh/resource-policy: keep</code>), so a leftover object stays stored and a <code>RunnerGroup</code>'s finalizer never clears; <a href="../upgrade/#before-upgrading-to-v200-no-v1alpha1-object-is-left">upgrade.md</a> has the check and the cleanup.</li>
 <li><strong>Move <code>v2alpha1</code> and <code>v2beta1</code> objects to <code>v2</code>.</strong> Re-apply them at <code>v2</code> (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.</li>
 <li><strong>Replace Classic runner sets with <code>ScaleSet</code> sets.</strong> Created fresh, since <code>acquisitionProtocol</code> is immutable.
    The labels carry across as they are, since a <code>ScaleSet</code> set registers every <code>runnerLabel</code>, so a multi-label group does not have to be split.

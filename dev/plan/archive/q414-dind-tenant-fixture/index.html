@@ -2790,7 +2790,7 @@ Every deliverable below shipped in one change.</p>
 <a href="../q415-migrate-dogfood-validation/">Q415</a> — migrate a representative tenant on the dogfood cluster for real — was blocked on it, because the <a href="../../v2-api/#definition-of-done-v2-ga">v2 GA Definition of Done</a> wants exactly one real tenant migrated and our own dogfood e2e tenant is the only one that exists.</p>
 <p>Building the fixture surfaced a defect that makes both of those impossible today.</p>
 <h2 id="finding--gag-migrate-cannot-migrate-a-dind-tenant-measured-2026-07-26">Finding — <code>gag-migrate</code> cannot migrate a DinD tenant (measured 2026-07-26)<a class="headerlink" href="#finding--gag-migrate-cannot-migrate-a-dind-tenant-measured-2026-07-26" title="Permanent link">&para;</a></h2>
-<p><code>FanOut</code> always emits a <strong>namespaced</strong> <code>RunnerTemplate</code> for a v1 <code>RunnerGroup</code>'s <code>podTemplate</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go">migrate.go</a>).
+<p><code>FanOut</code> always emits a <strong>namespaced</strong> <code>RunnerTemplate</code> for a v1 <code>RunnerGroup</code>'s <code>podTemplate</code> (migrate.go).
 The v2 admission webhook rejects a privileged container on that kind by design — privileged worker shapes belong on the platform-owned, cluster-scoped <code>ClusterRunnerTemplate</code> (<a href="../../../design/appendix-h-v2-api-decomposition/">§H.6</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go">runnertemplate_webhook.go</a>).
 A DinD tenant's worker pod is privileged by construction (the <code>dockerd</code> sidecar), so the two rules collide.</p>
 <p>Measured directly by running <code>FanOut</code> over a v1 DinD tenant shape and feeding the emitted template to the real <code>RunnerTemplateCustomValidator</code>:</p>
@@ -2872,7 +2872,7 @@ The tool already carries the platform's privileged grant forward (and warns, nev
 <tr>
 <td>2</td>
 <td><code>FanOut</code> emits <code>ClusterRunnerTemplate</code> for privileged shapes; <code>RenderManifests</code> + <code>applyResult</code> carry it</td>
-<td>✅ <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/migrate.go"><code>migrate.go</code></a> <code>templateRefFor</code></td>
+<td>✅ <code>migrate.go</code> <code>templateRefFor</code></td>
 </tr>
 <tr>
 <td>2b</td>
@@ -2892,7 +2892,7 @@ The tool already carries the platform's privileged grant forward (and warns, nev
 <tr>
 <td>4</td>
 <td>e2e spec covering the v1→v2 fan-out on a live cluster, including the DinD tenant</td>
-<td>✅ <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>migration_v1_to_v2_test.go</code></a></td>
+<td>✅ <a href="https://github.com/actions-gateway/github-actions-gateway/blob/7012cb4e8/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>migration_v1_to_v2_test.go</code></a></td>
 </tr>
 <tr>
 <td>5</td>
@@ -2903,9 +2903,9 @@ The tool already carries the platform's privileged grant forward (and warns, nev
 </table>
 <h2 id="test-coverage">Test coverage<a class="headerlink" href="#test-coverage" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Unit</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/migrate/privileged_test.go"><code>privileged_test.go</code></a>) — the kind choice, per-group splitting on a mixed tenant, within-namespace reuse collapse, cross-namespace non-sharing, name truncation, and a golden manifest for the DinD tenant.
+<li><strong>Unit</strong> (<code>privileged_test.go</code>) — the kind choice, per-group splitting on a mixed tenant, within-namespace reuse collapse, cross-namespace non-sharing, name truncation, and a golden manifest for the DinD tenant.
   The decisive one is <code>TestFanOut_EmittedTemplatesAreAdmissible</code>: it runs the <strong>real</strong> v2 admission validators over everything <code>FanOut</code> emits, so the assertion is made against the admission rule itself rather than a restatement of it — that is the invariant that actually broke.</li>
-<li><strong>e2e</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>migration_v1_to_v2_test.go</code></a>) — dry-run writes nothing and warns; <code>--apply</code> produces an object set the live apiserver admits, with the namespace patch applied and v1 still running beside it; and the migrated tenant reconciles into a working per-gateway AGC + proxy pool.
+<li><strong>e2e</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/7012cb4e8/cmd/gmc/test/e2e/migration_v1_to_v2_test.go"><code>migration_v1_to_v2_test.go</code></a>) — dry-run writes nothing and warns; <code>--apply</code> produces an object set the live apiserver admits, with the namespace patch applied and v1 still running beside it; and the migrated tenant reconciles into a working per-gateway AGC + proxy pool.
   The last one is what a unit test can never reach: admissible YAML is not the same as a tenant that runs.
   Findings 2 and 3 above were both caught here and nowhere else.</li>
 </ul>

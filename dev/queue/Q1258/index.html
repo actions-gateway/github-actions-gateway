@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q794/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1258/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>gag-migrate no longer needs to pin acquisitionProtocol: Classic - GitHub Actions Gateway</title>
+        <title>Strip the Q147 legacy tenant-label dual-read once v1alpha1 is gone - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gag-migrate-no-longer-needs-to-pin-acquisitionprotocol-classic" class="md-skip">
+        <a href="#strip-the-q147-legacy-tenant-label-dual-read-once-v1alpha1-is-gone" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              gag-migrate no longer needs to pin acquisitionProtocol: Classic
+              Strip the Q147 legacy tenant-label dual-read once v1alpha1 is gone
             
           </span>
         </div>
@@ -2657,14 +2657,19 @@
   
 
 
-<h1 id="gag-migrate-no-longer-needs-to-pin-acquisitionprotocol-classic"><code>gag-migrate</code> no longer needs to pin <code>acquisitionProtocol: Classic</code><a class="headerlink" href="#gag-migrate-no-longer-needs-to-pin-acquisitionprotocol-classic" title="Permanent link">&para;</a></h1>
-<p>It writes Classic onto every set it emits, whose stated reason — keeping multi-label matching — Q726 removed.
-Now conservative rather than necessary, but flipping it changes a migrating tenant's protocol silently, so it is a decision, not a cleanup.</p>
-<p><strong>Ask:</strong> whether <code>gag-migrate</code> may stop writing <code>acquisitionProtocol: Classic</code>.
-Flipping it changes the acquisition protocol of every set a tenant migrates, silently and without their asking, on a tool whose whole promise is a faithful translation of what they already run.
-The technical reason for the pin is gone (Q726), so nothing here is a measurement: what is left is whether a migration tool is allowed to improve on its input.</p>
-<p>The question now has an end date: <code>gag-migrate</code> emits <code>v2alpha1</code> objects (<code>cmd/gmc/internal/migrate/migrate.go:1:// Package migrate implements the one-shot v1alpha1 → v2alpha1 fan-out the M5</code>), and <code>v2.0.0</code> removes both <code>v2alpha1</code> and classic acquisition (<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a>).
-Every set it writes as Classic changes protocol at that upgrade whatever is decided here, so the answer governs only the 1.x window between a migration and the <code>v2.0.0</code> upgrade.</p>
+<h1 id="strip-the-q147-legacy-tenant-label-dual-read-once-v1alpha1-is-gone">Strip the Q147 legacy tenant-label dual-read once v1alpha1 is gone<a class="headerlink" href="#strip-the-q147-legacy-tenant-label-dual-read-once-v1alpha1-is-gone" title="Permanent link">&para;</a></h1>
+<p>Blocked by <a href="../Q273/">Q273</a>'s AGC half: once no <code>actions-gateway.github.com</code> kind is served, nothing should still accept that group's namespace labels as a tenant or privileged grant.
+Q147 had the admission policies and the GMC read both namespace markers through the coexistence window, the legacy <code>actions-gateway.github.com/tenant=true</code> and <code>actions-gateway.github.com/privileged-profile=allowed</code> beside <code>actions-gateway.com/tenant=managed</code> and its v2 eligibility label.
+<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> orders the strip after the served versions drop, and the GMC half of Q273 deliberately left it in place.</p>
+<p>The legacy arms, measured 2026-11-01 with <code>git grep "actions-gateway.github.com/tenant\|actions-gateway.github.com/privileged-profile"</code>:</p>
+<ul>
+<li><code>cmd/gmc/config/admission-policy/</code> <code>namespace-psa-guard.yaml</code>, <code>namespace-security-profile-guard.yaml</code> and <code>tenant-resource-guard.yaml</code>, with their chart twins under <code>charts/actions-gateway/templates/</code>, including the denial <code>messageExpression</code> text naming the legacy label.</li>
+<li><code>isTenantNamespace</code> in <code>cmd/gmc/internal/controller/tenant_secret_access.go</code>, which binds the GMC's Secret reader into a namespace carrying either marker, and the <code>TenantNamespaceMarkerLabel</code> constant in <code>shared_reconcile.go</code> it reads.</li>
+<li>The e2e spec <code>E2E_Mirror_SharedTenantsNP</code> in <code>cmd/gmc/test/e2e/mirror_np_test.go</code>, which stamps the legacy marker on its unmarked control namespace to show the mirror's ingress peer does not admit it; once no policy reads that marker the stamp proves nothing.</li>
+<li>The chart README's upgrade note and <code>docs/operations/upgrade.md</code>, which tell an operator to apply the legacy label.</li>
+</ul>
+<p>This is a security change in the narrowing direction: a namespace an operator marked only with the legacy label stops being a tenant namespace, so the GMC loses its Secret reader there and the guards deny its writes.
+The operator docs have to say that before the tag, which makes the doc half <a href="../Q1107/">Q1107</a>'s if it lands first.</p>
 
 
 

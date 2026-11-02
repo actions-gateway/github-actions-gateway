@@ -3075,17 +3075,17 @@ The only remaining M5 items are intentionally deferred to a staging cluster: the
 <tr>
 <td>Per-tenant <code>ResourceQuota</code></td>
 <td>✅ Done</td>
-<td><code>buildResourceQuota</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">cmd/gmc/internal/controller/builder.go:225</a>; driven by <code>spec.namespaceQuota</code></td>
+<td><code>buildResourceQuota</code> in cmd/gmc/internal/controller/builder.go:225; driven by <code>spec.namespaceQuota</code></td>
 </tr>
 <tr>
 <td>Hardened proxy pod spec (read-only root, no caps, seccomp)</td>
 <td>✅ Done</td>
-<td>Security W8 — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:323-327</a>; full <code>Capabilities.Drop: ALL</code> + <code>SeccompRuntimeDefault</code></td>
+<td>Security W8 — builder.go:323-327; full <code>Capabilities.Drop: ALL</code> + <code>SeccompRuntimeDefault</code></td>
 </tr>
 <tr>
 <td>Hardened AGC pod spec</td>
 <td>✅ Done</td>
-<td>Security W8 — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:492-497</a></td>
+<td>Security W8 — builder.go:492-497</td>
 </tr>
 <tr>
 <td>TLS hardening (AGC↔proxy)</td>

@@ -9650,10 +9650,7 @@ The CRD enforces a non-empty <code>https://</code> value; the GMC validating web
 Common misses: the field omitted entirely, an <code>http://</code> (non-TLS) URL, or a bare host (<code>https://github.com</code>) with no org.</p>
 <p><strong>Resolution.</strong>
 - Set <code>spec.gitHubURL</code> to an org URL (<code>https://github.com/my-org</code>), a single-repo URL (<code>https://github.com/my-org/my-repo</code>), or your GitHub Enterprise Server URL (<code>https://ghes.example.com/my-org</code>).
-- It must use <code>https://</code> and name the org/enterprise/owner — and must match where the App in <code>spec.gitHubAppRef</code> is installed.
-- Setting it through the Helm chart's sample CR?
-  Use the <code>sampleGateway.gitHubURL</code> value.
-  See <a href="../tenant-onboarding/#step-2-create-the-actionsgateway-resource">tenant-onboarding — Step 2</a>.</p>
+- It must use <code>https://</code> and name the org/enterprise/owner — and must match where the App in <code>spec.gitHubAppRef</code> is installed.</p>
 <hr />
 <h2 id="worker-pod-lifecycle-duration-rejected-by-admission">Worker-Pod Lifecycle Duration Rejected by Admission<a class="headerlink" href="#worker-pod-lifecycle-duration-rejected-by-admission" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> Applying a <code>RunnerGroup</code> (or an <code>ActionsGateway</code> whose <code>runnerGroups[]</code> entry sets the field) is rejected at admission with one of:</p>

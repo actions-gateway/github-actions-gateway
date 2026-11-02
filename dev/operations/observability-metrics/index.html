@@ -3436,31 +3436,25 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_managed_gateways</code></td>
 <td>Gauge</td>
 <td>—</td>
-<td>Total <code>ActionsGateway</code> CRs (v1 <strong>and</strong> v2) currently managed by the GMC (Q320).</td>
+<td>Total <code>ActionsGateway</code> CRs currently managed by the GMC, excluding those being deleted (Q320).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_proxy_quota_pressure</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when <code>ProxyQuotaPressure=True</code> (Q82): the proxy pool can't scale to <code>maxReplicas</code> within the namespace <code>ResourceQuota</code> headroom. Warning — alert with <code>for:</code>, don't page. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the <code>EgressProxy</code> owning the pool (Q320).</td>
+<td><code>1</code> when <code>ProxyQuotaPressure=True</code> (Q82): the proxy pool can't scale to <code>maxReplicas</code> within the namespace <code>ResourceQuota</code> headroom. Warning — alert with <code>for:</code>, don't page. <code>name</code> is the <code>EgressProxy</code> owning the pool (Q320).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_proxy_quota_exceeded</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when <code>ProxyQuotaExceeded=True</code> (Q82): proxy replica creates are being rejected by the <code>ResourceQuota</code> now. Error — page. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the <code>EgressProxy</code> owning the pool (Q320).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnergroups_degraded</code></td>
-<td>Gauge</td>
-<td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when <code>RunnerGroupsDegraded=True</code> (Q158): one or more of the gateway's owned <code>RunnerGroup</code>s report an impairing condition (<code>CredentialUnavailable</code>/<code>Degraded</code>/<code>RunnerVersionTooOld</code>/<code>WorkersUnschedulable</code>). Rolls child health up to the gateway; the impaired groups are named in the condition message. Advisory — does not gate <code>Ready</code>. v1 only — the v2 twin is <code>actions_gateway_runnersets_degraded</code> below.</td>
+<td><code>1</code> when <code>ProxyQuotaExceeded=True</code> (Q82): proxy replica creates are being rejected by the <code>ResourceQuota</code> now. Error — page. <code>name</code> is the <code>EgressProxy</code> owning the pool (Q320).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_egress_rules_stale</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges; also <code>1</code>, with reason <code>RefreshNeverSucceeded</code>, while the GMC holds no ranges at all and GitHub egress is denied (Q1228). Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the v1 <code>ActionsGateway</code> or, on a v2 deploy, the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
+<td><code>1</code> when <code>EgressRulesStale=True</code> (Q157): the GitHub egress IP-range allowlist has not been refreshed within the staleness window (just over two of the ~24h refresh cycles), so a stalled refresh loop may have let the proxy <code>NetworkPolicy</code> drift from GitHub's published ranges; also <code>1</code>, with reason <code>RefreshNeverSucceeded</code>, while the GMC holds no ranges at all and GitHub egress is denied (Q1228). Advisory — does not gate <code>Ready</code>; page if sustained, as new GitHub ranges will be silently dropped. <code>name</code> is the CIDR-mode <code>EgressProxy</code> carrying the condition (an FQDN-mode proxy carries no refreshed CIDR rule, so it never trips) (Q320).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_github_egress_incomplete</code></td>
@@ -3472,7 +3466,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_runnersets_degraded</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>RunnerSetsDegraded=True</code> (Q304): one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) report an impairing condition. The v2 twin of <code>actions_gateway_runnergroups_degraded</code>; rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate <code>Ready</code>. v2 only, emitted only on a v2 install (Q321).</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>RunnerSetsDegraded=True</code> (Q304): one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) report an impairing condition. Rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate <code>Ready</code>. v2 only, emitted only on a v2 install (Q321).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_agc_available</code></td>

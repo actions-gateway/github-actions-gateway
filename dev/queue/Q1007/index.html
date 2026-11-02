@@ -2659,7 +2659,7 @@
 
 <h1 id="a-fourth-gmc-integration-test-breaches-its-15s-wait-cause-unmeasured">A fourth GMC integration test breaches its 15s wait, cause unmeasured<a class="headerlink" href="#a-fourth-gmc-integration-test-breaches-its-15s-wait-cause-unmeasured" title="Permanent link">&para;</a></h1>
 <p><strong>Event:</strong> any 15 s <code>require.Eventually</code> in the GMC integration suite breaches on <code>main</code>.
-This subsumes <a href="../Q797/">Q797</a>'s narrower trigger, so that row delegates to this one: a failure of its three fires this Event, and both rows escalate together.
+This subsumes the narrower trigger of Q797, retired when its three tests were deleted with the v1 reconciler (<a href="../../development/flake-watch-retired/">ledger</a>).
 This row owns the class signal and the measurement.</p>
 <p>Sighted once, 2026-08-27 07:52 PDT, on a local <code>make test-integration</code>: <code>TestV2_ActionsGateway_ProvisionsAGCControlPlane</code> failed after 15.52 s at line 151 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/integration/v2_actionsgateway_test.go">v2_actionsgateway_test.go</a>, <code>Condition never satisfied</code>, on the wait for the AGC Deployment to appear.
 The observing session's diff touched no <code>cmd/gmc</code> file, and <code>cmd/agc</code> is a separately compiled module, so for this suite the tree it ran was <code>origin/main</code>.</p>
@@ -2709,8 +2709,8 @@ Whatever held that one reconcile past 15 s is an outlier rather than a proportio
 <p>The window is not tight by the suite's own standard: 15 s is its modal <code>Eventually</code> budget and the measured cost leaves 11x headroom, so raising the number moves the threshold instead of fixing anything.
 The test client is <code>client.New</code> (uncached), so the delay sits on the reconciler side: manager cache sync, the reconcile itself, or a starved envtest apiserver.
 One candidate, <strong>unverified</strong>: the suite runs under <code>nice -n 10 taskpolicy -d throttle</code> (<code>scripts/agent/local-throttle.sh</code>), which deprioritises its etcd on CPU <em>and</em> disk while unniced peer sessions compete at normal priority.</p>
-<p>Same class as <a href="../Q797/">Q797</a>, which holds the first sighting (three <code>TestGMC_TenantProvisioning_*</code> at the same 15 s, 2026-08-11) and whose own Event has not fired.
-A sweep of 1,432 local session transcripts finds no second failure of its three, and <code>integration-test</code> on <code>main</code> is 23/25 over its last 25 runs with neither red being one of them.
+<p>Same class as Q797, which held the first sighting (three <code>TestGMC_TenantProvisioning_*</code> at the same 15 s, 2026-08-11).
+A sweep of 1,432 local session transcripts on 2026-08-27 found no second failure of those three, and <code>integration-test</code> on <code>main</code> is 23/25 over its last 25 runs with neither red being one of them.
 <a href="../Q968/">Q968</a> is the same shape in <code>cmd/agc</code>, and its own investigation traced that breach to a shutdown defect rather than to load (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/1754">#1754</a>, merged 2026-08-27 as <code>17de0762f</code>).
 It refuted its load reading the way this row refutes its own, and then found a product cause underneath, which is the nearest evidence that a breach in this family can be a defect rather than an environment.
 <a href="../Q1008/">Q1008</a> is the sighting that <em>did</em> land on <code>main</code>, and its cause turned out to be a test defect rather than load, which is the second row in this family to end that way.

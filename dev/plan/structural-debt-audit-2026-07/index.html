@@ -2938,7 +2938,7 @@ Coverage went 363 → 1,397 lines across 8 files; a stale exemption fails the ga
 <p>Two things surfaced on the way: the gate had never run in CI at all (<code>make check</code> only, so the drift it guards could reach <code>main</code>), and <code>api/**</code> was missing from <code>unit-test.yml</code>'s <code>code</code> paths-filter, so an api-only change skipped its own gofmt, golangci-lint, and unit tests.
 Both fixed in the same change.</p>
 <p><strong>F4 — <code>githubCIDREgressRule</code> exists; the egress-proxy builder open-codes it twice.</strong> ✅ <strong>Shipped</strong> (Q364)</p>
-<p>The shared helper at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go:404</a> is called from three sites — but not from <code>egressproxy_builder.go</code>, which open-codes the same peer-building loop at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go">:470-476 and :487-493</a>.
+<p>The shared helper at builder.go:404 is called from three sites — but not from <code>egressproxy_builder.go</code>, which open-codes the same peer-building loop at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go">:470-476 and :487-493</a>.
 The helper's own doc comment claims to be the shared one.</p>
 <p>Three independent spellings of "which CIDRs may we reach on 443" in a security-relevant allowlist builder is where a policy bug hides.
 Same failure class as the PR #59 <code>ipBlock</code> trap the file's own comments warn about.</p>

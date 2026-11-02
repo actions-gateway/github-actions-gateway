@@ -4255,7 +4255,7 @@ The <a href="../observability-dashboards/#security-dashboard">security dashboard
 <a id="__codelineno-0-146" name="__codelineno-0-146" href="#__codelineno-0-146"></a><span class="w">        </span><span class="nt">expr</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
 <a id="__codelineno-0-147" name="__codelineno-0-147" href="#__codelineno-0-147"></a><span class="w">          </span><span class="no">sum by (name, operation) (</span>
 <a id="__codelineno-0-148" name="__codelineno-0-148" href="#__codelineno-0-148"></a><span class="w">            </span><span class="no">rate(apiserver_admission_webhook_rejection_count{</span>
-<a id="__codelineno-0-149" name="__codelineno-0-149" href="#__codelineno-0-149"></a><span class="w">              </span><span class="no">name=~"v(actionsgateway-v1alpha1|actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)\\.kb\\.io",</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149" href="#__codelineno-0-149"></a><span class="w">              </span><span class="no">name=~"v(actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)\\.kb\\.io",</span>
 <a id="__codelineno-0-150" name="__codelineno-0-150" href="#__codelineno-0-150"></a><span class="w">              </span><span class="no">error_type="no_error",</span>
 <a id="__codelineno-0-151" name="__codelineno-0-151" href="#__codelineno-0-151"></a><span class="w">              </span><span class="no">rejection_code="403"</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152" href="#__codelineno-0-152"></a><span class="w">            </span><span class="no">}[10m])</span>
@@ -5171,14 +5171,6 @@ Both are now rejected unless allowlisted, so <strong>an existing CR that names a
 <a id="__codelineno-31-10" name="__codelineno-31-10" href="#__codelineno-31-10"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
 <a id="__codelineno-31-11" name="__codelineno-31-11" href="#__codelineno-31-11"></a><span class="s1">  | (.spec.priorityTiers // [])[]</span>
 <a id="__codelineno-31-12" name="__codelineno-31-12" href="#__codelineno-31-12"></a><span class="s1">  | "\($ns)/\($name) -&gt; \(.priorityClassName)"'</span>
-<a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a>
-<a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="c1"># v1 ActionsGateways (the class lives on each runnerGroups[] entry)</span>
-<a id="__codelineno-31-15" name="__codelineno-31-15" href="#__codelineno-31-15"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">"</span><span class="nv">$CTX</span><span class="s2">"</span><span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'</span>
-<a id="__codelineno-31-16" name="__codelineno-31-16" href="#__codelineno-31-16"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-31-17" name="__codelineno-31-17" href="#__codelineno-31-17"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
-<a id="__codelineno-31-18" name="__codelineno-31-18" href="#__codelineno-31-18"></a><span class="s1">  | (.spec.runnerGroups // [])[]</span>
-<a id="__codelineno-31-19" name="__codelineno-31-19" href="#__codelineno-31-19"></a><span class="s1">  | select(.podTemplate.spec.priorityClassName != null)</span>
-<a id="__codelineno-31-20" name="__codelineno-31-20" href="#__codelineno-31-20"></a><span class="s1">  | "\($ns)/\($name) -&gt; \(.podTemplate.spec.priorityClassName)"'</span>
 </code></pre></div>
 <p>Any class these print that is <strong>not</strong> in your <code>--allowed-priority-classes</code> was an open cross-tenant preemption lever; treat a <code>system-cluster-critical</code> or <code>system-node-critical</code> result as an incident, not a config change.</p>
 <h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188, Q298)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" title="Permanent link">&para;</a></h3>

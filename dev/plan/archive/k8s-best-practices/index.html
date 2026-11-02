@@ -2807,7 +2807,7 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <td>A2</td>
 <td>✅</td>
 <td>~~GMC swallows <code>IsConflict</code> on <code>Status().Update</code>; in-memory <code>ag</code> is stale across the <code>Update</code> → <code>Status().Update</code> sequence in the deletion path.~~ Fixed 2026-06-03 for the status path: <code>updateStatus</code>/<code>setCredentialUnavailable</code> now return <code>ctrl.Result{Requeue: true}</code> on conflict (re-Get + recompute) instead of silently dropping the write. The deletion path's re-<code>Get</code>-before-second-mutation already landed earlier (<code>reconcileDelete</code> re-fetches before <code>RemoveFinalizer</code>). Covered by <code>TestUpdateStatus_RequeuesOnConflict</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go (<code>updateStatus</code>/<code>setCredentialUnavailable</code>)</a></td>
+<td>actionsgateway_controller.go (<code>updateStatus</code>/<code>setCredentialUnavailable</code>)</td>
 <td>—</td>
 </tr>
 <tr>
@@ -2828,21 +2828,21 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <td>A5</td>
 <td>✅</td>
 <td>~~GMC never explicitly sets <code>MaxConcurrentReconciles</code>; comments assert <code>=1</code> invariant but the default is implicit.~~ Fixed 2026-06-03: <code>SetupWithManager</code> now sets <code>.WithOptions(controller.Options{MaxConcurrentReconciles: 1})</code> with a comment documenting that raising it requires making the <code>apply*</code> helpers safe under concurrent reconciles first.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go (<code>SetupWithManager</code>)</a></td>
+<td>actionsgateway_controller.go (<code>SetupWithManager</code>)</td>
 <td>—</td>
 </tr>
 <tr>
 <td>A6</td>
 <td>✅</td>
 <td>~~Eleven <code>apply*</code> helpers do read-modify-write without <code>IsConflict</code> handling.~~ Fixed 2026-06-06 (<a href="../../../queue/">Q65</a>): the nine per-reconcile helpers (<code>applyServiceAccount</code>/<code>RoleBinding</code>/<code>NetworkPolicy</code>/<code>ResourceQuota</code>/<code>Deployment</code>/<code>Service</code>/<code>PDB</code>/<code>HPA</code>/<code>RunnerGroup</code>) plus <code>applyOwnedSecret</code> now use <code>controllerutil.CreateOrPatch</code>, which re-reads inside the call and writes a minimal merge patch of only the controller-managed fields — conflict-safe (a concurrent writer on unmanaged fields is neither clobbered nor forces an avoidable <code>IsConflict</code>) and no longer clobbers server-assigned fields (verified: <code>applyService</code> preserves <code>ClusterIP</code>). <code>applyRoleBinding</code> keeps the immutable-<code>roleRef</code> delete+recreate upgrade path via a sentinel error. <code>ensureProxyCert</code> now routes through <code>applyOwnedSecret</code> (DRY). The 11th helper, <code>applyNamespacePSA</code>, already uses Server-Side Apply (B2/B3) and is left as-is — already conflict-safe and conflict-reporting. Covered by <code>apply_helpers_test.go</code> (fake-client unit) + <code>apply_nochurn_test.go</code> (envtest: asserts child-resource <code>resourceVersion</code> stability across periodic reconciles, proving the whole-<code>Spec</code> helpers don't churn against a real apiserver that re-defaults + skips no-op writes). Why <code>CreateOrPatch</code> and not Server-Side Apply — see the <a href="#a6-design-note-createorpatch-vs-server-side-apply">A6 design note</a> (rationale promoted to <a href="../../../design/02-architecture/#design-choice-reconciler-writes-use-createorpatch-not-server-side-apply">02-architecture.md</a>).</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go</a></td>
+<td>actionsgateway_controller.go</td>
 <td>—</td>
 </tr>
 <tr>
 <td>A7</td>
 <td>✅</td>
 <td>~~Credential-missing path returns <code>RequeueAfter: 30s</code> — less than default backoff after the second failure; inconsistent.~~ Verified 2026-06-03 <strong>not a bug</strong>: <code>setCredentialUnavailable</code> returns <code>(RequeueAfter: 30s, nil)</code> — a nil error, so there is no error-driven exponential backoff to be "inconsistent" with (backoff only applies to error returns). The 30 s is a deliberate, documented fallback for a missed <code>WatchesMetadata</code> Secret event. No code change.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go (<code>setCredentialUnavailable</code>)</a></td>
+<td>actionsgateway_controller.go (<code>setCredentialUnavailable</code>)</td>
 <td>—</td>
 </tr>
 <tr>
@@ -2883,21 +2883,21 @@ Moved out of this closed audit so it survives archival; the finding row above re
 <td>B1</td>
 <td>✅</td>
 <td>~~Manager ClusterRole grants <code>rbac.authorization.k8s.io: escalate</code> — lets a compromised GMC create Roles at any privilege level.~~ Fixed 2026-06-01 by removing per-tenant Role creation entirely. The AGC permission set ships as a singleton <code>agc-tenant-role</code> ClusterRole (<code>config/agc-tenant-role/agc_tenant_role.yaml</code>); per-tenant RoleBindings reference it. The GMC ClusterRole now holds <code>rolebindings: {create,delete,get,list,patch,update,watch}</code> (no <code>bind</code>/<code>escalate</code>) plus <code>clusterroles: bind</code> with <code>resourceNames: [agc-tenant-role]</code> — the canonical RBAC-native pattern for narrow controllers, and simpler than the originally-proposed <code>ValidatingAdmissionPolicy</code>. A compromised GMC cannot create arbitrary Roles, cannot escalate, and cannot bind its SA into any ClusterRole other than <code>agc-tenant-role</code>. <code>roles: {get,delete}</code> retained for legacy GC of pre-fix per-tenant Roles.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go:10</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go (<code>buildAGCRoleBinding</code>)</a>, <code>agc_tenant_role.yaml</code></td>
+<td>actionsgateway_controller.go:10, builder.go (<code>buildAGCRoleBinding</code>), <code>agc_tenant_role.yaml</code></td>
 <td>—</td>
 </tr>
 <tr>
 <td>B2</td>
 <td>✅</td>
 <td>~~<code>patch</code>/<code>update</code> on <code>namespaces</code> cluster-wide so the GMC can stamp PSA labels — also lets a compromised pod relabel <code>kube-system</code> PSA to <code>privileged</code>.~~ Fixed (Q56) via the <code>namespace-psa-guard</code> ValidatingAdmissionPolicy (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/admission-policy/namespace-psa-guard.yaml">namespace-psa-guard.yaml</a>, applied by <code>make deploy</code>). Scoped to the GMC ServiceAccount, it denies any namespace <code>UPDATE</code> unless the existing namespace carries the trusted marker label <code>actions-gateway.github.com/tenant: "true"</code> (read from <code>oldObject</code>, unforgeable), and denies changes to any label other than the six <code>pod-security.kubernetes.io/*</code> keys or to annotations. RBAC stays cluster-wide (RBAC cannot express a label selector); the VAP is the gate. A blanket privileged-value ban was rejected because <code>securityProfile: privileged</code> is a supported per-tenant opt-in — the marker scope confines the blast radius to managed tenants. Covered by <code>TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope</code>. See <a href="../q56-namespace-patch-vap/">q56-namespace-patch-vap.md</a>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/admission-policy/namespace-psa-guard.yaml">namespace-psa-guard.yaml</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go</a> (<code>applyNamespacePSA</code>)</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/admission-policy/namespace-psa-guard.yaml">namespace-psa-guard.yaml</a>, actionsgateway_controller.go (<code>applyNamespacePSA</code>)</td>
 <td>—</td>
 </tr>
 <tr>
 <td>B3</td>
 <td>✅</td>
 <td>~~<code>applyNamespacePSA</code> silently overwrites admin edits — no resourceVersion precondition, no event when admin intent loses.~~ Converted 2026-06-01 to Server-Side Apply with field manager <code>actionsgateway-controller-psa</code>; a 409 conflict on the first apply emits a <code>PSALabelsOverridden</code> Warning Event on the ActionsGateway before retrying with <code>ForceOwnership</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_controller.go">actionsgateway_controller.go</a> (<code>applyNamespacePSA</code>)</td>
+<td>actionsgateway_controller.go (<code>applyNamespacePSA</code>)</td>
 <td>—</td>
 </tr>
 <tr>
@@ -2972,7 +2972,7 @@ Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened 
 <td>D1</td>
 <td>✅</td>
 <td>~~No printer column for <code>observedGeneration</code> / Reason on RunnerGroup — operators can't see generation skew.~~ Fixed 2026-06-06: both CRDs now carry <code>Reason</code> + <code>ObservedGen</code> columns at <code>priority=1</code> (shown only under <code>kubectl get … -o wide</code>, keeping the default view narrow).</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>, actionsgateway_types.go</td>
 <td>—</td>
 </tr>
 <tr>
@@ -2986,7 +2986,7 @@ Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened 
 <td>D3</td>
 <td>✅</td>
 <td>~~<code>ProxyReadyReplicas</code>, <code>ActiveSessions</code>, <code>ObservedGeneration</code> lack <code>+optional</code> / <code>omitempty</code> — always serialized as <code>0</code> on new objects.~~ Fixed 2026-06-06: marked <code>+optional</code> + <code>,omitempty</code> (matches the k8s <code>DeploymentStatus</code> convention). <code>ProxyReadyReplicas</code> keeps its printer column; a fresh object now shows empty rather than a misleading <code>0</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/api/v1alpha1/actionsgateway_types.go">actionsgateway_types.go</a></td>
+<td>actionsgateway_types.go</td>
 <td>—</td>
 </tr>
 <tr>
@@ -3000,7 +3000,7 @@ Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened 
 <td>D5</td>
 <td>✅</td>
 <td>~~No immutability / CEL <code>XValidation</code> on <code>gitHubAppRef.name</code> or <code>securityProfile</code> — silent security downgrades (e.g. <code>restricted</code> → <code>baseline</code>) possible.~~ Fixed 2026-06-06: the GMC validating webhook ranks <code>privileged(0) &lt; baseline(1) &lt; restricted(2)</code> and rejects any <strong>downgrade</strong> on update unless the object carries <code>actions-gateway.github.com/allow-profile-downgrade: "true"</code>; upgrades/hardening are always allowed. Done as a webhook (not CEL) because the decision reads <code>metadata.annotations</code>; the annotation keeps a deliberate rollback cheap while blocking a <em>silent</em> re-apply downgrade. <strong><code>gitHubAppRef.name</code> deliberately <em>not</em> pinned</strong>: changing it is the supported credential-rotation mechanism (<a href="../../../design/03-api-contracts/#32-github-app-credentials-secret-schema">03-api-contracts §3.2</a>, <code>TestGMC_TenantProvisioning_CredentialRotation</code>). Covered by <code>TestWebhook_Update*Profile*</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go">actionsgateway_webhook.go (<code>validateSecurityProfileTransition</code>)</a></td>
+<td>actionsgateway_webhook.go (<code>validateSecurityProfileTransition</code>)</td>
 <td>—</td>
 </tr>
 <tr>
@@ -3072,14 +3072,14 @@ Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for 
 <td>E6</td>
 <td>✅</td>
 <td>Proxy anti-affinity is <code>PreferredDuringScheduling</code> — 2 replicas can co-locate on one node, defeating the PDB.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a></td>
+<td>builder.go</td>
 <td>Switched to <code>RequiredDuringScheduling</code>. Dev trade-off documented (needs ≥<code>minReplicas</code> schedulable nodes; set <code>proxy.minReplicas=1</code> on single-node/<code>kind-config-1worker</code>).</td>
 </tr>
 <tr>
 <td>E7</td>
 <td>✅</td>
 <td>Proxy + AGC Deployments have no <code>terminationGracePeriodSeconds</code> — CONNECT tunnels truncated on rollout; AGC listener-renewals lose lock on SIGKILL.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a></td>
+<td>builder.go</td>
 <td><code>terminationGracePeriodSeconds: 60</code> on both. Both already have signal-driven graceful shutdown (proxy <code>Shutdown</code>, AGC <code>ctrl.SetupSignalHandler</code>).</td>
 </tr>
 <tr>
@@ -3093,7 +3093,7 @@ Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for 
 <td>E9</td>
 <td>✅</td>
 <td>Proxy CPU limit 100m throttles before HPA's 60% util signal trips.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a></td>
+<td>builder.go</td>
 <td>Default proxy CPU limit raised 100m → 500m (operator-overridable via <code>spec.proxy.resources</code>).</td>
 </tr>
 </tbody>
@@ -3149,7 +3149,7 @@ Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for 
 <td>F6</td>
 <td>✅</td>
 <td>~~AGC has no <code>HealthProbeBindAddress</code> wired and the AGC Deployment carries no liveness/readiness probes — wedged AGC is invisible.~~ Fixed: AGC wires <code>HealthProbeBindAddress: ":8081"</code> + <code>healthz.Ping</code>; the GMC stamps liveness/readiness + a startup probe (180s budget covering the initial-token wait) on the AGC Deployment.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">main.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/builder.go">builder.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">main.go</a>, builder.go</td>
 <td>—</td>
 </tr>
 </tbody>
