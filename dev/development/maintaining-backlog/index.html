@@ -3056,7 +3056,8 @@ The key is not a new convention either: <code>devtools/docs/roadmapcheck</code> 
 <li><strong>The blank lines between bullets are held beside the records, not inside them.</strong> Fold the trailing blank into a bullet and deleting a list's last bullet reads as an <em>edit</em> of its neighbour, which then collides with the other side deleting that neighbour: the exact merge the driver exists to resolve.</li>
 </ul>
 <p>A run of bullets is only merged this way when every bullet in it is annotated, so an ordinary bulleted paragraph elsewhere on the page keeps git's own merge.
-Everything else is the shared behaviour, plus a whole-page check that no backlog ID ended up on two bullets.</p>
+Everything else is the shared behaviour, plus a whole-page check that no backlog ID ended up on two bullets.
+That check falls back to git's own merge, which can come back clean with the duplicate in it, so <code>make roadmap-check</code> enforces the same rule (rule 14) on whatever page results, however the duplicate arrived.</p>
 <p><code>make merge-driver</code> installs all four drivers (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/README.md#per-clone-setup"><code>scripts/README.md</code></a> lists them).
 None is required: until you run it the <code>.gitattributes</code> lines name undefined drivers and git uses its built-in three-way merge, which is exactly the pre-driver behaviour.</p>
 <h2 id="verifying-a-backlog-only-change-run-the-subset-push-now">Verifying a backlog-only change: run the subset, push now<a class="headerlink" href="#verifying-a-backlog-only-change-run-the-subset-push-now" title="Permanent link">&para;</a></h2>
