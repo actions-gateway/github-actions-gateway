@@ -498,7 +498,7 @@ fi
 
 # The same check reads each ID, not the joined binding: two bullets sharing one
 # row of several still bind that row twice. git merges this cleanly too, so the
-# driver exits 0 with git's page and only the note says why (Q1247).
+# driver exits 0 with git's page and only the note says why; `make roadmap-check` rule 14 is what rejects that page.
 roadmap_page "$A" -- "$F" >"$WORKDIR/pdup-base.md"
 roadmap_page "$A" "$(bullet Q40 'Ours.')" -- "$F" >"$WORKDIR/pdup-ours.md"
 roadmap_page "$A" -- "$F" "$(bullet Q40,Q41 'Theirs.')" >"$WORKDIR/pdup-theirs.md"
