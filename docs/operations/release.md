@@ -735,7 +735,7 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 > [Step 7](#the-bump-on-main-does-not-reach-the-published-release) republishes them.
 > The versioned-docs model, and the one-time `mike` seeding of releases cut before it landed, are documented in [website.md § Versioned deploy](../development/website.md#versioned-deploy-mike).
 
-#### The tag push hands the site deploy to `main`
+#### The tag push hands the site deploy to a dispatch
 
 **Expect two `pages` runs for a stable tag, and read the second.** The tag push's run deploys nothing: its `handoff` job re-runs `pages` as a `workflow_dispatch` on the same tag, and that run builds, deploys and checks the live site (Q1041).
 Every stable tag from `v1.6.0` to `v1.10.0` deployed from its push, reported success, and never served, while every dispatch of the same content served, on `main` and on the `v1.10.0` tag ref alike.
