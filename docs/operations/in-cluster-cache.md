@@ -103,12 +103,13 @@ Run a workflow that saves and then restores a cache on the tenant's runners, and
 ## Validation
 
 Measured against real GitHub on 2026-11-01, falcondev 10.0.0 deployed from this base, first on kind and then on GKE under Kata workers with the untrusted-PR egress profile: a save and a restore on two worker pods, an artifact through the server's forward, and a restore from a sibling branch that the server refused.
-The details are in the design ([kind](../plan/q215-worker-cache.md#the-v1000-re-run-2026-11-01), [Kata](../plan/q215-worker-cache.md#the-kata-run-2026-11-01)).
+On kind, a pull request from a fork saved under its own `refs/pull/<n>/merge` scope and read its base branch's entries, and the base branch could not restore what it saved.
+The details are in the design ([kind](../plan/q215-worker-cache.md#the-v1000-re-run-2026-11-01), [Kata](../plan/q215-worker-cache.md#the-kata-run-2026-11-01), [fork](../plan/q215-worker-cache.md#the-fork-pull-request-run-2026-11-01)).
 
 Under that profile a worker can still reach GitHub's own cache storage, because Azure blob storage is in the address ranges GitHub requires runners to reach.
 The server keeps cache traffic in the cluster; it does not make GitHub's cache unreachable.
 
-Not yet measured: a real fork pull request's scope, and BuildKit's `type=gha` cache, which uses the same address but has not been run against it.
+Not yet measured: BuildKit's `type=gha` cache, which uses the same address but has not been run against it.
 
 ## Troubleshooting
 

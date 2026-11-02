@@ -191,6 +191,17 @@ The worker reported kernel `6.18.35`, the Kata guest's rather than the node's.
   That is by design: the runner itself uploads to blob storage, and [network-architecture.md](../design/network-architecture.md) lists `*.blob.core.windows.net` among the GitHub hostnames for every egress backend.
   So a worker under this profile can reach GitHub's own cache storage, and the premise that it cannot does not hold.
 
+## The fork pull request run (2026-11-01)
+
+The kind setup again, fresh at `6513cf2`, with a public fork (`karlkfi/gag-q215-fork`) opening draft PR #2222 against a spike base branch carrying one workflow.
+Each job printed its runtime token's `ac` claim, the cache scopes it may read (1) or write (3), and looked up two fixed keys without downloading them.
+
+- **A fork pull request writes its own scope and reads its base's.** [Run 41375170369](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375170369), from `karlkfi/gag-q215-fork` with `fork=true`, carried `refs/pull/2222/merge` at 3 and the base branch and `main` at 1.
+  It found the base branch's entry and saved its own; falcondev accepted the save.
+- **The base branch cannot restore it.** [Run 41375417452](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375417452), a second push to the base, got `Cache not found` for the pull request's key while finding its own.
+- **The entry is there, under the pull request's scope.** [Run 41375766235](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375766235), the pull request's next push, found it.
+- The server counted 2 uploads, 4 hits and 4 misses across the four runs, and GitHub's cache held no `q215-fork` key.
+
 ## Open decisions
 
 - **Eviction.** falcondev's defaults are 90 days unused and a volume-percentage cap.
