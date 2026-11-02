@@ -48,6 +48,7 @@ The maintainer's job is to cut the tag and verify the result.
    They inherit the repository's visibility and may start **private**.
    For third parties to run `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each package to **public** in the org's GHCR package settings, or keep them private and distribute pull credentials.
    Verification by *this project's* CI and by anyone with pull access works either way — but the **released-chart upgrade gate** (`make chart-released-upgrade-check`, run by every e2e CI pass) pulls the chart and the released `gmc` image **anonymously**, so those two packages must be public for PR CI to stay green.
+   An image added in a later release creates its package on that release's publish, so this step recurs then: `build-runner` is public already, and `cache-runner` needs it on the first release that publishes it.
 2. **Workflow permissions** are already declared in `publish.yml` (`packages: write` to push, `id-token: write` for keyless cosign and provenance, `attestations: write` for the build-provenance attestation).
    No repo secret is required — that is the point of keyless signing.
 

@@ -176,6 +176,21 @@ The same kind setup, fresh, with this branch's gateway images and `cache-runner`
 - **Sibling branch: holds.** [Run 41361503439](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361503439) asked for the same key from another branch and got `Cache not found`, and the server's miss count went from 0 to 1, so the miss is the server's answer, not a lost connection.
 - **The ingress policy: holds for the API server.** Reading `/metrics` through the API server's service proxy timed out, because the server admits only workload pods; the readings above came through `kubectl port-forward`, which enters through the kubelet.
 
+## The Kata run (2026-11-01)
+
+The dogfood GKE cluster's e2e tenant (`gag-dogfood-e2e`), brought up by `e2e-start.sh` with the Kata overlay, so its workers carry only the GMC's direct-mode default-deny and the mirror egress policy.
+A temporary namespaced `RunnerTemplate` ran `cache-runner` (this branch at `0494e0c`) under `runtimeClassName: kata` on the e2e pool, and the API server admitted it; the server came from a copy of `deploy/gha-cache/example/` in that namespace.
+The worker reported kernel `6.18.35`, the Kata guest's rather than the node's.
+
+- **Save, restore and artifacts: hold.** [Run 41372318482](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372318482) saved `q215-kata-41372318482`, restored it in a second job on another worker pod, and round-tripped an artifact.
+  The server counted 1 upload, a hit of 1, a miss of 0 and 279 bytes stored, and GitHub's cache held no `q215-kata` key while the same listing returned others.
+- **Sibling branch: holds.** [Run 41372555845](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372555845) got `Cache not found` for the same key, and the server's miss count went from 0 to 1.
+- **The server and GitHub answer; the open internet does not.** From the Kata worker, the server's `/health` and `api.github.com` returned 200, and `example.com` returned nothing within 20 seconds.
+- **Azure blob storage answers.** `productionresultssa0` and `productionresultssa19.blob.core.windows.net` both returned HTTP 400 from the worker, in [run 41371432425](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41371432425), which gated on them being blocked.
+  Their addresses fall in `20.209.226.0/23` and `20.209.112.0/23`, two of the 8,419 ranges the GMC's workload policy admits on 443, which it takes from the `actions` key of GitHub's `/meta` (`cmd/gmc/internal/controller/ipranges.go`).
+  That is by design: the runner itself uploads to blob storage, and [network-architecture.md](../design/network-architecture.md) lists `*.blob.core.windows.net` among the GitHub hostnames for every egress backend.
+  So a worker under this profile can reach GitHub's own cache storage, and the premise that it cannot does not hold.
+
 ## Open decisions
 
 - **Eviction.** falcondev's defaults are 90 days unused and a volume-percentage cap.

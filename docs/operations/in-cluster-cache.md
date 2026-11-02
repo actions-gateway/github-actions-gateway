@@ -3,7 +3,7 @@
 > **Audience:** Tenant operator, Platform engineer
 
 A tenant's jobs can keep their `actions/cache` entries, and BuildKit's `type=gha` layer cache, on a cache server in the tenant's own namespace instead of on GitHub.
-This matters most for a tenant that runs untrusted fork pull requests under tight egress, where workers cannot reach GitHub's cache storage at all, and where a cache shared between jobs is a way to plant content that a trusted job later restores.
+This matters most for a tenant that runs untrusted fork pull requests, where a cache shared between jobs is a way to plant content that a trusted job later restores.
 
 The server is [falcondev-oss/github-actions-cache-server](https://github.com/falcondev-oss/github-actions-cache-server) (MIT), deployed from [`deploy/gha-cache/`](https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/gha-cache).
 It takes each job's cache scope from the runtime token GitHub signs for that job, so it applies GitHub's own rule: a fork pull request can write only to its own `refs/pull/<n>/merge` scope, which the base branch and other pull requests never restore from.
@@ -102,10 +102,13 @@ Run a workflow that saves and then restores a cache on the tenant's runners, and
 
 ## Validation
 
-Measured on kind against real GitHub on 2026-11-01, falcondev 10.0.0 deployed from this base: a save and a restore on two worker pods, an artifact through the server's forward, and a restore from a sibling branch that the server refused.
-The details are in the [design](../plan/q215-worker-cache.md#the-v1000-re-run-2026-11-01).
+Measured against real GitHub on 2026-11-01, falcondev 10.0.0 deployed from this base, first on kind and then on GKE under Kata workers with the untrusted-PR egress profile: a save and a restore on two worker pods, an artifact through the server's forward, and a restore from a sibling branch that the server refused.
+The details are in the design ([kind](../plan/q215-worker-cache.md#the-v1000-re-run-2026-11-01), [Kata](../plan/q215-worker-cache.md#the-kata-run-2026-11-01)).
 
-Not yet measured: the server under Kata workers with tight egress, a real fork pull request's scope, and BuildKit's `type=gha` cache, which uses the same address but has not been run against it.
+Under that profile a worker can still reach GitHub's own cache storage, because Azure blob storage is in the address ranges GitHub requires runners to reach.
+The server keeps cache traffic in the cluster; it does not make GitHub's cache unreachable.
+
+Not yet measured: a real fork pull request's scope, and BuildKit's `type=gha` cache, which uses the same address but has not been run against it.
 
 ## Troubleshooting
 
