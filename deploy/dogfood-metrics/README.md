@@ -42,11 +42,16 @@ Then apply, pinned to the dogfood context:
 kubectl --context "gke_${PROJECT}_${ZONE}_${CLUSTER}" apply -k deploy/dogfood-metrics
 ```
 
-## What is still owed
+## Applied, and what it measured
 
-Applying this is tracked as Q1180, which stays open as a release gate until the scrape is confirmed.
+Applied to dogfood on 2026-11-02, with the label and the `PodMonitoring` left in place, so the scrape resumes whenever `scripts/dogfood/start.sh` brings the AGC back.
+Both survived 9 hours at zero nodes; whether a cluster upgrade keeps the `gmp-system` label is still unmeasured.
 
-- **A series count.** Nobody has counted the AGC's live series; take one `/metrics` sample through the runbook's port-forward and count the non-comment lines before relying on any cost estimate.
-- **The egress proxy.** The dogfood tenant runs without an `EgressProxy`, so there is no proxy to scrape.
+- **The scrape holds.** `up{namespace="gag-dogfood"}` first read `1` about a minute after the AGC rolled out, then held `1` at every 60-second sample for 17 minutes (`count_over_time(...[15m])` read `15`, `min_over_time` read `1`).
+  `actions_gateway_scaleset_jobs_completed_total{result="succeeded"}` reached `12` over one validation run and stayed queryable after the pod stopped.
+- **The series count.** `scrape_samples_scraped` reads one scrape's sample count, the non-comment lines of `/metrics`, without handling the client Secret.
+  It read `342` on an idle AGC and `405` once a validation run had completed jobs, of which `77` were `actions_gateway_*` and the rest the Go, process, controller-runtime, workqueue and client-go families.
+  That is one runner set with only `succeeded` results; each further runner set, result and reap reason adds label combinations.
+- **Querying it.** GMP's Prometheus API takes a selector only with an exact metric name, so `{job="dogfood-agc"}` alone is refused; count a family with `count(<name>{job="dogfood-agc"})`.
+- **The egress proxy is not scraped.** The dogfood tenant runs without an `EgressProxy`, so there is no proxy to scrape.
   Attaching one needs a second `PodMonitoring`, selecting that proxy's pods and presenting its `<ep>-metrics-client` Secret, with `serverName` set to `<ep>-proxy.gag-dogfood.svc`.
-- **A confirmed scrape.** In Cloud Monitoring, `up{namespace="gag-dogfood"}` should read `1` within a couple of scrape intervals of the apply.
