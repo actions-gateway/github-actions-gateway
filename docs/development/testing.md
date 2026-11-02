@@ -4067,7 +4067,7 @@ Take that total with `--limit 200` or higher: `gh cache list` defaults to 30 and
 That pool is shared with the `actions/cache` pre-pulls above, whose whole job is keeping this lane off registry.k8s.io and quay.io under rate limits, and evicting one of those surfaces as a registry-pull flake attributed to the registry rather than as a cache miss.
 Re-check with `gh cache list` if e2e pull flakes rise.
 
-All of this runner-side caching is **hosted-lane-only**: on a self-hosted runner the `actions/cache` steps, the bake's `GHA_CACHE`, and `azure/setup-helm` are skipped (`runner.environment` gates in `e2e-reusable.yml`), because the Actions cache data plane and `get.helm.sh` are job-time egress the managed GitHub egress rule does not admit (the Kata untrusted-PR posture keeps that lane's non-registry fetches GitHub-only, Q408).
+All of this runner-side caching is **hosted-lane-only**: on a self-hosted runner the `actions/cache` steps, the bake's `GHA_CACHE`, and `azure/setup-helm` are skipped (`runner.environment` gates in `e2e-reusable.yml`), because Q408's egress inventory counted the Actions cache data plane and `get.helm.sh` as job-time egress outside GitHub. `get.helm.sh` is outside the managed rule; the cache's Azure blob storage is inside GitHub's published ranges, and a Kata worker reached it (Q1253 owns what that admits).
 The pull steps fall back to retried upstream pulls there (helm is baked into the e2e runner image), and the in-cluster registry mirror is what will serve those pulls warm.
 
 #### Runner→GitHub egress attribution (Q352)

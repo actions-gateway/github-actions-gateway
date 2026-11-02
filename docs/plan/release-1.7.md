@@ -44,7 +44,7 @@ Two are settled here; the third is a real conflict and is scoped as work.
 
 ### Q215's trigger has not fired, and the row now says which reading it takes
 
-**Settled 2026-08-26.** [Q215](../queue/Q215.md)'s revive trigger is an in-cluster cache ask **or** Q408 Phase 1 landing and removing the working one, and 1.6 could not tell whether "the working one" meant GAG's own self-hosted lane or a tenant's.
+**Settled 2026-08-26.** Q215's revive trigger is an in-cluster cache ask **or** Q408 Phase 1 landing and removing the working one, and 1.6 could not tell whether "the working one" meant GAG's own self-hosted lane or a tenant's.
 
 It means a tenant's, and the row's own next sentence is what decides it: "`actions/cache` reaches its store today, so the gap is local."
 That is a claim about what GAG offers a tenant, not about this repo's CI, and it is true: the tenant egress proxy's implicit GitHub allowlist carries `*.blob.core.windows.net`, the Azure-blob store the Actions cache runs on (`githubEgressFQDNs`, `cmd/gmc/internal/controller/egressproxy_fqdn.go`).
@@ -84,7 +84,7 @@ The criterion now also records the decline, so a later reading cannot revive the
 
 - **Q539 and Q540.** Both are blocked behind Q408 by design: the mirror contract is validated on the simple implementation before Dragonfly and the composed stack are graded against it ([§6](q408-untrusted-pr-egress.md#6-follow-on-validations-q539-q540)).
   They are the follow-on validations of this release's deliverable, so they cannot also be in it.
-- **[Q215](../queue/Q215.md) as a build.** Deferred with an unfired trigger, per the section above.
+- **Q215 as a build.** Deferred with an unfired trigger, per the section above.
 - **Controller or API changes.** Q408's scope statement is explicit that the GMC, the AGC and the CRDs are untouched: the deliverable is manifests, wiring, docs and live validation, published as the supported reference recipe.
   A 1.7 that grows an API field has lost the plot of what the release is.
 - **The remaining proxy-hardening cluster.** [Q565](../queue/Q565.md) and Q567 (since closed as delivered by v2's per-`RunnerSet` `proxyRef`) keep their demand triggers, unchanged since [release-1.4.md](archive/release-1.4.md#deferred-out-of-14-and-why) shelved them.

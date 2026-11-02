@@ -98,7 +98,7 @@ Bundling them would give 1.6 two `L` items on unrelated axes and a tag waiting o
 
 **Two rows on that axis need a decision before 1.7 is scoped, and neither is this release's.**
 
-- [Q215](../../queue/Q215.md) reads as revived and has not been moved.
+- Q215 reads as revived and has not been moved.
   Its trigger is demand for an in-cluster cache **or** Q408 Phase 1 landing and removing the working one, and Phase 1 gated every `actions/cache` step and the bake's `type=gha` cache to the hosted lane on 2026-08-05.
   Whether that counts as the trigger firing turns on whether "the working one" means GAG's own self-hosted lane or a tenant's, which the row does not say.
   1.7 scoping has to settle it; leaving a `deferred` row whose trigger may have fired is the failure mode [release-ladder.md](../release-ladder.md#the-rule-this-establishes) names.

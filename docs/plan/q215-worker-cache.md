@@ -120,7 +120,7 @@ So, as §H.9 says of a shared proxy, the shared modes are for cooperating tenant
 
 One stock falcondev server per tenant, in the tenant namespace.
 Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream that v10.0.0 does not already ship.
-The steps left are on [Q215](../queue/Q215.md).
+It shipped with Q215, validated on kind, under Kata and with a fork pull request ([the runs below](#the-v1000-re-run-2026-11-01)).
 
 #### Phase 2: sharing (Q1225)
 

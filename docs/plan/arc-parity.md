@@ -70,7 +70,7 @@ That is deliberate: parity is about removing surprises for a migrating team, and
 - **Matching ARC's API shape.** The v2 decomposition into `ActionsGateway`, `EgressProxy`, `RunnerSet`, and `RunnerTemplate` is the product, not an accident to be reconciled.
   The intentional v1 to v2 differences are recorded in [v2-api-gap-analysis.md](v2-api-gap-analysis.md).
 - **Commercial support.** See above.
-- **In-cluster cache.** It appears on the comparison table as something GAG lacks, but ARC lacks it too ([Q215](../queue/Q215.md) tracks it against managed services and GitLab Runner, not ARC).
+- **In-cluster cache.** It appears on the comparison table as something GAG lacks, but ARC lacks it too (Q215 tracks it against managed services and GitLab Runner, not ARC).
 
 ## What the site may claim today
 

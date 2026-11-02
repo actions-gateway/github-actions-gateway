@@ -119,6 +119,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 - **[Troubleshooting](operations/troubleshooting.md)**: symptom to diagnosis to remediation, organised by observable failure mode.
 - **[Production runbook](operations/runbook.md)**: the operational procedures the platform team needs on call.
 - **[P2P image distribution](operations/p2p-image-distribution.md)**: add a Spegel or Dragonfly mirror to survive ephemeral-worker pull storms.
+- **[In-cluster `actions/cache` server](operations/in-cluster-cache.md)**: one cache server per tenant, in its namespace, that keeps cache traffic in the cluster and enforces GitHub's own ref scope from each job's token, so a fork pull request cannot plant entries the base branch restores.
 
 ## API surface and migration
 
