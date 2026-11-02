@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,6 +21,16 @@ func scopedGateway(name, ns, gitHubURL string) *gmcv2alpha1.ActionsGateway {
 	return &gmcv2alpha1.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec:       gmcv2alpha1.ActionsGatewaySpec{GitHubURL: gitHubURL},
+	}
+}
+
+// asV2Gateway is ag as the reconciler reads it. The fake store holds v2alpha1 objects
+// because scalesetscope lists at v2alpha1 to read spec.acquisitionProtocol, which v2
+// lacks; it retypes with scalesetscope in Q1167.
+func asV2Gateway(ag *gmcv2alpha1.ActionsGateway) *gmcv2.ActionsGateway {
+	return &gmcv2.ActionsGateway{
+		ObjectMeta: *ag.ObjectMeta.DeepCopy(),
+		Spec:       gmcv2.ActionsGatewaySpec{GitHubURL: ag.Spec.GitHubURL},
 	}
 }
 
@@ -56,7 +67,7 @@ func TestEvalScaleSetNameCollisions_Clean(t *testing.T) {
 		claimingRunnerSet("rs-c", "tenant-b", "gw-b", "acme-linux"),
 	)
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	assert.True(t, got.observed)
 	assert.False(t, got.collided)
 	assert.Equal(t, gmcv2alpha1.ReasonScaleSetNamesUnique, got.reason)
@@ -77,7 +88,7 @@ func TestEvalScaleSetNameCollisions_ClassicIsUnaffected(t *testing.T) {
 		classic,
 	)
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	assert.True(t, got.observed)
 	assert.False(t, got.collided)
 }
@@ -96,7 +107,7 @@ func TestEvalScaleSetNameCollisions_CrossTenant(t *testing.T) {
 		claimingRunnerSet("rs-b", "tenant-b", "gw-b", "shared-name", "linux"),
 	)
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	assert.True(t, got.observed)
 	assert.True(t, got.collided)
 	assert.Equal(t, gmcv2alpha1.ReasonScaleSetNameShared, got.reason)
@@ -118,7 +129,7 @@ func TestEvalScaleSetNameCollisions_DoesNotNameACrossTenantHolder(t *testing.T) 
 		claimingRunnerSet("victim-runnerset", "victim-namespace", "victim-gateway", "shared-name"),
 	)
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	require.True(t, got.collided)
 	assert.NotContains(t, got.message, "victim-namespace")
 	assert.NotContains(t, got.message, "victim-runnerset")
@@ -136,7 +147,7 @@ func TestEvalScaleSetNameCollisions_SameNamespaceHolderIsNamed(t *testing.T) {
 		claimingRunnerSet("rs-two", "tenant-a", "gw-a", "shared-name"),
 	)
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	require.True(t, got.collided)
 	assert.Contains(t, got.message, `"rs-one" claims "shared-name"`)
 	assert.Contains(t, got.message, `"rs-two" claims "shared-name"`)
@@ -157,7 +168,7 @@ func TestEvalScaleSetNameCollisions_OtherGatewaysCollisionIsNotOurs(t *testing.T
 		claimingRunnerSet("rs-c", "tenant-c", "gw-c", "theirs"),
 	)
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	assert.True(t, got.observed)
 	assert.False(t, got.collided)
 }
@@ -177,7 +188,7 @@ func TestEvalScaleSetNameCollisions_ReadFailureIsNotAVerdict(t *testing.T) {
 		}).Build()
 	r := &ActionsGatewayV2Reconciler{Client: c}
 
-	got := r.evalScaleSetNameCollisions(context.Background(), ag)
+	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
 	assert.False(t, got.observed)
 	assert.False(t, got.collided)
 	assert.Empty(t, got.reason)

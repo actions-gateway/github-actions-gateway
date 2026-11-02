@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
@@ -63,7 +63,7 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 	g := gomega.NewWithT(t)
 
 	tenantLabels := func(extra map[string]string) map[string]string {
-		l := map[string]string{gmcv2alpha1.TenantNamespaceMarkerLabel: gmcv2alpha1.TenantNamespaceMarkerValue}
+		l := map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue}
 		for k, v := range extra {
 			l[k] = v
 		}
@@ -74,7 +74,7 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		const ns = "secprof-non-tenant"
 		require.NoError(t, k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 			Name:   ns,
-			Labels: map[string]string{gmcv2alpha1.SecurityProfileLabel: "bogus"},
+			Labels: map[string]string{gmcv2.SecurityProfileLabel: "bogus"},
 		}}))
 		t.Cleanup(func() {
 			_ = k8sClient.Delete(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
@@ -87,7 +87,7 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		g.Eventually(func() bool {
 			err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 				Name:   ns,
-				Labels: tenantLabels(map[string]string{gmcv2alpha1.SecurityProfileLabel: "bogus"}),
+				Labels: tenantLabels(map[string]string{gmcv2.SecurityProfileLabel: "bogus"}),
 			}})
 			if err == nil {
 				_ = k8sClient.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
@@ -101,13 +101,13 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		const ns = "secprof-upgrade"
 		require.NoError(t, k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 			Name:   ns,
-			Labels: tenantLabels(map[string]string{gmcv2alpha1.SecurityProfileLabel: gmcv2alpha1.SecurityProfileBaseline}),
+			Labels: tenantLabels(map[string]string{gmcv2.SecurityProfileLabel: gmcv2.SecurityProfileBaseline}),
 		}}))
 		t.Cleanup(func() {
 			_ = k8sClient.Delete(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
 		})
 		require.NoError(t, setNamespaceLabel(k8sClient, ns, func(n *corev1.Namespace) {
-			n.Labels[gmcv2alpha1.SecurityProfileLabel] = gmcv2alpha1.SecurityProfileRestricted
+			n.Labels[gmcv2.SecurityProfileLabel] = gmcv2.SecurityProfileRestricted
 		}), "an upgrade restricted-ward must always be allowed")
 	})
 
@@ -115,7 +115,7 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		const ns = "secprof-downgrade"
 		require.NoError(t, k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 			Name:   ns,
-			Labels: tenantLabels(map[string]string{gmcv2alpha1.SecurityProfileLabel: gmcv2alpha1.SecurityProfileRestricted}),
+			Labels: tenantLabels(map[string]string{gmcv2.SecurityProfileLabel: gmcv2.SecurityProfileRestricted}),
 		}}))
 		t.Cleanup(func() {
 			_ = k8sClient.Delete(context.Background(), &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
@@ -123,7 +123,7 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 
 		// restricted -> baseline without the opt-in annotation: denied.
 		err := setNamespaceLabel(k8sClient, ns, func(n *corev1.Namespace) {
-			n.Labels[gmcv2alpha1.SecurityProfileLabel] = gmcv2alpha1.SecurityProfileBaseline
+			n.Labels[gmcv2.SecurityProfileLabel] = gmcv2.SecurityProfileBaseline
 		})
 		require.True(t, apierrors.IsForbidden(err), "a silent downgrade must be denied; got: %v", err)
 
@@ -132,8 +132,8 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 			if n.Annotations == nil {
 				n.Annotations = map[string]string{}
 			}
-			n.Annotations[gmcv2alpha1.AllowProfileDowngradeAnnotation] = gmcv2alpha1.AllowProfileDowngradeAllowed
-			n.Labels[gmcv2alpha1.SecurityProfileLabel] = gmcv2alpha1.SecurityProfileBaseline
+			n.Annotations[gmcv2.AllowProfileDowngradeAnnotation] = gmcv2.AllowProfileDowngradeAllowed
+			n.Labels[gmcv2.SecurityProfileLabel] = gmcv2.SecurityProfileBaseline
 		}), "a downgrade with the allow-profile-downgrade annotation must be allowed")
 	})
 
@@ -141,7 +141,7 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		const ineligibleNS = "secprof-priv-ineligible"
 		err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 			Name:   ineligibleNS,
-			Labels: tenantLabels(map[string]string{gmcv2alpha1.SecurityProfileLabel: gmcv2alpha1.SecurityProfilePrivileged}),
+			Labels: tenantLabels(map[string]string{gmcv2.SecurityProfileLabel: gmcv2.SecurityProfilePrivileged}),
 		}})
 		require.True(t, apierrors.IsForbidden(err),
 			"privileged must be denied without the eligibility label; got: %v", err)
@@ -150,8 +150,8 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		require.NoError(t, k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 			Name: eligibleNS,
 			Labels: tenantLabels(map[string]string{
-				gmcv2alpha1.SecurityProfileLabel:   gmcv2alpha1.SecurityProfilePrivileged,
-				gmcv2alpha1.PrivilegedProfileLabel: gmcv2alpha1.PrivilegedProfileAllowed,
+				gmcv2.SecurityProfileLabel:   gmcv2.SecurityProfilePrivileged,
+				gmcv2.PrivilegedProfileLabel: gmcv2.PrivilegedProfileAllowed,
 			}),
 		}}), "privileged must be allowed when the platform eligibility label is present")
 		t.Cleanup(func() {
@@ -193,8 +193,8 @@ func TestGMC_NamespacePSAReconciler_StampsProfile(t *testing.T) {
 
 	const ns = "secprof-reconcile"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		gmcv2alpha1.TenantNamespaceMarkerLabel: gmcv2alpha1.TenantNamespaceMarkerValue,
-		gmcv2alpha1.SecurityProfileLabel:       gmcv2alpha1.SecurityProfileRestricted,
+		gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue,
+		gmcv2.SecurityProfileLabel:       gmcv2.SecurityProfileRestricted,
 	})
 
 	wantEnforce := func(profile string) func() string {
@@ -207,15 +207,15 @@ func TestGMC_NamespacePSAReconciler_StampsProfile(t *testing.T) {
 		}
 	}
 
-	g.Eventually(wantEnforce(gmcv2alpha1.SecurityProfileRestricted), 30*time.Second, 200*time.Millisecond).
-		Should(gomega.Equal(gmcv2alpha1.SecurityProfileRestricted), "PSA enforce must be stamped from the security-profile label")
+	g.Eventually(wantEnforce(gmcv2.SecurityProfileRestricted), 30*time.Second, 200*time.Millisecond).
+		Should(gomega.Equal(gmcv2.SecurityProfileRestricted), "PSA enforce must be stamped from the security-profile label")
 
 	got := &corev1.Namespace{}
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: ns}, got))
 	for _, k := range []string{
 		"pod-security.kubernetes.io/warn", "pod-security.kubernetes.io/audit",
 	} {
-		require.Equal(t, gmcv2alpha1.SecurityProfileRestricted, got.Labels[k], "label %s", k)
+		require.Equal(t, gmcv2.SecurityProfileRestricted, got.Labels[k], "label %s", k)
 	}
 	for _, k := range []string{
 		"pod-security.kubernetes.io/enforce-version",
@@ -234,7 +234,7 @@ func TestGMC_NamespacePSAReconciler_DefaultsBaseline(t *testing.T) {
 
 	const ns = "secprof-default"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		gmcv2alpha1.TenantNamespaceMarkerLabel: gmcv2alpha1.TenantNamespaceMarkerValue,
+		gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue,
 	})
 
 	g.Eventually(func() string {
@@ -243,6 +243,6 @@ func TestGMC_NamespacePSAReconciler_DefaultsBaseline(t *testing.T) {
 			return ""
 		}
 		return got.Labels["pod-security.kubernetes.io/enforce"]
-	}, 30*time.Second, 200*time.Millisecond).Should(gomega.Equal(gmcv2alpha1.SecurityProfileBaseline),
+	}, 30*time.Second, 200*time.Millisecond).Should(gomega.Equal(gmcv2.SecurityProfileBaseline),
 		"an absent security-profile label must default to baseline")
 }

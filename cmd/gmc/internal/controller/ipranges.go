@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	appsv1 "k8s.io/api/apps/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -319,8 +319,8 @@ type IPRangeReconciler struct {
 	APIServerCIDRs []string
 
 	// V2Enabled gates the v2 NetworkPolicy refresh passes (EgressProxy and v2
-	// ActionsGateway direct egress). It is set from the startup v2alpha1 CRD
-	// detection (V2alpha1Installed): without the actions-gateway.com/v2alpha1
+	// ActionsGateway direct egress). It is set from the startup v2 CRD
+	// detection (V2Installed): without the actions-gateway.com/v2
 	// CRDs, listing those kinds would fail with "no matches for kind" on every
 	// tick. When false, the passes are skipped entirely. Q228.
 	V2Enabled bool
@@ -473,8 +473,8 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	}
 
 	// v2 NetworkPolicy refresh passes are gated on the opt-in
-	// actions-gateway.com/v2alpha1 CRDs being installed (detected once at startup,
-	// see V2alpha1Installed). Without them, listing the v2 kinds below would fail
+	// actions-gateway.com/v2 CRDs being installed (detected once at startup,
+	// see V2Installed). Without them, listing the v2 kinds below would fail
 	// with "no matches for kind" on every tick; skipping the passes keeps the loop
 	// quiet. Q228.
 	if !r.V2Enabled {
@@ -485,7 +485,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	// allowlist is derived from this cache, so it must be refreshed when GitHub's
 	// published ranges rotate. A List failure is logged and skipped rather than
 	// returned, so a transient list error does not fail the whole refresh loop.
-	var epList gmcv2alpha1.EgressProxyList
+	var epList gmcv2.EgressProxyList
 	if err := r.List(ctx, &epList); err != nil {
 		log.Error("failed to list EgressProxies", "error", err)
 		return nil
@@ -512,7 +512,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	// cache, so — like the proxy NetworkPolicies above — it must be refreshed when
 	// GitHub rotates ranges. Proxied gateways have no GitHub rule on these policies,
 	// so they are skipped.
-	var v2agList gmcv2alpha1.ActionsGatewayList
+	var v2agList gmcv2.ActionsGatewayList
 	if err := r.List(ctx, &v2agList); err != nil {
 		log.Error("failed to list v2 ActionsGateways", "error", err)
 		return nil
@@ -538,7 +538,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 // v2 direct-mode analogue of patchNetworkPolicy / patchEgressProxyNetworkPolicy. A
 // NetworkPolicy that does not exist yet (or is being removed) is skipped; the per-CR
 // reconcile creates it. The patch is metrics-counted once per gateway.
-func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, cidrs []net.IPNet) error {
+func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context, ag *gmcv2.ActionsGateway, cidrs []net.IPNet) error {
 	patched := false
 	patch := func(name string, desired *networkingv1.NetworkPolicy) error {
 		var np networkingv1.NetworkPolicy
@@ -586,7 +586,7 @@ func (r *IPRangeReconciler) patchDirectEgressNetworkPolicies(ctx context.Context
 // patchEgressProxyNetworkPolicy refreshes one EgressProxy's proxy NetworkPolicy
 // egress/ingress rules from the current CIDR set. The v2 analogue of
 // patchNetworkPolicy.
-func (r *IPRangeReconciler) patchEgressProxyNetworkPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, cidrs []net.IPNet) error {
+func (r *IPRangeReconciler) patchEgressProxyNetworkPolicy(ctx context.Context, ep *gmcv2.EgressProxy, cidrs []net.IPNet) error {
 	var np networkingv1.NetworkPolicy
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &np); err != nil {
 		return client.IgnoreNotFound(err) // NetworkPolicy may not exist yet or is being removed

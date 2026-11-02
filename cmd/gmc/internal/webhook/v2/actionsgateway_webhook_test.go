@@ -20,8 +20,7 @@ import (
 
 // fakeReader returns a client.Reader preloaded with the given objects, standing in
 // for the manager's uncached API reader in the Q322 referrer-graph guards. A v2
-// object is stored as its v2alpha1 view (asV2alpha1), the version the validators
-// read siblings at.
+// object is stored as both its v2 view and its v2alpha1 view (withV2alpha1Views).
 //
 // It registers every kind the validators read: the agent-identity guard (Q1011) is
 // fail-closed, so an unregistered kind fails admission with a List error rather
@@ -29,16 +28,20 @@ import (
 func fakeReader(t *testing.T, objs ...client.Object) client.Reader {
 	t.Helper()
 	scheme := runtime.NewScheme()
+	require.NoError(t, agcv2.AddToScheme(scheme))
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, objs...)...).Build()
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(withV2alpha1Views(t, objs...)...).Build()
 }
 
-// asV2alpha1 converts each v2 object to v2alpha1 through the v2beta1 hub, as the
-// apiserver serves a stored object to a v2alpha1 read, and passes any other kind
-// through. A fixture can then be both the object under admission and a sibling.
-func asV2alpha1(t *testing.T, objs ...client.Object) []client.Object {
+// withV2alpha1Views returns objs plus the v2alpha1 view of each v2 object, converted
+// through the v2beta1 hub as the apiserver serves a stored object to a v2alpha1 read.
+// The fake client does not convert, and the guards read at both versions: the
+// scale-set and agent-identity inventories list at v2alpha1 because scalesetscope
+// reads spec.acquisitionProtocol, which v2 lacks, and the rest read at v2. A fixture
+// can then be both the object under admission and a sibling.
+func withV2alpha1Views(t *testing.T, objs ...client.Object) []client.Object {
 	t.Helper()
-	out := make([]client.Object, 0, len(objs))
+	out := append([]client.Object{}, objs...)
 	for _, o := range objs {
 		var hub conversion.Hub
 		var dst interface {
@@ -57,7 +60,6 @@ func asV2alpha1(t *testing.T, objs ...client.Object) []client.Object {
 		case *agcv2.ClusterRunnerTemplate:
 			hub, dst = &v2beta1.ClusterRunnerTemplate{}, &agcv2alpha1.ClusterRunnerTemplate{}
 		default:
-			out = append(out, o)
 			continue
 		}
 		require.NoError(t, o.(conversion.Convertible).ConvertTo(hub))

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,9 +41,9 @@ func TestV2_EgressProxy_FQDNIntent_GKEBackend(t *testing.T) {
 	ipCache.Set([]net.IPNet{*cidr})
 	startEgressProxyReconcilerWithBackend(t, ipCache, controller.FQDNBackendGKE)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN},
+		Spec:       gmcv2.EgressProxySpec{EgressPolicyMode: gmcv2.EgressPolicyModeFQDN},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep), "FQDN intent must be admitted (suite backend is non-none)")
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -100,9 +100,9 @@ func TestV2_EgressProxy_FQDNIntent_CiliumBackend(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconcilerWithBackend(t, nil, controller.FQDNBackendCilium)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN},
+		Spec:       gmcv2.EgressProxySpec{EgressPolicyMode: gmcv2.EgressPolicyModeFQDN},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })

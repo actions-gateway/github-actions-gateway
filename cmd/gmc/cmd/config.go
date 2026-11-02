@@ -14,7 +14,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 )
@@ -145,7 +145,7 @@ func buildCacheOptions(cfg *gmcFlags, podNamespace string) (cache.Options, error
 	}
 
 	if cfg.priorityClassAllowlistName != "" {
-		byObject[&v2beta1.PriorityClassAllowlist{}] = cache.ByObject{
+		byObject[&v2.PriorityClassAllowlist{}] = cache.ByObject{
 			Field: fields.OneTermEqualSelector("metadata.name", cfg.priorityClassAllowlistName),
 		}
 	}

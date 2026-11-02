@@ -75,7 +75,7 @@ import (
 	"strings"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -208,7 +208,7 @@ func (r *ActionsGatewayV2Reconciler) preserveExistingEgress(ctx context.Context,
 
 // Reconcile drives a v2 ActionsGateway toward its desired AGC control plane.
 func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var ag gmcv2alpha1.ActionsGateway
+	var ag gmcv2.ActionsGateway
 	if err := r.Get(ctx, req.NamespacedName, &ag); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -217,8 +217,8 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return r.reconcileDelete(ctx, &ag)
 	}
 
-	if !controllerutil.ContainsFinalizer(&ag, gmcv2alpha1.ActionsGatewayFinalizer) {
-		controllerutil.AddFinalizer(&ag, gmcv2alpha1.ActionsGatewayFinalizer)
+	if !controllerutil.ContainsFinalizer(&ag, gmcv2.ActionsGatewayFinalizer) {
+		controllerutil.AddFinalizer(&ag, gmcv2.ActionsGatewayFinalizer)
 		if err := r.Update(ctx, &ag); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -234,7 +234,7 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Credential check, by union member (Q196/Q197):
 	switch ag.Spec.Credentials.Type {
-	case gmcv2alpha1.CredentialTypeGitHubApp:
+	case gmcv2.CredentialTypeGitHubApp:
 		// Possession model: the AGC mounts the GitHub App Secret; without it, do not
 		// provision (CredentialUnavailable, fail closed).
 		var credSecret corev1.Secret
@@ -243,10 +243,10 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, credErr
 		}
 		if apierrors.IsNotFound(credErr) {
-			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionCredentialUnavailable, gmcv2alpha1.ReasonSecretNotFound,
+			return r.setNotReady(ctx, &ag, gmcv2.ConditionCredentialUnavailable, gmcv2.ReasonSecretNotFound,
 				fmt.Sprintf("GitHub App Secret %q not found in namespace %q", ag.Spec.GitHubAppSecretName(), ag.Namespace))
 		}
-	case gmcv2alpha1.CredentialTypeWorkloadIdentity:
+	case gmcv2.CredentialTypeWorkloadIdentity:
 		// Delegation model (no in-cluster key, Q197/Q201): there is no GitHub App Secret
 		// to check — the App key never enters the cluster. The AGC is provisioned with
 		// the signer config env and a Vault-audience-scoped projected ServiceAccount
@@ -264,23 +264,23 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// (M4, §H.9): the proxy must list this gateway's namespace in
 	// spec.sharing.allowedNamespaces. Absent or empty sharing denies, so an operator
 	// cannot reach a proxy by naming it.
-	var proxy *gmcv2alpha1.EgressProxy
+	var proxy *gmcv2.EgressProxy
 	if ag.Spec.DefaultProxyRef != nil {
 		proxyNS := ag.Spec.DefaultProxyRef.Namespace
 		if proxyNS == "" {
 			proxyNS = ag.Namespace
 		}
-		var p gmcv2alpha1.EgressProxy
+		var p gmcv2.EgressProxy
 		proxyErr := r.Get(ctx, types.NamespacedName{Namespace: proxyNS, Name: ag.Spec.DefaultProxyRef.Name}, &p)
 		if proxyErr != nil && !apierrors.IsNotFound(proxyErr) {
 			return ctrl.Result{}, proxyErr
 		}
 		if apierrors.IsNotFound(proxyErr) {
-			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyNotFound,
+			return r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, gmcv2.ReasonProxyNotFound,
 				fmt.Sprintf("EgressProxy %q (defaultProxyRef) not found in namespace %q", ag.Spec.DefaultProxyRef.Name, proxyNS))
 		}
 		if proxyNS != ag.Namespace && !proxyShareGranted(&p, ag.Namespace) {
-			return r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyShareNotGranted,
+			return r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, gmcv2.ReasonProxyShareNotGranted,
 				fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
 					ag.Spec.DefaultProxyRef.Name, proxyNS, ag.Namespace))
 		}
@@ -293,7 +293,7 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 				return ctrl.Result{}, err
 			}
 			if !projected {
-				res, err := r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ReasonProxyShareNotGranted,
+				res, err := r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, gmcv2.ReasonProxyShareNotGranted,
 					fmt.Sprintf("EgressProxy %q in namespace %q grants namespace %q, but its CA has not yet been projected here as ConfigMap %q",
 						p.Name, proxyNS, ag.Namespace, proxyShareConfigMapName(proxyNS, p.Name)))
 				if err != nil {
@@ -312,7 +312,7 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if caReason, caMsg, caErr := r.checkGitHubCABundle(ctx, &ag); caErr != nil {
 		return ctrl.Result{}, caErr
 	} else if caReason != "" {
-		res, err := r.setNotReady(ctx, &ag, gmcv2alpha1.ConditionDegraded, caReason, caMsg)
+		res, err := r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, caReason, caMsg)
 		if err != nil {
 			return res, err
 		}
@@ -372,7 +372,7 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 // owner-referenced to the ActionsGateway. Failures are wrapped with the failing
 // step so setDegraded can name it (Q156).
 // proxy is nil for direct egress (§H.10).
-func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy, securityProfile string) (retErr error) {
+func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag *gmcv2.ActionsGateway, proxy *gmcv2.EgressProxy, securityProfile string) (retErr error) {
 	log := logf.FromContext(ctx)
 	var current string
 	step := func(name string) { current = name; log.V(1).Info("reconcileResources step", "step", name) }
@@ -480,7 +480,7 @@ func (r *ActionsGatewayV2Reconciler) namespaceSecurityProfile(ctx context.Contex
 	if err := r.Get(ctx, types.NamespacedName{Name: namespace}, &ns); err != nil {
 		return "", fmt.Errorf("read namespace %q for security profile: %w", namespace, err)
 	}
-	return gmcv2alpha1.EffectiveSecurityProfile(ns.Labels[gmcv2alpha1.SecurityProfileLabel]), nil
+	return gmcv2.EffectiveSecurityProfile(ns.Labels[gmcv2.SecurityProfileLabel]), nil
 }
 
 // githubCABundleReprobeInterval is how often a gateway whose githubCABundleRef does
@@ -497,7 +497,7 @@ const proxyShareReprobeInterval = 10 * time.Second
 
 // proxyShareProjected reports whether ep's share ConfigMap is in ns carrying a CA,
 // read uncached for the same reason as checkGitHubCABundle.
-func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns string, ep *gmcv2alpha1.EgressProxy) (bool, error) {
+func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns string, ep *gmcv2.EgressProxy) (bool, error) {
 	var cm corev1.ConfigMap
 	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyShareConfigMapName(ep.Namespace, ep.Name)}, &cm)
 	if apierrors.IsNotFound(err) {
@@ -518,7 +518,7 @@ func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns
 //
 // Parsing here rather than letting the AGC fail at startup is deliberate — a Degraded
 // condition naming the ConfigMap is a better operator signal than a CrashLoopBackOff.
-func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (string, string, error) {
+func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag *gmcv2.ActionsGateway) (string, string, error) {
 	ref := ag.Spec.GitHubCABundleRef
 	if ref == nil {
 		return "", "", nil
@@ -526,7 +526,7 @@ func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag
 	var cm corev1.ConfigMap
 	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ref.Name}, &cm)
 	if apierrors.IsNotFound(err) {
-		return gmcv2alpha1.ReasonCABundleNotFound,
+		return gmcv2.ReasonCABundleNotFound,
 			fmt.Sprintf("ConfigMap %q (githubCABundleRef) not found in namespace %q", ref.Name, ag.Namespace), nil
 	}
 	if err != nil {
@@ -537,11 +537,11 @@ func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag
 		bundle = string(cm.BinaryData[githubCABundleKey])
 	}
 	if bundle == "" {
-		return gmcv2alpha1.ReasonCABundleInvalid,
+		return gmcv2.ReasonCABundleInvalid,
 			fmt.Sprintf("ConfigMap %q (githubCABundleRef) has no %q key", ref.Name, githubCABundleKey), nil
 	}
 	if !x509.NewCertPool().AppendCertsFromPEM([]byte(bundle)) {
-		return gmcv2alpha1.ReasonCABundleInvalid,
+		return gmcv2.ReasonCABundleInvalid,
 			fmt.Sprintf("ConfigMap %q key %q holds no PEM-encoded certificate", ref.Name, githubCABundleKey), nil
 	}
 	return "", "", nil
@@ -553,7 +553,7 @@ func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag
 // issuance or a near-expiry rotation emits a Normal Event so the credential
 // transition is visible in `kubectl describe`; the steady-state path (cert valid)
 // returns early and emits nothing.
-func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
+func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag *gmcv2.ActionsGateway) error {
 	var serverSec corev1.Secret
 	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: metricsTLSSecretNameV2(ag)}, &serverSec)
 	if serverErr != nil && !apierrors.IsNotFound(serverErr) {
@@ -595,7 +595,7 @@ func (r *ActionsGatewayV2Reconciler) ensureMetricsCerts(ctx context.Context, ag 
 // creates/patches it, disabled best-effort deletes it. A NoMatch (CRD not installed)
 // is downgraded to a Warning Event on apply and is success on delete, so a missing
 // optional scrape prerequisite never blocks provisioning.
-func (r *ActionsGatewayV2Reconciler) applyOrPruneServiceMonitor(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
+func (r *ActionsGatewayV2Reconciler) applyOrPruneServiceMonitor(ctx context.Context, ag *gmcv2.ActionsGateway) error {
 	if !r.EnableServiceMonitor {
 		sm := &unstructured.Unstructured{}
 		sm.SetGroupVersionKind(serviceMonitorGVK)
@@ -628,7 +628,7 @@ func (r *ActionsGatewayV2Reconciler) applyOrPruneServiceMonitor(ctx context.Cont
 // recordEvent emits a Kubernetes Event on the ActionsGateway when a Recorder is
 // wired. The Recorder may be nil in unit tests, so callers go through here rather
 // than dereferencing it directly (mirrors the AGC reconcilers' recordEvent).
-func (r *ActionsGatewayV2Reconciler) recordEvent(ag *gmcv2alpha1.ActionsGateway, eventtype, reason, action, note string, args ...any) {
+func (r *ActionsGatewayV2Reconciler) recordEvent(ag *gmcv2.ActionsGateway, eventtype, reason, action, note string, args ...any) {
 	if r.Recorder == nil {
 		return
 	}
@@ -662,11 +662,11 @@ func boolConditionStatus(b bool) metav1.ConditionStatus {
 // cluster-scoped applyClusterRunnerTemplateReaderBinding, which cannot be owned by
 // a namespaced ActionsGateway (see the ownerRef policy on applyManagedChild).
 
-func (r *ActionsGatewayV2Reconciler) applyServiceAccount(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.ServiceAccount) error {
+func (r *ActionsGatewayV2Reconciler) applyServiceAccount(ctx context.Context, ag *gmcv2.ActionsGateway, desired *corev1.ServiceAccount) error {
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, &corev1.ServiceAccount{}, desired, nil)
 }
 
-func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *rbacv1.RoleBinding) error {
+func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *gmcv2.ActionsGateway, desired *rbacv1.RoleBinding) error {
 	obj := &rbacv1.RoleBinding{}
 	err := applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		// roleRef is immutable; on a roleRef change the binding must be recreated.
@@ -694,7 +694,7 @@ func (r *ActionsGatewayV2Reconciler) applyRoleBinding(ctx context.Context, ag *g
 // No owner reference: a cluster-scoped object cannot be owned by a namespaced
 // ActionsGateway (the apiserver rejects the cross-scope ref and never GCs it), so
 // reconcileDelete removes it explicitly.
-func (r *ActionsGatewayV2Reconciler) applyClusterRunnerTemplateReaderBinding(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
+func (r *ActionsGatewayV2Reconciler) applyClusterRunnerTemplateReaderBinding(ctx context.Context, ag *gmcv2.ActionsGateway) error {
 	desired := buildClusterRunnerTemplateReaderBinding(ag)
 	obj := &rbacv1.ClusterRoleBinding{}
 	err := applyManagedChild(ctx, r.Client, r.Scheme, nil, obj, desired, func() error {
@@ -715,7 +715,7 @@ func (r *ActionsGatewayV2Reconciler) applyClusterRunnerTemplateReaderBinding(ctx
 	return err
 }
 
-func (r *ActionsGatewayV2Reconciler) applyService(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.Service) error {
+func (r *ActionsGatewayV2Reconciler) applyService(ctx context.Context, ag *gmcv2.ActionsGateway, desired *corev1.Service) error {
 	obj := &corev1.Service{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		// Preserve server-assigned Spec fields (ClusterIP); set only managed fields.
@@ -726,7 +726,7 @@ func (r *ActionsGatewayV2Reconciler) applyService(ctx context.Context, ag *gmcv2
 	})
 }
 
-func (r *ActionsGatewayV2Reconciler) applyNetworkPolicy(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *networkingv1.NetworkPolicy) error {
+func (r *ActionsGatewayV2Reconciler) applyNetworkPolicy(ctx context.Context, ag *gmcv2.ActionsGateway, desired *networkingv1.NetworkPolicy) error {
 	obj := &networkingv1.NetworkPolicy{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		obj.Spec = desired.Spec
@@ -739,7 +739,7 @@ func (r *ActionsGatewayV2Reconciler) applyNetworkPolicy(ctx context.Context, ag 
 // EgressProxy), so no other controller owns `.spec.replicas`. An HPA-targeted
 // Deployment must not be applied this way — see assignHPATargetDeploymentSpec (Q283).
 // The tolerated pod-template annotations survive the replace (Q552).
-func (r *ActionsGatewayV2Reconciler) applyDeployment(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *appsv1.Deployment) error {
+func (r *ActionsGatewayV2Reconciler) applyDeployment(ctx context.Context, ag *gmcv2.ActionsGateway, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ag, obj, desired, func() error {
 		assignManagedDeploymentSpec(&obj.Spec, desired.Spec)
@@ -747,7 +747,7 @@ func (r *ActionsGatewayV2Reconciler) applyDeployment(ctx context.Context, ag *gm
 	})
 }
 
-func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, desired *corev1.Secret) error {
+func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *gmcv2.ActionsGateway, desired *corev1.Secret) error {
 	return applyManagedSecret(ctx, r.Client, r.Scheme, ag, desired)
 }
 
@@ -760,7 +760,7 @@ func (r *ActionsGatewayV2Reconciler) applyOwnedSecret(ctx context.Context, ag *g
 // EgressUnattributed condition (True only in direct mode, §H.10). proxy is nil for
 // direct egress. autoscaler carries the managed-VPA outcome (Q360) for the advisory
 // AGCAutoscalingUnavailable condition.
-func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy, autoscaler agcAutoscalerState) (ctrl.Result, error) {
+func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2.ActionsGateway, proxy *gmcv2.EgressProxy, autoscaler agcAutoscalerState) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	agcReady := false
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}, &dep); err == nil {
@@ -772,11 +772,11 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// Snapshot the pre-reconcile status of the conditions whose transitions we surface
 	// as Events, before the set() closure mutates them in place. Emitting only on a
 	// genuine change keeps `kubectl describe` free of per-reconcile churn.
-	prevReady := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionReady)
-	prevRunnerSets := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionRunnerSetsDegraded)
-	prevDegraded := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded)
-	prevAutoscaling := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable)
-	prevCollision := conditionStatusValue(ag.Status.Conditions, gmcv2alpha1.ConditionScaleSetNameCollision)
+	prevReady := conditionStatusValue(ag.Status.Conditions, gmcv2.ConditionReady)
+	prevRunnerSets := conditionStatusValue(ag.Status.Conditions, gmcv2.ConditionRunnerSetsDegraded)
+	prevDegraded := conditionStatusValue(ag.Status.Conditions, gmcv2.ConditionDegraded)
+	prevAutoscaling := conditionStatusValue(ag.Status.Conditions, gmcv2.ConditionAGCAutoscalingUnavailable)
+	prevCollision := conditionStatusValue(ag.Status.Conditions, gmcv2.ConditionScaleSetNameCollision)
 	set := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
 		if status {
@@ -790,8 +790,8 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// Provisioning succeeded, so clear the abnormal conditions. The credential is
 	// present for both methods — the mounted GitHub App Secret (possession) or the
 	// projected Vault-auth identity (delegation, Q201).
-	set(gmcv2alpha1.ConditionCredentialUnavailable, false, gmcv2alpha1.ReasonReconcileSucceeded, "credential is available")
-	set(gmcv2alpha1.ConditionDegraded, false, gmcv2alpha1.ReasonReconcileSucceeded, "all AGC control-plane resources reconciled")
+	set(gmcv2.ConditionCredentialUnavailable, false, gmcv2.ReasonReconcileSucceeded, "credential is available")
+	set(gmcv2.ConditionDegraded, false, gmcv2.ReasonReconcileSucceeded, "all AGC control-plane resources reconciled")
 
 	// Egress mode (§H.10). Direct egress is an explicit, auditable status — not an
 	// inferred absent field — paired with the advisory EgressUnattributed condition so
@@ -799,12 +799,12 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// IP identity (the property they opted out of by not setting defaultProxyRef). It
 	// does not gate Ready: direct egress is a supported, NetworkPolicy-restricted mode.
 	if proxy == nil {
-		ag.Status.ProxyMode = gmcv2alpha1.ProxyModeDirect
-		set(gmcv2alpha1.ConditionEgressUnattributed, true, gmcv2alpha1.ReasonDirectEgress,
+		ag.Status.ProxyMode = gmcv2.ProxyModeDirect
+		set(gmcv2.ConditionEgressUnattributed, true, gmcv2.ReasonDirectEgress,
 			"no defaultProxyRef: AGC control-plane egress is direct (restricted to DNS + GitHub + the kube API) and has no per-tenant egress IP identity")
 	} else {
-		ag.Status.ProxyMode = gmcv2alpha1.ProxyModeProxied
-		set(gmcv2alpha1.ConditionEgressUnattributed, false, gmcv2alpha1.ReasonProxiedEgress,
+		ag.Status.ProxyMode = gmcv2.ProxyModeProxied
+		set(gmcv2.ConditionEgressUnattributed, false, gmcv2.ReasonProxiedEgress,
 			fmt.Sprintf("AGC control-plane egress is attributed to EgressProxy %q", proxy.Name))
 	}
 
@@ -815,12 +815,12 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// switch being off entails the True; the False says the pair is configured, not that
 	// anything downstream runs the join.
 	auditReason, auditMsg := egressAuditAttribution(ag, proxy)
-	set(gmcv2alpha1.ConditionEgressAuditUnattributed, auditReason != gmcv2alpha1.ReasonEgressAuditJoined,
+	set(gmcv2.ConditionEgressAuditUnattributed, auditReason != gmcv2.ReasonEgressAuditJoined,
 		auditReason, auditMsg)
 
 	// EgressRulesStale (Q1249), advisory: it does not gate Ready.
 	es := r.evalDirectEgressRulesStale(ctx, ag, proxy, now.Time)
-	set(gmcv2alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
+	set(gmcv2.ConditionEgressRulesStale, es.stale, es.reason, es.message)
 
 	// Managed AGC right-sizing (Q360). Advisory like EgressUnattributed: it never gates
 	// Ready, because a gateway whose VerticalPodAutoscaler could not be created is
@@ -828,26 +828,26 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// right-sized. The unavailable state is what an operator sees instead of a silent
 	// no-op when they opt in on a cluster with no VPA CRDs installed.
 	autoscalingMsg := "spec.agcAutoscaling is not set: the AGC is sized by spec.agcResources"
-	autoscalingReason := gmcv2alpha1.ReasonAGCAutoscalingDisabled
+	autoscalingReason := gmcv2.ReasonAGCAutoscalingDisabled
 	switch {
 	case autoscaler.unavailable:
-		autoscalingReason = gmcv2alpha1.ReasonVPACRDNotInstalled
+		autoscalingReason = gmcv2.ReasonVPACRDNotInstalled
 		autoscalingMsg = fmt.Sprintf("spec.agcAutoscaling is set but the %s CRD is not installed in this cluster, so no VerticalPodAutoscaler was created for %q; the AGC runs on its spec.agcResources sizing. Install the Kubernetes vertical-pod-autoscaler (CRDs + recommender/updater/admission-controller) or remove spec.agcAutoscaling",
 			verticalPodAutoscalerGVK.GroupKind().String(), agcVPAName(ag))
 	case autoscaler.requested:
-		autoscalingReason = gmcv2alpha1.ReasonAGCAutoscalingActive
+		autoscalingReason = gmcv2.ReasonAGCAutoscalingActive
 		autoscalingMsg = fmt.Sprintf("VerticalPodAutoscaler %q manages the AGC container's resource requests in updateMode %s; limits stay as stamped from spec.agcResources",
 			agcVPAName(ag), agcVPAUpdateMode(ag.Spec.AGCAutoscaling))
 	}
-	set(gmcv2alpha1.ConditionAGCAutoscalingUnavailable, autoscaler.unavailable, autoscalingReason, autoscalingMsg)
+	set(gmcv2.ConditionAGCAutoscalingUnavailable, autoscaler.unavailable, autoscalingReason, autoscalingMsg)
 
-	agcReason := gmcv2alpha1.ReasonAGCReady
+	agcReason := gmcv2.ReasonAGCReady
 	agcMsg := "AGC Deployment has a ready replica"
 	if !agcReady {
-		agcReason = gmcv2alpha1.ReasonAGCNotReady
+		agcReason = gmcv2.ReasonAGCNotReady
 		agcMsg = "AGC Deployment has no ready replica yet"
 	}
-	set(gmcv2alpha1.ConditionAGCAvailable, agcReady, agcReason, agcMsg)
+	set(gmcv2.ConditionAGCAvailable, agcReady, agcReason, agcMsg)
 
 	// RunnerSetsDegraded rolls the health of the RunnerSets bound to this gateway
 	// (spec.gatewayRef) up to the gateway's single pane (Q304), the v2 counterpart of
@@ -855,7 +855,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// Ready, since the AGC control plane can be healthy while a tenant's RunnerSet is
 	// impaired.
 	rs := r.evalRunnerSetHealth(ctx, ag)
-	set(gmcv2alpha1.ConditionRunnerSetsDegraded, rs.degraded, rs.reason, rs.message)
+	set(gmcv2.ConditionRunnerSetsDegraded, rs.degraded, rs.reason, rs.message)
 
 	// ScaleSetNameCollision reports a scale-set name shared across the gateway's GitHub
 	// scope that admission never got to reject (Q849) — see
@@ -865,16 +865,16 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// on a read that did not happen.
 	collision := r.evalScaleSetNameCollisions(ctx, ag)
 	if collision.observed {
-		set(gmcv2alpha1.ConditionScaleSetNameCollision, collision.collided, collision.reason, collision.message)
+		set(gmcv2.ConditionScaleSetNameCollision, collision.collided, collision.reason, collision.message)
 	}
 
-	readyReason := gmcv2alpha1.ReasonReady
+	readyReason := gmcv2.ReasonReady
 	readyMsg := "AGC control plane is available"
 	if !agcReady {
-		readyReason = gmcv2alpha1.ReasonAGCNotReady
+		readyReason = gmcv2.ReasonAGCNotReady
 		readyMsg = "waiting for the AGC Deployment to become ready"
 	}
-	set(gmcv2alpha1.ConditionReady, agcReady, readyReason, readyMsg)
+	set(gmcv2.ConditionReady, agcReady, readyReason, readyMsg)
 
 	ag.Status.ObservedGeneration = gen
 	if err := r.Status().Update(ctx, ag); err != nil {
@@ -889,10 +889,10 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// change against the freshly persisted status).
 	if newReady := boolConditionStatus(agcReady); prevReady != newReady {
 		if agcReady {
-			r.recordEvent(ag, corev1.EventTypeNormal, gmcv2alpha1.ReasonReady, "Reconcile",
+			r.recordEvent(ag, corev1.EventTypeNormal, gmcv2.ReasonReady, "Reconcile",
 				"AGC control plane is available")
 		} else {
-			r.recordEvent(ag, corev1.EventTypeWarning, gmcv2alpha1.ReasonAGCNotReady, "Reconcile",
+			r.recordEvent(ag, corev1.EventTypeWarning, gmcv2.ReasonAGCNotReady, "Reconcile",
 				"%s", readyMsg)
 		}
 	}
@@ -908,7 +908,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	// Degraded → recovered: provisioning failed on a prior reconcile and has now
 	// succeeded (updateStatus is only reached when reconcileResources returned no error).
 	if prevDegraded == metav1.ConditionTrue {
-		r.recordEvent(ag, corev1.EventTypeNormal, gmcv2alpha1.ReasonReconcileSucceeded, "Reconcile",
+		r.recordEvent(ag, corev1.EventTypeNormal, gmcv2.ReasonReconcileSucceeded, "Reconcile",
 			"AGC control-plane provisioning recovered")
 	}
 	// Managed autoscaling became (un)satisfiable (Q360): the operator opted in on a
@@ -956,7 +956,7 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 
 // setNotReady records a fail-closed condition (CredentialUnavailable / ProxyNotFound)
 // plus Ready=False with the same reason, before provisioning any children.
-func (r *ActionsGatewayV2Reconciler) setNotReady(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, condType, reason, msg string) (ctrl.Result, error) {
+func (r *ActionsGatewayV2Reconciler) setNotReady(ctx context.Context, ag *gmcv2.ActionsGateway, condType, reason, msg string) (ctrl.Result, error) {
 	// Warn once per transition into the fail-closed state (credential Secret missing or
 	// defaultProxyRef'd proxy absent), read before SetStatusCondition mutates the slice.
 	if conditionStatusValue(ag.Status.Conditions, condType) != metav1.ConditionTrue {
@@ -968,7 +968,7 @@ func (r *ActionsGatewayV2Reconciler) setNotReady(ctx context.Context, ag *gmcv2a
 		Type: condType, Status: metav1.ConditionTrue, Reason: reason, Message: msg, LastTransitionTime: now, ObservedGeneration: gen,
 	})
 	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg, LastTransitionTime: now, ObservedGeneration: gen,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: reason, Message: msg, LastTransitionTime: now, ObservedGeneration: gen,
 	})
 	ag.Status.ObservedGeneration = gen
 	if err := r.Status().Update(ctx, ag); err != nil && !apierrors.IsConflict(err) {
@@ -979,20 +979,20 @@ func (r *ActionsGatewayV2Reconciler) setNotReady(ctx context.Context, ag *gmcv2a
 
 // setDegraded records Degraded=True naming the failing step and returns the cause
 // so the work item is retried with backoff (mirrors the EgressProxy reconciler).
-func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, cause error) (ctrl.Result, error) {
+func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2.ActionsGateway, cause error) (ctrl.Result, error) {
 	// Warn once per transition into Degraded, naming the failing provisioning step.
-	if !meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded) {
-		r.recordEvent(ag, corev1.EventTypeWarning, gmcv2alpha1.ReasonProvisioningFailed, "Reconcile", "%s", cause.Error())
+	if !meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2.ConditionDegraded) {
+		r.recordEvent(ag, corev1.EventTypeWarning, gmcv2.ReasonProvisioningFailed, "Reconcile", "%s", cause.Error())
 	}
 	now := metav1.Now()
 	gen := ag.Generation
-	for _, t := range []string{gmcv2alpha1.ConditionDegraded, gmcv2alpha1.ConditionReady} {
+	for _, t := range []string{gmcv2.ConditionDegraded, gmcv2.ConditionReady} {
 		status := metav1.ConditionTrue
-		if t == gmcv2alpha1.ConditionReady {
+		if t == gmcv2.ConditionReady {
 			status = metav1.ConditionFalse
 		}
 		meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
-			Type: t, Status: status, Reason: gmcv2alpha1.ReasonProvisioningFailed,
+			Type: t, Status: status, Reason: gmcv2.ReasonProvisioningFailed,
 			Message: cause.Error(), LastTransitionTime: now, ObservedGeneration: gen,
 		})
 	}
@@ -1016,9 +1016,9 @@ func (r *ActionsGatewayV2Reconciler) setDegraded(ctx context.Context, ag *gmcv2a
 //
 // The shared-pool case and the per-RunnerSet twin are in the condition's own godoc
 // (apiconditions.ConditionEgressAuditUnattributed).
-func egressAuditAttribution(ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy) (reason, message string) {
+func egressAuditAttribution(ag *gmcv2.ActionsGateway, proxy *gmcv2.EgressProxy) (reason, message string) {
 	if proxy == nil {
-		return gmcv2alpha1.ReasonDirectEgress,
+		return gmcv2.ReasonDirectEgress,
 			"no defaultProxyRef: AGC control-plane egress is direct, so no per-connection record attributes it. A bound RunnerSet naming its own spec.proxyRef reports its workers' egress on its own EgressAuditUnattributed condition"
 	}
 	// An empty value is the CRD default, so report it as Off rather than as "".
@@ -1032,19 +1032,19 @@ func egressAuditAttribution(ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.E
 	proxyHalf := proxy.Spec.AuditLogging == auditLoggingConnectionsWithSource
 	switch {
 	case workerHalf && proxyHalf:
-		return gmcv2alpha1.ReasonEgressAuditJoined,
+		return gmcv2.ReasonEgressAuditJoined,
 			fmt.Sprintf("spec.auditLogging is %s and EgressProxy %q logs %s: an egress audit record joins to this tenant and the job that held the address",
 				auditLoggingWorkerAddresses, proxy.Name, auditLoggingConnectionsWithSource)
 	case proxyHalf:
-		return gmcv2alpha1.ReasonWorkerAuditDisabled,
+		return gmcv2.ReasonWorkerAuditDisabled,
 			fmt.Sprintf("EgressProxy %q logs %s but this gateway's spec.auditLogging is %q: the source addresses it records name no tenant or job. Set spec.auditLogging: %s",
 				proxy.Name, auditLoggingConnectionsWithSource, effective(ag.Spec.AuditLogging), auditLoggingWorkerAddresses)
 	case workerHalf:
-		return gmcv2alpha1.ReasonProxySourceAuditDisabled,
+		return gmcv2.ReasonProxySourceAuditDisabled,
 			fmt.Sprintf("spec.auditLogging is %s but EgressProxy %q logs %q: no egress record carries a source address to join on. Set that proxy's spec.auditLogging: %s",
 				auditLoggingWorkerAddresses, proxy.Name, effective(proxy.Spec.AuditLogging), auditLoggingConnectionsWithSource)
 	default:
-		return gmcv2alpha1.ReasonEgressAuditDisabled,
+		return gmcv2.ReasonEgressAuditDisabled,
 			fmt.Sprintf("neither this gateway's spec.auditLogging nor EgressProxy %q's is on, so its egress is not attributable to a tenant or a job", proxy.Name)
 	}
 }
@@ -1069,11 +1069,11 @@ type runnerSetHealth struct {
 // v2 RunnerSets are not owned by the gateway — they only reference it via
 // spec.gatewayRef. The binding is resolved by listing the namespace and matching
 // gatewayRef.name, the same scoping the AGC applies server-side (§H.16 #1).
-func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) runnerSetHealth {
-	var rsList gmcv2alpha1.RunnerSetList
+func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag *gmcv2.ActionsGateway) runnerSetHealth {
+	var rsList gmcv2.RunnerSetList
 	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
 		return runnerSetHealth{
-			reason:  gmcv2alpha1.ReasonAllRunnerSetsHealthy,
+			reason:  gmcv2.ReasonAllRunnerSetsHealthy,
 			message: fmt.Sprintf("could not read bound RunnerSets: %v", err),
 		}
 	}
@@ -1091,13 +1091,13 @@ func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag
 	}
 	if len(impaired) == 0 {
 		return runnerSetHealth{
-			reason:  gmcv2alpha1.ReasonAllRunnerSetsHealthy,
+			reason:  gmcv2.ReasonAllRunnerSetsHealthy,
 			message: fmt.Sprintf("all %d bound RunnerSet(s) healthy", bound),
 		}
 	}
 	return runnerSetHealth{
 		degraded: true,
-		reason:   gmcv2alpha1.ReasonRunnerSetsImpaired,
+		reason:   gmcv2.ReasonRunnerSetsImpaired,
 		message:  fmt.Sprintf("%d of %d RunnerSet(s) impaired: %s", len(impaired), bound, strings.Join(impaired, "; ")),
 	}
 }
@@ -1117,7 +1117,7 @@ func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag
 //     RunnerVersionTooOld onto the RunnerSet independently of Ready, so a classic set
 //     whose sessions are all rejected as unauthorized converges to the benign
 //     Ready=NoActiveSessions while Degraded=True sits on its own condition — axis (1)
-//     alone would miss it. gmcv2alpha1.ImpairingConditionTypes is the single source of
+//     alone would miss it. gmcv2.ImpairingConditionTypes is the single source of
 //     truth for this set (the v2 counterpart of v1's ImpairingConditionTypes), so it
 //     stays in sync with WorkersUnschedulable and any future impairing condition.
 //
@@ -1127,11 +1127,11 @@ func (r *ActionsGatewayV2Reconciler) evalRunnerSetHealth(ctx context.Context, ag
 // flap the rollup on normal operation.
 func runnerSetImpairments(conditions []metav1.Condition) []string {
 	var tripped []string
-	if ready := meta.FindStatusCondition(conditions, gmcv2alpha1.ConditionReady); ready != nil &&
-		ready.Status != metav1.ConditionTrue && ready.Reason != gmcv2alpha1.ReasonNoActiveSessions {
-		tripped = append(tripped, fmt.Sprintf("%s=%s", gmcv2alpha1.ConditionReady, ready.Reason))
+	if ready := meta.FindStatusCondition(conditions, gmcv2.ConditionReady); ready != nil &&
+		ready.Status != metav1.ConditionTrue && ready.Reason != gmcv2.ReasonNoActiveSessions {
+		tripped = append(tripped, fmt.Sprintf("%s=%s", gmcv2.ConditionReady, ready.Reason))
 	}
-	for _, t := range gmcv2alpha1.ImpairingConditionTypes() {
+	for _, t := range gmcv2.ImpairingConditionTypes() {
 		if meta.IsStatusConditionTrue(conditions, t) {
 			tripped = append(tripped, t)
 		}
@@ -1155,8 +1155,8 @@ const workerDrainTimeout = 90 * time.Second
 // evalRunnerSetHealth uses — v2 RunnerSets are not owned by the gateway, so there are
 // no owner labels to select on. A read failure yields nothing: teardown must not wedge
 // on an unreadable list, and the deadline would release it anyway.
-func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) []string {
-	var rsList gmcv2alpha1.RunnerSetList
+func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag *gmcv2.ActionsGateway) []string {
+	var rsList gmcv2.RunnerSetList
 	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
 		logf.FromContext(ctx).Error(err, "could not read bound RunnerSets for the teardown worker drain")
 		return nil
@@ -1197,7 +1197,7 @@ func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag
 // worker pods do have to go, though, and only the AGC can reap them: teardown holds
 // until it has (undrainedRunnerSets, Q547) before deleting the AGC out from under
 // them.
-func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (ctrl.Result, error) {
+func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gmcv2.ActionsGateway) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
 	// Worker drain (Q547), before any child is deleted. The tenant's worker pods are
@@ -1301,7 +1301,7 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, ag); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	controllerutil.RemoveFinalizer(ag, gmcv2alpha1.ActionsGatewayFinalizer)
+	controllerutil.RemoveFinalizer(ag, gmcv2.ActionsGatewayFinalizer)
 	return ctrl.Result{}, r.Update(ctx, ag)
 }
 
@@ -1313,7 +1313,7 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 // appears.
 func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	c, err := ctrl.NewControllerManagedBy(mgr).
-		For(&gmcv2alpha1.ActionsGateway{}).
+		For(&gmcv2.ActionsGateway{}).
 		// Serialise reconciles explicitly, matching the v1 gateway reconciler
 		// (Q328): the shared apply/cert helpers assume a single writer per
 		// controller. Raising this requires auditing them for safety under
@@ -1321,7 +1321,7 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		Owns(&appsv1.Deployment{}).
 		Watches(
-			&gmcv2alpha1.EgressProxy{},
+			&gmcv2.EgressProxy{},
 			handler.EnqueueRequestsFromMapFunc(r.proxyToActionsGateways),
 		).
 		// Watch bound RunnerSets so a child's health change refreshes the parent's
@@ -1330,7 +1330,7 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// gateway only re-reconciles when a set's impaired signature actually changes.
 		// RunnerSet status carries no secret material, so caching it is cheap.
 		Watches(
-			&gmcv2alpha1.RunnerSet{},
+			&gmcv2.RunnerSet{},
 			handler.EnqueueRequestsFromMapFunc(r.runnerSetToActionsGateway),
 			builder.WithPredicates(runnerSetImpairmentChanged()),
 		).
@@ -1350,7 +1350,7 @@ func (r *ActionsGatewayV2Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // parent's RunnerSetsDegraded rollup promptly (Q304). A set with no gatewayRef.name
 // maps to no request.
 func (r *ActionsGatewayV2Reconciler) runnerSetToActionsGateway(_ context.Context, obj client.Object) []ctrl.Request {
-	rs, ok := obj.(*gmcv2alpha1.RunnerSet)
+	rs, ok := obj.(*gmcv2.RunnerSet)
 	if !ok || rs.Spec.GatewayRef.Name == "" {
 		return nil
 	}
@@ -1365,7 +1365,7 @@ func (r *ActionsGatewayV2Reconciler) runnerSetToActionsGateway(_ context.Context
 // counterpart of v1's runnerGroupImpairingConditionsChanged.
 func runnerSetImpairmentChanged() predicate.Predicate {
 	signature := func(obj client.Object) (string, bool) {
-		rs, ok := obj.(*gmcv2alpha1.RunnerSet)
+		rs, ok := obj.(*gmcv2.RunnerSet)
 		if !ok {
 			return "", false
 		}
@@ -1389,7 +1389,7 @@ func runnerSetImpairmentChanged() predicate.Predicate {
 // secretToActionsGateways enqueues any v2 ActionsGateway in the Secret's namespace
 // whose credentials.githubApp names it, so a credential Secret create/delete re-reconciles.
 func (r *ActionsGatewayV2Reconciler) secretToActionsGateways(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.gatewaysMatching(ctx, obj.GetNamespace(), func(ag *gmcv2alpha1.ActionsGateway) bool {
+	return r.gatewaysMatching(ctx, obj.GetNamespace(), func(ag *gmcv2.ActionsGateway) bool {
 		return ag.Spec.GitHubAppSecretName() == obj.GetName()
 	})
 }
@@ -1405,7 +1405,7 @@ func (r *ActionsGatewayV2Reconciler) secretToActionsGateways(ctx context.Context
 // a same-named proxy in an unrelated namespace, so the namespace is now compared
 // too.
 func (r *ActionsGatewayV2Reconciler) proxyToActionsGateways(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list gmcv2alpha1.ActionsGatewayList
+	var list gmcv2.ActionsGatewayList
 	if err := r.List(ctx, &list); err != nil {
 		return nil
 	}
@@ -1430,8 +1430,8 @@ func (r *ActionsGatewayV2Reconciler) proxyToActionsGateways(ctx context.Context,
 	return reqs
 }
 
-func (r *ActionsGatewayV2Reconciler) gatewaysMatching(ctx context.Context, ns string, match func(*gmcv2alpha1.ActionsGateway) bool) []ctrl.Request {
-	var list gmcv2alpha1.ActionsGatewayList
+func (r *ActionsGatewayV2Reconciler) gatewaysMatching(ctx context.Context, ns string, match func(*gmcv2.ActionsGateway) bool) []ctrl.Request {
+	var list gmcv2.ActionsGatewayList
 	if err := r.List(ctx, &list, client.InNamespace(ns)); err != nil {
 		return nil
 	}

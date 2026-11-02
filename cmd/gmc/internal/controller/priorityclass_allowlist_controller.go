@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 )
 
@@ -78,7 +78,7 @@ type PriorityClassAllowlistReconciler struct {
 func (r *PriorityClassAllowlistReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	var pca v2beta1.PriorityClassAllowlist
+	var pca v2.PriorityClassAllowlist
 	key := types.NamespacedName{Name: r.Name}
 	if err := r.Get(ctx, key, &pca); err != nil {
 		if client.IgnoreNotFound(err) == nil {
@@ -183,7 +183,7 @@ func (r *PriorityClassAllowlistReconciler) SetupWithManager(mgr ctrl.Manager) er
 	}
 	runUnconditionally := false
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v2beta1.PriorityClassAllowlist{}, builder.WithPredicates(r.namePredicate())).
+		For(&v2.PriorityClassAllowlist{}, builder.WithPredicates(r.namePredicate())).
 		Named("priorityclass-allowlist").
 		WithOptions(controller.Options{NeedLeaderElection: &runUnconditionally}).
 		Complete(r)

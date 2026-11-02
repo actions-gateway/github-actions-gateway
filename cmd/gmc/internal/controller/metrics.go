@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -91,7 +91,7 @@ func (c *gitHubEgressIncompleteCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
 	defer cancel()
 
-	var epList gmcv2alpha1.EgressProxyList
+	var epList gmcv2.EgressProxyList
 	if err := c.reader.List(ctx, &epList); err != nil {
 		return
 	}
@@ -101,7 +101,7 @@ func (c *gitHubEgressIncompleteCollector) Collect(ch chan<- prometheus.Metric) {
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(c.incomplete, prometheus.GaugeValue,
-			conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionGitHubEgressIncomplete), ep.Namespace, ep.Name)
+			conditionGaugeValue(ep.Status.Conditions, gmcv2.ConditionGitHubEgressIncomplete), ep.Namespace, ep.Name)
 	}
 }
 
@@ -141,7 +141,7 @@ func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
 	if !c.v2Enabled {
 		return
 	}
-	var epList gmcv2alpha1.EgressProxyList
+	var epList gmcv2.EgressProxyList
 	if err := c.reader.List(ctx, &epList); err == nil {
 		for i := range epList.Items {
 			ep := &epList.Items[i]
@@ -149,7 +149,7 @@ func (c *egressRulesStaleCollector) Collect(ch chan<- prometheus.Metric) {
 				continue
 			}
 			ch <- prometheus.MustNewConstMetric(c.stale, prometheus.GaugeValue,
-				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionEgressRulesStale), ep.Namespace, ep.Name)
+				conditionGaugeValue(ep.Status.Conditions, gmcv2.ConditionEgressRulesStale), ep.Namespace, ep.Name)
 		}
 	}
 }
@@ -234,7 +234,7 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 	ctx, cancel := context.WithTimeout(context.Background(), collectorListTimeout)
 	defer cancel()
 
-	var list gmcv2alpha1.ActionsGatewayList
+	var list gmcv2.ActionsGatewayList
 	if err := c.reader.List(ctx, &list); err != nil {
 		return
 	}
@@ -244,19 +244,19 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(c.runnerSetsDegraded, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionRunnerSetsDegraded), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionRunnerSetsDegraded), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.agcAvailable, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAvailable), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionAGCAvailable), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.egressUnattributed, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionEgressUnattributed), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.agcAutoscalingUnavailable, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionAGCAutoscalingUnavailable), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.scaleSetNameCollision, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionScaleSetNameCollision), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionScaleSetNameCollision), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.egressAuditUnattributed, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressAuditUnattributed), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionEgressAuditUnattributed), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.directEgressRulesStale, prometheus.GaugeValue,
-			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressRulesStale), ag.Namespace, ag.Name)
+			conditionGaugeValue(ag.Status.Conditions, gmcv2.ConditionEgressRulesStale), ag.Namespace, ag.Name)
 	}
 }
 
@@ -303,7 +303,7 @@ func (c *proxyQuotaCollector) Collect(ch chan<- prometheus.Metric) {
 	if !c.v2Enabled {
 		return
 	}
-	var epList gmcv2alpha1.EgressProxyList
+	var epList gmcv2.EgressProxyList
 	if err := c.reader.List(ctx, &epList); err == nil {
 		for i := range epList.Items {
 			ep := &epList.Items[i]
@@ -311,9 +311,9 @@ func (c *proxyQuotaCollector) Collect(ch chan<- prometheus.Metric) {
 				continue
 			}
 			ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
-				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionProxyQuotaPressure), ep.Namespace, ep.Name)
+				conditionGaugeValue(ep.Status.Conditions, gmcv2.ConditionProxyQuotaPressure), ep.Namespace, ep.Name)
 			ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
-				conditionGaugeValue(ep.Status.Conditions, gmcv2alpha1.ConditionProxyQuotaExceeded), ep.Namespace, ep.Name)
+				conditionGaugeValue(ep.Status.Conditions, gmcv2.ConditionProxyQuotaExceeded), ep.Namespace, ep.Name)
 		}
 	}
 }
@@ -370,7 +370,7 @@ func (c *managedGatewaysCollector) Collect(ch chan<- prometheus.Metric) {
 	var read bool
 
 	if c.v2Enabled {
-		var v2List gmcv2alpha1.ActionsGatewayList
+		var v2List gmcv2.ActionsGatewayList
 		if err := c.reader.List(ctx, &v2List); err == nil {
 			read = true
 			for i := range v2List.Items {

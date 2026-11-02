@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	dto "github.com/prometheus/client_model/go"
@@ -27,7 +27,7 @@ import (
 
 func egressProxyCondition(t *testing.T, ns, name, condType string) *metav1.Condition {
 	t.Helper()
-	var ep gmcv2alpha1.EgressProxy
+	var ep gmcv2.EgressProxy
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &ep); err != nil {
 		return nil
 	}
@@ -53,7 +53,7 @@ func TestV2_EgressProxy_SetsQuotaAndStaleConditions(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), quota) })
 
 	ep := newV2EgressProxyObject("pool", ns)
-	ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeCIDR
+	ep.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeCIDR
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
 
@@ -64,17 +64,17 @@ func TestV2_EgressProxy_SetsQuotaAndStaleConditions(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionProxyQuotaPressure)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionProxyQuotaPressure)
 	}, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionTrue),
 		gomega.HaveField("Reason", "InsufficientQuotaHeadroom"),
 	), "a tight ResourceQuota must trip ProxyQuotaPressure on the EgressProxy")
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionEgressRulesStale)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionEgressRulesStale)
 	}, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionTrue),
-		gomega.HaveField("Reason", gmcv2alpha1.ReasonRefreshStalled),
+		gomega.HaveField("Reason", gmcv2.ReasonRefreshStalled),
 	), "a stalled IP-range refresh must trip EgressRulesStale on the EgressProxy")
 }
 
@@ -124,16 +124,16 @@ func TestV2_GaugeCollectors_ReflectV2(t *testing.T) {
 	// Hand-set the proxy conditions (no reconciler in this test) via the status
 	// subresource, then assert the collectors reflect them.
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionProxyQuotaPressure, Status: metav1.ConditionTrue,
+		Type: gmcv2.ConditionProxyQuotaPressure, Status: metav1.ConditionTrue,
 		Reason: "InsufficientQuotaHeadroom", Message: "test",
 	})
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressRulesStale, Status: metav1.ConditionTrue,
-		Reason: gmcv2alpha1.ReasonRefreshStalled, Message: "test",
+		Type: gmcv2.ConditionEgressRulesStale, Status: metav1.ConditionTrue,
+		Reason: gmcv2.ReasonRefreshStalled, Message: "test",
 	})
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionGitHubEgressIncomplete, Status: metav1.ConditionTrue,
-		Reason: gmcv2alpha1.ReasonApplianceRangesRequired, Message: "test",
+		Type: gmcv2.ConditionGitHubEgressIncomplete, Status: metav1.ConditionTrue,
+		Reason: gmcv2.ReasonApplianceRangesRequired, Message: "test",
 	})
 	require.NoError(t, k8sClient.Status().Update(ctx, ep))
 

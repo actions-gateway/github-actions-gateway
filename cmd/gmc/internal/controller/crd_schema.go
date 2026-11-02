@@ -60,7 +60,7 @@ var boundaryFields = []boundaryField{
 // absent boundary widens the exposure it was asked to enforce.
 //
 // A CRD that is not installed at all is skipped — that is an install without
-// the v2 CRDs, which V2alpha1Installed already decides. Every other read error is
+// the v2 CRDs, which V2Installed already decides. Every other read error is
 // returned rather than swallowed, so a missing RBAC grant or an apiserver
 // hiccup fails closed instead of passing the check by accident.
 func VerifyCRDSchemas(ctx context.Context, reader client.Reader) error {

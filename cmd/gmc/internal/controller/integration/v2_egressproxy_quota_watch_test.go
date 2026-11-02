@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
@@ -60,14 +60,14 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 	require.NoError(t, k8sClient.Status().Update(ctx, &dep))
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionReady)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionReady)
 	}, 20*time.Second, 100*time.Millisecond).Should(
 		gomega.HaveField("Status", metav1.ConditionTrue),
 		"the pool must be Ready before the quota edit")
 
 	// Steady state without a quota: no pressure.
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionProxyQuotaPressure)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionProxyQuotaPressure)
 	}, 20*time.Second, 100*time.Millisecond).Should(
 		gomega.HaveField("Reason", "NoQuota"))
 	reconciles.waitIdle(t, ns, time.Second)
@@ -84,7 +84,7 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), quota) })
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionProxyQuotaPressure)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionProxyQuotaPressure)
 	}, 10*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionTrue),
 		gomega.HaveField("Reason", "InsufficientQuotaHeadroom"),
@@ -97,7 +97,7 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 	require.NoError(t, k8sClient.Update(ctx, quota))
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionProxyQuotaPressure)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionProxyQuotaPressure)
 	}, 10*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionFalse),
 		gomega.HaveField("Reason", "QuotaHeadroomSufficient"),
@@ -105,9 +105,9 @@ func TestV2_EgressProxy_QuotaEditRetriggersReconcile(t *testing.T) {
 
 	// The condition freshness above is the observable contract; also pin that the
 	// proxy stayed Ready throughout (the quota conditions are advisory).
-	var got gmcv2alpha1.EgressProxy
+	var got gmcv2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pool"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	require.Equal(t, metav1.ConditionTrue, ready.Status)
 }

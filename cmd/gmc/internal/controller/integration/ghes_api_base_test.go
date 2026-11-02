@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,7 +31,7 @@ import (
 func TestV2_GHESGateway_AGCAddressesTheAppliance(t *testing.T) {
 	const ns = "v2-ghes-apibase"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 
@@ -59,12 +59,12 @@ func TestV2_GHESGateway_AGCAddressesTheAppliance(t *testing.T) {
 func TestV2_PublicGateway_AGCKeepsPublicAPIBase(t *testing.T) {
 	const ns = "v2-public-apibase"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{
 			ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns},
 		})
 	})

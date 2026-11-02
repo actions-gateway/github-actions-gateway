@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,7 +41,7 @@ import (
 // own namespace could only cost — and it costs on every reconcile, for every proxy in
 // the cluster, against a resync that re-enqueues them all. Keeping the unshared case
 // namespace-scoped leaves it exactly as expensive as it was before M4.
-func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2alpha1.EgressProxy) ([]string, error) {
+func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2.EgressProxy) ([]string, error) {
 	namespace, proxyName := ep.Namespace, ep.Name
 
 	scope := []client.ListOption{client.InNamespace(namespace)}
@@ -49,20 +49,20 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2a
 		scope = nil
 	}
 
-	var gateways gmcv2alpha1.ActionsGatewayList
+	var gateways gmcv2.ActionsGatewayList
 	if err := c.List(ctx, &gateways, scope...); err != nil {
 		return nil, fmt.Errorf("list ActionsGateways: %w", err)
 	}
 	// Keyed namespace/name: a RunnerSet's gatewayRef is always same-namespace, so two
 	// namespaces may hold same-named gateways with different GitHub URLs.
 	type gwKey struct{ ns, name string }
-	gatewayByKey := make(map[gwKey]*gmcv2alpha1.ActionsGateway, len(gateways.Items))
+	gatewayByKey := make(map[gwKey]*gmcv2.ActionsGateway, len(gateways.Items))
 
 	// binds reports whether a referrer in referrerNS naming (refNS, refName) resolves
 	// to this proxy AND is entitled to it. Consent is required for the cross-namespace
 	// case so an unconsented referrer cannot inject a hostname into another tenant's
 	// egress allowlist by naming their proxy.
-	binds := func(ref *gmcv2alpha1.ProxyObjectRef, referrerNS string) bool {
+	binds := func(ref *gmcv2.ProxyObjectRef, referrerNS string) bool {
 		if ref == nil || ref.Name != proxyName {
 			return false
 		}
@@ -85,7 +85,7 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2a
 		}
 	}
 
-	var runnerSets gmcv2alpha1.RunnerSetList
+	var runnerSets gmcv2.RunnerSetList
 	if err := c.List(ctx, &runnerSets, scope...); err != nil {
 		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}
@@ -127,7 +127,7 @@ type gitHubEgressGap struct {
 // knowable only to the operator. So the condition names the obligation rather than
 // closing it. Supplying spec.destinationCIDRs clears it; whether those ranges cover
 // the appliance is not checkable here.
-func evalGitHubEgressIncomplete(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) gitHubEgressGap {
+func evalGitHubEgressIncomplete(ep *gmcv2.EgressProxy, gitHubHosts []string) gitHubEgressGap {
 	allowed := func(msg string) gitHubEgressGap {
 		return gitHubEgressGap{reason: apiconditions.ReasonGitHubEgressAllowed, message: msg}
 	}
@@ -158,7 +158,7 @@ func evalGitHubEgressIncomplete(ep *gmcv2alpha1.EgressProxy, gitHubHosts []strin
 // names: a proxyRef *change* must also requeue the proxy the referrer just stopped
 // naming, so its allowlist drops the host. A namespace holds a handful of proxies.
 func (r *EgressProxyReconciler) referrerToEgressProxies(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list gmcv2alpha1.EgressProxyList
+	var list gmcv2.EgressProxyList
 	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
 		return nil
 	}
@@ -178,8 +178,8 @@ func (r *EgressProxyReconciler) referrerToEgressProxies(ctx context.Context, obj
 	}
 	// A gateway's proxyFailureAttribution opts in its whole namespace (Q1184), so it
 	// moves the ports of every pool any referrer there names, not only its own.
-	if _, ok := obj.(*gmcv2alpha1.ActionsGateway); ok {
-		var runnerSets gmcv2alpha1.RunnerSetList
+	if _, ok := obj.(*gmcv2.ActionsGateway); ok {
+		var runnerSets gmcv2.RunnerSetList
 		if err := r.List(ctx, &runnerSets, client.InNamespace(obj.GetNamespace())); err == nil {
 			for i := range runnerSets.Items {
 				for _, ref := range remoteProxyRefsOf(&runnerSets.Items[i]) {
@@ -187,7 +187,7 @@ func (r *EgressProxyReconciler) referrerToEgressProxies(ctx context.Context, obj
 				}
 			}
 		}
-		var gateways gmcv2alpha1.ActionsGatewayList
+		var gateways gmcv2.ActionsGatewayList
 		if err := r.List(ctx, &gateways, client.InNamespace(obj.GetNamespace())); err == nil {
 			for i := range gateways.Items {
 				for _, ref := range remoteProxyRefsOf(&gateways.Items[i]) {
@@ -203,11 +203,11 @@ func (r *EgressProxyReconciler) referrerToEgressProxies(ctx context.Context, obj
 // Only the two referrer kinds this reconciler watches carry a proxy reference; any
 // other object yields nothing.
 func remoteProxyRefsOf(obj client.Object) []types.NamespacedName {
-	var ref *gmcv2alpha1.ProxyObjectRef
+	var ref *gmcv2.ProxyObjectRef
 	switch o := obj.(type) {
-	case *gmcv2alpha1.ActionsGateway:
+	case *gmcv2.ActionsGateway:
 		ref = o.Spec.DefaultProxyRef
-	case *gmcv2alpha1.RunnerSet:
+	case *gmcv2.RunnerSet:
 		ref = o.Spec.ProxyRef
 	default:
 		return nil

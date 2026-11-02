@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,7 +62,7 @@ func TestV2_EgressProxy_RecreatesAPoolWhoseSelectorPredatesTheNarrowing(t *testi
 	require.Error(t, k8sClient.Update(ctx, narrowed),
 		"Deployment.spec.selector must be immutable — the premise of the recreate path")
 
-	ep := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: epName, Namespace: ns}}
+	ep := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: epName, Namespace: ns}}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
 

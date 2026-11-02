@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -13,12 +13,10 @@ import (
 
 func TestEgressModeHelpers(t *testing.T) {
 	// Empty string defaults to CIDR (a hand-built object that skipped defaulting).
-	assert.Equal(t, gmcv2alpha1.EgressPolicyModeCIDR, egressModeOf(gmcv2alpha1.EgressProxySpec{}))
-	assert.True(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{}))
-	assert.True(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCIDR}))
-	assert.False(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN}))
-	assert.False(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN}))
-	assert.False(t, egressUsesCIDR(gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCalicoFQDN}))
+	assert.Equal(t, gmcv2.EgressPolicyModeCIDR, egressModeOf(gmcv2.EgressProxySpec{}))
+	assert.True(t, egressUsesCIDR(gmcv2.EgressProxySpec{}))
+	assert.True(t, egressUsesCIDR(gmcv2.EgressProxySpec{EgressPolicyMode: gmcv2.EgressPolicyModeCIDR}))
+	assert.False(t, egressUsesCIDR(gmcv2.EgressProxySpec{EgressPolicyMode: gmcv2.EgressPolicyModeFQDN}))
 }
 
 func TestParseFQDNBackend(t *testing.T) {
@@ -48,25 +46,21 @@ func TestParseFQDNBackend(t *testing.T) {
 }
 
 // TestResolveFQDNEmitter is the table that replaces the old per-CNI enum switch (Q245):
-// deprecated CiliumFQDN/CalicoFQDN pin their namesake mechanism regardless of backend,
 // FQDN intent defers to the operator backend, FQDN+none emits nothing (admission-rejected),
 // and CIDR/empty never emit.
 func TestResolveFQDNEmitter(t *testing.T) {
 	cases := []struct {
 		name    string
-		mode    gmcv2alpha1.EgressPolicyMode
+		mode    gmcv2.EgressPolicyMode
 		backend FQDNBackend
 		want    fqdnEmitterKind
 	}{
-		{"CIDR any backend", gmcv2alpha1.EgressPolicyModeCIDR, FQDNBackendGKE, fqdnEmitNone},
+		{"CIDR any backend", gmcv2.EgressPolicyModeCIDR, FQDNBackendGKE, fqdnEmitNone},
 		{"empty mode", "", FQDNBackendCilium, fqdnEmitNone},
-		{"deprecated Cilium ignores backend none", gmcv2alpha1.EgressPolicyModeCiliumFQDN, FQDNBackendNone, fqdnEmitCilium},
-		{"deprecated Cilium ignores backend gke", gmcv2alpha1.EgressPolicyModeCiliumFQDN, FQDNBackendGKE, fqdnEmitCilium},
-		{"deprecated Calico ignores backend none", gmcv2alpha1.EgressPolicyModeCalicoFQDN, FQDNBackendNone, fqdnEmitCalico},
-		{"FQDN + none emits nothing", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendNone, fqdnEmitNone},
-		{"FQDN + cilium", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendCilium, fqdnEmitCilium},
-		{"FQDN + calico", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendCalico, fqdnEmitCalico},
-		{"FQDN + gke", gmcv2alpha1.EgressPolicyModeFQDN, FQDNBackendGKE, fqdnEmitGKE},
+		{"FQDN + none emits nothing", gmcv2.EgressPolicyModeFQDN, FQDNBackendNone, fqdnEmitNone},
+		{"FQDN + cilium", gmcv2.EgressPolicyModeFQDN, FQDNBackendCilium, fqdnEmitCilium},
+		{"FQDN + calico", gmcv2.EgressPolicyModeFQDN, FQDNBackendCalico, fqdnEmitCalico},
+		{"FQDN + gke", gmcv2.EgressPolicyModeFQDN, FQDNBackendGKE, fqdnEmitGKE},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -76,7 +70,7 @@ func TestResolveFQDNEmitter(t *testing.T) {
 }
 
 func TestBuildEgressProxyGKEFQDNNetworkPolicy(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.DestinationFQDNs = []string{"proxy.golang.org"}
 	})
 	u := buildEgressProxyGKEFQDNNetworkPolicy(ep, nil)
@@ -143,8 +137,8 @@ func TestBuildEgressProxyNetworkPolicy_FQDNModeDropsCIDR(t *testing.T) {
 	require.NoError(t, err)
 	cidrs := []net.IPNet{*cidr}
 
-	for _, mode := range []gmcv2alpha1.EgressPolicyMode{gmcv2alpha1.EgressPolicyModeCiliumFQDN, gmcv2alpha1.EgressPolicyModeCalicoFQDN} {
-		ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	for _, mode := range []gmcv2.EgressPolicyMode{gmcv2.EgressPolicyModeFQDN} {
+		ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 			ep.Spec.EgressPolicyMode = mode
 		})
 		np := buildEgressProxyNetworkPolicy(ep, cidrs)

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,21 +86,21 @@ func TestV2_EgressProxy_Attribution_RunsUnderTheShippedRBAC(t *testing.T) {
 	installGMCShippedRBAC(t)
 	const providerNS = "v2-attr-rbac-provider"
 	const consumerNS = "v2-attr-rbac-consumer"
-	marker := map[string]string{v2alpha1.TenantNamespaceMarkerLabel: v2alpha1.TenantNamespaceMarkerValue}
+	marker := map[string]string{v2.TenantNamespaceMarkerLabel: v2.TenantNamespaceMarkerValue}
 	createNamespaceWithLabels(t, providerNS, marker)
 	createNamespaceWithLabels(t, consumerNS, marker)
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "attr-pool", Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
+		Spec: v2.EgressProxySpec{
 			FailureAttribution: "PerConsumerPort",
-			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+			Sharing:            &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
 	ag := newV2GatewayWired("attr-gw", consumerNS, "attr-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
@@ -127,7 +127,7 @@ func TestV2_EgressProxy_Attribution_RunsUnderTheShippedRBAC(t *testing.T) {
 			k8sClient.Get(ctx, projKey, &s) == nil && len(s.Data[corev1.TLSPrivateKeyKey]) == 0
 	}, 30*time.Second, 250*time.Millisecond, "withdrawal never removed the ConfigMap and blanked the key")
 
-	var pool v2alpha1.EgressProxy
+	var pool v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &pool))
 	for _, c := range pool.Status.Conditions {
 		if c.Type == "Degraded" {
@@ -145,23 +145,23 @@ func TestV2_EgressProxy_Attribution_AddsASecondConsumerUnderTheShippedRBAC(t *te
 	const providerNS = "v2-attr-rbac-second-provider"
 	const alphaNS = "v2-attr-rbac-second-alpha"
 	const betaNS = "v2-attr-rbac-second-beta"
-	marker := map[string]string{v2alpha1.TenantNamespaceMarkerLabel: v2alpha1.TenantNamespaceMarkerValue}
+	marker := map[string]string{v2.TenantNamespaceMarkerLabel: v2.TenantNamespaceMarkerValue}
 	for _, ns := range []string{providerNS, alphaNS, betaNS} {
 		createNamespaceWithLabels(t, ns, marker)
 	}
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "attr-pool", Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
+		Spec: v2.EgressProxySpec{
 			FailureAttribution: "PerConsumerPort",
-			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{alphaNS, betaNS}},
+			Sharing:            &v2.ProxySharing{AllowedNamespaces: []string{alphaNS, betaNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
 	optIn := func(ns string) {
 		ag := newV2GatewayWired("attr-gw", ns, "attr-creds", "")
-		ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
+		ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
 		ag.Spec.ProxyFailureAttribution = "PerJob"
 		require.NoError(t, k8sClient.Create(ctx, ag))
 		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
@@ -182,7 +182,7 @@ func TestV2_EgressProxy_Attribution_AddsASecondConsumerUnderTheShippedRBAC(t *te
 	require.Eventually(t, func() bool { return projected(betaNS) }, 30*time.Second, 250*time.Millisecond,
 		"the second consumer never received its port")
 
-	var pool v2alpha1.EgressProxy
+	var pool v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &pool))
 	for _, c := range pool.Status.Conditions {
 		if c.Type == "Degraded" {
@@ -198,23 +198,23 @@ func TestV2_EgressProxy_Attribution_HoldsUnderTheShippedRBAC(t *testing.T) {
 	installGMCShippedRBAC(t)
 	const providerNS = "v2-attr-rbac-hold-provider"
 	const consumerNS = "v2-attr-rbac-hold-consumer"
-	marker := map[string]string{v2alpha1.TenantNamespaceMarkerLabel: v2alpha1.TenantNamespaceMarkerValue}
+	marker := map[string]string{v2.TenantNamespaceMarkerLabel: v2.TenantNamespaceMarkerValue}
 	createNamespaceWithLabels(t, providerNS, marker)
 	createNamespaceWithLabels(t, consumerNS, marker)
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "hold-pool", Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
+		Spec: v2.EgressProxySpec{
 			FailureAttribution: "PerConsumerPort",
-			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+			Sharing:            &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
-	rs := &v2alpha1.RunnerSet{
+	rs := &v2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "hold-rs", Namespace: consumerNS},
-		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:        v2alpha1.ObjectRef{Name: "hold-gw"},
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:        v2.ObjectRef{Name: "hold-gw"},
 			RunnerLabels:      []string{"self-hosted"},
 			MaxWorkerLifetime: &metav1.Duration{Duration: time.Hour},
 		},
@@ -222,7 +222,7 @@ func TestV2_EgressProxy_Attribution_HoldsUnderTheShippedRBAC(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
 	ag := newV2GatewayWired("hold-gw", consumerNS, "hold-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "hold-pool", Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "hold-pool", Namespace: providerNS}
 	ag.Spec.ProxyFailureAttribution = "PerJob"
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
@@ -242,7 +242,7 @@ func TestV2_EgressProxy_Attribution_HoldsUnderTheShippedRBAC(t *testing.T) {
 			k8sClient.Get(ctx, depKey, &dep) == nil && dep.Annotations["actions-gateway.com/attribution-held-until"] != ""
 	}, 30*time.Second, 250*time.Millisecond, "the pool never withdrew the projection and recorded a hold")
 
-	var pool v2alpha1.EgressProxy
+	var pool v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &pool))
 	for _, c := range pool.Status.Conditions {
 		if c.Type == "Degraded" {

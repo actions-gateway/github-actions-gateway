@@ -3,7 +3,7 @@ package controller
 import (
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -61,8 +61,8 @@ func TestEgressProxyScheduling_NodeSelectorAndTolerationsPassThrough(t *testing.
 		Value:    "tenant-a",
 		Effect:   corev1.TaintEffectNoSchedule,
 	}
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{
 			NodeSelector: map[string]string{"cloud.google.com/gke-nodepool": "pool-tenant-a"},
 			Tolerations:  []corev1.Toleration{tol},
 		}
@@ -82,8 +82,8 @@ func TestEgressProxyScheduling_NodeSelectorAndTolerationsPassThrough(t *testing.
 // nodeAffinity (but not podAntiAffinity) must NOT drop the built-in spread. This is
 // the composition rule that a naive "operator affinity replaces ours" would break.
 func TestEgressProxyScheduling_NodeAffinityPreservesBuiltInAntiAffinity(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{Affinity: nodePoolAffinity("pool-tenant-a")}
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{Affinity: nodePoolAffinity("pool-tenant-a")}
 	})
 	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 
@@ -96,8 +96,8 @@ func TestEgressProxyScheduling_NodeAffinityPreservesBuiltInAntiAffinity(t *testi
 // TestEgressProxyScheduling_PodAntiAffinityReplacesBuiltIn: a supplied podAntiAffinity
 // takes over entirely — "set it and you own it".
 func TestEgressProxyScheduling_PodAntiAffinityReplacesBuiltIn(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{
 			Affinity: &corev1.Affinity{
 				PodAntiAffinity: &corev1.PodAntiAffinity{
 					// Preferred, not required: soft spread, so a 1-node pool still schedules.
@@ -126,8 +126,8 @@ func TestEgressProxyScheduling_PodAntiAffinityReplacesBuiltIn(t *testing.T) {
 // the pool's only node. This is the behaviour a nil-vs-empty confusion would silently
 // break — hence its own test.
 func TestEgressProxyScheduling_EmptyPodAntiAffinityOptsOut(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{
 			Affinity: &corev1.Affinity{PodAntiAffinity: &corev1.PodAntiAffinity{}},
 		}
 	})
@@ -143,8 +143,8 @@ func TestEgressProxyScheduling_EmptyPodAntiAffinityOptsOut(t *testing.T) {
 // builder must never hand the Deployment a pointer into the shared EgressProxy spec,
 // or a later mutation of the built Deployment would corrupt the cache.
 func TestEgressProxyScheduling_DoesNotAliasSpec(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{
 			NodeSelector: map[string]string{"pool": "a"},
 			Tolerations:  []corev1.Toleration{{Key: "dedicated", Value: "tenant-a"}},
 			Affinity:     nodePoolAffinity("pool-tenant-a"),
@@ -178,8 +178,8 @@ func zonalSpread() corev1.TopologySpreadConstraint {
 // built-in required cross-node anti-affinity survives — the field composes with the
 // invariant, it does not replace it (unlike a supplied podAntiAffinity).
 func TestEgressProxyScheduling_TopologySpreadComposesWithBuiltInAntiAffinity(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{
 			TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
 		}
 	})
@@ -198,8 +198,8 @@ func TestEgressProxyScheduling_TopologySpreadComposesWithBuiltInAntiAffinity(t *
 // priorityClassName lands on the proxy pod verbatim (admission gates the value; the
 // builder is an unconditional pass-through).
 func TestEgressProxyScheduling_PriorityClassNamePassThrough(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{PriorityClassName: "gag-infra-critical"}
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{PriorityClassName: "gag-infra-critical"}
 	})
 	pod := buildEgressProxyDeployment(ep, "proxy:v1", nil).Spec.Template.Spec
 	assert.Equal(t, "gag-infra-critical", pod.PriorityClassName)
@@ -208,8 +208,8 @@ func TestEgressProxyScheduling_PriorityClassNamePassThrough(t *testing.T) {
 // TestEgressProxyScheduling_TopologySpreadDoesNotAliasSpec guards the informer-object
 // invariant for the new slice field.
 func TestEgressProxyScheduling_TopologySpreadDoesNotAliasSpec(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.Scheduling = &gmcv2.PodScheduling{
 			TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
 		}
 	})
@@ -225,12 +225,12 @@ func TestEgressProxyScheduling_TopologySpreadDoesNotAliasSpec(t *testing.T) {
 func TestAGCScheduling_PassThrough(t *testing.T) {
 	tol := corev1.Toleration{Key: "control-plane", Operator: corev1.TolerationOpExists}
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ag.Spec.Scheduling = &gmcv2.PodScheduling{
 		NodeSelector: map[string]string{"pool": "control"},
 		Tolerations:  []corev1.Toleration{tol},
 		Affinity:     nodePoolAffinity("pool-control"),
 	}
-	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2alpha1.SecurityProfileBaseline, nil).Spec.Template.Spec
+	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2.SecurityProfileBaseline, nil).Spec.Template.Spec
 
 	assert.Equal(t, map[string]string{"pool": "control"}, pod.NodeSelector)
 	assert.Equal(t, []corev1.Toleration{tol}, pod.Tolerations)
@@ -244,11 +244,11 @@ func TestAGCScheduling_PassThrough(t *testing.T) {
 // compose with — topologySpreadConstraints applies as given.
 func TestAGCScheduling_TopologySpreadAndPriorityClassPassThrough(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ag.Spec.Scheduling = &gmcv2.PodScheduling{
 		TopologySpreadConstraints: []corev1.TopologySpreadConstraint{zonalSpread()},
 		PriorityClassName:         "gag-infra-critical",
 	}
-	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2alpha1.SecurityProfileBaseline, nil).Spec.Template.Spec
+	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2.SecurityProfileBaseline, nil).Spec.Template.Spec
 
 	require.Len(t, pod.TopologySpreadConstraints, 1)
 	assert.Equal(t, "topology.kubernetes.io/zone", pod.TopologySpreadConstraints[0].TopologyKey)
@@ -264,7 +264,7 @@ func TestAGCScheduling_TopologySpreadAndPriorityClassPassThrough(t *testing.T) {
 // produce a byte-for-byte unchanged AGC Deployment (no spurious rollout on upgrade).
 func TestAGCScheduling_UnsetLeavesPodSpecUntouched(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2alpha1.SecurityProfileBaseline, nil).Spec.Template.Spec
+	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2.SecurityProfileBaseline, nil).Spec.Template.Spec
 
 	assert.Nil(t, pod.NodeSelector)
 	assert.Nil(t, pod.Tolerations)
@@ -276,12 +276,12 @@ func TestAGCScheduling_UnsetLeavesPodSpecUntouched(t *testing.T) {
 // TestAGCScheduling_DoesNotAliasSpec — informer-object invariant, as above.
 func TestAGCScheduling_DoesNotAliasSpec(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ag.Spec.Scheduling = &gmcv2.PodScheduling{
 		NodeSelector: map[string]string{"pool": "control"},
 		Tolerations:  []corev1.Toleration{{Key: "k", Value: "orig"}},
 		Affinity:     nodePoolAffinity("pool-control"),
 	}
-	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2alpha1.SecurityProfileBaseline, nil).Spec.Template.Spec
+	pod := buildAGCDeploymentV2(ag, "agc:v1", nil, gmcv2.SecurityProfileBaseline, nil).Spec.Template.Spec
 
 	pod.NodeSelector["pool"] = "MUTATED"
 	pod.Tolerations[0].Value = "MUTATED"

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,7 +16,7 @@ import (
 
 // deletingV2GatewayFor returns a v2 ActionsGateway that has been deleting for `since`,
 // which is what the worker-drain deadline is measured against.
-func deletingV2GatewayFor(since time.Duration) *gmcv2alpha1.ActionsGateway {
+func deletingV2GatewayFor(since time.Duration) *gmcv2.ActionsGateway {
 	ag := deletingV2Gateway()
 	deleted := metav1.NewTime(time.Now().Add(-since))
 	ag.DeletionTimestamp = &deleted
@@ -24,7 +24,7 @@ func deletingV2GatewayFor(since time.Duration) *gmcv2alpha1.ActionsGateway {
 }
 
 // workingRunnerSet is a RunnerSet bound to gw reporting live worker pods.
-func workingRunnerSet(name, ns string, active, pending int32) *gmcv2alpha1.RunnerSet {
+func workingRunnerSet(name, ns string, active, pending int32) *gmcv2.RunnerSet {
 	rs := boundRunnerSet(name, ns, "gw")
 	rs.Status.ActiveJobs = active
 	rs.Status.PendingJobs = pending
@@ -100,7 +100,7 @@ func TestUndrainedRunnerSets_ScopeAndReporting(t *testing.T) {
 	ag := deletingV2GatewayFor(time.Second)
 
 	neighbour := workingRunnerSet("neighbour", ns, 5, 5)
-	neighbour.Spec.GatewayRef = gmcv2alpha1.ObjectRef{Name: "other-gw"}
+	neighbour.Spec.GatewayRef = gmcv2.ObjectRef{Name: "other-gw"}
 
 	r := v2RollupReconciler(t,
 		workingRunnerSet("busy", ns, 2, 3),

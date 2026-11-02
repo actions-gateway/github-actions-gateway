@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +21,7 @@ import (
 
 // v2StatusUpdateClient wraps a fake client, forcing every status subresource
 // update on the given v2 ActionsGateway to return updErr.
-func v2StatusUpdateClient(t *testing.T, ag *gmcv2alpha1.ActionsGateway, updErr error) client.Client {
+func v2StatusUpdateClient(t *testing.T, ag *gmcv2.ActionsGateway, updErr error) client.Client {
 	t.Helper()
 	s := actionsGatewayV2TestScheme(t)
 	return fake.NewClientBuilder().
@@ -47,16 +47,16 @@ func TestV2SetDegraded_WritesConditionAndReturnsCause(t *testing.T) {
 	_, err := r.setDegraded(context.Background(), ag, cause)
 	require.ErrorIs(t, err, cause, "setDegraded must return the original cause so the reconcile requeues")
 
-	deg := meta.FindStatusCondition(ag.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+	deg := meta.FindStatusCondition(ag.Status.Conditions, gmcv2.ConditionDegraded)
 	require.NotNil(t, deg, "Degraded condition must be set")
 	assert.Equal(t, metav1.ConditionTrue, deg.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonProvisioningFailed, deg.Reason)
+	assert.Equal(t, gmcv2.ReasonProvisioningFailed, deg.Reason)
 	assert.Contains(t, deg.Message, "AGC Deployment")
 
-	ready := meta.FindStatusCondition(ag.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(ag.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready, "Ready=False must accompany Degraded")
 	assert.Equal(t, metav1.ConditionFalse, ready.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonProvisioningFailed, ready.Reason)
+	assert.Equal(t, gmcv2.ReasonProvisioningFailed, ready.Reason)
 }
 
 // TestV2SetDegraded_ConflictRequeuesWithoutError verifies the v2-specific
@@ -67,7 +67,7 @@ func TestV2SetDegraded_ConflictRequeuesWithoutError(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "gh-app-creds", "")
 	cause := errors.New("boom")
 	conflict := apierrors.NewConflict(
-		schema.GroupResource{Group: gmcv2alpha1.GroupVersion.Group, Resource: "actionsgateways"},
+		schema.GroupResource{Group: gmcv2.GroupVersion.Group, Resource: "actionsgateways"},
 		ag.Name, errors.New("object was modified"))
 
 	r := &ActionsGatewayV2Reconciler{Client: v2StatusUpdateClient(t, ag, conflict)}

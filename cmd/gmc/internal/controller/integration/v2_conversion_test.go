@@ -104,8 +104,17 @@ func TestV2Conversion_ActionsGateway_Identity(t *testing.T) {
 	const ns = "v2-conv-ag"
 	createNamespace(t, ns)
 
-	ag := newV2ActionsGateway(ns, "acme")
-	ag.Spec.LogLevel = "debug"
+	ag := &v2alpha1.ActionsGateway{
+		ObjectMeta: metav1.ObjectMeta{Name: "acme", Namespace: ns},
+		Spec: v2alpha1.ActionsGatewaySpec{
+			Credentials: v2alpha1.GitHubCredentials{
+				Type:      v2alpha1.CredentialTypeGitHubApp,
+				GitHubApp: &v2alpha1.LocalSecretReference{Name: "acme-github-app"},
+			},
+			GitHubURL: "https://github.com/acme",
+			LogLevel:  "debug",
+		},
+	}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 

@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // newV2MetricsScheme returns the client-go scheme with the v2alpha1 kinds also
@@ -25,7 +25,7 @@ func newV2MetricsScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(s))
-	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	require.NoError(t, gmcv2.AddToScheme(s))
 	return s
 }
 
@@ -33,14 +33,14 @@ func newV2MetricsScheme(t *testing.T) *runtime.Scheme {
 func newV2OnlyMetricsScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
-	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	require.NoError(t, gmcv2.AddToScheme(s))
 	return s
 }
 
 // v2ManagedGateway builds a v2alpha1 ActionsGateway for the managed-gateways
 // collector's v2 count.
-func v2ManagedGateway(name string, deleting bool) *gmcv2alpha1.ActionsGateway {
-	ag := &gmcv2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
+func v2ManagedGateway(name string, deleting bool) *gmcv2.ActionsGateway {
+	ag := &gmcv2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
 	if deleting {
 		now := metav1.Now()
 		ag.DeletionTimestamp = &now
@@ -52,8 +52,8 @@ func v2ManagedGateway(name string, deleting bool) *gmcv2alpha1.ActionsGateway {
 
 // v2EgressProxyWithCondition builds a v2alpha1 EgressProxy carrying a single status
 // condition, for driving the v2 arm of the proxy-quota and egress-stale collectors.
-func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2alpha1.EgressProxy {
-	ep := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
+func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2.EgressProxy {
+	ep := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
 		Type: condType, Status: status, Reason: "Test", Message: "test",
 	})
@@ -62,7 +62,7 @@ func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionSt
 
 // v2GatewayWithCondition builds a v2alpha1 ActionsGateway carrying a single status
 // condition, for driving the v2 ActionsGateway condition collector (Q321).
-func v2GatewayWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2alpha1.ActionsGateway {
+func v2GatewayWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2.ActionsGateway {
 	ag := v2ManagedGateway(name, false)
 	meta.SetStatusCondition(&ag.Status.Conditions, metav1.Condition{
 		Type: condType, Status: status, Reason: "Test", Message: "test",
@@ -93,47 +93,47 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	// "degraded": RunnerSetsDegraded=True, AGCAvailable=False, EgressUnattributed=True,
 	// AGCAutoscalingUnavailable=True, ScaleSetNameCollision=True,
 	// EgressAuditUnattributed=True.
-	degraded := v2GatewayWithCondition("degraded", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionTrue)
+	degraded := v2GatewayWithCondition("degraded", gmcv2.ConditionRunnerSetsDegraded, metav1.ConditionTrue)
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionAGCAvailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionEgressUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionAGCAutoscalingUnavailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionAGCAutoscalingUnavailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionScaleSetNameCollision, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionScaleSetNameCollision, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressAuditUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionEgressAuditUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressRulesStale, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionEgressRulesStale, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
 
 	// "healthy": RunnerSetsDegraded=False, AGCAvailable=True, EgressUnattributed=False,
 	// AGCAutoscalingUnavailable=False, ScaleSetNameCollision=False,
 	// EgressAuditUnattributed=False.
-	healthy := v2GatewayWithCondition("healthy", gmcv2alpha1.ConditionRunnerSetsDegraded, metav1.ConditionFalse)
+	healthy := v2GatewayWithCondition("healthy", gmcv2.ConditionRunnerSetsDegraded, metav1.ConditionFalse)
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionAGCAvailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionAGCAvailable, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionEgressUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionAGCAutoscalingUnavailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionAGCAutoscalingUnavailable, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionScaleSetNameCollision, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionScaleSetNameCollision, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressAuditUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionEgressAuditUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionEgressRulesStale, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionEgressRulesStale, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 
 	deleting := v2ManagedGateway("deleting", true)
@@ -233,9 +233,9 @@ func TestNewMetrics_RegistersCounterAndCollectors(t *testing.T) {
 func TestProxyQuotaCollector_ReflectsV2EgressProxy(t *testing.T) {
 	scheme := newV2MetricsScheme(t)
 
-	ep := v2EgressProxyWithCondition("proxy", gmcv2alpha1.ConditionProxyQuotaExceeded, metav1.ConditionTrue)
+	ep := v2EgressProxyWithCondition("proxy", gmcv2.ConditionProxyQuotaExceeded, metav1.ConditionTrue)
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionProxyQuotaPressure, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+		Type: gmcv2.ConditionProxyQuotaPressure, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep).Build()
 
@@ -263,8 +263,8 @@ actions_gateway_proxy_quota_pressure{name="proxy",namespace="proxy"} 0
 func TestEgressRulesStaleCollector_ReflectsV2EgressProxy(t *testing.T) {
 	scheme := newV2OnlyMetricsScheme(t)
 
-	stale := v2EgressProxyWithCondition("v2stale", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
-	fresh := v2EgressProxyWithCondition("v2fresh", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionFalse)
+	stale := v2EgressProxyWithCondition("v2stale", gmcv2.ConditionEgressRulesStale, metav1.ConditionTrue)
+	fresh := v2EgressProxyWithCondition("v2fresh", gmcv2.ConditionEgressRulesStale, metav1.ConditionFalse)
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(stale, fresh).Build()
 	c := newEgressRulesStaleCollector(fc, true)
 
@@ -283,8 +283,8 @@ actions_gateway_egress_rules_stale{name="v2stale",namespace="v2stale"} 1
 // collected twice, which fails the whole scrape.
 func TestEgressRulesStale_SameNamedGatewayAndProxyGather(t *testing.T) {
 	scheme := newV2MetricsScheme(t)
-	ep := v2EgressProxyWithCondition("team", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
-	ag := v2GatewayWithCondition("team", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
+	ep := v2EgressProxyWithCondition("team", gmcv2.ConditionEgressRulesStale, metav1.ConditionTrue)
+	ag := v2GatewayWithCondition("team", gmcv2.ConditionEgressRulesStale, metav1.ConditionTrue)
 	require.Equal(t, ep.Namespace+"/"+ep.Name, ag.Namespace+"/"+ag.Name)
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep, ag).Build()
 
@@ -302,9 +302,9 @@ func TestEgressRulesStale_SameNamedGatewayAndProxyGather(t *testing.T) {
 func TestGitHubEgressIncompleteCollector_ReflectsV2EgressProxy(t *testing.T) {
 	scheme := newV2MetricsScheme(t)
 
-	gap := v2EgressProxyWithCondition("gap", gmcv2alpha1.ConditionGitHubEgressIncomplete, metav1.ConditionTrue)
-	ok := v2EgressProxyWithCondition("ok", gmcv2alpha1.ConditionGitHubEgressIncomplete, metav1.ConditionFalse)
-	deleting := v2EgressProxyWithCondition("deleting", gmcv2alpha1.ConditionGitHubEgressIncomplete, metav1.ConditionTrue)
+	gap := v2EgressProxyWithCondition("gap", gmcv2.ConditionGitHubEgressIncomplete, metav1.ConditionTrue)
+	ok := v2EgressProxyWithCondition("ok", gmcv2.ConditionGitHubEgressIncomplete, metav1.ConditionFalse)
+	deleting := v2EgressProxyWithCondition("deleting", gmcv2.ConditionGitHubEgressIncomplete, metav1.ConditionTrue)
 	now := metav1.Now()
 	deleting.DeletionTimestamp = &now
 	// A deletion timestamp only persists in the fake client with a finalizer.

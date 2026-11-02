@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -45,14 +45,14 @@ var agcVPAControlledResources = []interface{}{string(corev1.ResourceCPU), string
 // agcVPAName is the managed VerticalPodAutoscaler's name: the same per-gateway name as
 // the AGC Deployment it targets, so it is unique per gateway in a multi-gateway
 // namespace and reads unambiguously in `kubectl get vpa`.
-func agcVPAName(ag *gmcv2alpha1.ActionsGateway) string { return agcNameV2(ag) }
+func agcVPAName(ag *gmcv2.ActionsGateway) string { return agcNameV2(ag) }
 
 // agcVPAUpdateMode returns the effective updateMode for the managed autoscaler,
 // treating the empty string as the Off default so a hand-built object that skipped
 // apiserver defaulting behaves like a defaulted one.
-func agcVPAUpdateMode(a *gmcv2alpha1.AGCVerticalAutoscaling) gmcv2alpha1.VPAUpdateMode {
+func agcVPAUpdateMode(a *gmcv2.AGCVerticalAutoscaling) gmcv2.VPAUpdateMode {
 	if a == nil || a.Mode == "" {
-		return gmcv2alpha1.VPAUpdateModeOff
+		return gmcv2.VPAUpdateModeOff
 	}
 	return a.Mode
 }
@@ -105,7 +105,7 @@ func agcVPABounds(override *corev1.ResourceRequirements) (minAllowed, maxAllowed
 // limits the operator chose (or the platform default) stay exactly as stamped. On a
 // single-pod control plane an autoscaler that also drifted the memory *limit* would
 // erode the OOM ceiling that bounds a runaway — the property the limit exists for.
-func buildAGCVerticalPodAutoscaler(ag *gmcv2alpha1.ActionsGateway) *unstructured.Unstructured {
+func buildAGCVerticalPodAutoscaler(ag *gmcv2.ActionsGateway) *unstructured.Unstructured {
 	minAllowed, maxAllowed := agcVPABounds(ag.Spec.AGCResources)
 
 	containerPolicy := map[string]interface{}{
@@ -216,7 +216,7 @@ func (r *ActionsGatewayV2Reconciler) crdInstalled(gvk schema.GroupVersionKind) (
 //   - not opted in (the default): best-effort delete, so removing the block — or never
 //     adding it — leaves no stale autoscaler still moving the AGC's requests. A NoMatch
 //     (CRD absent) is success: there is nothing to prune.
-func (r *ActionsGatewayV2Reconciler) applyOrPruneAGCAutoscaler(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) (agcAutoscalerState, error) {
+func (r *ActionsGatewayV2Reconciler) applyOrPruneAGCAutoscaler(ctx context.Context, ag *gmcv2.ActionsGateway) (agcAutoscalerState, error) {
 	installed, err := r.vpaCRDInstalled()
 	if err != nil {
 		return agcAutoscalerState{requested: ag.Spec.AGCAutoscaling != nil}, err
@@ -257,7 +257,7 @@ func (r *ActionsGatewayV2Reconciler) applyOrPruneAGCAutoscaler(ctx context.Conte
 		// Announce the precedence resolution once, when the autoscaler first appears:
 		// which knob the autoscaler now owns, and the bounds derived from agcResources.
 		minAllowed, maxAllowed := agcVPABounds(ag.Spec.AGCResources)
-		r.recordEvent(ag, corev1.EventTypeNormal, gmcv2alpha1.ReasonAGCAutoscalingActive, "ApplyAGCAutoscaler",
+		r.recordEvent(ag, corev1.EventTypeNormal, gmcv2.ReasonAGCAutoscalingActive, "ApplyAGCAutoscaler",
 			"managed VerticalPodAutoscaler %q provisioned in updateMode %s; it sizes the AGC container's requests only (limits stay as stamped from agcResources), bounded by minAllowed [%s] and maxAllowed [%s]",
 			agcVPAName(ag), agcVPAUpdateMode(ag.Spec.AGCAutoscaling),
 			formatAGCVPABounds(minAllowed, "unset — no explicit agcResources.requests floor"),
@@ -272,7 +272,7 @@ func (r *ActionsGatewayV2Reconciler) applyOrPruneAGCAutoscaler(ctx context.Conte
 // since "the kind does not exist" and "the object does not exist" are the same desired
 // end state. Teardown deletes the object through reconcileDelete's verifying `del` helper
 // instead, so a lingering child holds the finalizer like every other child.
-func (r *ActionsGatewayV2Reconciler) deleteAGCAutoscaler(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) error {
+func (r *ActionsGatewayV2Reconciler) deleteAGCAutoscaler(ctx context.Context, ag *gmcv2.ActionsGateway) error {
 	vpa := &unstructured.Unstructured{}
 	vpa.SetGroupVersionKind(verticalPodAutoscalerGVK)
 	vpa.SetNamespace(ag.Namespace)

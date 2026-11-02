@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // managedNetworkPolicies returns every NetworkPolicy the GMC authors: a proxy pool's,
@@ -18,7 +18,7 @@ import (
 func managedNetworkPolicies(managed bool) []*networkingv1.NetworkPolicy {
 	_, githubCIDR, _ := net.ParseCIDR("140.82.112.0/20")
 	githubCIDRs := []net.IPNet{*githubCIDR}
-	ep := newEP("proxy", "team-a", func(ep *gmcv2alpha1.EgressProxy) { ep.Spec.ManagedNetworkPolicy = ptr(managed) })
+	ep := newEP("proxy", "team-a", func(ep *gmcv2.EgressProxy) { ep.Spec.ManagedNetworkPolicy = ptr(managed) })
 	proxied := v2Gateway("gateway", "team-a", "github-app", "proxy")
 	direct := v2Gateway("direct", "team-a", "github-app", "")
 	return []*networkingv1.NetworkPolicy{

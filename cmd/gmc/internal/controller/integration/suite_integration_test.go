@@ -358,8 +358,7 @@ func installAGCTenantClusterRole(ctx context.Context, c client.Client) error {
 // test against the envtest apiserver. The optional ipCache is shared so a test can
 // stamp GitHub CIDRs the proxy NetworkPolicy should pick up; a nil cache allocates a
 // fresh (empty) one, which the reconciler tolerates. The FQDN backend is none — enough
-// for the deprecated CiliumFQDN/CalicoFQDN modes (which pin their own backend) and the
-// CIDR default; use startEgressProxyReconcilerWithBackend for FQDN-intent tests.
+// for the CIDR default; use startEgressProxyReconcilerWithBackend for FQDN-intent tests.
 func startEgressProxyReconciler(t *testing.T, ipCache *controller.IPRangeCache) {
 	t.Helper()
 	startEgressProxyReconcilerWithBackend(t, ipCache, controller.FQDNBackendNone)

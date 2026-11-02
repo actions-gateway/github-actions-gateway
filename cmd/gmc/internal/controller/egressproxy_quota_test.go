@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,10 +16,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func egressProxy(name string) *gmcv2alpha1.EgressProxy {
-	return &gmcv2alpha1.EgressProxy{
+func egressProxy(name string) *gmcv2.EgressProxy {
+	return &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name},
-		Spec: gmcv2alpha1.EgressProxySpec{
+		Spec: gmcv2.EgressProxySpec{
 			MinReplicas: ptrInt32(1),
 			MaxReplicas: ptrInt32(5),
 		},
@@ -101,7 +101,7 @@ func TestEvalEgressProxyEgressRulesStale(t *testing.T) {
 		r := &EgressProxyReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
 		es := r.evalEgressProxyEgressRulesStale(egressProxy("team-a"), now)
 		assert.True(t, es.stale)
-		assert.Equal(t, gmcv2alpha1.ReasonRefreshStalled, es.reason)
+		assert.Equal(t, gmcv2.ReasonRefreshStalled, es.reason)
 	})
 
 	t.Run("fresh when within threshold", func(t *testing.T) {
@@ -110,14 +110,14 @@ func TestEvalEgressProxyEgressRulesStale(t *testing.T) {
 		r := &EgressProxyReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
 		es := r.evalEgressProxyEgressRulesStale(egressProxy("team-a"), now)
 		assert.False(t, es.stale)
-		assert.Equal(t, gmcv2alpha1.ReasonRefreshCurrent, es.reason)
+		assert.Equal(t, gmcv2.ReasonRefreshCurrent, es.reason)
 	})
 
 	t.Run("stale when no refresh has ever succeeded", func(t *testing.T) {
 		r := &EgressProxyReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 49 * time.Hour}
 		es := r.evalEgressProxyEgressRulesStale(egressProxy("team-a"), now)
 		assert.True(t, es.stale, "a CIDR policy with no ranges denies GitHub egress, so it must be reported (Q1228)")
-		assert.Equal(t, gmcv2alpha1.ReasonRefreshNeverSucceeded, es.reason)
+		assert.Equal(t, gmcv2.ReasonRefreshNeverSucceeded, es.reason)
 		assert.Contains(t, es.message, "GitHub egress is denied")
 	})
 
@@ -128,16 +128,16 @@ func TestEvalEgressProxyEgressRulesStale(t *testing.T) {
 		r := &EgressProxyReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
 		es := r.evalEgressProxyEgressRulesStale(egressProxy("team-a"), now)
 		assert.False(t, es.stale)
-		assert.Equal(t, gmcv2alpha1.ReasonRefreshCurrent, es.reason)
+		assert.Equal(t, gmcv2.ReasonRefreshCurrent, es.reason)
 	})
 
 	t.Run("no alarm for FQDN egress mode before any refresh", func(t *testing.T) {
 		r := &EgressProxyReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 49 * time.Hour}
 		ep := egressProxy("team-a")
-		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+		ep.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeFQDN
 		es := r.evalEgressProxyEgressRulesStale(ep, now)
 		assert.False(t, es.stale, "FQDN mode carries no CIDR rule, so an empty cache costs it nothing")
-		assert.Equal(t, gmcv2alpha1.ReasonRefreshPending, es.reason)
+		assert.Equal(t, gmcv2.ReasonRefreshPending, es.reason)
 	})
 
 	t.Run("pending for FQDN egress mode", func(t *testing.T) {
@@ -145,10 +145,10 @@ func TestEvalEgressProxyEgressRulesStale(t *testing.T) {
 		cache.MarkRefreshed(now.Add(-50 * time.Hour))
 		r := &EgressProxyReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
 		ep := egressProxy("team-a")
-		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+		ep.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeFQDN
 		es := r.evalEgressProxyEgressRulesStale(ep, now)
 		assert.False(t, es.stale, "FQDN mode carries no refreshed CIDR rule, so it cannot go stale")
-		assert.Equal(t, gmcv2alpha1.ReasonRefreshPending, es.reason)
+		assert.Equal(t, gmcv2.ReasonRefreshPending, es.reason)
 	})
 
 	t.Run("pending for unmanaged NetworkPolicy", func(t *testing.T) {
@@ -169,8 +169,8 @@ func TestQuotaToEgressProxies(t *testing.T) {
 	scheme := newV2MetricsScheme(t)
 	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
 		egressProxy("team-a"),
-		&gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "second", Namespace: "team-a"}},
-		&gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "team-b"}},
+		&gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "second", Namespace: "team-a"}},
+		&gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "team-b"}},
 	).Build()
 	r := &EgressProxyReconciler{Client: fc}
 
@@ -205,12 +205,12 @@ func TestEgressProxyEgressRecheckRequeue(t *testing.T) {
 		"CIDR staleness is not evaluated without the shared IP cache")
 
 	fqdn := egressProxy("team-a")
-	fqdn.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	fqdn.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeFQDN
 	assert.Equal(t, 6*time.Hour, noCache.egressProxyEgressRecheckRequeue(fqdn),
 		"an FQDN-mode proxy re-checks CNI-policy drift on the same cadence, IP cache or not (Q326)")
 
 	unmanaged := egressProxy("team-a")
-	unmanaged.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	unmanaged.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeFQDN
 	f := false
 	unmanaged.Spec.ManagedNetworkPolicy = &f
 	assert.Equal(t, time.Duration(0), cidr.egressProxyEgressRecheckRequeue(unmanaged),

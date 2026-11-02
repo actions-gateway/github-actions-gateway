@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-func newEP(name, ns string, mut func(*gmcv2alpha1.EgressProxy)) *gmcv2alpha1.EgressProxy {
-	ep := &gmcv2alpha1.EgressProxy{}
+func newEP(name, ns string, mut func(*gmcv2.EgressProxy)) *gmcv2.EgressProxy {
+	ep := &gmcv2.EgressProxy{}
 	ep.Name = name
 	ep.Namespace = ns
 	if mut != nil {
@@ -50,7 +50,7 @@ func TestEgressProxyScalarDefaultsAndOverrides(t *testing.T) {
 	assert.Equal(t, int32(60), egressProxyTargetCPU(def))
 
 	// Overrides win.
-	over := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	over := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(3))
 		ep.Spec.MaxReplicas = ptr(int32(7))
 		ep.Spec.TargetCPUUtilizationPercentage = ptr(int32(55))
@@ -61,7 +61,7 @@ func TestEgressProxyScalarDefaultsAndOverrides(t *testing.T) {
 }
 
 func TestEgressProxyResourcesMergeOverDefaults(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.Resources = corev1.ResourceRequirements{
 			Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("25m")},
 		}
@@ -76,7 +76,7 @@ func TestEgressProxyResourcesMergeOverDefaults(t *testing.T) {
 }
 
 func TestBuildEgressProxyDeployment(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(3))
 	})
 	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
@@ -153,7 +153,7 @@ func TestBuildEgressProxyDeployment(t *testing.T) {
 // TestBuildEgressProxyDeployment_LogLevelOverride asserts spec.logLevel lands on
 // the proxy container as LOG_LEVEL — the per-pool debug knob, v1 parity (Q327).
 func TestBuildEgressProxyDeployment_LogLevelOverride(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.LogLevel = "debug"
 	})
 	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
@@ -169,7 +169,7 @@ func TestBuildEgressProxyDeployment_LogLevelOverride(t *testing.T) {
 }
 
 func TestBuildEgressProxyServiceHPAPDB(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(3))
 		ep.Spec.MaxReplicas = ptr(int32(7))
 		ep.Spec.TargetCPUUtilizationPercentage = ptr(int32(55))
@@ -224,7 +224,7 @@ func TestBuildEgressProxyNetworkPolicy(t *testing.T) {
 	assert.Equal(t, metricsPort, metricsRule.Ports[0].Port.IntVal, "monitoring scrape must target the mTLS metrics port")
 
 	// managedNetworkPolicy=false: GitHub CIDR egress omitted (additive model), DNS kept.
-	unmanaged := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	unmanaged := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.ManagedNetworkPolicy = ptr(false)
 	})
 	npU := buildEgressProxyNetworkPolicy(unmanaged, cidrs)
@@ -278,7 +278,7 @@ func TestBuildEgressProxyNetworkPolicy_DestinationCIDRsStayDistinct(t *testing.T
 
 	// CIDR mode (default): both rules present, and they are distinct rules — the
 	// destinationCIDRs rule is not equal to the GitHub helper's output.
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.DestinationCIDRs = []string{extraCIDR}
 	})
 	np := buildEgressProxyNetworkPolicy(ep, githubCIDRs)
@@ -305,8 +305,8 @@ func TestBuildEgressProxyNetworkPolicy_DestinationCIDRsStayDistinct(t *testing.T
 
 	// FQDN mode: the GitHub CIDR rule is gated out (egressUsesCIDR=false), but the
 	// destinationCIDRs rule persists — proof the two are governed by different gates.
-	epFQDN := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
-		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+	epFQDN := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
+		ep.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeFQDN
 		ep.Spec.DestinationCIDRs = []string{extraCIDR}
 	})
 	npFQDN := buildEgressProxyNetworkPolicy(epFQDN, githubCIDRs)
@@ -358,7 +358,7 @@ func TestProxyAllowlistEnv_NilWhenNoExtras(t *testing.T) {
 // suffixes (wildcards normalized) plus the operator's extra FQDNs, and no
 // PROXY_ALLOWED_CIDRS (no destinationCIDRs supplied).
 func TestProxyAllowlistEnv_FQDNsOnly(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.DestinationFQDNs = []string{"npm.pkg.example.com"}
 	})
 	env := proxyAllowlistEnv(ep, nil)
@@ -382,7 +382,7 @@ func TestProxyAllowlistEnv_FQDNsOnly(t *testing.T) {
 // destinationCIDRs adds PROXY_ALLOWED_CIDRS alongside the host-suffix env,
 // carrying exactly the operator's CIDRs (never the GitHub CIDR set).
 func TestProxyAllowlistEnv_CIDRsAddSecondEnvVar(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.DestinationFQDNs = []string{"npm.pkg.example.com"}
 		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8", "192.168.1.0/24"}
 	})
@@ -397,7 +397,7 @@ func TestProxyAllowlistEnv_CIDRsAddSecondEnvVar(t *testing.T) {
 // via destinationCIDRs alone still emits the GitHub host-suffix allowlist (the
 // implicit GitHub set is unconditional whenever the env is emitted at all).
 func TestProxyAllowlistEnv_CIDRsOnlyStillEmitsHostSuffixes(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8"}
 	})
 	env := proxyAllowlistEnv(ep, nil)
@@ -415,7 +415,7 @@ func TestProxyAllowlistEnv_CIDRsOnlyStillEmitsHostSuffixes(t *testing.T) {
 // written before the field — and must land on Off with the enum default.
 func TestProxyAuditEnv_NilWhenOff(t *testing.T) {
 	assert.Nil(t, proxyAuditEnv(newEP("shared", "team-a", nil)), "unset must inject nothing")
-	assert.Nil(t, proxyAuditEnv(newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	assert.Nil(t, proxyAuditEnv(newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.AuditLogging = "Off"
 	})), "explicit Off must inject nothing")
 }
@@ -425,7 +425,7 @@ func TestProxyAuditEnv_NilWhenOff(t *testing.T) {
 // The namespace must come from the downward API rather than a formatted value —
 // the record's attribution is only trustworthy if the pod supplies it.
 func TestProxyAuditEnv_ConnectionsInjectsModeAndNamespace(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.AuditLogging = "Connections"
 	})
 	env := proxyAuditEnv(ep)
@@ -445,7 +445,7 @@ func TestProxyAuditEnv_ConnectionsInjectsModeAndNamespace(t *testing.T) {
 // the helper and the pod template: proxyAuditEnv can be correct and still not be
 // wired in, and only the assembled Deployment says which.
 func TestEgressProxyDeployment_AuditEnvReachesTheContainer(t *testing.T) {
-	envNames := func(ep *gmcv2alpha1.EgressProxy) map[string]corev1.EnvVar {
+	envNames := func(ep *gmcv2.EgressProxy) map[string]corev1.EnvVar {
 		dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 		require.Len(t, dep.Spec.Template.Spec.Containers, 1)
 		out := map[string]corev1.EnvVar{}
@@ -459,7 +459,7 @@ func TestEgressProxyDeployment_AuditEnvReachesTheContainer(t *testing.T) {
 	assert.NotContains(t, off, "PROXY_AUDIT_LOGGING")
 	assert.NotContains(t, off, "POD_NAMESPACE")
 
-	on := envNames(newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	on := envNames(newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.AuditLogging = "Connections"
 	}))
 	require.Contains(t, on, "PROXY_AUDIT_LOGGING")
@@ -474,7 +474,7 @@ func TestEgressProxyDeployment_AuditEnvReachesTheContainer(t *testing.T) {
 // TestEgressProxyDeployment_AuditAndAllowlistEnvCoexist asserts the append does
 // not drop either optional block when a pool opts into both.
 func TestEgressProxyDeployment_AuditAndAllowlistEnvCoexist(t *testing.T) {
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.AuditLogging = "Connections"
 		ep.Spec.DestinationCIDRs = []string{"10.0.0.0/8"}
 	})

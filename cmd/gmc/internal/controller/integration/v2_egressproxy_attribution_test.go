@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,12 +32,12 @@ func attributionNamespaceNames(n int) []string {
 func TestV2_EgressProxy_Attribution_CapsAllowedNamespaces(t *testing.T) {
 	const ns = "v2-ep-attr-cap"
 	createNamespace(t, ns)
-	pool := func(name, mode string, n int) *v2alpha1.EgressProxy {
-		return &v2alpha1.EgressProxy{
+	pool := func(name, mode string, n int) *v2.EgressProxy {
+		return &v2.EgressProxy{
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Spec: v2alpha1.EgressProxySpec{
+			Spec: v2.EgressProxySpec{
 				FailureAttribution: mode,
-				Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: attributionNamespaceNames(n)},
+				Sharing:            &v2.ProxySharing{AllowedNamespaces: attributionNamespaceNames(n)},
 			},
 		}
 	}
@@ -70,18 +70,18 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 	startActionsGatewayV2Reconciler(t)
 	createGitHubAppSecret(t, consumerNS, "attr-creds")
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "attr-pool", Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
+		Spec: v2.EgressProxySpec{
 			FailureAttribution: "PerConsumerPort",
-			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+			Sharing:            &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	ag := newV2GatewayWired("attr-gw", consumerNS, "attr-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "attr-pool", Namespace: providerNS}
 	ag.Spec.ProxyFailureAttribution = "PerJob"
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
@@ -142,7 +142,7 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 	}, 30*time.Second, 250*time.Millisecond, "the pool never cleared its attribution key material and read Service")
 	require.Eventually(t, func() bool { return !workloadRange() }, 30*time.Second, 250*time.Millisecond,
 		"the workload policy kept the attributed port range after the namespace opted out")
-	var ready v2alpha1.EgressProxy
+	var ready v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: providerNS, Name: "attr-pool"}, &ready))
 	for _, c := range ready.Status.Conditions {
 		if c.Type == "Degraded" {
@@ -156,7 +156,7 @@ func TestV2_EgressProxy_Attribution_ProvisionsThePoolSide(t *testing.T) {
 func setGatewayAttribution(t *testing.T, key types.NamespacedName, value string) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		var ag v2alpha1.ActionsGateway
+		var ag v2.ActionsGateway
 		if k8sClient.Get(ctx, key, &ag) != nil {
 			return false
 		}
@@ -178,19 +178,19 @@ func TestV2_EgressProxy_Attribution_HoldsAnOptedOutNamespacesPort(t *testing.T) 
 	startActionsGatewayV2Reconciler(t)
 	createGitHubAppSecret(t, consumerNS, "hold-creds")
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "hold-pool", Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
+		Spec: v2.EgressProxySpec{
 			FailureAttribution: "PerConsumerPort",
-			Sharing:            &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+			Sharing:            &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
-	rs := &v2alpha1.RunnerSet{
+	rs := &v2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "hold-rs", Namespace: consumerNS},
-		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:        v2alpha1.ObjectRef{Name: "hold-gw"},
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:        v2.ObjectRef{Name: "hold-gw"},
 			RunnerLabels:      []string{"self-hosted"},
 			MaxWorkerLifetime: &metav1.Duration{Duration: time.Hour},
 		},
@@ -198,7 +198,7 @@ func TestV2_EgressProxy_Attribution_HoldsAnOptedOutNamespacesPort(t *testing.T) 
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
 	ag := newV2GatewayWired("hold-gw", consumerNS, "hold-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "hold-pool", Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "hold-pool", Namespace: providerNS}
 	ag.Spec.ProxyFailureAttribution = "PerJob"
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })

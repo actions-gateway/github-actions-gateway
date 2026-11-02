@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -83,19 +83,13 @@ const (
 
 // resolveFQDNEmitter maps the tenant intent (egressPolicyMode) and the operator backend
 // (--fqdn-policy-backend) to the concrete CNI-native emitter — the single decision point
-// that replaces the old per-CNI enum switch (Q245). The deprecated CNI-specific intents
-// CiliumFQDN/CalicoFQDN pin their namesake mechanism regardless of the operator backend,
-// preserving exact pre-split behavior for stored objects; the intent value FQDN defers to
-// the operator backend, and FQDN+none emits nothing. That last case is rejected at
+// that replaces the old per-CNI enum switch (Q245). The intent value FQDN defers to the
+// operator backend, and FQDN+none emits nothing. That last case is rejected at
 // admission, so it is not reached in practice — and if it were, the base NetworkPolicy
 // still default-denies GitHub egress, so it fails closed rather than opening wide.
-func resolveFQDNEmitter(mode gmcv2alpha1.EgressPolicyMode, backend FQDNBackend) fqdnEmitterKind {
+func resolveFQDNEmitter(mode gmcv2.EgressPolicyMode, backend FQDNBackend) fqdnEmitterKind {
 	switch mode {
-	case gmcv2alpha1.EgressPolicyModeCiliumFQDN:
-		return fqdnEmitCilium
-	case gmcv2alpha1.EgressPolicyModeCalicoFQDN:
-		return fqdnEmitCalico
-	case gmcv2alpha1.EgressPolicyModeFQDN:
+	case gmcv2.EgressPolicyModeFQDN:
 		switch backend {
 		case FQDNBackendCilium:
 			return fqdnEmitCilium
@@ -136,7 +130,7 @@ var githubEgressFQDNs = []string{
 // mode (the CRD's CEL rule rejects destinationFQDNs without an FQDN-family
 // egressPolicyMode), so they only ever reach the CNI-native policy. A fresh slice is
 // returned so callers never mutate the shared githubEgressFQDNs backing array.
-func egressFQDNs(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []string {
+func egressFQDNs(ep *gmcv2.EgressProxy, gitHubHosts []string) []string {
 	out := make([]string, 0, len(githubEgressFQDNs)+len(gitHubHosts)+len(ep.Spec.DestinationFQDNs))
 	out = append(out, githubEgressFQDNs...)
 	out = append(out, gitHubHosts...)
@@ -147,9 +141,9 @@ func egressFQDNs(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []string {
 // egressModeOf returns the effective egress policy mode, treating the empty string as
 // the CIDR default (so a hand-built object that skipped apiserver defaulting still
 // behaves like a defaulted one).
-func egressModeOf(spec gmcv2alpha1.EgressProxySpec) gmcv2alpha1.EgressPolicyMode {
+func egressModeOf(spec gmcv2.EgressProxySpec) gmcv2.EgressPolicyMode {
 	if spec.EgressPolicyMode == "" {
-		return gmcv2alpha1.EgressPolicyModeCIDR
+		return gmcv2.EgressPolicyModeCIDR
 	}
 	return spec.EgressPolicyMode
 }
@@ -157,13 +151,13 @@ func egressModeOf(spec gmcv2alpha1.EgressProxySpec) gmcv2alpha1.EgressPolicyMode
 // egressUsesCIDR reports whether the proxy expresses its GitHub allowlist as CIDR
 // ranges (the default). When false the standard NetworkPolicy omits the GitHub CIDR
 // rule and the IPRangeReconciler skips this proxy.
-func egressUsesCIDR(spec gmcv2alpha1.EgressProxySpec) bool {
-	return egressModeOf(spec) == gmcv2alpha1.EgressPolicyModeCIDR
+func egressUsesCIDR(spec gmcv2.EgressProxySpec) bool {
+	return egressModeOf(spec) == gmcv2.EgressPolicyModeCIDR
 }
 
 // egressProxyFQDNPolicyName is the name of the CNI-native FQDN egress policy:
 // "<ep>-proxy-fqdn".
-func egressProxyFQDNPolicyName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyFQDNPolicyName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyFQDNPolicySuffix
 }
 
@@ -183,7 +177,7 @@ func toUnstructuredLabels(in map[string]string) map[string]interface{} {
 // the resolved IPs) and TCP/443 to the GitHub FQDNs via toFQDNs. A CiliumNetworkPolicy
 // makes its selected endpoints default-deny for egress, so everything else is denied —
 // the same secure-by-default posture as the standard NetworkPolicy's CIDR rule.
-func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
+func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
 	allFQDNs := egressFQDNs(ep, gitHubHosts)
 	fqdnRules := make([]interface{}, 0, len(allFQDNs))
 	for _, f := range allFQDNs {
@@ -262,7 +256,7 @@ func buildEgressProxyCiliumNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHost
 // allows DNS to cluster DNS plus TCP/443 to the GitHub destination domains. The policy
 // declares types: [Egress] with no Allow rule beyond these, so Calico default-denies
 // all other egress — matching the CIDR default's posture.
-func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
+func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
 	allFQDNs := egressFQDNs(ep, gitHubHosts)
 	domains := make([]interface{}, 0, len(allFQDNs))
 	for _, f := range allFQDNs {
@@ -332,7 +326,7 @@ func buildEgressProxyCalicoNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHost
 // node-local-dns peer). So the fail-closed guarantee for gke DEPENDS on that base NP being
 // present: the FQDNNetworkPolicy only widens the union to permit GitHub, and if it is
 // absent or unenforced, GitHub egress stays denied by the base NP rather than opening wide.
-func buildEgressProxyGKEFQDNNetworkPolicy(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
+func buildEgressProxyGKEFQDNNetworkPolicy(ep *gmcv2.EgressProxy, gitHubHosts []string) *unstructured.Unstructured {
 	allFQDNs := egressFQDNs(ep, gitHubHosts)
 	matches := make([]interface{}, 0, len(allFQDNs))
 	for _, f := range allFQDNs {

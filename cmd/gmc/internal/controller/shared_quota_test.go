@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 func ptrInt32(v int32) *int32 { return &v }
@@ -38,7 +38,7 @@ func TestResourceListEqual(t *testing.T) {
 // poolResources returns the proxy pool's per-replica resources: the secure defaults,
 // overlaid with overrides when given.
 func poolResources(overrides *corev1.ResourceRequirements) corev1.ResourceRequirements {
-	ep := &gmcv2alpha1.EgressProxy{}
+	ep := &gmcv2.EgressProxy{}
 	if overrides != nil {
 		ep.Spec.Resources = *overrides
 	}

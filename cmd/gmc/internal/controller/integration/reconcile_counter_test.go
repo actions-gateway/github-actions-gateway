@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -31,7 +31,7 @@ func newReconcileCounter(c client.Client) *reconcileCounter {
 
 func (c *reconcileCounter) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	err := c.Client.Get(ctx, key, obj, opts...)
-	if _, ok := obj.(*v2alpha1.EgressProxy); ok && err == nil && obj.GetDeletionTimestamp().IsZero() {
+	if _, ok := obj.(*v2.EgressProxy); ok && err == nil && obj.GetDeletionTimestamp().IsZero() {
 		c.mu.Lock()
 		c.started[key.Namespace]++
 		c.mu.Unlock()
@@ -49,7 +49,7 @@ type statusCounter struct {
 }
 
 func (s *statusCounter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
-	if _, ok := obj.(*v2alpha1.EgressProxy); ok {
+	if _, ok := obj.(*v2.EgressProxy); ok {
 		defer func() {
 			s.c.mu.Lock()
 			s.c.finished[obj.GetNamespace()]++

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -22,15 +22,12 @@ import (
 )
 
 // These tests exercise the Q208 CNI-native FQDN egress opt-in on the v2 EgressProxy
-// reconciler end-to-end against the real apiserver: a stored CiliumFQDN/CalicoFQDN
-// mode emits the matching CNI-native policy (asserted as an unstructured object — the
-// suite installs stub Cilium/Calico CRDs), drops the GitHub CIDR rule from the
-// standard NetworkPolicy (fail-closed), and removes the other-mode policy. The CIDR
-// default is covered by the existing v2_egressproxy_test.go emission test.
-//
-// The fixtures are planted with createStoredAliasProxy rather than created: admission
-// refuses a new alias write (Q1085), so what these emitters serve is exactly the
-// stored population that predates the guard.
+// reconciler end-to-end against the real apiserver: the FQDN intent under a cilium or
+// calico operator backend emits the matching CNI-native policy (asserted as an
+// unstructured object — the suite installs stub Cilium/Calico CRDs), drops the GitHub
+// CIDR rule from the standard NetworkPolicy (fail-closed), and removes the other-mode
+// policy. The CIDR default is covered by the existing v2_egressproxy_test.go emission
+// test, and the gke backend by v2_egressproxy_gke_fqdn_test.go.
 
 var (
 	ciliumGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
@@ -69,7 +66,7 @@ func stdNPHasGitHubCIDR(np networkingv1.NetworkPolicy) bool {
 	return false
 }
 
-func TestV2_EgressProxy_CiliumFQDNMode(t *testing.T) {
+func TestV2_EgressProxy_FQDNModeCilium(t *testing.T) {
 	const ns = "v2-ep-cilium-fqdn"
 	createNamespace(t, ns)
 
@@ -79,13 +76,14 @@ func TestV2_EgressProxy_CiliumFQDNMode(t *testing.T) {
 	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
 	require.NoError(t, err)
 	ipCache.Set([]net.IPNet{*cidr})
-	startEgressProxyReconciler(t, ipCache)
+	startEgressProxyReconcilerWithBackend(t, ipCache, controller.FQDNBackendCilium)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN},
+		Spec:       gmcv2.EgressProxySpec{EgressPolicyMode: gmcv2.EgressPolicyModeFQDN},
 	}
-	createStoredAliasProxy(t, ep)
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 
@@ -95,7 +93,7 @@ func TestV2_EgressProxy_CiliumFQDNMode(t *testing.T) {
 		var gerr error
 		cnp, gerr = getCNIPolicy(t, ns, fqdnName, ciliumGVK)
 		return gerr == nil
-	}, 10*time.Second, 100*time.Millisecond, "CiliumNetworkPolicy should be emitted in CiliumFQDN mode")
+	}, 10*time.Second, 100*time.Millisecond, "CiliumNetworkPolicy should be emitted for FQDN intent + cilium backend")
 
 	assert.True(t, hasControllerOwnerRef(cnp.GetOwnerReferences(), egressProxyName), "Cilium policy must be owned by the EgressProxy")
 	egress, found, err := unstructured.NestedSlice(cnp.Object, "spec", "egress")
@@ -121,30 +119,31 @@ func TestV2_EgressProxy_CiliumFQDNMode(t *testing.T) {
 
 	// The other-mode (Calico) policy must not exist.
 	_, err = getCNIPolicy(t, ns, fqdnName, calicoGVK)
-	assert.True(t, apierrors.IsNotFound(err), "Calico policy must be absent in CiliumFQDN mode, got %v", err)
+	assert.True(t, apierrors.IsNotFound(err), "Calico policy must be absent under the cilium backend, got %v", err)
 }
 
-// TestV2_EgressProxy_CiliumFQDNExtraDestinations proves the Q242 G.1 deliverable-3
-// plumbing in CiliumFQDN mode: an operator destinationFQDNs entry is appended to the
+// TestV2_EgressProxy_FQDNExtraDestinations proves the Q242 G.1 deliverable-3
+// plumbing in FQDN mode under the cilium backend: an operator destinationFQDNs entry is appended to the
 // CiliumNetworkPolicy toFQDNs set and to the proxy CONNECT host-suffix env, and a
 // destinationCIDRs entry lands as an ipBlock peer on the standard NetworkPolicy
 // (which is applied in FQDN mode too) and in PROXY_ALLOWED_CIDRS.
-func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
+func TestV2_EgressProxy_FQDNExtraDestinations(t *testing.T) {
 	const ns = "v2-ep-cilium-extra"
 	createNamespace(t, ns)
-	startEgressProxyReconciler(t, nil)
+	startEgressProxyReconcilerWithBackend(t, nil, controller.FQDNBackendCilium)
 
 	const destFQDN = "proxy.golang.org"
 	const destCIDR = "199.36.153.8/30"
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
-			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
 			DestinationFQDNs: []string{destFQDN},
 			DestinationCIDRs: []string{destCIDR},
 		},
 	}
-	createStoredAliasProxy(t, ep)
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 	var cnp *unstructured.Unstructured
@@ -188,7 +187,7 @@ func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
 	assert.True(t, npHasCIDRPeer(np, destCIDR), "destinationCIDRs must become an ipBlock peer even in FQDN mode")
 }
 
-// TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost covers Q506 #2. The GitHub host
+// TestV2_EgressProxy_FQDNCarriesReferrerGHESHost covers Q506 #2. The GitHub host
 // a tenant uses lives on the referring ActionsGateway, not on the EgressProxy, so an
 // FQDN-mode GHES tenant used to get a policy naming six public hosts and nothing its
 // traffic touches. The gateway is applied AFTER the pool is Ready and the reconciles
@@ -196,7 +195,7 @@ func TestV2_EgressProxy_CiliumFQDNExtraDestinations(t *testing.T) {
 // referrer watch edge fires: with the suite's 2s resync disabled and no not-ready
 // requeue left running, nothing else can re-enqueue the proxy (the Q326 setup, for
 // the same reason).
-func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
+func TestV2_EgressProxy_FQDNCarriesReferrerGHESHost(t *testing.T) {
 	const ns = "v2-ep-cilium-ghes"
 	const ghesHost = "ghes.example.com"
 	createNamespace(t, ns)
@@ -207,16 +206,17 @@ func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 	// cache state: it requeues every threshold/8 (~6h), far past this test either way.
 	ipCache := &controller.IPRangeCache{}
 	ipCache.MarkRefreshed(time.Now())
-	reconciles := startEgressProxyReconcilerNoResync(t, ipCache)
+	reconciles := startEgressProxyReconcilerOpts(t, ipCache, controller.FQDNBackendCilium, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
-			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCiliumFQDN,
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
 			MinReplicas:      ptr32(1),
 		},
 	}
-	createStoredAliasProxy(t, ep)
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 	require.Eventually(t, func() bool {
@@ -237,7 +237,7 @@ func TestV2_EgressProxy_CiliumFQDNCarriesReferrerGHESHost(t *testing.T) {
 	require.NoError(t, k8sClient.Status().Update(ctx, &dep))
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, egressProxyName, gmcv2alpha1.ConditionReady)
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2.ConditionReady)
 	}, 20*time.Second, 100*time.Millisecond).Should(
 		gomega.HaveField("Status", metav1.ConditionTrue),
 		"the pool must be Ready before the gateway lands")
@@ -288,7 +288,7 @@ func ciliumPolicyAllowsFQDN(t *testing.T, cnp *unstructured.Unstructured, host s
 	return false
 }
 
-func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {
+func TestV2_EgressProxy_FQDNModeCalico(t *testing.T) {
 	const ns = "v2-ep-calico-fqdn"
 	createNamespace(t, ns)
 
@@ -296,13 +296,14 @@ func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {
 	_, cidr, err := net.ParseCIDR("140.82.112.0/20")
 	require.NoError(t, err)
 	ipCache.Set([]net.IPNet{*cidr})
-	startEgressProxyReconciler(t, ipCache)
+	startEgressProxyReconcilerWithBackend(t, ipCache, controller.FQDNBackendCalico)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{EgressPolicyMode: gmcv2alpha1.EgressPolicyModeCalicoFQDN},
+		Spec:       gmcv2.EgressProxySpec{EgressPolicyMode: gmcv2.EgressPolicyModeFQDN},
 	}
-	createStoredAliasProxy(t, ep)
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	fqdnName := egressProxyName + "-proxy-fqdn"
 
@@ -311,7 +312,7 @@ func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {
 		var gerr error
 		calico, gerr = getCNIPolicy(t, ns, fqdnName, calicoGVK)
 		return gerr == nil
-	}, 10*time.Second, 100*time.Millisecond, "Calico NetworkPolicy should be emitted in CalicoFQDN mode")
+	}, 10*time.Second, 100*time.Millisecond, "Calico NetworkPolicy should be emitted for FQDN intent + calico backend")
 
 	assert.True(t, hasControllerOwnerRef(calico.GetOwnerReferences(), egressProxyName), "Calico policy must be owned by the EgressProxy")
 	egress, found, err := unstructured.NestedSlice(calico.Object, "spec", "egress")
@@ -328,5 +329,5 @@ func TestV2_EgressProxy_CalicoFQDNMode(t *testing.T) {
 	assert.False(t, stdNPHasGitHubCIDR(np), "FQDN mode must drop the GitHub CIDR egress rule")
 
 	_, err = getCNIPolicy(t, ns, fqdnName, ciliumGVK)
-	assert.True(t, apierrors.IsNotFound(err), "Cilium policy must be absent in CalicoFQDN mode, got %v", err)
+	assert.True(t, apierrors.IsNotFound(err), "Cilium policy must be absent under the calico backend, got %v", err)
 }

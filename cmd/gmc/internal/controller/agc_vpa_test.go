@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,9 +31,9 @@ func vpaAwareRESTMapper() apimeta.RESTMapper {
 }
 
 // autoscalingGateway returns a v2 gateway that opted into managed AGC right-sizing.
-func autoscalingGateway(mode gmcv2alpha1.VPAUpdateMode) *gmcv2alpha1.ActionsGateway {
+func autoscalingGateway(mode gmcv2.VPAUpdateMode) *gmcv2.ActionsGateway {
 	ag := v2Gateway("gw", "team-a", "github-app", "")
-	ag.Spec.AGCAutoscaling = &gmcv2alpha1.AGCVerticalAutoscaling{Mode: mode}
+	ag.Spec.AGCAutoscaling = &gmcv2.AGCVerticalAutoscaling{Mode: mode}
 	return ag
 }
 
@@ -85,7 +85,7 @@ func TestAGCVPABounds_CeilingTracksEffectiveLimits(t *testing.T) {
 // object targets the AGC Deployment, names the AGC container exactly as the Deployment
 // builder does, and is pinned to RequestsOnly so the stamped limits are never moved.
 func TestBuildAGCVerticalPodAutoscaler_TargetsTheAGCDeploymentRequestsOnly(t *testing.T) {
-	ag := autoscalingGateway(gmcv2alpha1.VPAUpdateModeRecreate)
+	ag := autoscalingGateway(gmcv2.VPAUpdateModeRecreate)
 
 	vpa := buildAGCVerticalPodAutoscaler(ag)
 
@@ -111,7 +111,7 @@ func TestBuildAGCVerticalPodAutoscaler_TargetsTheAGCDeploymentRequestsOnly(t *te
 
 	// The container name must match the Deployment's container exactly, or the policy
 	// silently applies to nothing.
-	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileRestricted, nil)
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2.SecurityProfileRestricted, nil)
 	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
 	assert.Equal(t, dep.Spec.Template.Spec.Containers[0].Name, policy["containerName"])
 }
@@ -132,7 +132,7 @@ func TestBuildAGCVerticalPodAutoscaler_DefaultsToRecommendOnly(t *testing.T) {
 // reports unavailable and returns NO error, so the caller never degrades the gateway.
 func TestApplyAGCAutoscaler_CRDAbsentDegradesGracefully(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
-	ag := autoscalingGateway(gmcv2alpha1.VPAUpdateModeRecreate)
+	ag := autoscalingGateway(gmcv2.VPAUpdateModeRecreate)
 	// No WithRESTMapper: the fake client's default mapper matches no kind at all,
 	// which is precisely a cluster without the vertical-pod-autoscaler installed.
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag).Build()
@@ -169,10 +169,10 @@ func TestActionsGatewayV2Reconcile_VPACRDAbsentStaysReady(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 		Name:   "team-a",
-		Labels: map[string]string{gmcv2alpha1.SecurityProfileLabel: gmcv2alpha1.SecurityProfileRestricted},
+		Labels: map[string]string{gmcv2.SecurityProfileLabel: gmcv2.SecurityProfileRestricted},
 	}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
-	ag := autoscalingGateway(gmcv2alpha1.VPAUpdateModeRecreate)
+	ag := autoscalingGateway(gmcv2.VPAUpdateModeRecreate)
 	// A ready AGC Deployment so Ready is decided by provisioning, not by rollout timing.
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{Name: agcNameV2(ag), Namespace: ag.Namespace},
@@ -189,25 +189,25 @@ func TestActionsGatewayV2Reconcile_VPACRDAbsentStaysReady(t *testing.T) {
 	assert.Equal(t, agcAutoscalerReprobeInterval, res.RequeueAfter,
 		"an unsatisfiable opt-in must re-probe on the slow bounded cadence, not hot-loop")
 
-	var fetched gmcv2alpha1.ActionsGateway
+	var fetched gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched))
 
-	ready := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionTrue, ready.Status,
 		"a missing optional autoscaler CRD must not gate Ready — the AGC runs on its agcResources sizing")
 
-	degraded := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+	degraded := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2.ConditionDegraded)
 	require.NotNil(t, degraded)
 	assert.Equal(t, metav1.ConditionFalse, degraded.Status, "the gateway must not be Degraded")
 
-	unavailable := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable)
+	unavailable := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2.ConditionAGCAutoscalingUnavailable)
 	require.NotNil(t, unavailable, "the unsatisfiable opt-in must be surfaced, not silent")
 	assert.Equal(t, metav1.ConditionTrue, unavailable.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonVPACRDNotInstalled, unavailable.Reason)
+	assert.Equal(t, gmcv2.ReasonVPACRDNotInstalled, unavailable.Reason)
 	assert.Contains(t, unavailable.Message, "vertical-pod-autoscaler", "the message must name the remediation")
 
-	assert.True(t, hasEventContaining(rec, gmcv2alpha1.ReasonVPACRDNotInstalled),
+	assert.True(t, hasEventContaining(rec, gmcv2.ReasonVPACRDNotInstalled),
 		"expected one Warning event naming the missing CRD")
 }
 
@@ -233,17 +233,17 @@ func TestActionsGatewayV2Reconcile_NoOptInReportsAutoscalingDisabled(t *testing.
 	res := reconcileV2Gateway(t, r, ag.Namespace, ag.Name)
 	assert.Zero(t, res.RequeueAfter, "a gateway that did not opt in must not carry the re-probe requeue")
 
-	var fetched gmcv2alpha1.ActionsGateway
+	var fetched gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched))
-	cond := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2alpha1.ConditionAGCAutoscalingUnavailable)
+	cond := apimeta.FindStatusCondition(fetched.Status.Conditions, gmcv2.ConditionAGCAutoscalingUnavailable)
 	require.NotNil(t, cond)
 	assert.Equal(t, metav1.ConditionFalse, cond.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonAGCAutoscalingDisabled, cond.Reason)
+	assert.Equal(t, gmcv2.ReasonAGCAutoscalingDisabled, cond.Reason)
 
 	// The condition appearing for the first time in its default state is not a
 	// transition worth an Event — otherwise every gateway ever created would carry one
 	// line of pure noise in `kubectl describe`.
-	assert.False(t, hasEventContaining(rec, gmcv2alpha1.ReasonAGCAutoscalingDisabled),
+	assert.False(t, hasEventContaining(rec, gmcv2.ReasonAGCAutoscalingDisabled),
 		"the not-opted-in default must not emit an Event on first observation")
 }
 
@@ -255,7 +255,7 @@ func TestApplyAGCAutoscaler_StampsAndPrunes(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	scheme.AddKnownTypeWithName(verticalPodAutoscalerGVK, &unstructured.Unstructured{})
 	scheme.AddKnownTypeWithName(verticalPodAutoscalerGVK.GroupVersion().WithKind(verticalPodAutoscalerGVK.Kind+"List"), &unstructured.UnstructuredList{})
-	ag := autoscalingGateway(gmcv2alpha1.VPAUpdateModeInitial)
+	ag := autoscalingGateway(gmcv2.VPAUpdateModeInitial)
 	ag.UID = "gw-uid-1"
 	c := fake.NewClientBuilder().WithScheme(scheme).WithRESTMapper(vpaAwareRESTMapper()).WithObjects(ag).Build()
 	rec := events.NewFakeRecorder(8)
@@ -272,7 +272,7 @@ func TestApplyAGCAutoscaler_StampsAndPrunes(t *testing.T) {
 	owners := got.GetOwnerReferences()
 	require.Len(t, owners, 1, "the autoscaler must be owner-referenced for cascade GC")
 	assert.Equal(t, ag.Name, owners[0].Name)
-	assert.True(t, hasEventContaining(rec, gmcv2alpha1.ReasonAGCAutoscalingActive),
+	assert.True(t, hasEventContaining(rec, gmcv2.ReasonAGCAutoscalingActive),
 		"the precedence resolution must be announced when the autoscaler first appears")
 
 	// A label another writer added survives the next apply (Q1215).

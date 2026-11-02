@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
@@ -219,7 +218,7 @@ func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context
 	if v.reader == nil || rs.Spec.ProxyRef == nil {
 		return nil
 	}
-	var gw agcv2alpha1.ActionsGateway
+	var gw agcv2.ActionsGateway
 	if err := v.reader.Get(ctx, client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}, &gw); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

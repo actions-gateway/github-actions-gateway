@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -18,7 +18,7 @@ import (
 // EgressProxy's namespace, maxReplicas, and per-replica proxy resources so the quota
 // math stays identical across versions. Both conditions are advisory and do NOT gate
 // Ready — the pool keeps serving at its current scale.
-func (r *EgressProxyReconciler) evalEgressProxyQuota(ctx context.Context, ep *gmcv2alpha1.EgressProxy, proxyDep *appsv1.Deployment) proxyQuotaConditions {
+func (r *EgressProxyReconciler) evalEgressProxyQuota(ctx context.Context, ep *gmcv2.EgressProxy, proxyDep *appsv1.Deployment) proxyQuotaConditions {
 	target := egressProxyMaxReplicas(ep)
 	if !egressProxyManagedAutoscaling(ep) {
 		// Bring-your-own autoscaler (Q173): spec.maxReplicas is inert and the GMC
@@ -39,7 +39,7 @@ func (r *EgressProxyReconciler) evalEgressProxyQuota(ctx context.Context, ep *gm
 // than a CNI-native FQDN policy. Only CIDR mode can go "stale" — the FQDN modes carry
 // no refreshed CIDR rule. It also requires a managed NetworkPolicy: an unmanaged one
 // is operator-maintained, not refreshed by this loop.
-func egressUsesCIDRMode(ep *gmcv2alpha1.EgressProxy) bool {
+func egressUsesCIDRMode(ep *gmcv2.EgressProxy) bool {
 	if ep.Spec.ManagedNetworkPolicy != nil && !*ep.Spec.ManagedNetworkPolicy {
 		return false
 	}
@@ -55,18 +55,18 @@ func egressUsesCIDRMode(ep *gmcv2alpha1.EgressProxy) bool {
 // proxy NetworkPolicy then carries no GitHub rule (Q1228). It is False for an
 // unmanaged or non-CIDR (FQDN) egress mode, neither of which is CIDR-refreshed by this
 // loop, and when no cache is wired.
-func (r *EgressProxyReconciler) evalEgressProxyEgressRulesStale(ep *gmcv2alpha1.EgressProxy, now time.Time) egressStale {
+func (r *EgressProxyReconciler) evalEgressProxyEgressRulesStale(ep *gmcv2.EgressProxy, now time.Time) egressStale {
 	if !egressUsesCIDRMode(ep) {
-		return egressStale{reason: gmcv2alpha1.ReasonRefreshPending,
+		return egressStale{reason: gmcv2.ReasonRefreshPending,
 			message: "egress NetworkPolicy is not CIDR-refreshed (unmanaged or FQDN egress mode)"}
 	}
 	if r.IPCache == nil {
-		return egressStale{reason: gmcv2alpha1.ReasonRefreshPending,
+		return egressStale{reason: gmcv2.ReasonRefreshPending,
 			message: "GitHub IP-range refresh has not run yet"}
 	}
 	last, ok := r.IPCache.LastRefresh()
 	if !ok {
-		return egressStale{stale: true, reason: gmcv2alpha1.ReasonRefreshNeverSucceeded,
+		return egressStale{stale: true, reason: gmcv2.ReasonRefreshNeverSucceeded,
 			message: "no GitHub IP-range refresh has succeeded, so the egress allowlist carries no GitHub ranges and GitHub egress is denied"}
 	}
 	threshold := r.egressStaleThreshold()
@@ -74,11 +74,11 @@ func (r *EgressProxyReconciler) evalEgressProxyEgressRulesStale(ep *gmcv2alpha1.
 	if age > threshold {
 		return egressStale{
 			stale:   true,
-			reason:  gmcv2alpha1.ReasonRefreshStalled,
+			reason:  gmcv2.ReasonRefreshStalled,
 			message: refreshStalledMessage(r.IPCache, age, threshold),
 		}
 	}
-	return egressStale{reason: gmcv2alpha1.ReasonRefreshCurrent,
+	return egressStale{reason: gmcv2.ReasonRefreshCurrent,
 		message: fmt.Sprintf("GitHub egress IP-range allowlist refreshed %s ago", age.Round(time.Minute))}
 }
 
@@ -103,7 +103,7 @@ func (r *EgressProxyReconciler) egressStaleThreshold() time.Duration {
 // policy for out-of-band drift: the unstructured Cilium/Calico/GKE policy has no
 // Owns() watch, so once Ready a deleted or edited policy would otherwise never be
 // restored (Q326).
-func (r *EgressProxyReconciler) egressProxyEgressRecheckRequeue(ep *gmcv2alpha1.EgressProxy) time.Duration {
+func (r *EgressProxyReconciler) egressProxyEgressRecheckRequeue(ep *gmcv2.EgressProxy) time.Duration {
 	if ep.Spec.ManagedNetworkPolicy != nil && !*ep.Spec.ManagedNetworkPolicy {
 		return 0 // operator-maintained egress policy: nothing of ours to re-check
 	}
@@ -129,7 +129,7 @@ func (r *EgressProxyReconciler) egressProxyEgressRecheckRequeue(ep *gmcv2alpha1.
 // the ProxyQuota{Pressure,Exceeded} conditions promptly (Q82/Q326) instead of lagging
 // until an unrelated child event. Mirrors the v1 quotaToActionsGateways.
 func (r *EgressProxyReconciler) quotaToEgressProxies(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list gmcv2alpha1.EgressProxyList
+	var list gmcv2.EgressProxyList
 	if err := r.List(ctx, &list, client.InNamespace(obj.GetNamespace())); err != nil {
 		return nil
 	}

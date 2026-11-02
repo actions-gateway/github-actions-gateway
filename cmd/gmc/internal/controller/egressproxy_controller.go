@@ -35,7 +35,7 @@ import (
 	"net"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -103,8 +103,7 @@ type EgressProxyReconciler struct {
 	// FQDNBackend is the operator-selected CNI/platform mechanism used to enforce an
 	// FQDN egressPolicyMode intent (the GMC --fqdn-policy-backend flag). The zero value
 	// is treated as FQDNBackendNone: FQDN intent emits no CNI-native policy (and is
-	// rejected at admission). The deprecated CiliumFQDN/CalicoFQDN intents ignore this
-	// field and always emit their namesake policy (Q245).
+	// rejected at admission).
 	FQDNBackend FQDNBackend
 	// Now supplies the current time for failure-attribution port holds. nil is
 	// time.Now.
@@ -122,7 +121,7 @@ func (r *EgressProxyReconciler) nowFunc() func() time.Time {
 // no finalizer (§H.8), so deletion is handled by owner-reference garbage collection
 // of the children; a delete in flight simply returns without re-provisioning.
 func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var ep gmcv2alpha1.EgressProxy
+	var ep gmcv2.EgressProxy
 	if err := r.Get(ctx, req.NamespacedName, &ep); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -169,7 +168,7 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // failure is wrapped with the failing step so updateStatus/setDegraded can name it
 // in the Degraded condition. The proxy TLS cert is ensured first so the Deployment
 // can mount it on the very first reconcile.
-func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet, gitHubHosts []string) error {
+func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv2.EgressProxy, githubCIDRs []net.IPNet, gitHubHosts []string) error {
 	if err := r.ensureProxyCert(ctx, ep); err != nil {
 		return &provisioningError{step: "ensure proxy TLS cert", err: err}
 	}
@@ -226,7 +225,7 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 // make a mode/backend switch converge cleanly. Deletes tolerate a missing object and a
 // missing CRD (a CIDR-mode cluster need not have any FQDN CRD installed), so the default
 // path never fails on their absence.
-func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) error {
+func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmcv2.EgressProxy, gitHubHosts []string) error {
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
 	emitter := fqdnEmitNone
 	if managed {
@@ -240,7 +239,7 @@ func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmc
 	// GitHub egress; the GKE object only ever widens the union (Q245).
 	policies := []struct {
 		gvk   schema.GroupVersionKind
-		build func(*gmcv2alpha1.EgressProxy, []string) *unstructured.Unstructured
+		build func(*gmcv2.EgressProxy, []string) *unstructured.Unstructured
 		want  bool
 	}{
 		{ciliumNetworkPolicyGVK, buildEgressProxyCiliumNetworkPolicy, emitter == fqdnEmitCilium},
@@ -264,7 +263,7 @@ func (r *EgressProxyReconciler) reconcileFQDNPolicy(ctx context.Context, ep *gmc
 // applyCNIPolicy creates or patches an unstructured CNI-native egress policy, writing
 // only the controller-managed labels + spec and stamping a controller owner reference
 // on the EgressProxy so the apiserver garbage-collects it on EgressProxy delete (§H.8).
-func (r *EgressProxyReconciler) applyCNIPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *unstructured.Unstructured) error {
+func (r *EgressProxyReconciler) applyCNIPolicy(ctx context.Context, ep *gmcv2.EgressProxy, desired *unstructured.Unstructured) error {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(desired.GroupVersionKind())
 	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
@@ -297,7 +296,7 @@ func (r *EgressProxyReconciler) deleteCNIPolicy(ctx context.Context, namespace, 
 // cert valid for at least proxyCertRenewBefore, (re)generating a self-signed cert
 // when the Secret is missing, unparseable, or near expiry. Mirrors v1's
 // ensureProxyCert; the private key never leaves the cluster.
-func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	secretName := egressProxyTLSSecretName(ep)
 	var existing corev1.Secret
 	getErr := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: secretName}, &existing)
@@ -342,7 +341,7 @@ func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2al
 // or the server cert is within metricsCertRenewBefore of expiry — mirroring v1's
 // ensureMetricsCerts and the EgressProxy's own ensureProxyCert. No key material is
 // logged. The CA is per-EgressProxy, never shared with the AGC or another tenant.
-func (r *EgressProxyReconciler) ensureMetricsCerts(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+func (r *EgressProxyReconciler) ensureMetricsCerts(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	var serverSec corev1.Secret
 	serverErr := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: egressProxyMetricsTLSSecretName(ep)}, &serverSec)
 	if serverErr != nil && !apierrors.IsNotFound(serverErr) {
@@ -396,7 +395,7 @@ func (r *EgressProxyReconciler) ensureMetricsCerts(ctx context.Context, ep *gmcv
 // error — downgraded to a Warning Event and a logged note rather than failing the
 // whole reconcile, so a missing optional scrape prerequisite never blocks provisioning
 // (a NoMatch on the delete path means there is nothing to prune).
-func (r *EgressProxyReconciler) applyOrPruneServiceMonitor(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+func (r *EgressProxyReconciler) applyOrPruneServiceMonitor(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	if !r.EnableServiceMonitor {
 		sm := &unstructured.Unstructured{}
 		sm.SetGroupVersionKind(serviceMonitorGVK)
@@ -426,7 +425,7 @@ func (r *EgressProxyReconciler) applyOrPruneServiceMonitor(ctx context.Context, 
 // writing only the controller-managed labels + spec and stamping a controller owner
 // reference so the apiserver garbage-collects it on EgressProxy delete (§H.8). Mirrors
 // the other apply* helpers and v1's applyServiceMonitor.
-func (r *EgressProxyReconciler) applyServiceMonitor(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *unstructured.Unstructured) error {
+func (r *EgressProxyReconciler) applyServiceMonitor(ctx context.Context, ep *gmcv2.EgressProxy, desired *unstructured.Unstructured) error {
 	obj := &unstructured.Unstructured{}
 	obj.SetGroupVersionKind(serviceMonitorGVK)
 	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
@@ -438,7 +437,7 @@ func (r *EgressProxyReconciler) applyServiceMonitor(ctx context.Context, ep *gmc
 // recordEvent emits a Kubernetes Event on the EgressProxy when a Recorder is wired.
 // The Recorder may be nil in unit tests, so callers go through here rather than
 // dereferencing it directly (mirrors the AGC reconcilers' recordEvent).
-func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventtype, reason, action, note string, args ...any) {
+func (r *EgressProxyReconciler) recordEvent(ep *gmcv2.EgressProxy, eventtype, reason, action, note string, args ...any) {
 	if r.Recorder == nil {
 		return
 	}
@@ -473,7 +472,7 @@ func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventty
 // period on that anti-affinity, so the pool is briefly unavailable — a one-time
 // cost, and one a migration never pays: gag-migrate creates the EgressProxy after
 // the upgrade, so its pool is born with the narrowed selector.
-func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *appsv1.Deployment) error {
+func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2.EgressProxy, desired *appsv1.Deployment) error {
 	obj := &appsv1.Deployment{}
 	err := applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		if obj.ResourceVersion != "" && !equality.Semantic.DeepEqual(obj.Spec.Selector, desired.Spec.Selector) {
@@ -505,7 +504,7 @@ func (r *EgressProxyReconciler) applyDeployment(ctx context.Context, ep *gmcv2al
 	return err
 }
 
-func (r *EgressProxyReconciler) applyService(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *corev1.Service) error {
+func (r *EgressProxyReconciler) applyService(ctx context.Context, ep *gmcv2.EgressProxy, desired *corev1.Service) error {
 	obj := &corev1.Service{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		// Preserve server-assigned Spec fields (ClusterIP); set only managed fields.
@@ -522,7 +521,7 @@ func (r *EgressProxyReconciler) applyService(ctx context.Context, ep *gmcv2alpha
 // fighting it over `.spec.replicas`. The managed "<ep>-proxy" HPA name stays
 // reserved either way; the delete tolerates an absent object, so the
 // bring-your-own path is a steady-state no-op.
-func (r *EgressProxyReconciler) reconcileHPA(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+func (r *EgressProxyReconciler) reconcileHPA(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	if egressProxyManagedAutoscaling(ep) {
 		return r.applyHPA(ctx, ep, buildEgressProxyHPA(ep))
 	}
@@ -533,7 +532,7 @@ func (r *EgressProxyReconciler) reconcileHPA(ctx context.Context, ep *gmcv2alpha
 	return nil
 }
 
-func (r *EgressProxyReconciler) applyHPA(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *autoscalingv2.HorizontalPodAutoscaler) error {
+func (r *EgressProxyReconciler) applyHPA(ctx context.Context, ep *gmcv2.EgressProxy, desired *autoscalingv2.HorizontalPodAutoscaler) error {
 	obj := &autoscalingv2.HorizontalPodAutoscaler{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Spec = desired.Spec
@@ -541,7 +540,7 @@ func (r *EgressProxyReconciler) applyHPA(ctx context.Context, ep *gmcv2alpha1.Eg
 	})
 }
 
-func (r *EgressProxyReconciler) applyPDB(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *policyv1.PodDisruptionBudget) error {
+func (r *EgressProxyReconciler) applyPDB(ctx context.Context, ep *gmcv2.EgressProxy, desired *policyv1.PodDisruptionBudget) error {
 	obj := &policyv1.PodDisruptionBudget{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Spec = desired.Spec
@@ -549,7 +548,7 @@ func (r *EgressProxyReconciler) applyPDB(ctx context.Context, ep *gmcv2alpha1.Eg
 	})
 }
 
-func (r *EgressProxyReconciler) applyNetworkPolicy(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *networkingv1.NetworkPolicy) error {
+func (r *EgressProxyReconciler) applyNetworkPolicy(ctx context.Context, ep *gmcv2.EgressProxy, desired *networkingv1.NetworkPolicy) error {
 	obj := &networkingv1.NetworkPolicy{}
 	return applyManagedChild(ctx, r.Client, r.Scheme, ep, obj, desired, func() error {
 		obj.Spec = desired.Spec
@@ -557,7 +556,7 @@ func (r *EgressProxyReconciler) applyNetworkPolicy(ctx context.Context, ep *gmcv
 	})
 }
 
-func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2alpha1.EgressProxy, desired *corev1.Secret) error {
+func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2.EgressProxy, desired *corev1.Secret) error {
 	return applyManagedSecret(ctx, r.Client, r.Scheme, ep, desired)
 }
 
@@ -565,7 +564,7 @@ func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2a
 // status/condition contract (§H.7): readyReplicas, observedGeneration, a Ready
 // condition (True once readyReplicas ≥ minReplicas), and a cleared Degraded
 // condition (the reconcile reached here, so provisioning succeeded).
-func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) (ctrl.Result, error) {
+func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2.EgressProxy, gitHubHosts []string) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	readyReplicas := int32(0)
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &dep); err == nil {
@@ -587,9 +586,9 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 
 	// Snapshot the pre-reconcile status of the conditions whose transitions we surface
 	// as Events, before setCondition mutates them, so we emit only on a genuine change.
-	prevReady := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionReady)
-	prevDegraded := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded)
-	prevEgressGap := conditionStatusValue(ep.Status.Conditions, gmcv2alpha1.ConditionGitHubEgressIncomplete)
+	prevReady := conditionStatusValue(ep.Status.Conditions, gmcv2.ConditionReady)
+	prevDegraded := conditionStatusValue(ep.Status.Conditions, gmcv2.ConditionDegraded)
+	prevEgressGap := conditionStatusValue(ep.Status.Conditions, gmcv2.ConditionGitHubEgressIncomplete)
 
 	setCondition := func(condType string, status bool, reason, msg string) {
 		s := metav1.ConditionFalse
@@ -606,26 +605,26 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 		})
 	}
 
-	setCondition(gmcv2alpha1.ConditionDegraded, false, gmcv2alpha1.ReasonReconcileSucceeded, "all child resources reconciled")
-	readyReason := gmcv2alpha1.ReasonProxyReady
+	setCondition(gmcv2.ConditionDegraded, false, gmcv2.ReasonReconcileSucceeded, "all child resources reconciled")
+	readyReason := gmcv2.ReasonProxyReady
 	if !ready {
-		readyReason = gmcv2alpha1.ReasonProxyNotReady
+		readyReason = gmcv2.ReasonProxyNotReady
 	}
-	setCondition(gmcv2alpha1.ConditionReady, ready, readyReason, fmt.Sprintf("%d/%d proxy pods ready", readyReplicas, minReplicas))
+	setCondition(gmcv2.ConditionReady, ready, readyReason, fmt.Sprintf("%d/%d proxy pods ready", readyReplicas, minReplicas))
 
 	// ProxyQuota{Pressure,Exceeded} (Q82) and EgressRulesStale (Q157), ported from the
 	// v1 ActionsGateway onto the v2 standalone proxy pool. All advisory — they do NOT
 	// gate Ready; the pool keeps serving at its current scale. Pressure/Exceeded are
 	// mutually exclusive (error supersedes warning).
 	qc := r.evalEgressProxyQuota(ctx, ep, &dep)
-	setCondition(gmcv2alpha1.ConditionProxyQuotaPressure, qc.pressure, qc.pressureReason, qc.pressureMessage)
-	setCondition(gmcv2alpha1.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
+	setCondition(gmcv2.ConditionProxyQuotaPressure, qc.pressure, qc.pressureReason, qc.pressureMessage)
+	setCondition(gmcv2.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
 	es := r.evalEgressProxyEgressRulesStale(ep, now.Time)
-	setCondition(gmcv2alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
+	setCondition(gmcv2.ConditionEgressRulesStale, es.stale, es.reason, es.message)
 	// GitHubEgressIncomplete (Q506 #3): the one GHES gap the GMC cannot close, named
 	// rather than left to surface as a connect timeout with no cause.
 	eg := evalGitHubEgressIncomplete(ep, gitHubHosts)
-	setCondition(gmcv2alpha1.ConditionGitHubEgressIncomplete, eg.incomplete, eg.reason, eg.message)
+	setCondition(gmcv2.ConditionGitHubEgressIncomplete, eg.incomplete, eg.reason, eg.message)
 
 	ep.Status.ReadyReplicas = readyReplicas
 	ep.Status.ObservedGeneration = gen
@@ -658,7 +657,7 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 	// Degraded → recovered: a prior reconcile failed to provision and this one succeeded
 	// (updateStatus is only reached when reconcileResources returned no error).
 	if prevDegraded == metav1.ConditionTrue {
-		r.recordEvent(ep, corev1.EventTypeNormal, gmcv2alpha1.ReasonReconcileSucceeded, "Reconcile",
+		r.recordEvent(ep, corev1.EventTypeNormal, gmcv2.ReasonReconcileSucceeded, "Reconcile",
 			"proxy pool provisioning recovered")
 	}
 
@@ -679,25 +678,25 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 
 // setDegraded records a Degraded=True condition naming the failing provisioning
 // step and returns the underlying error so the work item is retried with backoff.
-func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2alpha1.EgressProxy, cause error) (ctrl.Result, error) {
+func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2.EgressProxy, cause error) (ctrl.Result, error) {
 	// Warn once per transition into Degraded, naming the failing provisioning step.
-	if !meta.IsStatusConditionTrue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded) {
-		r.recordEvent(ep, corev1.EventTypeWarning, gmcv2alpha1.ReasonProvisioningFailed, "Reconcile", "%s", cause.Error())
+	if !meta.IsStatusConditionTrue(ep.Status.Conditions, gmcv2.ConditionDegraded) {
+		r.recordEvent(ep, corev1.EventTypeWarning, gmcv2.ReasonProvisioningFailed, "Reconcile", "%s", cause.Error())
 	}
 	now := metav1.Now()
 	gen := ep.Generation
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
-		Type:               gmcv2alpha1.ConditionDegraded,
+		Type:               gmcv2.ConditionDegraded,
 		Status:             metav1.ConditionTrue,
-		Reason:             gmcv2alpha1.ReasonProvisioningFailed,
+		Reason:             gmcv2.ReasonProvisioningFailed,
 		Message:            cause.Error(),
 		LastTransitionTime: now,
 		ObservedGeneration: gen,
 	})
 	meta.SetStatusCondition(&ep.Status.Conditions, metav1.Condition{
-		Type:               gmcv2alpha1.ConditionReady,
+		Type:               gmcv2.ConditionReady,
 		Status:             metav1.ConditionFalse,
-		Reason:             gmcv2alpha1.ReasonProvisioningFailed,
+		Reason:             gmcv2.ReasonProvisioningFailed,
 		Message:            cause.Error(),
 		LastTransitionTime: now,
 		ObservedGeneration: gen,
@@ -724,7 +723,7 @@ func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2alpha1
 // re-creates it on the next reconcile if it is removed out-of-band.
 func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&gmcv2alpha1.EgressProxy{}).
+		For(&gmcv2.EgressProxy{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&autoscalingv2.HorizontalPodAutoscaler{}).
@@ -747,12 +746,12 @@ func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// generation predicate drops the status churn that would otherwise requeue
 		// every proxy in the namespace.
 		Watches(
-			&gmcv2alpha1.ActionsGateway{},
+			&gmcv2.ActionsGateway{},
 			handler.EnqueueRequestsFromMapFunc(r.referrerToEgressProxies),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
 		Watches(
-			&gmcv2alpha1.RunnerSet{},
+			&gmcv2.RunnerSet{},
 			handler.EnqueueRequestsFromMapFunc(r.referrerToEgressProxies),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).

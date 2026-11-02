@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -21,16 +21,16 @@ func shareTestScheme(t *testing.T) *runtime.Scheme {
 	s := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(s))
 	require.NoError(t, networkingv1.AddToScheme(s))
-	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	require.NoError(t, gmcv2.AddToScheme(s))
 	return s
 }
 
-func proxyWithSharing(namespace, name string, allowed ...string) *gmcv2alpha1.EgressProxy {
-	ep := &gmcv2alpha1.EgressProxy{
+func proxyWithSharing(namespace, name string, allowed ...string) *gmcv2.EgressProxy {
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
 	}
 	if allowed != nil {
-		ep.Spec.Sharing = &gmcv2alpha1.ProxySharing{AllowedNamespaces: allowed}
+		ep.Spec.Sharing = &gmcv2.ProxySharing{AllowedNamespaces: allowed}
 	}
 	return ep
 }
@@ -41,7 +41,7 @@ func proxyWithSharing(namespace, name string, allowed ...string) *gmcv2alpha1.Eg
 func TestProxyShareGranted_DeniesWithoutExplicitConsent(t *testing.T) {
 	tests := []struct {
 		name       string
-		proxy      *gmcv2alpha1.EgressProxy
+		proxy      *gmcv2.EgressProxy
 		consumerNS string
 		want       bool
 	}{
@@ -197,10 +197,10 @@ func TestReconcileProxyShares_RevokedGrantIsPruned(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
 				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
 			},
-			&gmcv2alpha1.ActionsGateway{
+			&gmcv2.ActionsGateway{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
-				Spec: gmcv2alpha1.ActionsGatewaySpec{
-					DefaultProxyRef: &gmcv2alpha1.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+				Spec: gmcv2.ActionsGatewaySpec{
+					DefaultProxyRef: &gmcv2.ProxyObjectRef{Name: "pool", Namespace: "provider"},
 				},
 			},
 		).Build()
@@ -237,10 +237,10 @@ func TestReconcileProxyShares_UnconsentedReferrerGetsNothing(t *testing.T) {
 
 	c := fake.NewClientBuilder().
 		WithScheme(shareTestScheme(t)).
-		WithObjects(&gmcv2alpha1.ActionsGateway{
+		WithObjects(&gmcv2.ActionsGateway{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
-			Spec: gmcv2alpha1.ActionsGatewaySpec{
-				DefaultProxyRef: &gmcv2alpha1.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+			Spec: gmcv2.ActionsGatewaySpec{
+				DefaultProxyRef: &gmcv2.ProxyObjectRef{Name: "pool", Namespace: "provider"},
 			},
 		}).Build()
 	r := &EgressProxyReconciler{Client: c}
@@ -272,10 +272,10 @@ func TestReconcileProxyShares_ProjectsAuditLogging(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
 				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
 			},
-			&gmcv2alpha1.ActionsGateway{
+			&gmcv2.ActionsGateway{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
-				Spec: gmcv2alpha1.ActionsGatewaySpec{
-					DefaultProxyRef: &gmcv2alpha1.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+				Spec: gmcv2.ActionsGatewaySpec{
+					DefaultProxyRef: &gmcv2.ProxyObjectRef{Name: "pool", Namespace: "provider"},
 				},
 			},
 		).Build()

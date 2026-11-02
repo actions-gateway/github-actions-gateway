@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +29,7 @@ func newIPRangeScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(s)
-	_ = gmcv2alpha1.AddToScheme(s)
+	_ = gmcv2.AddToScheme(s)
 	return s
 }
 
@@ -548,13 +548,13 @@ func TestIPRangeCache_LastRefresh(t *testing.T) {
 
 // ipRangeTestPool returns a CIDR-mode EgressProxy and the NetworkPolicy its
 // reconcile would have created, carrying no GitHub CIDRs yet.
-func ipRangeTestPool() (*gmcv2alpha1.EgressProxy, *networkingv1.NetworkPolicy) {
+func ipRangeTestPool() (*gmcv2.EgressProxy, *networkingv1.NetworkPolicy) {
 	ep := newEP("pool", "team-a", nil)
 	return ep, buildEgressProxyNetworkPolicy(ep, nil)
 }
 
 // poolNPHasCIDR reports whether the pool NetworkPolicy's egress admits cidr.
-func poolNPHasCIDR(t *testing.T, fc client.Client, ep *gmcv2alpha1.EgressProxy, cidr string) bool {
+func poolNPHasCIDR(t *testing.T, fc client.Client, ep *gmcv2.EgressProxy, cidr string) bool {
 	t.Helper()
 	var np networkingv1.NetworkPolicy
 	if err := fc.Get(context.Background(), client.ObjectKey{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &np); err != nil {

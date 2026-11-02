@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
@@ -21,18 +21,18 @@ import (
 // While the cache serves no ranges, preserveExistingEgress keeps an already-programmed
 // policy's rules (Q246), so whether GitHub egress is denied depends on what the
 // policies hold rather than on the cache alone; the message reads them to say which.
-func (r *ActionsGatewayV2Reconciler) evalDirectEgressRulesStale(ctx context.Context, ag *gmcv2alpha1.ActionsGateway, proxy *gmcv2alpha1.EgressProxy, now time.Time) egressStale {
+func (r *ActionsGatewayV2Reconciler) evalDirectEgressRulesStale(ctx context.Context, ag *gmcv2.ActionsGateway, proxy *gmcv2.EgressProxy, now time.Time) egressStale {
 	if proxy != nil {
-		return egressStale{reason: gmcv2alpha1.ReasonRefreshPending,
+		return egressStale{reason: gmcv2.ReasonRefreshPending,
 			message: fmt.Sprintf("GitHub egress goes through EgressProxy %q, which reports its own allowlist's staleness", proxy.Name)}
 	}
 	if r.IPCache == nil {
-		return egressStale{reason: gmcv2alpha1.ReasonRefreshPending,
+		return egressStale{reason: gmcv2.ReasonRefreshPending,
 			message: "GitHub IP-range refresh has not run yet"}
 	}
 	last, ok := r.IPCache.LastRefresh()
 	if !ok {
-		return egressStale{stale: true, reason: gmcv2alpha1.ReasonRefreshNeverSucceeded,
+		return egressStale{stale: true, reason: gmcv2.ReasonRefreshNeverSucceeded,
 			message: "no GitHub IP-range refresh has succeeded, so the GMC holds no GitHub ranges; " + r.servedGitHubRules(ctx, ag)}
 	}
 	threshold := r.egressStaleThreshold()
@@ -44,16 +44,16 @@ func (r *ActionsGatewayV2Reconciler) evalDirectEgressRulesStale(ctx context.Cont
 			msg = fmt.Sprintf("GitHub egress IP-range allowlist last refreshed %s ago, exceeding the %s staleness window, and the GMC serves no ranges; %s",
 				age.Round(time.Minute), threshold, r.servedGitHubRules(ctx, ag))
 		}
-		return egressStale{stale: true, reason: gmcv2alpha1.ReasonRefreshStalled, message: msg}
+		return egressStale{stale: true, reason: gmcv2.ReasonRefreshStalled, message: msg}
 	}
-	return egressStale{reason: gmcv2alpha1.ReasonRefreshCurrent,
+	return egressStale{reason: gmcv2.ReasonRefreshCurrent,
 		message: fmt.Sprintf("GitHub egress IP-range allowlist refreshed %s ago", age.Round(time.Minute))}
 }
 
 // servedGitHubRules describes what a direct-egress gateway's NetworkPolicies serve
 // while the cache serves no ranges: the GitHub rule they were last programmed with, or
 // none, in which case GitHub egress through that policy is denied.
-func (r *ActionsGatewayV2Reconciler) servedGitHubRules(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) string {
+func (r *ActionsGatewayV2Reconciler) servedGitHubRules(ctx context.Context, ag *gmcv2.ActionsGateway) string {
 	vault, hasVault := vaultEgressRule(ag)
 	var denied []string
 	for _, p := range []struct{ name, who string }{
@@ -112,7 +112,7 @@ func (r *ActionsGatewayV2Reconciler) egressStaleThreshold() time.Duration {
 // re-reconciled to keep EgressRulesStale fresh, or 0 when it is not evaluated (proxied,
 // or no IP cache). The refresh loop patches these policies without waking this
 // reconciler, so a stall would otherwise never flip the condition.
-func (r *ActionsGatewayV2Reconciler) directEgressRecheckRequeue(proxy *gmcv2alpha1.EgressProxy) time.Duration {
+func (r *ActionsGatewayV2Reconciler) directEgressRecheckRequeue(proxy *gmcv2.EgressProxy) time.Duration {
 	if proxy != nil || r.IPCache == nil {
 		return 0
 	}

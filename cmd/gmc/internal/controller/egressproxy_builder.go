@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -56,19 +56,19 @@ const (
 
 // proxyResourceName is the name shared by an EgressProxy's Deployment, Service,
 // HPA, PDB, and NetworkPolicy: "<ep>-proxy".
-func proxyResourceName(ep *gmcv2alpha1.EgressProxy) string {
+func proxyResourceName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyResourceSuffix
 }
 
 // egressProxyTLSSecretName is the name of the EgressProxy's self-signed proxy TLS
 // Secret: "<ep>-proxy-tls".
-func egressProxyTLSSecretName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyTLSSecretName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyTLSSuffix
 }
 
 // egressProxyLabels returns the metadata labels stamped on every EgressProxy
 // child: the managed-by marker plus the per-EgressProxy identity label.
-func egressProxyLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
+func egressProxyLabels(ep *gmcv2.EgressProxy) map[string]string {
 	l := apilabels.Recommended(proxyAppName, ep.Name, componentProxyLabel, "", labelManagerValue)
 	l[egressProxyComponentLabel] = ep.Name
 	return l
@@ -91,7 +91,7 @@ func egressProxyLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
 // identity for humans and tooling is the recommended `app.kubernetes.io/name` label,
 // which is additive metadata that nothing selects on; the v2 workload NetworkPolicy
 // reaches proxy pods via egressProxyPodPeerSelector instead.
-func egressProxyPodSelector(ep *gmcv2alpha1.EgressProxy) map[string]string {
+func egressProxyPodSelector(ep *gmcv2.EgressProxy) map[string]string {
 	return map[string]string{egressProxyComponentLabel: ep.Name}
 }
 
@@ -112,21 +112,21 @@ func egressProxyPodPeerSelector() *metav1.LabelSelector {
 // egressProxyMinReplicas / egressProxyMaxReplicas / egressProxyTargetCPU read the
 // spec knobs, falling back to the CRD defaults so a hand-built object (e.g. a unit
 // test that skips apiserver defaulting) still produces a coherent pool.
-func egressProxyMinReplicas(ep *gmcv2alpha1.EgressProxy) int32 {
+func egressProxyMinReplicas(ep *gmcv2.EgressProxy) int32 {
 	if ep.Spec.MinReplicas != nil {
 		return *ep.Spec.MinReplicas
 	}
 	return 2
 }
 
-func egressProxyMaxReplicas(ep *gmcv2alpha1.EgressProxy) int32 {
+func egressProxyMaxReplicas(ep *gmcv2.EgressProxy) int32 {
 	if ep.Spec.MaxReplicas != nil {
 		return *ep.Spec.MaxReplicas
 	}
 	return 10
 }
 
-func egressProxyTargetCPU(ep *gmcv2alpha1.EgressProxy) int32 {
+func egressProxyTargetCPU(ep *gmcv2.EgressProxy) int32 {
 	if ep.Spec.TargetCPUUtilizationPercentage != nil {
 		return *ep.Spec.TargetCPUUtilizationPercentage
 	}
@@ -136,14 +136,14 @@ func egressProxyTargetCPU(ep *gmcv2alpha1.EgressProxy) int32 {
 // egressProxyManagedAutoscaling reports whether the GMC manages this pool's HPA
 // (spec.managedAutoscaling, default true — Q173). False means the operator brings
 // their own autoscaler and the GMC provisions no HPA.
-func egressProxyManagedAutoscaling(ep *gmcv2alpha1.EgressProxy) bool {
+func egressProxyManagedAutoscaling(ep *gmcv2.EgressProxy) bool {
 	return ep.Spec.ManagedAutoscaling == nil || *ep.Spec.ManagedAutoscaling
 }
 
 // egressProxyResources returns the proxy container's resource requirements: the
 // secure defaults overlaid with any spec.resources overrides — the same defaults
 // and merge semantics as v1's proxyResources, decoupled from ActionsGateway.
-func egressProxyResources(ep *gmcv2alpha1.EgressProxy) corev1.ResourceRequirements {
+func egressProxyResources(ep *gmcv2.EgressProxy) corev1.ResourceRequirements {
 	res := corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("10m"),
@@ -183,7 +183,7 @@ func egressProxyResources(ep *gmcv2alpha1.EgressProxy) corev1.ResourceRequiremen
 //     the ~7400 GitHub CIDRs are deliberately NOT injected (no worker CONNECTs to
 //     GitHub by literal IP, and an env var of thousands of CIDRs would be unwieldy).
 //   - PROXY_ALLOWED_CIDRS carries the operator's destinationCIDRs only.
-func proxyAllowlistEnv(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []corev1.EnvVar {
+func proxyAllowlistEnv(ep *gmcv2.EgressProxy, gitHubHosts []string) []corev1.EnvVar {
 	if len(ep.Spec.DestinationFQDNs) == 0 && len(ep.Spec.DestinationCIDRs) == 0 {
 		return nil
 	}
@@ -213,7 +213,7 @@ func proxyAllowlistEnv(ep *gmcv2alpha1.EgressProxy, gitHubHosts []string) []core
 // POD_NAMESPACE rides along from the downward API rather than being formatted in
 // here: the record must name the namespace the pod actually runs in, and the
 // downward API is the one source a template substitution cannot get wrong.
-func proxyAuditEnv(ep *gmcv2alpha1.EgressProxy) []corev1.EnvVar {
+func proxyAuditEnv(ep *gmcv2.EgressProxy) []corev1.EnvVar {
 	if ep.Spec.AuditLogging == "" || ep.Spec.AuditLogging == auditLoggingOff {
 		return nil
 	}
@@ -259,7 +259,7 @@ func defaultEgressProxyAntiAffinity(selector map[string]string) *corev1.PodAntiA
 //     pointer with no terms, so it opts out of spreading altogether. That is the
 //     escape hatch a single-node tenant node pool needs: the required built-in term
 //     would otherwise strand every replica after the first in Pending (Q243).
-func egressProxyAffinity(ep *gmcv2alpha1.EgressProxy, selector map[string]string) *corev1.Affinity {
+func egressProxyAffinity(ep *gmcv2.EgressProxy, selector map[string]string) *corev1.Affinity {
 	builtIn := defaultEgressProxyAntiAffinity(selector)
 	if ep.Spec.Scheduling == nil || ep.Spec.Scheduling.Affinity == nil {
 		return &corev1.Affinity{PodAntiAffinity: builtIn}
@@ -275,7 +275,7 @@ func egressProxyAffinity(ep *gmcv2alpha1.EgressProxy, selector map[string]string
 
 // egressProxyNodeSelector / egressProxyTolerations return the pass-through placement
 // fields, deep-copied out of the (shared, informer-owned) EgressProxy spec.
-func egressProxyNodeSelector(ep *gmcv2alpha1.EgressProxy) map[string]string {
+func egressProxyNodeSelector(ep *gmcv2.EgressProxy) map[string]string {
 	if ep.Spec.Scheduling == nil || len(ep.Spec.Scheduling.NodeSelector) == 0 {
 		return nil
 	}
@@ -286,7 +286,7 @@ func egressProxyNodeSelector(ep *gmcv2alpha1.EgressProxy) map[string]string {
 	return out
 }
 
-func egressProxyTolerations(ep *gmcv2alpha1.EgressProxy) []corev1.Toleration {
+func egressProxyTolerations(ep *gmcv2.EgressProxy) []corev1.Toleration {
 	if ep.Spec.Scheduling == nil || len(ep.Spec.Scheduling.Tolerations) == 0 {
 		return nil
 	}
@@ -303,7 +303,7 @@ func egressProxyTolerations(ep *gmcv2alpha1.EgressProxy) []corev1.Toleration {
 // than replacing it (Q284): the constraints are applied verbatim alongside the
 // anti-affinity that egressProxyAffinity still stamps, so a soft zonal spread narrows
 // placement without dropping the cross-node durability invariant.
-func egressProxyTopologySpreadConstraints(ep *gmcv2alpha1.EgressProxy) []corev1.TopologySpreadConstraint {
+func egressProxyTopologySpreadConstraints(ep *gmcv2.EgressProxy) []corev1.TopologySpreadConstraint {
 	if ep.Spec.Scheduling == nil || len(ep.Spec.Scheduling.TopologySpreadConstraints) == 0 {
 		return nil
 	}
@@ -318,7 +318,7 @@ func egressProxyTopologySpreadConstraints(ep *gmcv2alpha1.EgressProxy) []corev1.
 // unset. It is a bare string, so no copy is needed; the empty default leaves the pod
 // unprioritized. The name is gated at admission against the infra-only allowlist
 // (--allowed-infra-priority-classes, Q284), not the worker allowlist.
-func egressProxyPriorityClassName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyPriorityClassName(ep *gmcv2.EgressProxy) string {
 	if ep.Spec.Scheduling == nil {
 		return ""
 	}
@@ -339,7 +339,7 @@ func egressProxyPriorityClassName(ep *gmcv2alpha1.EgressProxy) string {
 // binary falls back to serving /metrics plaintext on the health port, so mounting
 // the bundle is what keeps the endpoint from regressing to unauthenticated plaintext.
 // The bundle is a per-EgressProxy PKI (ensureMetricsCerts), never shared cross-tenant.
-func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, gitHubHosts []string) *appsv1.Deployment {
+func buildEgressProxyDeployment(ep *gmcv2.EgressProxy, proxyImage string, gitHubHosts []string) *appsv1.Deployment {
 	replicas := egressProxyMinReplicas(ep)
 	name := proxyResourceName(ep)
 	selector := egressProxyPodSelector(ep)
@@ -463,7 +463,7 @@ func buildEgressProxyDeployment(ep *gmcv2alpha1.EgressProxy, proxyImage string, 
 // buildEgressProxyService builds the ClusterIP Service that fronts an EgressProxy's
 // pool on the proxy port and the mTLS metrics port. The selector carries the
 // per-EgressProxy identity so it never fronts another pool's pods.
-func buildEgressProxyService(ep *gmcv2alpha1.EgressProxy) *corev1.Service {
+func buildEgressProxyService(ep *gmcv2.EgressProxy) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyResourceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
 		Spec: corev1.ServiceSpec{
@@ -483,7 +483,7 @@ func buildEgressProxyService(ep *gmcv2alpha1.EgressProxy) *corev1.Service {
 // buildEgressProxyHPA builds the HorizontalPodAutoscaler that scales an
 // EgressProxy's Deployment on CPU utilization, between spec.minReplicas and
 // spec.maxReplicas. Mirrors v1's buildHPA, keyed on the EgressProxy.
-func buildEgressProxyHPA(ep *gmcv2alpha1.EgressProxy) *autoscalingv2.HorizontalPodAutoscaler {
+func buildEgressProxyHPA(ep *gmcv2.EgressProxy) *autoscalingv2.HorizontalPodAutoscaler {
 	minReplicas := egressProxyMinReplicas(ep)
 	maxReplicas := egressProxyMaxReplicas(ep)
 	targetCPU := egressProxyTargetCPU(ep)
@@ -511,7 +511,7 @@ func buildEgressProxyHPA(ep *gmcv2alpha1.EgressProxy) *autoscalingv2.HorizontalP
 // buildEgressProxyPDB builds the PodDisruptionBudget that keeps at least one proxy
 // replica available across voluntary disruptions. Mirrors v1's buildPDB, keyed on
 // the EgressProxy identity selector.
-func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBudget {
+func buildEgressProxyPDB(ep *gmcv2.EgressProxy) *policyv1.PodDisruptionBudget {
 	return &policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{Name: proxyResourceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
 		Spec: policyv1.PodDisruptionBudgetSpec{
@@ -536,7 +536,7 @@ func buildEgressProxyPDB(ep *gmcv2alpha1.EgressProxy) *policyv1.PodDisruptionBud
 //
 // The pod selector keys on the per-EgressProxy identity so the policy governs only
 // this pool's pods.
-func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
+func buildEgressProxyNetworkPolicy(ep *gmcv2.EgressProxy, githubCIDRs []net.IPNet) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{dnsEgressRule()}
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
 	// GitHub-CIDR 443 allowlist: the shared helper (builder.go) is the single
@@ -629,7 +629,7 @@ func buildEgressProxyNetworkPolicy(ep *gmcv2alpha1.EgressProxy, githubCIDRs []ne
 // buildEgressProxyCertSecret constructs the kubernetes.io/tls Secret holding the
 // EgressProxy's self-signed proxy cert+key. The proxy Deployment mounts both; a
 // same-namespace consumer (the AGC, wired in M3a) mounts only the public cert.
-func buildEgressProxyCertSecret(ep *gmcv2alpha1.EgressProxy, certPEM, keyPEM []byte) *corev1.Secret {
+func buildEgressProxyCertSecret(ep *gmcv2.EgressProxy, certPEM, keyPEM []byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      egressProxyTLSSecretName(ep),

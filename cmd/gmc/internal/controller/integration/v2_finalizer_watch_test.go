@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -22,7 +22,7 @@ import (
 func TestV2_ActionsGateway_FinalizerUpdateDrivesNextReconcile(t *testing.T) {
 	const ns = "v2-ag-finalizer-watch"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
@@ -39,9 +39,9 @@ func TestV2_ActionsGateway_FinalizerUpdateDrivesNextReconcile(t *testing.T) {
 	startActionsGatewayV2ReconcilerSync(t, mgrCtx, nil, false, nil)
 
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got) == nil &&
-			controllerutil.ContainsFinalizer(&got, v2alpha1.ActionsGatewayFinalizer)
+			controllerutil.ContainsFinalizer(&got, v2.ActionsGatewayFinalizer)
 	}, 15*time.Second, 100*time.Millisecond, "finalizer should be added")
 
 	require.Eventually(t, func() bool {

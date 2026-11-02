@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -137,6 +137,6 @@ func TestGatewaysMatching_ListErrorReturnsNil(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
 	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
 
-	reqs := r.gatewaysMatching(context.Background(), "empty-ns", func(*gmcv2alpha1.ActionsGateway) bool { return true })
+	reqs := r.gatewaysMatching(context.Background(), "empty-ns", func(*gmcv2.ActionsGateway) bool { return true })
 	assert.Empty(t, reqs)
 }

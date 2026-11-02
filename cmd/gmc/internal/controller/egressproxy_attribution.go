@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -80,19 +80,19 @@ const (
 	defaultWorkerLifetime = 12 * time.Hour
 )
 
-func egressProxyAttributes(ep *gmcv2alpha1.EgressProxy) bool {
+func egressProxyAttributes(ep *gmcv2.EgressProxy) bool {
 	return ep.Spec.FailureAttribution == failureAttributionPerConsumerPort
 }
 
-func egressProxyAttributionTLSSecretName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyAttributionTLSSecretName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyAttributionTLSSuffix
 }
 
-func egressProxyAttributionClientsSecretName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyAttributionClientsSecretName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyAttributionClientsSuffix
 }
 
-func egressProxyAttributionServiceName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyAttributionServiceName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyAttributionServiceSuffix
 }
 
@@ -100,15 +100,15 @@ func egressProxyAttributionServiceName(ep *gmcv2alpha1.EgressProxy) string {
 // that reference it, that it admits (its own, or one sharing grants), and where
 // any ActionsGateway has set proxyFailureAttribution PerJob. Sorted, and cut to
 // maxAttributedNamespaces, which admission already bounds.
-func attributedNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2alpha1.EgressProxy) ([]string, error) {
+func attributedNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2.EgressProxy) ([]string, error) {
 	if !egressProxyAttributes(ep) {
 		return nil, nil
 	}
-	var gateways gmcv2alpha1.ActionsGatewayList
+	var gateways gmcv2.ActionsGatewayList
 	if err := c.List(ctx, &gateways); err != nil {
 		return nil, fmt.Errorf("list ActionsGateways: %w", err)
 	}
-	var runnerSets gmcv2alpha1.RunnerSetList
+	var runnerSets gmcv2.RunnerSetList
 	if err := c.List(ctx, &runnerSets); err != nil {
 		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}
@@ -120,7 +120,7 @@ func attributedNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2alph
 		}
 	}
 	attributed := map[string]bool{}
-	reference := func(ref *gmcv2alpha1.ProxyObjectRef, referrerNS string) {
+	reference := func(ref *gmcv2.ProxyObjectRef, referrerNS string) {
 		if ref == nil || ref.Name != ep.Name || !optedIn[referrerNS] {
 			return
 		}
@@ -256,7 +256,7 @@ func attributionPortsEnv(ports map[string]int) string {
 // applyAttributionToDeployment adds the attributed and held listeners, the read
 // listener and its mTLS bundle to the pool Deployment built by
 // buildEgressProxyDeployment, and records the holds. No ports leaves it untouched.
-func applyAttributionToDeployment(dep *appsv1.Deployment, ep *gmcv2alpha1.EgressProxy, plan *attributionPlan) {
+func applyAttributionToDeployment(dep *appsv1.Deployment, ep *gmcv2.EgressProxy, plan *attributionPlan) {
 	ports := plan.listening()
 	if len(ports) == 0 {
 		return
@@ -318,7 +318,7 @@ func applyAttributionToService(svc *corev1.Service, ports map[string]int) {
 // rules in buildEgressProxyNetworkPolicy). Rules naming the container port by
 // number keep the grant list out of the pod template. Like the sharing rules,
 // another namespace's are emitted only while the GMC manages the policy.
-func applyAttributionToNetworkPolicy(np *networkingv1.NetworkPolicy, ep *gmcv2alpha1.EgressProxy, ports, held map[string]int) {
+func applyAttributionToNetworkPolicy(np *networkingv1.NetworkPolicy, ep *gmcv2.EgressProxy, ports, held map[string]int) {
 	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
 	all := maps.Clone(held)
 	if all == nil {
@@ -350,7 +350,7 @@ func applyAttributionToNetworkPolicy(np *networkingv1.NetworkPolicy, ep *gmcv2al
 
 // attributionPeer selects pods matching podLabels in ns. The pool's own namespace
 // takes a bare pod selector, as the same-namespace workload rule does.
-func attributionPeer(ep *gmcv2alpha1.EgressProxy, ns string, podLabels map[string]string) networkingv1.NetworkPolicyPeer {
+func attributionPeer(ep *gmcv2.EgressProxy, ns string, podLabels map[string]string) networkingv1.NetworkPolicyPeer {
 	peer := networkingv1.NetworkPolicyPeer{PodSelector: &metav1.LabelSelector{MatchLabels: podLabels}}
 	if ns != ep.Namespace {
 		peer.NamespaceSelector = &metav1.LabelSelector{MatchLabels: map[string]string{corev1.LabelMetadataName: ns}}
@@ -360,7 +360,7 @@ func attributionPeer(ep *gmcv2alpha1.EgressProxy, ns string, podLabels map[strin
 
 // buildEgressProxyAttributionService builds the headless Service on the read port
 // whose DNS records resolve to every ready replica, since each holds its own buffer.
-func buildEgressProxyAttributionService(ep *gmcv2alpha1.EgressProxy) *corev1.Service {
+func buildEgressProxyAttributionService(ep *gmcv2.EgressProxy) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyAttributionServiceName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
 		Spec: corev1.ServiceSpec{
@@ -439,7 +439,7 @@ func generateAttributionCerts(namespace, svcName string, consumers []string) (*a
 	return b, nil
 }
 
-func buildEgressProxyAttributionTLSSecret(ep *gmcv2alpha1.EgressProxy, b *attributionCertBundle) *corev1.Secret {
+func buildEgressProxyAttributionTLSSecret(ep *gmcv2.EgressProxy, b *attributionCertBundle) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyAttributionTLSSecretName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
 		Type:       corev1.SecretTypeTLS,
@@ -451,7 +451,7 @@ func buildEgressProxyAttributionTLSSecret(ep *gmcv2alpha1.EgressProxy, b *attrib
 	}
 }
 
-func buildEgressProxyAttributionClientsSecret(ep *gmcv2alpha1.EgressProxy, b *attributionCertBundle) *corev1.Secret {
+func buildEgressProxyAttributionClientsSecret(ep *gmcv2.EgressProxy, b *attributionCertBundle) *corev1.Secret {
 	data := map[string][]byte{metricsCACertKey: b.caPEM}
 	for ns, pair := range b.clients {
 		data[ns+attributionClientCertSuffix] = pair[0]
@@ -481,7 +481,7 @@ func attributionClientNamespaces(s *corev1.Secret) []string {
 // disagree on the CA, the clients Secret names a different namespace set, or the
 // server cert is near expiry. With no namespaces it empties both Secrets rather
 // than deleting them, since the GMC holds no delete verb on Secrets.
-func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *gmcv2alpha1.EgressProxy, namespaces []string) ([]byte, map[string][]byte, error) {
+func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *gmcv2.EgressProxy, namespaces []string) ([]byte, map[string][]byte, error) {
 	if len(namespaces) == 0 {
 		for _, name := range []string{egressProxyAttributionTLSSecretName(ep), egressProxyAttributionClientsSecretName(ep)} {
 			var s corev1.Secret
@@ -551,7 +551,7 @@ func (r *EgressProxyReconciler) ensureAttributionCerts(ctx context.Context, ep *
 
 // reconcileAttributionService applies the headless read Service while any
 // namespace is attributed, and deletes it otherwise.
-func (r *EgressProxyReconciler) reconcileAttributionService(ctx context.Context, ep *gmcv2alpha1.EgressProxy, ports map[string]int) error {
+func (r *EgressProxyReconciler) reconcileAttributionService(ctx context.Context, ep *gmcv2.EgressProxy, ports map[string]int) error {
 	if len(ports) > 0 {
 		desired := buildEgressProxyAttributionService(ep)
 		obj := &corev1.Service{}
@@ -596,7 +596,7 @@ func (p *attributionPlan) listening() map[string]int {
 // those that left, allocates ports against the live Deployment, keeps the bundle in
 // step, and projects each attributed namespace's port and client certificate into
 // it.
-func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gmcv2alpha1.EgressProxy) (*attributionPlan, error) {
+func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gmcv2.EgressProxy) (*attributionPlan, error) {
 	namespaces, err := attributedNamespacesFor(ctx, r.Client, ep)
 	if err != nil {
 		return nil, err
@@ -645,7 +645,7 @@ func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gm
 // from the reconcile that first sees it gone, since a worker that started on the
 // port can live that long. One the pool no longer admits is cut off on every port
 // already, and one with no RunnerSet has no worker to wait for, so neither is held.
-func (r *EgressProxyReconciler) attributionHolds(ctx context.Context, ep *gmcv2alpha1.EgressProxy, namespaces []string, current map[string]int, recorded map[string]time.Time) (map[string]int, map[string]time.Time, error) {
+func (r *EgressProxyReconciler) attributionHolds(ctx context.Context, ep *gmcv2.EgressProxy, namespaces []string, current map[string]int, recorded map[string]time.Time) (map[string]int, map[string]time.Time, error) {
 	now := r.nowFunc()()
 	held := map[string]int{}
 	until := map[string]time.Time{}
@@ -674,7 +674,7 @@ func (r *EgressProxyReconciler) attributionHolds(ctx context.Context, ep *gmcv2a
 // allows, zero when there is none. A RunnerSet with no cap is counted at the
 // default one: a worker outliving it loses the port as it did before holds.
 func workerLifetimeIn(ctx context.Context, c client.Client, ns string) (time.Duration, error) {
-	var runnerSets gmcv2alpha1.RunnerSetList
+	var runnerSets gmcv2.RunnerSetList
 	if err := c.List(ctx, &runnerSets, client.InNamespace(ns)); err != nil {
 		return 0, fmt.Errorf("list RunnerSets in %q: %w", ns, err)
 	}
@@ -730,7 +730,7 @@ func proxyAttributionName(proxyNamespace, proxyName string) string {
 	return apinames.Join(apinames.MaxLabelValue, "proxy-attribution", proxyNamespace, proxyName)
 }
 
-func attributionProjectionLabels(ep *gmcv2alpha1.EgressProxy) map[string]string {
+func attributionProjectionLabels(ep *gmcv2.EgressProxy) map[string]string {
 	return map[string]string{
 		labelManagedBy:          labelManagerValue,
 		labelAttributionManaged: "true",
@@ -739,7 +739,7 @@ func attributionProjectionLabels(ep *gmcv2alpha1.EgressProxy) map[string]string 
 	}
 }
 
-func buildProxyAttributionConfigMap(ep *gmcv2alpha1.EgressProxy, consumerNS string, port int) *corev1.ConfigMap {
+func buildProxyAttributionConfigMap(ep *gmcv2.EgressProxy, consumerNS string, port int) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      proxyAttributionName(ep.Namespace, ep.Name),
@@ -757,7 +757,7 @@ func buildProxyAttributionConfigMap(ep *gmcv2alpha1.EgressProxy, consumerNS stri
 	}
 }
 
-func buildProxyAttributionSecret(ep *gmcv2alpha1.EgressProxy, consumerNS string, clients map[string][]byte) *corev1.Secret {
+func buildProxyAttributionSecret(ep *gmcv2.EgressProxy, consumerNS string, clients map[string][]byte) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      proxyAttributionName(ep.Namespace, ep.Name),
@@ -783,7 +783,7 @@ func buildProxyAttributionSecret(ep *gmcv2alpha1.EgressProxy, consumerNS string,
 // Projections carry no owner reference, as share ConfigMaps do not, and are found
 // by the ConfigMap's label for pruning; each withdrawn ConfigMap's Secret is
 // blanked by name (blankProjectedSecret).
-func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Context, ep *gmcv2alpha1.EgressProxy, ports, live map[string]int, rolledOut bool, clients map[string][]byte) error {
+func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Context, ep *gmcv2.EgressProxy, ports, live map[string]int, rolledOut bool, clients map[string][]byte) error {
 	labels := client.MatchingLabels{labelAttributionManaged: "true", labelShareProxyNS: ep.Namespace, labelShareProxyNam: ep.Name}
 	var existing corev1.ConfigMapList
 	if err := r.shareReader().List(ctx, &existing, labels); err != nil {
@@ -874,16 +874,16 @@ func (r *EgressProxyReconciler) applyProjectedSecret(ctx context.Context, desire
 // port after it opts out. It also returns when to re-read, zero when nothing is
 // pending.
 func attributionEgress(ctx context.Context, c client.Client, ns string, remoteProxies []remoteProxy, now time.Time) (bool, time.Duration, error) {
-	var gateways gmcv2alpha1.ActionsGatewayList
+	var gateways gmcv2.ActionsGatewayList
 	if err := c.List(ctx, &gateways, client.InNamespace(ns)); err != nil {
 		return false, 0, fmt.Errorf("list ActionsGateways: %w", err)
 	}
-	optedIn := slices.ContainsFunc(gateways.Items, func(ag gmcv2alpha1.ActionsGateway) bool {
+	optedIn := slices.ContainsFunc(gateways.Items, func(ag gmcv2.ActionsGateway) bool {
 		return ag.Spec.ProxyFailureAttribution == proxyFailureAttributionPerJob
 	})
 
 	pools := slices.Clone(remoteProxies)
-	var own gmcv2alpha1.EgressProxyList
+	var own gmcv2.EgressProxyList
 	if err := c.List(ctx, &own, client.InNamespace(ns)); err != nil {
 		return false, 0, fmt.Errorf("list EgressProxies: %w", err)
 	}

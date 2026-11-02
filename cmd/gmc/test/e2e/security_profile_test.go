@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
@@ -28,7 +28,7 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 		// relabels the namespace to privileged, which the
 		// namespace-security-profile-guard policy rejects without it.
 		utils.CreateNamespace(ns, map[string]string{
-			v2alpha1.PrivilegedProfileLabel: v2alpha1.PrivilegedProfileAllowed,
+			v2.PrivilegedProfileLabel: v2.PrivilegedProfileAllowed,
 		})
 		utils.CreateGitHubAppSecret(ns, secretName, 55555, 66666, testRSAKeyPEM)
 		utils.BaseTenant(ns, agName, secretName).ApplyWithWebhookRetry()
@@ -89,8 +89,8 @@ var _ = Describe("E2E_GMC_SecurityProfile", Ordered, func() {
 		// patch; this also exercises the opt-in path end-to-end.
 		By("relabelling the namespace to the privileged security profile with the downgrade opt-in annotation")
 		patch := fmt.Sprintf(`{"metadata":{"annotations":{%q:%q},"labels":{%q:%q}}}`,
-			v2alpha1.AllowProfileDowngradeAnnotation, v2alpha1.AllowProfileDowngradeAllowed,
-			v2alpha1.SecurityProfileLabel, v2alpha1.SecurityProfilePrivileged)
+			v2.AllowProfileDowngradeAnnotation, v2.AllowProfileDowngradeAllowed,
+			v2.SecurityProfileLabel, v2.SecurityProfilePrivileged)
 		cmd := exec.Command("kubectl", "patch", "namespace", ns, "--type=merge", "-p", patch)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred())

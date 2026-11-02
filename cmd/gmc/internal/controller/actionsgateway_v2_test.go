@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,23 +35,25 @@ func actionsGatewayV2TestScheme(t *testing.T) *runtime.Scheme {
 	require.NoError(t, appsv1.AddToScheme(s))
 	require.NoError(t, rbacv1.AddToScheme(s))
 	require.NoError(t, networkingv1.AddToScheme(s))
+	require.NoError(t, gmcv2.AddToScheme(s))
+	// scalesetscope lists at v2alpha1 until Q1167 retypes it.
 	require.NoError(t, gmcv2alpha1.AddToScheme(s))
 	return s
 }
 
-func v2Gateway(name, ns, secret, proxyRef string) *gmcv2alpha1.ActionsGateway {
-	ag := &gmcv2alpha1.ActionsGateway{
+func v2Gateway(name, ns, secret, proxyRef string) *gmcv2.ActionsGateway {
+	ag := &gmcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: gmcv2alpha1.ActionsGatewaySpec{
-			Credentials: gmcv2alpha1.GitHubCredentials{
-				Type:      gmcv2alpha1.CredentialTypeGitHubApp,
-				GitHubApp: &gmcv2alpha1.LocalSecretReference{Name: secret},
+		Spec: gmcv2.ActionsGatewaySpec{
+			Credentials: gmcv2.GitHubCredentials{
+				Type:      gmcv2.CredentialTypeGitHubApp,
+				GitHubApp: &gmcv2.LocalSecretReference{Name: secret},
 			},
 			GitHubURL: "https://github.com/example-org",
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &gmcv2.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }
@@ -58,21 +61,21 @@ func v2Gateway(name, ns, secret, proxyRef string) *gmcv2alpha1.ActionsGateway {
 // v2WorkloadIdentityGateway is a fixture for the no-PEM delegation method (Q201):
 // no GitHub App Secret, App identity + Vault transit signer inline. proxyRef ""
 // leaves egress direct.
-func v2WorkloadIdentityGateway(name, ns, proxyRef string) *gmcv2alpha1.ActionsGateway {
-	ag := &gmcv2alpha1.ActionsGateway{
+func v2WorkloadIdentityGateway(name, ns, proxyRef string) *gmcv2.ActionsGateway {
+	ag := &gmcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: gmcv2alpha1.ActionsGatewaySpec{
-			Credentials: gmcv2alpha1.GitHubCredentials{
-				Type: gmcv2alpha1.CredentialTypeWorkloadIdentity,
-				WorkloadIdentity: &gmcv2alpha1.WorkloadIdentity{
+		Spec: gmcv2.ActionsGatewaySpec{
+			Credentials: gmcv2.GitHubCredentials{
+				Type: gmcv2.CredentialTypeWorkloadIdentity,
+				WorkloadIdentity: &gmcv2.WorkloadIdentity{
 					AppID:          424242,
 					InstallationID: 99,
-					Signer: gmcv2alpha1.ExternalSigner{
-						Provider: gmcv2alpha1.SignerProviderVault,
-						Vault: &gmcv2alpha1.VaultSigner{
+					Signer: gmcv2.ExternalSigner{
+						Provider: gmcv2.SignerProviderVault,
+						Vault: &gmcv2.VaultSigner{
 							Address: "https://vault.vault.svc:8200",
 							KeyName: "agc",
-							Auth:    gmcv2alpha1.VaultKubernetesAuth{Role: "agc"},
+							Auth:    gmcv2.VaultKubernetesAuth{Role: "agc"},
 						},
 					},
 				},
@@ -81,7 +84,7 @@ func v2WorkloadIdentityGateway(name, ns, proxyRef string) *gmcv2alpha1.ActionsGa
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &gmcv2.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }
@@ -102,10 +105,10 @@ func TestActionsGatewayV2Reconcile_ProvisionsControlPlane(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 		Name:   "team-a",
-		Labels: map[string]string{gmcv2alpha1.SecurityProfileLabel: gmcv2alpha1.SecurityProfileRestricted},
+		Labels: map[string]string{gmcv2.SecurityProfileLabel: gmcv2.SecurityProfileRestricted},
 	}}
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
-	proxy := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"}}
+	proxy := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"}}
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 
 	c := fake.NewClientBuilder().
@@ -129,7 +132,7 @@ func TestActionsGatewayV2Reconcile_ProvisionsControlPlane(t *testing.T) {
 	env := agcEnv(&dep)
 	assert.Equal(t, "https://shared-proxy.team-a.svc.cluster.local:8080", env["HTTPS_PROXY"])
 	assert.Equal(t, "shared-proxy-tls", env["PROXY_TLS_SECRET_NAME"])
-	assert.Equal(t, gmcv2alpha1.SecurityProfileRestricted, env["SECURITY_PROFILE"])
+	assert.Equal(t, gmcv2.SecurityProfileRestricted, env["SECURITY_PROFILE"])
 	assert.Equal(t, "gw", env["GATEWAY_NAME"], "AGC must be scoped to its gateway")
 	assert.Equal(t, workerSANameV2(ag), env["WORKER_SERVICE_ACCOUNT"], "per-gateway worker SA")
 	for _, k := range []string{"appId", "privateKey", "installationId"} {
@@ -167,33 +170,33 @@ func TestActionsGatewayV2Reconcile_ProvisionsControlPlane(t *testing.T) {
 	assert.Equal(t, "team-a", crb.Subjects[0].Namespace)
 
 	// Status: Ready=False (no kubelet) / Degraded=False / CredentialUnavailable=False.
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
-	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionReady))
-	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionDegraded))
-	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable))
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2.ConditionReady))
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2.ConditionDegraded))
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2.ConditionCredentialUnavailable))
 	assert.Equal(t, got.Generation, got.Status.ObservedGeneration)
 	// Proxied: proxyMode Proxied, EgressUnattributed=False (Q168).
-	assert.Equal(t, gmcv2alpha1.ProxyModeProxied, got.Status.ProxyMode)
-	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed))
+	assert.Equal(t, gmcv2.ProxyModeProxied, got.Status.ProxyMode)
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2.ConditionEgressUnattributed))
 }
 
 func TestActionsGatewayV2Reconcile_FailsClosedWithoutCredential(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
-	proxy := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"}}
+	proxy := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"}}
 	ag := v2Gateway("gw", "team-a", "missing", "shared")
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ns, proxy, ag).WithStatusSubresource(ag).Build()
 
 	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 	reconcileV2Gateway(t, r, "team-a", "gw")
 
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
-	cred := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable)
+	cred := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionCredentialUnavailable)
 	require.NotNil(t, cred)
 	assert.Equal(t, metav1.ConditionTrue, cred.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonSecretNotFound, cred.Reason)
+	assert.Equal(t, gmcv2.ReasonSecretNotFound, cred.Reason)
 	// Fail closed: no AGC Deployment.
 	var dep appsv1.Deployment
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcNameV2(ag)}, &dep))
@@ -213,12 +216,12 @@ func TestActionsGatewayV2Reconcile_FailsClosedWithAbsentProxyRef(t *testing.T) {
 
 	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 	reconcileV2Gateway(t, r, "team-a", "gw-absent")
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw-absent"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionFalse, ready.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonProxyNotFound, ready.Reason)
+	assert.Equal(t, gmcv2.ReasonProxyNotFound, ready.Reason)
 	// Fail closed: no AGC Deployment.
 	var dep appsv1.Deployment
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: agcNameV2(agAbsent)}, &dep))
@@ -262,21 +265,21 @@ func TestActionsGatewayV2Reconcile_DirectEgressWhenNoProxyRef(t *testing.T) {
 	assert.NotNil(t, findApiserverEgressRule(&anp), "AGC NP keeps apiserver egress")
 
 	// Status: proxyMode Direct, EgressUnattributed=True, not Degraded.
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
-	assert.Equal(t, gmcv2alpha1.ProxyModeDirect, got.Status.ProxyMode)
-	unattr := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressUnattributed)
+	assert.Equal(t, gmcv2.ProxyModeDirect, got.Status.ProxyMode)
+	unattr := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionEgressUnattributed)
 	require.NotNil(t, unattr)
 	assert.Equal(t, metav1.ConditionTrue, unattr.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonDirectEgress, unattr.Reason)
-	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2alpha1.ConditionDegraded))
+	assert.Equal(t, gmcv2.ReasonDirectEgress, unattr.Reason)
+	assert.Equal(t, metav1.ConditionFalse, condStatus(got.Status.Conditions, gmcv2.ConditionDegraded))
 }
 
 func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	now := metav1.Now()
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Finalizers = []string{gmcv2alpha1.ActionsGatewayFinalizer}
+	ag.Finalizers = []string{gmcv2.ActionsGatewayFinalizer}
 	ag.DeletionTimestamp = &now
 	// The cluster-scoped ClusterRoleBinding is not owner-GC'd, so reconcileDelete
 	// must remove it explicitly; seed it to prove the cleanup.
@@ -287,7 +290,7 @@ func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
 	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "gw"}})
 	require.NoError(t, err)
 	// Finalizer removed ⇒ the object is fully deleted from the fake client.
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
 	// The per-gateway ClusterRoleBinding is explicitly deleted.
 	var gotCRB rbacv1.ClusterRoleBinding
@@ -298,10 +301,10 @@ func TestActionsGatewayV2Reconcile_RemovesFinalizerOnDelete(t *testing.T) {
 // deletingV2Gateway returns a v2 ActionsGateway that is mid-deletion: it carries
 // the cleanup finalizer and a deletion timestamp, the precondition for
 // reconcileDelete (mirrors v1's deletingAG).
-func deletingV2Gateway() *gmcv2alpha1.ActionsGateway {
+func deletingV2Gateway() *gmcv2.ActionsGateway {
 	now := metav1.Now()
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Finalizers = []string{gmcv2alpha1.ActionsGatewayFinalizer}
+	ag.Finalizers = []string{gmcv2.ActionsGatewayFinalizer}
 	ag.DeletionTimestamp = &now
 	return ag
 }
@@ -335,9 +338,9 @@ func TestActionsGatewayV2ReconcileDelete_FailClosedOnDeleteError(t *testing.T) {
 	_, err := r.reconcileDelete(context.Background(), ag)
 	require.Error(t, err, "a failed teardown delete must surface an error to requeue")
 
-	var fetched gmcv2alpha1.ActionsGateway
+	var fetched gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched))
-	assert.Contains(t, fetched.Finalizers, gmcv2alpha1.ActionsGatewayFinalizer,
+	assert.Contains(t, fetched.Finalizers, gmcv2.ActionsGatewayFinalizer,
 		"finalizer must be retained while a delete is unconfirmed")
 
 	// The orphan-prevention invariant: the AGC Deployment that failed to delete is
@@ -375,9 +378,9 @@ func TestActionsGatewayV2ReconcileDelete_RetainsFinalizerWhileChildLingers(t *te
 	require.NoError(t, err, "a lingering child is a wait, not an error")
 	assert.Positive(t, res.RequeueAfter, "teardown must poll until the lingering child is gone")
 
-	var fetched gmcv2alpha1.ActionsGateway
+	var fetched gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &fetched))
-	assert.Contains(t, fetched.Finalizers, gmcv2alpha1.ActionsGatewayFinalizer,
+	assert.Contains(t, fetched.Finalizers, gmcv2.ActionsGatewayFinalizer,
 		"finalizer must be retained while a child lingers")
 
 	select {
@@ -495,7 +498,7 @@ func TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule(t *testing.T) {
 func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	// CIDR form (external Vault): scoped ipBlock peer on the address port (8200).
 	wiCIDR := v2WorkloadIdentityGateway("gw", "team-a", "")
-	wiCIDR.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
+	wiCIDR.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2.EgressPeer{
 		CIDR: "10.0.5.7/32",
 	}
 	np := buildAGCNetworkPolicyV2(wiCIDR, nil, nil, true, nil)
@@ -512,7 +515,7 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	// Selector form (in-cluster Vault): pod + namespace selector peer, default https port.
 	wiSel := v2WorkloadIdentityGateway("gw", "team-a", "")
 	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.Address = "https://vault.vault.svc"
-	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
+	wiSel.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2.EgressPeer{
 		PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{"app.kubernetes.io/name": "vault"}},
 		NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": "vault"}},
 	}
@@ -529,7 +532,7 @@ func TestBuildAGCNetworkPolicyV2_VaultEgress(t *testing.T) {
 	// descriptor lets a peer pin its own port; for Vault the override wins over the address.
 	wiPort := v2WorkloadIdentityGateway("gw", "team-a", "")
 	wiPort.Spec.Credentials.WorkloadIdentity.Signer.Vault.Address = "https://vault.vault.svc"
-	wiPort.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{
+	wiPort.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2.EgressPeer{
 		CIDR: "10.0.5.7/32",
 		Port: ptr(int32(8201)),
 	}
@@ -629,12 +632,12 @@ func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 	// too, or a proxied v2 tenant's AGC dials the API server through the proxy.
 	t.Setenv(apiServerHostEnv, gkeAPIServerIP)
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{Endpoint: "otel:4317", Sampler: "always_on"}
-	proxy := &gmcv2alpha1.EgressProxy{
+	ag.Spec.Tracing = gmcv2.TracingConfig{Endpoint: "otel:4317", Sampler: "always_on"}
+	proxy := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"},
-		Spec:       gmcv2alpha1.EgressProxySpec{NoProxyCIDRs: []string{"10.20.0.0/16"}},
+		Spec:       gmcv2.EgressProxySpec{NoProxyCIDRs: []string{"10.20.0.0/16"}},
 	}
-	dep := buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2alpha1.SecurityProfileBaseline, nil)
+	dep := buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2.SecurityProfileBaseline, nil)
 	env := agcEnv(dep)
 	assert.Equal(t, "otel:4317", env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"])
 	assert.Equal(t, "always_on", env["OTEL_TRACES_SAMPLER"])
@@ -653,8 +656,8 @@ func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 // Secret exists only in the provider's namespace (Q1209, §H.9).
 func TestBuildAGCDeploymentV2_CrossNamespaceProxy(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "pool")
-	proxy := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "pool", Namespace: "platform"}}
-	dep := buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2alpha1.SecurityProfileBaseline, nil)
+	proxy := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "pool", Namespace: "platform"}}
+	dep := buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2.SecurityProfileBaseline, nil)
 	env := agcEnv(dep)
 	assert.Equal(t, "https://pool-proxy.platform.svc.cluster.local:8080", env["HTTPS_PROXY"])
 	assert.NotContains(t, env, "PROXY_TLS_SECRET_NAME")
@@ -677,7 +680,7 @@ func TestBuildAGCDeploymentV2_CrossNamespaceProxy(t *testing.T) {
 // control-plane egress goes directly to GitHub (Q168, §H.10).
 func TestBuildAGCDeploymentV2_DirectEgress(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "")
-	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)
 	env := agcEnv(dep)
 	assert.NotContains(t, env, "HTTP_PROXY")
 	assert.NotContains(t, env, "HTTPS_PROXY")
@@ -693,7 +696,7 @@ func TestBuildAGCDeploymentV2_DirectEgress(t *testing.T) {
 // api.github.com, so a GHES gateway never mints an installation token.
 func TestBuildAGCDeploymentV2_APIBaseURL(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "")
-	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)
 	env := agcEnv(dep)
 	require.Contains(t, env, "GITHUB_API_BASE_URL",
 		"an absent var silently defaults to api.github.com")
@@ -702,7 +705,7 @@ func TestBuildAGCDeploymentV2_APIBaseURL(t *testing.T) {
 
 	ghes := v2Gateway("gw", "team-a", "github-app", "")
 	ghes.Spec.GitHubURL = "https://ghes.example.com/example-org"
-	depGHES := buildAGCDeploymentV2(ghes, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	depGHES := buildAGCDeploymentV2(ghes, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)
 	assert.Equal(t, "https://ghes.example.com/api/v3", agcEnv(depGHES)["GITHUB_API_BASE_URL"])
 }
 
@@ -712,7 +715,7 @@ func TestBuildAGCDeploymentV2_APIBaseURL(t *testing.T) {
 // pod (Q201). The rollout annotation that records the credential Secret is omitted.
 func TestBuildAGCDeploymentV2_WorkloadIdentity(t *testing.T) {
 	ag := v2WorkloadIdentityGateway("gw", "team-a", "")
-	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	dep := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)
 
 	env := agcEnv(dep)
 	assert.Equal(t, "WorkloadIdentity", env["CREDENTIAL_TYPE"])
@@ -773,9 +776,9 @@ func TestActionsGatewayV2Reconcile_WorkloadIdentityProvisions(t *testing.T) {
 	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 	reconcileV2Gateway(t, r, "team-a", "gw")
 
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
-	cred := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable)
+	cred := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionCredentialUnavailable)
 	require.NotNil(t, cred)
 	assert.Equal(t, metav1.ConditionFalse, cred.Status, "workload identity needs no Secret; CredentialUnavailable must be cleared")
 
@@ -968,7 +971,7 @@ func TestActionsGatewayV2Reconcile_FailsClosedOnFreshInstallEmptyCache(t *testin
 // iteration per range, so one process re-rendering is a valid probe.
 func TestBuildAGCDeploymentV2_RenderIsDeterministic(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{
+	ag.Spec.Tracing = gmcv2.TracingConfig{
 		Endpoint:           "otel:4317",
 		Sampler:            "parentbased_traceidratio",
 		SamplerArg:         "0.1",
@@ -978,13 +981,13 @@ func TestBuildAGCDeploymentV2_RenderIsDeterministic(t *testing.T) {
 		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m")},
 		Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("8Gi")},
 	}
-	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ag.Spec.Scheduling = &gmcv2.PodScheduling{
 		NodeSelector: map[string]string{"k1": "v1", "k2": "v2", "k3": "v3", "k4": "v4"},
 		Tolerations:  []corev1.Toleration{{Key: "t1", Operator: corev1.TolerationOpExists}},
 	}
-	proxy := &gmcv2alpha1.EgressProxy{
+	proxy := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"},
-		Spec:       gmcv2alpha1.EgressProxySpec{NoProxyCIDRs: []string{"10.20.0.0/16", "10.30.0.0/16"}},
+		Spec:       gmcv2.EgressProxySpec{NoProxyCIDRs: []string{"10.20.0.0/16", "10.30.0.0/16"}},
 	}
 	extraEnv := []corev1.EnvVar{
 		{Name: "GITHUB_API_BASE_URL", Value: "http://fakegithub:8080"},
@@ -993,7 +996,7 @@ func TestBuildAGCDeploymentV2_RenderIsDeterministic(t *testing.T) {
 
 	render := func() string {
 		b, err := json.Marshal(buildAGCDeploymentV2(ag.DeepCopy(), "agc:test", proxy.DeepCopy(),
-			gmcv2alpha1.SecurityProfileBaseline, extraEnv))
+			gmcv2.SecurityProfileBaseline, extraEnv))
 		require.NoError(t, err)
 		return string(b)
 	}
@@ -1009,31 +1012,31 @@ func TestBuildAGCDeploymentV2_RenderIsDeterministic(t *testing.T) {
 // GMC upgrade and roll them all, which is why proxyAuditEnv is conditional too.
 func TestBuildAGCDeploymentV2_AuditLogging(t *testing.T) {
 	off := v2Gateway("gw", "team-a", "github-app", "")
-	assert.NotContains(t, agcEnv(buildAGCDeploymentV2(off, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)),
+	assert.NotContains(t, agcEnv(buildAGCDeploymentV2(off, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)),
 		"AGC_AUDIT_LOGGING", "an unset auditLogging must inject nothing")
 
 	explicitOff := v2Gateway("gw", "team-a", "github-app", "")
 	explicitOff.Spec.AuditLogging = "Off"
-	assert.NotContains(t, agcEnv(buildAGCDeploymentV2(explicitOff, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)),
+	assert.NotContains(t, agcEnv(buildAGCDeploymentV2(explicitOff, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)),
 		"AGC_AUDIT_LOGGING", "an explicit Off must inject nothing either")
 
 	on := v2Gateway("gw", "team-a", "github-app", "")
 	on.Spec.AuditLogging = "WorkerAddresses"
 	assert.Equal(t, "WorkerAddresses",
-		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
+		agcEnv(buildAGCDeploymentV2(on, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil))["AGC_AUDIT_LOGGING"])
 }
 
 // TestEgressAuditAttribution covers all five states of the Q986 pair the
 // EgressAuditUnattributed condition reports (Q1062), including the two half-on ones —
 // each names the half still to turn on, because that is what the operator does next.
 func TestEgressAuditAttribution(t *testing.T) {
-	proxyWith := func(mode string) *gmcv2alpha1.EgressProxy {
-		return &gmcv2alpha1.EgressProxy{
+	proxyWith := func(mode string) *gmcv2.EgressProxy {
+		return &gmcv2.EgressProxy{
 			ObjectMeta: metav1.ObjectMeta{Name: "pool", Namespace: "team-a"},
-			Spec:       gmcv2alpha1.EgressProxySpec{AuditLogging: mode},
+			Spec:       gmcv2.EgressProxySpec{AuditLogging: mode},
 		}
 	}
-	gatewayWith := func(mode string) *gmcv2alpha1.ActionsGateway {
+	gatewayWith := func(mode string) *gmcv2.ActionsGateway {
 		ag := v2Gateway("gw", "team-a", "github-app", "pool")
 		ag.Spec.AuditLogging = mode
 		return ag
@@ -1042,18 +1045,18 @@ func TestEgressAuditAttribution(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		gateway    string
-		proxy      *gmcv2alpha1.EgressProxy
+		proxy      *gmcv2.EgressProxy
 		wantReason string
 		wantInMsg  string
 	}{
 		{"both halves on", "WorkerAddresses", proxyWith("ConnectionsWithSource"),
-			gmcv2alpha1.ReasonEgressAuditJoined, "joins to this tenant"},
+			gmcv2.ReasonEgressAuditJoined, "joins to this tenant"},
 		{"proxy half only", "Off", proxyWith("ConnectionsWithSource"),
-			gmcv2alpha1.ReasonWorkerAuditDisabled, "Set spec.auditLogging: WorkerAddresses"},
+			gmcv2.ReasonWorkerAuditDisabled, "Set spec.auditLogging: WorkerAddresses"},
 		{"gateway half only", "WorkerAddresses", proxyWith("Connections"),
-			gmcv2alpha1.ReasonProxySourceAuditDisabled, "spec.auditLogging: ConnectionsWithSource"},
+			gmcv2.ReasonProxySourceAuditDisabled, "spec.auditLogging: ConnectionsWithSource"},
 		{"neither half", "Off", proxyWith("Off"),
-			gmcv2alpha1.ReasonEgressAuditDisabled, "not attributable"},
+			gmcv2.ReasonEgressAuditDisabled, "not attributable"},
 		// Direct egress leaves the AGC's own traffic on no pool, so the pair cannot be
 		// joined for it however the gateway half is set — the reason names the proxy,
 		// not the opt-in. The message is pinned on the clause that SCOPES the claim to
@@ -1061,7 +1064,7 @@ func TestEgressAuditAttribution(t *testing.T) {
 		// own proxyRef does have a per-connection record (Q1069), so an unscoped
 		// wording here would be false, and both wordings contain that opening.
 		{"direct egress with the gateway half on", "WorkerAddresses", nil,
-			gmcv2alpha1.ReasonDirectEgress, "AGC control-plane egress is direct"},
+			gmcv2.ReasonDirectEgress, "AGC control-plane egress is direct"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			reason, msg := egressAuditAttribution(gatewayWith(tc.gateway), tc.proxy)
@@ -1086,9 +1089,9 @@ func TestEgressAuditAttribution(t *testing.T) {
 	// assertion to change if the decision is ever revisited.
 	shared := proxyWith("ConnectionsWithSource")
 	shared.Namespace = "platform"
-	shared.Spec.Sharing = &gmcv2alpha1.ProxySharing{AllowedNamespaces: []string{"team-a"}}
+	shared.Spec.Sharing = &gmcv2.ProxySharing{AllowedNamespaces: []string{"team-a"}}
 	reason, _ := egressAuditAttribution(gatewayWith("WorkerAddresses"), shared)
-	assert.Equal(t, gmcv2alpha1.ReasonEgressAuditJoined, reason)
+	assert.Equal(t, gmcv2.ReasonEgressAuditJoined, reason)
 }
 
 // TestActionsGatewayV2Reconcile_EgressAuditUnattributed asserts the reconciler writes
@@ -1100,9 +1103,9 @@ func TestActionsGatewayV2Reconcile_EgressAuditUnattributed(t *testing.T) {
 		scheme := actionsGatewayV2TestScheme(t)
 		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
 		secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
-		proxy := &gmcv2alpha1.EgressProxy{
+		proxy := &gmcv2.EgressProxy{
 			ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: "team-a"},
-			Spec:       gmcv2alpha1.EgressProxySpec{AuditLogging: proxyMode},
+			Spec:       gmcv2.EgressProxySpec{AuditLogging: proxyMode},
 		}
 		ag := v2Gateway("gw", "team-a", "github-app", "shared")
 		ag.Spec.AuditLogging = gatewayMode
@@ -1112,21 +1115,21 @@ func TestActionsGatewayV2Reconcile_EgressAuditUnattributed(t *testing.T) {
 		r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 		reconcileV2Gateway(t, r, "team-a", "gw")
 
-		var got gmcv2alpha1.ActionsGateway
+		var got gmcv2.ActionsGateway
 		require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: "team-a", Name: "gw"}, &got))
-		return meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressAuditUnattributed)
+		return meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionEgressAuditUnattributed)
 	}
 
 	// Abnormal-is-True: both halves on is the cleared state.
 	joined := reconcileWith(t, "WorkerAddresses", "ConnectionsWithSource")
 	require.NotNil(t, joined, "the reconciler must write the condition")
 	assert.Equal(t, metav1.ConditionFalse, joined.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonEgressAuditJoined, joined.Reason)
+	assert.Equal(t, gmcv2.ReasonEgressAuditJoined, joined.Reason)
 
 	// Half on stays True, and the reason names the half still off — the state the row
 	// exists to keep a dashboard from reading as attributed.
 	half := reconcileWith(t, "WorkerAddresses", "Connections")
 	require.NotNil(t, half)
 	assert.Equal(t, metav1.ConditionTrue, half.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonProxySourceAuditDisabled, half.Reason)
+	assert.Equal(t, gmcv2.ReasonProxySourceAuditDisabled, half.Reason)
 }

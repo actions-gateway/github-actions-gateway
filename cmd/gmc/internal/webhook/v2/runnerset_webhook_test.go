@@ -26,9 +26,10 @@ import (
 func runnerSetValidatorWith(t *testing.T, existing ...client.Object) *RunnerSetCustomValidator {
 	t.Helper()
 	scheme := runtime.NewScheme()
+	require.NoError(t, agcv2.AddToScheme(scheme))
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
 	return &RunnerSetCustomValidator{
-		reader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, existing...)...).Build(),
+		reader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(withV2alpha1Views(t, existing...)...).Build(),
 	}
 }
 

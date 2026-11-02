@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -51,9 +51,9 @@ func caBundlePEM(t *testing.T) string {
 
 // ghesGatewayWithCABundle is a directly-egressing GHES gateway naming a CA bundle
 // ConfigMap.
-func ghesGatewayWithCABundle(name, ns, cmName string) *gmcv2alpha1.ActionsGateway {
+func ghesGatewayWithCABundle(name, ns, cmName string) *gmcv2.ActionsGateway {
 	ag := ghesGateway(name, ns, "https://ghes.corp.example/example-org", "")
-	ag.Spec.GitHubCABundleRef = &gmcv2alpha1.LocalConfigMapReference{Name: cmName}
+	ag.Spec.GitHubCABundleRef = &gmcv2.LocalConfigMapReference{Name: cmName}
 	return ag
 }
 
@@ -108,7 +108,7 @@ func TestActionsGatewayV2Reconcile_GHESCABundleMounted(t *testing.T) {
 	assert.Equal(t, "ghes-ca", agcEnv(&dep)["GITHUB_CA_CONFIGMAP_NAME"],
 		"the AGC needs the name to project the same bundle into worker pods")
 	assert.Equal(t, metav1.ConditionFalse,
-		condStatus(gatewayConditions(t, c, ag), gmcv2alpha1.ConditionDegraded))
+		condStatus(gatewayConditions(t, c, ag), gmcv2.ConditionDegraded))
 }
 
 // TestActionsGatewayV2Reconcile_NoCABundleRefLeavesPodUnchanged is the negative
@@ -144,7 +144,7 @@ func TestActionsGatewayV2Reconcile_CABundleFailsClosed(t *testing.T) {
 	}{
 		{
 			name:   "ConfigMap absent",
-			reason: gmcv2alpha1.ReasonCABundleNotFound,
+			reason: gmcv2.ReasonCABundleNotFound,
 		},
 		{
 			name: "no ca.crt key",
@@ -152,7 +152,7 @@ func TestActionsGatewayV2Reconcile_CABundleFailsClosed(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "ghes-ca", Namespace: "team-a"},
 				Data:       map[string]string{"bundle.pem": "irrelevant"},
 			},
-			reason: gmcv2alpha1.ReasonCABundleInvalid,
+			reason: gmcv2.ReasonCABundleInvalid,
 		},
 		{
 			name: "ca.crt is not a certificate",
@@ -160,7 +160,7 @@ func TestActionsGatewayV2Reconcile_CABundleFailsClosed(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "ghes-ca", Namespace: "team-a"},
 				Data:       map[string]string{githubCABundleKey: "-----BEGIN CERTIFICATE-----\nnope\n"},
 			},
-			reason: gmcv2alpha1.ReasonCABundleInvalid,
+			reason: gmcv2.ReasonCABundleInvalid,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -182,11 +182,11 @@ func TestActionsGatewayV2Reconcile_CABundleFailsClosed(t *testing.T) {
 				"an unresolved bundle must be re-read; nothing watches tenant ConfigMaps")
 
 			conds := gatewayConditions(t, c, ag)
-			degraded := meta.FindStatusCondition(conds, gmcv2alpha1.ConditionDegraded)
+			degraded := meta.FindStatusCondition(conds, gmcv2.ConditionDegraded)
 			require.NotNil(t, degraded)
 			assert.Equal(t, metav1.ConditionTrue, degraded.Status)
 			assert.Equal(t, tc.reason, degraded.Reason)
-			assert.Equal(t, metav1.ConditionFalse, condStatus(conds, gmcv2alpha1.ConditionReady))
+			assert.Equal(t, metav1.ConditionFalse, condStatus(conds, gmcv2.ConditionReady))
 
 			var dep appsv1.Deployment
 			err := c.Get(context.Background(),
@@ -224,9 +224,9 @@ func TestActionsGatewayV2Reconcile_CABundleRecovers(t *testing.T) {
 }
 
 // gatewayConditions re-reads the gateway's conditions after a reconcile.
-func gatewayConditions(t *testing.T, c client.Client, ag *gmcv2alpha1.ActionsGateway) []metav1.Condition {
+func gatewayConditions(t *testing.T, c client.Client, ag *gmcv2.ActionsGateway) []metav1.Condition {
 	t.Helper()
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(),
 		types.NamespacedName{Namespace: ag.Namespace, Name: ag.Name}, &got))
 	return got.Status.Conditions
