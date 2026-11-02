@@ -36,13 +36,13 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | Row | Covers | Depends on |
 |---|---|---|
 | Q555 (built) | Detection, R1 to R8 | Built without the dogfood measurement it named |
-| [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 |
+| [Q1236](../queue/Q1236.md) | The dogfood readings detection rests on (M1, M2, M4) | Q1180 (applied) |
 | Q1237 (built) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
 | Q1181 (built on the scale-set tier) | R18's futility checks, on the arms that exist today | Nothing |
 | Q1183 (built on the scale-set tier) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
 | Q1244 (built), Q1245 (built) | What Q1183 left: the persistent deferred wait, and the misclassification alert with a paused-breaker gauge | Q1183 (built) |
 | Q1177 (closed by the `own_limit` withhold), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
-| [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
+| Q1180 (applied) | Keeping dogfood's retry metrics at all | Nothing |
 | Q1178, Q1184 (both shipped) | The proxy's outcome metrics, and per-job failure attribution | Nothing |
 
 ## Problem statement
@@ -193,7 +193,7 @@ A blanket retry of unclassified failures is [not scheduled](#unclassified-retry-
   Calls are for the rare case (a failure, or a re-run), never the common one.
 - **R7.** For each failed attempt, detection MUST record the platform context GAG could read at the time: the pod's phase, reason and message, each container's termination reason and restart count (sidecars included), the node's conditions, and the readiness of the set's egress proxy pool and registry mirror.
   The record of failures that later passed is the evidence that proposes new classes; without it, a candidate is a guess.
-  It MUST outlive the AGC pod: on dogfood today no AGC metric is scraped and Cloud Logging keeps warn lines for 30 days ([Q1180](../queue/Q1180.md)), so one structured line per concluded job, carrying run, job, result, cause and node, is the cheapest durable form.
+  It MUST outlive the AGC pod: on dogfood the AGC's metrics are scraped only while the cluster runs ([since Q1180](../../deploy/dogfood-metrics/README.md)) and Cloud Logging keeps warn lines for 30 days, so one structured line per concluded job, carrying run, job, result, cause and node, is the cheapest durable form.
 - **R8.** Detection MUST tell the re-runs GAG triggered from the ones it did not, and report per set the rate of re-runs nobody automated.
   That rate is this feature's success metric: each class shipped should lower it, and a class that does not is not paying for itself.
 
