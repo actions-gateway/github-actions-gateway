@@ -18,9 +18,9 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
-  - [Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it](#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
   - [Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded](#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded)
+  - [Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it](#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it)
   - [Non-breaking: the GMC keeps GitHub egress across a restart](#non-breaking-the-gmc-keeps-github-egress-across-a-restart)
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
@@ -242,18 +242,6 @@ Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
 
-### Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it
-
-**Who is affected:** anyone running a v2 `ActionsGateway` with no `defaultProxyRef`, and anyone applying `deploy/monitoring/prometheusrule.yaml`.
-Nothing to do.
-
-Such a gateway carries the GitHub allowlist on its own AGC and workload `NetworkPolicies`, and no condition reported whether that allowlist was being refreshed.
-It now carries `EgressRulesStale`, with the reasons the `EgressProxy` uses, exported as the new gauge `actions_gateway_direct_egress_rules_stale` and paged on by the new `ActionsGatewayDirectEgressRulesStale` alert after 15 minutes (Q1249).
-A proxied gateway reads `False` / `RefreshPending`, since its `EgressProxy` reports the allowlist.
-The gauge has its own name, rather than a series on `actions_gateway_egress_rules_stale`, because a gateway and an `EgressProxy` may share a namespace and a name.
-
-**Rolling back** removes the gauge and stops updating the condition, which keeps its last value until the gateway is next written by a GMC that sets it.
-
 ### Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run
 
 **Who is affected:** anyone whose workers can be reaped by `pendingPodDeadline` or drained while scheduled but still `Pending`, typically pulling a large or unpullable image.
@@ -278,6 +266,18 @@ It now reads `True` with the new reason `RefreshNeverSucceeded`, so the existing
 While the state lasts, the GMC re-checks it every minute, so it clears within a minute of the first fetch.
 
 **Rolling back** returns the state to `False` / `RefreshPending`.
+
+### Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it
+
+**Who is affected:** anyone running a v2 `ActionsGateway` with no `defaultProxyRef`, and anyone applying `deploy/monitoring/prometheusrule.yaml`.
+Nothing to do.
+
+Such a gateway carries the GitHub allowlist on its own AGC and workload `NetworkPolicies`, and no condition reported whether that allowlist was being refreshed.
+It now carries `EgressRulesStale`, with the reasons the `EgressProxy` uses, exported as the new gauge `actions_gateway_direct_egress_rules_stale` and paged on by the new `ActionsGatewayDirectEgressRulesStale` alert after 15 minutes (Q1249).
+A proxied gateway reads `False` / `RefreshPending`, since its `EgressProxy` reports the allowlist.
+The gauge has its own name, rather than a series on `actions_gateway_egress_rules_stale`, because a gateway and an `EgressProxy` may share a namespace and a name.
+
+**Rolling back** removes the gauge and stops updating the condition, which keeps its last value until the gateway is next written by a GMC that sets it.
 
 ### Non-breaking: the GMC keeps GitHub egress across a restart
 
