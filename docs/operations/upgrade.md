@@ -18,6 +18,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
+  - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
   - [Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded](#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded)
   - [Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it](#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it)
@@ -241,6 +242,16 @@ Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2
 
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
+
+### Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the `-v2` webhooks
+
+**Who is affected:** anyone who copied the `ActionsGatewayWebhookRejections` alert from [security-operations.md](security-operations.md#prometheus-abuse-alerts), or imported the security dashboard, whose `name=~` selector still names a `-v2alpha1` webhook: any copy taken from release 1.8, 1.9 or 1.10.
+
+**What changed.** Both select the GMC's webhooks by name, and through 1.10 they still named the `-v2alpha1` webhooks that 1.9 renamed to `-v2`, so a copy taken from 1.8 went blind on the upgrade to 1.9.
+From 1.9 on, neither could see a denial by the five `actions-gateway.com` webhooks: the alert could fire only for `vactionsgateway-v1alpha1.kb.io`, and the dashboard's **total denied** series counted that webhook alone.
+Both now name the six webhooks the chart ships (Q1267).
+
+**What to do.** Replace the `name=~` selector in your copy of the alert with the one in [security-operations.md](security-operations.md#prometheus-abuse-alerts), and re-import `deploy/monitoring/grafana-dashboard-security.json`.
 
 ### Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run
 
