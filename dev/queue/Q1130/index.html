@@ -23,7 +23,7 @@
     
     
       
-        <title>Nothing spaces a batch across the registry files that still collide - GitHub Actions Gateway</title>
+        <title>Name the four routed registry paths in the dispatch pre-flight checklist - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nothing-spaces-a-batch-across-the-registry-files-that-still-collide" class="md-skip">
+        <a href="#name-the-four-routed-registry-paths-in-the-dispatch-pre-flight-checklist" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nothing spaces a batch across the registry files that still collide
+              Name the four routed registry paths in the dispatch pre-flight checklist
             
           </span>
         </div>
@@ -2616,10 +2616,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-measurement" class="md-nav__link">
+  <a href="#the-choice-name-the-paths-and-space-the-assignment" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The measurement
+        The choice: name the paths and space the assignment
       
     </span>
   </a>
@@ -2627,10 +2627,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#what-to-do-is-open" class="md-nav__link">
+  <a href="#the-measurement" class="md-nav__link">
     <span class="md-ellipsis">
       
-        What to do is open
+        The measurement
       
     </span>
   </a>
@@ -2657,44 +2657,80 @@
   
 
 
-<h1 id="nothing-spaces-a-batch-across-the-registry-files-that-still-collide">Nothing spaces a batch across the registry files that still collide<a class="headerlink" href="#nothing-spaces-a-batch-across-the-registry-files-that-still-collide" title="Permanent link">&para;</a></h1>
+<h1 id="name-the-four-routed-registry-paths-in-the-dispatch-pre-flight-checklist">Name the four routed registry paths in the dispatch pre-flight checklist<a class="headerlink" href="#name-the-four-routed-registry-paths-in-the-dispatch-pre-flight-checklist" title="Permanent link">&para;</a></h1>
 <p><code>.gitattributes</code> routes four paths to per-clone merge drivers: <code>scripts/README.md</code>, <code>mk/gate-lists.mk</code>, <code>docs/plan/README.md</code> and <code>docs/roadmap.md</code>.
-Two pull requests editing <em>different</em> rows of one of those files conflict on GitHub whenever their rows are directly adjacent.
-The same merge resolves cleanly in any clone that has run <code>make merge-driver</code>, so the cost lands entirely on the host: a <code>DIRTY</code> pull request, or a merge-queue eviction, and a rebase plus a force-push plus a full CI cycle each time.</p>
-<p><strong>The mechanism is already written down, and restating it is not what this row is for.</strong> The driver's own header says it (<code>scripts/docs/git-merge-script-index.sh:18:reduce merge-queue evictions, and no local driver can</code>), and <a href="../../development/parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">parallel-dispatch.md</a> carries the rule that follows: space the assignment.
-<a href="../Q1121/">Q1121</a> owns the adjacent defect that <code>git merge-tree</code> answers the driver's question rather than the queue's, and is not this.</p>
-<p><strong>What is missing is anything that applies that rule to the paths which still collide.</strong> The pre-flight checklist item is <code>docs/development/parallel-dispatch.md:509:No two assigned Queue rows adjacent</code>, and Queue rows no longer share a file.
-<code>docs/STATUS.md</code> is gone and the backlog is one file per item, which <code>.gitattributes</code> states outright when it declares the backlog deliberately unrouted.
-So the checklist names a shape that cannot collide and none of the four shapes that can.
-The <code>gh pr create</code> guard that compared colliding line ranges is retired (<code>CONTRIBUTING.md:342:Nothing checks this for you</code>), leaving a hand comparison nothing prompts anyone to run.
-<code>scripts/README.md</code> is the one that bites, because <code>check-script-docs.sh</code> fails a gated script with no row, so a batch adding scripts has no choice but to land rows in one table.</p>
+Two pull requests editing <em>different</em> rows of one of those files conflict on GitHub whenever their rows are directly adjacent, and the same merge resolves cleanly in any clone that has run <code>make merge-driver</code>.
+The cost lands on the host: a <code>DIRTY</code> pull request or a merge-queue eviction, then a rebase, a force-push and a full CI cycle.
+The mechanism is written down in the driver's header (<code>scripts/docs/git-merge-script-index.sh:18:reduce merge-queue evictions, and no local driver can</code>) and the rule that follows is in <a href="../../development/parallel-dispatch/#the-dispatcher-owns-assignment-not-coordination-files">parallel-dispatch.md</a>: space the assignment.
+<a href="../Q1121/">Q1121</a> owns the separate defect that <code>git merge-tree</code> answers the driver's question rather than the queue's.</p>
+<p><strong>The gap.</strong> The pre-flight checklist item is <code>docs/development/parallel-dispatch.md:519:No two assigned Queue rows adjacent</code>, and Queue rows no longer share a file (one file per item), so it names a shape that cannot collide and none of the four that can.
+<code>scripts/README.md</code> bites hardest because <code>check-script-docs.sh</code> fails a gated script with no row, so a batch adding scripts must land rows in one table.
+The <code>gh pr create</code> guard that compared colliding line ranges is retired (<code>CONTRIBUTING.md:342:Nothing checks this for you</code>).</p>
+<h2 id="the-choice-name-the-paths-and-space-the-assignment">The choice: name the paths and space the assignment<a class="headerlink" href="#the-choice-name-the-paths-and-space-the-assignment" title="Permanent link">&para;</a></h2>
+<p><strong>Do this.</strong> Replace the Queue-row checklist item with one naming the four paths: before assigning, the dispatcher lists which items will edit each (a new gated script or a new gate adds a <code>scripts/README.md</code> row and usually a <code>mk/gate-lists.mk</code> entry; a new plan or a roadmap change adds the other two) and does not hand two of them out in the same wave when their rows would sit in one table; the second waits for the first to merge, or the dispatcher accepts one rebase.
+The cost is a sentence in the checklist and a line in the opening assignment pass.</p>
+<p><strong>Why not the other two directions, from the measurement below.</strong></p>
+<ul>
+<li><em>A row order stable under append</em> puts every new row of a table at its end, so concurrent additions to one table collide at the same spot every time.
+  Today's sorted order at least spreads them.</li>
+<li><em>Splitting <code>scripts/README.md</code> by group</em> removes collisions between groups, and none can be between groups in that file: two adjacent rows are always in one table, because headings and blank lines separate the tables.
+  A per-group file would therefore collide exactly as often.
+  The same holds for <code>mk/gate-lists.mk</code> and the plan index, whose collisions are between neighbouring entries of one list.
+  It would also cost <code>check-script-docs.sh</code>, whose invocation takes one README path (<code>scripts/docs/check-script-docs.sh:93:"$bin" "$README" "${scripts[@]}"</code>), a multi-file reader, and it would move the driver's table-set merge across files.
+  Splitting to a file per script would remove the collision, and it is a large change for about one event a week.</li>
+</ul>
 <h2 id="the-measurement">The measurement<a class="headerlink" href="#the-measurement" title="Permanent link">&para;</a></h2>
-<p><strong>Taken 2026-09-19</strong> over the 2026-09-18/19 dispatch run, with <code>git merge-file</code> on the three blobs rather than <code>git merge-tree</code>, for the reason Q1121 gives.
-At <code>71ced4d76</code> the file carries 263 table rows over 394 lines, <code>check-queue-rules-test.sh</code> is line 200, and <code>queue.py</code> is directly beneath it at line 201.</p>
-<ul>
-<li><strong>#1965 against #1964.</strong> #1964 edits line 201 and #1965 edits line 200.
-  Against base <code>5b7550305</code>: exit 1, one conflict hunk. #1964 merged at 17:09:40Z and #1965 force-pushed a rebase at 17:17:42Z.</li>
-<li><strong>#1965 against #1967.</strong> #1967 edits that same line 201 while #1965's head <code>ebbaffd39</code> still edits line 200.
-  Against base <code>c8a323361</code>: exit 1, one conflict hunk. #1965 entered the merge queue at 15:46:54Z and was removed from it at 15:51:13Z.</li>
-<li><strong>Control, #1962 against #1965.</strong> #1962 edits line 58, far from #1965's lines 200, 236 and 297.
-  Exit 0, no markers.
-  Adjacency decides this, not the shared file.</li>
-<li><strong>Negative control.</strong> Identical sides exit 0, so the harness is able to report clean.</li>
-</ul>
-<p>Every resolution under the <code>scriptindex</code> driver came back clean at exit 0, reconciled at 263 rows and 394 lines on every side, with no row added, dropped or reordered.
-A third eviction followed at 16:06:33Z to 16:06:51Z; its cause is unmeasured and it is not counted above.</p>
-<p><strong>The conflict window is one line, not six.</strong> <code>CONTRIBUTING.md:345:Two edits within six lines of each other collide</code> describes the diff-context overlap the retired guard keyed on, which is a fair trigger for <em>read the other diff</em> and over-reports the merge itself by five lines.
-Measured by a synthetic sweep on this file at base <code>c8a323361</code>: edits on lines 200 and 201 conflict, and 200 against each of 202, 203, 204 and 205 merges clean at exit 0.
-Git needs one unchanged line between two changes and adjacent table rows leave none, so the hazard is exactly the zero-gap case and any check keying on six lines is conservative by design rather than correct.</p>
-<h2 id="what-to-do-is-open">What to do is open<a class="headerlink" href="#what-to-do-is-open" title="Permanent link">&para;</a></h2>
-<p>Three directions, none of them measured for cost or feasibility, and there may be better ones:</p>
-<ul>
-<li>Give the file a row order that is stable under append, so a new row cannot land beside an edited one.</li>
-<li>Split it, so concurrent work touches different files the way the backlog store already does.</li>
-<li>Accept the tax and name the four paths in the pre-flight checklist, so a dispatcher spaces the assignment across them the way it used to across Queue rows.</li>
-</ul>
-<p><strong>Measure:</strong> how often two open pull requests in one run land within one line of each other in a driver-routed file, read off the <code>gh pr diff</code> hunks of the last several dispatch runs rather than estimated; and what splitting <code>scripts/README.md</code> by group would cost <code>check-script-docs.sh</code>, which reads column 1 of every table in it.
-The deliverable is this row rewritten with a direction chosen, not an implementation.</p>
+<p><strong>Taken 2026-11-01</strong> at <code>origin/main</code> <code>f763051b9</code>, over the squash commits since 2026-08-15 that touched the four files (400 commits listed, 237 PR-file edits by 157 of the last 600 merged PRs).
+Per PR the changed rows are keyed on column 1, placed at their position in the current file, and two PRs count as concurrent when their created-to-merged intervals overlap (<code>gh pr list --state merged --json number,createdAt,mergedAt</code>); a pair counts as adjacent when any two of their rows sit within one line.
+Positions come from today's file, not the base each PR saw, so the error runs both ways: a row inserted later separates a pair that did collide, and a row deleted later brings together a pair that did not (in this window 5 <code>scripts/README.md</code> row keys were deleted and never re-added, and 24 edited keys are missing from today's file and dropped).
+The counts are an estimate, not a bound; confirming each pair against its base with <code>git merge-file</code> is the tighter measurement and was not done.
+The row first asked for counts read off <code>gh pr diff</code> hunks; this uses each squash commit's diff instead, which is each PR's net change on the main-line file and a fair proxy.</p>
+<table>
+<thead>
+<tr>
+<th>file</th>
+<th>PR edits</th>
+<th>concurrent pairs</th>
+<th>same row</th>
+<th>neighbouring rows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scripts/README.md</code></td>
+<td>107</td>
+<td>117</td>
+<td>3</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>mk/gate-lists.mk</code></td>
+<td>61</td>
+<td>40</td>
+<td>1</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>docs/plan/README.md</code></td>
+<td>57</td>
+<td>11</td>
+<td>2</td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>docs/roadmap.md</code></td>
+<td>12</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Only the <em>neighbouring rows</em> column is the row's defect (different rows, directly adjacent): 8 pairs.
+A <em>same row</em> pair (6) is an ordinary conflict, and whether the set-merging driver resolves one is unmeasured.
+The 14 hits fall on 10 file-days in about 11 weeks, 23 distinct PRs.
+<strong>Control:</strong> the method finds the row's own 2026-09-19 pair (#1965/#1964/#1967 on <code>scripts/README.md</code>), which it was not told about.
+<code>CONTRIBUTING.md:345:Two edits within six lines of each other collide</code> over-reports the merge itself: git needs one unchanged line between two changes, so only adjacent rows (zero gap) conflict (measured in the original run on this file at base <code>c8a323361</code>: lines 200 and 201 conflict, 200 against 202 through 205 merge clean).</p>
 <p>Found by the dispatch run of 2026-09-18/19, which paid it twice on one pull request.</p>
 
 
