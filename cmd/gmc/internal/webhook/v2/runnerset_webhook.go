@@ -26,11 +26,10 @@ import (
 // `cannot list resource "runnersets"`.
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets,verbs=get;list;watch
 
-// The validator also lists v1alpha1 RunnerGroups and both gateway versions to enforce
-// agent-identity uniqueness across the two derivations (Q1011). The GMC's ClusterRole
-// already carries every one of those reads for the reconciler, so this marker records
-// the webhook's dependency on them rather than widening the role.
-// +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups;actionsgateways,verbs=get;list;watch
+// The validator also lists ActionsGateways to scope agent-identity uniqueness (Q1011).
+// The GMC's ClusterRole already carries that read for the reconciler, so this marker
+// records the webhook's dependency on it rather than widening the role.
+// +kubebuilder:rbac:groups=actions-gateway.com,resources=actionsgateways,verbs=get;list;watch
 
 // RunnerSetCustomValidator enforces the RunnerSet invariants a spec-scoped CRD CEL
 // rule cannot express:

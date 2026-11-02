@@ -65,8 +65,8 @@ CONTROLLER_GEN="${CONTROLLER_GEN:-$REPO_ROOT/.build/controller-gen}"
 # committed dir named here so this gate can redirect it away from the tree.
 MODULES=(
 	"api|crd|crd=config/crd"
-	"cmd/agc|crd rbac:roleName=agc-role|crd=config/crd rbac=config/rbac"
-	"cmd/gmc|rbac:roleName=manager-role crd webhook|crd=config/crd/bases rbac=config/rbac webhook=config/webhook"
+	"cmd/agc|rbac:roleName=agc-role|rbac=config/rbac"
+	"cmd/gmc|rbac:roleName=manager-role webhook|rbac=config/rbac webhook=config/webhook"
 )
 
 # One entry per module whose `deepcopy:` target regenerates zz_generated.deepcopy.go.
@@ -105,12 +105,7 @@ COPY_SKIP=(.git .build .claude tmp vendor tools)
 # Committed files that live under a generated output dir but are NOT produced by
 # that module's controller-gen run. Each entry needs a reason: an unexplained one
 # is indistinguishable from a manifest whose type was deleted.
-EXEMPT=(
-	# A bundled copy of the AGC-owned RunnerGroup CRD, not GMC controller-gen
-	# output — controller-gen walks only the GMC module's own packages. It is held
-	# byte-identical to cmd/agc/config/crd/ by `make chart-crds-check` (Q73).
-	"cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml"
-)
+EXEMPT=()
 
 # Scratch tree for the regenerated manifests, and — under $GEN_TMP/tree — the
 # working-tree copy the DeepCopy half regenerates into. Created by main() rather

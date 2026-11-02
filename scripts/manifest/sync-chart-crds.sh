@@ -2,25 +2,16 @@
 #
 # Single source of truth for the Helm chart's CRD templates (Q73 / Q142 slice A).
 #
-# The chart ships every CRD under charts/actions-gateway/templates/crds/, but the
-# authoritative schema is the controller-gen output under cmd/*/config/crd (the
-# v1alpha1 CRDs) and api/config/crd (the v2alpha1 CRDs, from the neutral api module).
+# The charts ship every CRD as a template, but the authoritative schema is the
+# controller-gen output under api/config/crd, from the neutral api module.
 # Hand-copying invites silent drift: a field added to a CRD type but not
 # propagated to the chart copy is silently pruned at apply time. This script
 # regenerates the chart copies FROM the controller-gen sources, injecting the
 # per-CRD `helm.sh/resource-policy: keep` annotation the chart needs (so
 # `helm upgrade` carries field changes and `helm uninstall` preserves the CRD).
 #
-# It covers both API groups served side by side: the v1alpha1
-# actions-gateway.github.com CRDs (ActionsGateway, RunnerGroup) and the v2alpha1
-# actions-gateway.com CRDs (ActionsGateway, EgressProxy, RunnerSet, RunnerTemplate,
-# ClusterRunnerTemplate — the v2 decomposition, Q149).
-#
-#   scripts/manifest/sync-chart-crds.sh            # write the chart CRD templates and refresh the
-#                                         # GMC-bundled RunnerGroup CRD (make chart-crds)
-#   scripts/manifest/sync-chart-crds.sh --check    # fail if the chart copies are stale, or if
-#                                         # the GMC-bundled RunnerGroup CRD has drifted
-#                                         # from the AGC authoritative copy (make chart-crds-check)
+#   scripts/manifest/sync-chart-crds.sh            # write the chart CRD templates (make chart-crds)
+#   scripts/manifest/sync-chart-crds.sh --check    # fail if the chart copies are stale (make chart-crds-check)
 #
 # The --check mode backs the CI drift gate (manifest-validate.yml) and `make check`.
 set -euo pipefail
@@ -31,32 +22,9 @@ cd "$REPO_ROOT"
 # shellcheck source=scripts/lib/chart-sync.sh
 source "$REPO_ROOT/scripts/lib/chart-sync.sh"
 
-# The GMC bundles its own controller-gen copy of the (imported, v1alpha1)
-# RunnerGroup type; it must stay byte-identical to the AGC authoritative copy or a
-# k8s.io/api skew silently prunes fields on deploy (Q73).
-SRC_RUNNERGROUP="cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml"
-GMC_BUNDLED_RUNNERGROUP="cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml"
-
 # Per-CRD annotation block injected after the controller-gen version line. Kept
-# here (not in the chart copies) so the chart files are fully generated. The
-# v1alpha1 ActionsGateway and RunnerGroup blocks are preserved verbatim so their
-# rendered chart copies stay byte-identical; the v2 CRDs share one generic block.
-ACTIONSGATEWAY_BLOCK="$(cat <<'EOF'
-    # Shipped under templates/crds/ (not the chart-root crds/ dir) so day-2
-    # `helm upgrade` carries CRD field changes — Helm never upgrades crds/.
-    # resource-policy: keep also makes `helm uninstall` preserve the CRD (and
-    # therefore every tenant's ActionsGateway objects) rather than cascade-delete.
-    helm.sh/resource-policy: keep
-EOF
-)"
-RUNNERGROUP_BLOCK="$(cat <<'EOF'
-    # Sourced from the AGC authoritative copy (cmd/agc/config/crd/), not the
-    # GMC's stale crd/bases/ copy (Q73 drift). Shipped under templates/crds/
-    # with resource-policy: keep so `helm upgrade` carries field changes and
-    # `helm uninstall` preserves tenant RunnerGroup objects. See docs/operations/upgrade.md.
-    helm.sh/resource-policy: keep
-EOF
-)"
+# here (not in the chart copies) so the chart files are fully generated.
+#
 # The only CRD in the chart-root crds/ dir rather than templates/crds/, and the
 # only one carrying no resource-policy: keep — Helm never deletes crds/ anyway, so
 # the uninstall-preservation the other CRDs need that annotation for is already the
@@ -137,12 +105,6 @@ add_crd() { # add_crd SRC DST BLOCK [CONVERSION_BLOCK]
 	CRD_CONVERSIONS+=("${4:-}")
 }
 
-# v1alpha1 — actions-gateway.github.com.
-add_crd "cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml" \
-	"charts/actions-gateway/templates/crds/actionsgateway-crd.yaml" "$ACTIONSGATEWAY_BLOCK"
-add_crd "$SRC_RUNNERGROUP" \
-	"charts/actions-gateway/templates/crds/runnergroup-crd.yaml" "$RUNNERGROUP_BLOCK"
-
 # PriorityClassAllowlist (Q492) — two deviations from the layout of every other
 # CRD here, each forced:
 #
@@ -152,7 +114,7 @@ add_crd "$SRC_RUNNERGROUP" \
 #     ON, so a main-chart install that could not create this CRD would render a
 #     policy whose params can never resolve — and parameterNotFoundAction: Deny
 #     turns that into a cluster-wide denial of every
-#     runnergroups/runnersets/runnertemplates write. The 1 MiB release-Secret
+#     runnersets/runnertemplates write. The 1 MiB release-Secret
 #     budget that forced the v2 split is not at risk: this CRD is a list of
 #     strings (~4 KB), not an embedded PodTemplateSpec (~600 KB).
 #  2. It ships in the chart-root crds/ dir, not templates/crds/, because the same
@@ -200,7 +162,7 @@ render() {
 		}
 		# For the v2 CRDs, inject the deployment-specific spec.conversion block
 		# immediately after the top-level `spec:` line (Q74). CONVERSION is empty for
-		# the v1 CRDs, so this is a no-op there.
+		# the PriorityClassAllowlist CRD, so this is a no-op there.
 		!conv_injected && ENVIRON["CONVERSION"] != "" && /^spec:$/ {
 			printf "%s\n", ENVIRON["CONVERSION"]
 			conv_injected = 1
@@ -220,14 +182,6 @@ render() {
 
 sync() {
 	local i
-	# The bundled copy first: the RunnerGroup chart template renders FROM the AGC
-	# authoritative copy, so refreshing it afterwards would leave the two one
-	# generation apart. check() diffs them byte for byte, and only cmd/agc's
-	# manifests target can produce the content, so copying is the whole remedy.
-	if ! cmp -s "$SRC_RUNNERGROUP" "$GMC_BUNDLED_RUNNERGROUP"; then
-		cp "$SRC_RUNNERGROUP" "$GMC_BUNDLED_RUNNERGROUP"
-		echo "refreshed the GMC-bundled RunnerGroup CRD from $SRC_RUNNERGROUP."
-	fi
 	for i in "${!CRD_SRCS[@]}"; do
 		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
 	done
@@ -249,19 +203,10 @@ check() {
 			rc=1
 		fi
 	done
-	if ! diff -u "$GMC_BUNDLED_RUNNERGROUP" "$SRC_RUNNERGROUP"; then
-		echo "ERROR: the GMC-bundled RunnerGroup CRD ($GMC_BUNDLED_RUNNERGROUP) has drifted" >&2
-		echo "from the AGC authoritative copy ($SRC_RUNNERGROUP) — likely a k8s.io/api skew (Q73)." >&2
-		echo "Fix: regenerate the AGC copy (make -C cmd/agc manifests), then run 'make chart-crds'," >&2
-		echo "which copies it over the bundled path. ('make -C cmd/gmc manifests' cannot refresh" >&2
-		echo "the bundled copy — the type lives in cmd/agc/api/. For a k8s.io/api skew, align" >&2
-		echo "the module versions first — see Q68.)" >&2
-		rc=1
-	fi
 	if [[ "$rc" -ne 0 ]]; then
 		exit 1
 	fi
-	echo "chart CRD templates and the GMC-bundled RunnerGroup CRD are in sync."
+	echo "chart CRD templates are in sync."
 }
 
 chart_sync_main "$@"

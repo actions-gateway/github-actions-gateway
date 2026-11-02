@@ -48,7 +48,7 @@ crds_v2_chart="$REPO_ROOT/charts/actions-gateway-crds-v2"
 # kubeconform flags: -strict rejects unknown fields; -ignore-missing-schemas
 # skips resources whose schema is not in the upstream Kubernetes set —
 # cert-manager (Certificate/Issuer), the Prometheus Operator (ServiceMonitor)
-# and our own CRs (ActionsGateway/RunnerGroup). Those are third-party/custom
+# and our own CRs (ActionsGateway, RunnerSet, ...). Those are third-party/custom
 # kinds; the CRDs that define them ARE validated (CustomResourceDefinition is
 # a native apiextensions kind).
 kubeconform_flags="-strict -summary -kubernetes-version $MANIFEST_K8S_VERSION -ignore-missing-schemas"
@@ -98,9 +98,9 @@ $REPO_ROOT/deploy/monitoring/grafana-dashboard-platform.json
 $REPO_ROOT/deploy/monitoring/grafana-dashboard-budget.json
 $REPO_ROOT/deploy/monitoring/grafana-dashboard-security.json"
 
-# The plain-YAML files retained under cmd/*/config/: the controller-gen outputs
-# (CRDs, manager RBAC role, webhook config) that are the codegen substrate and
-# single-source inputs to the chart CRD/RBAC generators, plus the two
+# The plain-YAML controller-gen outputs: the CRDs under api/config/crd and the
+# RBAC roles and webhook config under cmd/*/config/, which are the codegen
+# substrate and single-source inputs to the chart CRD/RBAC/webhook generators, plus the two
 # ValidatingAdmissionPolicies the GMC integration suite applies in envtest.
 # Schema-validate them directly since there is no longer a kustomize overlay that
 # renders them. The deploy/kata-ci/ manifests (Q226 Kata-on-GKE spike) are plain
@@ -109,7 +109,6 @@ $REPO_ROOT/deploy/monitoring/grafana-dashboard-security.json"
 # kata-deploy chart, not a Kubernetes manifest — yamllint covers it (via
 # yamllint_paths above); kubeconform must not try to schema-check it.
 standalone_manifests="cmd/agc/config/rbac/role.yaml
-cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml
 api/config/crd/actions-gateway.com_runnersets.yaml
 api/config/crd/actions-gateway.com_runnertemplates.yaml
 api/config/crd/actions-gateway.com_clusterrunnertemplates.yaml
@@ -117,8 +116,6 @@ api/config/crd/actions-gateway.com_actionsgateways.yaml
 api/config/crd/actions-gateway.com_egressproxies.yaml
 cmd/gmc/config/rbac/role.yaml
 cmd/gmc/config/webhook/manifests.yaml
-cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml
-cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
 cmd/gmc/config/admission-policy/tenant-resource-guard.yaml
@@ -217,10 +214,10 @@ echo "==> kubeconform: Helm chart render (dev/test opt-out: allowFloatingImageTa
 helm template ag "$chart" --set allowFloatingImageTags=true \
 	| kubeconform $kubeconform_flags
 
-echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + sample CR + self-signed cert)"
+echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + self-signed cert)"
 # shellcheck disable=SC2086
 helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" \
-	--set metrics.serviceMonitor.enabled=true --set sampleGateway.create=true --set certManager.enabled=false \
+	--set metrics.serviceMonitor.enabled=true --set certManager.enabled=false \
 	| kubeconform $kubeconform_flags
 
 echo "==> kubeconform: Helm chart render (cert-manager-verified metrics scrape: ServiceMonitor + metrics.tls.certManager)"
