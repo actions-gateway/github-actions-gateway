@@ -737,6 +737,8 @@ Two refinements keep direct egress **auditable**, not silently inferred (both sh
 - **Direct egress is a structurally explicit state.** An unset `proxyRef` resolves to direct egress, and the gateway/runner-set status records `proxyMode: Direct` rather than leaving "no proxy" to be inferred from an absent field.
 - **Surface the attribution trade.** The proxy-less gateway and runner set carry an advisory `EgressUnattributed` condition (True), so an operator sees at a glance that this workload has no per-tenant egress identity — the property they opted out of — without grepping specs.
   It is advisory only and never gates Ready.
+- **Report the allowlist's freshness where it lives (Q1249).** In direct egress the GitHub allowlist sits on the gateway's own AGC and workload NetworkPolicies, so the gateway carries the `EgressRulesStale` condition the CIDR-mode `EgressProxy` carries, exported on its own gauge, `actions_gateway_direct_egress_rules_stale`.
+  While the GMC serves no ranges it keeps an already-programmed policy's rules (Q246), so the condition's message reads the policies to say whether GitHub egress is denied, rather than inferring it from the empty cache.
 
 **Composition bonus.** §H.9 and §H.10 combine: a platform team runs one shared `EgressProxy` in a central namespace, grants it to the EMU/allowlist tenants who need stable IPs, and everyone else runs proxy-less.
 

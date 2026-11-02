@@ -172,7 +172,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta) array_ | Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed, RunnerSetsDegraded. |  | Optional: \{\} |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta) array_ | Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, AGCAutoscalingUnavailable, CredentialUnavailable, Degraded, EgressAuditUnattributed, EgressRulesStale, EgressUnattributed, RunnerSetsDegraded, ScaleSetNameCollision. |  | Optional: \{\} |
 | `proxyMode` _string_ | ProxyMode records how this gateway's AGC control-plane egress reaches GitHub: "Proxied" (through the EgressProxy named by defaultProxyRef, with stable per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy- restricted to GitHub + DNS + kube API but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10). |  | Enum: [Proxied Direct]<br />Optional: \{\} |
 | `observedGeneration` _integer_ | ObservedGeneration is the .metadata.generation the most recent reconcile acted on. |  | Optional: \{\} |
 

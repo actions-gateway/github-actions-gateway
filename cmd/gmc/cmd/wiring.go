@@ -213,6 +213,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 			AGCExtraEnv:          img.agcExtraEnv,
 			APIServerCIDRs:       parsedAPIServerCIDRs,
 			IPCache:              ipCache,
+			EgressStaleThreshold: egressStaleThreshold,
 			EnableServiceMonitor: cfg.enableTenantServiceMonitors,
 			Recorder:             mgr.GetEventRecorder("actionsgateway-v2-controller"),
 			Reader:               mgr.GetAPIReader(),

@@ -211,6 +211,12 @@ See [The Reason Is `PodsNotStarting`: the Image Will Not Pull](troubleshooting.m
 With reason `RefreshNeverSucceeded` it is worse: the GMC holds no ranges at all, so GitHub egress is already denied and jobs stay queued.
 See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-reports-egressrulesstale).
 
+### ActionsGatewayDirectEgressRulesStale
+
+**Page.** A v2 `ActionsGateway` with no `defaultProxyRef` reaches GitHub through the allowlist on its own AGC and workload `NetworkPolicies`, and that allowlist has not refreshed within the staleness window.
+With reason `RefreshNeverSucceeded`, or a message saying the GMC serves no ranges, read the message before acting: a policy that keeps the rules it was last programmed with still reaches GitHub, and one named as carrying no GitHub rule denies it now.
+See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-reports-egressrulesstale).
+
 ### ActionsGatewayGitHubEgressIncomplete
 
 **Ticket.** A referring gateway names a GitHub Enterprise Server host the `EgressProxy` pool's `CIDR`-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.

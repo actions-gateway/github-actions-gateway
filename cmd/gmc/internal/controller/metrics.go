@@ -181,6 +181,7 @@ type actionsGatewayV2ConditionsCollector struct {
 	agcAutoscalingUnavailable *prometheus.Desc
 	scaleSetNameCollision     *prometheus.Desc
 	egressAuditUnattributed   *prometheus.Desc
+	directEgressRulesStale    *prometheus.Desc
 }
 
 func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewayV2ConditionsCollector {
@@ -216,6 +217,14 @@ func newActionsGatewayV2ConditionsCollector(reader client.Reader) *actionsGatewa
 			"1 when the v2 ActionsGateway EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off, so no egress audit record joins to a tenant and a job: the gateway does not log WorkerAddresses, or the EgressProxy it defaults to does not log ConnectionsWithSource), else 0. Both halves are opt-in and Off is the default, so a 1 is the expected state on a gateway that never opted in, not a fault. A 0 says the pair is configured, not that anything runs the join. Scoped to defaultProxyRef, the AGC control plane's pool; worker egress is per RunnerSet, in actions_gateway_runnerset_egress_audit_unattributed.",
 			[]string{"namespace", "name"}, nil,
 		),
+		// Its own name rather than actions_gateway_egress_rules_stale, whose namespace/name
+		// series a same-named EgressProxy or v1 ActionsGateway already occupies: a
+		// duplicate series fails the whole scrape.
+		directEgressRulesStale: prometheus.NewDesc(
+			"actions_gateway_direct_egress_rules_stale",
+			"1 when the v2 ActionsGateway EgressRulesStale condition is True (the gateway egresses directly and the GitHub IP-range allowlist on its AGC and workload NetworkPolicies has not been refreshed within the staleness window, or the GMC holds no ranges at all), else 0. Always 0 on a proxied gateway, whose EgressProxy reports on actions_gateway_egress_rules_stale.",
+			[]string{"namespace", "name"}, nil,
+		),
 	}
 }
 
@@ -227,6 +236,7 @@ func (c *actionsGatewayV2ConditionsCollector) Describe(ch chan<- *prometheus.Des
 	ch <- c.agcAutoscalingUnavailable
 	ch <- c.scaleSetNameCollision
 	ch <- c.egressAuditUnattributed
+	ch <- c.directEgressRulesStale
 }
 
 // Collect implements prometheus.Collector. On a read failure it emits nothing
@@ -256,6 +266,8 @@ func (c *actionsGatewayV2ConditionsCollector) Collect(ch chan<- prometheus.Metri
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionScaleSetNameCollision), ag.Namespace, ag.Name)
 		ch <- prometheus.MustNewConstMetric(c.egressAuditUnattributed, prometheus.GaugeValue,
 			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressAuditUnattributed), ag.Namespace, ag.Name)
+		ch <- prometheus.MustNewConstMetric(c.directEgressRulesStale, prometheus.GaugeValue,
+			conditionGaugeValue(ag.Status.Conditions, gmcv2alpha1.ConditionEgressRulesStale), ag.Namespace, ag.Name)
 	}
 }
 

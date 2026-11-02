@@ -55,8 +55,9 @@ func startActionsGatewayV2ReconcilerWithIPRange(t *testing.T, fetcher controller
 		fetcher = &stubIPFetcher{cidrs: []net.IPNet{}}
 	}
 	ipCache := &controller.IPRangeCache{}
-	if cidrs, fetchErr := fetcher.FetchIPRanges(ctx); fetchErr == nil {
+	if cidrs, fetchErr := fetcher.FetchIPRanges(ctx); fetchErr == nil && len(cidrs) > 0 {
 		ipCache.Set(cidrs)
+		ipCache.MarkRefreshed(time.Now())
 	}
 
 	err = (&controller.ActionsGatewayV2Reconciler{
@@ -140,7 +141,8 @@ func TestV2_DirectEgress_ProvisionsRestrictedControlPlane(t *testing.T) {
 	assert.True(t, npHasGitHubCIDR(&workloadNP, "140.82.112.0/20"), "direct workload NP allows GitHub CIDR")
 	assert.Empty(t, workloadNP.Spec.Ingress, "workload NP default-denies ingress")
 
-	// Status: proxyMode Direct + EgressUnattributed=True; not Degraded.
+	// Status: proxyMode Direct + EgressUnattributed=True; not Degraded; the allowlist
+	// just fetched reads current (Q1249).
 	require.Eventually(t, func() bool {
 		var got v2alpha1.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
@@ -148,10 +150,12 @@ func TestV2_DirectEgress_ProvisionsRestrictedControlPlane(t *testing.T) {
 		}
 		unattr := findCondition(got.Status.Conditions, v2alpha1.ConditionEgressUnattributed)
 		degraded := findCondition(got.Status.Conditions, v2alpha1.ConditionDegraded)
+		stale := findCondition(got.Status.Conditions, v2alpha1.ConditionEgressRulesStale)
 		return got.Status.ProxyMode == v2alpha1.ProxyModeDirect &&
 			unattr != nil && unattr.Status == metav1.ConditionTrue && unattr.Reason == v2alpha1.ReasonDirectEgress &&
-			degraded != nil && degraded.Status == metav1.ConditionFalse
-	}, 15*time.Second, 100*time.Millisecond, "status should report proxyMode Direct + EgressUnattributed=True, not Degraded")
+			degraded != nil && degraded.Status == metav1.ConditionFalse &&
+			stale != nil && stale.Status == metav1.ConditionFalse && stale.Reason == v2alpha1.ReasonRefreshCurrent
+	}, 15*time.Second, 100*time.Millisecond, "status should report proxyMode Direct + EgressUnattributed=True + EgressRulesStale=False, not Degraded")
 }
 
 func TestV2_DirectEgress_IPRangeRefreshUpdatesDirectPolicies(t *testing.T) {

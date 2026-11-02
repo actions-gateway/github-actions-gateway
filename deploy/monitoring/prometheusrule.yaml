@@ -235,6 +235,18 @@ spec:
             summary: "GitHub egress allowlist stale for {{ $labels.name }} in {{ $labels.namespace }}"
             description: "The gateway's GitHub egress IP-range allowlist has not refreshed within the staleness window; a stalled refresh loop may let the proxy NetworkPolicy drift from GitHub's published ranges, silently dropping new ranges. Reason RefreshNeverSucceeded means no ranges have loaded at all and GitHub egress is already denied."
 
+        # Page: a direct-egress v2 gateway's GitHub allowlist has gone stale (Q1249)
+        - alert: ActionsGatewayDirectEgressRulesStale
+          expr: |
+            actions_gateway_direct_egress_rules_stale == 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaydirectegressrulesstale"
+            summary: "GitHub egress allowlist stale for direct-egress gateway {{ $labels.name }} in {{ $labels.namespace }}"
+            description: "The GitHub IP-range allowlist on a direct-egress gateway's AGC and workload NetworkPolicies has not refreshed within the staleness window, so new GitHub ranges may be silently dropped. When the GMC serves no ranges, the condition message says whether each policy still keeps the rules it was last programmed with or carries no GitHub rule, which denies GitHub egress."
+
         # Ticket: a GHES tenant's egress allowlist can't reach its appliance (Q506, Q537)
         - alert: ActionsGatewayGitHubEgressIncomplete
           expr: |
