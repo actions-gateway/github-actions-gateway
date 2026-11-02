@@ -326,6 +326,9 @@ check_patch_form() {
 check_patch_indent() {
 	local kust="$1" bad
 	bad="$(awk '
+		# Every parser here finds the block by this exact key line, so a trailing
+		# comment or a flow list on it hides the whole block.
+		/^patches:/ && $0 !~ /^patches:[[:space:]]*$/ { print NR ": " $0; next }
 		/^patches:[[:space:]]*$/ { in_block = 1; next }
 		in_block && /^[^[:space:]#-]/ { in_block = 0 }
 		!in_block { next }
@@ -333,7 +336,7 @@ check_patch_indent() {
 		/^[[:space:]]+-[[:space:]]+(target|patch):/ && $0 !~ /^  - / { print NR ": " $0 }
 	' "$kust")"
 	if [[ -n "$bad" ]]; then
-		fail "$kust has patches: items not at two-space indent, which rules 5 and 8 cannot read, so their checks would pass unread. Indent each item by two spaces:
+		fail "$kust has a patches: key line other than a bare \`patches:\`, or items not at two-space indent, which rules 5 and 8 cannot read, so their checks would pass unread. Use a bare key and indent each item by two spaces:
 $(awk '{ print "         " $0 }' <<<"$bad")"
 	fi
 }

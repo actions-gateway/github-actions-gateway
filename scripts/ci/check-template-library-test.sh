@@ -371,6 +371,19 @@ sed 's|^apiVersion: actions-gateway.com/v2beta1$|apiVersion: actions-gateway.com
 dedent_patches "$F/overlays/kata/kustomization.yaml"
 expect_red "a column-0 unmatched target is not passed unread" "$F" "not at two-space indent"
 
+# The key line itself: a trailing comment, or a flow list on it, hides the block
+# from every parser. Both are accepted by kustomize v5.8.1 (reviewer-measured).
+build_fixture "$F"
+sed 's|^patches:$|patches: # cluster specifics|' "$F/overlays/kata/kustomization.yaml" >"$F/t" &&
+	mv "$F/t" "$F/overlays/kata/kustomization.yaml"
+expect_red "a commented patches key is not passed unread" "$F" "other than a bare"
+
+build_fixture "$F"
+cat >>"$F/overlays/kata/kustomization.yaml" <<-'EOF'
+	patches: [{target: {group: actions-gateway.com, version: v2beta1, kind: ClusterRunnerTemplate, name: kata-dind}, patch: "- {op: add, path: /spec/x, value: 1}"}]
+EOF
+expect_red "a flow-list patches key is not passed unread" "$F" "other than a bare"
+
 # --- rule 6: the README names every entry ------------------------------------
 
 build_fixture "$F"
