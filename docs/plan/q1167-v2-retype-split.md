@@ -61,7 +61,7 @@ That is true of a *release* and not of a commit on `main`.
 `main`'s next tag is `v2.0.0`, which carries all of the removals, and the 1.10 fallback is cut from a `release-1.10` branch off the `v1.10.0` tag rather than from `main` (open PR #2234's `release-ladder.md` change, read 2026-11-02).
 So no tag can ship the state between Q264 and Q1167.
 
-Changing Q264's row to match is left to whoever runs it; this plan's PR does not edit it, since Q264 is part of the batch being dispatched now.
+Q264's row and the [v2-ga.md scope ledger](v2-ga.md#scope-ledger) carry this order, and both retype rows gate `v2.0.0` beside Q1167, since the tag waits on them as much as on the drop.
 
 ## Each step leaves `main` building
 
