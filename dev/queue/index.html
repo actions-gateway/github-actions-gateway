@@ -3226,14 +3226,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Three clean runs say lock TTL (9m36–9m45s); the lone 17s run predates the <code>runner_name</code> identity check, so "not reliably ungraceful" is …</td>
 </tr>
 <tr>
-<td><a href="Q662/">Q662</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.claude/foreground-guard.json">foreground-guard registers the fast e2e targets as 30-minute commands</a></td>
-<td><code>debt</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Every <code>e2e-*</code> target is registered at 30 min; only <code>make e2e</code>/<code>e2e-up</code> are slow (<code>e2e-github-cleanup</code> takes seconds).</td>
-</tr>
-<tr>
 <td><a href="Q522/">Q522</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_pki.go">Consolidate GMC PKI/cert generation helpers</a></td>
 <td><code>debt</code></td>
