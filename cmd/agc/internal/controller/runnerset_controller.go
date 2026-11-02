@@ -518,12 +518,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// 5. Ensure agent pool Secrets. Carry any pre-Q466 Secrets across the rename first,
-	// so an upgraded install keeps its existing agents instead of orphaning them.
-	if err := r.adoptLegacyAgentSecrets(ctx, log, &rs); err != nil {
-		log.Error("failed to adopt pre-existing agent Secrets", "error", err)
-		return ctrl.Result{}, err
-	}
+	// 5. Ensure agent pool Secrets.
 	pool := r.getOrCreatePool(req.NamespacedName, &rs)
 	if err := pool.EnsureAgents(ctx, rs.Spec.MaxListeners, instToken); err != nil {
 		log.Error("EnsureAgents failed", "error", err)
@@ -718,22 +713,6 @@ func (r *RunnerSetReconciler) getOrCreatePool(key types.NamespacedName, rs *v2al
 	}
 	p.SetOwner(runnerSetOwnerRef(rs.Name, rs.UID))
 	return p
-}
-
-// adoptLegacyAgentSecrets carries a RunnerSet's agent Secrets across the Q466 rename,
-// so upgrading an install that already ran v2 neither orphans its agent Secrets nor
-// leaks the GitHub runner records they hold. It is a no-op once the set has Secrets
-// under the RunnerSet scheme, which is the steady state after the first reconcile.
-func (r *RunnerSetReconciler) adoptLegacyAgentSecrets(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) error {
-	n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, r.Client, rs.Namespace, rs.Name,
-		[]metav1.OwnerReference{runnerSetOwnerRef(rs.Name, rs.UID)})
-	if err != nil {
-		return err
-	}
-	if n > 0 {
-		log.Info("adopted pre-existing agent Secrets onto the runner-set naming scheme", "count", n)
-	}
-	return nil
 }
 
 func (r *RunnerSetReconciler) getPool(key types.NamespacedName) *agentpool.Pool {

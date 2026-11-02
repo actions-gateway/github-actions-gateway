@@ -59,9 +59,7 @@ const (
 	// SchemeRunnerSet is the v2 RunnerSet derivation: Secret
 	// "agentpool-rs-<name>-<index>", selector actions-gateway.com/runner-set=<name>,
 	// runner name "rs-<name>-<index>". v2 is the side that moves, because the v1
-	// layout must stay put. An install that already has v2 agent Secrets under the
-	// old shared derivation is carried across by AdoptLegacyRunnerSetSecrets rather
-	// than left behind.
+	// layout must stay put.
 	SchemeRunnerSet Scheme = "RunnerSet"
 )
 

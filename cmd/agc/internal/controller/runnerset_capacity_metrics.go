@@ -12,17 +12,10 @@ import (
 )
 
 // runnerSetCapacityCollector exports the v2 RunnerSet worker-capacity conditions
-// (Q303) as gauges — the v2 twins of the v1 RunnerGroup collectors in
-// worker_quota.go and runnergroup_unschedulable.go (Q319).
+// (Q303) as gauges, each family a distinct name plus a runner_set label like every
+// other RunnerSet-scoped family here.
 //
-// The families are named apart from the v1 ones rather than sharing them behind an
-// added label: the v1 series key on runner_group, which a RunnerSet has none of, so
-// one shared family would fold every set into a single runner_group="" bucket and
-// silently corrupt the `sum by (namespace, runner_group)` groupings the v1 series
-// promise. It also matches how every other RunnerSet-scoped family here is shaped
-// (a distinct name plus a runner_set label).
-//
-// Like the v1 collectors it reads at scrape time from the cached reader, so a deleted
+// It reads at scrape time from the cached reader, so a deleted
 // RunnerSet stops being listed and its series disappears with no reconcile-path cost
 // and no stale-series cleanup. Each value mirrors the condition the reconciler wrote
 // to .status.conditions (1 when True, 0 otherwise).

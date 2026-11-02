@@ -551,9 +551,7 @@ const (
 
 // Listener session-failure condition vocabulary (Q309, Q325). Both acquisition
 // tiers push these conditions onto the RunnerSet that owns the session: the
-// classic listener goroutines (cmd/agc/internal/listener, shared with the v1
-// RunnerGroup — referencing the agcv1alpha1 constants of the same values, pinned
-// by a value-parity test in cmd/agc) and the ScaleSet listener
+// classic listener goroutines (cmd/agc/internal/listener) and the ScaleSet listener
 // (cmd/agc/internal/scalesetlistener, Q325). All are advisory (abnormal-is-True)
 // and do not gate Ready. The classic listener sets only the abnormal (True) states;
 // the ScaleSet listener also publishes the healthy (False) states and clears an

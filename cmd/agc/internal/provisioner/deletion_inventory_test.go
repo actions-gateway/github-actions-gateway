@@ -50,7 +50,6 @@ var declaredDeleteSites = map[deleteSite]string{
 	{"internal/provisioner/provisioner.go", "(*Provisioner).replaceStaleScaleSetSecret"}:       "job Secret of a worker already gone, not a worker pod (Q1174)",
 	{"internal/controller/runner_shared.go", "(reapTarget).delete"}:                            "worker pod — stamped with the reap reason before the delete (Q502)",
 	{"internal/controller/runnerset_controller.go", "(*RunnerSetReconciler).workerPodHandler"}: "not a delete — forwards a pod Delete watch event to the RunnerSet enqueue after the Q555 snapshot",
-	{"internal/agentpool/adopt.go", "adoptOneLegacySecret"}:                                    "agent Secret, not a worker pod",
 	{"internal/agentpool/pool.go", "(*Pool).EnsureAgents"}:                                     "agent Secret, not a worker pod",
 	{"internal/agentpool/pool.go", "(*Pool).DeleteAll"}:                                        "agent Secret, not a worker pod",
 }

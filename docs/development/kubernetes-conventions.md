@@ -94,7 +94,8 @@ The repair is structural rather than a fourth copy of the rule: the derivation l
 A consumer that cannot see the `Scheme` must not be deriving a `Scheme`-dependent name at all.
 
 Renaming a derived object in a shipped release also has to carry the existing ones across, not orphan them.
-`agentpool.AdoptLegacyRunnerSetSecrets` is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the *other* kind.
+[`agentpool.AdoptLegacyRunnerSetSecrets`](https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/agentpool/adopt.go) is the pattern: on the first reconcile after the rename, copy each old-named object to its new name (preserving the payload, so no external registration is re-issued) and delete the original, gated on a check that the old name is not in use by the *other* kind.
+It shipped in 1.3.0 and left at `v2.0.0`, whose CRDs apply only once a 1.x release storing `v2` has run, so by then every `RunnerSet` had moved its own Secrets and any left under the old name belonged to a `RunnerGroup`.
 
 ### A selector a coexisting controller also matches is a cross-wire (Q582)
 
@@ -328,8 +329,8 @@ Rules:
 Every condition an operator should alert on is **also** exported as a Prometheus gauge by the owning controller (`1` when the condition is `True`, `0` otherwise), labelled by namespace + object name.
 This lets clusters alert directly on the controller's `/metrics` endpoint **without depending on kube-state-metrics** to scrape CRD conditions.
 
-Implement it as a **scrape-time collector** that lists the CRs from the cached reader and reads `.status.conditions` (see `proxyQuotaCollector` in `cmd/gmc` and `workerQuotaCollector` in `cmd/agc`), not a reconcile-path gauge: a deleted object simply stops being listed, so its series disappears with no stale-series cleanup and no reconcile cost.
-Metric names mirror the condition (`actions_gateway_proxy_quota_pressure`, `actions_gateway_worker_quota_exceeded`, …).
+Implement it as a **scrape-time collector** that lists the CRs from the cached reader and reads `.status.conditions` (see `proxyQuotaCollector` in `cmd/gmc` and `runnerSetCapacityCollector` in `cmd/agc`), not a reconcile-path gauge: a deleted object simply stops being listed, so its series disappears with no stale-series cleanup and no reconcile cost.
+Metric names mirror the condition (`actions_gateway_proxy_quota_pressure`, `actions_gateway_runnerset_worker_quota_exceeded`, …).
 
 ## Kubernetes Events for lifecycle transitions
 
