@@ -53,9 +53,8 @@ The ledger takes a row for each item that merges onto the released surface befor
 Q1184, the proxy failure attribution retry reads, is not here: it gates 1.10.
 Unlike the removals, none of these waits on the 1.10 tag.
 
-Two rows end with the release rather than ship in it.
+One row ends with the release rather than ships in it.
 Q416, a classic-listener defect parked until classic removal slips, is retired when Q264 lands.
-Q794 asks whether `gag-migrate` may stop pinning `acquisitionProtocol: Classic`; the tool emits `v2alpha1`, which this release removes, so its answer governs only the 1.x window.
 
 ## Why this is gated on a soak, not a date
 
