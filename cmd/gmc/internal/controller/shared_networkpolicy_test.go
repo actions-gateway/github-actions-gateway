@@ -127,3 +127,199 @@ func TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS(t *testing.T) {
 			"%s node-local DNS ipBlock must not carve out exceptions", np.Name)
 	}
 }
+
+// TestBuildAGCNetworkPolicy_MetricsScrapeIngress locks in L-8 for the AGC: the
+// policy must declare PolicyTypeIngress (default-deny) and admit metrics scrapes
+// only from monitoring namespaces, so no other pod in the namespace can scrape
+// per-tenant controller-runtime metrics.
+func TestBuildAGCNetworkPolicy_MetricsScrapeIngress(t *testing.T) {
+	np := buildAGCNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "proxy"), nil, nil, false, nil)
+
+	assert.Contains(t, np.Spec.PolicyTypes, networkingv1.PolicyTypeIngress,
+		"AGC NP must declare PolicyTypeIngress so ingress defaults to deny")
+	found := false
+	for _, rule := range np.Spec.Ingress {
+		hasMetricsPort := false
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == metricsPort {
+				hasMetricsPort = true
+			}
+		}
+		if !hasMetricsPort {
+			continue
+		}
+		found = true
+		require.Len(t, rule.From, 1, "metrics-scrape rule must have exactly one peer")
+		peer := rule.From[0]
+		require.NotNil(t, peer.NamespaceSelector,
+			"metrics-scrape rule must select by namespace, not pod or IP")
+		assert.Equal(t, metricsScrapeNamespaceValue,
+			peer.NamespaceSelector.MatchLabels[metricsScrapeNamespaceLabel],
+			"metrics-scrape rule must restrict to the monitoring namespace selector")
+		assert.Nil(t, peer.PodSelector, "metrics-scrape rule must not allow arbitrary pods")
+		assert.Nil(t, peer.IPBlock, "metrics-scrape rule must not allow arbitrary IPs")
+	}
+	assert.True(t, found, "expected an ingress rule for the metrics port %d", metricsPort)
+}
+
+func TestBuildAGCNetworkPolicy_KubernetesAPIEgressAllowed(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		np := buildAGCNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "proxy"), nil, nil, direct, nil)
+
+		// The AGC NP must allow egress on BOTH 443 and 6443:
+		//   - 443: production clusters where the kubernetes Service backends listen on 443.
+		//   - 6443: kind (and any cluster where the apiserver Endpoints listen on 6443) —
+		//     kube-proxy DNATs the Service ClusterIP:443 → node-ip:6443, and NetworkPolicy
+		//     enforcement evaluates the post-DNAT port. A 443-only rule silently drops
+		//     k8s API traffic in kind. See docs/development/networkpolicy-port-matching.md.
+		saw443, saw6443 := false, false
+		for _, rule := range np.Spec.Egress {
+			for _, port := range rule.Ports {
+				if port.Port == nil {
+					continue
+				}
+				switch port.Port.IntVal {
+				case 443:
+					saw443 = true
+					assert.Empty(t, rule.To,
+						"port-443 rule must allow egress to any destination for k8s API access")
+				case 6443:
+					saw6443 = true
+					assert.Empty(t, rule.To,
+						"port-6443 rule must allow egress to any destination for k8s API access")
+				}
+			}
+		}
+		assert.True(t, saw443, "AGC NP must include egress rule for port 443 (k8s API server, production)")
+		assert.True(t, saw6443,
+			"AGC NP must include egress rule for port 6443 (k8s API server post-DNAT in kind — "+
+				"docs/development/networkpolicy-port-matching.md)")
+	}
+}
+
+// TestBuildAGCNetworkPolicy_APIServerCIDRsScoped locks in Q145: when the
+// operator supplies an apiserver-CIDR allowlist, the AGC NP's 443/6443 egress
+// rule is scoped to those CIDRs via ipBlock peers (a strict tightening) while
+// the ports are unchanged.
+func TestBuildAGCNetworkPolicy_APIServerCIDRsScoped(t *testing.T) {
+	cidrs := []string{"10.0.0.1/32", "172.16.0.0/12"}
+	np := buildAGCNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "proxy"), cidrs, nil, false, nil)
+
+	// Find the apiserver-ports egress rule (the one carrying 443/6443).
+	var apiRule *networkingv1.NetworkPolicyEgressRule
+	for i := range np.Spec.Egress {
+		for _, port := range np.Spec.Egress[i].Ports {
+			if port.Port != nil && (port.Port.IntVal == 443 || port.Port.IntVal == 6443) {
+				apiRule = &np.Spec.Egress[i]
+				break
+			}
+		}
+	}
+	require.NotNil(t, apiRule, "AGC NP must still carry the apiserver-ports egress rule")
+
+	// Ports unchanged: both 443 and 6443 still present.
+	saw443, saw6443 := false, false
+	for _, port := range apiRule.Ports {
+		if port.Port == nil {
+			continue
+		}
+		switch port.Port.IntVal {
+		case 443:
+			saw443 = true
+		case 6443:
+			saw6443 = true
+		}
+	}
+	assert.True(t, saw443 && saw6443, "scoping must not drop either apiserver port")
+
+	// `To` must list exactly one ipBlock peer per supplied CIDR.
+	require.Len(t, apiRule.To, len(cidrs),
+		"apiserver egress must be scoped to one ipBlock peer per operator CIDR")
+	got := make([]string, 0, len(apiRule.To))
+	for _, peer := range apiRule.To {
+		require.NotNil(t, peer.IPBlock, "scoped apiserver egress peer must be an ipBlock")
+		assert.Nil(t, peer.PodSelector, "scoped apiserver egress peer must not select pods")
+		assert.Nil(t, peer.NamespaceSelector, "scoped apiserver egress peer must not select namespaces")
+		got = append(got, peer.IPBlock.CIDR)
+	}
+	assert.ElementsMatch(t, cidrs, got, "scoped CIDRs must match the operator allowlist")
+}
+
+// TestBuildAGCNetworkPolicy_APIServerCIDRsEmptyKeepsAnyDest asserts the
+// secure-default Q145 behavior: an empty (or nil) allowlist leaves the apiserver
+// ports open to any destination, no `To`.
+func TestBuildAGCNetworkPolicy_APIServerCIDRsEmptyKeepsAnyDest(t *testing.T) {
+	ag := v2Gateway("gateway", "team-a", "github-app", "proxy")
+	for _, cidrs := range [][]string{nil, {}} {
+		np := buildAGCNetworkPolicyV2(ag, cidrs, nil, false, nil)
+		for _, rule := range np.Spec.Egress {
+			for _, port := range rule.Ports {
+				if port.Port != nil && (port.Port.IntVal == 443 || port.Port.IntVal == 6443) {
+					assert.Empty(t, rule.To,
+						"empty apiserver-CIDR allowlist must leave the apiserver egress any-destination")
+				}
+			}
+		}
+	}
+}
+
+func TestBuildWorkloadNetworkPolicy_EgressToProxy(t *testing.T) {
+	np := buildWorkloadNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "proxy"), nil, false, nil)
+	assert.Equal(t, componentWorkload, np.Spec.PodSelector.MatchLabels[labelComponent],
+		"workload NP must select workload-labeled pods")
+
+	// The proxy peer must be a PodSelector, not an ipBlock on the Service ClusterIP.
+	// kube-proxy DNATs ClusterIP → PodIP before NetworkPolicy enforcement, so an
+	// ipBlock rule on the Service IP never matches.
+	found := false
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == proxyPort {
+				for _, peer := range rule.To {
+					if peer.PodSelector != nil {
+						found = true
+					}
+					assert.Nil(t, peer.IPBlock,
+						"workload NP must not target proxy via ipBlock — DNAT defeats it")
+				}
+			}
+		}
+	}
+	assert.True(t, found, "expected workload egress rule to select proxy pods by label on port 8080")
+}
+
+// TestBuildWorkloadNetworkPolicy_NoGitHubEgressWhenProxied: a proxied gateway's
+// workers reach GitHub only through the pool, so no 443 rule of any shape may
+// appear, whatever GitHub CIDRs the cache holds.
+func TestBuildWorkloadNetworkPolicy_NoGitHubEgressWhenProxied(t *testing.T) {
+	_, githubCIDR, _ := net.ParseCIDR("140.82.112.0/20")
+	np := buildWorkloadNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "proxy"),
+		[]net.IPNet{*githubCIDR}, false, nil)
+
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port != nil && port.Port.IntVal == 443 {
+				t.Errorf("workload NP must not allow direct egress on port 443")
+			}
+		}
+	}
+}
+
+// TestBuildWorkloadNetworkPolicy_DefaultDenyIngress locks in Q128: worker pods run
+// untrusted GitHub Actions job code and must accept no inbound connections. The
+// authoring guard asserts the generated spec declares PolicyTypeIngress with an empty
+// ingress rule set (= default-deny). This is the reliable CI gate because kindnet does
+// not enforce ingress NetworkPolicy (see Q7b, worker-egress isolation); a
+// runtime negative needs a policy-enforcing CNI such as Calico.
+func TestBuildWorkloadNetworkPolicy_DefaultDenyIngress(t *testing.T) {
+	_, githubCIDR, _ := net.ParseCIDR("140.82.112.0/20")
+	for _, direct := range []bool{false, true} {
+		np := buildWorkloadNetworkPolicyV2(v2Gateway("gateway", "team-a", "github-app", "proxy"),
+			[]net.IPNet{*githubCIDR}, direct, nil)
+
+		assert.Contains(t, np.Spec.PolicyTypes, networkingv1.PolicyTypeIngress,
+			"workload NP must declare PolicyTypeIngress so ingress to worker pods defaults to deny")
+		assert.Empty(t, np.Spec.Ingress,
+			"workload NP must carry no ingress rules — default-deny all inbound to untrusted worker pods")
+	}
+}

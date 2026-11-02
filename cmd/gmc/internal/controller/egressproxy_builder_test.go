@@ -488,3 +488,36 @@ func TestEgressProxyDeployment_AuditAndAllowlistEnvCoexist(t *testing.T) {
 	assert.True(t, names["PROXY_AUDIT_LOGGING"])
 	assert.True(t, names["POD_NAMESPACE"])
 }
+
+// The grace period is a claim about how long shutdown takes; this asserts the
+// claim still covers every wait the sequence actually performs. Getting it wrong
+// means SIGKILL lands mid-drain and silently undoes Q384.
+func TestProxyShutdownBudget_GracePeriodCoversSequence(t *testing.T) {
+	worstCase := proxyDrainBudgetSeconds + proxyDrainTailSeconds
+	assert.Less(t, worstCase, proxyTerminationGracePeriodSeconds,
+		"grace period must exceed the drain budget plus its force-close tail, with headroom to spare")
+	assert.Equal(t, proxyTerminationGracePeriodSeconds-worstCase, proxyExitHeadroomSeconds,
+		"headroom must be exactly what the grace period has left over")
+
+	// Guards the cross-module mirror: cmd/proxy's defaultShutdownDrainTimeout is
+	// 45s and cannot be imported here (separate Go module).
+	assert.Equal(t, 45, proxyDrainBudgetSeconds,
+		"must match defaultShutdownDrainTimeout in cmd/proxy/proxy.go")
+}
+
+// The proxy pod carries the shared grace period and no preStop hook.
+//
+// The preStop absence is deliberate and load-bearing, not an omission (Q386). A
+// preStop sleep is serial with the drain and unconditional, and the kubelet
+// grants min(grace period, remaining node-shutdown window): on a truncated
+// window (spot preemption, graceful node shutdown) it would spend scarce budget
+// idling and leave the drain with less than it has today. cmd/proxy absorbs the
+// endpoint-removal race in-process instead, inside the drain budget.
+func TestEgressProxyDeployment_NoPreStopSharedGracePeriod(t *testing.T) {
+	spec := buildEgressProxyDeployment(newEP("pool", "team-a", nil), "proxy:latest", nil).Spec.Template.Spec
+
+	assert.Nil(t, spec.Containers[0].Lifecycle,
+		"the endpoint-removal wait belongs in cmd/proxy's drain, not a preStop hook")
+	require.NotNil(t, spec.TerminationGracePeriodSeconds)
+	assert.Equal(t, int64(proxyTerminationGracePeriodSeconds), *spec.TerminationGracePeriodSeconds)
+}
