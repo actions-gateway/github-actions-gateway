@@ -71,11 +71,12 @@ The refusal is the gate, and it also catches a hand-run `ginkgo`.
 Give a hand-run the same private kubeconfig rather than running `kubectl config use-context`, which repoints every parallel session:
 
 ```bash
-kind get kubeconfig --name actions-gateway-e2e > tmp/kubeconfig
+(umask 077 && kind get kubeconfig --name actions-gateway-e2e > tmp/kubeconfig)
 ```
 
 then set `KUBECONFIG=$PWD/tmp/kubeconfig` and `KIND_CLUSTER=actions-gateway-e2e` on the `ginkgo` invocation.
 `tmp/` at the repo root is gitignored and inside the workspace, which is where scratch files belong.
+The file holds the cluster's client key, so delete it (`rm tmp/kubeconfig`) when the run is done.
 
 ### Verify the resolved target before any mutating command
 
