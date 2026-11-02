@@ -84,6 +84,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
+// statusConflictRequeue is the retry after a status write loses an update conflict.
+// The conflict is swallowed rather than returned, so the write is retried on a fresh
+// Get without workqueue error backoff; the write that won also fires the primary
+// watch, so this interval is a backstop for that event.
+const statusConflictRequeue = time.Second
+
 // ActionsGatewayReconciler reconciles ActionsGateway objects.
 type ActionsGatewayReconciler struct {
 	client.Client
@@ -552,7 +558,7 @@ func (r *ActionsGatewayReconciler) updateStatus(ctx context.Context, ag *gmcv1al
 		if apierrors.IsConflict(err) {
 			// Our in-memory ag is stale; requeue to re-Get and recompute rather
 			// than silently dropping the status write.
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: statusConflictRequeue}, nil
 		}
 		return ctrl.Result{}, err
 	}
@@ -632,7 +638,7 @@ func (r *ActionsGatewayReconciler) setCredentialUnavailable(ctx context.Context,
 	})
 	if err := r.Status().Update(ctx, ag); err != nil {
 		if apierrors.IsConflict(err) {
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{RequeueAfter: statusConflictRequeue}, nil
 		}
 		return ctrl.Result{}, err
 	}

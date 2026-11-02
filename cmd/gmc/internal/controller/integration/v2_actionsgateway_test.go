@@ -56,20 +56,28 @@ func startActionsGatewayV2ReconcilerIn(t *testing.T, mgrCtx context.Context, agc
 	return startActionsGatewayV2ReconcilerFull(t, mgrCtx, agcExtraEnv, false)
 }
 
-// startActionsGatewayV2ReconcilerFull is the underlying constructor;
+// startActionsGatewayV2ReconcilerFull starts a reconciler resyncing every 2s;
 // enableServiceMonitor toggles the per-gateway AGC ServiceMonitor (Q1101).
 func startActionsGatewayV2ReconcilerFull(t *testing.T, mgrCtx context.Context, agcExtraEnv []corev1.EnvVar, enableServiceMonitor bool) <-chan struct{} {
 	t.Helper()
+	syncPeriod := 2 * time.Second
+	return startActionsGatewayV2ReconcilerSync(t, mgrCtx, agcExtraEnv, enableServiceMonitor, &syncPeriod)
+}
+
+// startActionsGatewayV2ReconcilerSync is the underlying constructor. A nil
+// syncPeriod keeps controller-runtime's default, so no resync lands within a test
+// and every reconcile it observes was queued by a watch event or a requeue.
+func startActionsGatewayV2ReconcilerSync(t *testing.T, mgrCtx context.Context, agcExtraEnv []corev1.EnvVar, enableServiceMonitor bool, syncPeriod *time.Duration) <-chan struct{} {
+	t.Helper()
 
 	skipNameValidation := true
-	syncPeriod := 2 * time.Second
 	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
 		Scheme:                 testScheme,
 		Metrics:                metricsserver.Options{BindAddress: "0"},
 		HealthProbeBindAddress: "0",
 		LeaderElection:         false,
 		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
-		Cache:                  cache.Options{SyncPeriod: &syncPeriod},
+		Cache:                  cache.Options{SyncPeriod: syncPeriod},
 	})
 	require.NoError(t, err)
 
