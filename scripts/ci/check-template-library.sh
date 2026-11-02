@@ -43,6 +43,11 @@
 #      clobbered list shows up as a base marker missing from the render.
 #      Skipped with a notice when kubectl is absent (it is `e2e`-tier in
 #      scripts/ci/check-tools.sh, so `make check` cannot require it).
+#   8. Same render: every patch `target:` (group/version/kind/name) selects a
+#      resource the overlay's render holds. kustomize skips a patch whose
+#      selector matches nothing and exits 0, so a template moved to a new
+#      apiVersion leaves the overlay's cluster specifics unapplied while rule 7
+#      still holds (the base is intact). Measured on kubectl v1.36.3.
 #
 # Backs `make template-library-check`; assertions in check-template-library-test.sh
 # under `make scripts-test`.
@@ -404,6 +409,51 @@ if ((RENDER)) && command -v kubectl >/dev/null 2>&1; then
 			sed 's/^[[:space:]]*//' | LC_ALL=C sort
 	}
 
+	# render_docs — stdin: kustomize output; stdout: `apiVersion|kind|name` per
+	# document, split at `---`.
+	render_docs() {
+		awk '
+			function emit() { if (kind != "") print api "|" kind "|" name; api = kind = name = ""; in_meta = 0 }
+			/^---/ { emit(); next }
+			/^apiVersion: / { api = $2 }
+			/^kind: / { kind = $2 }
+			/^metadata:$/ { in_meta = 1; next }
+			in_meta && /^[^[:space:]]/ { in_meta = 0 }
+			in_meta && /^  name: / && name == "" { name = $2 }
+			END { emit() }
+		'
+	}
+
+	# patch_targets KUSTOMIZATION — one `group/version|kind|name` per `target:`
+	# block under `patches:`, matched literally (kustomize reads them as regexes,
+	# which the overlays here do not use). A target omitting a field is skipped:
+	# it selects by wildcard, which this rule cannot judge.
+	patch_targets() {
+		awk '
+			function emit() {
+				if (kind != "" && name != "" && version != "")
+					print (group == "" ? "" : group "/") version "|" kind "|" name
+				group = version = kind = name = ""; in_target = 0
+			}
+			/^patches:[[:space:]]*$/ { in_block = 1; next }
+			in_block && /^[^[:space:]#]/ { emit(); in_block = 0 }
+			!in_block { next }
+			/^  - / { emit() }
+			{
+				line = $0; sub(/^  - /, "    ", line)
+				if (line ~ /^    target:[[:space:]]*$/) { in_target = 1; next }
+				if (in_target && line ~ /^      [a-z]+:/) {
+					v = line; sub(/^[^:]+:[[:space:]]*/, "", v); gsub(/["\047]/, "", v)
+					if (line ~ /^      group:/) group = v
+					else if (line ~ /^      version:/) version = v
+					else if (line ~ /^      kind:/) kind = v
+					else if (line ~ /^      name:/) name = v
+				} else if (line !~ /^[[:space:]]*$/ && line !~ /^      /) in_target = 0
+			}
+			END { emit() }
+		' "$1"
+	}
+
 	for entry in "${entries[@]}"; do
 		if ! kubectl kustomize "$TEMPLATES_DIR/$entry" >/dev/null 2>&1; then
 			fail "\`kubectl kustomize $TEMPLATES_DIR/$entry\` does not render; an operator cannot apply this entry"
@@ -419,6 +469,15 @@ if ((RENDER)) && command -v kubectl >/dev/null 2>&1; then
 $render"
 			continue
 		}
+
+		# Rule 8: every targeted patch selects a resource the render holds.
+		docs_in_render="$(render_docs <<<"$render")"
+		while IFS='|' read -r t_gv t_kind t_name; do
+			[[ -n "$t_kind" ]] || continue
+			if ! grep -qxF -- "$t_gv|$t_kind|$t_name" <<<"$docs_in_render"; then
+				fail "overlay '$overlay' has a patch targeting $t_gv $t_kind/$t_name, which matches no resource in its render; kustomize skips such a patch at exit 0, so the overlay's cluster specifics never apply"
+			fi
+		done < <(patch_targets "$kust")
 
 		base=""
 		while IFS= read -r res; do

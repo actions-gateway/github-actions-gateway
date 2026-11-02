@@ -377,6 +377,22 @@ if command -v kubectl >/dev/null 2>&1; then
 	else
 		ok "render catches a list replacement" "reported the lost base lines"
 	fi
+
+	# Rule 8: the template moves to a new apiVersion, the overlay's target does
+	# not. kustomize skips the patch at exit 0 and the base stays intact, so
+	# rule 7 is silent.
+	build_fixture "$F"
+	sed 's|^apiVersion: actions-gateway.com/v2beta1$|apiVersion: actions-gateway.com/v2|' \
+		"$F/templates/kata-dind/template.yaml" >"$F/t" && mv "$F/t" "$F/templates/kata-dind/template.yaml"
+	run_gate "$F"
+	die_if_killed "a patch that matches nothing is caught" "$RC"
+	if ((RC == 0)); then
+		bad "a patch that matches nothing is caught" "gate PASSED an overlay whose patch target matches no resource"
+	elif [[ "$GATE_OUT" != *"matches no resource in its render"* ]]; then
+		bad "a patch that matches nothing is caught" "failed for another reason: $GATE_OUT"
+	else
+		ok "a patch that matches nothing is caught" "reported the unmatched target"
+	fi
 else
 	printf 'skip %-46s %s\n' "render assertions" "kubectl not on PATH"
 fi
