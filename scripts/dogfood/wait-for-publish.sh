@@ -10,8 +10,10 @@
 # slower publish or a free e2e lane; a lost race fails `kubectl rollout status`
 # in start.sh, a gate failure that says nothing about the candidate (Q1162).
 #
-# The publish run is found by the tag's commit and the push event, so a re-pushed
-# tag or a manual dispatch of publish.yml cannot stand in for it. Its conclusion
+# The publish run is found by the tag's name and commit and the push event: a tag
+# push records the tag as the run's branch, so a manual dispatch cannot stand in
+# for it, and neither can a sibling tag on the same commit (v1.2.0 and v1.2.0-rc.1
+# share one, and the commit alone returns v1.2.0's run for the candidate). Its conclusion
 # is read once it completes: `success` returns 0, anything else returns 1, so a
 # red publish fails the gate rather than deploying what it left behind.
 #
@@ -45,7 +47,7 @@ polls=$((timeout / interval))
 last="no publish run for ${tag} (${sha:0:7}) had appeared"
 for ((i = 0; i <= polls; i++)); do
 	if runs="$(gh run list --repo "${REPO}" --workflow publish.yml --event push \
-		--commit "${sha}" --limit 1 --json databaseId,status,conclusion,url 2>&1)"; then
+		--commit "${sha}" --branch "${tag}" --limit 1 --json databaseId,status,conclusion,url 2>&1)"; then
 		status="$(jq -r '.[0].status // "none"' <<<"${runs}")"
 		conclusion="$(jq -r '.[0].conclusion // ""' <<<"${runs}")"
 		url="$(jq -r '.[0].url // ""' <<<"${runs}")"

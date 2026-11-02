@@ -87,10 +87,10 @@ run timeout-with-gh-down-fails 1 'gh run list failed' v1.9.0-rc.3 FAIL
 run unknown-tag-fails 1 'not in this checkout' v9.9.9-rc.1 "$GREEN"
 
 # The run is looked up by the tag's commit and the push event.
-if grep -qF -- "--event push --commit ${SHA}" "$WORK/green-at-once/calls"; then
-	ok "looks the run up by event and the tag's commit"
+if grep -qF -- "--event push --commit ${SHA} --branch v1.9.0-rc.3" "$WORK/green-at-once/calls"; then
+	ok "looks the run up by event, the tag's commit and the tag's name"
 else
-	bad "looks the run up by event and the tag's commit"
+	bad "looks the run up by event, the tag's commit and the tag's name"
 fi
 
 # It polls rather than spinning: four polls, three sleeps, then gives up.
