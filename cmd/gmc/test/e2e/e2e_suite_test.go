@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,6 +84,8 @@ type suiteData struct {
 var _ = SynchronizedBeforeSuite(
 	// Runs ONCE on process 0: cluster setup and shared-state marshaling.
 	func() []byte {
+		requireKindContext("run e2e")
+
 		// Fallback defaults match the local-registry naming the root Makefile
 		// emits; `make e2e-up` overrides via env. Kind nodes pull these names
 		// via scripts/e2e/kind-with-registry.sh's containerd config. The host is the
@@ -172,6 +175,7 @@ var _ = SynchronizedAfterSuite(
 			_, _ = fmt.Fprintln(GinkgoWriter, "E2E_SKIP_TEARDOWN=true; leaving GMC/fakegithub/cert-manager in place for diagnostics")
 			return
 		}
+		requireKindContext("tear down e2e")
 		// Drain tenant namespaces BEFORE teardownGMC(): their finalizers can only
 		// be cleared while the GMC/AGC controllers are still running (see the
 		// function doc). teardownGMC() removes those controllers.
@@ -473,6 +477,23 @@ func setupMetricsServer() {
 	if _, err := utils.Run(cmd); err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "warning: metrics-server patch: %v\n", err)
 	}
+}
+
+// requireKindContext fails the current node unless kubectl resolves the current
+// context to kind-$KIND_CLUSTER. Setup, specs and teardown all act on whatever
+// context kubectl resolves, so a context switched to a shared cluster would get
+// cert-manager, the CRDs and the GMC installed into it, and teardown's
+// `make undeploy` run against it (Q1201). A context that is unset or unreadable
+// fails the same way. Ginkgo runs SynchronizedAfterSuite even when the
+// BeforeSuite fails, so teardown calls this too.
+func requireKindContext(action string) {
+	want := "kind-" + envOrDefault("KIND_CLUSTER", "actions-gateway-e2e")
+	By("checking the kube context is " + want)
+	out, err := utils.Run(exec.Command("kubectl", "config", "current-context"))
+	Expect(err).NotTo(HaveOccurred(),
+		"read kubeconfig current-context; refusing to %s without a resolvable kind context", action)
+	Expect(strings.TrimSpace(out)).To(Equal(want),
+		"refusing to %s against a context other than the kind cluster; `make e2e` pins KUBECONFIG to it", action)
 }
 
 func configureKubectlKubeRC() {
