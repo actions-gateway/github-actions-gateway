@@ -24,11 +24,11 @@ The corrected model: the platform provisions the namespace + quota (+ optional `
 ## Scope
 
 ### API / CRD
-- Remove `NamespaceQuota corev1.ResourceList` from `ActionsGatewaySpec` ([actionsgateway_types.go](../../../cmd/gmc/api/v1alpha1/actionsgateway_types.go)); regenerate with `make manifests generate`.
+- Remove `NamespaceQuota corev1.ResourceList` from `ActionsGatewaySpec` ([actionsgateway_types.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/api/v1alpha1/actionsgateway_types.go)); regenerate with `make manifests generate`.
 - Confirm + document that structural-schema pruning drops the field from existing CRs silently (no apply rejection) pre-1.0.
 
 ### Controller / builder
-- Remove `ResourceQuota` construction in [builder.go](../../../cmd/gmc/internal/controller/builder.go) and its reconcile/teardown in the controller; drop it from the owned-resource set.
+- Remove `ResourceQuota` construction in [builder.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go) and its reconcile/teardown in the controller; drop it from the owned-resource set.
 - **Keep** `maxQuotaRetries` / `quotaRetryDelay` — those are the AGC reacting to a *full* quota (operating within it), not owning it.
 
 ### RBAC
@@ -59,7 +59,7 @@ Captured here; may split into its own item after the quota change lands.
 
 **Implemented (2026-06-14, Q130).** Delivered:
 
-- **API/CRD:** removed `NamespaceQuota` from `ActionsGatewaySpec` ([actionsgateway_types.go](../../../cmd/gmc/api/v1alpha1/actionsgateway_types.go)); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
+- **API/CRD:** removed `NamespaceQuota` from `ActionsGatewaySpec` ([actionsgateway_types.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/api/v1alpha1/actionsgateway_types.go)); regenerated deepcopy, the CRD bases, the GMC-bundled chart CRD copy, and RBAC.
   Structural-schema pruning silently drops the now-unknown field from existing CRs (no apply rejection) pre-1.0.
 - **Controller/builder:** removed `buildResourceQuota`, the reconcile apply path, the teardown delete, and the `applyResourceQuota` helper.
   `maxQuotaRetries` / `quotaRetryDelay` (AGC reacting to a *full* quota) are kept — those are operating *within* a quota, not owning it.

@@ -37,9 +37,9 @@ The only remaining M5 items are intentionally deferred to a staging cluster: the
 | Sub-item | Status | Notes |
 |---|---|---|
 | Locked-down Pod Security Standards | ✅ Done | Security W2 — `applyNamespacePSA` stamps labels per `securityProfile`; CEL forbids `privileged: true` |
-| Per-tenant `ResourceQuota` | ✅ Done | `buildResourceQuota` in [cmd/gmc/internal/controller/builder.go:225](../../cmd/gmc/internal/controller/builder.go); driven by `spec.namespaceQuota` |
-| Hardened proxy pod spec (read-only root, no caps, seccomp) | ✅ Done | Security W8 — [builder.go:323-327](../../cmd/gmc/internal/controller/builder.go); full `Capabilities.Drop: ALL` + `SeccompRuntimeDefault` |
-| Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](../../cmd/gmc/internal/controller/builder.go) |
+| Per-tenant `ResourceQuota` | ✅ Done | `buildResourceQuota` in [cmd/gmc/internal/controller/builder.go:225](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go); driven by `spec.namespaceQuota` |
+| Hardened proxy pod spec (read-only root, no caps, seccomp) | ✅ Done | Security W8 — [builder.go:323-327](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go); full `Capabilities.Drop: ALL` + `SeccompRuntimeDefault` |
+| Hardened AGC pod spec | ✅ Done | Security W8 — [builder.go:492-497](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go) |
 | TLS hardening (AGC↔proxy) | ✅ Done | Security W7 — GMC self-signed cert + AGC pinning |
 | Production Helm chart (`charts/actions-gateway/`) | ✅ Done | Chart exists ([q12-helm-chart.md](archive/q12-helm-chart.md), Q12) and is now **live-validated** end-to-end on kind: a digest-pinned secure-default `helm install` + cert-manager produced a working v1alpha1 tenant whose job ran to GitHub-side success (Q219, §1.5). polaris posture scan landed (Q14 — §3.2). `cmd/*/config/` kustomize bases stay the dev source-of-truth |
 | `cmd/agc/test/load/` load harness | ✅ Done | Q13 — in-process listener-core harness (§2); `make load-test-quick`/`load-test-full`, single-use re-registration modelled (Q114) |

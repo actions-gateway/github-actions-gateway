@@ -12,7 +12,7 @@ Not a second distribution path — the `cmd/*/config/` kustomize bases stay the 
 
 The GMC is the only thing installed.
 **AGC instances and proxy pools are provisioned by the GMC at runtime** from each `ActionsGateway` CR — they are *not* chart resources.
-Verified against [builder.go](../../../cmd/gmc/internal/controller/builder.go) (`buildAGCDeployment`/`buildProxyDeployment`) and [main.go](../../../cmd/gmc/cmd/main.go) (`AGCImage`/`ProxyImage` injected into the reconciler), and the `docs/operations/tenant-onboarding.md` flow.
+Verified against [builder.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go) (`buildAGCDeployment`/`buildProxyDeployment`) and [main.go](../../../cmd/gmc/cmd/main.go) (`AGCImage`/`ProxyImage` injected into the reconciler), and the `docs/operations/tenant-onboarding.md` flow.
 
 Resources, sourced 1:1 from the kustomize bases:
 

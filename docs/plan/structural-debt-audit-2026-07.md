@@ -115,7 +115,7 @@ Both fixed in the same change.
 
 **F4 — `githubCIDREgressRule` exists; the egress-proxy builder open-codes it twice.** ✅ **Shipped** (Q364)
 
-The shared helper at [builder.go:404](../../cmd/gmc/internal/controller/builder.go) is called from three sites — but not from `egressproxy_builder.go`, which open-codes the same peer-building loop at [:470-476 and :487-493](../../cmd/gmc/internal/controller/egressproxy_builder.go).
+The shared helper at [builder.go:404](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go) is called from three sites — but not from `egressproxy_builder.go`, which open-codes the same peer-building loop at [:470-476 and :487-493](../../cmd/gmc/internal/controller/egressproxy_builder.go).
 The helper's own doc comment claims to be the shared one.
 
 Three independent spellings of "which CIDRs may we reach on 443" in a security-relevant allowlist builder is where a policy bug hides.

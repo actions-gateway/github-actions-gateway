@@ -764,7 +764,7 @@ The .NET HttpClient validates the proxy's TLS certificate before sending `CONNEC
 The proxy's cert is signed by a cert-manager-issued self-signed CA (the `actions-gateway-proxy-tls` Secret in the tenant namespace).
 The runner image's default OS trust store (`/etc/ssl/certs/ca-certificates.crt`) does not contain that CA, so the outer TLS handshake fails before any traffic ever reaches GitHub.
 
-The GMC already mounts this Secret into the AGC pod (cert only, via `Items: [tls.crt]`) at `/etc/actions-gateway/proxy-tls/tls.crt` — see `buildAGCDeployment` in [cmd/gmc/internal/controller/builder.go](../../../cmd/gmc/internal/controller/builder.go) ~lines 494-509 — and the AGC code path reads it via the `appendProxyCAToSystemPool` helper landed under Q5f.
+The GMC already mounts this Secret into the AGC pod (cert only, via `Items: [tls.crt]`) at `/etc/actions-gateway/proxy-tls/tls.crt` — see `buildAGCDeployment` in [cmd/gmc/internal/controller/builder.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go) ~lines 494-509 — and the AGC code path reads it via the `appendProxyCAToSystemPool` helper landed under Q5f.
 Worker pods need the symmetric treatment, but the AGC provisioner's `BuildPod` ([cmd/agc/internal/provisioner/provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go)) never adds that volume.
 
 **Fix sketch (tracked as Q5h):**
@@ -799,7 +799,7 @@ Once Q5h ships, Q6 can be re-run against the same kind cluster and should reach 
     `tls.key` is never projected, keeping the proxy private key off worker pods.
     Two new unit tests pin the mount shape and the empty-secret-name no-op path ([provisioner_test.go](../../../cmd/agc/internal/provisioner/provisioner_test.go) — `TestBuildPod_MountsProxyCASecret`, `TestBuildPod_NoProxyCAWhenSecretNameEmpty`).
 - AGC `main.go` reads `PROXY_TLS_SECRET_NAME` and plumbs it into the provisioner.
-- GMC `buildAGCDeployment` sets `PROXY_TLS_SECRET_NAME= actions-gateway-proxy-tls` on the AGC Deployment so each tenant's AGC finds the right Secret automatically ([cmd/gmc/internal/controller/builder.go](../../../cmd/gmc/internal/controller/builder.go)); `TestBuildAGCDeployment_PlumbsProxyTLSSecretName` guards the env.
+- GMC `buildAGCDeployment` sets `PROXY_TLS_SECRET_NAME= actions-gateway-proxy-tls` on the AGC Deployment so each tenant's AGC finds the right Secret automatically ([cmd/gmc/internal/controller/builder.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go)); `TestBuildAGCDeployment_PlumbsProxyTLSSecretName` guards the env.
 - Worker entrypoint wrapper installs the CA into a combined trust bundle and sets `SSL_CERT_FILE` on the child Runner.Worker env before exec'ing ([cmd/worker/main.go](../../../cmd/worker/main.go) — `installProxyCATrust` / `readSystemCABundle`).
   System bundle missing, CA file missing, CA file empty, and `PROXY_CA_CERT_PATH=""` are all tolerated as no-ops so unit-test and non-proxied deployments keep working.
   Five unit tests cover the helper plus an end-to-end test (`TestWrapper_PropagatesProxyTrustEnvToChild`) that asserts the child process sees `SSL_CERT_FILE` pointing at the combined bundle.
@@ -835,7 +835,7 @@ Any concurrent `kubectl apply` of an `ActionsGateway` CR during a GMC image roll
 The fix is a one-line addition and ships in the same branch as the Q6 re-run.
 
 **Follow-up identified — resolved by Q42.** The egress proxy ([cmd/proxy/proxy.go](../../../cmd/proxy/proxy.go)) had the same class of bug — its `/healthz` returned OK as soon as the health-port server bound, but the CONNECT listener on port 8080 was started in a separate goroutine.
-The GMC's per-tenant proxy Deployment ([cmd/gmc/internal/controller/builder.go](../../../cmd/gmc/internal/controller/builder.go)) used `/healthz` for both liveness and readiness, so worker pods could hit `connection refused` on `HTTPS_PROXY` traffic during a proxy rollout or HPA scale-up.
+The GMC's per-tenant proxy Deployment ([cmd/gmc/internal/controller/builder.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go)) used `/healthz` for both liveness and readiness, so worker pods could hit `connection refused` on `HTTPS_PROXY` traffic during a proxy rollout or HPA scale-up.
 
 Fixed by Q42: `ListenAndServe` now pre-binds both listeners synchronously before either serve goroutine starts, then closes a `ready` channel.
 A new `/readyz` endpoint returns 200 only after the channel closes, and the proxy `Deployment`'s `readinessProbe` was re-pointed to `/readyz`.

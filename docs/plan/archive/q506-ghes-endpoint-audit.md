@@ -50,7 +50,7 @@ Three real defects, two ambiguities, the rest legitimate.
 
 **The largest finding, and the one Q506 did not anticipate.** The AGC resolves its REST API base from the `GITHUB_API_BASE_URL` env var, defaulting to `https://api.github.com` ([`githubapp/auth.go:202`](../../../githubapp/auth.go)).
 The Gateway Manager Controller (GMC) never sets it.
-Both builders inject `GITHUB_ORG_URL` from `spec.gitHubURL` and stop there — [`builder.go:642`](../../../cmd/gmc/internal/controller/builder.go) (v1) and [`actionsgateway_v2_builder.go:383`](../../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go) (v2).
+Both builders inject `GITHUB_ORG_URL` from `spec.gitHubURL` and stop there — [`builder.go:642`](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/controller/builder.go) (v1) and [`actionsgateway_v2_builder.go:383`](../../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go) (v2).
 There is no CRD field for it, no Helm value, and no other injection site.
 
 The only route to that variable is `AGC_EXTRA_GITHUB_API_BASE_URL` behind the GMC's `--allow-agc-extra-env` flag, whose own help text reads *"Intended for testing only"* ([`flags.go:95`](../../../cmd/gmc/cmd/flags.go)) and which [security-operations.md](../../operations/security-operations.md#github-api-base-url-must-be-https) tells operators not to use in production.
@@ -112,7 +112,7 @@ Any fix for #1 should collapse all three.
 `noproxy.GitHubHosts` is a public-only list, but it is never the whole protected set.
 Both callers add the tenant's GHES host:
 
-- v1 parses `spec.gitHubURL` and appends its hostname ([`actionsgateway_webhook.go:402`](../../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go)).
+- v1 parses `spec.gitHubURL` and appends its hostname ([`actionsgateway_webhook.go:402`](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go)).
 - v2 resolves it from every referrer, in both directions, through the uncached API reader ([`noproxy_referrers.go`](../../../cmd/gmc/internal/webhook/v2/noproxy_referrers.go)) — this was Q322, filed precisely as the GHES residual of the original guard.
 
 The package doc says so explicitly.

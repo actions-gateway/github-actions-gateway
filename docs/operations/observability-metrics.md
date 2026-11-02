@@ -317,8 +317,7 @@ Two things follow from how the AGC records these, and both are worth knowing bef
 
 ### Condition reasons
 
-The `reason` field of a `.status.conditions[]` entry on a `RunnerGroup` (`v1alpha1`) or `RunnerSet` (`v2alpha1`).
-A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is classic-only by construction.
+The `reason` field of a `.status.conditions[]` entry on a `RunnerSet`.
 
 | Reason | Tier | Why, and what to read on the other tier |
 | --- | --- | --- |
@@ -328,7 +327,6 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 | `AwaitingWorkerPods` | Both | The sizing-profile override reads worker pods, which both tiers label identically. |
 | `CPULimitInjected` | Both | As above. |
 | `CapacityAvailable` | Both | The capacity gate's cleared state, from the same shared call. |
-| `CredentialAvailable` | Classic only | A `RunnerGroup` condition, and a `RunnerGroup` only acquires classically. A v2 set reports the same state as `Ready`/`TokenUnavailable`. |
 | `DirectEgress` | Both | Egress mode is recorded before the protocol routing. |
 | `EgressAuditDisabled` | Both | The per-set egress-audit verdict, read off the resolved references before the routing. |
 | `EgressAuditJoined` | Both | As above. |
@@ -345,7 +343,7 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 | `NoCPULimitInjected` | Both | The sizing-profile override, before the routing. |
 | `NoReapBlockingSidecar` | Both | Read off the resolved worker template, before the routing. |
 | `PodsNotStarting` | Both | The kubelet's verdict on a worker pod that bound and could not start, from the same shared capacity call. |
-| `PodsUnschedulable` | Both | The scheduler's verdict on worker pods, evaluated for `RunnerGroup` and `RunnerSet` alike. |
+| `PodsUnschedulable` | Both | The scheduler's verdict on worker pods, evaluated on both tiers alike. |
 | `PollingHealthy` | Both | Both listeners publish the rate-limit baseline and clear on recovery (Q332). |
 | `ProxiedEgress` | Both | Egress mode, before the routing. |
 | `ProxyDeleted` | Both | Reference resolution, before the routing. |
@@ -379,7 +377,7 @@ A `RunnerGroup` only ever acquires classically, so a reason no v2 path writes is
 
 ### Event reasons
 
-The `Reason` on a Kubernetes Event the AGC records on the owning `RunnerGroup`/`RunnerSet`, listed by the reason string `kubectl get events --field-selector reason=…` matches.
+The `Reason` on a Kubernetes Event the AGC records on the owning `RunnerSet`, listed by the reason string `kubectl get events --field-selector reason=…` matches.
 Each also has a [runbook entry](troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) naming the remedy, which the gate holds it to.
 
 | Reason | Tier | Why, and what to read on the other tier |
@@ -417,7 +415,7 @@ Each also has a [runbook entry](troubleshooting.md#job-lifecycle-events-on-a-run
 | `WorkerPodsReapedOnGatewayTeardown` | Both | Teardown stops both tiers before deleting their worker pods. |
 | `WorkerTerminating` | Scale-set only | An assignment waiting for its previous worker pod to finish terminating, normally a grace period, so `Normal` rather than `Warning` (Q1199). |
 | `WorkersNotStarting` | Both | The kubelet's startup verdict, recorded from the same shared capacity call and on every set, gated or not (Q906). |
-| `WorkersUnschedulable` | Both | The scheduler's verdict, recorded for `RunnerGroup` and `RunnerSet` alike. |
+| `WorkersUnschedulable` | Both | The scheduler's verdict, recorded on both tiers alike. |
 
 ---
 
