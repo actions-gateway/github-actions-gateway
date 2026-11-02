@@ -267,7 +267,7 @@ The guard denies the GMC that delete once the namespace is no longer a tenant, s
 
 **What changed.** Both select the GMC's webhooks by name, and through 1.10 they still named the `-v2alpha1` webhooks that 1.9 renamed to `-v2`, so a copy taken from 1.8 went blind on the upgrade to 1.9.
 From 1.9 on, neither could see a denial by the five `actions-gateway.com` webhooks: the alert could fire only for `vactionsgateway-v1alpha1.kb.io`, and the dashboard's **total denied** series counted that webhook alone.
-Both now name the six webhooks the chart ships (Q1267).
+Both now name the webhooks the chart ships (Q1267): five from `v2.0.0`, whose chart no longer ships the `v1alpha1` one.
 
 **What to do.** Replace the `name=~` selector in your copy of the alert with the one in [security-operations.md](security-operations.md#prometheus-abuse-alerts), and re-import `deploy/monitoring/grafana-dashboard-security.json`.
 

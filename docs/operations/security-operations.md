@@ -237,7 +237,7 @@ groups:
         expr: |
           sum by (name, operation) (
             rate(apiserver_admission_webhook_rejection_count{
-              name=~"v(actionsgateway-v1alpha1|actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)\\.kb\\.io",
+              name=~"v(actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)\\.kb\\.io",
               error_type="no_error",
               rejection_code="403"
             }[10m])
