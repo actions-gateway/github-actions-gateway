@@ -2692,7 +2692,7 @@ This is a question for the maintainer, not a decided change: the alternative lea
 <h2 id="why-the-merge-drivers-do-not-help">Why the merge drivers do not help<a class="headerlink" href="#why-the-merge-drivers-do-not-help" title="Permanent link">&para;</a></h2>
 <p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/git-merge-plan-index.sh"><code>git-merge-plan-index.sh</code></a> would refuse these merges even where it runs, because it hands back "a row changed on both sides" as a conflict (<a href="../../development/maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">the refusal rules</a>); that is read from the driver's documented rules, not exercised on these PRs.
 It also does not run on GitHub: the mergeability check behind <code>mergeStateStatus</code> and the merge queue's candidate both take the plain three-way merge.
-So this is not <a href="../Q1130/">Q1130</a>'s case, two PRs editing <em>adjacent</em> rows, which a driver resolves locally and spacing the batch avoids.
+So this is not Q1130's case, two PRs editing <em>adjacent</em> rows, which a driver resolves locally and spacing the batch avoids.
 Here every PR edits <em>one</em> row, and nothing short of not editing it removes the conflict.</p>
 <p><strong>Why each PR edits it now.</strong> <a href="../../development/maintaining-backlog/#plan-level-status-lives-in-the-plan-index">The rule</a> is to update a plan's Status cell when its overall status changes, and a release plan's cell names its gating rows by link.
 A PR that deletes a row the cell links has to edit the cell, or <code>make doc-links</code> fails on the dead link.

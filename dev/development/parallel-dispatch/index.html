@@ -3123,11 +3123,10 @@ Three of those land differently:</p>
   Mechanical work runs fine on a faster model; anything touching the concurrency core, admission, or a security default warrants the strongest one, because the dispatcher's scope review is the only gate before a human sees it.</li>
 <li><strong>An unmeasured claim in a prompt is the expensive kind.</strong> Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing <em>open</em>, on the call immediately before <code>gh pr merge --squash</code>.
   Mark an unverified claim as unverified, or leave it out.</li>
-<li><strong>Contention has a guard attached.</strong> When several workers will touch one large doc, say so <strong>and</strong> say what the resulting <code>gh pr create</code> denial means: <em>read the other PR and override with the reading</em>, never <em>re-scope this change</em>.
-  A worker who shrinks a good change to get past the guard reports that as scoping rather than friction, so it never reaches a friction report and cannot be found retrospectively.
-  Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
-  Since Q862 the denial says this itself, and fires on colliding <strong>line ranges</strong> rather than shared paths, so a warning that survives is one two edits can actually reach each other through.
-  Saying it in the prompt is now reinforcement rather than the only place a worker hears it.</li>
+<li><strong>Say what an overlap means.</strong> When several workers will touch one large doc, say so <strong>and</strong> say what to do about it: <em>read the other PR and say what it claims</em>, never <em>re-scope this change</em>.
+  A worker who shrinks a good change to dodge an overlap reports that as scoping rather than friction, so it never reaches a friction report and cannot be found retrospectively.
+  History of the retired <code>gh pr create</code> guard: across one batch it drew five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
+  Nothing says this at <code>gh pr create</code> any more, so the prompt is the only place a worker hears it.</li>
 <li><strong>A contention list has two silences, and a worker reads both as clearance.</strong> The first is scope: a file you never swept is indistinguishable from one you swept and found clear, so close the list rather than ending it ("X and Y are contended, nothing else is open"), and say it covers direct paths only.
   The second is time, and it is the one a stamp does not cover: the batch itself creates contention while it runs.
   Measured 2026-08-19, a list telling the Q904 chip that nothing else in the batch touched <code>CHECK_FAST_GATES</code> was true when written and false within the hour, because Q899's worker added a gate its row never mentioned.
@@ -3258,13 +3257,16 @@ Backgrounding does not reduce contention either — it stops the queue time from
 <h3 id="the-dispatcher-owns-assignment-not-coordination-files">The dispatcher owns assignment, not coordination files<a class="headerlink" href="#the-dispatcher-owns-assignment-not-coordination-files" title="Permanent link">&para;</a></h3>
 <p>The real need is preventing two workers from implementing the <strong>same</strong> backlog item — an <em>assignment</em> problem — not keeping <code>docs/STATUS.md</code> out of worker hands.
 Each worker removes its own completed row in its own isolated commit, so PRs stay self-contained and the Queue stays current as they merge.</p>
-<p><strong>Self-healing absorbs the resolution, not the cycle it costs.</strong> The <a href="../maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">merge driver</a> decides the Queue table by row ID, so a sibling's row deletion resolves silently inside the worker's <code>git rebase origin/main</code>.
-It is per-clone <code>git config</code>, so it never runs on GitHub: the mergeability read behind <code>mergeStateStatus</code> and the merge queue's candidate build both take the plain three-way merge, where two adjacent row deletions conflict.
+<p><strong>Self-healing absorbs the resolution, not the cycle it costs.</strong> Queue rows are one file per item, so two workers deleting their own rows never touch the same lines.
+Four shared registry files still take edits from many PRs, each routed in <code>.gitattributes</code> to a <a href="../maintaining-backlog/#the-merge-drivers-resolve-registry-rows-by-key-not-by-line-position">merge driver</a> that resolves by entry key: <code>scripts/README.md</code> (a row for every gated script), <code>mk/gate-lists.mk</code> (an entry for every gate), <code>docs/plan/README.md</code> (a row for every plan) and <code>docs/roadmap.md</code> (a bullet deleted when its item ships).
+The drivers are per-clone <code>git config</code> (<code>make merge-driver</code>), so they never run on GitHub: the mergeability read behind <code>mergeStateStatus</code> and the merge queue's candidate build both take the plain three-way merge, where two edits to adjacent rows of one table conflict.
 That server-side half is the expensive one.
-A PR that is merely <em>behind</em> costs nothing, while a <code>DIRTY</code> one must rebase and force-push, and the force-push restarts the whole CI cycle whatever the driver did locally.
-The same <code>make merge-driver</code> installs the <a href="../maintaining-backlog/#the-same-treatment-for-docsplanreadmemd">plan-index driver</a>, which does the same for <code>docs/plan/README.md</code>, and the <a href="../maintaining-backlog/#and-for-docsroadmapmd">roadmap driver</a>, for a batch whose items each delete their own roadmap bullet.</p>
-<p><strong>So space the assignment: never hand one batch two adjacent Queue rows.</strong> Measured 2026-08-14 against the live 97-row Queue, merged driverless in a fresh repo: adjacent deletions conflict, the same two deletions one row apart merge clean, and a new row inserted directly above a deleted one conflicts too.
-The control arm is the pair re-run with the backlog driver configured, which resolves, so the probe is measuring the missing driver rather than the file.
+A PR that is merely <em>behind</em> costs nothing, while a <code>DIRTY</code> one must rebase and force-push, and the force-push restarts the whole CI cycle whatever the driver did locally.</p>
+<p><strong>So space the assignment: never hand one wave two items that will edit the same registry file.</strong> Before assigning, list which items touch each of the four: a new gated script adds a <code>scripts/README.md</code> row (<code>check-script-docs.sh</code> fails a gated script without one) and a new gate usually adds a <code>mk/gate-lists.mk</code> entry; a new plan adds a <code>docs/plan/README.md</code> row; shipping a roadmap item deletes a <code>docs/roadmap.md</code> bullet.
+The second item of a pair waits for the first to merge, or the dispatcher accepts one rebase and says so in the worker's prompt.
+Re-read <code>.gitattributes</code> for the routed paths rather than trusting this list.
+Measured 2026-08-14 against a then-single-table Queue, merged driverless in a fresh repo: adjacent deletions conflict, the same two deletions one row apart merge clean, and a new row inserted directly above a deleted one conflicts too.
+The control arm is the pair re-run with the driver configured, which resolves, so the probe measures the missing driver rather than the file.
 Serializing the batch reaches the same place by idling every worker but one, so spacing is strictly cheaper (Q807).</p>
 <h2 id="coordination-channels">Coordination channels<a class="headerlink" href="#coordination-channels" title="Permanent link">&para;</a></h2>
 <p>Sessions coordinate by exchanging deliberately published state, never by reading one another's transcripts.
@@ -3408,8 +3410,7 @@ Resolve a keyed conflict by keeping <strong>both</strong> sides and verifying ea
 <p><strong>"Same file" and "different sections" both predict badly; diff context is what decides.</strong> Measured 2026-08-12 on one file in one batch: two edits to adjacent rows of a Markdown table conflicted, while two edits to sections 180 lines apart rebased as a pure line offset.
   A dispatcher reasoning from "they touch different cells" got the first one wrong and would have got the second one right by luck.
   Measure the pair rather than predicting it, and say which you did when you tell a worker.
-  Q862 moved that measurement into the <code>gh pr create</code> guard, which now compares the two branches' changed line ranges, each carrying its diff's three lines of context, so the adjacent rows still collide and the 180-line gap no longer does.
-  It is the same measurement, not a replacement for taking one: the guard fires at create time on PRs that are already open, while a dispatcher needs the answer before it assigns the work.</p>
+  Q862 once moved that measurement into a <code>gh pr create</code> guard comparing changed line ranges; the guard is retired (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/CONTRIBUTING.md#re-check-concurrent-work-before-opening">CONTRIBUTING.md</a> says to run the comparison by hand), so the dispatcher takes it before assigning and the worker again before opening.</p>
 </li>
 <li>
 <p><strong>A clean merge proves the absence of a textual conflict and nothing else.</strong> Measured 2026-08-12 across one batch: three open PRs asserted about a thing called "quota", carrying two referents between them, a Kubernetes <code>ResourceQuota</code> tenant cap in two of them and a global, project-wide GCE CPU limit in the third.
@@ -3439,7 +3440,7 @@ Some tasks simply cannot run autonomously under this rule (e.g. anything needing
 <p>Only the items this repo adds; the skills' own checks are theirs.</p>
 <ul>
 <li>[ ] Batch chosen, each item independent and one-PR-sized, with the theme taken from the dispatcher's opening question and checked against the release plan doc where one exists (<a href="#what-the-release-theme-means-here">what each half means here</a>).</li>
-<li>[ ] No two assigned Queue rows adjacent (<a href="#the-dispatcher-owns-assignment-not-coordination-files">why</a>); streams grouped by shared <strong>docs</strong> as well as code.</li>
+<li>[ ] No two items in one wave edit the same routed registry file (<code>scripts/README.md</code>, <code>mk/gate-lists.mk</code>, <code>docs/plan/README.md</code>, <code>docs/roadmap.md</code>; re-read <code>.gitattributes</code>) (<a href="#the-dispatcher-owns-assignment-not-coordination-files">why</a>); streams grouped by shared <strong>docs</strong> as well as code.</li>
 <li>[ ] Concurrency cap taken from <code>scripts/agent/local-throttle.sh workers</code>, or a deliberate <code>GAG_DISPATCH_WORKERS</code> override.</li>
 <li>[ ] pr-sentinel installed in each worker session, launched bare, with <code>PR_SENTINEL_TIMEOUT</code> and <code>PR_SENTINEL_WATCH_UNTIL</code> left to <code>.claude/settings.json</code>.</li>
 <li>[ ] Post-<code>ready</code> window covered by <code>scripts/agent/pr-mergeability-watch.sh</code> per handed-off PR, armed after a clean read.</li>
