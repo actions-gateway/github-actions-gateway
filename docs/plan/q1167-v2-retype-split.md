@@ -158,6 +158,10 @@ Q1167 retypes them once Q264 has removed the classic read.
 Their callers are on `v2`, and the fake client does not convert between versions, so unit tests reaching the trio store each fixture at both versions.
 `withV2alpha1Views` in `webhook/v2/actionsgateway_webhook_test.go` does it for the validators, and `asV2Gateway` in `controller/actionsgateway_scaleset_collision_test.go` for the collision check; both go when the trio retypes.
 
+The split also costs the GMC a second informer for `ActionsGateway` and `RunnerSet` until then: `evalScaleSetNameCollisions` lists through the reconciler's cached client at `v2alpha1`, while the controllers watch `v2`, and controller-runtime keys informers by group, version and kind (read from source, not measured).
+And a stored `CiliumFQDN`/`CalicoFQDN` alias on a `main` build in this window is admitted unchanged but read by the controller as plain `FQDN`, so it follows `--fqdn-policy-backend`; under `none` the pool loses its CNI-native policy without a condition.
+No `v2.0.0` cluster can hold one ([why](#why-a-retype-is-mechanical-everywhere-except-two-places)).
+
 The rest of what stays names a version on purpose, and Q1167 deletes or retargets it:
 
 - `cmd/gmc/cmd/main.go` registers `v2alpha1` and `v2beta1`, which the conversion webhook still serves, and `storageversion.go` reads `v2beta1` as above.
