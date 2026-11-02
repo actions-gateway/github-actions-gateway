@@ -72,6 +72,10 @@ That single constant drives, and must stay in lockstep with, three consumers:
 Dependabot bumps only the Dockerfile, so the lockstep test [`cmd/agc/names/runner_version_test.go`](../../cmd/agc/names/runner_version_test.go) fails CI (in the unit tier) when the `FROM` tag/digest and the constants disagree.
 To bump the version, follow the procedure in the Dockerfile header: update the `FROM` line **and** `RunnerVersion` + `WorkerImageDigest` together; `DefaultWorkerImage` and `GITHUB_RUNNER_VERSION` then follow automatically.
 
+GitHub also stops queueing jobs to a runner that has not updated within 30 days of a newer release, without refusing its connection, so a pin that sits unbumped looks like jobs lapsing rather than an error.
+The scheduled [`runner-window-watch.yml`](../../.github/workflows/runner-window-watch.yml) counts the days from the first newer *stable* release's `publishedAt` and goes red at day 21; when it does, bump the pin by the procedure above.
+It is a scheduled run and not a `make check` gate because it reads GitHub's release feed and the date, so it would redden unrelated branches.
+
 ### License attribution (`/licenses/`)
 
 Each production image `COPY`s three license files into `/licenses/` — the Red Hat/OpenShift container-certification convention, paired with the `org.opencontainers.image.licenses="Apache-2.0"` label every image carries:

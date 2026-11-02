@@ -1,0 +1,51 @@
+name: runner-window-watch
+
+# Goes red when the pinned actions/runner is close to aging out of GitHub's
+# 30-day update window (Q1149).
+#
+# GitHub stops queueing jobs to a self-hosted runner that has not updated within
+# 30 days of a new version being made available, and does not refuse its
+# connection, so a stale pin shows up as every job lapsing rather than as an
+# error. The dogfood e2e tenant received no job on 2026-09-29 on a 2.335.1 worker
+# and ran one the same day on 2.337.0. Dependabot's weekly PR proposes the bump
+# but can sit unmerged past the deadline without anything reddening.
+#
+# WHY A SCHEDULE AND NOT `make check`.
+# The answer depends on GitHub's release feed and on today's date, not on the
+# tree, so a gate would flip red on an unchanged branch and block every PR for a
+# reason none of them can fix. A scheduled run reddens only itself, and reports
+# to whoever watches scheduled runs: that is the whole signal, deliberately with
+# no issue to open, comment on or close.
+#
+# The window is counted from the first stable release newer than the pin, which
+# is the stricter of the readings the dogfood runs allow; the threshold is day 21
+# so the product default and the dogfood images are bumped while jobs still run.
+# The feed is public, so the run's own token is all it carries.
+on:
+  schedule:
+    - cron: '17 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: is the pinned runner inside GitHub's update window?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Fetched to a file first so a failed request is its own failure and an
+          # empty feed never reaches the check as "no newer release".
+          gh api 'repos/actions/runner/releases?per_page=100' > "${RUNNER_TEMP}/runner-releases.json"
+          rc=0
+          scripts/release/check-runner-window.sh "${RUNNER_TEMP}/runner-releases.json" || rc=$?
+          if [ "${rc}" -ne 0 ]; then
+            echo "::error::runner-window-watch: pinned actions/runner is within the update window's warning period, or the check could not measure (exit ${rc}); see the log above"
+          fi
+          exit "${rc}"
