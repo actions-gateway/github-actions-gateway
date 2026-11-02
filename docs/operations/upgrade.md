@@ -245,10 +245,10 @@ The guard denies the GMC that delete once the namespace is no longer a tenant, s
 
 ### Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the `-v2` webhooks
 
-**Who is affected:** anyone who copied the `ActionsGatewayWebhookRejections` alert from [security-operations.md](security-operations.md#prometheus-abuse-alerts), or imported the security dashboard, from release 1.9 or 1.10.
+**Who is affected:** anyone who copied the `ActionsGatewayWebhookRejections` alert from [security-operations.md](security-operations.md#prometheus-abuse-alerts), or imported the security dashboard, whose `name=~` selector still names a `-v2alpha1` webhook: any copy taken from release 1.8, 1.9 or 1.10.
 
-**What changed.** Both select the GMC's webhooks by name, and in those two releases they still named the `-v2alpha1` webhooks that 1.9 renamed to `-v2`.
-So neither could see a denial by the five `actions-gateway.com` webhooks: the alert could fire only for `vactionsgateway-v1alpha1.kb.io`, and the dashboard's **total denied** series counted that webhook alone.
+**What changed.** Both select the GMC's webhooks by name, and through 1.10 they still named the `-v2alpha1` webhooks that 1.9 renamed to `-v2`, so a copy taken from 1.8 went blind on the upgrade to 1.9.
+From 1.9 on, neither could see a denial by the five `actions-gateway.com` webhooks: the alert could fire only for `vactionsgateway-v1alpha1.kb.io`, and the dashboard's **total denied** series counted that webhook alone.
 Both now name the six webhooks the chart ships (Q1267).
 
 **What to do.** Replace the `name=~` selector in your copy of the alert with the one in [security-operations.md](security-operations.md#prometheus-abuse-alerts), and re-import `deploy/monitoring/grafana-dashboard-security.json`.
