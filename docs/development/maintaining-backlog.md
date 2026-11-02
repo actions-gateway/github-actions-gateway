@@ -810,7 +810,7 @@ Closing an item has a documented cascade — the plan's status flip, plan archiv
 | Prose cross-references on the same page | Nothing checks these. Moving a roadmap bullet between sections leaves any "the near-term work below" phrasing pointing at the wrong place, and `make doc-links` reads links, not sentences. |
 
 Only the first two were written down before.
-A 2026-07-30 groom that deferred [Q273](../queue/Q273.md) found the other three the expensive way — two by opening a red PR, the third by re-reading the page.
+A 2026-07-30 groom that deferred Q273 found the other three the expensive way — two by opening a red PR, the third by re-reading the page.
 
 ## A label earns its place by discriminating
 

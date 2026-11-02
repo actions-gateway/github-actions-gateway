@@ -11,7 +11,7 @@ It is the last step of Option E's retirement ladder — one isolated PR, gated o
 
 1. **The one-minor classic deprecation window from v1.1.0 elapses** (i.e. v1.2.0 ships).
    ScaleSet became the default and Classic was deprecated in v1.1.0's release notes, which starts the window.
-2. **v1alpha1 tenants have migrated off** via `gag-migrate` ([Q273](../queue/Q273.md)).
+2. **v1alpha1 tenants have migrated off** via `gag-migrate` (Q273).
    Classic is v1alpha1's *only* acquisition path, so removing it necessarily ends v1alpha1's ability to acquire jobs — the classic deprecation window **is** the v1alpha1 migration window.
 
 The removal was originally expected to ride the Q74 v2beta1 graduation hop (that hop is where the transitional fields were to be stripped). v2beta1 has since graduated **without** carrying the removal, so it is no longer bundled — it is now the terminal step, gated on the two conditions above.
