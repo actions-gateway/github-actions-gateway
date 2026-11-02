@@ -1585,13 +1585,6 @@ EOF
 	# Reading at v2alpha1 forces a conversion over TLS whichever version stores
 	# the object (v2beta1 before 1.10, v2 from it), and reading back at v2beta1
 	# closes the loop.
-	#
-	# What it does NOT cover, deliberately: `actions-gateway.github.com/v1alpha1`.
-	# That is a DIFFERENT CRD in a different API group, and a conversion webhook
-	# converts versions within one CRD — it cannot cross groups. Reaching v2 from
-	# v1 is gag-migrate, a migration, not a conversion. Q1060's row asserted that
-	# deploy/dogfood-migrate's v1alpha1 ActionsGateway was "the pre-graduation
-	# object the criterion names"; it is not, and the row now says so.
 	echo "Q1060: round-tripping the conversion webhook, field for field..."
 	# Resource-qualified by version, `<plural>.<version>.<group>`, with the object
 	# NAME as a separate argument. Appending the suffix to a `kind/name` string

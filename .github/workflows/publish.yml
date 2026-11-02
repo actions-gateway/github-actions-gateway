@@ -789,9 +789,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # gag-migrate (the one-shot v1->v2 migration CLI) was source-build-only
-          # (Q306). Cross-compile it for the operator platform matrix and ship the
-          # binaries as release assets so running the migration needs neither a Go
+          # gag-migrate (the upgrade-step CLI) was source-build-only (Q306).
+          # Cross-compile it for the operator platform matrix and ship the
+          # binaries as release assets so running it needs neither a Go
           # toolchain nor a repo checkout. Keyless-signed over a single SHA256SUMS
           # manifest via the SAME Fulcio/Rekor sign-blob path as the v2 CRD asset
           # above — no key material and no stored secret (the project forbids

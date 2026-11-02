@@ -166,15 +166,17 @@ assert_webhook_enforces() {
 	local answer="" i
 	for ((i = 1; i <= 45; i++)); do
 		answer="$(kc create -f - 2>&1 <<-EOF || true
-			apiVersion: actions-gateway.github.com/v1alpha1
+			apiVersion: actions-gateway.com/v2
 			kind: ActionsGateway
 			metadata:
 			  name: released-upgrade-webhook-probe
 			  namespace: kube-system
 			spec:
-			  gitHubURL: https://github.com/example-org
-			  gitHubAppRef:
-			    name: chart-released-upgrade-check-nonexistent
+			  githubURL: https://github.com/example-org
+			  credentials:
+			    type: GitHubApp
+			    githubApp:
+			      name: chart-released-upgrade-check-nonexistent
 		EOF
 		)"
 		[[ "${answer}" == *"reserved namespace"* ]] && break
@@ -196,19 +198,19 @@ assert_webhook_enforces() {
 # assert_params_resolve fails unless the PriorityClass guard denies an
 # off-allowlist class AND admits a plain write — the same probe pair
 # chart-reinstall-check.sh gates on, because it distinguishes a healthy guard
-# from both the Q444 no-params outage and a guard that denies everything.
+# from both the Q444 no-params outage and a guard that denies everything. The
+# probe kind's GMC webhook denies an off-allowlist class too, in other words;
+# that script's probe_write says why the policy's answer is the one seen.
 assert_params_resolve() {
 	local answer="" plain="" i
 	for ((i = 1; i <= 45; i++)); do
 		answer="$(kc create -f - 2>&1 <<-EOF || true
-			apiVersion: actions-gateway.github.com/v1alpha1
-			kind: RunnerGroup
+			apiVersion: actions-gateway.com/v2
+			kind: RunnerTemplate
 			metadata:
 			  name: probe-class-${i}
 			  namespace: ${PROBE_NS}
 			spec:
-			  maxListeners: 1
-			  runnerLabels: ["self-hosted"]
 			  podTemplate:
 			    spec:
 			      priorityClassName: system-cluster-critical
@@ -220,7 +222,7 @@ assert_params_resolve() {
 		case "${answer}" in
 		*"not in the platform PriorityClassAllowlist"*) break ;;
 		*created*)
-			kc delete runnergroup -n "${PROBE_NS}" "probe-class-${i}" \
+			kc delete runnertemplate -n "${PROBE_NS}" "probe-class-${i}" \
 				--ignore-not-found >/dev/null 2>&1 || true
 			;;
 		esac
@@ -234,24 +236,28 @@ assert_params_resolve() {
 		echo "  admitted create means the guard is not enforcing at all." >&2
 		return 1
 	fi
-	plain="$(kc create -f - 2>&1 <<-EOF || true
-		apiVersion: actions-gateway.github.com/v1alpha1
-		kind: RunnerGroup
-		metadata:
-		  name: probe-plain
-		  namespace: ${PROBE_NS}
-		spec:
-		  maxListeners: 1
-		  runnerLabels: ["self-hosted"]
-		  podTemplate:
-		    spec:
-		      containers:
-		        - name: runner
-		          image: runner:test
-	EOF
-	)"
+	# Retried: this write reaches the GMC webhook, which is unreachable until the
+	# upgraded manager is serving.
+	for ((i = 1; i <= 45; i++)); do
+		plain="$(kc create -f - 2>&1 <<-EOF || true
+			apiVersion: actions-gateway.com/v2
+			kind: RunnerTemplate
+			metadata:
+			  name: probe-plain-${i}
+			  namespace: ${PROBE_NS}
+			spec:
+			  podTemplate:
+			    spec:
+			      containers:
+			        - name: runner
+			          image: runner:test
+		EOF
+		)"
+		[[ "${plain}" == *created* || "${plain}" == *"no params found"* ]] && break
+		sleep 2
+	done
 	if [[ "${plain}" != *created* ]]; then
-		echo "FAIL: after the released -> HEAD upgrade, a class-free RunnerGroup was not admitted:" >&2
+		echo "FAIL: after the released -> HEAD upgrade, a class-free RunnerTemplate was not admitted:" >&2
 		echo "  ${plain}" >&2
 		return 1
 	fi

@@ -17,7 +17,6 @@
 6 cmd/gmc/README.md
 4 deploy/athens/README.md
 23 deploy/dogfood-e2e/README.md
-8 deploy/dogfood-migrate/README.md
 7 deploy/kata-ci/README.md
 4 deploy/monitoring/README.md
 7 deploy/monitoring/preview/README.md

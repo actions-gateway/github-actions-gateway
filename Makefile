@@ -696,7 +696,7 @@ build-gmc: ## Build the GMC binary
 	go build -C cmd/gmc/cmd -o ../../../.build/gmc .
 
 .PHONY: build-migrate
-build-migrate: ## Build the gag-migrate one-shot v1->v2 migration CLI into .build/
+build-migrate: ## Build the gag-migrate upgrade-step CLI (storage-version) into .build/
 	go build -C cmd/gmc -o ../../.build/gag-migrate ./migrate
 
 .PHONY: build-probe
@@ -1039,7 +1039,7 @@ chart-crds: ## Regenerate the Helm chart CRD templates from the controller-gen s
 	scripts/manifest/sync-chart-crds.sh
 
 .PHONY: chart-crds-check
-chart-crds-check: ## Fail if the chart CRD templates drifted from their sources, or the GMC-bundled RunnerGroup CRD drifted from the AGC copy (Q73)
+chart-crds-check: ## Fail if the chart CRD templates drifted from their controller-gen sources (Q73)
 	scripts/manifest/sync-chart-crds.sh --check
 
 .PHONY: chart-rbac
@@ -1125,14 +1125,13 @@ chart-reinstall-check: ## Verify the chart survives a helm uninstall/reinstall c
 
 # Q475 — the day-2 `helm upgrade` gate. `make deploy` runs `helm upgrade
 # --install`, but never against a prior release, so upgrade over a LIVE release
-# was untested; in particular nothing proved that CRD field changes still reach
-# an existing install (they only do because the CRDs ship under templates/crds/,
-# not the chart-root crds/ Helm never upgrades). Unlike chart-reinstall-check
-# this one IS wired into CI (e2e-reusable.yml, after the suite). Run it against a
-# cluster with the release already installed (after the e2e suite under
-# E2E_SKIP_TEARDOWN, or a manual `make deploy`).
+# was untested: this proves a template change rolls the manager out and admission
+# still enforces after it. Unlike chart-reinstall-check this one IS wired into
+# CI (e2e-reusable.yml, after the suite). Run it against a cluster with the
+# release already installed (after the e2e suite under E2E_SKIP_TEARDOWN, or a
+# manual `make deploy`).
 .PHONY: chart-upgrade-check
-chart-upgrade-check: ## Verify `helm upgrade` delivers chart + CRD changes to a live release (needs the release installed)
+chart-upgrade-check: ## Verify `helm upgrade` delivers chart changes to a live release (needs the release installed)
 	KIND_CLUSTER=$(KIND_CLUSTER) scripts/e2e/chart-upgrade-check.sh
 
 # Q507 — the released-chart upgrade gate. chart-upgrade-check proves HEAD's
