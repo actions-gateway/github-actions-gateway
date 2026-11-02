@@ -954,6 +954,34 @@ func (p *Provisioner) adoptExistingScaleSetPod(ctx context.Context, namespace, p
 	return nil
 }
 
+// CheckScaleSetWorkerPod reports whether jobID's worker pod can be created now, returning
+// a *WorkerTerminatingError when a pod still being deleted holds its name and nil
+// otherwise, a live pod included: that is a replay, which ProvisionScaleSetWorker adopts.
+//
+// It is the terminating twin of CheckScaleSetCapacity, asked by the scale-set listener
+// before it mints a JIT config, so a job held for a terminating pod registers no runner
+// on each re-offer (Q1233). It reads the cache, because it runs on every assignment; a
+// cache that has not yet seen the deletion lets the job through to the authoritative
+// check adoptExistingScaleSetPod makes, and one that has not yet seen the pod go costs one
+// more re-offer. Any other error means the check could not be made.
+func (p *Provisioner) CheckScaleSetWorkerPod(ctx context.Context, target Target, jobID string) error {
+	key := target.Key()
+	podName := scaleSetPodName(key.Name, jobID)
+	var pod corev1.Pod
+	err := p.Client.Get(ctx, client.ObjectKey{Namespace: key.Namespace, Name: podName}, &pod)
+	switch {
+	case apierrors.IsNotFound(err):
+		return nil
+	case err != nil:
+		return fmt.Errorf("provisioner: read scale-set Pod %s: %w", podName, err)
+	case pod.DeletionTimestamp != nil:
+		p.logForKey(key).Info("scale-set worker pod is still terminating; re-offering the job once it is gone",
+			"podName", podName, "jobID", jobID)
+		return &WorkerTerminatingError{Pod: podName}
+	}
+	return nil
+}
+
 // WorkerTerminatingError reports that a scale-set job's worker pod name is held by a pod
 // already being deleted, so the job cannot have a worker until that pod is gone (Q1199).
 //

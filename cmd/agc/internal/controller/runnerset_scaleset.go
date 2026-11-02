@@ -339,6 +339,11 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		CheckCapacity: func(ctx context.Context) error {
 			return listenerProvisionError(r.Provisioner.CheckScaleSetCapacity(ctx, target))
 		},
+		// Asked next, so a job whose previous worker pod is still terminating registers
+		// no runner on each re-offer (Q1233).
+		CheckWorker: func(ctx context.Context, jobID string) error {
+			return listenerProvisionError(r.Provisioner.CheckScaleSetWorkerPod(ctx, target, jobID))
+		},
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
 			err := r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
 				JobID:     job.JobID,
