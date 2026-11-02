@@ -2787,6 +2787,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>Whether <code>v2.0.0</code> retires <code>v2beta1</code> or keeps serving it, which decides whether GA <code>v2</code> defines the deprecated FQDN aliases: the doc conflict, what upstream requires, and the two paths costed against each other</td>
 <td>ⓘ Decision record, kept because the path it chose is only two thirds executed: the notice shipped in 1.8 and the reject and pre-upgrade check in 1.9, and Release C is <code>v2.0.0</code>. Decided 2026-09-08 (Q1082): <code>v2beta1</code> is not served past <code>v2.0.0</code>, because a major release may break. Q452 flips to <em><code>v2</code> omits the aliases</em>, and the aliases move off their own clock onto <code>v2.0.0</code>, walking the published <code>v3.0.0</code> floor back across the operator docs, the enum godoc and the admission warning. Rule #4b still forces an overlap release, so the notice, the admission reject and the pre-upgrade check are Q1085. Sibling Q1083 proposed a wall-clock floor beside the release count and was declined 2026-09-09; the policy stays release-count only</td>
 </tr>
+<tr>
+<td><a href="q1167-v2-retype-split/">q1167-v2-retype-split.md</a></td>
+<td>How the <code>v2</code> retype and the <code>v2alpha1</code>/<code>v2beta1</code> drop split into PRs, each leaving <code>main</code> building: the import graph per step, where Q264's boundary falls, why the conversion hub is deleted rather than moved, and what compiles but still breaks</td>
+<td>❌ Open, scoped 2026-11-02: <a href="../queue/Q1262/">Q1262</a> retypes the GMC, <a href="../queue/Q1263/">Q1263</a> the AGC once classic is gone, and <a href="../queue/Q1167/">Q1167</a> drops the versions and the hub</td>
+</tr>
 </tbody>
 </table>
 <h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>

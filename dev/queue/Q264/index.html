@@ -2658,9 +2658,11 @@
 
 
 <h1 id="remove-deprecated-classic-acquisition-machinery">Remove deprecated classic acquisition machinery<a class="headerlink" href="#remove-deprecated-classic-acquisition-machinery" title="Permanent link">&para;</a></h1>
-<p>Blocked by <a href="../Q1167/">Q1167</a>, <a href="../Q273/">Q273</a>: classic serves only <code>v1alpha1</code> objects and <code>v2alpha1</code> sets written with the Classic protocol, so removing it while either version is served breaks those sets.
+<p>Blocked by <a href="../Q273/">Q273</a>: classic is <code>v1alpha1</code>'s only acquisition path, so it cannot go while <code>v1alpha1</code> is served.
+It no longer waits for the <code>v2alpha1</code> drop: removing classic while <code>v2alpha1</code> still serves a <code>Classic</code> set would run that set as ScaleSet, and would skip scale-set label uniqueness, but only a <code>v2.0.0</code> candidate cut early could ship that state, and the cut waits on every removal.
+It lands before <a href="../Q1263/">Q1263</a>, the AGC retype onto <code>v2</code>, which cannot compile while the AGC reads <code>acquisitionProtocol</code> and <code>maxListeners</code>; the completing change deletes those reads, and the field declarations leave with the <code>v2alpha1</code> package in <a href="../Q1167/">Q1167</a> (<a href="../../plan/q1167-v2-retype-split/#where-q264s-boundary-falls-before-the-agc-retype">the split</a>).
 <code>v2beta1</code> is ScaleSet-only, so classic serves only v1alpha1/v2alpha1 objects and comes out in the same <code>v2.0.0</code> bundle, not separately.
-Strips <code>acquisitionProtocol</code>/<code>maxListeners</code>.
+Strips every read of <code>acquisitionProtocol</code>/<code>maxListeners</code>, including the conversion-annotation reads the GMC makes in <code>cmd/gmc/internal/webhook/v2/runnerset_webhook.go</code> (<code>acquisitionProtocolOf</code>, the label-uniqueness skip) and <code>cmd/gmc/internal/scalesetscope/scalesetscope.go</code>.
 Removing classic also retires <a href="../Q416/">Q416</a>, a classic-listener defect parked until classic removal slips, so the completing change deletes that row too.</p>
 
 

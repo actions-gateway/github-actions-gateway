@@ -23,7 +23,7 @@
     
     
       
-        <title>Retype the controllers onto v2, move the hub, drop v2alpha1 and v2beta1 - GitHub Actions Gateway</title>
+        <title>Drop v2alpha1, v2beta1 and the conversion hub after the v2 retype - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#retype-the-controllers-onto-v2-move-the-hub-drop-v2alpha1-and-v2beta1" class="md-skip">
+        <a href="#drop-v2alpha1-v2beta1-and-the-conversion-hub-after-the-v2-retype" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Retype the controllers onto v2, move the hub, drop v2alpha1 and v2beta1
+              Drop v2alpha1, v2beta1 and the conversion hub after the v2 retype
             
           </span>
         </div>
@@ -2657,21 +2657,22 @@
   
 
 
-<h1 id="retype-the-controllers-onto-v2-move-the-hub-drop-v2alpha1-and-v2beta1">Retype the controllers onto v2, move the hub, drop v2alpha1 and v2beta1<a class="headerlink" href="#retype-the-controllers-onto-v2-move-the-hub-drop-v2alpha1-and-v2beta1" title="Permanent link">&para;</a></h1>
-<p>Blocked on the 1.10 tag: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a served version until the storage migration has run on every cluster that upgrades.
-Q1086 shipped that migration for 1.10 as <code>gag-migrate storage-version</code>.</p>
-<p>The <code>actions-gateway.com</code> half of Phase 3, which no row owned until the 2.0 scope was reviewed on 2026-10-09.
-<a href="../Q273/">Q273</a> removes the <code>actions-gateway.github.com</code> group (<code>v1alpha1</code>) and <a href="../Q264/">Q264</a> the classic acquisition machinery, and neither reaches the <code>v2</code> group's own versions.
-Three things, measured 2026-10-09 off <code>main</code>:</p>
+<h1 id="drop-v2alpha1-v2beta1-and-the-conversion-hub-after-the-v2-retype">Drop v2alpha1, v2beta1 and the conversion hub after the v2 retype<a class="headerlink" href="#drop-v2alpha1-v2beta1-and-the-conversion-hub-after-the-v2-retype" title="Permanent link">&para;</a></h1>
+<p>Blocked by <a href="../Q1262/">Q1262</a>, <a href="../Q1263/">Q1263</a>: this is the last of three PRs, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which compile only once nothing outside them imports either.
+<a href="../../plan/q1167-v2-retype-split/">q1167-v2-retype-split.md</a> is the split and the import-graph evidence that each step leaves <code>main</code> building.</p>
+<p>The PR deletes both packages, <code>api/v2/conversion.go</code>, the conversion webhook (<code>cmd/gmc/internal/webhook/v2beta1/</code>) and its readers, and the <code>conversion:</code> stanza of every CRD in <code>charts/actions-gateway-crds-v2/</code>, which then serve <code>v2</code> alone.
+The hub is deleted rather than moved to <code>v2</code>: with one served version there is nothing to convert (<a href="../../plan/q1167-v2-retype-split/#the-hub-delete-the-conversion-dont-move-it">why</a>).
+<code>gag-migrate storage-version</code> survives <code>v2.0.0</code> and reads <code>EgressProxy</code> at <code>v2beta1</code> against a 1.10 cluster on purpose, so <code>cmd/gmc/internal/migrate/storageversion.go</code> swaps its import of the deleted package for the version string and the two alias values held locally rather than retyping.
+It also has to run against a <code>v2</code>-only cluster, which today it cannot: it lists <code>EgressProxy</code> at <code>v2beta1</code> before its "already <code>[v2]</code>" short-circuit, and the candidate gate's default <code>storage</code> leg runs the candidate's own sweep after applying its CRDs (<a href="../../plan/q1167-v2-retype-split/#what-compiles-and-still-breaks">item 6</a>); skip the alias check when every kind stores <code>[v2]</code>, or read a no-match as no aliases, and test it against a <code>v2</code>-only CRD set.
+<code>scripts/go/check-v2-api-sync.sh</code>, its Makefile target and its <code>unit-test.yml</code> step go with the packages, since a stale exemption entry fails it.</p>
+<p>Six things the build does not catch are this PR's (<a href="../../plan/q1167-v2-retype-split/#what-compiles-and-still-breaks">list</a>), and two are silent:</p>
 <ul>
-<li><strong>The controllers are typed on <code>v2alpha1</code>.</strong> 43 non-test Go files import <code>api/v2alpha1</code> (180 with tests), 24 of them under <code>cmd/gmc/internal</code> and 15 under <code>cmd/agc/internal</code>, the reconcilers included.
-  Removing the version removes the types they compile against, so they move onto <code>api/v2</code> first.</li>
-<li><strong>The conversion hub is <code>v2beta1</code>.</strong> <code>api/v2beta1/conversion.go</code> carries the five <code>Hub()</code> methods, and <a href="../../plan/v2-ga/#the-hub-stays-at-v2beta1">v2-ga.md</a> kept it there on purpose for 1.9.
-  Dropping <code>v2beta1</code> means <code>v2</code> becomes the hub and the conversion code is rewritten around it, or deleted once <code>v2</code> is the only served version.</li>
-<li><strong>Every kind still serves three versions.</strong> Each CRD in <code>charts/actions-gateway-crds-v2/</code> lists <code>v2alpha1</code>, <code>v2beta1</code> and <code>v2</code>, and the <code>v2.0.0</code> CRDs list <code>v2</code> alone.</li>
+<li><code>charts/actions-gateway/templates/tenant-resource-guard.yaml</code> matches <code>runnersets</code> at <code>v2alpha1</code> alone and stops confining the GMC's writes once that version is not served; <code>make webhook-versions-check</code> reads only the controller-gen webhook manifest, so this PR retargets the rule and widens the gate to the chart's admission policies.</li>
+<li><code>cmd/gmc/internal/controller/crd_schema.go</code> checks fields at <code>v2beta1</code> and <code>v2alpha1</code> by name at GMC startup and has to move to <code>v2</code>.</li>
 </ul>
-<p>Ships in the <code>v2.0.0</code> bundle beside Q273 and Q264, after the 1.10 tag, since <code>main</code>'s next tag once a served version is gone is <code>v2.0.0</code>.
-Sized <code>L</code> on the file count; how the retype splits into PRs is the first thing to decide when it is picked up.</p>
+<p><code>make chart-released-upgrade-check</code> is expected to pass, because a fresh 1.10 install stores at <code>v2</code> only, but the e2e lanes that run it are merge-group-only: take <code>make e2e</code> before enqueueing.
+Draft PR #2084 (Q1066) edits all three <code>v2</code> API packages; whichever lands second rebases.</p>
+<p>The <code>storedVersions</code> precondition the 1.10 tag was waiting on is met: <code>v1.10.0</code> tagged 2026-10-27 with <code>gag-migrate storage-version</code> (Q1086).</p>
 
 
 

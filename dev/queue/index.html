@@ -2994,6 +2994,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every worker egress mode admits Azure blob storage, and nothing in <a href="../design/05-security/">05-security.md</a> records what that lets an …</td>
 </tr>
 <tr>
+<td><a href="Q1264/">Q1264</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_controller.go">EgressProxy applies its Deployment before its NetworkPolicy</a></td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>EgressProxyReconciler.reconcileResources</code> applies the proxy Deployment, Service, HPA and PDB, and only then the proxy NetworkPolicy …</td>
+</tr>
+<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -3538,12 +3546,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Blocked on the 1.10 tag: <code>v2.0.0</code> is the only breaking release, so once a removal is on <code>main</code> the next tag cut from it is <code>v2.0.0</code>.</td>
 </tr>
 <tr>
-<td><a href="Q1167/">Q1167</a></td>
-<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Retype the controllers onto v2, move the hub, drop v2alpha1 and v2beta1</a></td>
+<td><a href="Q1262/">Q1262</a></td>
+<td><a href="../plan/q1167-v2-retype-split/">Retype the GMC onto api/v2 ahead of the v2alpha1 and v2beta1 drop</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
 <td>🚫</td>
-<td>L</td>
-<td>Blocked on the 1.10 tag: a version still named in a CRD's <code>storedVersions</code> cannot leave its <code>spec.versions</code>, so nothing here can drop a …</td>
+<td>M</td>
+<td>Blocked on Q273, the <code>v1alpha1</code> removal now in flight, which edits many of the same files: of the 34 files importing both <code>v1alpha1</code> and an …</td>
+</tr>
+<tr>
+<td><a href="Q1263/">Q1263</a></td>
+<td><a href="../plan/q1167-v2-retype-split/">Retype the AGC onto api/v2 once classic acquisition is gone</a></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked on Q273 (the <code>v1alpha1</code> removal) and Q264 (the classic removal): <code>runnerset_controller.go</code> reads <code>spec.acquisitionProtocol</code> and …</td>
+</tr>
+<tr>
+<td><a href="Q1167/">Q1167</a></td>
+<td><a href="../plan/q1167-v2-retype-split/">Drop v2alpha1, v2beta1 and the conversion hub after the v2 retype</a></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
+<td>🚫</td>
+<td>M</td>
+<td>Blocked by <a href="Q1262/">Q1262</a>, <a href="Q1263/">Q1263</a>: this is the last of three PRs, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which …</td>
 </tr>
 <tr>
 <td><a href="Q264/">Q264</a></td>
@@ -3551,7 +3575,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>debt</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>L</td>
-<td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>: classic serves only <code>v1alpha1</code> objects and <code>v2alpha1</code> sets written with the Classic …</td>
+<td>Blocked by <a href="Q273/">Q273</a>: classic is <code>v1alpha1</code>'s only acquisition path, so it cannot go while <code>v1alpha1</code> is served.</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>
