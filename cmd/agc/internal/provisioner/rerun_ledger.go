@@ -31,7 +31,7 @@ import (
 // maps survive a rewrite, every map entry ages itself by its own expiresAt, and a
 // writer below minWriterVersion reads but never writes. The operator-facing account is
 // docs/design/04-operational-flows.md §4.2. Q555 adds the failures map (flaky_jobs.go),
-// and Q1183 the memoryFloors map (oom_class.go).
+// Q1183 the memoryFloors map (oom_class.go), and Q1244 the pending map (pending_rerun.go).
 
 // rerunLedgerDataKey is the one data key in a failure-ledger ConfigMap.
 const rerunLedgerDataKey = "failures.json"
@@ -94,7 +94,10 @@ type rerunLedger struct {
 	// MemoryFloors holds each job an out-of-memory retry raised the limit of, keyed by
 	// failureKey.
 	MemoryFloors map[string]*memoryFloor `json:"memoryFloors,omitempty"`
-	extra        map[string]json.RawMessage
+	// Pending holds each retry-class re-run waiting for its run to conclude, keyed by
+	// failureKey.
+	Pending map[string]*pendingRerun `json:"pending,omitempty"`
+	extra   map[string]json.RawMessage
 }
 
 // rerunRecord is one run's budget, keyed by run ID: Count is how many times GAG has
@@ -129,16 +132,19 @@ type (
 	rerunAttemptFields  rerunAttempt
 	failureRecordFields failureRecord
 	memoryFloorFields   memoryFloor
+	pendingRerunFields  pendingRerun
 )
 
 // The JSON names each type declares, which the preserving helpers keep out of extra.
 var (
-	rerunLedgerNames   = []string{"version", "minWriterVersion", "reruns", "failures", "memoryFloors"}
+	rerunLedgerNames   = []string{"version", "minWriterVersion", "reruns", "failures", "memoryFloors", "pending"}
 	rerunRecordNames   = []string{"expiresAt", "count", "selfCancelledAttempt", "attempts"}
 	rerunAttemptNames  = []string{"scope", "cause", "jobs", "disruptions"}
 	failureRecordNames = []string{"expiresAt", "failedAt", "jobID", "cause", "event", "workflowRef",
 		"pairedAttempts", "context"}
-	memoryFloorNames = []string{"expiresAt", "pod", "container", "killedLimit", "limit", "requestsFollow"}
+	memoryFloorNames  = []string{"expiresAt", "pod", "container", "killedLimit", "limit", "requestsFollow"}
+	pendingRerunNames = []string{"expiresAt", "firedAt", "cause", "repository", "runID", "job", "disruption",
+		"failedAttempt"}
 )
 
 func (l *rerunLedger) UnmarshalJSON(b []byte) error {
@@ -179,6 +185,14 @@ func (m *memoryFloor) UnmarshalJSON(b []byte) error {
 
 func (m memoryFloor) MarshalJSON() ([]byte, error) {
 	return marshalPreserving(memoryFloorFields(m), m.extra)
+}
+
+func (r *pendingRerun) UnmarshalJSON(b []byte) error {
+	return unmarshalPreserving(b, (*pendingRerunFields)(r), pendingRerunNames, &r.extra)
+}
+
+func (r pendingRerun) MarshalJSON() ([]byte, error) {
+	return marshalPreserving(pendingRerunFields(r), r.extra)
 }
 
 // unmarshalPreserving decodes b into known and stores every key not in names in extra.
@@ -246,6 +260,9 @@ func decodeRerunLedger(raw string) (*rerunLedger, error) {
 	if l.MemoryFloors == nil {
 		l.MemoryFloors = map[string]*memoryFloor{}
 	}
+	if l.Pending == nil {
+		l.Pending = map[string]*pendingRerun{}
+	}
 	return l, nil
 }
 
@@ -266,6 +283,11 @@ func pruneRerunLedger(l *rerunLedger, now time.Time) {
 	for key, m := range l.MemoryFloors {
 		if m == nil || m.ExpiresAt.Before(now) {
 			delete(l.MemoryFloors, key)
+		}
+	}
+	for key, r := range l.Pending {
+		if r == nil || r.ExpiresAt.Before(now) {
+			delete(l.Pending, key)
 		}
 	}
 	for name, raw := range l.extra {
@@ -316,6 +338,10 @@ type rerunDisruption struct {
 	// onReserved, where set, runs once the disruption holds a slot: a fresh
 	// reservation, or a merge into one this attempt already holds.
 	onReserved func()
+	// park defers the re-run until the run concludes: the reservation records it in
+	// the ledger's pending map in the same write, and the recovery returns once the slot
+	// is held instead of re-running (pending_rerun.go).
+	park bool
 }
 
 // Reservation outcomes, in the order reserveScaleSetRerun tests them.
@@ -337,13 +363,14 @@ const (
 // reserveScaleSetRerun takes the run's budget decision for one disruption, under the
 // ledger's compare-and-swap. It returns the outcome and, for a resumed or reserved one,
 // the 1-based number of GAG's re-run of the run it belongs to. A non-nil error means no
-// decision was recorded, and the caller withholds the re-run.
-func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, runID string, d rerunDisruption, cause string, maxRetries int) (rerunReservation, int, error) {
+// decision was recorded, and the caller withholds the re-run. A non-nil park is recorded
+// in the same write where the disruption holds a slot.
+func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, runID string, d rerunDisruption, cause string, maxRetries int, park *pendingRerun) (rerunReservation, int, error) {
 	var (
 		outcome rerunReservation
 		number  int
 	)
-	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {
+	decide := func(l *rerunLedger, now time.Time) bool {
 		r := l.Reruns[runID]
 		if r == nil {
 			r = &rerunRecord{}
@@ -383,6 +410,13 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 		r.ExpiresAt = now.Add(rerunRecordTTL)
 		outcome, number = rerunReserved, r.Count
 		return true
+	}
+	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, now time.Time) bool {
+		changed := decide(l, now)
+		if park != nil && outcome != rerunRefused {
+			changed = parkRerun(l, now, *park) || changed
+		}
+		return changed
 	})
 	return outcome, number, err
 }

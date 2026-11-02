@@ -172,15 +172,16 @@ func (p *Provisioner) sweepAbandonedReruns(ctx context.Context) []<-chan struct{
 		// No retry delay: the force-cancel already concluded the run, which is the
 		// state rerun-failed-jobs was measured to accept (Q683).
 		armed = append(armed, p.handleEviction(ctx, e.target, e.owner, e.repo, e.runID, log,
-			p.abandonedRerunMaxRetries(ctx, e.target), 0, e.tier, recoveryCauseAbandoned, e.disruption))
+			p.ownerMaxEvictionRetries(ctx, e.target), 0, e.tier, recoveryCauseAbandoned, e.disruption))
 	}
 	return armed
 }
 
-// abandonedRerunMaxRetries reads the owner's retry budget from its live spec, falling
-// back to the provisioner-level default when the owner no longer resolves. A budget we
-// cannot read must not become an unbounded one.
-func (p *Provisioner) abandonedRerunMaxRetries(ctx context.Context, target Target) int {
+// ownerMaxEvictionRetries reads the owner's retry budget from its live spec, for a
+// recovery released after the reconcile that detected it, falling back to the
+// provisioner-level default when the owner no longer resolves. A budget we cannot read
+// must not become an unbounded one.
+func (p *Provisioner) ownerMaxEvictionRetries(ctx context.Context, target Target) int {
 	if spec, err := target.Resolve(ctx); err == nil {
 		return spec.MaxEvictionRetries
 	}
@@ -280,6 +281,11 @@ func (s *AbandonedRerunSweeper) Start(ctx context.Context) error {
 			// re-check does not depend on a reconcile following the start's stamp.
 			if n := len(s.p.sweepStrandedRechecks(ctx)); n > 0 {
 				log.Info("force-cancelled jobs left without a runner, found on re-check", "count", n)
+			}
+			// And releases parked retry-class re-runs whose run has concluded (Q1244);
+			// its 30-second cadence is the fastest those are polled at.
+			if n := len(s.p.sweepPendingReruns(ctx)); n > 0 {
+				log.Info("released parked re-runs whose run concluded", "count", n)
 			}
 		}
 	}

@@ -363,6 +363,16 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return r.reconcileGatewayTerminating(ctx, log, &rs)
 	}
 
+	// Hand the set to the pending sweep where a previous process left re-runs parked in
+	// its ledger (Q1244). Ahead of reference resolution, so a set whose template or proxy
+	// is missing is still swept and its entries expire reported. Once per process per
+	// set; a failed read retries.
+	if r.Provisioner != nil && rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
+		if err := r.Provisioner.AdoptPendingReruns(ctx, r.provisionerTarget(&rs)); err != nil {
+			log.Warn("could not read the failure ledger for parked re-runs", "error", err)
+		}
+	}
+
 	// 1. Resolve references. Fail closed: until every reference resolves, the
 	// RunnerSet sits Ready=False/<Ref>NotFound with no listeners running, so no
 	// worker pod is ever provisioned in the gap (§H.7). The referent watches

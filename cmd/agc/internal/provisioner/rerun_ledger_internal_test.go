@@ -175,7 +175,7 @@ func TestScaleSetBudget_AMergeIntoADeadReservationStillReRuns(t *testing.T) {
 	ctx := context.Background()
 	c, api, srv, target := ledgerFixture(t)
 	dead := ledgerProvisioner(c, srv)
-	got, _, err := dead.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
+	got, _, err := dead.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	require.Equal(t, rerunReserved, got)
 
@@ -273,7 +273,7 @@ func TestScaleSetBudget_ReservationOutcomes(t *testing.T) {
 	p := ledgerProvisioner(c, srv)
 	reserve := func(key, job string, attempt int) (rerunReservation, int) {
 		t.Helper()
-		got, n, err := p.reserveScaleSetRerun(ctx, target, "77", rerunDisruption{key: key, job: job, failedAttempt: attempt}, recoveryCauseEviction, 2)
+		got, n, err := p.reserveScaleSetRerun(ctx, target, "77", rerunDisruption{key: key, job: job, failedAttempt: attempt}, recoveryCauseEviction, 2, nil)
 		require.NoError(t, err)
 		return got, n
 	}
@@ -322,11 +322,11 @@ func TestScaleSetBudget_ASingleJobRerunDoesNotAbsorbAnotherJob(t *testing.T) {
 		return true
 	}))
 
-	got, _, err := p.reserveScaleSetRerun(ctx, target, "77", rerunDisruption{key: "pod-b", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2)
+	got, _, err := p.reserveScaleSetRerun(ctx, target, "77", rerunDisruption{key: "pod-b", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	assert.Equal(t, rerunReserved, got, "the second job reserves its own re-run")
 
-	got, _, err = p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-c", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2)
+	got, _, err = p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-c", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	assert.Equal(t, rerunReserved, got, "another run's record does not cover this one")
 }
@@ -460,12 +460,12 @@ func TestRerunLedger_OlderWriterPreservesWhatItDoesNotKnow(t *testing.T) {
 		"reruns": {"77": {"expiresAt": "`+live+`", "count": 1, "futureRecord": true,
 			"attempts": {"1": {"scope": "FailedJobs", "cause": "oom", "disruptions": ["x"], "futureAttempt": "y"}}}},
 		"failures": {"900/build": {"expiresAt": "`+live+`", "failedAt": "`+live+`", "jobID": "j0", "memoryFloor": "6Gi"}},
-		"pending": {"keep": {"expiresAt": "`+live+`", "jobID": "j1"},
+		"futureMap": {"keep": {"expiresAt": "`+live+`", "jobID": "j1"},
 		            "drop": {"expiresAt": "`+expired+`", "jobID": "j2"},
 		            "undated": {"jobID": "j3"}}
 	}`)
 
-	got, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
+	got, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	require.Equal(t, rerunReserved, got)
 
@@ -473,7 +473,7 @@ func TestRerunLedger_OlderWriterPreservesWhatItDoesNotKnow(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(readLedgerData(t, c, target)), &doc))
 	assert.JSONEq(t, `3`, string(doc["version"]), "an older writer does not downgrade the schema")
 	assert.JSONEq(t, `{"a": 1}`, string(doc["futureTop"]))
-	assert.JSONEq(t, `{"keep": {"expiresAt": "`+live+`", "jobID": "j1"}, "undated": {"jobID": "j3"}}`, string(doc["pending"]),
+	assert.JSONEq(t, `{"keep": {"expiresAt": "`+live+`", "jobID": "j1"}, "undated": {"jobID": "j3"}}`, string(doc["futureMap"]),
 		"an unknown map keeps its live and undated entries and loses its expired one")
 	assert.Contains(t, string(doc["failures"]), `"memoryFloor":"6Gi"`, "a failure record keeps a field it does not know")
 	var reruns map[string]map[string]json.RawMessage
@@ -491,7 +491,7 @@ func TestRerunLedger_ExpiredBudgetsAreDropped(t *testing.T) {
 	expired := p.nowFn().Add(-time.Minute).UTC().Format(time.RFC3339)
 	writeLedger(t, c, target, `{"version":1,"minWriterVersion":1,"reruns":{"old":{"expiresAt":"`+expired+`","count":2}}}`)
 
-	_, _, err := p.reserveScaleSetRerun(ctx, target, "new", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
+	_, _, err := p.reserveScaleSetRerun(ctx, target, "new", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 
 	l, _, err := p.readRerunLedger(ctx, target)
@@ -511,7 +511,7 @@ func TestRerunLedger_CapRefusesRatherThanEvicts(t *testing.T) {
 		"reruns":{"77":{"expiresAt":"`+live+`","count":1}}}`)
 	before := readLedgerData(t, c, target)
 
-	_, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
+	_, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.ErrorIs(t, err, errRerunLedgerFull)
 	assert.Equal(t, before, readLedgerData(t, c, target), "nothing is written past the cap")
 }

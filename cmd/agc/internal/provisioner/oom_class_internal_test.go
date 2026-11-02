@@ -116,6 +116,8 @@ func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 		require.NoError(t, err)
 		<-done
 	}
+	require.Zero(t, rerunCount.Load(), "the re-run waits in the ledger for the pending sweep")
+	sweepPendingAndWait(t, p, ctx, 1)
 
 	require.Equal(t, int64(1), rerunCount.Load(), "the killed run must be re-run exactly once")
 	assert.Equal(t, "/repos/myorg/myrepo/actions/runs/4242/rerun-failed-jobs", <-paths)
@@ -210,6 +212,7 @@ func TestRecoverOOMKilled_SecondKillIsSameClassAgain(t *testing.T) {
 		require.NoError(t, err)
 		<-done
 	}
+	sweepPendingAndWait(t, p, ctx, 1)
 
 	assert.Equal(t, int64(1), rerunCount.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(
@@ -237,6 +240,7 @@ func TestRecoverOOMKilled_BreakerPausesAStampede(t *testing.T) {
 		require.NoError(t, err)
 		<-done
 	}
+	sweepPendingAndWait(t, p, ctx, classBreakerRuns+1)
 
 	assert.Equal(t, int64(classBreakerRuns+1), rerunCount.Load(),
 		"the fire that opens the breaker still runs; the one after it is withheld")

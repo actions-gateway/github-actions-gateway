@@ -94,6 +94,11 @@ var errRerunCovered = errors.New("the run was already re-run past the attempt th
 // marked with this — see runConclusion.
 var errRunConclusionUnreadable = errors.New("the run's conclusion could not be read")
 
+// errRunGone marks a run-status read GitHub answered 404 or 410: the run, or GAG's access
+// to it, is gone, which no amount of waiting changes. Only the pending sweep tells it
+// from any other 4xx.
+var errRunGone = errors.New("the run is gone")
+
 // Reason label values for the EvictionRerunFailures counter: the recovery's re-run
 // window closed with GitHub still refusing, the window closed with the run's conclusion
 // still unreadable, or the API answered with a terminal failure (anything other than
@@ -202,7 +207,9 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // The futility checks (futileRerun, Q1181) run on that read, before the reservation, so
 // a re-run they withhold spends no slot. The reservation then resumes, merges, refuses
 // or reserves (reserveScaleSetRerun).
-// Every outcome but a refusal goes on to the re-run loop, which reads the run before
+// A disruption carrying d.park stops there, its re-run parked in the ledger for the
+// pending sweep to release into this function once the run concludes (Q1244).
+// Every other outcome but a refusal goes on to the re-run loop, which reads the run before
 // each call and stands down once its attempt has moved past the one the job failed in
 // (errRerunCovered). That is what makes a merge safe: a merged disruption re-runs only
 // if the reservation it joined never landed, because its owner's loop failed or its
@@ -251,7 +258,12 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			return
 		}
 
-		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, d, cause, maxRetries)
+		var park *pendingRerun
+		if d.park {
+			park = &pendingRerun{Cause: cause, Repository: owner + "/" + repo, RunID: runID,
+				Job: d.job, Disruption: d.key, FailedAttempt: d.failedAttempt}
+		}
+		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, d, cause, maxRetries, park)
 		switch {
 		case err != nil:
 			log.Error("could not record the run's re-run budget decision; the re-run is withheld, manual rerun may be required",
@@ -272,6 +284,14 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		}
 		if d.onReserved != nil && outcome != rerunResumed {
 			d.onReserved()
+		}
+		if d.park {
+			// The reservation parked the re-run; the pending sweep releases it once the run
+			// concludes (pending_rerun.go).
+			p.watchPendingReruns(target)
+			log.Info("the re-run waits in the failure ledger until the run concludes",
+				"runID", runID, "runAttempt", d.failedAttempt, "cause", cause)
+			return
 		}
 
 		select {
@@ -701,6 +721,9 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 	case status >= 500:
 		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
 			status, strings.TrimSpace(string(body)), errRunConclusionUnreadable)
+	case status == http.StatusNotFound || status == http.StatusGone:
+		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
+			status, strings.TrimSpace(string(body)), errRunGone)
 	case status < 200 || status > 299:
 		return runState{}, fmt.Errorf("run-status API returned %d: %s", status, strings.TrimSpace(string(body)))
 	}

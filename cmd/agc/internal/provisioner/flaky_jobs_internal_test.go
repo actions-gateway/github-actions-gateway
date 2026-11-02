@@ -414,7 +414,7 @@ func TestRerunLedger_CapEvictsFailuresBeforeBudgets(t *testing.T) {
 	require.NoError(t, err)
 	writeLedger(t, c, target, string(b))
 
-	outcome, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2)
+	outcome, _, err := p.reserveScaleSetRerun(ctx, target, "78", rerunDisruption{key: "pod-a", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
 	require.NoError(t, err)
 	assert.Equal(t, rerunReserved, outcome)
 	got, _, err := p.readRerunLedger(ctx, target)

@@ -245,7 +245,7 @@ Notes on the table:
 
 **Built** (Q1183) for the out-of-memory class only, with five departures from what follows; [§4.2](../design/04-operational-flows.md#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183) is the account as built:
 
-- **No `pending` map.** The class re-runs on the disruption arms' path, inside its 15-minute window, so a run whose sibling outlasts that ends `run_never_concluded` as an evicted job's does; the persistent wait is [Q1244](../queue/Q1244.md).
+- **No `pending` map at first.** The class re-ran on the disruption arms' path, inside its 15-minute window; Q1244 built the persistent wait since, with the differences listed under [How it waits](#how-it-waits).
 - **The floor is its own map**, `memoryFloors`, keyed by run and job, not a field on the failure entry: the failure record is written on `JobCompleted`, which can arrive after the re-run's assignment needs the floor, and is deleted by the pairing a later attempt's completion makes.
   A floor lives its 7 days instead, so the second kill it finds is `same_class_again`.
 - **The breaker cools down rather than half-opens**: 30 minutes after it opens it closes with an empty window, since nothing observes a single trial re-run's outcome inside that time.
@@ -285,6 +285,10 @@ Classes go through one deferred path, built beside the abandoned arm's (Q691, `a
   - `observable` releases when `ready` is true;
   - `unobservable` releases after a backoff of 1, 4, then 16 minutes by attempt, each with ±25% jitter.
 - **Then it re-runs.** Release calls `handleEviction` with no delay, which runs [Component 2](#component-2-one-run-read-before-every-re-run-q1182-budget-q1181-futility)'s read, checks and budget, and `rerunUntilAccepted`.
+- **Built in Q1244 for the out-of-memory class, with three differences.** The slot is taken when the class fires, with the pending entry in the same ledger write, so the breaker and the `MemoryLimitRaisedForRetry` Event still count only a run that holds a slot; release takes the read and checks again and its reservation resumes that slot.
+  Only the `freshPod` release is built, the one the first class needs.
+  A restart finds the sets to sweep through the `RunnerSet` reconciler, which hands each set to the sweep once per process to read its ledger, because the AGC runs no ConfigMap informer and a ledger does not hold the `Target` a release needs.
+  The operator-facing account is [04-operational-flows.md](../design/04-operational-flows.md#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183).
 - **The re-run's pods say so (R16).** The provisioner, which already looks up the ledger for a floor, stamps each pod of a run GAG re-ran with `actions-gateway.com/rerun-cause`, so [cost attribution](../operations/cost-attribution.md) can split re-run compute by cause.
 
 ### The breaker (R11)
@@ -565,5 +569,5 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; `already_rerun`, `run_succeeded` and `worker_unstartable` are not built, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
-5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; the `pending` map is Q1244, the alert and the gauge Q1245, and job-granular re-run still waits on M6.
+5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, the alert and the gauge are Q1245, and job-granular re-run still waits on M6.
 6. Q1178 (built); Q1184 after its review.

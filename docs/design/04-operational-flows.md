@@ -623,8 +623,18 @@ The `MemoryLimitRaisedForRetry` Event and `cause="oom"` count make each raise vi
 **The breaker is in memory, one per set and class cause**, so a restart closes it and the per-run budget still bounds what that costs.
 The disruption arms are outside it: a mass Spot preemption is exactly when their recovery is wanted.
 
-**Not built yet** ([Q1244](../queue/Q1244.md)): the design's [deferred wait](../plan/q555-automatic-recovery-design.md#how-it-waits).
-The class re-runs inside the disruption arms' 15-minute window, which covers GitHub concluding a runner it lost (about 10 minutes) but not a sibling job that runs longer: such a run ends `run_never_concluded`, as an evicted job's does today.
+**The re-run waits for the run to conclude** (Q1244), the design's [deferred wait](../plan/q555-automatic-recovery-design.md#how-it-waits).
+The disruption arms' 15-minute window covers GitHub concluding a runner it lost, about 10 minutes, and not a sibling job that runs longer, and a job that outgrows its memory is often one of a long matrix.
+So the class takes its slot when it fires, with the run read and the futility checks the arms take, and parks the re-run in the failure ledger under `pending["<runID>/<job name>"]` in the same write, recording the attempt the job failed in.
+A sweep on the abandoned-run sweeper's 30-second tick reads each parked run every 30 seconds for its first 5 minutes, every 2 minutes to its first hour, then every 10, about 175 reads in a day.
+A run already past the recorded attempt has been re-run by someone, and the entry is dropped.
+A read that fails retries at the next poll, whatever the failure, since over a day of polling a rate limit or a token that would not mint is expected; only a 404 or 410 ends the wait early, as `eviction_rerun_failures_total{reason="api_error"}`.
+A concluded run is released into the arms' path with no delay: it reads the run and takes the futility checks again, its reservation resumes the slot already held, and the entry leaves the ledger once the re-run has finished.
+An entry that waits 24 hours is dropped as `eviction_rerun_failures_total{reason="run_never_concluded"}` with an `EvictionRerunFailed` Event; it is kept an hour past that so a prune on another write does not drop it unreported.
+**A restart loses no parked re-run.** The entries are in the ledger; what a new process lacks is which sets to sweep, since the AGC runs no ConfigMap informer and a ledger does not hold the owner the release needs.
+The `RunnerSet` reconciler hands every scale-set set to the sweep once per process, ahead of resolving its references so a set whose template or proxy is missing is found too, which reads that set's ledger and adds the set where it holds entries; the reconciler's initial list reaches every set at startup.
+Two replicas can both release one entry: the second reservation resumes the same slot and its re-run loop stands down once the first re-run moves the run past the recorded attempt, as for any resumed disruption.
+The disruption arms keep their 15-minute window.
 
 **The shape is read from source, not reproduced on dogfood** ([R12](../plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2)).
 What it rests on, from recall of the kubelet rather than measured here: on cgroup v2 the kubelet has the kernel kill a container's whole process group on an out-of-memory kill, which ends the runner along with the step that used the memory; on cgroup v1, or with the kubelet's `singleProcessOOMKill`, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised.

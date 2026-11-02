@@ -22,7 +22,8 @@ import (
 // rather than from the set's history, because the sampler records an out-of-memory
 // job's peak at or below the limit that killed it, so the history may never move. A
 // kill the next attempt would repeat is withheld before any slot is spent: no profile,
-// a limit at the profile's ceiling, or a second kill after a raise. The
+// a limit at the profile's ceiling, or a second kill after a raise. A re-run that holds a
+// slot waits in the ledger until the run concludes (pending_rerun.go). The
 // operator-facing account is docs/design/04-operational-flows.md §4.2.
 //
 // Only a kill of the runner container is recognised. It is the one that ends the job
@@ -162,10 +163,12 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		log.Info("raising the job's memory limit for its re-run", "runID", runID, "job", job,
 			"container", runnerContainer, "killedLimit", killed.String(), "limit", next.String())
 		target.RecordEvent(corev1.EventTypeNormal, "MemoryLimitRaisedForRetry", "RetryEvictedJob",
-			fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and the run is re-run automatically", job, runID, killed.String(), next.String()))
+			fmt.Sprintf("job %q of run %s was killed at its memory limit of %s; its next attempt gets %s, and the run is re-run automatically once it concludes", job, runID, killed.String(), next.String()))
 	}
+	// Parked rather than re-run now: a job that outgrows its memory is often one of a long
+	// matrix, and GitHub refuses the re-run until every sibling has concluded.
 	return p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay,
-		evictionTierScaleSet, recoveryCauseOOM, rerunDisruption{key: pod.Name, job: job, onReserved: onReserved})
+		evictionTierScaleSet, recoveryCauseOOM, rerunDisruption{key: pod.Name, job: job, onReserved: onReserved, park: true})
 }
 
 // withholdOOMRerun logs and records one withheld out-of-memory retry.
