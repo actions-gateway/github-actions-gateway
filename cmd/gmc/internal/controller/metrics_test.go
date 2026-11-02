@@ -149,7 +149,8 @@ func TestIPRangeReconciler_NoUpdateWhenNetworkPolicyMissing(t *testing.T) {
 // TestActionsGatewayV2ConditionsCollector_MirrorsConditions asserts the v2
 // ActionsGateway condition collector (Q321) exports the runnersets_degraded,
 // agc_available, egress_unattributed, agc_autoscaling_unavailable (Q390), and
-// egress_audit_unattributed (Q1062) gauges per non-deleting v2 gateway, each
+// egress_audit_unattributed (Q1062), and direct_egress_rules_stale (Q1249) gauges per
+// non-deleting v2 gateway, each
 // mirroring its condition's True/False (set/clear) state, and skips a deleting
 // gateway entirely.
 func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
@@ -174,6 +175,9 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionEgressAuditUnattributed, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
 	})
+	meta.SetStatusCondition(&degraded.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionEgressRulesStale, Status: metav1.ConditionTrue, Reason: "Test", Message: "test",
+	})
 
 	// "healthy": RunnerSetsDegraded=False, AGCAvailable=True, EgressUnattributed=False,
 	// AGCAutoscalingUnavailable=False, ScaleSetNameCollision=False,
@@ -194,6 +198,9 @@ func TestActionsGatewayV2ConditionsCollector_MirrorsConditions(t *testing.T) {
 	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
 		Type: gmcv2alpha1.ConditionEgressAuditUnattributed, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
 	})
+	meta.SetStatusCondition(&healthy.Status.Conditions, metav1.Condition{
+		Type: gmcv2alpha1.ConditionEgressRulesStale, Status: metav1.ConditionFalse, Reason: "Test", Message: "test",
+	})
 
 	deleting := v2ManagedGateway("deleting", true)
 
@@ -209,6 +216,10 @@ actions_gateway_agc_autoscaling_unavailable{name="healthy",namespace="healthy"} 
 # TYPE actions_gateway_agc_available gauge
 actions_gateway_agc_available{name="degraded",namespace="degraded"} 0
 actions_gateway_agc_available{name="healthy",namespace="healthy"} 1
+# HELP actions_gateway_direct_egress_rules_stale 1 when the v2 ActionsGateway EgressRulesStale condition is True (the gateway egresses directly and the GitHub IP-range allowlist on its AGC and workload NetworkPolicies has not been refreshed within the staleness window, or the GMC holds no ranges at all), else 0. Always 0 on a proxied gateway, whose EgressProxy reports on actions_gateway_egress_rules_stale.
+# TYPE actions_gateway_direct_egress_rules_stale gauge
+actions_gateway_direct_egress_rules_stale{name="degraded",namespace="degraded"} 1
+actions_gateway_direct_egress_rules_stale{name="healthy",namespace="healthy"} 0
 # HELP actions_gateway_egress_audit_unattributed 1 when the v2 ActionsGateway EgressAuditUnattributed condition is True (either half of the egress-attribution pair is off, so no egress audit record joins to a tenant and a job: the gateway does not log WorkerAddresses, or the EgressProxy it defaults to does not log ConnectionsWithSource), else 0. Both halves are opt-in and Off is the default, so a 1 is the expected state on a gateway that never opted in, not a fault. A 0 says the pair is configured, not that anything runs the join. Scoped to defaultProxyRef, the AGC control plane's pool; worker egress is per RunnerSet, in actions_gateway_runnerset_egress_audit_unattributed.
 # TYPE actions_gateway_egress_audit_unattributed gauge
 actions_gateway_egress_audit_unattributed{name="degraded",namespace="degraded"} 1
@@ -358,6 +369,24 @@ actions_gateway_egress_rules_stale{name="v2fresh",namespace="v2fresh"} 0
 actions_gateway_egress_rules_stale{name="v2stale",namespace="v2stale"} 1
 `
 	assert.NoError(t, testutil.CollectAndCompare(c, strings.NewReader(expected)))
+}
+
+// TestEgressRulesStale_SameNamedGatewayAndProxyGather pins why the v2 ActionsGateway's
+// EgressRulesStale has its own gauge (Q1249): a gateway and an EgressProxy may share a
+// namespace and a name, and one namespace/name series per family would then be
+// collected twice, which fails the whole scrape.
+func TestEgressRulesStale_SameNamedGatewayAndProxyGather(t *testing.T) {
+	scheme := newV2MetricsScheme(t)
+	ep := v2EgressProxyWithCondition("team", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
+	ag := v2GatewayWithCondition("team", gmcv2alpha1.ConditionEgressRulesStale, metav1.ConditionTrue)
+	require.Equal(t, ep.Namespace+"/"+ep.Name, ag.Namespace+"/"+ag.Name)
+	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep, ag).Build()
+
+	reg := prometheus.NewPedanticRegistry()
+	require.NoError(t, reg.Register(newEgressRulesStaleCollector(fc, true)))
+	require.NoError(t, reg.Register(newActionsGatewayV2ConditionsCollector(fc)))
+	_, err := reg.Gather()
+	assert.NoError(t, err)
 }
 
 // TestEgressRulesStaleCollector_V1ReadFailureKeepsV2Series pins the isolation

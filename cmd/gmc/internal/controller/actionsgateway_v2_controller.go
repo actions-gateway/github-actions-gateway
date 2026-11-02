@@ -106,6 +106,9 @@ type ActionsGatewayV2Reconciler struct {
 	// those policies current as GitHub rotates ranges. nil is tolerated (the direct
 	// NetworkPolicies are created with no GitHub rule and patched on the next refresh).
 	IPCache *IPRangeCache
+	// EgressStaleThreshold is the age past which a direct-egress gateway's
+	// EgressRulesStale condition trips (Q1249). Zero uses DefaultEgressStaleThreshold.
+	EgressStaleThreshold time.Duration
 	// EnableServiceMonitor gates the per-gateway Prometheus-Operator ServiceMonitor
 	// that scrapes the AGC's mTLS metrics port (Q1101), from the same
 	// --enable-tenant-service-monitors flag as the EgressProxy's. Off by default: the
@@ -326,6 +329,9 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if _, d, err := attributionEgress(ctx, r.Client, ag.Namespace, remoteProxies, r.nowFunc()()); err != nil {
 		return res, err
 	} else if d > 0 && (res.RequeueAfter == 0 || d < res.RequeueAfter) {
+		res.RequeueAfter = d
+	}
+	if d := r.directEgressRecheckRequeue(proxy); d > 0 && (res.RequeueAfter == 0 || d < res.RequeueAfter) {
 		res.RequeueAfter = d
 	}
 	return res, nil
@@ -780,6 +786,10 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	auditReason, auditMsg := egressAuditAttribution(ag, proxy)
 	set(gmcv2alpha1.ConditionEgressAuditUnattributed, auditReason != gmcv2alpha1.ReasonEgressAuditJoined,
 		auditReason, auditMsg)
+
+	// EgressRulesStale (Q1249), advisory: it does not gate Ready.
+	es := r.evalDirectEgressRulesStale(ctx, ag, proxy, now.Time)
+	set(gmcv2alpha1.ConditionEgressRulesStale, es.stale, es.reason, es.message)
 
 	// Managed AGC right-sizing (Q360). Advisory like EgressUnattributed: it never gates
 	// Ready, because a gateway whose VerticalPodAutoscaler could not be created is
