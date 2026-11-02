@@ -16,7 +16,9 @@ on:
   #   - a push to `main`      -> (re)deploys the `dev` version (unreleased), and
   #                              re-runs the strict PR gate on the merged tree
   #                              (`validate`, which a tag push deliberately skips)
-  #   - a STABLE `v*` tag push -> deploys that release and moves the `stable`
+  #   - a STABLE `v*` tag push -> hands the deploy to a `main` dispatch of this
+  #                               workflow (the `handoff` job, Q1041), which
+  #                               deploys that release and moves the `stable`
   #                               alias + default root redirect to it
   #   - a prerelease tag (0.x, -rc/-alpha/-beta) -> no deploy
   # `stable` is the default a visitor lands on, so a feature merged to `main` but
@@ -55,13 +57,10 @@ on:
       docs_ref:
         description: 'Ref to build the docs content from (e.g. v1.2.0). Blank = this ref. Use when seeding an already-released version.'
         required: false
-
-# PR builds are per-ref and cancelable; every deploy shares one group and never
-# cancels, so concurrent main/tag pushes serialise on the gh-pages branch instead
-# of racing it.
-concurrency:
-  group: pages-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+      stable_tag:
+        description: 'Treat `version` as a stable tag: claim stable and the default only if it is the highest release. Set by the tag push hand-off.'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -74,6 +73,10 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Per-ref and cancelable: a newer push to the PR supersedes the build.
+    concurrency:
+      group: pages-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,10 +139,52 @@ jobs:
           MKDOCS_EXCLUDE_DOCS: "/README.md\n/releases/\n"
         run: mkdocs build --strict --site-dir _site-dev
 
-  # Push/dispatch: update the mike version tree on gh-pages and deploy it.
-  publish:
-    if: github.event_name != 'pull_request'
+  # Stable tag push: dispatch the release deploy on `main` instead of running it
+  # here (Q1041). No Pages deployment made from a tag ref has been seen to serve:
+  # v1.6.0 to v1.10.0 each deployed from the tag with "Reported success" while the
+  # site kept the previous tree, and a `main` dispatch of the same build version
+  # served each time, within 15s wherever the live check timed it. The ref is the
+  # only input the two runs differ in; why Pages ignores the tag one is
+  # unmeasured. The dispatch is the republish release.md used to run by hand,
+  # with `stable_tag=true` so the highest-release rule still decides the alias.
+  #
+  # A workflow_dispatch made with GITHUB_TOKEN still starts a run, which is the
+  # documented exception validate-candidate.yml's hand-off also rests on.
+  handoff:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the release deploy on main
+        id: handoff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.ref }}
+        # Same prerelease test as `resolve` below: no site deploy for 0.x or a
+        # `-` suffix.
+        run: |
+          set -euo pipefail
+          core="${REF#refs/tags/v}"
+          if [[ "${core}" == 0.* || "${core}" == *-* ]]; then
+            echo "Prerelease ${REF#refs/tags/}: no site deploy."
+            exit 0
+          fi
+          gh workflow run pages.yml --repo "${GITHUB_REPOSITORY}" --ref main \
+            -f version="${core}" -f docs_ref="v${core}" -f stable_tag=true
+          echo "Dispatched the ${core} deploy on main; its run is the one that publishes and verifies the site."
+
+  # Push to main and dispatch: update the mike version tree on gh-pages and
+  # deploy it. A tag push never gets here (`handoff` above).
+  publish:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref_type != 'tag')
+    runs-on: ubuntu-latest
+    # Every deploy shares one group and never cancels, so concurrent runs
+    # serialise on the gh-pages branch instead of racing it.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     # The live-site check below polls on a release publish, on top of the
     # build, the mike deploy and the Pages rollout. Its 300s budget bounds when
     # the LAST attempt may start, not when the run ends: an attempt already in
@@ -193,12 +238,9 @@ jobs:
         #     hooks/release_version.py, so its announce bar would render the
         #     version-free fallback instead of naming the newest release.
         #
-        # NOTE this only covers seeds. A stable tag push has a blank `docs_ref`
-        # and builds the tag wholesale, overrides included. That is safe for the
-        # banner's VERSION, which the hook derives from the tag list at build time
-        # rather than from a string in the checkout (Q393); only the optional
-        # highlight prose is pinned to the tag. See docs/operations/release.md,
-        # Pre-flight.
+        # A stable tag push takes this path too: its `handoff` dispatch sets
+        # `docs_ref` to the tag (Q1041), so every release builds the tag's docs
+        # with this checkout's chrome.
         #
         # The overrides ride in an INHERIT overlay rather than a YAML rewrite, so
         # the tag's own nav and config stay byte-for-byte intact (mkdocs deep-merges
@@ -250,6 +292,7 @@ jobs:
           IN_VERSION: ${{ github.event.inputs.version }}
           IN_ALIAS: ${{ github.event.inputs.alias }}
           IN_DEFAULT: ${{ github.event.inputs.set_default }}
+          IN_STABLE_TAG: ${{ github.event.inputs.stable_tag }}
         # Decide WHAT to deploy. `deploy=false` means "nothing to publish" (a
         # prerelease tag): the mike/deploy steps below are skipped and the job is
         # a green no-op. The prerelease test mirrors publish.yml's single source
@@ -262,7 +305,8 @@ jobs:
         # patch to an older supported line (e.g. v1.2.5 cut after v1.3.0) publishes
         # its own version without demoting the site from the newer minor. A
         # workflow_dispatch with an explicit alias/set_default is honored verbatim
-        # (that is the seeding path).
+        # (that is the seeding path); one with `stable_tag` gets the tag's rule,
+        # which is how a stable tag push's hand-off arrives.
         run: |
           set -euo pipefail
           version=""
@@ -295,6 +339,9 @@ jobs:
             title="${IN_VERSION}"
             alias="${IN_ALIAS}"
             is_default="${IN_DEFAULT}"
+            if [[ "${IN_STABLE_TAG}" == "true" ]]; then
+              stable_tag=true
+            fi
             deploy=true
           else
             resolve_from_ref

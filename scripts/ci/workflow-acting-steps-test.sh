@@ -20,11 +20,12 @@
 # rather than report — those that open an issue, push, publish or tag — minus the
 # ones a `pull_request` event already executes. That derivation, and what it
 # excludes, is in docs/development/testing.md § Driving a workflow `run:` body.
-# Three steps qualify today:
+# Four steps qualify today:
 #
 #   release-freeze-watch.yml  `check` + `report`  — opens/comments/closes an issue
 #   security-scan.yml         `scan-report`       — opens/comments/closes an issue
 #   pages.yml                 `mike`              — pushes the gh-pages version tree
+#   pages.yml                 `handoff`           — dispatches a tag's site deploy
 #
 # THE POSITIVE CONTROLS ARE THE LOAD-BEARING HALF. A suite of "must not act"
 # cases passes trivially for a body that has stopped acting at all, so each
@@ -69,8 +70,8 @@ REPORTS="$WORK/reports"
 : >"$REPORTS"
 fails=0
 
-# The 25 cases plus registry-complete. Bump it with the case you add.
-EXPECTED_REPORTS=26
+# The 29 cases plus registry-complete. Bump it with the case you add.
+EXPECTED_REPORTS=30
 
 fail() {
 	printf 'FAIL %-34s %s\n' "$1" "$2" >&2
@@ -129,6 +130,7 @@ extract() {
 CHECK_BODY="$(extract "$FREEZE_WORKFLOW" check freeze-check)"
 REPORT_BODY="$(extract "$FREEZE_WORKFLOW" report freeze-report)"
 MIKE_BODY="$(extract "$PAGES_WORKFLOW" mike pages-mike)"
+HANDOFF_BODY="$(extract "$PAGES_WORKFLOW" handoff pages-handoff)"
 SCAN_BODY="$(extract "$SCAN_WORKFLOW" scan-report scan-report)"
 
 # Each subject must still contain the act the cases assert on. Without this a
@@ -139,6 +141,8 @@ grep -q 'gh issue create' "$SCAN_BODY" ||
 	refuse "the scan-report step no longer runs \`gh issue create\`, so its cases assert about a step that has stopped acting"
 grep -q 'git push origin gh-pages' "$MIKE_BODY" ||
 	refuse "the mike step no longer runs \`git push origin gh-pages\`, so its cases assert about a step that has stopped acting"
+grep -q 'gh workflow run' "$HANDOFF_BODY" ||
+	refuse "the handoff step no longer runs \`gh workflow run\`, so its cases assert about a step that has stopped acting"
 
 # --- sandboxes --------------------------------------------------------------
 
@@ -583,6 +587,62 @@ else
 fi
 
 # ============================================================================
+# pages.yml `handoff` — a tag push dispatching its site deploy on main
+# ============================================================================
+#
+# The decision under test: a stable tag dispatches the release deploy on `main`
+# with the tag's rule (Q1041), and a prerelease dispatches nothing, because that
+# dispatch publishes the site and moves `stable`.
+
+# run_handoff CASE REF [BODY] — echoes the sandbox.
+run_handoff() {
+	local case="$1" ref="$2" body="${3:-$HANDOFF_BODY}"
+	local dir got
+	dir="$(new_sandbox "$case")"
+	write_gh_stub "$dir"
+	got="$(drive "$dir" "$body" "GH_TOKEN=stub" "GITHUB_REPOSITORY=o/r" "REF=$ref")"
+	expect_rc "$case" 0 "$got" "$dir" || return 0
+	printf '%s\n' "$dir"
+}
+
+# THE POSITIVE CONTROL: a stable tag must dispatch. A body that stopped acting
+# passes both prerelease cases below and fails here.
+dir="$(run_handoff pages-handoff-stable refs/tags/v1.10.0)"
+if [[ -n "$dir" ]]; then
+	expect_call pages-handoff-stable "$dir" \
+		'gh workflow run pages.yml --repo o/r --ref main -f version=1.10.0 -f docs_ref=v1.10.0 -f stable_tag=true' &&
+		pass pages-handoff-stable 'a stable tag dispatches its deploy on main with the tag rule'
+fi
+
+dir="$(run_handoff pages-handoff-rc refs/tags/v1.10.0-rc.1)"
+if [[ -n "$dir" ]]; then
+	expect_no_call pages-handoff-rc "$dir" 'gh workflow run' &&
+		pass pages-handoff-rc 'a release candidate dispatches nothing'
+fi
+
+dir="$(run_handoff pages-handoff-zero refs/tags/v0.9.0)"
+if [[ -n "$dir" ]]; then
+	expect_no_call pages-handoff-zero "$dir" 'gh workflow run' &&
+		pass pages-handoff-zero 'a 0.x tag dispatches nothing'
+fi
+
+# Delete the prerelease test and require the rc case to go the other way, so
+# pages-handoff-rc is known to be able to fail.
+# The ${...} here are the workflow's own text, matched literally.
+# shellcheck disable=SC2016
+sed 's/if \[\[ "${core}" == 0\.\* || "${core}" == \*-\* \]\]; then/if false; then/' "$HANDOFF_BODY" >"$WORK/pages-handoff-no-prerelease.sh"
+if cmp -s "$HANDOFF_BODY" "$WORK/pages-handoff-no-prerelease.sh"; then
+	fail pages-regression-handoff 'the prerelease test is gone from the handoff step, so this control mutates nothing'
+else
+	dir="$(run_handoff pages-regression-handoff refs/tags/v1.10.0-rc.1 "$WORK/pages-handoff-no-prerelease.sh")"
+	if [[ -n "$dir" ]] && grep -qF 'gh workflow run pages.yml' "$dir/calls"; then
+		pass pages-regression-handoff 'without the prerelease test a candidate publishes the site, so this case can fail'
+	else
+		fail pages-regression-handoff 'the mutated body did not reproduce the defect'
+	fi
+fi
+
+# ============================================================================
 # security-scan.yml `scan-report` — the scheduled run's issue
 # ============================================================================
 #
@@ -681,13 +741,14 @@ fi
 # Those are listed for the reader rather than because the scan found them, so
 # they are exempt from the stale-entry check — nothing there can stop matching a
 # pattern it never matched.
-ACTING_PATTERN='gh (issue|pr|release|label) |git (push|tag)|docker push|helm push|crane |cosign sign|mike (deploy|set-default)'
+ACTING_PATTERN='gh (issue|pr|release|label|workflow run) |git (push|tag)|docker push|helm push|crane |cosign sign|mike (deploy|set-default)'
 
 # workflow|disposition|why
 acting_registry() {
 	cat <<'EOF'
 release-freeze-watch.yml|driven|its check and report steps are the subject above
-pages.yml|driven|its mike step is the subject above
+pages.yml|driven|its mike and handoff steps are the subject above
+validate-candidate.yml|no-decision|its dispatch job's body is one unconditional gh workflow run; the job's if: on the event is the only decision, and actionlint reads it
 security-scan.yml|driven|its scan-report step is the subject above
 dependabot-go-sync.yml|pre-merge|pull_request is its only trigger, so every Dependabot PR executes this body before it merges
 e2e-reusable.yml|pre-merge|called by the e2e lanes on merge_group, so the queue runs it on the candidate merge; and its docker push targets the registry the same job stands up
