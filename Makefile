@@ -299,6 +299,14 @@ registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tena
 webhook-versions-check: ## Fail when an admission webhook rule names only API versions no CRD serves
 	scripts/manifest/check-webhook-versions.sh
 
+# The webhook rejection counter carries only the webhook's name, so the security
+# alert and dashboard select ours by an alternation of names nothing tied to the
+# webhooks: Q1150's -v2alpha1 → -v2 rename left both blind through two releases
+# (Q1267).
+.PHONY: webhook-selectors-check
+webhook-selectors-check: ## Fail when a webhook-rejection selector or the preview exporter names other webhooks than the chart ships
+	scripts/manifest/check-webhook-selectors.sh
+
 # Distribution serves /v2/_catalog unconditionally and offers no setting that
 # closes it while leaving anonymous pulls working, so each mirror pod fronts its
 # registry with a deny proxy and binds the registry to loopback (Q1022). Six

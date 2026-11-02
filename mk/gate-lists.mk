@@ -74,6 +74,7 @@ CHECK_FAST_GATES := roadmap-check \
                     registry-mirror-wiring-check \
                     registry-mirror-catalog-deny-check \
                     webhook-versions-check \
+                    webhook-selectors-check \
                     gate-needs-check \
                     gha-cache-render-check
 
@@ -328,6 +329,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  manifest/check-registry-mirror-wiring-test \
                  manifest/check-registry-mirror-catalog-deny-test \
                  manifest/check-webhook-versions-test \
+                 manifest/check-webhook-selectors-test \
                  e2e/egress-negatives-test e2e/mirror-timing-test \
                  lib/merge-driver-common-test \
                  ci/check-gate-needs-test \

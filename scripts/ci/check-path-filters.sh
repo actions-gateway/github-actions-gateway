@@ -91,6 +91,7 @@ NARROW_FILTERS=(
 	'manifest-validate.yml:promql'    # the shipped PrometheusRule and the two docs describing its alerts
 	'manifest-validate.yml:dashboards' # the two dashboards and the two screenshots the docs embed
 	'manifest-validate.yml:dashboard_tables' # the four dashboards and the one doc whose tables describe them
+	'manifest-validate.yml:webhook_selectors' # the webhook manifest and every file a rejection-counter selector can sit in
 	'license-notices.yml:notices'     # vendor/ and the notices generator
 	'doc-links.yml:docs'              # tracked Markdown plus the docs-content checkers and the site build
 	'status-lint.yml:status'          # docs/queue/, docs/roadmap.md, and their linters
