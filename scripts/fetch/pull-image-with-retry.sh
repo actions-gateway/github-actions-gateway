@@ -54,6 +54,8 @@ fi
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=scripts/lib/registry-mirror.sh
 source "${REPO_ROOT}/scripts/lib/registry-mirror.sh"
+# shellcheck source=scripts/lib/retry.sh
+source "${REPO_ROOT}/scripts/lib/retry.sh"
 
 # What is actually pulled. Identical to ${image} unless a mirror applies.
 pull_ref="$(mirror_rewrite "${image}")"
@@ -65,36 +67,17 @@ attempts="${PULL_RETRY_ATTEMPTS:-6}"
 delay="${PULL_RETRY_DELAY:-5}"
 max_delay="${PULL_RETRY_MAX_DELAY:-60}"
 
-# Doubled after every sleep and clamped to max_delay, so the schedule with the
-# defaults is 5, 10, 20, 40, 60 seconds before jitter.
-backoff="${delay}"
-
-for (( attempt = 1; attempt <= attempts; attempt++ )); do
-  if docker pull "${pull_ref}"; then
-    if [[ "${pull_ref}" != "${image}" ]]; then
-      # Restore the caller's own reference and remove the mirror's, so nothing
-      # downstream has to know a mirror was involved.
-      docker tag "${pull_ref}" "${image}"
-      docker rmi "${pull_ref}" >/dev/null
-    fi
-    exit 0
+# The schedule with the defaults is 5, 10, 20, 40, 60 seconds before jitter.
+if retry_backoff "${attempts}" "${delay}" "${max_delay}" "pull of ${pull_ref}" -- \
+  docker pull "${pull_ref}"; then
+  if [[ "${pull_ref}" != "${image}" ]]; then
+    # Restore the caller's own reference and remove the mirror's, so nothing
+    # downstream has to know a mirror was involved.
+    docker tag "${pull_ref}" "${image}"
+    docker rmi "${pull_ref}" >/dev/null
   fi
-  if (( attempt < attempts )); then
-    # Jitter up to half the delay. Callers that failed in the same second must
-    # not retry in the same second; without this the shards stay in lockstep for
-    # the whole budget and every round lands as one burst on the registry.
-    sleep_for="${backoff}"
-    if (( sleep_for > 0 )); then
-      sleep_for=$(( sleep_for + RANDOM % (sleep_for / 2 + 1) ))
-    fi
-    echo "pull of ${pull_ref} failed (attempt ${attempt}/${attempts}); retrying in ${sleep_for}s" >&2
-    sleep "${sleep_for}"
-    backoff=$(( backoff * 2 ))
-    if (( backoff > max_delay )); then
-      backoff="${max_delay}"
-    fi
-  fi
-done
+  exit 0
+fi
 
 echo "failed to pull ${pull_ref} after ${attempts} attempts" >&2
 exit 1

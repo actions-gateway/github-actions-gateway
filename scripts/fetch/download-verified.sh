@@ -62,6 +62,10 @@ if [[ ! "$want" =~ ^[0-9a-fA-F]{64}$ ]]; then
 	exit 2
 fi
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=scripts/lib/retry.sh
+source "${REPO_ROOT}/scripts/lib/retry.sh"
+
 retries="${DOWNLOAD_RETRIES:-5}"
 attempts=$((retries + 1))
 delay="${DOWNLOAD_RETRY_DELAY:-5}"
@@ -84,31 +88,10 @@ trap 'rm -f "$tmp"' EXIT
 
 echo "downloading $url"
 
-# Doubled after every sleep and clamped to max_delay, so the schedule with the
-# defaults is 5, 10, 20, 40, 60 seconds before jitter.
-backoff="$delay"
+# The schedule with the defaults is 5, 10, 20, 40, 60 seconds before jitter.
 rc=0
-for ((attempt = 1; attempt <= attempts; attempt++)); do
-	rc=0
+retry_backoff "$attempts" "$delay" "$max_delay" "download of $url" -- \
 	curl -fsSL -o "$tmp" "$url" || rc=$?
-	if ((rc == 0)); then
-		break
-	fi
-	if ((attempt < attempts)); then
-		# Jitter up to half the delay. Shards that were denied in the same second
-		# must not come back in the same second, or every round lands as one burst.
-		sleep_for="$backoff"
-		if ((sleep_for > 0)); then
-			sleep_for=$((sleep_for + RANDOM % (sleep_for / 2 + 1)))
-		fi
-		echo "download of $url failed with curl exit $rc (attempt $attempt/$attempts); retrying in ${sleep_for}s" >&2
-		sleep "$sleep_for"
-		backoff=$((backoff * 2))
-		if ((backoff > max_delay)); then
-			backoff="$max_delay"
-		fi
-	fi
-done
 if ((rc != 0)); then
 	echo "failed to download $url after $attempts attempts" >&2
 	exit "$rc"

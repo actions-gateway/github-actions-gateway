@@ -56,6 +56,8 @@ if [[ -z "${name}" || -z "${url}" || -z "${dir}" ]]; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/lib/retry.sh
+source "${script_dir}/../lib/retry.sh"
 tar="${dir}/images.tar"
 list="${dir}/images.txt"
 saved_manifest="${dir}/manifest.yaml"
@@ -80,29 +82,9 @@ trap 'rm -f "${manifest}"' EXIT
 attempts="${MANIFEST_FETCH_ATTEMPTS:-6}"
 delay="${MANIFEST_FETCH_DELAY:-5}"
 max_delay="${MANIFEST_FETCH_MAX_DELAY:-60}"
-backoff="${delay}"
 rc=0
-for (( attempt = 1; attempt <= attempts; attempt++ )); do
-  rc=0
+retry_backoff "${attempts}" "${delay}" "${max_delay}" "fetch of ${name} manifest" -- \
   curl -fsSL -o "${manifest}" "${url}" || rc=$?
-  if (( rc == 0 )); then
-    break
-  fi
-  if (( attempt < attempts )); then
-    # Jitter up to half the delay, so the two e2e lanes failing in the same
-    # second do not retry in the same second.
-    sleep_for="${backoff}"
-    if (( sleep_for > 0 )); then
-      sleep_for=$(( sleep_for + RANDOM % (sleep_for / 2 + 1) ))
-    fi
-    echo "fetch of ${name} manifest failed with curl exit ${rc} (attempt ${attempt}/${attempts}); retrying in ${sleep_for}s" >&2
-    sleep "${sleep_for}"
-    backoff=$(( backoff * 2 ))
-    if (( backoff > max_delay )); then
-      backoff="${max_delay}"
-    fi
-  fi
-done
 if (( rc != 0 )); then
   echo "failed to fetch ${name} manifest from ${url} after ${attempts} attempts" >&2
   exit "${rc}"

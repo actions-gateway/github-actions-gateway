@@ -304,6 +304,27 @@ else
 	fail 'first delay is jittered' "all 12 runs slept ${!seen[*]}s — jitter missing"
 fi
 
+# --- each env var reaches the schedule ---------------------------------------
+# The schedule assertions above run on the defaults, so they pass even if a
+# caller stopped passing one of its variables through to retry_backoff. Three
+# non-default values with disjoint outcomes pin each one: 3 attempts gives two
+# sleeps (default: five), a 20s base puts the first sleep in [20, 30] (default
+# base 5), and a 20s cap holds the second there too (default cap 60 gives
+# [40, 60]).
+DOWNLOAD_RETRIES=2 DOWNLOAD_RETRY_DELAY=20 DOWNLOAD_RETRY_MAX_DELAY=20 \
+	run_download "$stub_url" "$src_sha" "$FIXTURE_DIR/out-wired.bin"
+wired=1
+((${#sleeps[@]} == 2)) || wired=0
+for i in 0 1; do
+	got="${sleeps[$i]:-}"
+	[[ "$got" =~ ^[0-9]+$ ]] && ((got >= 20 && got <= 30)) || wired=0
+done
+if ((wired == 1)); then
+	pass 'DOWNLOAD_RETRIES/DELAY/MAX_DELAY: attempts, base delay and cap reach the schedule: '"${sleeps[*]}"
+else
+	fail 'DOWNLOAD_RETRIES/DELAY/MAX_DELAY: attempts, base delay and cap reach the schedule' "sleeps: ${sleeps[*]:-none}"
+fi
+
 # Nothing may bypass the digest comparison: it is the only writer of the output
 # path, and it is unconditional.
 # shellcheck disable=SC2016  # matching the script's source text, not expanding it

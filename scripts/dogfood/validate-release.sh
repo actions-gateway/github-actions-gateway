@@ -117,6 +117,8 @@ shopt -s inherit_errexit
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/lib/common.sh
 source "${REPO_ROOT}/scripts/lib/common.sh"
+# shellcheck source=scripts/lib/retry.sh
+source "${REPO_ROOT}/scripts/lib/retry.sh"
 # shellcheck source=scripts/dogfood/lib/progress.sh
 source "${REPO_ROOT}/scripts/dogfood/lib/progress.sh"
 # shellcheck source=scripts/dogfood/lib/lease.sh
@@ -305,26 +307,11 @@ USAGE
 # because a denial that is really a rate limit is not cleared by re-asking on a
 # fixed cadence.
 gh_retry() {
-	local attempts=$((GH_RETRIES + 1))
-	local backoff="${GH_RETRY_DELAY}"
-	local attempt rc sleep_for
-	for ((attempt = 1; attempt <= attempts; attempt++)); do
-		rc=0
-		gh "$@" || rc=$?
-		if ((rc == 0)); then
-			return 0
-		fi
-		if ((attempt < attempts)); then
-			sleep_for=$((backoff + RANDOM % (backoff / 2 + 1)))
-			echo "  gh exited ${rc} (attempt ${attempt}/${attempts}); retrying in ${sleep_for}s: gh $*" >&2
-			sleep "${sleep_for}"
-			backoff=$((backoff * 2))
-			if ((backoff > GH_RETRY_MAX_DELAY)); then
-				backoff="${GH_RETRY_MAX_DELAY}"
-			fi
-		fi
-	done
-	echo "error: gh $* failed after ${attempts} attempts." >&2
+	local rc=0
+	retry_backoff "$((GH_RETRIES + 1))" "${GH_RETRY_DELAY}" "${GH_RETRY_MAX_DELAY}" "gh $*" -- gh "$@" || rc=$?
+	if ((rc != 0)); then
+		echo "error: gh $* failed after $((GH_RETRIES + 1)) attempts." >&2
+	fi
 	return "${rc}"
 }
 

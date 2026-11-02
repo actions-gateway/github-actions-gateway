@@ -185,6 +185,27 @@ if ((schedule_ok == 1)); then
 	pass "schedule is 5,10,20,40,60 plus jitter (${total}s of backoff)"
 fi
 
+# --- each env var reaches the schedule ---------------------------------------
+# The schedule assertions above run on the defaults, so they pass even if a
+# caller stopped passing one of its variables through to retry_backoff. Three
+# non-default values with disjoint outcomes pin each one: 3 attempts gives two
+# sleeps (default: five), a 20s base puts the first sleep in [20, 30] (default
+# base 5), and a 20s cap holds the second there too (default cap 60 gives
+# [40, 60]).
+MANIFEST_FETCH_ATTEMPTS=3 MANIFEST_FETCH_DELAY=20 MANIFEST_FETCH_MAX_DELAY=20 \
+	run_prepull "$FIXTURE_DIR/wired"
+wired=1
+((${#sleeps[@]} == 2)) || wired=0
+for i in 0 1; do
+	got="${sleeps[$i]:-}"
+	[[ "$got" =~ ^[0-9]+$ ]] && ((got >= 20 && got <= 30)) || wired=0
+done
+if ((wired == 1)); then
+	pass 'MANIFEST_FETCH_ATTEMPTS/DELAY/MAX_DELAY: attempts, base delay and cap reach the schedule: '"${sleeps[*]}"
+else
+	fail 'MANIFEST_FETCH_ATTEMPTS/DELAY/MAX_DELAY: attempts, base delay and cap reach the schedule' "sleeps: ${sleeps[*]:-none}"
+fi
+
 if ((fails > 0)); then
 	printf '%d failure(s)\n' "$fails" >&2
 	exit 1
