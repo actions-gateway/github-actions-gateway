@@ -133,6 +133,26 @@ rewrite "${root}/${EXPORTER}" '"vrunnerset-v2.kb.io"' '"vrunnerset-v2alpha1.kb.i
 run_checker "${root}"
 expect 'a stale name in the preview exporter fails' 1 "${EXPORTER}: does not match vrunnerset-v2.kb.io"
 
+# --- a name matcher other than =~ ------------------------------------------
+#
+# A new site written with `name="..."` is judged too: a stale name fails, a
+# shipped one passes, and an operator the gate cannot judge is refused.
+
+root="$(fixture)"
+printf '%s\n' 'Query: sum(rate(apiserver_admission_webhook_rejection_count{name="vrunnerset-v2alpha1.kb.io"}[5m]))' >"${root}/docs/operations/new-page.md"
+run_checker "${root}"
+expect 'an exact-name selector naming a stale webhook fails' 1 "docs/operations/new-page.md: names vrunnerset-v2alpha1.kb.io, which the chart does not ship"
+
+root="$(fixture)"
+printf '%s\n' 'Query: sum(rate(apiserver_admission_webhook_rejection_count{name="vrunnerset-v2.kb.io"}[5m]))' >"${root}/docs/operations/new-page.md"
+run_checker "${root}"
+expect '  and one naming a shipped webhook passes' 0 '4 selectors and the preview exporter'
+
+root="$(fixture)"
+printf '%s\n' 'Query: sum(rate(apiserver_admission_webhook_rejection_count{name!~"vrunnerset-v2alpha1\\.kb\\.io"}[5m]))' >"${root}/docs/operations/new-page.md"
+run_checker "${root}"
+expect '  and a negative matcher is refused' 2 'is not name=~'
+
 # --- Q273: the v1alpha1 webhook removed --------------------------------------
 #
 # Deleting the webhook leaves its alternative in every selector, so all three
@@ -163,14 +183,14 @@ expect '  and passes once every site drops it' 0 'over 5 webhooks'
 root="$(fixture)"
 rewrite "${root}/${ALERT}" '\\.kb\\.io",' '\\.kb.io",'
 run_checker "${root}"
-expect 'a selector of another shape is refused' 2 'is not v(<alt>|...)'
+expect 'a selector of another shape is refused' 2 'is not name=~'
 
 root="$(fixture)"
 for f in "${ALERT}" "${TABLE}" "${DASHBOARD}"; do
 	rewrite "${root}/${f}" 'apiserver_admission_webhook_rejection_count' 'apiserver_admission_webhook_rejections'
 done
 run_checker "${root}"
-expect 'no selector found at all is refused' 2 'no apiserver_admission_webhook_rejection_count name=~ selector'
+expect 'no selector found at all is refused' 2 'no apiserver_admission_webhook_rejection_count name selector'
 
 root="$(fixture)"
 printf -- '---\napiVersion: admissionregistration.k8s.io/v1\nkind: ValidatingWebhookConfiguration\n' >"${root}/${WEBHOOKS}"

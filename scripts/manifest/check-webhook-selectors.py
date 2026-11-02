@@ -25,8 +25,10 @@ selector to them as a set, in both directions:
                                           which the screenshot's denied series
                                           is drawn from
 
-A selector is read as `v(<alt>|<alt>...)\\.kb\\.io`; any other shape is refused
-rather than judged, so a rewrite cannot pass by being unparseable.
+Every `name` matcher on the counter is judged, not only `=~`. A `=~` selector is
+read as `v(<alt>|<alt>...)\\.kb\\.io` and must name the shipped set exactly; a
+`=` selector must name one shipped webhook; `!=`, `!~` and any other `=~` shape
+are refused rather than judged, so a rewrite cannot pass by being unparseable.
 
 Exit: 0 every selector names the shipped set, 1 one does not, 2 a read that
 could not be taken — an empty extraction is a parser that stopped matching.
@@ -43,8 +45,9 @@ SITE_GLOBS = ("deploy/monitoring/**/*.json", "deploy/monitoring/**/*.yaml",
 EXPORTER = Path("deploy/monitoring/preview/exporter.py")
 
 METRIC = "apiserver_admission_webhook_rejection_count"
-# The name matcher inside the metric's braces, as a PromQL string literal.
-SELECTOR_RE = re.compile(METRIC + r'\{[^}]*?\bname=~"((?:[^"\\]|\\.)*)"')
+# The name matcher inside the metric's braces: its operator, and its value as a
+# PromQL string literal.
+SELECTOR_RE = re.compile(METRIC + r'\{[^}]*?\bname\s*(=~|!~|!=|=)\s*"((?:[^"\\]|\\.)*)"')
 SHAPE_RE = re.compile(r"v\(([a-z0-9|-]+)\)\\\.kb\\\.io")
 EXPORTER_NAME_RE = re.compile(r'"(v[a-z0-9-]+\.kb\.io)"')
 
@@ -86,12 +89,12 @@ def strings(path):
 
 
 def selectors():
-    """Yield (path, decoded regex) for every name=~ on the rejection counter."""
+    """Yield (path, operator, decoded value) for every name matcher on the counter."""
     for pattern in SITE_GLOBS:
         for path in sorted(Path(".").glob(pattern)):
             for s in strings(path):
                 for m in SELECTOR_RE.finditer(s):
-                    yield path, re.sub(r"\\(.)", r"\1", m.group(1))
+                    yield path, m.group(1), re.sub(r"\\(.)", r"\1", m.group(2))
 
 
 def judge(where, named, shipped, problems):
@@ -104,14 +107,18 @@ def judge(where, named, shipped, problems):
 def main():
     shipped = shipped_names()
     problems, checked = [], 0
-    for path, regex in selectors():
+    for path, op, value in selectors():
         checked += 1
-        shape = SHAPE_RE.fullmatch(regex)
+        if op == "=":
+            if value not in shipped:
+                problems.append(f"{path}: names {value}, which the chart does not ship")
+            continue
+        shape = SHAPE_RE.fullmatch(value) if op == "=~" else None
         if not shape:
-            raise Refusal(f"{path}: selector {regex!r} is not v(<alt>|...)\\.kb\\.io")
+            raise Refusal(f"{path}: selector name{op}{value!r} is not name=~\"v(<alt>|...)\\.kb\\.io\" or name=\"<webhook>\"")
         judge(path, {f"v{alt}.kb.io" for alt in shape.group(1).split("|")}, shipped, problems)
     if not checked:
-        raise Refusal(f"no {METRIC} name=~ selector under {', '.join(SITE_GLOBS)}")
+        raise Refusal(f"no {METRIC} name selector under {', '.join(SITE_GLOBS)}")
 
     exported = set(EXPORTER_NAME_RE.findall(EXPORTER.read_text()))
     if not exported:
