@@ -355,3 +355,13 @@ func TestManagedGatewaysCollector(t *testing.T) {
 			"with the list unreadable the gauge must be absent, not zero")
 	})
 }
+
+func TestConditionGaugeValue(t *testing.T) {
+	conds := []metav1.Condition{
+		{Type: "ProxyQuotaPressure", Status: metav1.ConditionTrue},
+		{Type: "ProxyQuotaExceeded", Status: metav1.ConditionFalse},
+	}
+	assert.Equal(t, float64(1), conditionGaugeValue(conds, "ProxyQuotaPressure"))
+	assert.Equal(t, float64(0), conditionGaugeValue(conds, "ProxyQuotaExceeded"))
+	assert.Equal(t, float64(0), conditionGaugeValue(conds, "Absent"))
+}
