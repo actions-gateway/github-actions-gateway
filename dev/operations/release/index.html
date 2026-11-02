@@ -2740,10 +2740,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#the-site-deploy-fails-on-a-stable-tag-and-the-republish-is-a-step" class="md-nav__link">
+  <a href="#the-tag-push-hands-the-site-deploy-to-a-dispatch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The site deploy fails on a stable tag, and the republish is a step
+        The tag push hands the site deploy to a dispatch
       
     </span>
   </a>
@@ -3386,10 +3386,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#the-site-deploy-fails-on-a-stable-tag-and-the-republish-is-a-step" class="md-nav__link">
+  <a href="#the-tag-push-hands-the-site-deploy-to-a-dispatch" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The site deploy fails on a stable tag, and the republish is a step
+        The tag push hands the site deploy to a dispatch
       
     </span>
   </a>
@@ -4310,19 +4310,21 @@ Because each version builds from <strong>its own tag</strong>, the version pins 
 <a href="#the-bump-on-main-does-not-reach-the-published-release">Step 7</a> republishes them.
 The versioned-docs model, and the one-time <code>mike</code> seeding of releases cut before it landed, are documented in <a href="../../development/website/#versioned-deploy-mike">website.md § Versioned deploy</a>.</p>
 </blockquote>
-<h4 id="the-site-deploy-fails-on-a-stable-tag-and-the-republish-is-a-step">The site deploy fails on a stable tag, and the republish is a step<a class="headerlink" href="#the-site-deploy-fails-on-a-stable-tag-and-the-republish-is-a-step" title="Permanent link">&para;</a></h4>
-<p><strong>Expect <code>pages</code> to go red on the tag and plan to re-run it.</strong> Every stable tag since <code>v1.6.0</code> has failed this way: <code>v1.6.0</code>, <code>v1.7.0</code> and <code>v1.8.0</code>, three for three.
-The deploy step reports success, <code>verify-pages-live</code> then polls for five minutes and fails, and the site goes on serving the previous release.
-The cause is open (<a href="../../queue/Q1041/">Q1041</a>); what is established is that the tag's deploy lands one to two minutes behind the <code>main</code> merge's deploy of the same commit, and that a later solo deploy of the same content publishes.</p>
-<p>Re-run it from <code>main</code>, pointing the content at the tag:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>pages<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span>-f<span class="w"> </span><span class="nv">version</span><span class="o">=</span>X.Y.Z<span class="w"> </span>-f<span class="w"> </span><span class="nv">alias</span><span class="o">=</span>stable<span class="w"> </span>-f<span class="w"> </span><span class="nv">set_default</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">docs_ref</span><span class="o">=</span>vX.Y.Z
+<h4 id="the-tag-push-hands-the-site-deploy-to-a-dispatch">The tag push hands the site deploy to a dispatch<a class="headerlink" href="#the-tag-push-hands-the-site-deploy-to-a-dispatch" title="Permanent link">&para;</a></h4>
+<p><strong>Expect two <code>pages</code> runs for a stable tag, and read the second.</strong> The tag push's run deploys nothing: its <code>handoff</code> job re-runs <code>pages</code> as a <code>workflow_dispatch</code> on the same tag, and that run builds, deploys and checks the live site (Q1041).
+Every stable tag from <code>v1.6.0</code> to <code>v1.10.0</code> deployed from its push, reported success, and never served, while every dispatch of the same content served, on <code>main</code> and on the <code>v1.10.0</code> tag ref alike.
+Why a push deploy differs from a dispatch is not known.</p>
+<p>If the dispatched run fails, dispatch it again by hand:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>pages<span class="w"> </span>--ref<span class="w"> </span>vX.Y.Z
 </code></pre></div>
+<p>With no inputs it resolves from the tag the way the push does, so it moves <code>stable</code> only when <code>X.Y.Z</code> is the highest release and is safe for a backport.</p>
+<p><strong>A backport tag cut from a <code>release-X.Y</code> branch older than this change deploys from its push</strong>, because a tag push runs the <code>pages.yml</code> on its own commit.
+<code>release-1.4</code> through <code>release-1.7</code> predate the hand-off, so a tag cut from one of them needs the command above run by hand.</p>
 <p>Then read the site rather than the run:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>curl<span class="w"> </span>-fsS<span class="w"> </span>https://actions-gateway.com/versions.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.[] | "\(.version) \(.aliases | join(","))"'</span>
 </code></pre></div>
 <p><code>X.Y.Z</code> must be listed and must hold <code>stable</code>.
-Use <code>docs_ref=release-X.Y</code> instead when <a href="#the-bump-on-main-does-not-reach-the-published-release">step 7</a> applies, that is, when the pins were bumped <em>after</em> the tag, so the tag's own tree still names the previous release.</p>
+When <a href="#the-bump-on-main-does-not-reach-the-published-release">step 7</a> applies, that is, when the pins were bumped <em>after</em> the tag, so the tag's own tree still names the previous release, republish from <code>main</code> with <code>docs_ref=release-X.Y</code> as that step shows instead.</p>
 <h3 id="3-verify-the-publish">3. Verify the publish<a class="headerlink" href="#3-verify-the-publish" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><strong>A red "Build and push" step in a green <code>publish</code> job is expected, not a half-published release.</strong> The base-image pull inside the build has no retry of its own, so a transient registry denial fails it (Q863).
@@ -4775,11 +4777,8 @@ This half exists because <code>v1.3.0</code> shipped without it too: the 1.3 row
 <h4 id="the-bump-on-main-does-not-reach-the-published-release">The bump on <code>main</code> does not reach the published release<a class="headerlink" href="#the-bump-on-main-does-not-reach-the-published-release" title="Permanent link">&para;</a></h4>
 <p><strong>Bump the pins before the tag and this whole section is a fallback</strong>, which is what <a href="#2-tag-and-push">step 2</a> tells you to do and what <code>v1.8.0</code> was the first release to do.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/docs/check-release-pins.sh"><code>check-release-pins.sh</code></a> accepts a pin naming a release that has a candidate tagged and no stable tag yet, so the bump lands on <code>main</code> during the candidate window without reddening <code>make check</code> for every PR in it.
-The tag then carries the right pins itself and the republish needs no branch:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>pages<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="w">  </span>-f<span class="w"> </span><span class="nv">version</span><span class="o">=</span>X.Y.Z<span class="w"> </span>-f<span class="w"> </span><span class="nv">alias</span><span class="o">=</span>stable<span class="w"> </span>-f<span class="w"> </span><span class="nv">set_default</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">docs_ref</span><span class="o">=</span>vX.Y.Z
-</code></pre></div>
-<p>Then confirm it with <code>make verify-published-docs VERSION=vX.Y.Z</code>, as below.</p>
+The tag then carries the right pins itself, so its own deploy publishes them and no republish is needed.
+Confirm it with <code>make verify-published-docs VERSION=vX.Y.Z</code>, as below.</p>
 <p><strong>Everything below is the recovery for a bump that landed after the tag</strong>, which is how every release before <code>v1.8.0</code> was cut.</p>
 <p>Landing it on <code>main</code> fixes <code>make check</code> and the <code>dev</code> docs, and <strong>nothing else</strong>.
 The site builds each version from its tag (<a href="#2-tag-and-push">step 2</a>), so <code>/X.Y.Z/</code> is frozen at what the tag's tree said, which is the <em>previous</em> release's pins.
@@ -4795,13 +4794,13 @@ Three of the four releases cut since <code>1.0.0</code> published the previous v
 Measured on the live site 2026-08-10: <code>/1.1.0/</code> and <code>/1.2.0/</code> both advertise <code>--version 1.0.0</code>, and <code>/1.4.0/</code> advertised <code>1.3.0</code> together with the <code>v1.3.0</code> CRD manifest URL, as did <code>stable</code> and the root redirect, for the three hours until it was reported.
 <code>v1.3.0</code> is correct only because Q638's hand-fix happened to land before that tag.</p>
 <p>A tag's tree cannot be changed, so the release's own docs are republished from a branch that is the tag plus the bump:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>git<span class="w"> </span>switch<span class="w"> </span>-c<span class="w"> </span>release-X.Y<span class="w"> </span>vX.Y.Z
-<a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a>git<span class="w"> </span>cherry-pick<span class="w"> </span>&lt;the<span class="w"> </span>pin-bump<span class="w"> </span>commit<span class="w"> </span>from<span class="w"> </span>main&gt;
-<a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a>./scripts/docs/check-release-pins.sh<span class="w">    </span><span class="c1"># must be green on this branch</span>
-<a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a>git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>release-X.Y
+<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>git<span class="w"> </span>switch<span class="w"> </span>-c<span class="w"> </span>release-X.Y<span class="w"> </span>vX.Y.Z
+<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>git<span class="w"> </span>cherry-pick<span class="w"> </span>&lt;the<span class="w"> </span>pin-bump<span class="w"> </span>commit<span class="w"> </span>from<span class="w"> </span>main&gt;
+<a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a>./scripts/docs/check-release-pins.sh<span class="w">    </span><span class="c1"># must be green on this branch</span>
+<a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a>git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>release-X.Y
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>pages<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="w">  </span>-f<span class="w"> </span><span class="nv">version</span><span class="o">=</span>X.Y.Z<span class="w"> </span>-f<span class="w"> </span><span class="nv">alias</span><span class="o">=</span>stable<span class="w"> </span>-f<span class="w"> </span><span class="nv">set_default</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">docs_ref</span><span class="o">=</span>release-X.Y
+<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>pages<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="w">  </span>-f<span class="w"> </span><span class="nv">version</span><span class="o">=</span>X.Y.Z<span class="w"> </span>-f<span class="w"> </span><span class="nv">alias</span><span class="o">=</span>stable<span class="w"> </span>-f<span class="w"> </span><span class="nv">set_default</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span>-f<span class="w"> </span><span class="nv">docs_ref</span><span class="o">=</span>release-X.Y
 </code></pre></div>
 <p><code>release-X.Y</code> is the tag plus the pin bump and nothing else — verify with <code>git diff --stat vX.Y.Z..release-X.Y</code> before pushing, because anything else on it publishes as documentation of a release that never shipped it.
 Keep the branch: it is the backport line <a href="#patch-releases-and-backports">patch releases</a> already want, and <code>GAG_DOCS_SOURCE_REF</code> points the published version's source links at it.
@@ -4809,7 +4808,7 @@ A release that bumped early still wants that branch for the backport line, cut f
 <p>For a backport patch to an older line, drop <code>-f alias=stable -f set_default=true</code>.
 Those belong to the highest release, and a dispatch applies them verbatim rather than checking (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">pages.yml</a>).</p>
 <p>Then confirm the published pages, not the branch:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>make<span class="w"> </span>verify-published-docs<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
+<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>make<span class="w"> </span>verify-published-docs<span class="w"> </span><span class="nv">VERSION</span><span class="o">=</span>vX.Y.Z
 </code></pre></div>
 <p>It reads the four site pages that pin a version (the landing page, and <code>operations/</code>'s <code>install</code>, <code>upgrade</code> and <code>gitops</code>), plus the <code>stable</code> alias and the root redirect, and fails with the page and the version each one actually advertises.
 Add <code>ARGS=--no-stable</code> for a backport to an older line, whose dispatch above drops the alias.
@@ -4818,11 +4817,11 @@ This is the same comparison <a href="https://github.com/actions-gateway/github-a
 <code>/1.1.0/</code> and <code>/1.2.0/</code> still advertise <code>--version 1.0.0</code> today and both read as clean that way.</p>
 <h3 id="8-hand-off-to-operators">8. Hand off to operators<a class="headerlink" href="#8-hand-off-to-operators" title="Permanent link">&para;</a></h3>
 <p>Operators install/upgrade straight from the <strong>published OCI chart</strong> with the digests pinned via <code>--set</code>, exactly as <a href="../install/#pin-images-by-digest">install.md § Pin images by digest</a> and <a href="../upgrade/">upgrade.md</a> document (<code>X.Y.Z</code> is the release tag without the <code>v</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span>--version<span class="w"> </span>X.Y.Z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-55-4" name="__codelineno-55-4" href="#__codelineno-55-4"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-55-5" name="__codelineno-55-5" href="#__codelineno-55-5"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
 </code></pre></div>
 <h2 id="checks-that-stay-human-and-why">Checks that stay human, and why<a class="headerlink" href="#checks-that-stay-human-and-why" title="Permanent link">&para;</a></h2>
 <p>Most of this runbook is judgement, and a gate that guessed at judgement would fail good releases until someone switched it off.
@@ -4974,8 +4973,8 @@ That download used to go through <code>anchore/sbom-action/download-syft</code>,
 The helper retries and refuses to write bytes that miss the pinned digest, so absorbing the flake tightened the pin rather than loosening it: the release now names the exact syft bytes instead of trusting an installer to resolve them.</p>
 <p><strong>Bumping a pinned action.</strong> Dependabot's <code>github-actions</code> ecosystem (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/dependabot.yml"><code>.github/dependabot.yml</code></a>) opens weekly PRs that bump both the SHA <em>and</em> the <code># vX.Y.Z</code> comment, so the pins don't rot — review and merge those like any dependency PR.
 To pin or bump by hand, resolve the tag to its commit SHA and keep the comment in sync:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.sha'</span>
-<a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>gh<span class="w"> </span>api<span class="w"> </span>repos/&lt;owner&gt;/&lt;action&gt;/commits/&lt;tag&gt;<span class="w"> </span>--jq<span class="w"> </span><span class="s1">'.sha'</span>
+<a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="c1"># -&gt; uses: &lt;owner&gt;/&lt;action&gt;@&lt;sha&gt; # &lt;tag&gt;</span>
 </code></pre></div>
 <p><code>SYFT_VERSION</code>/<code>SYFT_SHA256</code> are <strong>not</strong> Dependabot-managed (a tool download, not an action ref).
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/updatecli.d/syft.yaml"><code>updatecli.d/syft.yaml</code></a> bumps the pair weekly in <code>scripts/ci/pins.env</code>, which <code>publish.yml</code> and <code>security-scan.yml</code> both read, so the released images and the PR-time scan are described by the same syft.</p>

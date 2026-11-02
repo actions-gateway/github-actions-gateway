@@ -3284,8 +3284,10 @@ Each version is a full built copy under its own path on the <code>gh-pages</code
 <p><strong>What deploys when</strong> (<code>.github/workflows/pages.yml</code>):</p>
 <ul>
 <li><strong>push to <code>main</code></strong> → <code>mike deploy dev</code> (refreshes the unreleased <code>dev</code> docs).</li>
-<li><strong>stable <code>v*</code> tag push</strong> → deploys that release's docs, and <strong>only if it is the highest released version</strong> also moves the <code>stable</code> alias + the default root redirect to it (<code>mike set-default stable</code>).
-  This is the same tag push that runs <code>publish.yml</code>.</li>
+<li><strong>stable <code>v*</code> tag push</strong> → re-runs <code>pages.yml</code> as a <code>workflow_dispatch</code> on the same tag (the <code>handoff</code> job), which deploys that release's docs, and <strong>only if it is the highest released version</strong> also moves the <code>stable</code> alias + the default root redirect to it (<code>mike set-default stable</code>).
+  This is the same tag push that runs <code>publish.yml</code>.
+  The push hands off rather than deploying because no deploy made by a tag push has been seen to serve (Q1041): <code>v1.6.0</code> to <code>v1.10.0</code> each reported success and kept the previous tree live, while every dispatch of the same content served, on <code>main</code> and on the <code>v1.10.0</code> tag ref alike.
+  Why the push differs is not known.</li>
 <li><strong>prerelease tag</strong> (<code>0.x</code>, <code>-rc</code>/<code>-alpha</code>/<code>-beta</code>) → <strong>no deploy</strong> (the same prerelease test <code>publish.yml</code> uses, Q293).</li>
 <li><strong><code>workflow_dispatch</code></strong> → deploys the <code>version</code>/<code>alias</code> inputs verbatim (or derives from the ref when blank) — used for <strong>seeding</strong> already-released versions and manual redeploys.
   The <code>docs_ref</code> input picks which ref the docs <em>content</em> is built from, independently of the ref the workflow logic runs from (see § Seeding below).</li>
@@ -3320,6 +3322,7 @@ No assertion over <code>_site</code> can stand in for this, and <code>v1.6.0</co
 Every tree-side signal in that run was correct: <code>mike</code> pushed the right commit, <code>git archive</code> picked it up, the uploaded artifact carried <code>1.6.0</code> with the <code>stable</code> alias, and the Pages deployment reported success and became the active one.
 The site served <code>1.5.0</code> for roughly 25 minutes regardless, until a manual republish.
 Re-reading the retained artifact afterwards is what settled it, so the failure was on the serving side and nothing the run could assert about its own tree would have caught it.
+Every stable tag through <code>v1.10.0</code> failed the same way, and every one was a deploy from a tag push, which is why a tag push now hands its deploy to a dispatch (§ above).
 Each poll uses a fresh query string, because Pages caches on the full URL and re-reading one URL reports whatever the edge already holds.</p>
 <p><code>dev</code> is excluded from the live check.
 Its version id is in <code>versions.json</code> before the run starts, so there is no assertion there that could go red, and a check that cannot fail on every push to <code>main</code> is worse than no check.</p>
@@ -3402,11 +3405,11 @@ Four things are deliberately <strong>not</strong> taken from the tag:</p>
 </tr>
 <tr>
 <td><code>hooks</code></td>
-<td>A tag cut before Q393 does not wire <code>hooks/release_version.py</code>, so its announce bar would render the version-free fallback instead of naming the newest release.</td>
+<td>A tag cut before Q393 does not wire <code>hooks/release_version.py</code>, so its announce bar would render the version-free fallback instead of naming the newest release. The whole list is copied, because <code>INHERIT</code> replaces a list rather than merging it: a one-entry list left <code>source_links.py</code> out, so <code>1.8.0</code> and <code>1.9.0</code> shipped <code>.github/</code> links that 404 (Q1041).</td>
 </tr>
 </tbody>
 </table>
-<p><strong>That safety net covers seeds only.</strong> A stable tag push has a blank <code>docs_ref</code> and builds the tag wholesale, <code>overrides/</code> included.
+<p><strong>That safety net covers seeds only.</strong> A stable tag's deploy has a blank <code>docs_ref</code> and builds the tag wholesale, <code>overrides/</code> included.
 That is safe for the announce bar's <em>version</em>, which the hook derives from the tag list at build time rather than from a string in the checkout; only the optional highlight prose is pinned to the tag.
 Refreshing it is an optional pre-flight step in <a href="../../operations/release/#1-pre-flight">release.md</a>.</p>
 <p>The <code>mkdocs.yml</code> overrides ride in an <a href="https://www.mkdocs.org/user-guide/configuration/#inheritance"><code>INHERIT</code></a> overlay (<code>mkdocs.versioned.yml</code>) rather than a YAML rewrite, so the tag's own nav and config stay byte-for-byte intact: MkDocs deep-merges the inherited mapping, and scalars such as <code>site_url</code> are replaced.</p>

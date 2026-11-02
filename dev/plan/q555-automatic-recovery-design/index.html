@@ -3415,7 +3415,7 @@ Either way it reads the same snapshot detection records, which is why Q1183 wait
   The abandoned arm keeps its own path unchanged.</li>
 <li><strong>Release needs the run concluded.</strong> A failed job's siblings can run for an hour, and <code>rerunUntilAccepted</code>'s 15-minute window would expire into <code>run_never_concluded</code>.
   The sweeper reads the run every 30 seconds for the first 5 minutes, every 2 minutes to the first hour, then every 10 minutes.
-  An entry expires after 24 hours, with <code>reason="run_never_concluded"</code>: GitHub lets a run go on far longer, but by then a person has seen the failure, and the cap bounds the polling at about 175 reads per entry.</li>
+  An entry expires after 24 hours, with <code>reason="run_never_concluded"</code>, once one last read finds the run still in progress, or reads keep failing for half an hour past it (a concluded run is released, Q1254): GitHub lets a run go on far longer, but by then a person has seen the failure, and the cap bounds the polling at about 175 reads per entry.</li>
 <li><strong>Release then needs the cause cleared:</strong></li>
 <li><code>freshPod</code> releases at once;</li>
 <li><code>observable</code> releases when <code>ready</code> is true;</li>

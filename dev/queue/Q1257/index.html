@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1041/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1257/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A pages deploy can succeed while the site never serves the version - GitHub Actions Gateway</title>
+        <title>Republish 1.6.0-1.9.0 docs; their .github/ source links 404 - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-pages-deploy-can-succeed-while-the-site-never-serves-the-version" class="md-skip">
+        <a href="#republish-160-190-docs-their-github-source-links-404" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A pages deploy can succeed while the site never serves the version
+              Republish 1.6.0-1.9.0 docs; their .github/ source links 404
             
           </span>
         </div>
@@ -2657,88 +2657,18 @@
   
 
 
-<h1 id="a-pages-deploy-can-succeed-while-the-site-never-serves-the-version">A pages deploy can succeed while the site never serves the version<a class="headerlink" href="#a-pages-deploy-can-succeed-while-the-site-never-serves-the-version" title="Permanent link">&para;</a></h1>
-<p>Every stable tag from <code>v1.6.0</code> to <code>v1.10.0</code> has published nothing to the site while every check the run could make of its own tree was correct.
-The deploy step succeeds, <code>verify-pages-live</code> exhausts its 300s budget, and a hand-run <code>workflow_dispatch</code> of the same content publishes.</p>
-<table>
-<thead>
-<tr>
-<th>tag</th>
-<th><code>main</code> deploy</th>
-<th>tag deploy</th>
-<th>gap</th>
-<th>site served it</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>v1.5.0</code></td>
-<td>2026-08-15T19:17:12Z</td>
-<td>19:19:12Z</td>
-<td>2m00s</td>
-<td>unmeasured, the live check did not exist yet</td>
-</tr>
-<tr>
-<td><code>v1.6.0</code></td>
-<td>2026-08-26T23:22:15Z</td>
-<td>23:24:13Z</td>
-<td>1m58s</td>
-<td>no; 1.5.0 for ~25 min (<a href="../../development/website/#what-the-publish-job-verifies-and-why-it-takes-two-checks">website.md</a>)</td>
-</tr>
-<tr>
-<td><code>v1.7.0</code></td>
-<td>2026-08-30T04:21:18Z</td>
-<td>04:22:28Z</td>
-<td>1m10s</td>
-<td>no; <code>versions.json</code> ≤ 1.6.0 40 min later</td>
-</tr>
-<tr>
-<td><code>v1.8.0</code></td>
-<td>2026-09-14T10:27:39Z</td>
-<td>10:29:10Z</td>
-<td>1m31s</td>
-<td>no; <code>/1.8.0/</code> 404 at origin 14 min later</td>
-</tr>
-<tr>
-<td><code>v1.9.0</code></td>
-<td>unmeasured</td>
-<td>2026-10-06 (run 37395739033)</td>
-<td>unmeasured</td>
-<td>no; the run failed <code>verify-pages-live</code></td>
-</tr>
-<tr>
-<td><code>v1.10.0</code></td>
-<td>2026-10-27T01:58:00Z</td>
-<td>02:31:18Z</td>
-<td>33m18s</td>
-<td>no; <code>versions.json</code> still listed 1.9.0 as <code>stable</code> at 02:36</td>
-</tr>
-</tbody>
-</table>
-<p><strong>A short gap is common to <code>v1.5.0</code> through <code>v1.8.0</code>, and <code>v1.10.0</code> shows it is not the cause.</strong> A stable tag sits on <code>main</code>'s tip, so the merge push and the tag push are the same commit and both trigger <code>pages</code>.
-The <code>pages-deploy</code> concurrency group serialises them on <code>gh-pages</code>, and for those four the tag's deploy landed one to two minutes behind <code>main</code>'s.
-<code>v1.10.0</code>'s landed 33 minutes behind it, on a site <code>main</code> had finished deploying long before, and still never served.</p>
-<p><code>v1.8.0</code> is the clearest reading because the winner is identifiable.
-The live <code>/1.7.0/</code> page carried <code>last-modified: 10:28:39</code>, which is the <code>main</code> run's artifact, assembled at 10:28:28, before <code>mike</code> wrote 1.8.0 at 10:30:15.
-<code>x-proxy-cache: MISS</code> and <code>age: 0</code> on the 404 rule out an edge cache.
-The tag run's own checks were all correct: <code>mike</code> pushed 1.8.0 with the <code>stable</code> alias, and <code>verify-pages-artifact.sh</code> confirmed the upload carried both.</p>
-<p><strong>A same-commit collision is not the mechanism, and the recovery is what refutes it.</strong> Both runs create a Pages deployment whose id is <code>pages_build_version</code>, which <code>actions/deploy-pages</code> defaults to <code>github.sha</code>, so both get the same string.
-That is a real observation and it does not explain the failure: the <code>v1.8.0</code> republish (run 34834527848) deployed <strong>the same</strong> <code>09a57c0cc…</code> build version 13 minutes later and served fine.
-So a deployment at that id is not permanently deduped.
-The republish was alone, but so was <code>v1.10.0</code>'s tag deploy, which failed; its republish (run 40439517751) deployed the same <code>6465a4562…</code> build version 7 minutes later and served.
-So neither the gap nor solitude separates a deploy that serves from one that does not, and the republish is the one action that has recovered every time.</p>
-<p><strong>This bears on the two candidate fixes, which had no evidence when they were written:</strong></p>
-<ul>
-<li>Retry the publish once from inside the job when <code>verify-pages-live</code> exhausts its budget, then re-verify.
-  Now the better-supported one: it reproduces the recovery, which is a solo deploy at the same build version after the first has settled.</li>
-<li>Give the budget an adaptive tail rather than a fixed 300s.
-  Weaker than it looked.
-  <code>v1.7.0</code> was still unserved at 40 minutes and <code>v1.8.0</code> at 14, so the publish is not slow-but-working and a longer budget waits for something that is not coming.</li>
-</ul>
-<p>A third shape worth pricing: give the tag deploy its own <code>pages_build_version</code> so the two are distinguishable, which is cheap and tests the collision reading directly.
-Skipping the <code>main</code> deploy when a stable tag points at the same commit is worse, because <code>dev</code> would then miss the merge.</p>
-<p><strong>Until this is fixed the republish is the release path rather than an exception</strong>, which <a href="../../operations/release/#the-site-deploy-fails-on-a-stable-tag-and-the-republish-is-a-step">release.md</a> states as a step.</p>
-<p>Distinct from <a href="../Q1034/">Q1034</a>, which is <code>verify-pages-live-test</code>'s own clock flakiness rather than the publish path.</p>
+<h1 id="republish-160-190-docs-their-github-source-links-404">Republish 1.6.0-1.9.0 docs; their .github/ source links 404<a class="headerlink" href="#republish-160-190-docs-their-github-source-links-404" title="Permanent link">&para;</a></h1>
+<p>The live <code>1.6.0</code>, <code>1.7.0</code>, <code>1.8.0</code> and <code>1.9.0</code> docs carry links into the source tree that <code>hooks/source_links.py</code> never rewrote, so they resolve against the site and 404.
+Measured 2026-11-01 21:20 PST with <code>curl -fsS "https://actions-gateway.com/&lt;v&gt;/operations/release/?r=$RANDOM" | grep -oE 'href="[^"]*\.github/workflows/[^"]*"' | grep -vc github.com</code>: 4, 6, 6 and 7 relative <code>.github/workflows/</code> links on that one page, and <code>https://actions-gateway.com/1.9.0/.github/workflows/pages.yml</code> returns 404.</p>
+<p>All four were last published by a <code>docs_ref</code> republish from <code>main</code> (runs 33024832599, 33293076832, 34834527848, 37397207266; each log reads <code>via mkdocs.versioned.yml</code>).
+That overlay set <code>hooks:</code> to a single entry, and <code>INHERIT</code> replaces the list rather than merging it, so every hook but <code>release_version.py</code> was dropped.
+The Q1041 change makes the overlay copy the whole list; its fix was measured by building <code>v1.10.0</code> through the overlay in a scratch repo, where 57 links read <code>blob/v1.10.0</code> and none stayed relative.
+Nothing republishes the four versions already live, so they stay broken until someone dispatches them.</p>
+<p>The fix is one dispatch per version once that change is on <code>main</code>, oldest first.
+A version whose pins were bumped after its tag republishes from its <code>release-X.Y</code> branch, per <a href="../../operations/release/#the-bump-on-main-does-not-reach-the-published-release">release.md step 7</a>.
+A version whose tag already carries the right pins (<code>1.8.0</code> was the first, per that step) can instead take <code>gh workflow run pages --ref vX.Y.Z</code> with no inputs, which builds the tag wholesale and leaves <code>stable</code> alone for a non-highest release; which of <code>1.9.0</code>'s two cases applies is unchecked.
+Each dispatch publishes the live site, so this is the maintainer's to run or authorize.
+Done when the curl above counts 0 for every version.</p>
 
 
 
