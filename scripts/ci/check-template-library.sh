@@ -318,6 +318,26 @@ check_patch_form() {
 	done <<<"$report"
 }
 
+# check_patch_indent KUSTOMIZATION — fails when a `patches:` item sits anywhere
+# but two spaces in. check_patch_form and patch_targets key on `^  - `, so an
+# item at column 0 (valid YAML, accepted by kustomize) or any other indent is
+# parsed by neither and passes rules 5 and 8 unread. Failing on the shape keeps
+# those parsers simple instead of teaching each one every indent.
+check_patch_indent() {
+	local kust="$1" bad
+	bad="$(awk '
+		/^patches:[[:space:]]*$/ { in_block = 1; next }
+		in_block && /^[^[:space:]#-]/ { in_block = 0 }
+		!in_block { next }
+		/^-[[:space:]]/ { print NR ": " $0; next }
+		/^[[:space:]]+-[[:space:]]+(target|patch):/ && $0 !~ /^  - / { print NR ": " $0 }
+	' "$kust")"
+	if [[ -n "$bad" ]]; then
+		fail "$kust has patches: items not at two-space indent, which rules 5 and 8 cannot read, so their checks would pass unread. Indent each item by two spaces:
+$(awk '{ print "         " $0 }' <<<"$bad")"
+	fi
+}
+
 # An overlay directory the start script cannot select, or a selectable variant
 # with no overlay, breaks the equivalence rule 3 rests on.
 have_overlays="$(printf '%s\n' "${overlays[@]}" | LC_ALL=C sort)"
@@ -370,6 +390,9 @@ for overlay in "${overlays[@]}"; do
 			fail "$f declares a ClusterRunnerTemplate; the worker shape belongs in $TEMPLATES_DIR so the shipped artifact and the exercised one cannot drift"
 		fi
 	done
+
+	# Rules 5 and 8 read only two-space items.
+	check_patch_indent "$kust"
 
 	# Rule 5.
 	check_patch_form "$kust"

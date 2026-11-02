@@ -325,6 +325,52 @@ cat >>"$F/overlays/kata/kustomization.yaml" <<-'EOF'
 EOF
 expect_red "a targeted non-op body is caught" "$F" "is not a JSON 6902 op list"
 
+# --- patches items off the two-space indent (Q1250) -------------------------
+
+# dedent_patches FILE — move every line under `patches:` left two spaces, so the
+# items sit at column 0. kustomize accepts that form; the rule 5 and 8 parsers
+# read only two-space items.
+dedent_patches() {
+	awk '
+		/^patches:[[:space:]]*$/ { in_block = 1; print; next }
+		in_block { sub(/^  /, "") }
+		{ print }
+	' "$1" >"$1.t" && mv "$1.t" "$1"
+}
+
+build_fixture "$F"
+dedent_patches "$F/overlays/kata/kustomization.yaml"
+expect_red "a column-0 patches list is caught" "$F" "not at two-space indent"
+
+# Rule 5 broken at column 0: a strategic merge on a template, which the
+# two-space tree reports as "REPLACES lists wholesale". Unread at column 0, it
+# must still go red.
+build_fixture "$F"
+cat >>"$F/overlays/kata/kustomization.yaml" <<-'EOF'
+	- patch: |
+	    apiVersion: actions-gateway.com/v2beta1
+	    kind: ClusterRunnerTemplate
+	    metadata:
+	      name: kata-dind
+	    spec:
+	      podTemplate:
+	        spec:
+	          initContainers:
+	            - name: dind
+	              resources:
+	                requests:
+	                  cpu: "3"
+EOF
+expect_red "a column-0 strategic merge is not passed unread" "$F" "not at two-space indent"
+
+# Rule 8 broken at column 0: the template moves to v2, the overlay's target stays
+# v2beta1.
+build_fixture "$F"
+sed 's|^apiVersion: actions-gateway.com/v2beta1$|apiVersion: actions-gateway.com/v2|' \
+	"$F/templates/kata-dind/template.yaml" >"$F/t" && mv "$F/t" "$F/templates/kata-dind/template.yaml"
+dedent_patches "$F/overlays/kata/kustomization.yaml"
+expect_red "a column-0 unmatched target is not passed unread" "$F" "not at two-space indent"
+
 # --- rule 6: the README names every entry ------------------------------------
 
 build_fixture "$F"
