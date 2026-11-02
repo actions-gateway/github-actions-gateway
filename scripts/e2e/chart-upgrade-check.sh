@@ -159,7 +159,7 @@ assert_webhook_enforces() {
 			  name: webhook-probe-${phase}
 			  namespace: kube-system
 			spec:
-			  gitHubURL: https://github.com/example-org
+			  githubURL: https://github.com/example-org
 			  credentials:
 			    type: GitHubApp
 			    githubApp:

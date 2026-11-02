@@ -172,7 +172,7 @@ assert_webhook_enforces() {
 			  name: released-upgrade-webhook-probe
 			  namespace: kube-system
 			spec:
-			  gitHubURL: https://github.com/example-org
+			  githubURL: https://github.com/example-org
 			  credentials:
 			    type: GitHubApp
 			    githubApp:
