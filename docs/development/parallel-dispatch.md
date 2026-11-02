@@ -151,10 +151,10 @@ Three of those land differently:
   Mechanical work runs fine on a faster model; anything touching the concurrency core, admission, or a security default warrants the strongest one, because the dispatcher's scope review is the only gate before a human sees it.
 - **An unmeasured claim in a prompt is the expensive kind.** Q805's chip forwarded the row's "all three fail closed" as fact and drew an instruction from it, not to change what the checker decides; the worker's first measurement found one probe failing *open*, on the call immediately before `gh pr merge --squash`.
   Mark an unverified claim as unverified, or leave it out.
-- **Contention has a guard attached.** When several workers will touch one large doc, say so **and** say what the resulting `gh pr create` denial means: *read the other PR and override with the reading*, never *re-scope this change*.
-  A worker who shrinks a good change to get past the guard reports that as scoping rather than friction, so it never reaches a friction report and cannot be found retrospectively.
-  Measured across one batch: five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
-  That guard is retired, so nothing says it at `gh pr create` any more: the prompt is the only place a worker hears it.
+- **Say what an overlap means.** When several workers will touch one large doc, say so **and** say what to do about it: *read the other PR and say what it claims*, never *re-scope this change*.
+  A worker who shrinks a good change to dodge an overlap reports that as scoping rather than friction, so it never reaches a friction report and cannot be found retrospectively.
+  History of the retired `gh pr create` guard: across one batch it drew five overrides, each recorded with a reading, one of which caught a cross-PR contradiction nothing else would have.
+  Nothing says this at `gh pr create` any more, so the prompt is the only place a worker hears it.
 - **A contention list has two silences, and a worker reads both as clearance.** The first is scope: a file you never swept is indistinguishable from one you swept and found clear, so close the list rather than ending it ("X and Y are contended, nothing else is open"), and say it covers direct paths only.
   The second is time, and it is the one a stamp does not cover: the batch itself creates contention while it runs.
   Measured 2026-08-19, a list telling the Q904 chip that nothing else in the batch touched `CHECK_FAST_GATES` was true when written and false within the hour, because Q899's worker added a gate its row never mentioned.
