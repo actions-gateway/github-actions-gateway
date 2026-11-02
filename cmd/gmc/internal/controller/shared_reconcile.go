@@ -51,6 +51,19 @@ type egressStale struct {
 	message string
 }
 
+// refreshStalledMessage is the RefreshStalled message. A cache whose seeded set has
+// expired still reports its fetch time but serves no ranges, so a CIDR policy built
+// from it carries no GitHub rule, and the message says so rather than predicting a
+// drift that has already become a denial.
+func refreshStalledMessage(cache *IPRangeCache, age, threshold time.Duration) string {
+	msg := fmt.Sprintf("GitHub egress IP-range allowlist last refreshed %s ago, exceeding the %s staleness window; ",
+		age.Round(time.Minute), threshold)
+	if len(cache.Snapshot()) == 0 {
+		return msg + "the GMC serves no ranges, so GitHub egress is denied"
+	}
+	return msg + "egress to rotated GitHub ranges may be silently dropped"
+}
+
 // TenantNamespaceMarkerLabel is the label a trusted administrator must apply to a
 // tenant namespace to mark it as managed by the GMC. The namespace-psa-guard
 // ValidatingAdmissionPolicy (config/admission-policy/namespace-psa-guard.yaml)

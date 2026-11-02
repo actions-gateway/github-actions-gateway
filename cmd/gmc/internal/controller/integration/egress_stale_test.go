@@ -70,10 +70,10 @@ func TestGMC_EgressRulesStale_TripsAndRecovers(t *testing.T) {
 		"a fresh refresh must clear EgressRulesStale")
 }
 
-// TestGMC_EgressRulesStale_PendingBeforeFirstRefresh proves that before any
-// refresh has completed (startup), the condition is False with RefreshPending —
-// absence of a refresh is not yet an alarm.
-func TestGMC_EgressRulesStale_PendingBeforeFirstRefresh(t *testing.T) {
+// TestGMC_EgressRulesStale_NeverSucceeded proves that while no refresh has ever
+// succeeded the condition is True with RefreshNeverSucceeded: the proxy
+// NetworkPolicy carries no GitHub rule, which no other condition reports (Q1228).
+func TestGMC_EgressRulesStale_NeverSucceeded(t *testing.T) {
 	const nsName = "team-egress-pending"
 	createNamespace(t, nsName)
 	createGitHubAppSecret(t, nsName, "github-app")
@@ -91,8 +91,8 @@ func TestGMC_EgressRulesStale_PendingBeforeFirstRefresh(t *testing.T) {
 	g := gomega.NewWithT(t)
 	g.Eventually(func() bool {
 		c := egressCondition(t, nsName, "egress-pending-gateway")
-		return c != nil && c.Status == metav1.ConditionFalse &&
-			c.Reason == gmcv1alpha1.ReasonRefreshPending
+		return c != nil && c.Status == metav1.ConditionTrue &&
+			c.Reason == gmcv1alpha1.ReasonRefreshNeverSucceeded
 	}, 20*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
-		"before the first refresh, EgressRulesStale is pending (not an alarm)")
+		"with no refresh ever succeeded, EgressRulesStale reports RefreshNeverSucceeded")
 }

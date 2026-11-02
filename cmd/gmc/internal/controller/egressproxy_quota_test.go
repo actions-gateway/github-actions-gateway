@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -112,10 +113,30 @@ func TestEvalEgressProxyEgressRulesStale(t *testing.T) {
 		assert.Equal(t, gmcv2alpha1.ReasonRefreshCurrent, es.reason)
 	})
 
-	t.Run("pending before first refresh", func(t *testing.T) {
+	t.Run("stale when no refresh has ever succeeded", func(t *testing.T) {
 		r := &EgressProxyReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 49 * time.Hour}
 		es := r.evalEgressProxyEgressRulesStale(egressProxy("team-a"), now)
+		assert.True(t, es.stale, "a CIDR policy with no ranges denies GitHub egress, so it must be reported (Q1228)")
+		assert.Equal(t, gmcv2alpha1.ReasonRefreshNeverSucceeded, es.reason)
+		assert.Contains(t, es.message, "GitHub egress is denied")
+	})
+
+	t.Run("current when seeded from the persisted copy", func(t *testing.T) {
+		cache := &IPRangeCache{}
+		require.True(t, cache.Seed([]net.IPNet{{IP: net.IPv4(140, 82, 112, 0), Mask: net.CIDRMask(20, 32)}},
+			now.Add(-time.Hour), now.Add(48*time.Hour)))
+		r := &EgressProxyReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
+		es := r.evalEgressProxyEgressRulesStale(egressProxy("team-a"), now)
 		assert.False(t, es.stale)
+		assert.Equal(t, gmcv2alpha1.ReasonRefreshCurrent, es.reason)
+	})
+
+	t.Run("no alarm for FQDN egress mode before any refresh", func(t *testing.T) {
+		r := &EgressProxyReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 49 * time.Hour}
+		ep := egressProxy("team-a")
+		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+		es := r.evalEgressProxyEgressRulesStale(ep, now)
+		assert.False(t, es.stale, "FQDN mode carries no CIDR rule, so an empty cache costs it nothing")
 		assert.Equal(t, gmcv2alpha1.ReasonRefreshPending, es.reason)
 	})
 
@@ -173,6 +194,9 @@ func TestEgressProxyEgressStaleThreshold_Default(t *testing.T) {
 // and 0 when there is nothing to re-check.
 func TestEgressProxyEgressRecheckRequeue(t *testing.T) {
 	cidr := &EgressProxyReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 48 * time.Hour}
+	assert.Equal(t, time.Minute, cidr.egressProxyEgressRecheckRequeue(egressProxy("team-a")),
+		"until the first refresh succeeds, re-check every minute so RefreshNeverSucceeded clears with it")
+	cidr.IPCache.MarkRefreshed(time.Now())
 	assert.Equal(t, 6*time.Hour, cidr.egressProxyEgressRecheckRequeue(egressProxy("team-a")),
 		"threshold/8 bounds the recheck cadence")
 

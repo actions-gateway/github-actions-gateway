@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net"
 	"testing"
 	"time"
 
@@ -34,6 +35,7 @@ func TestEvalEgressRulesStale_Fresh(t *testing.T) {
 func TestEvalEgressRulesStale_Stalled(t *testing.T) {
 	now := time.Now()
 	cache := &IPRangeCache{}
+	cache.Set([]net.IPNet{{IP: net.IPv4(140, 82, 112, 0), Mask: net.CIDRMask(20, 32)}})
 	cache.MarkRefreshed(now.Add(-72 * time.Hour))
 	r := &ActionsGatewayReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
 
@@ -43,13 +45,28 @@ func TestEvalEgressRulesStale_Stalled(t *testing.T) {
 	assert.Contains(t, es.message, "silently dropped")
 }
 
-// TestEvalEgressRulesStale_NeverRefreshed: before the first refresh, staleness
-// cannot be asserted (startup) — not an alarm.
+// TestEvalEgressRulesStale_NeverRefreshed: with no refresh ever succeeded the proxy
+// NetworkPolicy carries no GitHub rule, so the condition fires with its own reason
+// (Q1228).
 func TestEvalEgressRulesStale_NeverRefreshed(t *testing.T) {
 	r := &ActionsGatewayReconciler{IPCache: &IPRangeCache{}, EgressStaleThreshold: 49 * time.Hour}
 	es := r.evalEgressRulesStale(agWithManagedNP(nil), time.Now())
-	assert.False(t, es.stale)
-	assert.Equal(t, gmcv1alpha1.ReasonRefreshPending, es.reason)
+	assert.True(t, es.stale)
+	assert.Equal(t, gmcv1alpha1.ReasonRefreshNeverSucceeded, es.reason)
+	assert.Contains(t, es.message, "GitHub egress is denied")
+}
+
+// TestEvalEgressRulesStale_ExpiredSeed: a persisted copy the cache no longer serves
+// reads as stalled, not as never refreshed, since its fetch time is known.
+func TestEvalEgressRulesStale_ExpiredSeed(t *testing.T) {
+	now := time.Now()
+	cache := &IPRangeCache{now: func() time.Time { return now }}
+	cache.Seed(nil, now.Add(-50*time.Hour), now.Add(-time.Hour))
+	r := &ActionsGatewayReconciler{IPCache: cache, EgressStaleThreshold: 49 * time.Hour}
+	es := r.evalEgressRulesStale(agWithManagedNP(nil), now)
+	assert.True(t, es.stale)
+	assert.Equal(t, gmcv1alpha1.ReasonRefreshStalled, es.reason)
+	assert.Contains(t, es.message, "GitHub egress is denied", "an expired seed serves nothing, which the message must not understate")
 }
 
 // TestEvalEgressRulesStale_NilCache: no cache wired → pending, never stale.
@@ -87,6 +104,9 @@ func TestEgressStaleThreshold_Default(t *testing.T) {
 func TestEgressRecheckRequeue(t *testing.T) {
 	cache := &IPRangeCache{}
 	r := &ActionsGatewayReconciler{IPCache: cache, EgressStaleThreshold: 48 * time.Hour}
+	assert.Equal(t, time.Minute, r.egressRecheckRequeue(agWithManagedNP(nil)),
+		"nothing wakes this controller when the first fetch lands, so it polls until then")
+	cache.MarkRefreshed(time.Now())
 	assert.Equal(t, 6*time.Hour, r.egressRecheckRequeue(agWithManagedNP(nil)))
 	assert.Zero(t, r.egressRecheckRequeue(agWithManagedNP(egressBoolPtr(false))))
 	assert.Zero(t, (&ActionsGatewayReconciler{}).egressRecheckRequeue(agWithManagedNP(nil)))

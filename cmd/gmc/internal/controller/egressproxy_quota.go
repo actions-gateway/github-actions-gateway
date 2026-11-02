@@ -51,9 +51,10 @@ func egressUsesCIDRMode(ep *gmcv2alpha1.EgressProxy) bool {
 // IP-range refresh loop's last success is older than the staleness threshold, so the
 // proxy NetworkPolicy CIDR allowlist may have drifted from GitHub's published ranges.
 //
-// It is False (not an alarm) in the "no evidence yet" cases: an unmanaged or non-CIDR
-// (FQDN) egress mode — neither of which is CIDR-refreshed by this loop — and before
-// the first refresh has completed (startup).
+// It is also True, with its own reason, while the cache holds no ranges at all: the
+// proxy NetworkPolicy then carries no GitHub rule (Q1228). It is False for an
+// unmanaged or non-CIDR (FQDN) egress mode, neither of which is CIDR-refreshed by this
+// loop, and when no cache is wired.
 func (r *EgressProxyReconciler) evalEgressProxyEgressRulesStale(ep *gmcv2alpha1.EgressProxy, now time.Time) egressStale {
 	if !egressUsesCIDRMode(ep) {
 		return egressStale{reason: gmcv2alpha1.ReasonRefreshPending,
@@ -65,17 +66,16 @@ func (r *EgressProxyReconciler) evalEgressProxyEgressRulesStale(ep *gmcv2alpha1.
 	}
 	last, ok := r.IPCache.LastRefresh()
 	if !ok {
-		return egressStale{reason: gmcv2alpha1.ReasonRefreshPending,
-			message: "awaiting first GitHub IP-range refresh"}
+		return egressStale{stale: true, reason: gmcv2alpha1.ReasonRefreshNeverSucceeded,
+			message: "no GitHub IP-range refresh has succeeded, so the egress allowlist carries no GitHub ranges and GitHub egress is denied"}
 	}
 	threshold := r.egressStaleThreshold()
 	age := now.Sub(last)
 	if age > threshold {
 		return egressStale{
-			stale:  true,
-			reason: gmcv2alpha1.ReasonRefreshStalled,
-			message: fmt.Sprintf("GitHub egress IP-range allowlist last refreshed %s ago, exceeding the %s staleness window; "+
-				"egress to rotated GitHub ranges may be silently dropped", age.Round(time.Minute), threshold),
+			stale:   true,
+			reason:  gmcv2alpha1.ReasonRefreshStalled,
+			message: refreshStalledMessage(r.IPCache, age, threshold),
 		}
 	}
 	return egressStale{reason: gmcv2alpha1.ReasonRefreshCurrent,
@@ -109,6 +109,13 @@ func (r *EgressProxyReconciler) egressProxyEgressRecheckRequeue(ep *gmcv2alpha1.
 	}
 	if egressUsesCIDR(ep.Spec) && r.IPCache == nil {
 		return 0 // CIDR staleness is not evaluated without the shared cache
+	}
+	// Until the first fetch lands, poll briefly so RefreshNeverSucceeded clears with
+	// it even if the refresh pass's NetworkPolicy patch, the usual wake, fails.
+	if egressUsesCIDR(ep.Spec) {
+		if _, ok := r.IPCache.LastRefresh(); !ok {
+			return time.Minute
+		}
 	}
 	d := r.egressStaleThreshold() / 8
 	if d < time.Minute {

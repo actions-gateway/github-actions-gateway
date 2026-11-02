@@ -738,10 +738,10 @@ func (r *ActionsGatewayReconciler) evalRunnerGroupHealth(ctx context.Context, ag
 // may have drifted from GitHub's published ranges and traffic to rotated ranges is
 // silently dropped.
 //
-// It is False (not an alarm) in two "no evidence yet" cases: when the gateway's
-// proxy NetworkPolicy is unmanaged (its egress rules are operator-maintained, not
-// refreshed by this loop) and before the first refresh has completed (startup,
-// which reconcileInitial repairs on a sub-interval cadence).
+// It is also True, with its own reason, while the cache holds no ranges at all:
+// the proxy NetworkPolicy then carries no GitHub rule, which is worse than a stale
+// one (Q1228). It is False when the proxy NetworkPolicy is unmanaged (its egress
+// rules are operator-maintained, not refreshed by this loop) or no cache is wired.
 func (r *ActionsGatewayReconciler) evalEgressRulesStale(ag *gmcv1alpha1.ActionsGateway, now time.Time) egressStale {
 	if ag.Spec.Proxy.ManagedNetworkPolicy != nil && !*ag.Spec.Proxy.ManagedNetworkPolicy {
 		return egressStale{reason: gmcv1alpha1.ReasonRefreshPending,
@@ -753,17 +753,16 @@ func (r *ActionsGatewayReconciler) evalEgressRulesStale(ag *gmcv1alpha1.ActionsG
 	}
 	last, ok := r.IPCache.LastRefresh()
 	if !ok {
-		return egressStale{reason: gmcv1alpha1.ReasonRefreshPending,
-			message: "awaiting first GitHub IP-range refresh"}
+		return egressStale{stale: true, reason: gmcv1alpha1.ReasonRefreshNeverSucceeded,
+			message: "no GitHub IP-range refresh has succeeded, so the egress allowlist carries no GitHub ranges and GitHub egress is denied"}
 	}
 	threshold := r.egressStaleThreshold()
 	age := now.Sub(last)
 	if age > threshold {
 		return egressStale{
-			stale:  true,
-			reason: gmcv1alpha1.ReasonRefreshStalled,
-			message: fmt.Sprintf("GitHub egress IP-range allowlist last refreshed %s ago, exceeding the %s staleness window; "+
-				"egress to rotated GitHub ranges may be silently dropped", age.Round(time.Minute), threshold),
+			stale:   true,
+			reason:  gmcv1alpha1.ReasonRefreshStalled,
+			message: refreshStalledMessage(r.IPCache, age, threshold),
 		}
 	}
 	return egressStale{reason: gmcv1alpha1.ReasonRefreshCurrent,
@@ -791,6 +790,11 @@ func (r *ActionsGatewayReconciler) egressRecheckRequeue(ag *gmcv1alpha1.ActionsG
 	}
 	if r.IPCache == nil {
 		return 0
+	}
+	// Nothing about the first fetch landing reaches this controller, so poll briefly
+	// until it has, or RefreshNeverSucceeded would outlive the outage by hours.
+	if _, ok := r.IPCache.LastRefresh(); !ok {
+		return time.Minute
 	}
 	d := r.egressStaleThreshold() / 8
 	if d < time.Minute {

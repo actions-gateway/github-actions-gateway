@@ -448,6 +448,12 @@ func (r *IPRangeReconciler) ReconcileNow(ctx context.Context) {
 // and one bad CR must not block the retry loop from completing.
 func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) error {
 	cidrs, err := r.Fetcher.FetchIPRanges(ctx)
+	if err == nil && len(cidrs) == 0 {
+		// Treated as a bad response (/meta published 8,418 api/actions/web ranges when
+		// measured 2026-11-01): taking it would blank the cache while EgressRulesStale
+		// reads RefreshCurrent.
+		err = errors.New("GitHub meta returned no usable IP ranges")
+	}
 	if err != nil {
 		log.Error("failed to fetch GitHub IP ranges", "error", err)
 		return err
@@ -461,7 +467,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	}
 	// A failed write costs only the next restart's head start, so it does not fail
 	// the refresh.
-	if r.Store != nil && len(cidrs) > 0 {
+	if r.Store != nil {
 		if err := r.Store.Save(ctx, cidrs, fetchedAt); err != nil {
 			log.Error("failed to persist GitHub IP ranges", "error", err)
 		}

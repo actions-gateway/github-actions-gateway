@@ -19,6 +19,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
+  - [Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded](#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded)
   - [Non-breaking: the GMC keeps GitHub egress across a restart](#non-breaking-the-gmc-keeps-github-egress-across-a-restart)
   - [Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner](#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner)
   - [Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run](#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run)
@@ -252,6 +253,18 @@ A worker that never left `Pending` because it was never scheduled was already ha
 These workers also stop adding samples to `actions_gateway_job_duration_seconds`, which already skipped a worker that never started a container, so where image pulls are slow or broken the series' count drops and its percentiles shift.
 
 **Rolling back** returns these workers to the unstarted-job timeout.
+
+### Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded
+
+**Who is affected:** anyone alerting on `EgressRulesStale` or `actions_gateway_egress_rules_stale`.
+Nothing to do, unless you alert on reason `RefreshPending`: that reason no longer covers this state, so match `RefreshNeverSucceeded` as well.
+
+A CIDR-mode `EgressProxy` or v1 `ActionsGateway` used to read `EgressRulesStale=False` / `RefreshPending` while the GMC had no GitHub IP ranges at all, which is exactly when its policy denies all GitHub egress.
+It now reads `True` with the new reason `RefreshNeverSucceeded`, so the existing `ActionsGatewayEgressRulesStale` alert fires on it after 15 minutes (Q1228).
+`RefreshPending` remains only for an unmanaged or FQDN-mode policy.
+While the state lasts, the GMC re-checks it every minute, so it clears within a minute of the first fetch.
+
+**Rolling back** returns the state to `False` / `RefreshPending`.
 
 ### Non-breaking: the GMC keeps GitHub egress across a restart
 

@@ -51,7 +51,11 @@ func reconcilePool(t *testing.T, c client.Client) {
 
 func reconcilePoolAt(t *testing.T, c client.Client, now time.Time) ctrl.Result {
 	t.Helper()
-	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: &IPRangeCache{}, ProxyImage: "proxy:test", Now: func() time.Time { return now }}
+	// A refreshed cache, so the never-refreshed recheck (Q1228) does not shorten the
+	// requeue these tests assert.
+	cache := &IPRangeCache{}
+	cache.MarkRefreshed(now)
+	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: cache, ProxyImage: "proxy:test", Now: func() time.Time { return now }}
 	res, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "provider", Name: "shared"}})
 	require.NoError(t, err)
 	return res
