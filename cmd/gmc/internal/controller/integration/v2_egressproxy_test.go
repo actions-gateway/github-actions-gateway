@@ -37,6 +37,18 @@ func proxyChildName(ep string) string { return ep + "-proxy" }
 func proxyTLSName(ep string) string   { return ep + "-proxy-tls" }
 func proxyIdentityLabel() string      { return "actions-gateway.com/egress-proxy" }
 
+// waitForProxyPass waits for the proxy PDB, the last child every EgressProxy reconcile
+// pass applies, so once it returns every earlier child (TLS and metrics Secrets,
+// NetworkPolicy, Deployment, Service, HPA) exists and a Get of one is not a
+// mid-reconcile read race.
+func waitForProxyPass(t *testing.T, ns, name string) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		var pdb policyv1.PodDisruptionBudget
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pdb) == nil
+	}, 10*time.Second, 100*time.Millisecond, "proxy PDB should be created")
+}
+
 // hasControllerOwnerRef reports whether refs contains a controller owner reference
 // to an EgressProxy named epName — the mechanism that drives cascade GC in a real
 // cluster (envtest runs no GC controller, so the owner reference itself is what we
@@ -78,13 +90,9 @@ func TestV2_EgressProxy_ReconcilesOwnedProxyPool(t *testing.T) {
 
 	name := proxyChildName(egressProxyName)
 
-	// Wait for the NetworkPolicy — the last child applied in a reconcile pass — so a
-	// successful Get here guarantees every earlier child (cert Secret, Deployment,
-	// Service, HPA, PDB) already exists, avoiding a mid-reconcile read race.
+	waitForProxyPass(t, ns, name)
 	var np networkingv1.NetworkPolicy
-	require.Eventually(t, func() bool {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
-	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np))
 
 	// Deployment: created, owned, replicas == minReplicas, identity label, TLS mount.
 	var dep appsv1.Deployment
@@ -280,10 +288,9 @@ func TestV2_EgressProxy_DestinationCIDRsInjected(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	name := proxyChildName(egressProxyName)
+	waitForProxyPass(t, ns, name)
 	var np networkingv1.NetworkPolicy
-	require.Eventually(t, func() bool {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
-	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np))
 
 	// (1) Deployment env: allowlist injected, GitHub by hostname + operator CIDR.
 	var dep appsv1.Deployment
@@ -403,13 +410,9 @@ func TestV2_EgressProxy_ProvisionsMetricsMTLS(t *testing.T) {
 
 	name := proxyChildName("metered")
 
-	// Wait for the NetworkPolicy — the last child applied in a reconcile pass — so a
-	// successful Get guarantees every earlier child (both metrics Secrets, the
-	// Deployment, the Service) already exists, avoiding a mid-reconcile read race.
+	waitForProxyPass(t, ns, name)
 	var np networkingv1.NetworkPolicy
-	require.Eventually(t, func() bool {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
-	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np))
 
 	// Server bundle Secret: created, owned, TLS type, carries the metrics CA so the
 	// proxy can verify scraper client certs.
@@ -540,12 +543,8 @@ func TestV2_EgressProxy_UnmanagedAutoscalingLifecycle(t *testing.T) {
 
 	name := proxyChildName("byo")
 
-	// Wait for the NetworkPolicy — the last child applied in a reconcile pass — so
-	// the absence of the HPA below is a real skip, not a mid-reconcile read race.
-	var np networkingv1.NetworkPolicy
-	require.Eventually(t, func() bool {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &np) == nil
-	}, 10*time.Second, 100*time.Millisecond, "proxy NetworkPolicy should be created")
+	// The PDB follows the HPA step, so the absence of the HPA below is a real skip.
+	waitForProxyPass(t, ns, name)
 
 	var dep appsv1.Deployment
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &dep))
