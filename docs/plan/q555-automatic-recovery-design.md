@@ -280,7 +280,7 @@ Classes go through one deferred path, built beside the abandoned arm's (Q691, `a
   The abandoned arm keeps its own path unchanged.
 - **Release needs the run concluded.** A failed job's siblings can run for an hour, and `rerunUntilAccepted`'s 15-minute window would expire into `run_never_concluded`.
   The sweeper reads the run every 30 seconds for the first 5 minutes, every 2 minutes to the first hour, then every 10 minutes.
-  An entry expires after 24 hours, with `reason="run_never_concluded"`, once one last read finds the run still in progress or fails (a concluded run is released, Q1254): GitHub lets a run go on far longer, but by then a person has seen the failure, and the cap bounds the polling at about 175 reads per entry.
+  An entry expires after 24 hours, with `reason="run_never_concluded"`, once one last read finds the run still in progress, or reads keep failing for half an hour past it (a concluded run is released, Q1254): GitHub lets a run go on far longer, but by then a person has seen the failure, and the cap bounds the polling at about 175 reads per entry.
 - **Release then needs the cause cleared:**
   - `freshPod` releases at once;
   - `observable` releases when `ready` is true;
