@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -12,6 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // sweepPendingAndWait runs one pending sweep, requires it to release want parked
@@ -59,12 +62,31 @@ func pendingFixture(t *testing.T) (*Provisioner, *ledgerRunAPI, *stubTarget, *at
 
 // pendingFaults are failures pendingFixtureWith's GitHub serves ahead of the run API:
 // readStatus, where non-zero, answers that many run reads with its status code, and a
-// rerun POST waits on rerunGate, where set, before it is answered.
+// rerun POST waits on rerunGate, where set, before it is answered. gets counts every run
+// read, and ledger is the client the set's failure ledger lives in.
 type pendingFaults struct {
 	mu         sync.Mutex
 	readStatus int
 	reads      int
 	rerunGate  chan struct{}
+	gets       atomic.Int64
+	ledger     client.Client
+}
+
+// freezeLedger raises the ledger's minWriterVersion past this AGC's, so every write to it
+// is refused while reads still parse.
+func (f *pendingFaults) freezeLedger(t *testing.T, target *stubTarget) {
+	t.Helper()
+	var cm corev1.ConfigMap
+	require.NoError(t, f.ledger.Get(context.Background(), client.ObjectKey{
+		Namespace: target.key.Namespace, Name: scaleSetRerunLedgerConfigMapName(target.key.Name)}, &cm))
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal([]byte(cm.Data[rerunLedgerDataKey]), &raw))
+	raw["minWriterVersion"] = 99
+	b, err := json.Marshal(raw)
+	require.NoError(t, err)
+	cm.Data[rerunLedgerDataKey] = string(b)
+	require.NoError(t, f.ledger.Update(context.Background(), &cm))
 }
 
 func (f *pendingFaults) failReads(status, n int) {
@@ -79,8 +101,11 @@ func pendingFixtureWith(t *testing.T) (*Provisioner, *ledgerRunAPI, *stubTarget,
 	target.spec = &ResolvedSpec{MaxEvictionRetries: 2}
 	concluded := &atomic.Bool{}
 	api.holdUntil = concluded.Load
-	faults := &pendingFaults{}
+	faults := &pendingFaults{ledger: c}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			faults.gets.Add(1)
+		}
 		faults.mu.Lock()
 		status, gate := 0, faults.rerunGate
 		if r.Method == http.MethodGet && faults.reads > 0 {
@@ -223,24 +248,71 @@ func TestPendingRerun_AdoptedPastADayReadsTheRunFirst(t *testing.T) {
 	assert.Empty(t, l.Pending)
 }
 
-// TestPendingRerun_TheFinalReadIsBounded: the read at the 24-hour mark is the last one. A
-// failed read expires the entry as never concluded instead of releasing it or polling on.
+// TestPendingRerun_TheFinalReadIsBounded: a run that cannot be read at the 24-hour mark is
+// read again at the poll cadence for pendingRerunFinalReadWindow, then expires as never
+// concluded rather than being released or polled on.
 func TestPendingRerun_TheFinalReadIsBounded(t *testing.T) {
 	ctx := context.Background()
 	p, api, target, concluded, clock, _, faults := pendingFixtureWith(t)
 	parkOOM(p, target, "pod-a")
 
 	concluded.Store(true)
-	faults.failReads(http.StatusForbidden, 1)
+	faults.failReads(http.StatusInternalServerError, 1000)
 	clock.advance(pendingRerunMaxWait)
-	sweepPendingAndWait(t, p, ctx, 0)
+	before := faults.gets.Load()
+	for i := 0; i < 62; i++ {
+		sweepPendingAndWait(t, p, ctx, 0)
+		clock.advance(30 * time.Second)
+	}
 
 	assert.Zero(t, api.reruns.Load())
+	assert.Equal(t, int64(4), faults.gets.Load()-before, "the read at 24 h, then one every 10 minutes to 24.5 h")
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
 		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
-	assert.Empty(t, l.Pending, "a failed final read ends the wait")
+	assert.Empty(t, l.Pending, "the failed reads end the wait")
+}
+
+// TestPendingRerun_TheFinalReadRetriesAFailure: one bad answer at the 24-hour mark costs
+// a poll, not the re-run.
+func TestPendingRerun_TheFinalReadRetriesAFailure(t *testing.T) {
+	ctx := context.Background()
+	p, api, target, concluded, clock, _, faults := pendingFixtureWith(t)
+	parkOOM(p, target, "pod-a")
+
+	concluded.Store(true)
+	faults.failReads(http.StatusTooManyRequests, 1)
+	clock.advance(pendingRerunMaxWait)
+	sweepPendingAndWait(t, p, ctx, 0)
+	clock.advance(10 * time.Minute)
+	sweepPendingAndWait(t, p, ctx, 1)
+
+	assert.Equal(t, int64(1), api.reruns.Load())
+	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
+		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+}
+
+// TestPendingRerun_AnUnwritableLedgerKeepsTheCadence is the review finding on #2228: an
+// expiry whose ledger write fails leaves the entry for a later sweep, which must wait out
+// the poll cadence rather than read the run on every 30-second tick.
+func TestPendingRerun_AnUnwritableLedgerKeepsTheCadence(t *testing.T) {
+	ctx := context.Background()
+	p, _, target, _, clock, _, faults := pendingFixtureWith(t)
+	parkOOM(p, target, "pod-a")
+
+	faults.freezeLedger(t, target)
+	clock.advance(pendingRerunMaxWait)
+	before := faults.gets.Load()
+	for i := 0; i < 20; i++ {
+		sweepPendingAndWait(t, p, ctx, 0)
+		clock.advance(30 * time.Second)
+	}
+
+	assert.Equal(t, int64(1), faults.gets.Load()-before, "ten minutes of sweeps read the run once")
+	l, _, err := p.readRerunLedger(ctx, target)
+	require.NoError(t, err)
+	assert.Len(t, l.Pending, 1, "the entry the write could not drop is still parked")
 }
 
 // TestPendingRerun_ReRunAtTheDeadlineIsDropped: a run already re-run past the failed
@@ -289,7 +361,7 @@ func TestPendingRerun_PollCadenceBoundsTheReads(t *testing.T) {
 	t0 := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 	reads := 0
 	for age := time.Duration(0); age < pendingRerunMaxWait; age += 30 * time.Second {
-		if s.due("e", age, t0.Add(age)) {
+		if s.due("e", age, t0.Add(age), time.Time{}) {
 			reads++
 		}
 	}
