@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -103,4 +104,35 @@ func TestAGC_Reconciler_WorkerPodEventTriggersReconcile(t *testing.T) {
 		return r.ReconcileCountForTest() > before && hasCondition(&fetched, sentinelType)
 	}, 15*time.Second, 50*time.Millisecond,
 		"worker Pod creation did not trigger a reconcile that flushed the buffered condition (Pod watch not wired?)")
+}
+
+// TestV2_RunnerSet_WorkerPodEventTriggersReconcile proves the RunnerSet controller's
+// worker-Pod watch is wired: creating a worker Pod re-triggers a reconcile, so status
+// and the reaper track pod transitions without waiting for the next RunnerSet write
+// or the cache resync.
+//
+// The set's gateway does not exist, so it settles at GatewayNotFound with no listener
+// and no provisioned pods; once the controller quiesces, the hand-made Pod is the only
+// thing that can wake it.
+func TestV2_RunnerSet_WorkerPodEventTriggersReconcile(t *testing.T) {
+	const ns = "v2-podwatch-test"
+	const setName = "podwatch-set"
+
+	createNSForAGC(t, ns)
+	r := startRunnerSetReconciler(t)
+
+	rs := newRunnerSet(setName, ns, "gw-does-not-exist")
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionFalse, v2alpha1.ReasonGatewayNotFound)
+	waitForQuiescence(t, r)
+	before := r.ReconcileCountForTest()
+
+	createV2WorkerPod(t, ns, setName, "runner-podwatch-probe")
+
+	require.Eventually(t, func() bool {
+		return r.ReconcileCountForTest() > before
+	}, 15*time.Second, 50*time.Millisecond,
+		"worker Pod creation did not trigger a reconcile (Pod watch not wired?)")
 }
