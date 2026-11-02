@@ -5,7 +5,7 @@ package integration_test
 import (
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -32,10 +32,10 @@ func TestV2_EgressProxy_Scheduling_AllowsAllowlistedPriorityClass(t *testing.T) 
 	const ns = "v2-ep-sched-allow"
 	createNamespace(t, ns)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "allowed", Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
-			Scheduling: &gmcv2alpha1.PodScheduling{
+		Spec: gmcv2.EgressProxySpec{
+			Scheduling: &gmcv2.PodScheduling{
 				PriorityClassName:         "gag-infra-critical",
 				TopologySpreadConstraints: []corev1.TopologySpreadConstraint{schedulingZonalSpread()},
 			},
@@ -51,10 +51,10 @@ func TestV2_EgressProxy_Scheduling_RejectsOffAllowlistPriorityClass(t *testing.T
 
 	// system-cluster-critical is nameable from any namespace (not kube-system-scoped) —
 	// exactly the cluster-wide preemption escape the infra gate exists to close.
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "offlist", Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
-			Scheduling: &gmcv2alpha1.PodScheduling{PriorityClassName: "system-cluster-critical"},
+		Spec: gmcv2.EgressProxySpec{
+			Scheduling: &gmcv2.PodScheduling{PriorityClassName: "system-cluster-critical"},
 		},
 	}
 	err := k8sClient.Create(ctx, ep)
@@ -68,10 +68,10 @@ func TestV2_EgressProxy_Scheduling_EmptyPriorityClassAlwaysAllowed(t *testing.T)
 
 	// No priorityClassName, only a topologySpreadConstraint: the ungated fields are
 	// usable on their own, and an empty name never trips the gate.
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "empty", Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
-			Scheduling: &gmcv2alpha1.PodScheduling{
+		Spec: gmcv2.EgressProxySpec{
+			Scheduling: &gmcv2.PodScheduling{
 				TopologySpreadConstraints: []corev1.TopologySpreadConstraint{schedulingZonalSpread()},
 			},
 		},
@@ -86,7 +86,7 @@ func TestV2_ActionsGateway_Scheduling_AllowsAllowlistedPriorityClass(t *testing.
 	createGitHubAppSecret(t, ns, "github-app")
 
 	ag := newV2GatewayWired("allowed", ns, "github-app", "")
-	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{
+	ag.Spec.Scheduling = &gmcv2.PodScheduling{
 		PriorityClassName:         "gag-infra-critical",
 		TopologySpreadConstraints: []corev1.TopologySpreadConstraint{schedulingZonalSpread()},
 	}
@@ -100,7 +100,7 @@ func TestV2_ActionsGateway_Scheduling_RejectsOffAllowlistPriorityClass(t *testin
 	createGitHubAppSecret(t, ns, "github-app")
 
 	ag := newV2GatewayWired("offlist", ns, "github-app", "")
-	ag.Spec.Scheduling = &gmcv2alpha1.PodScheduling{PriorityClassName: "system-cluster-critical"}
+	ag.Spec.Scheduling = &gmcv2.PodScheduling{PriorityClassName: "system-cluster-critical"}
 	err := k8sClient.Create(ctx, ag)
 	require.Error(t, err, "an off-allowlist infra PriorityClass must be rejected on a v2 ActionsGateway")
 	assert.Contains(t, err.Error(), "infra allowlist")

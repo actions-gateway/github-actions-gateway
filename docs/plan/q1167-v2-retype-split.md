@@ -1,7 +1,7 @@
 # Q1167: how the `v2` retype and the `v2alpha1`/`v2beta1` drop split into PRs
 
 Three PRs, and the classic removal moves ahead of the second one.
-[Q1262](../queue/Q1262.md) retypes the Gateway Manager Controller (GMC) onto `api/v2`, [Q1263](../queue/Q1263.md) retypes the Actions Gateway Controller (AGC), and [Q1167](../queue/Q1167.md) then deletes `api/v2alpha1`, `api/v2beta1` and the conversion machinery in one PR.
+Q1262 retypes the Gateway Manager Controller (GMC) onto `api/v2`, [Q1263](../queue/Q1263.md) retypes the Actions Gateway Controller (AGC), and [Q1167](../queue/Q1167.md) then deletes `api/v2alpha1`, `api/v2beta1` and the conversion machinery in one PR.
 The AGC retype waits for Q264's classic removal rather than preceding it, because the AGC reads two fields `v2` does not have, and nothing else forces an order between the two.
 
 This is the scoping answer [Q1167](../queue/Q1167.md) asked for ("how the retype splits into PRs is the first thing to decide").
@@ -13,7 +13,7 @@ It changes no code; the background is [v2-ga.md](v2-ga.md) Phase 3.
 |---|---|---|---|---|
 | 0a | Q273's test port (in flight, ID not yet allocated) | Port the e2e tenant fixtures, the RunnerGroup-driven AGC envtests and `cmd/agc/test/load` onto `v2` tenants typed on `api/v2` | none | in flight |
 | 0b | Q273 (in flight) | Remove `v1alpha1` and `gag-migrate`'s v1→v2 fan-out | 0a | in flight |
-| 1 | [Q1262](../queue/Q1262.md) | Retype the GMC onto `api/v2` | Q273 | ❌ open |
+| 1 | Q1262 | Retype the GMC onto `api/v2` | Q273 | ✅ done; the classic-reading trio stays on `v2alpha1` ([what it left](#what-q1262-left-on-the-older-versions)) |
 | 2 | Q264 | Remove classic acquisition | Q273 | ❌ open |
 | 3 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` | Q273, Q264 | ❌ open |
 | 4 | [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1`, the hub and the conversion webhook | Q1262, Q1263 | ❌ open |
@@ -75,7 +75,8 @@ Within the GMC, a function's signature and every caller change together, which i
 `v2alpha1` and `v2beta1` stay registered in the GMC's scheme (`cmd/gmc/cmd/main.go`) because the conversion webhook still serves them.
 
 Two files in the GMC read the classic field, `scalesetscope.go:152` and through it `runnerset_read.go`.
-If Q264 has merged when Q1262 is cut, they retype with the rest; if not, they stay on `v2alpha1` and Q1167 retypes them, which compiles because they form a closed pair.
+If Q264 has merged when Q1262 is cut, they retype with the rest; if not, they stay on `v2alpha1` and Q1167 retypes them.
+The closed set is three files, not two: `runnerset_read.go` also hands its `v2alpha1` lists to `agentidentity.FromLists`, the only production caller of `cmd/gmc/internal/agentidentity`, so that package stays with them (measured by compiling the retype, 2026-11-02).
 
 **Step 3, Q1263 (AGC).** After Q264 the AGC's `v2alpha1` use is the shared surface only, so the swap is mechanical.
 `cmd/agc/internal/controller/v2_detect.go` asks the REST mapper whether `RunnerSet` is served at `v2alpha1`; retyped, it asks about `v2`, which every release since 1.9 serves.
@@ -148,6 +149,27 @@ It must also keep working against a `v2`-only cluster, which it does not today (
 **34 surviving files import both `v1alpha1` and `v2alpha1`/`v2beta1`, 29 after the test port.** Q273 edits each to drop its `v1alpha1` half, and Q1262 or Q1263 then edits the same file, so each retype starts by rebasing onto Q273's edits.
 Seven are non-test: `cmd/agc/main.go`, `cmd/agc/internal/controller/runnerset_controller.go`, `cmd/gmc/cmd/main.go`, `cmd/gmc/internal/agentidentity/agentidentity.go`, `cmd/gmc/internal/webhook/v2/runnerset_read.go`, `cmd/gmc/internal/webhook/validation/validation.go` and `cmd/gmc/migrate/main.go`.
 The rest are tests, mostly under the two `internal/controller/integration` suites.
+
+## What Q1262 left on the older versions
+
+Q264 had not merged when Q1262 was cut, so the classic-reading trio stayed on `v2alpha1`: `scalesetscope.go`, `webhook/v2/runnerset_read.go` and `agentidentity.go`, with their own unit tests.
+Q1167 retypes them once Q264 has removed the classic read.
+
+Their callers are on `v2`, and the fake client does not convert between versions, so unit tests reaching the trio store each fixture at both versions.
+`withV2alpha1Views` in `webhook/v2/actionsgateway_webhook_test.go` does it for the validators, and `asV2Gateway` in `controller/actionsgateway_scaleset_collision_test.go` for the collision check; both go when the trio retypes.
+
+The split also costs the GMC a second informer for `ActionsGateway` and `RunnerSet` until then: `evalScaleSetNameCollisions` lists through the reconciler's cached client at `v2alpha1`, while the controllers watch `v2`, and controller-runtime keys informers by group, version and kind (read from source, not measured).
+And a stored `CiliumFQDN`/`CalicoFQDN` alias on a `main` build in this window is admitted unchanged but read by the controller as plain `FQDN`, so it follows `--fqdn-policy-backend`; under `none` the pool loses its CNI-native policy without a condition.
+No `v2.0.0` cluster can hold one ([why](#why-a-retype-is-mechanical-everywhere-except-two-places)).
+
+The rest of what stays names a version on purpose, and Q1167 deletes or retargets it:
+
+- `cmd/gmc/cmd/main.go` registers `v2alpha1` and `v2beta1`, which the conversion webhook still serves, and `storageversion.go` reads `v2beta1` as above.
+- The conversion tests (`v2_conversion_test.go`, `v2_ga_conversion_test.go`, `conversion_annotations_test.go`), the storage sweep's tests, the hub reads in `v2_scheduling_test.go` and `actionsgateway_webhook_test.go`, and `v2_egressproxy_admission_test.go`, which pins the alias admission (Q1085) at the versions that can name one.
+- `priorityclass_vap_test.go` writes at each served version, so the guard's rules for `v2alpha1` and `v2beta1` stay covered until Q1167 retargets them ([item 2](#what-compiles-and-still-breaks)).
+- `webhook_admission_test.go` writes one Classic set at `v2alpha1`, and `cmd/gmc/test/utils/fixtures.go` still builds Classic sets for e2e; both are Q264's.
+
+The `v2alpha1` CRD tests retyped onto `v2` as `v2_crd_test.go`: their CEL rules are byte-identical across versions, which `check-v2-api-sync.sh` holds, so they now cover the version that survives.
 
 ## Sizes, measured
 

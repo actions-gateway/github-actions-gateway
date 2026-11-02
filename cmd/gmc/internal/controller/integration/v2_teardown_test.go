@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -34,7 +34,7 @@ func TestV2_Teardown_FailClosedUntilChildrenGone(t *testing.T) {
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired(gwName, ns, "github-app", "shared")
@@ -80,11 +80,11 @@ func TestV2_Teardown_FailClosedUntilChildrenGone(t *testing.T) {
 		return containsAny(reasons, []string{"TeardownIncomplete"})
 	}, 30*time.Second, 250*time.Millisecond, "expected a TeardownIncomplete event while the AGC Deployment lingers, got %v", reasons)
 
-	var fetched v2alpha1.ActionsGateway
+	var fetched v2.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwName}, &fetched),
 		"the gateway CR must still exist while a child lingers")
 	require.NotNil(t, fetched.DeletionTimestamp, "the gateway should be mid-deletion")
-	assert.Contains(t, fetched.Finalizers, v2alpha1.ActionsGatewayFinalizer,
+	assert.Contains(t, fetched.Finalizers, v2.ActionsGatewayFinalizer,
 		"the cleanup finalizer must be retained while a child lingers")
 
 	// The unheld children are deleted explicitly (envtest runs no GC, so this is
@@ -109,7 +109,7 @@ func TestV2_Teardown_FailClosedUntilChildrenGone(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "hold finalizer should be released")
 
 	require.Eventually(t, func() bool {
-		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwName}, &v2alpha1.ActionsGateway{})
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwName}, &v2.ActionsGateway{})
 		return apierrors.IsNotFound(err)
 	}, 30*time.Second, 250*time.Millisecond, "the gateway must finalize away once every child is gone")
 

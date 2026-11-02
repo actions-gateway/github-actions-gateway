@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // §1 — buildNoProxy merge tests
@@ -112,9 +112,9 @@ func TestBuildNoProxy_DefaultsAreMinimal(t *testing.T) {
 
 // proxiedAGCDeploymentV2 renders ag's AGC Deployment behind a same-namespace pool
 // named "shared", the shape that mounts the proxy CA from the pool's TLS Secret.
-func proxiedAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, extraEnv []corev1.EnvVar) *appsv1.Deployment {
-	proxy := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ag.Namespace}}
-	return buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2alpha1.SecurityProfileBaseline, extraEnv)
+func proxiedAGCDeploymentV2(ag *gmcv2.ActionsGateway, extraEnv []corev1.EnvVar) *appsv1.Deployment {
+	proxy := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ag.Namespace}}
+	return buildAGCDeploymentV2(ag, "agc:test", proxy, gmcv2.SecurityProfileBaseline, extraEnv)
 }
 
 // lastEnvValue returns the value of the last env entry named name — the one
@@ -229,7 +229,7 @@ func TestBuildAGCDeploymentV2_TracingOffByDefault(t *testing.T) {
 
 func TestBuildAGCDeploymentV2_TracingEnabled(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{
+	ag.Spec.Tracing = gmcv2.TracingConfig{
 		Endpoint:   "https://otel-collector.observability:4317",
 		Insecure:   ptr(true),
 		Sampler:    "parentbased_traceidratio",
@@ -256,7 +256,7 @@ func TestBuildAGCDeploymentV2_TracingEnabled(t *testing.T) {
 func TestBuildAGCDeploymentV2_TracingOmitsUnsetKnobs(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	// Endpoint only: TLS stays on (no INSECURE), and the optional knobs are absent.
-	ag.Spec.Tracing = gmcv2alpha1.TracingConfig{Endpoint: "otel:4317"}
+	ag.Spec.Tracing = gmcv2.TracingConfig{Endpoint: "otel:4317"}
 	env := agcEnv(proxiedAGCDeploymentV2(ag, nil))
 
 	assert.Equal(t, "otel:4317", env["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"])
@@ -282,7 +282,7 @@ func TestBuildAGCDeploymentV2_ExtraEnvWins(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ag := v2Gateway("gw", "team-a", "github-app", "shared")
 			ag.Spec.GitHubURL = "https://github.com/spec-org"
-			ag.Spec.Tracing = gmcv2alpha1.TracingConfig{Endpoint: "spec-endpoint:4317"}
+			ag.Spec.Tracing = gmcv2.TracingConfig{Endpoint: "spec-endpoint:4317"}
 			dep := proxiedAGCDeploymentV2(ag, []corev1.EnvVar{{Name: tc.name, Value: tc.extra}})
 			assert.Equal(t, tc.extra, lastEnvValue(t, dep, tc.name), "AGC_EXTRA_ override must be last")
 		})

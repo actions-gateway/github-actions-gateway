@@ -1,7 +1,7 @@
 # Minimal CiliumNetworkPolicy CRD stub for envtest (Q208).
 #
 # NOT the upstream Cilium schema — just enough structure for the test apiserver to
-# accept the CiliumNetworkPolicy objects the GMC emits in CiliumFQDN mode so the
+# accept the CiliumNetworkPolicy objects the GMC emits under the cilium backend so the
 # integration suite can assert emission. spec is preserve-unknown-fields, so the GMC's
 # real (un-validated here) spec round-trips. Real clusters install Cilium's own CRD.
 apiVersion: apiextensions.k8s.io/v1

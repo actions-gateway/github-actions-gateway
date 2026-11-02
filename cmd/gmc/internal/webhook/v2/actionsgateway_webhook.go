@@ -6,7 +6,6 @@ import (
 	"os"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
@@ -81,7 +80,7 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 			return err
 		}
 	}
-	var runnerSets agcv2alpha1.RunnerSetList
+	var runnerSets agcv2.RunnerSetList
 	if err := v.reader.List(ctx, &runnerSets, client.InNamespace(gw.Namespace)); err != nil {
 		// Fail closed: admitting an unverifiable gitHubURL/noProxyCIDRs pair is the
 		// bypass this guards against.

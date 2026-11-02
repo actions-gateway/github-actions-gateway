@@ -5,7 +5,7 @@ package integration_test
 import (
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -13,19 +13,19 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// These tests prove the v2alpha1 (actions-gateway.com) GMC kinds install into the
+// These tests prove the v2 (actions-gateway.com) GMC kinds install into the
 // real apiserver and round-trip (Q149, M1 exit criterion), and that the
 // CEL/structural validation behaves under real-apiserver semantics — defaulting and
 // the per-field immutability transitions only the apiserver applies. No reconciler is
 // exercised: M1 is the API foundation only.
 
-func newV2ActionsGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
-	return &gmcv2alpha1.ActionsGateway{
+func newV2ActionsGateway(ns, name string) *gmcv2.ActionsGateway {
+	return &gmcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: gmcv2alpha1.ActionsGatewaySpec{
-			Credentials: gmcv2alpha1.GitHubCredentials{
-				Type:      gmcv2alpha1.CredentialTypeGitHubApp,
-				GitHubApp: &gmcv2alpha1.LocalSecretReference{Name: "acme-github-app"},
+		Spec: gmcv2.ActionsGatewaySpec{
+			Credentials: gmcv2.GitHubCredentials{
+				Type:      gmcv2.CredentialTypeGitHubApp,
+				GitHubApp: &gmcv2.LocalSecretReference{Name: "acme-github-app"},
 			},
 			GitHubURL: "https://github.com/acme",
 		},
@@ -34,21 +34,21 @@ func newV2ActionsGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
 
 // newV2WorkloadIdentityGateway builds a well-formed workload-identity (Q197)
 // ActionsGateway: the second credentials union member, with a Vault transit signer.
-func newV2WorkloadIdentityGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
-	return &gmcv2alpha1.ActionsGateway{
+func newV2WorkloadIdentityGateway(ns, name string) *gmcv2.ActionsGateway {
+	return &gmcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: gmcv2alpha1.ActionsGatewaySpec{
-			Credentials: gmcv2alpha1.GitHubCredentials{
-				Type: gmcv2alpha1.CredentialTypeWorkloadIdentity,
-				WorkloadIdentity: &gmcv2alpha1.WorkloadIdentity{
+		Spec: gmcv2.ActionsGatewaySpec{
+			Credentials: gmcv2.GitHubCredentials{
+				Type: gmcv2.CredentialTypeWorkloadIdentity,
+				WorkloadIdentity: &gmcv2.WorkloadIdentity{
 					AppID:          12345,
 					InstallationID: 67890,
-					Signer: gmcv2alpha1.ExternalSigner{
-						Provider: gmcv2alpha1.SignerProviderVault,
-						Vault: &gmcv2alpha1.VaultSigner{
+					Signer: gmcv2.ExternalSigner{
+						Provider: gmcv2.SignerProviderVault,
+						Vault: &gmcv2.VaultSigner{
 							Address: "https://vault.vault.svc:8200",
 							KeyName: "github-app",
-							Auth:    gmcv2alpha1.VaultKubernetesAuth{Role: "agc-acme"},
+							Auth:    gmcv2.VaultKubernetesAuth{Role: "agc-acme"},
 						},
 					},
 				},
@@ -66,13 +66,13 @@ func TestV2_ActionsGateway_RoundTripAndDefaulting(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "acme"}, &got))
 	// securityProfile is no longer a per-gateway field in v2: it relocated to the
 	// namespace (actions-gateway.com/security-profile label, Q175 / §H.16 #7).
 	assert.Equal(t, "info", got.Spec.LogLevel, "logLevel should default to info")
 	require.NotNil(t, got.Spec.Credentials.GitHubApp)
-	assert.Equal(t, gmcv2alpha1.CredentialTypeGitHubApp, got.Spec.Credentials.Type)
+	assert.Equal(t, gmcv2.CredentialTypeGitHubApp, got.Spec.Credentials.Type)
 	assert.Equal(t, "acme-github-app", got.Spec.Credentials.GitHubApp.Name)
 }
 
@@ -84,7 +84,7 @@ func TestV2_ActionsGateway_GitHubURLImmutable(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "acme"}, &got))
 
 	// githubURL is frozen by a CEL transition rule (self == oldSelf): rebinding a
@@ -103,7 +103,7 @@ func TestV2_ActionsGateway_GitHubAppRefNameMutable(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "acme"}, &got))
 
 	// credentials.githubApp.name is deliberately mutable — the supported
@@ -160,7 +160,7 @@ func TestV2_ActionsGateway_CredentialsUnion(t *testing.T) {
 		require.NoError(t, k8sClient.Create(ctx, ag))
 		t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
-		var got gmcv2alpha1.ActionsGateway
+		var got gmcv2.ActionsGateway
 		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "creds-wi-ok"}, &got))
 		require.NotNil(t, got.Spec.Credentials.WorkloadIdentity)
 		assert.Nil(t, got.Spec.Credentials.GitHubApp, "githubApp must be absent under WorkloadIdentity")
@@ -179,7 +179,7 @@ func TestV2_ActionsGateway_CredentialsUnion(t *testing.T) {
 	t.Run("two members set rejected", func(t *testing.T) {
 		ag := newV2WorkloadIdentityGateway(ns, "creds-two-members")
 		// type=WorkloadIdentity but githubApp also set — violates the githubApp iff rule.
-		ag.Spec.Credentials.GitHubApp = &gmcv2alpha1.LocalSecretReference{Name: "stray"}
+		ag.Spec.Credentials.GitHubApp = &gmcv2.LocalSecretReference{Name: "stray"}
 		err := k8sClient.Create(ctx, ag)
 		require.Error(t, err)
 		assert.True(t, apierrors.IsInvalid(err), "expected Invalid for two union members set, got %v", err)
@@ -210,14 +210,14 @@ func TestV2_EgressProxy_RoundTripAndDefaulting(t *testing.T) {
 	const ns = "v2-ep-rt"
 	createNamespace(t, ns)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
-	var got gmcv2alpha1.EgressProxy
+	var got gmcv2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "shared"}, &got))
 	require.NotNil(t, got.Spec.MinReplicas)
 	require.NotNil(t, got.Spec.MaxReplicas)
@@ -235,9 +235,9 @@ func TestV2_EgressProxy_MinReplicasExceedingMaxRejected(t *testing.T) {
 
 	minR := int32(5)
 	maxR := int32(2)
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "bad", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{MinReplicas: &minR, MaxReplicas: &maxR},
+		Spec:       gmcv2.EgressProxySpec{MinReplicas: &minR, MaxReplicas: &maxR},
 	}
 	err := k8sClient.Create(ctx, ep)
 	require.Error(t, err)
@@ -252,9 +252,9 @@ func TestV2_EgressProxy_DestinationFQDNsRequireFQDNMode(t *testing.T) {
 	const ns = "v2-ep-fqdn-mode"
 	createNamespace(t, ns)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "bad-fqdn", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{DestinationFQDNs: []string{"proxy.golang.org"}},
+		Spec:       gmcv2.EgressProxySpec{DestinationFQDNs: []string{"proxy.golang.org"}},
 	}
 	err := k8sClient.Create(ctx, ep)
 	require.Error(t, err)
@@ -267,10 +267,10 @@ func TestV2_EgressProxy_DestinationFQDNsAcceptedWithFQDNMode(t *testing.T) {
 	const ns = "v2-ep-fqdn-ok"
 	createNamespace(t, ns)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "ok-fqdn", Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
-			EgressPolicyMode: gmcv2alpha1.EgressPolicyModeFQDN,
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
 			DestinationFQDNs: []string{"proxy.golang.org", "sum.golang.org"},
 		},
 	}
@@ -285,9 +285,9 @@ func TestV2_EgressProxy_DestinationCIDRsAllowedInAnyMode(t *testing.T) {
 	const ns = "v2-ep-cidr"
 	createNamespace(t, ns)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cidr-default", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{"10.0.0.0/8", "199.36.153.8/30"}},
+		Spec:       gmcv2.EgressProxySpec{DestinationCIDRs: []string{"10.0.0.0/8", "199.36.153.8/30"}},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })

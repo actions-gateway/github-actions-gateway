@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/url"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/noproxy"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,11 +59,11 @@ type referrerHost struct {
 // pair when it arrives (it checks the proxies bound via its RunnerSets too).
 func referrerGitHubHosts(ctx context.Context, reader client.Reader, namespace, proxyName string) ([]referrerHost, error) {
 	var out []referrerHost
-	var gateways agcv2alpha1.ActionsGatewayList
+	var gateways agcv2.ActionsGatewayList
 	if err := reader.List(ctx, &gateways, client.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("list ActionsGateways in %q: %w", namespace, err)
 	}
-	gatewayByName := make(map[string]*agcv2alpha1.ActionsGateway, len(gateways.Items))
+	gatewayByName := make(map[string]*agcv2.ActionsGateway, len(gateways.Items))
 	for i := range gateways.Items {
 		gw := &gateways.Items[i]
 		gatewayByName[gw.Name] = gw
@@ -76,7 +76,7 @@ func referrerGitHubHosts(ctx context.Context, reader client.Reader, namespace, p
 			}
 		}
 	}
-	var runnerSets agcv2alpha1.RunnerSetList
+	var runnerSets agcv2.RunnerSetList
 	if err := reader.List(ctx, &runnerSets, client.InNamespace(namespace)); err != nil {
 		return nil, fmt.Errorf("list RunnerSets in %q: %w", namespace, err)
 	}
@@ -108,7 +108,7 @@ func validateGitHubHostAgainstProxy(ctx context.Context, reader client.Reader, n
 	if host == "" || proxyName == "" {
 		return nil
 	}
-	var ep agcv2alpha1.EgressProxy
+	var ep agcv2.EgressProxy
 	if err := reader.Get(ctx, client.ObjectKey{Namespace: namespace, Name: proxyName}, &ep); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

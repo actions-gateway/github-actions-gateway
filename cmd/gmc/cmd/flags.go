@@ -161,8 +161,7 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"enforced (cilium=CiliumNetworkPolicy, calico=Calico NetworkPolicy, gke=GKE "+
 			"Dataplane V2 FQDNNetworkPolicy). The secure default 'none' declares no backend, "+
 			"so an EgressProxy requesting FQDN intent is rejected at admission rather than "+
-			"silently degrading. The deprecated CiliumFQDN/CalicoFQDN modes ignore this flag "+
-			"and always emit their namesake policy. An unrecognized value fails startup.")
+			"silently degrading. An unrecognized value fails startup.")
 	fs.StringVar(&f.apiServerCIDRs, "apiserver-cidrs", "",
 		"Comma-separated CIDR allowlist for the AGC NetworkPolicy's Kubernetes API server "+
 			"(443/6443) egress rule. When set, the rule is scoped to these CIDRs (ipBlock) "+

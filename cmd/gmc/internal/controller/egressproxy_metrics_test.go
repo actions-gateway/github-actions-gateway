@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +33,7 @@ func egressProxyServiceMonitorScheme(t *testing.T) *runtime.Scheme {
 
 // epWithUID returns an EgressProxy with a UID so SetControllerReference stamps a
 // usable owner reference on children.
-func epWithUID(name, ns string) *gmcv2alpha1.EgressProxy {
+func epWithUID(name, ns string) *gmcv2.EgressProxy {
 	ep := newEP(name, ns, nil)
 	ep.UID = "ep-uid-1"
 	return ep

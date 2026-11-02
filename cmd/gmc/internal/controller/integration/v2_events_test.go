@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	eventsv1 "k8s.io/api/events/v1"
@@ -56,12 +56,12 @@ func containsAny(haystack, wanted []string) bool {
 func TestV2_ActionsGateway_EmitsEvents(t *testing.T) {
 	const ns = "v2-ag-events"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(ctx, &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired("gw", ns, "github-app", "shared")
@@ -77,7 +77,7 @@ func TestV2_ActionsGateway_EmitsEvents(t *testing.T) {
 	var reasons []string
 	require.Eventually(t, func() bool {
 		reasons = eventReasonsFor(t, ns, "ActionsGateway", "gw")
-		return containsAny(reasons, []string{"Provisioning", "MetricsCertificateIssued", v2alpha1.ReasonAGCNotReady})
+		return containsAny(reasons, []string{"Provisioning", "MetricsCertificateIssued", v2.ReasonAGCNotReady})
 	}, 30*time.Second, 250*time.Millisecond, "expected the ActionsGateway to emit a provisioning/credential/readiness Event, got %v", reasons)
 
 	assert.NotEmpty(t, reasons, "ActionsGateway should have at least one Event")
@@ -91,13 +91,13 @@ func TestV2_EgressProxy_EmitsEvents(t *testing.T) {
 	ep := newV2EgressProxyObject(egressProxyName, ns)
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns}})
+		_ = k8sClient.Delete(ctx, &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns}})
 	})
 
 	// Confirm the proxy pool is being reconciled (the child Deployment appears) before
 	// asserting on Events, so a slow first reconcile does not race the poll.
 	require.Eventually(t, func() bool {
-		var got v2alpha1.EgressProxy
+		var got v2.EgressProxy
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: egressProxyName}, &got) == nil
 	}, 10*time.Second, 100*time.Millisecond)
 
@@ -108,7 +108,7 @@ func TestV2_EgressProxy_EmitsEvents(t *testing.T) {
 	var reasons []string
 	require.Eventually(t, func() bool {
 		reasons = eventReasonsFor(t, ns, "EgressProxy", egressProxyName)
-		return containsAny(reasons, []string{"ProxyCertificateIssued", v2alpha1.ReasonProxyNotReady})
+		return containsAny(reasons, []string{"ProxyCertificateIssued", v2.ReasonProxyNotReady})
 	}, 30*time.Second, 250*time.Millisecond, "expected the EgressProxy to emit a cert-issuance/readiness Event, got %v", reasons)
 
 	assert.NotEmpty(t, reasons, "EgressProxy should have at least one Event")

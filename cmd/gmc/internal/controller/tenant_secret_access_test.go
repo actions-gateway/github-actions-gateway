@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -31,10 +31,10 @@ import (
 func TestIsTenantNamespace(t *testing.T) {
 	assert.True(t, isTenantNamespace(map[string]string{TenantNamespaceMarkerLabel: "true"}), "v1 marker")
 	assert.True(t, isTenantNamespace(map[string]string{
-		gmcv2alpha1.TenantNamespaceMarkerLabel: gmcv2alpha1.TenantNamespaceMarkerValue,
+		gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue,
 	}), "v2 marker")
 	assert.False(t, isTenantNamespace(map[string]string{TenantNamespaceMarkerLabel: "false"}), "v1 marker set false")
-	assert.False(t, isTenantNamespace(map[string]string{gmcv2alpha1.TenantNamespaceMarkerLabel: "true"}), "v2 marker with the v1 value")
+	assert.False(t, isTenantNamespace(map[string]string{gmcv2.TenantNamespaceMarkerLabel: "true"}), "v2 marker with the v1 value")
 	assert.False(t, isTenantNamespace(nil), "no labels")
 }
 

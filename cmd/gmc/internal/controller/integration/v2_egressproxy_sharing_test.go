@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -34,7 +34,7 @@ func shareConfigMapName() string { return "proxy-share-" + shareProviderNS + "-"
 // gatewayCondition returns the named condition on a freshly-read gateway, or nil.
 func gatewayCondition(t *testing.T, ns, name, condType string) *metav1.Condition {
 	t.Helper()
-	var ag v2alpha1.ActionsGateway
+	var ag v2.ActionsGateway
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &ag); err != nil {
 		return nil
 	}
@@ -49,7 +49,7 @@ func TestV2_ProxySharing_UngrantedCrossNamespaceRefIsDenied(t *testing.T) {
 	createNamespace(t, shareConsumerNS)
 	startActionsGatewayV2Reconciler(t)
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: shareProviderNS},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
@@ -58,19 +58,19 @@ func TestV2_ProxySharing_UngrantedCrossNamespaceRefIsDenied(t *testing.T) {
 	createGitHubAppSecret(t, shareConsumerNS, "share-creds")
 
 	ag := newV2GatewayWired("share-gw", shareConsumerNS, "share-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{
 		Name: sharedProxyName, Namespace: shareProviderNS,
 	}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
 	require.Eventually(t, func() bool {
-		c := gatewayCondition(t, shareConsumerNS, "share-gw", v2alpha1.ConditionDegraded)
-		return c != nil && c.Reason == v2alpha1.ReasonProxyShareNotGranted
+		c := gatewayCondition(t, shareConsumerNS, "share-gw", v2.ConditionDegraded)
+		return c != nil && c.Reason == v2.ReasonProxyShareNotGranted
 	}, 30*time.Second, 250*time.Millisecond,
 		"gateway did not report ProxyShareNotGranted for an unconsented cross-namespace proxyRef")
 
-	ready := gatewayCondition(t, shareConsumerNS, "share-gw", v2alpha1.ConditionReady)
+	ready := gatewayCondition(t, shareConsumerNS, "share-gw", v2.ConditionReady)
 	if ready != nil {
 		assert.NotEqual(t, metav1.ConditionTrue, ready.Status,
 			"gateway reached Ready despite an unconsented cross-namespace proxy")
@@ -98,17 +98,17 @@ func TestV2_ProxySharing_GrantAdmitsConsumerAndProjectsCA(t *testing.T) {
 	startEgressProxyReconciler(t, nil)
 	createGitHubAppSecret(t, consumerNS, "share-creds")
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
-			Sharing: &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		Spec: v2.EgressProxySpec{
+			Sharing: &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	ag := newV2GatewayWired("share-gw", consumerNS, "share-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
@@ -166,17 +166,17 @@ func TestV2_ProxySharing_RevokedGrantDeletesProjection(t *testing.T) {
 	startEgressProxyReconciler(t, nil)
 	createGitHubAppSecret(t, consumerNS, "share-creds")
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
-			Sharing: &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		Spec: v2.EgressProxySpec{
+			Sharing: &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	ag := newV2GatewayWired("share-gw", consumerNS, "share-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
@@ -191,7 +191,7 @@ func TestV2_ProxySharing_RevokedGrantDeletesProjection(t *testing.T) {
 
 	// Withdraw consent.
 	require.Eventually(t, func() bool {
-		var live v2alpha1.EgressProxy
+		var live v2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{
 			Namespace: providerNS, Name: sharedProxyName,
 		}, &live); err != nil {
@@ -240,17 +240,17 @@ func TestV2_ProxySharing_GatewayDefaultProxyRefWiresAGCFromProjection(t *testing
 	startActionsGatewayV2Reconciler(t)
 	createGitHubAppSecret(t, consumerNS, "share-creds")
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
-			Sharing: &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		Spec: v2.EgressProxySpec{
+			Sharing: &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	ag := newV2GatewayWired("share-gw", consumerNS, "share-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
@@ -300,23 +300,23 @@ func TestV2_ProxySharing_GatewayDefaultProxyRefWaitsForProjection(t *testing.T) 
 	startActionsGatewayV2Reconciler(t)
 	createGitHubAppSecret(t, consumerNS, "share-creds")
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: sharedProxyName, Namespace: providerNS},
-		Spec: v2alpha1.EgressProxySpec{
-			Sharing: &v2alpha1.ProxySharing{AllowedNamespaces: []string{consumerNS}},
+		Spec: v2.EgressProxySpec{
+			Sharing: &v2.ProxySharing{AllowedNamespaces: []string{consumerNS}},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	ag := newV2GatewayWired("share-gw", consumerNS, "share-creds", "")
-	ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
+	ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: sharedProxyName, Namespace: providerNS}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
 
 	require.Eventually(t, func() bool {
-		c := gatewayCondition(t, consumerNS, "share-gw", v2alpha1.ConditionDegraded)
-		return c != nil && c.Reason == v2alpha1.ReasonProxyShareNotGranted
+		c := gatewayCondition(t, consumerNS, "share-gw", v2.ConditionDegraded)
+		return c != nil && c.Reason == v2.ReasonProxyShareNotGranted
 	}, 30*time.Second, 250*time.Millisecond,
 		"gateway did not fail closed while its proxy's share projection is absent")
 	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: "share-gw-agc"}, &appsv1.Deployment{})

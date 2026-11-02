@@ -54,7 +54,7 @@ Set `egressPolicyMode: FQDN` on the `EgressProxy` and have the platform operator
 The enforced policy is identical either way — each alias pins its namesake backend, and `FQDN` plus the matching selector resolves to the same emitter — so this is a re-label, not a change in what is enforced.
 
 This is no longer optional, and the reason is mechanical rather than procedural.
-While `v2beta1` is served, a `v2` read shows a stored alias as `FQDN` and carries the alias in the annotation `conversion.actions-gateway.com/egress-policy-mode`, so the pool keeps its pinned backend.
+While `v2beta1` is served, a `v2` read shows a stored alias as `FQDN` and carries the alias in the annotation `conversion.actions-gateway.com/egress-policy-mode`, and a 1.10 GMC, which reads pools at `v2alpha1`, still sees the alias, so the pool keeps its pinned backend.
 `v2.0.0` removes every version that can store the alias, so an unmigrated pool is rewritten as plain `FQDN` and enforced by whatever `--fqdn-policy-backend` names, which may not be the backend its alias pinned.
 Migrating first makes that choice explicit instead of leaving it to the upgrade.
 

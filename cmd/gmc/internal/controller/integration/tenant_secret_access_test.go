@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
@@ -115,11 +115,11 @@ func startGMCAsServiceAccount(t *testing.T) {
 
 func credentialUnavailable(t *testing.T, ns, name string) func() bool {
 	return func() bool {
-		var ag gmcv2alpha1.ActionsGateway
+		var ag gmcv2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &ag); err != nil {
 			return false
 		}
-		return meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable)
+		return meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2.ConditionCredentialUnavailable)
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,7 +33,7 @@ func v2ServiceMonitorScheme(t *testing.T) *runtime.Scheme {
 
 // v2GatewayWithUID returns a gateway with a UID so SetControllerReference stamps a
 // usable owner reference on children.
-func v2GatewayWithUID(name, ns string) *gmcv2alpha1.ActionsGateway {
+func v2GatewayWithUID(name, ns string) *gmcv2.ActionsGateway {
 	ag := v2Gateway(name, ns, "github-app", "")
 	ag.UID = "ag-uid-1"
 	return ag

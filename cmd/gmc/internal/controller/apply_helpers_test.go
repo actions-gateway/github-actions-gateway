@@ -5,7 +5,7 @@ import (
 	"maps"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,7 +32,7 @@ func applyTestScheme(t *testing.T) *runtime.Scheme {
 	require.NoError(t, networkingv1.AddToScheme(s))
 	require.NoError(t, policyv1.AddToScheme(s))
 	require.NoError(t, autoscalingv2.AddToScheme(s))
-	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	require.NoError(t, gmcv2.AddToScheme(s))
 	return s
 }
 
@@ -43,8 +43,8 @@ func applyTestReconciler(t *testing.T, c client.Client, scheme *runtime.Scheme) 
 
 // applyTestAG returns an ActionsGateway with a UID so SetControllerReference
 // stamps a usable owner reference.
-func applyTestAG() *gmcv2alpha1.ActionsGateway {
-	return &gmcv2alpha1.ActionsGateway{
+func applyTestAG() *gmcv2.ActionsGateway {
+	return &gmcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: "tenant", Namespace: "tenant-ns", UID: "ag-uid-1"},
 	}
 }

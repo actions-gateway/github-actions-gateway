@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,8 +33,8 @@ import (
 // tenantPoolScheduling is the Q243 egress-IP pinning shape: pin the pool to one node
 // pool (nodeSelector), tolerate that pool's dedication taint, and express the same
 // constraint as a nodeAffinity so the composition rule is exercised too.
-func tenantPoolScheduling() *v2alpha1.PodScheduling {
-	return &v2alpha1.PodScheduling{
+func tenantPoolScheduling() *v2.PodScheduling {
+	return &v2.PodScheduling{
 		NodeSelector: map[string]string{"cloud.google.com/gke-nodepool": "pool-tenant-a"},
 		Tolerations: []corev1.Toleration{{
 			Key:      "dedicated",
@@ -66,15 +66,15 @@ func TestV2_EgressProxy_SchedulingPlumbedToDeployment(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "pinned", Namespace: ns},
-		Spec:       v2alpha1.EgressProxySpec{Scheduling: tenantPoolScheduling()},
+		Spec:       v2.EgressProxySpec{Scheduling: tenantPoolScheduling()},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	// The CR itself round-trips unpruned.
-	var stored v2alpha1.EgressProxy
+	var stored v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pinned"}, &stored))
 	require.NotNil(t, stored.Spec.Scheduling, "spec.scheduling must survive the apiserver (schema pruning guard)")
 	assert.Equal(t, "pool-tenant-a", stored.Spec.Scheduling.NodeSelector["cloud.google.com/gke-nodepool"])
@@ -111,10 +111,10 @@ func TestV2_EgressProxy_EmptyPodAntiAffinityOptsOutOfSpread(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &v2alpha1.EgressProxy{
+	ep := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "onenode", Namespace: ns},
-		Spec: v2alpha1.EgressProxySpec{
-			Scheduling: &v2alpha1.PodScheduling{
+		Spec: v2.EgressProxySpec{
+			Scheduling: &v2.PodScheduling{
 				Affinity: &corev1.Affinity{PodAntiAffinity: &corev1.PodAntiAffinity{}},
 			},
 		},
@@ -123,7 +123,7 @@ func TestV2_EgressProxy_EmptyPodAntiAffinityOptsOutOfSpread(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	// The empty object survives storage as a non-nil pointer.
-	var stored v2alpha1.EgressProxy
+	var stored v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "onenode"}, &stored))
 	require.NotNil(t, stored.Spec.Scheduling)
 	require.NotNil(t, stored.Spec.Scheduling.Affinity)
@@ -152,7 +152,7 @@ func TestV2_EgressProxy_NoSchedulingLeavesBuiltInSpread(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "plain", Namespace: ns}}
+	ep := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "plain", Namespace: ns}}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
@@ -177,9 +177,9 @@ func TestV2Conversion_EgressProxy_SchedulingRoundTrip(t *testing.T) {
 	const ns = "v2-conv-ep-sched"
 	createNamespace(t, ns)
 
-	orig := &v2alpha1.EgressProxy{
+	orig := &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "pinned", Namespace: ns},
-		Spec:       v2alpha1.EgressProxySpec{Scheduling: tenantPoolScheduling()},
+		Spec:       v2.EgressProxySpec{Scheduling: tenantPoolScheduling()},
 	}
 	require.NoError(t, k8sClient.Create(ctx, orig))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, orig) })
@@ -198,7 +198,7 @@ func TestV2Conversion_EgressProxy_SchedulingRoundTrip(t *testing.T) {
 			NodeSelectorTerms[0].MatchExpressions[0].Values)
 
 	// …and back down to the v2alpha1 spoke, unchanged.
-	var spoke v2alpha1.EgressProxy
+	var spoke v2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pinned"}, &spoke))
 	assert.Equal(t, orig.Spec.Scheduling, spoke.Spec.Scheduling, "round-trip must be lossless")
 }
@@ -221,7 +221,7 @@ func TestV2Conversion_ActionsGateway_SchedulingRoundTrip(t *testing.T) {
 	require.Len(t, hub.Spec.Scheduling.Tolerations, 1)
 	require.NotNil(t, hub.Spec.Scheduling.Affinity)
 
-	var spoke v2alpha1.ActionsGateway
+	var spoke v2.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &spoke))
 	assert.Equal(t, orig.Spec.Scheduling, spoke.Spec.Scheduling, "round-trip must be lossless")
 }

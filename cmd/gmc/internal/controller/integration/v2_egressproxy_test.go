@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,9 +65,9 @@ func TestV2_EgressProxy_ReconcilesOwnedProxyPool(t *testing.T) {
 	minR := int32(3)
 	maxR := int32(7)
 	targetCPU := int32(55)
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec: gmcv2alpha1.EgressProxySpec{
+		Spec: gmcv2.EgressProxySpec{
 			MinReplicas:                    &minR,
 			MaxReplicas:                    &maxR,
 			TargetCPUUtilizationPercentage: &targetCPU,
@@ -151,14 +151,14 @@ func TestV2_EgressProxy_ReconcilesOwnedProxyPool(t *testing.T) {
 
 	// Status: uniform contract. No kubelet ⇒ 0 ready pods ⇒ Ready False / ProxyNotReady.
 	require.Eventually(t, func() bool {
-		var got gmcv2alpha1.EgressProxy
+		var got gmcv2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: egressProxyName}, &got); err != nil {
 			return false
 		}
-		readyCond := findCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
-		degradedCond := findCondition(got.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+		readyCond := findCondition(got.Status.Conditions, gmcv2.ConditionReady)
+		degradedCond := findCondition(got.Status.Conditions, gmcv2.ConditionDegraded)
 		return readyCond != nil && readyCond.Status == metav1.ConditionFalse &&
-			readyCond.Reason == gmcv2alpha1.ReasonProxyNotReady &&
+			readyCond.Reason == gmcv2.ReasonProxyNotReady &&
 			degradedCond != nil && degradedCond.Status == metav1.ConditionFalse &&
 			got.Status.ObservedGeneration == got.Generation
 	}, 10*time.Second, 100*time.Millisecond, "EgressProxy status should surface Ready=False/ProxyNotReady, Degraded=False, observedGeneration set")
@@ -172,9 +172,9 @@ func TestV2_EgressProxy_DefaultsFlowIntoChildren(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "defaulted", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -200,9 +200,9 @@ func TestV2_EgressProxy_RecreatesDeletedChild(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "resilient", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -272,9 +272,9 @@ func TestV2_EgressProxy_DestinationCIDRsInjected(t *testing.T) {
 	startEgressProxyReconciler(t, ipCache)
 
 	const destCIDR = "10.20.0.0/16"
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{DestinationCIDRs: []string{destCIDR}},
+		Spec:       gmcv2.EgressProxySpec{DestinationCIDRs: []string{destCIDR}},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -308,9 +308,9 @@ func TestV2_EgressProxy_NoDestinationsTransportOnly(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -336,9 +336,9 @@ func TestV2_EgressProxy_LogLevelChange_RollsProxy(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -354,7 +354,7 @@ func TestV2_EgressProxy_LogLevelChange_RollsProxy(t *testing.T) {
 	// Flip spec.logLevel to debug (retry on conflict — the reconciler may still be
 	// writing status on first reconcile).
 	require.Eventually(t, func() bool {
-		var fetched gmcv2alpha1.EgressProxy
+		var fetched gmcv2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: egressProxyName}, &fetched); err != nil {
 			return false
 		}
@@ -394,9 +394,9 @@ func TestV2_EgressProxy_ProvisionsMetricsMTLS(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "metered", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -483,9 +483,9 @@ func TestV2_EgressProxy_ProvisionsServiceMonitor(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconcilerWithServiceMonitor(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "scraped", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -524,16 +524,16 @@ func TestV2_EgressProxy_UnmanagedAutoscalingLifecycle(t *testing.T) {
 	startEgressProxyReconciler(t, nil)
 
 	unmanaged := false
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "byo", Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{ManagedAutoscaling: &unmanaged},
+		Spec:       gmcv2.EgressProxySpec{ManagedAutoscaling: &unmanaged},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	// The CRD default is managed (true): an empty-spec object must round-trip the
 	// default, and this explicit false must survive it.
-	var defaulted gmcv2alpha1.EgressProxy
+	var defaulted gmcv2.EgressProxy
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "byo"}, &defaulted))
 	require.NotNil(t, defaulted.Spec.ManagedAutoscaling)
 	assert.False(t, *defaulted.Spec.ManagedAutoscaling)
@@ -558,7 +558,7 @@ func TestV2_EgressProxy_UnmanagedAutoscalingLifecycle(t *testing.T) {
 
 	// Flip to managed: the HPA appears.
 	require.Eventually(t, func() bool {
-		var fetched gmcv2alpha1.EgressProxy
+		var fetched gmcv2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "byo"}, &fetched); err != nil {
 			return false
 		}
@@ -573,7 +573,7 @@ func TestV2_EgressProxy_UnmanagedAutoscalingLifecycle(t *testing.T) {
 
 	// Flip back to unmanaged: the managed HPA is deleted.
 	require.Eventually(t, func() bool {
-		var fetched gmcv2alpha1.EgressProxy
+		var fetched gmcv2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "byo"}, &fetched); err != nil {
 			return false
 		}
@@ -598,9 +598,9 @@ func TestV2_EgressProxy_AuditLoggingChange_RollsProxy(t *testing.T) {
 	createNamespace(t, ns)
 	startEgressProxyReconciler(t, nil)
 
-	ep := &gmcv2alpha1.EgressProxy{
+	ep := &gmcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
-		Spec:       gmcv2alpha1.EgressProxySpec{},
+		Spec:       gmcv2.EgressProxySpec{},
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
@@ -618,7 +618,7 @@ func TestV2_EgressProxy_AuditLoggingChange_RollsProxy(t *testing.T) {
 		"the downward-API namespace rides with the audit opt-in, not on its own")
 
 	require.Eventually(t, func() bool {
-		var fetched gmcv2alpha1.EgressProxy
+		var fetched gmcv2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: egressProxyName}, &fetched); err != nil {
 			return false
 		}

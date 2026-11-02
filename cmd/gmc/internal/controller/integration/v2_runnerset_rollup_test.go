@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,7 +31,7 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired("gw", ns, "github-app", "shared")
@@ -43,7 +43,7 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 	boundA := newScaleSetRunnerSet("bound-a", ns, "gw", "linux")
 	boundB := newScaleSetRunnerSet("bound-b", ns, "gw", "windows")
 	other := newScaleSetRunnerSet("other-set", ns, "other-gw", "macos")
-	for _, rs := range []*v2alpha1.RunnerSet{boundA, boundB, other} {
+	for _, rs := range []*v2.RunnerSet{boundA, boundB, other} {
 		require.NoError(t, k8sClient.Create(ctx, rs))
 		rs := rs
 		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
@@ -61,11 +61,11 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 	requireRollup := func(status metav1.ConditionStatus, reason string, contains ...string) {
 		t.Helper()
 		require.Eventually(t, func() bool {
-			var got v2alpha1.ActionsGateway
+			var got v2.ActionsGateway
 			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 				return false
 			}
-			c := findCondition(got.Status.Conditions, v2alpha1.ConditionRunnerSetsDegraded)
+			c := findCondition(got.Status.Conditions, v2.ConditionRunnerSetsDegraded)
 			if c == nil || c.Status != status || c.Reason != reason {
 				return false
 			}
@@ -80,47 +80,47 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 
 	// Bound sets carry no Ready condition yet (no AGC reconciles them in this suite), so
 	// the rollup starts healthy — and the out-of-scope set is not in the count.
-	requireRollup(metav1.ConditionFalse, v2alpha1.ReasonAllRunnerSetsHealthy, "all 2 bound RunnerSet(s) healthy")
+	requireRollup(metav1.ConditionFalse, v2.ReasonAllRunnerSetsHealthy, "all 2 bound RunnerSet(s) healthy")
 
 	// Impair both bound sets: bound-a via a non-transient Ready=False (a reference or
 	// GitHub-auth failure), bound-b via the abnormal WorkersUnschedulable condition (a
 	// set can be serving yet have worker pods stuck Pending). The out-of-scope set is
 	// impaired too, to prove scoping.
 	setRunnerSetCondition(t, ns, "bound-a", metav1.Condition{
-		Type: v2alpha1.ConditionReady, Status: metav1.ConditionFalse,
-		Reason: v2alpha1.ReasonTokenUnavailable, Message: "test-induced",
+		Type: v2.ConditionReady, Status: metav1.ConditionFalse,
+		Reason: v2.ReasonTokenUnavailable, Message: "test-induced",
 	})
 	setRunnerSetCondition(t, ns, "bound-b", metav1.Condition{
-		Type: v2alpha1.ConditionWorkersUnschedulable, Status: metav1.ConditionTrue,
-		Reason: v2alpha1.ReasonPodsUnschedulable, Message: "test-induced",
+		Type: v2.ConditionWorkersUnschedulable, Status: metav1.ConditionTrue,
+		Reason: v2.ReasonPodsUnschedulable, Message: "test-induced",
 	})
 	setRunnerSetCondition(t, ns, "other-set", metav1.Condition{
-		Type: v2alpha1.ConditionReady, Status: metav1.ConditionFalse,
-		Reason: v2alpha1.ReasonTokenUnavailable, Message: "test-induced",
+		Type: v2.ConditionReady, Status: metav1.ConditionFalse,
+		Reason: v2.ReasonTokenUnavailable, Message: "test-induced",
 	})
 
 	// Both bound sets roll up, each naming its tripped signal; the control set does not.
-	requireRollup(metav1.ConditionTrue, v2alpha1.ReasonRunnerSetsImpaired,
+	requireRollup(metav1.ConditionTrue, v2.ReasonRunnerSetsImpaired,
 		"2 of 2 RunnerSet(s) impaired", "bound-a", "bound-b",
-		v2alpha1.ConditionReady+"="+v2alpha1.ReasonTokenUnavailable,
-		v2alpha1.ConditionWorkersUnschedulable)
+		v2.ConditionReady+"="+v2.ReasonTokenUnavailable,
+		v2.ConditionWorkersUnschedulable)
 
 	// Scoping: the set bound to a different gateway must never appear in gw's rollup.
-	var got v2alpha1.ActionsGateway
+	var got v2.ActionsGateway
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got))
-	assert.NotContains(t, findCondition(got.Status.Conditions, v2alpha1.ConditionRunnerSetsDegraded).Message, "other-set",
+	assert.NotContains(t, findCondition(got.Status.Conditions, v2.ConditionRunnerSetsDegraded).Message, "other-set",
 		"a RunnerSet bound to a different gateway must not roll up")
 
 	// Recover both bound sets; the rollup must clear back to healthy.
 	setRunnerSetCondition(t, ns, "bound-a", metav1.Condition{
-		Type: v2alpha1.ConditionReady, Status: metav1.ConditionTrue,
-		Reason: v2alpha1.ReasonListenerActive, Message: "recovered",
+		Type: v2.ConditionReady, Status: metav1.ConditionTrue,
+		Reason: v2.ReasonListenerActive, Message: "recovered",
 	})
 	setRunnerSetCondition(t, ns, "bound-b", metav1.Condition{
-		Type: v2alpha1.ConditionWorkersUnschedulable, Status: metav1.ConditionFalse,
-		Reason: v2alpha1.ReasonWorkersSchedulable, Message: "recovered",
+		Type: v2.ConditionWorkersUnschedulable, Status: metav1.ConditionFalse,
+		Reason: v2.ReasonWorkersSchedulable, Message: "recovered",
 	})
-	requireRollup(metav1.ConditionFalse, v2alpha1.ReasonAllRunnerSetsHealthy, "all 2 bound RunnerSet(s) healthy")
+	requireRollup(metav1.ConditionFalse, v2.ReasonAllRunnerSetsHealthy, "all 2 bound RunnerSet(s) healthy")
 
 	// Q330: a listener-pushed abnormal-is-True condition must roll up even when Ready has
 	// converged to the benign NoActiveSessions — the classic-set-with-revoked-credentials
@@ -128,15 +128,15 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 	// active. This exercises the watch predicate's independent Degraded axis end-to-end:
 	// without the fix Ready reads healthy and the impairment is silently dropped.
 	setRunnerSetCondition(t, ns, "bound-a", metav1.Condition{
-		Type: v2alpha1.ConditionReady, Status: metav1.ConditionFalse,
-		Reason: v2alpha1.ReasonNoActiveSessions, Message: "no session could be created",
+		Type: v2.ConditionReady, Status: metav1.ConditionFalse,
+		Reason: v2.ReasonNoActiveSessions, Message: "no session could be created",
 	})
 	setRunnerSetCondition(t, ns, "bound-a", metav1.Condition{
-		Type: v2alpha1.ConditionDegraded, Status: metav1.ConditionTrue,
-		Reason: v2alpha1.ReasonSessionUnauthorized, Message: "test-induced revoked credentials",
+		Type: v2.ConditionDegraded, Status: metav1.ConditionTrue,
+		Reason: v2.ReasonSessionUnauthorized, Message: "test-induced revoked credentials",
 	})
-	requireRollup(metav1.ConditionTrue, v2alpha1.ReasonRunnerSetsImpaired,
-		"1 of 2 RunnerSet(s) impaired", "bound-a", v2alpha1.ConditionDegraded)
+	requireRollup(metav1.ConditionTrue, v2.ReasonRunnerSetsImpaired,
+		"1 of 2 RunnerSet(s) impaired", "bound-a", v2.ConditionDegraded)
 }
 
 // setRunnerSetCondition upserts a status condition on a RunnerSet, retrying on the
@@ -145,7 +145,7 @@ func TestV2_ActionsGateway_RunnerSetsDegraded_Rollup(t *testing.T) {
 func setRunnerSetCondition(t *testing.T, ns, name string, cond metav1.Condition) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 			return false
 		}

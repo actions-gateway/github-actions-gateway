@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -32,7 +32,7 @@ func egressProxyTestScheme(t *testing.T) *runtime.Scheme {
 	require.NoError(t, autoscalingv2.AddToScheme(s))
 	require.NoError(t, policyv1.AddToScheme(s))
 	require.NoError(t, networkingv1.AddToScheme(s))
-	require.NoError(t, gmcv2alpha1.AddToScheme(s))
+	require.NoError(t, gmcv2.AddToScheme(s))
 	return s
 }
 
@@ -42,7 +42,7 @@ func egressProxyTestScheme(t *testing.T) *runtime.Scheme {
 // exercising the same code path in the unit tier.
 func TestEgressProxyReconcile_CreatesOwnedChildren(t *testing.T) {
 	scheme := egressProxyTestScheme(t)
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(2))
 	})
 
@@ -99,13 +99,13 @@ func TestEgressProxyReconcile_CreatesOwnedChildren(t *testing.T) {
 	assert.NotEmpty(t, metricsClient.Data[metricsCACertKey])
 
 	// Status contract: Ready=False/ProxyNotReady, Degraded=False, observedGeneration set.
-	var got gmcv2alpha1.EgressProxy
+	var got gmcv2.EgressProxy
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionFalse, ready.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonProxyNotReady, ready.Reason)
-	degraded := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionDegraded)
+	assert.Equal(t, gmcv2.ReasonProxyNotReady, ready.Reason)
+	degraded := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionDegraded)
 	require.NotNil(t, degraded)
 	assert.Equal(t, metav1.ConditionFalse, degraded.Status)
 	assert.Equal(t, got.Generation, got.Status.ObservedGeneration)
@@ -116,7 +116,7 @@ func TestEgressProxyReconcile_CreatesOwnedChildren(t *testing.T) {
 // Deployment status, since the fake client runs no controllers).
 func TestEgressProxyReconcile_ReadyWhenReplicasMeetMin(t *testing.T) {
 	scheme := egressProxyTestScheme(t)
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(1))
 	})
 	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
@@ -134,12 +134,12 @@ func TestEgressProxyReconcile_ReadyWhenReplicasMeetMin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, res.RequeueAfter, "a ready CIDR-mode pool without an IP cache has nothing to re-check on a timer")
 
-	var got gmcv2alpha1.EgressProxy
+	var got gmcv2.EgressProxy
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionTrue, ready.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonProxyReady, ready.Reason)
+	assert.Equal(t, gmcv2.ReasonProxyReady, ready.Reason)
 	assert.Equal(t, int32(1), got.Status.ReadyReplicas)
 }
 
@@ -149,9 +149,9 @@ func TestEgressProxyReconcile_ReadyWhenReplicasMeetMin(t *testing.T) {
 // policy drift would never be repaired.
 func TestEgressProxyReconcile_ReadyFQDNModeRequeues(t *testing.T) {
 	scheme := egressProxyTestScheme(t)
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(1))
-		ep.Spec.EgressPolicyMode = gmcv2alpha1.EgressPolicyModeFQDN
+		ep.Spec.EgressPolicyMode = gmcv2.EgressPolicyModeFQDN
 	})
 	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
 	dep.Status.ReadyReplicas = 1
@@ -169,9 +169,9 @@ func TestEgressProxyReconcile_ReadyFQDNModeRequeues(t *testing.T) {
 	require.NoError(t, err)
 	assert.Positive(t, res.RequeueAfter, "a ready FQDN-mode pool must keep a periodic drift re-check (Q326)")
 
-	var got gmcv2alpha1.EgressProxy
+	var got gmcv2.EgressProxy
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionTrue, ready.Status, "the requeue must come from the Ready path, not the not-ready backoff")
 }
@@ -182,7 +182,7 @@ func TestEgressProxyReconcile_ReadyFQDNModeRequeues(t *testing.T) {
 // count from minReplicas.
 func TestEgressProxyReconcile_UnmanagedAutoscalingSkipsHPA(t *testing.T) {
 	scheme := egressProxyTestScheme(t)
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(2))
 		ep.Spec.ManagedAutoscaling = ptr(false)
 	})
@@ -227,7 +227,7 @@ func TestEgressProxyReconcile_UnmanagedAutoscalingDeletesManagedHPA(t *testing.T
 	var hpa autoscalingv2.HorizontalPodAutoscaler
 	require.NoError(t, c.Get(ctx, key, &hpa), "managed by default: the HPA is provisioned")
 
-	var live gmcv2alpha1.EgressProxy
+	var live gmcv2.EgressProxy
 	require.NoError(t, c.Get(ctx, req.NamespacedName, &live))
 	live.Spec.ManagedAutoscaling = ptr(false)
 	require.NoError(t, c.Update(ctx, &live))
@@ -247,7 +247,7 @@ func TestEgressProxyReconcile_UnmanagedAutoscalingDeletesManagedHPA(t *testing.T
 // asked for; it is not wedged (Q173).
 func TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady(t *testing.T) {
 	scheme := egressProxyTestScheme(t)
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.MinReplicas = ptr(int32(2))
 		ep.Spec.ManagedAutoscaling = ptr(false)
 	})
@@ -266,9 +266,9 @@ func TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady(t *testing.T) {
 	require.NotNil(t, got.Spec.Replicas)
 	assert.Equal(t, int32(0), *got.Spec.Replicas, "an external scale-to-zero must not be restored to the floor")
 
-	var gotEP gmcv2alpha1.EgressProxy
+	var gotEP gmcv2.EgressProxy
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "shared"}, &gotEP))
-	ready := meta.FindStatusCondition(gotEP.Status.Conditions, gmcv2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(gotEP.Status.Conditions, gmcv2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionTrue, ready.Status, "0/0 ready is Ready: the pool converged to the external scaler's ask")
 }
@@ -278,7 +278,7 @@ func TestEgressProxyReconcile_UnmanagedScaleToZeroIsReady(t *testing.T) {
 func TestEgressProxyReconcile_DeletingIsNoOp(t *testing.T) {
 	scheme := egressProxyTestScheme(t)
 	now := metav1.Now()
-	ep := newEP("shared", "team-a", func(ep *gmcv2alpha1.EgressProxy) {
+	ep := newEP("shared", "team-a", func(ep *gmcv2.EgressProxy) {
 		ep.DeletionTimestamp = &now
 		ep.Finalizers = []string{"kubernetes"} // a finalizer is required for the fake client to retain a deleting object
 	})

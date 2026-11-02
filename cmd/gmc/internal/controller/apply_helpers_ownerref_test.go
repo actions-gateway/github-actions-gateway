@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -71,7 +71,7 @@ func TestV2ApplyHelpers_OwnerReferenceContract(t *testing.T) {
 	rbDesired := buildAGCRoleBindingV2(ag)
 	svcDesired := buildAGCServiceV2(ag)
 	npDesired := buildAGCNetworkPolicyV2(ag, nil, nil, false, nil)
-	depDesired := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileBaseline, nil)
+	depDesired := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2.SecurityProfileBaseline, nil)
 	crbName := clusterRunnerTemplateReaderBindingName(ag)
 
 	cases := []ownerRefCase{

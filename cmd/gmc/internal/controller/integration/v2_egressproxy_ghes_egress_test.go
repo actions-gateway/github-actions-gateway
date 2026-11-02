@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,7 +38,7 @@ func TestV2_EgressProxy_GHESReferrerInCIDRModeFlagsEgressGap(t *testing.T) {
 
 	// No referrer: nothing to be incomplete about.
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionGitHubEgressIncomplete)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionGitHubEgressIncomplete)
 	}, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionFalse),
 		gomega.HaveField("Reason", "GitHubEgressAllowed"),
@@ -50,7 +50,7 @@ func TestV2_EgressProxy_GHESReferrerInCIDRModeFlagsEgressGap(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), gw) })
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionGitHubEgressIncomplete)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionGitHubEgressIncomplete)
 	}, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionTrue),
 		gomega.HaveField("Reason", "ApplianceRangesRequired"),
@@ -60,7 +60,7 @@ func TestV2_EgressProxy_GHESReferrerInCIDRModeFlagsEgressGap(t *testing.T) {
 	// The operator's declaration clears it — the GMC cannot verify the ranges cover
 	// the appliance, only that the obligation was answered.
 	require.Eventually(t, func() bool {
-		var got gmcv2alpha1.EgressProxy
+		var got gmcv2.EgressProxy
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pool"}, &got); err != nil {
 			return false
 		}
@@ -71,7 +71,7 @@ func TestV2_EgressProxy_GHESReferrerInCIDRModeFlagsEgressGap(t *testing.T) {
 	}, 10*time.Second, 100*time.Millisecond, "destinationCIDRs update should land")
 
 	g.Eventually(func() *metav1.Condition {
-		return egressProxyCondition(t, ns, "pool", gmcv2alpha1.ConditionGitHubEgressIncomplete)
+		return egressProxyCondition(t, ns, "pool", gmcv2.ConditionGitHubEgressIncomplete)
 	}, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
 		gomega.HaveField("Status", metav1.ConditionFalse),
 		gomega.HaveField("Reason", "GitHubEgressAllowed"),

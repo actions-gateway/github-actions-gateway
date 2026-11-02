@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -57,7 +57,7 @@ const (
 //
 // A same-namespace reference is not this function's business — callers short-circuit
 // it before asking, since colocated use needs no grant.
-func proxyShareGranted(ep *gmcv2alpha1.EgressProxy, consumerNS string) bool {
+func proxyShareGranted(ep *gmcv2.EgressProxy, consumerNS string) bool {
 	if ep.Spec.Sharing == nil || consumerNS == "" {
 		return false
 	}
@@ -76,7 +76,7 @@ func proxyShareConfigMapName(proxyNamespace, proxyName string) string {
 // proxyShareServiceHost is the in-cluster DNS name a consumer dials to reach the
 // proxy. Same derivation the AGC uses for a colocated proxy, with the provider's
 // namespace substituted.
-func proxyShareServiceHost(ep *gmcv2alpha1.EgressProxy) string {
+func proxyShareServiceHost(ep *gmcv2.EgressProxy) string {
 	return fmt.Sprintf("%s.%s.svc.cluster.local", proxyResourceName(ep), ep.Namespace)
 }
 
@@ -88,7 +88,7 @@ func proxyShareServiceHost(ep *gmcv2alpha1.EgressProxy) string {
 // by the apiserver's garbage collector (an owner must be in the same namespace, or
 // cluster-scoped), so a dangling reference would make the object un-GC-able. The
 // reconciler prunes these explicitly instead — see pruneProxyShares.
-func buildProxyShareConfigMap(ep *gmcv2alpha1.EgressProxy, consumerNS string, caPEM []byte) *corev1.ConfigMap {
+func buildProxyShareConfigMap(ep *gmcv2.EgressProxy, consumerNS string, caPEM []byte) *corev1.ConfigMap {
 	noProxy := ""
 	if cidrs := ep.Spec.NoProxyCIDRs; len(cidrs) > 0 {
 		noProxy = strings.Join(cidrs, ",")
@@ -125,16 +125,16 @@ func buildProxyShareConfigMap(ep *gmcv2alpha1.EgressProxy, consumerNS string, ca
 // for it; projecting into every referring namespace would hand out the CA on the
 // consumer's say-so, which is the consent bypass this whole mechanism exists to
 // prevent.
-func consumerNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2alpha1.EgressProxy) ([]string, error) {
+func consumerNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2.EgressProxy) ([]string, error) {
 	if ep.Spec.Sharing == nil || len(ep.Spec.Sharing.AllowedNamespaces) == 0 {
 		return nil, nil
 	}
 
-	var gateways gmcv2alpha1.ActionsGatewayList
+	var gateways gmcv2.ActionsGatewayList
 	if err := c.List(ctx, &gateways); err != nil {
 		return nil, fmt.Errorf("list ActionsGateways: %w", err)
 	}
-	var runnerSets gmcv2alpha1.RunnerSetList
+	var runnerSets gmcv2.RunnerSetList
 	if err := c.List(ctx, &runnerSets); err != nil {
 		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}
@@ -178,16 +178,16 @@ func consumerNamespacesFor(ctx context.Context, c client.Client, ep *gmcv2alpha1
 //
 // A read failure is returned rather than swallowed: silently returning no namespaces
 // would strip working egress rules from a live policy.
-func grantedRemoteProxies(ctx context.Context, c client.Client, ag *gmcv2alpha1.ActionsGateway) ([]remoteProxy, error) {
+func grantedRemoteProxies(ctx context.Context, c client.Client, ag *gmcv2.ActionsGateway) ([]remoteProxy, error) {
 	refs := map[remoteProxy]struct{}{}
-	remote := func(ref *gmcv2alpha1.ProxyObjectRef) {
+	remote := func(ref *gmcv2.ProxyObjectRef) {
 		if ref != nil && ref.Namespace != "" && ref.Namespace != ag.Namespace {
 			refs[remoteProxy{Namespace: ref.Namespace, Name: ref.Name}] = struct{}{}
 		}
 	}
 	remote(ag.Spec.DefaultProxyRef)
 
-	var runnerSets gmcv2alpha1.RunnerSetList
+	var runnerSets gmcv2.RunnerSetList
 	if err := c.List(ctx, &runnerSets, client.InNamespace(ag.Namespace)); err != nil {
 		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}
@@ -200,7 +200,7 @@ func grantedRemoteProxies(ctx context.Context, c client.Client, ag *gmcv2alpha1.
 
 	var granted []remoteProxy
 	for ref := range refs {
-		var ep gmcv2alpha1.EgressProxy
+		var ep gmcv2.EgressProxy
 		if err := c.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, &ep); err != nil {
 			if apierrors.IsNotFound(err) {
 				continue // the reference's own NotFound condition reports this
@@ -233,7 +233,7 @@ type remoteProxy struct {
 // namespace entitled to them, and prunes projections that are no longer entitled.
 // Pruning runs even when the proxy grants nothing, so clearing allowedNamespaces
 // revokes access rather than merely stopping refreshes.
-func (r *EgressProxyReconciler) reconcileProxyShares(ctx context.Context, ep *gmcv2alpha1.EgressProxy) error {
+func (r *EgressProxyReconciler) reconcileProxyShares(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	wanted, err := consumerNamespacesFor(ctx, r.Client, ep)
 	if err != nil {
 		return err
@@ -288,7 +288,7 @@ func (r *EgressProxyReconciler) applyProxyShare(ctx context.Context, desired *co
 // keep. It lists by the proxy-identifying labels rather than iterating the previous
 // grant list, so a projection is reclaimed even if the grant that created it was
 // removed while the controller was down.
-func (r *EgressProxyReconciler) pruneProxyShares(ctx context.Context, ep *gmcv2alpha1.EgressProxy, keep []string) error {
+func (r *EgressProxyReconciler) pruneProxyShares(ctx context.Context, ep *gmcv2.EgressProxy, keep []string) error {
 	var existing corev1.ConfigMapList
 	if err := r.shareReader().List(ctx, &existing, client.MatchingLabels{
 		labelShareManaged:  "true",

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,12 +38,12 @@ func TestV2_GMCRestart_LeavesTheAGCDeploymentUntouched(t *testing.T) {
 		gwAGC = "gw-agc"
 	)
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired(gw, ns, "github-app", "shared")

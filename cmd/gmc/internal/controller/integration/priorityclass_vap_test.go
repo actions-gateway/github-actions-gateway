@@ -340,11 +340,11 @@ func TestGMC_PriorityClassGuard_GatesDirectRunnerGroupWrites(t *testing.T) {
 	runV2GuardSubtests(t, ns)
 }
 
-// guardedV2RS returns a v2alpha1 RunnerSet naming tierClass in priorityTiers, with
+// guardedV2RS returns a v2 RunnerSet naming tierClass in priorityTiers, with
 // a per-set runnerLabel — the suite's RunnerSet webhook enforces ScaleSet
 // runnerLabel uniqueness per gateway, so reusing one label would trip that guard
 // instead of the policy under test.
-func guardedV2RS(ns, name, tierClass string) *agcv2alpha1.RunnerSet {
+func guardedV2RS(ns, name, tierClass string) *agcv2.RunnerSet {
 	rs := rsWithTierPriorityClass(name, ns, tierClass)
 	rs.Spec.RunnerLabels = []string{name}
 	return rs
@@ -399,10 +399,10 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 	})
 
 	t.Run("v2: class-free objects are never subject to the policy", func(t *testing.T) {
-		rs := &agcv2alpha1.RunnerSet{
+		rs := &agcv2.RunnerSet{
 			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "plain-rs"},
-			Spec: agcv2alpha1.RunnerSetSpec{
-				GatewayRef:   agcv2alpha1.ObjectRef{Name: "gateway"},
+			Spec: agcv2.RunnerSetSpec{
+				GatewayRef:   agcv2.ObjectRef{Name: "gateway"},
 				RunnerLabels: []string{"plain-rs"},
 			},
 		}
@@ -454,21 +454,22 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		})
 	})
 
-	t.Run("v2: GA v2 writes are matched too", func(t *testing.T) {
-		// This pins the outcome, not the rule's explicit "v2" entry: with it removed
-		// the default matchPolicy Equivalent still converts the write to a listed
-		// version, and this subtest stays green (measured for Q413).
+	t.Run("v2: v2alpha1 writes are matched too", func(t *testing.T) {
+		// The subtests above write at v2; this keeps v2alpha1, served until Q1167,
+		// covered. It pins the outcome, not the rule's explicit "v2alpha1" entry: the
+		// default matchPolicy Equivalent can route a write to another listed version,
+		// which Q413 measured for the "v2" entry.
 		setGuardAllowlist(t)
 		attempt := 0
 		var lastErr error
 		gomega.NewWithT(t).Eventually(func() bool {
 			attempt++
-			rs := &agcv2.RunnerSet{
-				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("ga-tier-%d", attempt)},
-				Spec: agcv2.RunnerSetSpec{
-					GatewayRef:    agcv2.ObjectRef{Name: "gateway"},
-					RunnerLabels:  []string{fmt.Sprintf("ga-tier-%d", attempt)},
-					PriorityTiers: []agcv2.PriorityTier{{PriorityClassName: "high", Threshold: 5}},
+			rs := &agcv2alpha1.RunnerSet{
+				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("alpha-tier-%d", attempt)},
+				Spec: agcv2alpha1.RunnerSetSpec{
+					GatewayRef:    agcv2alpha1.ObjectRef{Name: "gateway"},
+					RunnerLabels:  []string{fmt.Sprintf("alpha-tier-%d", attempt)},
+					PriorityTiers: []agcv2alpha1.PriorityTier{{PriorityClassName: "high", Threshold: 5}},
 				},
 			}
 			lastErr = k8sClient.Create(ctx, rs)
@@ -478,7 +479,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 			}
 			return strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard")
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
-			return fmt.Sprintf("a v2 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
+			return fmt.Sprintf("a v2alpha1 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
 		})
 	})
 
@@ -494,7 +495,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.Succeed(),
 			"the allowlisted tier class must be admitted once the param update propagates")
 		t.Cleanup(func() {
-			var left agcv2alpha1.RunnerSet
+			var left agcv2.RunnerSet
 			if getErr := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &left); getErr == nil {
 				left.Finalizers = nil
 				_ = k8sClient.Update(context.Background(), &left)
@@ -512,7 +513,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		threshold := int32(5)
 		var lastUpdateErr error
 		gomega.NewWithT(t).Eventually(func() bool {
-			var live agcv2alpha1.RunnerSet
+			var live agcv2.RunnerSet
 			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &live); err != nil {
 				return false
 			}
@@ -525,7 +526,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		})
 
 		require.NoError(t, k8sClient.Delete(ctx, rs))
-		var deleting agcv2alpha1.RunnerSet
+		var deleting agcv2.RunnerSet
 		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &deleting))
 		require.NotNil(t, deleting.DeletionTimestamp)
 
@@ -539,7 +540,7 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 		require.NoError(t, k8sClient.Update(ctx, &deleting),
 			"the finalizer-removal update on a deleting RunnerSet must be admitted")
 		gomega.NewWithT(t).Eventually(func() bool {
-			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &agcv2alpha1.RunnerSet{}))
+			return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "deletion-exempt"}, &agcv2.RunnerSet{}))
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue())
 	})
 }

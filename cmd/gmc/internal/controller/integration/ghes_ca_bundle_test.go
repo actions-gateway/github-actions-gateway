@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -57,7 +57,7 @@ func testCABundle(t *testing.T) string {
 func TestV2_GHESGateway_MountsPrivateCABundle(t *testing.T) {
 	const ns = "v2-ghes-cabundle"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 
@@ -70,7 +70,7 @@ func TestV2_GHESGateway_MountsPrivateCABundle(t *testing.T) {
 
 	ag := newV2GatewayWired("cagw", ns, "github-app", "")
 	ag.Spec.GitHubURL = "https://ghes.example.com/example-org"
-	ag.Spec.GitHubCABundleRef = &v2alpha1.LocalConfigMapReference{Name: "ghes-ca"}
+	ag.Spec.GitHubCABundleRef = &v2.LocalConfigMapReference{Name: "ghes-ca"}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
@@ -121,13 +121,13 @@ func TestV2_GHESGateway_MountsPrivateCABundle(t *testing.T) {
 func TestV2_GHESGateway_MissingCABundleFailsClosed(t *testing.T) {
 	const ns = "v2-ghes-cabundle-missing"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 
 	ag := newV2GatewayWired("missingca", ns, "github-app", "")
 	ag.Spec.GitHubURL = "https://ghes.example.com/example-org"
-	ag.Spec.GitHubCABundleRef = &v2alpha1.LocalConfigMapReference{Name: "ghes-ca"}
+	ag.Spec.GitHubCABundleRef = &v2.LocalConfigMapReference{Name: "ghes-ca"}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
@@ -135,16 +135,16 @@ func TestV2_GHESGateway_MissingCABundleFailsClosed(t *testing.T) {
 
 	g := gomega.NewWithT(t)
 	g.Eventually(func() string {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "missingca"}, &got); err != nil {
 			return ""
 		}
-		c := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionDegraded)
+		c := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionDegraded)
 		if c == nil || c.Status != metav1.ConditionTrue {
 			return ""
 		}
 		return c.Reason
-	}, 15*time.Second, 100*time.Millisecond).Should(gomega.Equal(v2alpha1.ReasonCABundleNotFound))
+	}, 15*time.Second, 100*time.Millisecond).Should(gomega.Equal(v2.ReasonCABundleNotFound))
 
 	var dep appsv1.Deployment
 	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "missingca-agc"}, &dep)

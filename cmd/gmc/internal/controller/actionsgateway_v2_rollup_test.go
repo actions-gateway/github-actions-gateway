@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -14,11 +14,11 @@ import (
 
 // boundRunnerSet builds a RunnerSet targeting gatewayName via spec.gatewayRef, with the
 // given status conditions.
-func boundRunnerSet(name, ns, gatewayName string, conds ...metav1.Condition) *gmcv2alpha1.RunnerSet {
-	return &gmcv2alpha1.RunnerSet{
+func boundRunnerSet(name, ns, gatewayName string, conds ...metav1.Condition) *gmcv2.RunnerSet {
+	return &gmcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec:       gmcv2alpha1.RunnerSetSpec{GatewayRef: gmcv2alpha1.ObjectRef{Name: gatewayName}},
-		Status:     gmcv2alpha1.RunnerSetStatus{Conditions: conds},
+		Spec:       gmcv2.RunnerSetSpec{GatewayRef: gmcv2.ObjectRef{Name: gatewayName}},
+		Status:     gmcv2.RunnerSetStatus{Conditions: conds},
 	}
 }
 
@@ -34,7 +34,7 @@ func TestEvalRunnerSetHealth_NoBoundSets(t *testing.T) {
 	r := v2RollupReconciler(t)
 	h := r.evalRunnerSetHealth(context.Background(), ag)
 	assert.False(t, h.degraded)
-	assert.Equal(t, gmcv2alpha1.ReasonAllRunnerSetsHealthy, h.reason)
+	assert.Equal(t, gmcv2.ReasonAllRunnerSetsHealthy, h.reason)
 	assert.Contains(t, h.message, "all 0 bound RunnerSet(s) healthy")
 }
 
@@ -43,16 +43,16 @@ func TestEvalRunnerSetHealth_NoBoundSets(t *testing.T) {
 func TestEvalRunnerSetHealth_AllHealthy(t *testing.T) {
 	ag := v2Gateway("gw", "ns", "github-app", "shared")
 	ready := boundRunnerSet("rs-ready", "ns", "gw", metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonListenerActive,
 	})
 	// A set awaiting its first listener (transient NoActiveSessions) is not impaired.
 	starting := boundRunnerSet("rs-start", "ns", "gw", metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonNoActiveSessions,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2.ReasonNoActiveSessions,
 	})
 	r := v2RollupReconciler(t, ready, starting)
 	h := r.evalRunnerSetHealth(context.Background(), ag)
 	assert.False(t, h.degraded, "Ready=True and transient NoActiveSessions must not trip the rollup")
-	assert.Equal(t, gmcv2alpha1.ReasonAllRunnerSetsHealthy, h.reason)
+	assert.Equal(t, gmcv2.ReasonAllRunnerSetsHealthy, h.reason)
 	assert.Contains(t, h.message, "all 2 bound RunnerSet(s) healthy")
 }
 
@@ -62,28 +62,28 @@ func TestEvalRunnerSetHealth_AllHealthy(t *testing.T) {
 func TestEvalRunnerSetHealth_Impaired(t *testing.T) {
 	ag := v2Gateway("gw", "ns", "github-app", "shared")
 	tokenBad := boundRunnerSet("rs-token", "ns", "gw", metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonTokenUnavailable,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2.ReasonTokenUnavailable,
 	})
 	unsched := boundRunnerSet("rs-unsched", "ns", "gw",
-		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive},
-		metav1.Condition{Type: gmcv2alpha1.ConditionWorkersUnschedulable, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonPodsUnschedulable},
+		metav1.Condition{Type: gmcv2.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonListenerActive},
+		metav1.Condition{Type: gmcv2.ConditionWorkersUnschedulable, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonPodsUnschedulable},
 	)
 	good := boundRunnerSet("rs-good", "ns", "gw", metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonListenerActive,
 	})
 	otherOwner := boundRunnerSet("rs-other", "ns", "other-gw", metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonGatewayNotFound,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2.ReasonGatewayNotFound,
 	})
 	r := v2RollupReconciler(t, tokenBad, unsched, good, otherOwner)
 
 	h := r.evalRunnerSetHealth(context.Background(), ag)
 	assert.True(t, h.degraded)
-	assert.Equal(t, gmcv2alpha1.ReasonRunnerSetsImpaired, h.reason)
+	assert.Equal(t, gmcv2.ReasonRunnerSetsImpaired, h.reason)
 	assert.Contains(t, h.message, "2 of 3 RunnerSet(s) impaired")
 	assert.Contains(t, h.message, "rs-token")
-	assert.Contains(t, h.message, gmcv2alpha1.ConditionReady+"="+gmcv2alpha1.ReasonTokenUnavailable)
+	assert.Contains(t, h.message, gmcv2.ConditionReady+"="+gmcv2.ReasonTokenUnavailable)
 	assert.Contains(t, h.message, "rs-unsched")
-	assert.Contains(t, h.message, gmcv2alpha1.ConditionWorkersUnschedulable)
+	assert.Contains(t, h.message, gmcv2.ConditionWorkersUnschedulable)
 	assert.NotContains(t, h.message, "rs-good", "healthy sets must not be named")
 	assert.NotContains(t, h.message, "rs-other", "a set bound to a different gateway must not be counted")
 }
@@ -94,10 +94,10 @@ func TestEvalRunnerSetHealth_Impaired(t *testing.T) {
 func TestEvalRunnerSetHealth_AdvisoryExcluded(t *testing.T) {
 	ag := v2Gateway("gw", "ns", "github-app", "shared")
 	advisory := boundRunnerSet("rs-adv", "ns", "gw",
-		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive},
-		metav1.Condition{Type: gmcv2alpha1.ConditionWorkerQuotaExceeded, Status: metav1.ConditionTrue, Reason: "QuotaExceeded"},
-		metav1.Condition{Type: gmcv2alpha1.ConditionEgressUnattributed, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonDirectEgress},
-		metav1.Condition{Type: gmcv2alpha1.ConditionPossibleReapBlockingSidecar, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonReapBlockingSidecar},
+		metav1.Condition{Type: gmcv2.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonListenerActive},
+		metav1.Condition{Type: gmcv2.ConditionWorkerQuotaExceeded, Status: metav1.ConditionTrue, Reason: "QuotaExceeded"},
+		metav1.Condition{Type: gmcv2.ConditionEgressUnattributed, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonDirectEgress},
+		metav1.Condition{Type: gmcv2.ConditionPossibleReapBlockingSidecar, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonReapBlockingSidecar},
 	)
 	r := v2RollupReconciler(t, advisory)
 	h := r.evalRunnerSetHealth(context.Background(), ag)
@@ -115,29 +115,29 @@ func TestEvalRunnerSetHealth_ListenerPushedImpairment(t *testing.T) {
 	// sits at the benign NoActiveSessions (no session could be created). Axis (1) alone
 	// would read this set as healthy — the bug Q330 fixes.
 	revoked := boundRunnerSet("rs-revoked", "ns", "gw",
-		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonNoActiveSessions},
-		metav1.Condition{Type: gmcv2alpha1.ConditionDegraded, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSessionUnauthorized},
+		metav1.Condition{Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2.ReasonNoActiveSessions},
+		metav1.Condition{Type: gmcv2.ConditionDegraded, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonSessionUnauthorized},
 	)
 	// A too-old runner: RunnerVersionTooOld while Ready=True.
 	tooOld := boundRunnerSet("rs-old", "ns", "gw",
-		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive},
-		metav1.Condition{Type: gmcv2alpha1.ConditionRunnerVersionTooOld, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonVersionTooOld},
+		metav1.Condition{Type: gmcv2.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonListenerActive},
+		metav1.Condition{Type: gmcv2.ConditionRunnerVersionTooOld, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonVersionTooOld},
 	)
 	// Rate-limited but otherwise healthy: advisory, excluded.
 	limited := boundRunnerSet("rs-limited", "ns", "gw",
-		metav1.Condition{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonListenerActive},
-		metav1.Condition{Type: gmcv2alpha1.ConditionRateLimited, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSustainedRateLimit},
+		metav1.Condition{Type: gmcv2.ConditionReady, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonListenerActive},
+		metav1.Condition{Type: gmcv2.ConditionRateLimited, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonSustainedRateLimit},
 	)
 	r := v2RollupReconciler(t, revoked, tooOld, limited)
 
 	h := r.evalRunnerSetHealth(context.Background(), ag)
 	assert.True(t, h.degraded)
-	assert.Equal(t, gmcv2alpha1.ReasonRunnerSetsImpaired, h.reason)
+	assert.Equal(t, gmcv2.ReasonRunnerSetsImpaired, h.reason)
 	assert.Contains(t, h.message, "2 of 3 RunnerSet(s) impaired")
 	assert.Contains(t, h.message, "rs-revoked")
-	assert.Contains(t, h.message, gmcv2alpha1.ConditionDegraded)
+	assert.Contains(t, h.message, gmcv2.ConditionDegraded)
 	assert.Contains(t, h.message, "rs-old")
-	assert.Contains(t, h.message, gmcv2alpha1.ConditionRunnerVersionTooOld)
+	assert.Contains(t, h.message, gmcv2.ConditionRunnerVersionTooOld)
 	assert.NotContains(t, h.message, "rs-limited", "RateLimited is advisory and must not trip the rollup")
 }
 
@@ -149,11 +149,11 @@ func TestRunnerSetPredicate_WakesOnListenerImpairment(t *testing.T) {
 
 	// Ready stays benign; Degraded flips True — the signature changes, so it must enqueue.
 	base := boundRunnerSet("rs", "ns", "gw", metav1.Condition{
-		Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonNoActiveSessions,
+		Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2.ReasonNoActiveSessions,
 	})
 	degraded := base.DeepCopy()
 	degraded.Status.Conditions = append(degraded.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionDegraded, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSessionUnauthorized,
+		Type: gmcv2.ConditionDegraded, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonSessionUnauthorized,
 	})
 	assert.True(t, p.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: degraded}),
 		"a listener-pushed Degraded flip must enqueue")
@@ -161,7 +161,7 @@ func TestRunnerSetPredicate_WakesOnListenerImpairment(t *testing.T) {
 	// RateLimited flips True: advisory, signature unchanged.
 	limited := base.DeepCopy()
 	limited.Status.Conditions = append(limited.Status.Conditions, metav1.Condition{
-		Type: gmcv2alpha1.ConditionRateLimited, Status: metav1.ConditionTrue, Reason: gmcv2alpha1.ReasonSustainedRateLimit,
+		Type: gmcv2.ConditionRateLimited, Status: metav1.ConditionTrue, Reason: gmcv2.ReasonSustainedRateLimit,
 	})
 	assert.False(t, p.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: limited}),
 		"an advisory RateLimited flip must not enqueue")
@@ -180,7 +180,7 @@ func TestRunnerSetPredicate_OnlyImpairmentChanges(t *testing.T) {
 	// Unrelated churn: an advisory condition flips True — the impaired signature is unchanged.
 	advisory := base.DeepCopy()
 	advisory.Status.Conditions = []metav1.Condition{
-		{Type: gmcv2alpha1.ConditionWorkerQuotaPressure, Status: metav1.ConditionTrue, Reason: "Pressure"},
+		{Type: gmcv2.ConditionWorkerQuotaPressure, Status: metav1.ConditionTrue, Reason: "Pressure"},
 	}
 	assert.False(t, p.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: advisory}),
 		"an advisory-condition change must not enqueue")
@@ -188,7 +188,7 @@ func TestRunnerSetPredicate_OnlyImpairmentChanges(t *testing.T) {
 	// Impairment flip: Ready goes False for a non-transient reason.
 	impaired := base.DeepCopy()
 	impaired.Status.Conditions = []metav1.Condition{
-		{Type: gmcv2alpha1.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2alpha1.ReasonTokenUnavailable},
+		{Type: gmcv2.ConditionReady, Status: metav1.ConditionFalse, Reason: gmcv2.ReasonTokenUnavailable},
 	}
 	assert.True(t, p.Update(event.UpdateEvent{ObjectOld: base, ObjectNew: impaired}),
 		"an impairment flip must enqueue")

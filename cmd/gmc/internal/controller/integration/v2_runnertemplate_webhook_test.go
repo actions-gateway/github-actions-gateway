@@ -5,7 +5,7 @@ package integration_test
 import (
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -20,10 +20,10 @@ import (
 // ClusterRunnerTemplate. The scalar pod-level reserved fields stay on the M1 CEL
 // rules and are not re-tested here.
 
-func runnerTemplateWithContainer(ns, name string, c corev1.Container) *agcv2alpha1.RunnerTemplate {
-	return &agcv2alpha1.RunnerTemplate{
+func runnerTemplateWithContainer(ns, name string, c corev1.Container) *agcv2.RunnerTemplate {
+	return &agcv2.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: agcv2alpha1.RunnerTemplateSpec{
+		Spec: agcv2.RunnerTemplateSpec{
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{Containers: []corev1.Container{c}},
 			},
@@ -31,10 +31,10 @@ func runnerTemplateWithContainer(ns, name string, c corev1.Container) *agcv2alph
 	}
 }
 
-func clusterRunnerTemplateWithContainer(name string, c corev1.Container) *agcv2alpha1.ClusterRunnerTemplate {
-	return &agcv2alpha1.ClusterRunnerTemplate{
+func clusterRunnerTemplateWithContainer(name string, c corev1.Container) *agcv2.ClusterRunnerTemplate {
+	return &agcv2.ClusterRunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: agcv2alpha1.RunnerTemplateSpec{
+		Spec: agcv2.RunnerTemplateSpec{
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{Containers: []corev1.Container{c}},
 			},

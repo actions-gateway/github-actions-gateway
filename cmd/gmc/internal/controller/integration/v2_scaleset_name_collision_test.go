@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -61,7 +61,7 @@ func TestV2_ActionsGateway_ScaleSetNameCollision(t *testing.T) {
 	// second labels differ, which changes nothing — only the first is the name (Q726).
 	rsA := newScaleSetRunnerSet("tenant-a-set", nsA, "gw", shared, "linux")
 	rsB := newScaleSetRunnerSet("tenant-b-set", nsB, "gw", shared, "windows")
-	for _, rs := range []*v2alpha1.RunnerSet{rsA, rsB} {
+	for _, rs := range []*v2.RunnerSet{rsA, rsB} {
 		requireCreateEventually(t, rs)
 		rs := rs
 		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
@@ -73,11 +73,11 @@ func TestV2_ActionsGateway_ScaleSetNameCollision(t *testing.T) {
 		t.Helper()
 		var cond *metav1.Condition
 		require.Eventually(t, func() bool {
-			var got v2alpha1.ActionsGateway
+			var got v2.ActionsGateway
 			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 				return false
 			}
-			c := findCondition(got.Status.Conditions, v2alpha1.ConditionScaleSetNameCollision)
+			c := findCondition(got.Status.Conditions, v2.ConditionScaleSetNameCollision)
 			if c == nil || c.Status != status || c.Reason != reason {
 				return false
 			}
@@ -95,9 +95,9 @@ func TestV2_ActionsGateway_ScaleSetNameCollision(t *testing.T) {
 
 	// Both sides report it. Neither is "the offender" — GAG cannot pick which tenant
 	// loses the name, so both operators get the signal.
-	condA := requireCollision(nsA, metav1.ConditionTrue, v2alpha1.ReasonScaleSetNameShared,
+	condA := requireCollision(nsA, metav1.ConditionTrue, v2.ReasonScaleSetNameShared,
 		"tenant-a-set", shared, "github.com/example-org")
-	condB := requireCollision(nsB, metav1.ConditionTrue, v2alpha1.ReasonScaleSetNameShared,
+	condB := requireCollision(nsB, metav1.ConditionTrue, v2.ReasonScaleSetNameShared,
 		"tenant-b-set", shared)
 
 	// Non-enumeration (Q791's second boundary property, carried into status): the
@@ -118,18 +118,18 @@ func TestV2_ActionsGateway_ScaleSetNameCollision(t *testing.T) {
 		}
 		for i := range events.Items {
 			e := &events.Items[i]
-			if e.Reason == v2alpha1.ReasonScaleSetNameShared && e.Type == corev1.EventTypeWarning {
+			if e.Reason == v2.ReasonScaleSetNameShared && e.Type == corev1.EventTypeWarning {
 				return true
 			}
 		}
 		return false
-	}, 30*time.Second, 200*time.Millisecond, "a Warning Event with reason %s must be recorded on the gateway", v2alpha1.ReasonScaleSetNameShared)
+	}, 30*time.Second, 200*time.Millisecond, "a Warning Event with reason %s must be recorded on the gateway", v2.ReasonScaleSetNameShared)
 
 	// The operator's fix: give one side a distinct first label. Both conditions clear,
 	// which is what makes the signal trustworthy — a condition that never goes back to
 	// False cannot tell a resolved collision from an unwatched one.
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsB, Name: "tenant-b-set"}, &rs); err != nil {
 			return false
 		}
@@ -137,8 +137,8 @@ func TestV2_ActionsGateway_ScaleSetNameCollision(t *testing.T) {
 		return k8sClient.Update(ctx, &rs) == nil
 	}, 10*time.Second, 100*time.Millisecond, "renaming tenant B's scale set must succeed")
 
-	requireCollision(nsA, metav1.ConditionFalse, v2alpha1.ReasonScaleSetNamesUnique, "github.com/example-org")
-	requireCollision(nsB, metav1.ConditionFalse, v2alpha1.ReasonScaleSetNamesUnique)
+	requireCollision(nsA, metav1.ConditionFalse, v2.ReasonScaleSetNamesUnique, "github.com/example-org")
+	requireCollision(nsB, metav1.ConditionFalse, v2.ReasonScaleSetNamesUnique)
 }
 
 // bypassV2Admission scopes the v2 ActionsGateway and RunnerSet validating webhooks

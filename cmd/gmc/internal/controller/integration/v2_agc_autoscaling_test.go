@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -50,11 +50,11 @@ func TestV2_ActionsGateway_AGCAutoscalingStampsVPA(t *testing.T) {
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired("gw", ns, "github-app", "shared")
-	ag.Spec.AGCAutoscaling = &v2alpha1.AGCVerticalAutoscaling{Mode: v2alpha1.VPAUpdateModeRecreate}
+	ag.Spec.AGCAutoscaling = &v2.AGCVerticalAutoscaling{Mode: v2.VPAUpdateModeRecreate}
 	// An explicit memory request (the floor) plus an explicit memory limit (the ceiling).
 	ag.Spec.AGCResources = &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1Gi")},
@@ -104,12 +104,12 @@ func TestV2_ActionsGateway_AGCAutoscalingStampsVPA(t *testing.T) {
 
 	// The gateway reports the opt-in as satisfied, not as an unavailable trade-off.
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 			return false
 		}
-		cond := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionAGCAutoscalingUnavailable)
-		return cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == v2alpha1.ReasonAGCAutoscalingActive
+		cond := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionAGCAutoscalingUnavailable)
+		return cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == v2.ReasonAGCAutoscalingActive
 	}, 15*time.Second, 100*time.Millisecond, "AGCAutoscalingUnavailable should be False/AGCAutoscalingActive")
 }
 
@@ -122,11 +122,11 @@ func TestV2_ActionsGateway_AGCAutoscalingRemovalPrunesVPA(t *testing.T) {
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired("gw", ns, "github-app", "shared")
-	ag.Spec.AGCAutoscaling = &v2alpha1.AGCVerticalAutoscaling{}
+	ag.Spec.AGCAutoscaling = &v2.AGCVerticalAutoscaling{}
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
@@ -149,7 +149,7 @@ func TestV2_ActionsGateway_AGCAutoscalingRemovalPrunesVPA(t *testing.T) {
 	// resourceVersion conflict that says nothing about the behavior under test. Retry
 	// until the write lands on a current version.
 	require.Eventually(t, func() bool {
-		var g v2alpha1.ActionsGateway
+		var g v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &g); err != nil {
 			return false
 		}
@@ -163,11 +163,11 @@ func TestV2_ActionsGateway_AGCAutoscalingRemovalPrunesVPA(t *testing.T) {
 	}, 15*time.Second, 100*time.Millisecond, "removing spec.agcAutoscaling should delete the managed autoscaler")
 
 	require.Eventually(t, func() bool {
-		var g v2alpha1.ActionsGateway
+		var g v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &g); err != nil {
 			return false
 		}
-		cond := meta.FindStatusCondition(g.Status.Conditions, v2alpha1.ConditionAGCAutoscalingUnavailable)
-		return cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == v2alpha1.ReasonAGCAutoscalingDisabled
+		cond := meta.FindStatusCondition(g.Status.Conditions, v2.ConditionAGCAutoscalingUnavailable)
+		return cond != nil && cond.Status == metav1.ConditionFalse && cond.Reason == v2.ReasonAGCAutoscalingDisabled
 	}, 15*time.Second, 100*time.Millisecond, "the condition should return to False/AGCAutoscalingDisabled")
 }

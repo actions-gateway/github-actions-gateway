@@ -9,7 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 )
 
@@ -227,7 +227,7 @@ func TestBuildCacheOptions(t *testing.T) {
 		}
 		var found bool
 		for k, v := range opts.ByObject {
-			if _, isPCA := k.(*v2beta1.PriorityClassAllowlist); !isPCA {
+			if _, isPCA := k.(*v2.PriorityClassAllowlist); !isPCA {
 				continue
 			}
 			found = true

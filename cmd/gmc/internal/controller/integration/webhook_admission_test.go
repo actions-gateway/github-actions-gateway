@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -62,8 +63,16 @@ func TestWebhookAdmission_ClassicSetMayShareAScaleSetName(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, scaleSet), "the ScaleSet set claiming the name must be admitted")
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), scaleSet)) })
 
-	classic := newScaleSetRunnerSet("classic-set", nsName, "gw", "linux", "amd64")
-	classic.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolClassic
+	// v2 cannot name the Classic protocol, so this set is written at v2alpha1; it
+	// leaves with Classic in Q264.
+	classic := &v2alpha1.RunnerSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "classic-set", Namespace: nsName},
+		Spec: v2alpha1.RunnerSetSpec{
+			GatewayRef:          v2alpha1.ObjectRef{Name: "gw"},
+			AcquisitionProtocol: v2alpha1.AcquisitionProtocolClassic,
+			RunnerLabels:        []string{"linux", "amd64"},
+		},
+	}
 	require.NoError(t, k8sClient.Create(ctx, classic),
 		"a Classic set sharing a ScaleSet set's first label must be admitted: it registers no scale set")
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), classic)) })
@@ -196,16 +205,15 @@ func TestWebhookAdmission_ScaleSetScopeClosesApplyOrderGap(t *testing.T) {
 	assert.Contains(t, err.Error(), "sneaky", "its own namespace's referrer is named")
 }
 
-// newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet bound to the named gateway,
-// whose first runnerLabel names its scale set (references are resolved at runtime, so
-// no template need exist for admission).
-func newScaleSetRunnerSet(name, ns, gateway, label string, more ...string) *v2alpha1.RunnerSet {
-	return &v2alpha1.RunnerSet{
+// newScaleSetRunnerSet builds a RunnerSet bound to the named gateway, whose first
+// runnerLabel names its scale set; v2 has no other protocol. References are resolved
+// at runtime, so no template need exist for admission.
+func newScaleSetRunnerSet(name, ns, gateway, label string, more ...string) *v2.RunnerSet {
+	return &v2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:          v2alpha1.ObjectRef{Name: gateway},
-			AcquisitionProtocol: v2alpha1.AcquisitionProtocolScaleSet,
-			RunnerLabels:        append([]string{label}, more...),
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:   v2.ObjectRef{Name: gateway},
+			RunnerLabels: append([]string{label}, more...),
 		},
 	}
 }

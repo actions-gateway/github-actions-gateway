@@ -31,10 +31,10 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1262 and Q1263; step 4 of [the split](q1167-v2-retype-split.md) |
+| [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1263; step 4 of [the split](q1167-v2-retype-split.md) |
 | [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate`'s fan-out (Phase 3) | `2.0-gate` | 🔲 the GMC half is on `main`; the AGC half (`RunnerGroup`) is open |
 | [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q273; lands before Q1263 ([why](q1167-v2-retype-split.md#where-q264s-boundary-falls-before-the-agc-retype)) |
-| [Q1262](../queue/Q1262.md) | Retype the GMC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 1 of [the split](q1167-v2-retype-split.md): after Q273, beside Q264 |
+| Q1262 | Retype the GMC onto `api/v2` (Phase 3) | `2.0-gate` | ✅ landed, with the classic-reading trio left on `v2alpha1` for Q1167 ([why](q1167-v2-retype-split.md#what-q1262-left-on-the-older-versions)) |
 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 3 of [the split](q1167-v2-retype-split.md): after Q273 and Q264 |
 | [Q1258](../queue/Q1258.md) | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | 🚫 blocked on Q273 |
 | [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q273 and Q264 |

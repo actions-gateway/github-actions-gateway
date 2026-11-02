@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -21,7 +21,7 @@ import (
 )
 
 // directEgressFixture is a provisioned-able direct-egress gateway on a fake client.
-func directEgressFixture(t *testing.T, cache *IPRangeCache) (*ActionsGatewayV2Reconciler, client.Client, *gmcv2alpha1.ActionsGateway) {
+func directEgressFixture(t *testing.T, cache *IPRangeCache) (*ActionsGatewayV2Reconciler, client.Client, *gmcv2.ActionsGateway) {
 	t.Helper()
 	scheme := actionsGatewayV2TestScheme(t)
 	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}
@@ -43,11 +43,11 @@ func filledCache(t *testing.T, refreshed time.Time) *IPRangeCache {
 	return cache
 }
 
-func egressRulesStale(t *testing.T, c client.Client, ag *gmcv2alpha1.ActionsGateway) *metav1.Condition {
+func egressRulesStale(t *testing.T, c client.Client, ag *gmcv2.ActionsGateway) *metav1.Condition {
 	t.Helper()
-	var got gmcv2alpha1.ActionsGateway
+	var got gmcv2.ActionsGateway
 	require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(ag), &got))
-	cond := meta.FindStatusCondition(got.Status.Conditions, gmcv2alpha1.ConditionEgressRulesStale)
+	cond := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionEgressRulesStale)
 	require.NotNil(t, cond, "a direct-egress gateway carries EgressRulesStale")
 	return cond
 }
@@ -59,7 +59,7 @@ func TestDirectEgressRulesStale_Current(t *testing.T) {
 
 	cond := egressRulesStale(t, c, ag)
 	assert.Equal(t, metav1.ConditionFalse, cond.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshCurrent, cond.Reason)
+	assert.Equal(t, gmcv2.ReasonRefreshCurrent, cond.Reason)
 }
 
 // Never filled, first provision: the policies are created with no GitHub rule, so
@@ -70,7 +70,7 @@ func TestDirectEgressRulesStale_NeverFilledFirstProvisionDenies(t *testing.T) {
 
 	cond := egressRulesStale(t, c, ag)
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshNeverSucceeded, cond.Reason)
+	assert.Equal(t, gmcv2.ReasonRefreshNeverSucceeded, cond.Reason)
 	assert.Contains(t, cond.Message, `"gw-agc" carries no GitHub rule, so GitHub egress from the AGC is denied`)
 	assert.Contains(t, cond.Message, `"gw-workload" carries no GitHub rule, so GitHub egress from workers is denied`)
 }
@@ -90,7 +90,7 @@ func TestDirectEgressRulesStale_NeverFilledPreservedRulesServe(t *testing.T) {
 
 	cond := egressRulesStale(t, c, ag)
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshNeverSucceeded, cond.Reason)
+	assert.Equal(t, gmcv2.ReasonRefreshNeverSucceeded, cond.Reason)
 	assert.Contains(t, cond.Message, "keep the GitHub ranges they were last programmed with")
 	assert.NotContains(t, cond.Message, "denied")
 }
@@ -119,7 +119,7 @@ func TestDirectEgressRulesStale_StalledServingRanges(t *testing.T) {
 
 	cond := egressRulesStale(t, c, ag)
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshStalled, cond.Reason)
+	assert.Equal(t, gmcv2.ReasonRefreshStalled, cond.Reason)
 	assert.Contains(t, cond.Message, "silently dropped")
 }
 
@@ -136,7 +136,7 @@ func TestDirectEgressRulesStale_StalledExpiredSeedPreservedRulesServe(t *testing
 
 	cond := egressRulesStale(t, c, ag)
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshStalled, cond.Reason)
+	assert.Equal(t, gmcv2.ReasonRefreshStalled, cond.Reason)
 	assert.Contains(t, cond.Message, "keep the GitHub ranges they were last programmed with")
 	assert.NotContains(t, cond.Message, "denied")
 }
@@ -144,17 +144,17 @@ func TestDirectEgressRulesStale_StalledExpiredSeedPreservedRulesServe(t *testing
 // A proxied gateway's policies carry no GitHub rule; its pool reports the allowlist.
 func TestDirectEgressRulesStale_ProxiedIsPending(t *testing.T) {
 	r := &ActionsGatewayV2Reconciler{IPCache: &IPRangeCache{}}
-	ep := &gmcv2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "pool"}}
+	ep := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "pool"}}
 	es := r.evalDirectEgressRulesStale(context.Background(), v2Gateway("gw", "team-a", "s", "pool"), ep, time.Now())
 	assert.False(t, es.stale, "an empty cache is the pool's to report, not a proxied gateway's")
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshPending, es.reason)
+	assert.Equal(t, gmcv2.ReasonRefreshPending, es.reason)
 }
 
 func TestDirectEgressRulesStale_NilCacheIsPending(t *testing.T) {
 	r := &ActionsGatewayV2Reconciler{}
 	es := r.evalDirectEgressRulesStale(context.Background(), v2Gateway("gw", "team-a", "s", ""), nil, time.Now())
 	assert.False(t, es.stale)
-	assert.Equal(t, gmcv2alpha1.ReasonRefreshPending, es.reason)
+	assert.Equal(t, gmcv2.ReasonRefreshPending, es.reason)
 }
 
 // The refresh loop never wakes this reconciler, so a direct gateway requeues on a
@@ -172,7 +172,7 @@ func TestDirectEgressRecheckRequeue(t *testing.T) {
 	assert.Equal(t, 49*time.Hour/8, res.RequeueAfter)
 
 	assert.Equal(t, time.Minute, (&ActionsGatewayV2Reconciler{IPCache: &IPRangeCache{}}).directEgressRecheckRequeue(nil))
-	assert.Zero(t, (&ActionsGatewayV2Reconciler{IPCache: &IPRangeCache{}}).directEgressRecheckRequeue(&gmcv2alpha1.EgressProxy{}))
+	assert.Zero(t, (&ActionsGatewayV2Reconciler{IPCache: &IPRangeCache{}}).directEgressRecheckRequeue(&gmcv2.EgressProxy{}))
 	assert.Zero(t, (&ActionsGatewayV2Reconciler{}).directEgressRecheckRequeue(nil))
 }
 
@@ -180,7 +180,7 @@ func TestDirectEgressRecheckRequeue(t *testing.T) {
 func TestHasGitHubCIDREgressRule_IgnoresVaultLookalike(t *testing.T) {
 	ag := v2WorkloadIdentityGateway("gw", "team-a", "")
 	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.Address = "https://vault.example.com"
-	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2alpha1.EgressPeer{CIDR: "10.0.0.0/24"}
+	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &gmcv2.EgressPeer{CIDR: "10.0.0.0/24"}
 	vault, ok := vaultEgressRule(ag)
 	require.True(t, ok)
 	require.Equal(t, 443, vault.Ports[0].Port.IntValue(), "precondition: the lookalike is on 443")

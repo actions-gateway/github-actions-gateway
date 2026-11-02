@@ -3,7 +3,7 @@ package controller
 import (
 	"fmt"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -31,19 +31,19 @@ const (
 
 // egressProxyMetricsTLSSecretName is the name of the EgressProxy's metrics server
 // bundle Secret (ca.crt + tls.crt + tls.key), mounted read-only into the proxy pod.
-func egressProxyMetricsTLSSecretName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyMetricsTLSSecretName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyMetricsTLSSuffix
 }
 
 // egressProxyMetricsClientSecretName is the name of the EgressProxy's scraper client
 // bundle Secret (ca.crt + tls.crt + tls.key), published for the monitoring stack.
-func egressProxyMetricsClientSecretName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyMetricsClientSecretName(ep *gmcv2.EgressProxy) string {
 	return ep.Name + egressProxyMetricsClientSuffix
 }
 
 // egressProxyMetricsServiceMonitorName is the name of the EgressProxy's per-tenant
 // ServiceMonitor: "<ep>-proxy-metrics" (the proxy Service name plus "-metrics").
-func egressProxyMetricsServiceMonitorName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyMetricsServiceMonitorName(ep *gmcv2.EgressProxy) string {
 	return proxyResourceName(ep) + egressProxyMetricsServiceMonitorSuffix
 }
 
@@ -51,14 +51,14 @@ func egressProxyMetricsServiceMonitorName(ep *gmcv2alpha1.EgressProxy) string {
 // name used as the scrape TLS serverName. It is one of the SANs on the metrics server
 // cert (metricsServerSANsV2 keyed on proxyResourceName), so a ServiceMonitor setting
 // serverName here verifies the scrape against the EgressProxy's metrics CA.
-func egressProxyMetricsServiceDNSName(ep *gmcv2alpha1.EgressProxy) string {
+func egressProxyMetricsServiceDNSName(ep *gmcv2.EgressProxy) string {
 	return fmt.Sprintf("%s.%s.svc", proxyResourceName(ep), ep.Namespace)
 }
 
 // buildEgressProxyMetricsTLSSecret constructs the server bundle Secret mounted into
 // the proxy pod: the metrics CA cert (to verify scraper client certs) plus the metrics
 // server cert+key. It is a kubernetes.io/tls Secret with an extra ca.crt key.
-func buildEgressProxyMetricsTLSSecret(ep *gmcv2alpha1.EgressProxy, b *metricsCertBundle) *corev1.Secret {
+func buildEgressProxyMetricsTLSSecret(ep *gmcv2.EgressProxy, b *metricsCertBundle) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      egressProxyMetricsTLSSecretName(ep),
@@ -78,7 +78,7 @@ func buildEgressProxyMetricsTLSSecret(ep *gmcv2alpha1.EgressProxy, b *metricsCer
 // for the monitoring stack: the metrics CA cert (to verify the proxy metrics server)
 // plus the scraper client cert+key (to authenticate to the mTLS listener). It is
 // never mounted into the proxy pod.
-func buildEgressProxyMetricsClientSecret(ep *gmcv2alpha1.EgressProxy, b *metricsCertBundle) *corev1.Secret {
+func buildEgressProxyMetricsClientSecret(ep *gmcv2.EgressProxy, b *metricsCertBundle) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      egressProxyMetricsClientSecretName(ep),
@@ -104,7 +104,7 @@ func buildEgressProxyMetricsClientSecret(ep *gmcv2alpha1.EgressProxy, b *metrics
 // HTTPS, presenting this EgressProxy's scraper client bundle for mTLS. serverName is
 // the "<ep>-proxy.<ns>.svc" DNS name (a SAN on the metrics server cert), so the scrape
 // verifies without insecureSkipVerify.
-func buildEgressProxyServiceMonitor(ep *gmcv2alpha1.EgressProxy) *unstructured.Unstructured {
+func buildEgressProxyServiceMonitor(ep *gmcv2.EgressProxy) *unstructured.Unstructured {
 	clientSecret := egressProxyMetricsClientSecretName(ep)
 	secretRef := func(key string) map[string]interface{} {
 		return map[string]interface{}{

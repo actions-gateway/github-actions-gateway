@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"sync"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -43,7 +43,7 @@ const TenantSecretReaderName = "gmc-tenant-secret-reader" //nolint:gosec // G101
 // the same two markers gmc-tenant-resource-guard accepts.
 func isTenantNamespace(labels map[string]string) bool {
 	return labels[TenantNamespaceMarkerLabel] == "true" ||
-		labels[gmcv2alpha1.TenantNamespaceMarkerLabel] == gmcv2alpha1.TenantNamespaceMarkerValue
+		labels[gmcv2.TenantNamespaceMarkerLabel] == gmcv2.TenantNamespaceMarkerValue
 }
 
 // secretMetadata is the object type every per-namespace Secret source watches:

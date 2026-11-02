@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -50,7 +50,7 @@ type scaleSetCollisionState struct {
 // observed=false — the caller leaves the last verdict standing rather than reporting a
 // clean scope it did not measure, the one direction that would be a lie about a
 // security boundary.
-func (r *ActionsGatewayV2Reconciler) evalScaleSetNameCollisions(ctx context.Context, ag *gmcv2alpha1.ActionsGateway) scaleSetCollisionState {
+func (r *ActionsGatewayV2Reconciler) evalScaleSetNameCollisions(ctx context.Context, ag *gmcv2.ActionsGateway) scaleSetCollisionState {
 	inv, err := scalesetscope.Of(ctx, r.Client, nil)
 	if err != nil {
 		logf.FromContext(ctx).Error(err, "could not read the cluster's ScaleSet claims; leaving the last ScaleSetNameCollision verdict in place")
@@ -77,7 +77,7 @@ func (r *ActionsGatewayV2Reconciler) evalScaleSetNameCollisions(ctx context.Cont
 	if len(own) == 0 {
 		return scaleSetCollisionState{
 			observed: true,
-			reason:   gmcv2alpha1.ReasonScaleSetNamesUnique,
+			reason:   gmcv2.ReasonScaleSetNamesUnique,
 			message:  scaleSetNamesUniqueMessage(scope),
 		}
 	}
@@ -94,7 +94,7 @@ func (r *ActionsGatewayV2Reconciler) evalScaleSetNameCollisions(ctx context.Cont
 	return scaleSetCollisionState{
 		observed: true,
 		collided: true,
-		reason:   gmcv2alpha1.ReasonScaleSetNameShared,
+		reason:   gmcv2.ReasonScaleSetNameShared,
 		message:  scaleSetCollisionMessage(scope, own),
 	}
 }

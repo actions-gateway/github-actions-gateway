@@ -67,7 +67,7 @@ func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Opt
 }
 
 // registerControllers wires every GMC controller onto the manager. It detects the
-// opt-in v2 CRDs once (V2alpha1Installed), fails closed when an installed CRD's
+// opt-in v2 CRDs once (V2Installed), fails closed when an installed CRD's
 // schema is behind this binary on a field that bounds tenant access
 // (VerifyCRDSchemas), registers the GMC metrics collectors
 // and build-info gauge, parses the apiserver-CIDR allowlist, and registers the v1
@@ -94,9 +94,9 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	// without that chart the kinds are absent, so registering the v2 controllers
 	// unconditionally would spin a source.Kind retry loop. Installing the v2 CRDs
 	// later requires a GMC restart to enable the v2 controllers (Q228).
-	v2Enabled, err := controller.V2alpha1Installed(mgr.GetRESTMapper())
+	v2Enabled, err := controller.V2Installed(mgr.GetRESTMapper())
 	if err != nil {
-		return fmt.Errorf("detect actions-gateway.com/v2alpha1 CRDs: %w", err)
+		return fmt.Errorf("detect actions-gateway.com/v2 CRDs: %w", err)
 	}
 	if v2Enabled {
 		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")

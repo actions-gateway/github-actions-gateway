@@ -75,7 +75,7 @@ func TestVerifyCRDSchemas_ShippedCRDsPass(t *testing.T) {
 }
 
 // TestVerifyCRDSchemas_AbsentCRDIsNotStale covers an install without the v2 CRDs:
-// they are simply not there, which V2alpha1Installed decides, not this.
+// they are simply not there, which V2Installed decides, not this.
 func TestVerifyCRDSchemas_AbsentCRDIsNotStale(t *testing.T) {
 	require.NoError(t, VerifyCRDSchemas(context.Background(), crdReader{}))
 }

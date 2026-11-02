@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
@@ -59,7 +59,7 @@ func (r *NamespacePSAReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if !ns.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
-	if ns.Labels[gmcv2alpha1.TenantNamespaceMarkerLabel] != gmcv2alpha1.TenantNamespaceMarkerValue {
+	if ns.Labels[gmcv2.TenantNamespaceMarkerLabel] != gmcv2.TenantNamespaceMarkerValue {
 		// Marker removed between enqueue and reconcile; nothing to stamp.
 		return ctrl.Result{}, nil
 	}
@@ -69,7 +69,7 @@ func (r *NamespacePSAReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 	log.V(1).Info("reconciled namespace Pod Security Admission labels",
 		"namespace", ns.Name,
-		"securityProfile", gmcv2alpha1.EffectiveSecurityProfile(ns.Labels[gmcv2alpha1.SecurityProfileLabel]))
+		"securityProfile", gmcv2.EffectiveSecurityProfile(ns.Labels[gmcv2.SecurityProfileLabel]))
 	return ctrl.Result{}, nil
 }
 
@@ -80,7 +80,7 @@ func (r *NamespacePSAReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // a conflict, which is re-applied with ForceOwnership to re-establish the
 // controller's invariant.
 func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *corev1.Namespace) error {
-	profile := gmcv2alpha1.EffectiveSecurityProfile(ns.Labels[gmcv2alpha1.SecurityProfileLabel])
+	profile := gmcv2.EffectiveSecurityProfile(ns.Labels[gmcv2.SecurityProfileLabel])
 	desired := corev1ac.Namespace(ns.Name).WithLabels(map[string]string{
 		"pod-security.kubernetes.io/enforce":         profile,
 		"pod-security.kubernetes.io/enforce-version": "latest",
@@ -101,7 +101,7 @@ func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *core
 		if r.Recorder != nil {
 			r.Recorder.Eventf(ns, nil, corev1.EventTypeWarning, "NamespaceMarkerMissing", "ApplyPSALabels",
 				"Cannot stamp Pod Security Admission labels on namespace %q: the admission policy denied the update. Label the namespace with %s=%s to mark it a managed tenant namespace: %v",
-				ns.Name, gmcv2alpha1.TenantNamespaceMarkerLabel, gmcv2alpha1.TenantNamespaceMarkerValue, err)
+				ns.Name, gmcv2.TenantNamespaceMarkerLabel, gmcv2.TenantNamespaceMarkerValue, err)
 		}
 		return fmt.Errorf("stamp PSA labels on namespace %q: %w", ns.Name, err)
 	}
@@ -131,7 +131,7 @@ func (r *NamespacePSAReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // the valid baseline default the reconciler must still stamp.
 func v2TenantNamespacePredicate() predicate.Predicate {
 	return predicate.NewPredicateFuncs(func(obj client.Object) bool {
-		return obj.GetLabels()[gmcv2alpha1.TenantNamespaceMarkerLabel] == gmcv2alpha1.TenantNamespaceMarkerValue
+		return obj.GetLabels()[gmcv2.TenantNamespaceMarkerLabel] == gmcv2.TenantNamespaceMarkerValue
 	})
 }
 

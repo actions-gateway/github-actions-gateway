@@ -13,7 +13,7 @@ import (
 
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,31 +76,31 @@ const (
 // RoleBinding, Service, and AGC NetworkPolicy all use it, and it is the pod `app`
 // label value so the NetworkPolicy and Service select exactly this gateway's AGC
 // pods (never a sibling gateway's).
-func agcNameV2(ag *gmcv2alpha1.ActionsGateway) string { return ag.Name + AGCResourceSuffix }
+func agcNameV2(ag *gmcv2.ActionsGateway) string { return ag.Name + AGCResourceSuffix }
 
 // workerSANameV2 is the per-gateway worker ServiceAccount the AGC stamps on its
 // worker pods (threaded via WORKER_SERVICE_ACCOUNT); owner-referenced to the
 // gateway so deleting it GCs only this gateway's worker SA.
-func workerSANameV2(ag *gmcv2alpha1.ActionsGateway) string { return ag.Name + agcWorkerSuffix }
+func workerSANameV2(ag *gmcv2.ActionsGateway) string { return ag.Name + agcWorkerSuffix }
 
 // workloadNPNameV2 is the per-gateway workload NetworkPolicy name. Its selector
 // stays the shared component=workload (§H.16 #1 is a naming change, not a policy
 // rewrite), so co-located gateways' workload pods share the same egress lockdown.
-func workloadNPNameV2(ag *gmcv2alpha1.ActionsGateway) string { return ag.Name + agcWorkloadNPSuffix }
+func workloadNPNameV2(ag *gmcv2.ActionsGateway) string { return ag.Name + agcWorkloadNPSuffix }
 
 // metricsTLSSecretNameV2 / metricsClientSecretNameV2 are the per-gateway metrics
 // mTLS server/scraper Secrets, with per-gateway cert SANs for the "<ag>-agc"
 // Service so two AGCs in one namespace never share a metrics identity.
-func metricsTLSSecretNameV2(ag *gmcv2alpha1.ActionsGateway) string {
+func metricsTLSSecretNameV2(ag *gmcv2.ActionsGateway) string {
 	return ag.Name + agcMetricsTLSSuffix
 }
-func metricsClientSecretNameV2(ag *gmcv2alpha1.ActionsGateway) string {
+func metricsClientSecretNameV2(ag *gmcv2.ActionsGateway) string {
 	return ag.Name + agcMetricsClientSuffix
 }
 
 // agcServiceMonitorNameV2 is the per-gateway AGC ServiceMonitor: "<ag>-agc-metrics"
 // (the AGC Service name plus "-metrics", matching the EgressProxy's "<ep>-proxy-metrics").
-func agcServiceMonitorNameV2(ag *gmcv2alpha1.ActionsGateway) string {
+func agcServiceMonitorNameV2(ag *gmcv2.ActionsGateway) string {
 	return ag.Name + agcMetricsMonitorSuffix
 }
 
@@ -108,7 +108,7 @@ func agcServiceMonitorNameV2(ag *gmcv2alpha1.ActionsGateway) string {
 // child: the recommended app.kubernetes.io/* set (controller component, instance
 // scoped to the gateway) plus the per-gateway identity label the v2 controller keys
 // on. The recommended labels are additive metadata; the identity label is functional.
-func v2GatewayLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
+func v2GatewayLabels(ag *gmcv2.ActionsGateway) map[string]string {
 	l := apilabels.Recommended(agcAppName, ag.Name, componentControllerLabel, "", labelManagerValue)
 	l[gatewayComponentLabel] = ag.Name
 	return l
@@ -116,19 +116,19 @@ func v2GatewayLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
 
 // v2WorkerLabels is v2GatewayLabels for the worker (runner) component — the worker
 // ServiceAccount the AGC assigns to v2 worker pods. Mirrors v1's workerLabels.
-func v2WorkerLabels(ag *gmcv2alpha1.ActionsGateway) map[string]string {
+func v2WorkerLabels(ag *gmcv2.ActionsGateway) map[string]string {
 	l := apilabels.Recommended(appNameWorker, ag.Name, componentRunnerLabel, "", labelManagerValue)
 	l[gatewayComponentLabel] = ag.Name
 	return l
 }
 
-func buildAGCServiceAccountV2(ag *gmcv2alpha1.ActionsGateway) *corev1.ServiceAccount {
+func buildAGCServiceAccountV2(ag *gmcv2.ActionsGateway) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{Name: agcNameV2(ag), Namespace: ag.Namespace, Labels: v2GatewayLabels(ag)},
 	}
 }
 
-func buildWorkerServiceAccountV2(ag *gmcv2alpha1.ActionsGateway) *corev1.ServiceAccount {
+func buildWorkerServiceAccountV2(ag *gmcv2.ActionsGateway) *corev1.ServiceAccount {
 	return &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{Name: workerSANameV2(ag), Namespace: ag.Namespace, Labels: v2WorkerLabels(ag)},
 	}
@@ -144,7 +144,7 @@ const clusterRunnerTemplateReaderRole = "agc-clusterrunnertemplate-reader"
 // ClusterRoleBindings are cluster-scoped, so the name embeds both the namespace and
 // the gateway to stay globally unique; the dot separators are collision-free because
 // a namespace and a gateway name are each a single DNS label (no embedded dots).
-func clusterRunnerTemplateReaderBindingName(ag *gmcv2alpha1.ActionsGateway) string {
+func clusterRunnerTemplateReaderBindingName(ag *gmcv2.ActionsGateway) string {
 	return fmt.Sprintf("%s.%s.%s", clusterRunnerTemplateReaderRole, ag.Namespace, ag.Name)
 }
 
@@ -155,7 +155,7 @@ func clusterRunnerTemplateReaderBindingName(ag *gmcv2alpha1.ActionsGateway) stri
 // object cannot carry an OwnerReference to a namespaced ActionsGateway, so cascade
 // GC does not apply: the reconciler deletes this binding explicitly on gateway
 // deletion (reconcileDelete).
-func buildClusterRunnerTemplateReaderBinding(ag *gmcv2alpha1.ActionsGateway) *rbacv1.ClusterRoleBinding {
+func buildClusterRunnerTemplateReaderBinding(ag *gmcv2.ActionsGateway) *rbacv1.ClusterRoleBinding {
 	return &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{Name: clusterRunnerTemplateReaderBindingName(ag), Labels: v2GatewayLabels(ag)},
 		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: clusterRunnerTemplateReaderRole},
@@ -166,7 +166,7 @@ func buildClusterRunnerTemplateReaderBinding(ag *gmcv2alpha1.ActionsGateway) *rb
 // buildAGCRoleBindingV2 binds the per-gateway AGC ServiceAccount to the shipped
 // agc-tenant-role ClusterRole (scoped to this namespace), identical to v1 except
 // the per-gateway SA/binding name.
-func buildAGCRoleBindingV2(ag *gmcv2alpha1.ActionsGateway) *rbacv1.RoleBinding {
+func buildAGCRoleBindingV2(ag *gmcv2.ActionsGateway) *rbacv1.RoleBinding {
 	name := agcNameV2(ag)
 	return &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ag.Namespace, Labels: v2GatewayLabels(ag)},
@@ -178,7 +178,7 @@ func buildAGCRoleBindingV2(ag *gmcv2alpha1.ActionsGateway) *rbacv1.RoleBinding {
 // buildAGCServiceV2 builds the per-gateway AGC metrics Service (mTLS metrics port
 // :8443), selecting this gateway's AGC pods so a ServiceMonitor scrapes the right
 // listener. Mirrors v1's buildAGCService.
-func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
+func buildAGCServiceV2(ag *gmcv2.ActionsGateway) *corev1.Service {
 	name := agcNameV2(ag)
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ag.Namespace, Labels: agcServiceLabelsV2(ag)},
@@ -193,7 +193,7 @@ func buildAGCServiceV2(ag *gmcv2alpha1.ActionsGateway) *corev1.Service {
 // agcServiceLabelsV2 is the AGC metrics Service's label set, which the AGC
 // ServiceMonitor's selector matches: the per-gateway identity labels plus the
 // per-gateway `app`, so the monitor selects this gateway's Service and no sibling's.
-func agcServiceLabelsV2(ag *gmcv2alpha1.ActionsGateway) map[string]string {
+func agcServiceLabelsV2(ag *gmcv2.ActionsGateway) map[string]string {
 	labels := v2GatewayLabels(ag)
 	labels["app"] = agcNameV2(ag)
 	return labels
@@ -207,7 +207,7 @@ func agcServiceLabelsV2(ag *gmcv2alpha1.ActionsGateway) map[string]string {
 // "<ag>-agc.<ns>.svc" DNS name, a SAN on the metrics server cert
 // (metricsServerSANsV2), so the scrape verifies without insecureSkipVerify. The AGC
 // stamps its own `namespace` metric label, so no relabeling is needed.
-func buildAGCServiceMonitorV2(ag *gmcv2alpha1.ActionsGateway) *unstructured.Unstructured {
+func buildAGCServiceMonitorV2(ag *gmcv2.ActionsGateway) *unstructured.Unstructured {
 	clientSecret := metricsClientSecretNameV2(ag)
 	secretRef := func(key string) map[string]interface{} {
 		return map[string]interface{}{
@@ -270,7 +270,7 @@ func buildAGCServiceMonitorV2(ag *gmcv2alpha1.ActionsGateway) *unstructured.Unst
 // default-deny except DNS + the proxy + (in direct mode) the GitHub allowlist —
 // never arbitrary internet. githubCIDRs comes from the shared IP-range cache; empty
 // (pre-first-fetch) omits the GitHub rule, fail-closed, until the refresh patches it.
-func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []net.IPNet, direct bool, remoteProxies []remoteProxy) *networkingv1.NetworkPolicy {
+func buildWorkloadNetworkPolicyV2(ag *gmcv2.ActionsGateway, githubCIDRs []net.IPNet, direct bool, remoteProxies []remoteProxy) *networkingv1.NetworkPolicy {
 	egress := []networkingv1.NetworkPolicyEgressRule{
 		dnsEgressRule(),
 		{
@@ -309,7 +309,7 @@ func buildWorkloadNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, githubCIDRs []
 // stays mandatory either way — the AGC must reach the apiserver regardless of egress
 // mode. Restriction is preserved: DNS + kube API + (direct) the GitHub allowlist,
 // never arbitrary internet.
-func buildAGCNetworkPolicyV2(ag *gmcv2alpha1.ActionsGateway, apiServerCIDRs []string, githubCIDRs []net.IPNet, direct bool, remoteProxies []remoteProxy) *networkingv1.NetworkPolicy {
+func buildAGCNetworkPolicyV2(ag *gmcv2.ActionsGateway, apiServerCIDRs []string, githubCIDRs []net.IPNet, direct bool, remoteProxies []remoteProxy) *networkingv1.NetworkPolicy {
 	name := agcNameV2(ag)
 	np := buildAGCNetworkPolicyFrom(ag.Namespace, name, name, v2GatewayLabels(ag), apiServerCIDRs)
 	np.Spec.Egress = append(np.Spec.Egress, remoteProxyEgressRules(remoteProxies)...)
@@ -365,13 +365,13 @@ func remoteProxyEgressRules(proxies []remoteProxy) []networkingv1.NetworkPolicyE
 // API port parsed from the signer Address — never a broaden-to-all-egress. Added additively
 // to the AGC-only policy, so only the AGC reaches Vault; worker pods (which carry no AGC `app`
 // label) do not.
-func vaultEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
+func vaultEgressRule(ag *gmcv2.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
 	creds := ag.Spec.Credentials
-	if creds.Type != gmcv2alpha1.CredentialTypeWorkloadIdentity || creds.WorkloadIdentity == nil {
+	if creds.Type != gmcv2.CredentialTypeWorkloadIdentity || creds.WorkloadIdentity == nil {
 		return networkingv1.NetworkPolicyEgressRule{}, false
 	}
 	signer := creds.WorkloadIdentity.Signer
-	if signer.Provider != gmcv2alpha1.SignerProviderVault || signer.Vault == nil || signer.Vault.NetworkPolicy == nil {
+	if signer.Provider != gmcv2.SignerProviderVault || signer.Vault == nil || signer.Vault.NetworkPolicy == nil {
 		return networkingv1.NetworkPolicyEgressRule{}, false
 	}
 	npc := signer.Vault.NetworkPolicy
@@ -391,7 +391,7 @@ func vaultEgressRule(ag *gmcv2alpha1.ActionsGateway) (networkingv1.NetworkPolicy
 // IPBlock for an external peer, otherwise the pod/namespace selector for an in-cluster one. The
 // EgressPeer CEL validation guarantees exactly one form is set, so the branch is unambiguous.
 // Shared so future egress-peer consumers (cloud KMS signers, telemetry) emit peers identically.
-func egressPeerTo(p *gmcv2alpha1.EgressPeer) networkingv1.NetworkPolicyPeer {
+func egressPeerTo(p *gmcv2.EgressPeer) networkingv1.NetworkPolicyPeer {
 	if p.CIDR != "" {
 		return networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: p.CIDR}}
 	}
@@ -491,7 +491,7 @@ func agcResources(override *corev1.ResourceRequirements) corev1.ResourceRequirem
 // clients reach GitHub directly (governed by the direct-egress AGC NetworkPolicy),
 // and no proxy-CA volume is mounted. securityProfile is the namespace's effective
 // profile.
-func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy *gmcv2alpha1.EgressProxy, securityProfile string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
+func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv2.EgressProxy, securityProfile string, extraEnv []corev1.EnvVar) *appsv1.Deployment {
 	var proxyCA proxyCASource
 
 	env := []corev1.EnvVar{
@@ -590,7 +590,7 @@ func buildAGCDeploymentV2(ag *gmcv2alpha1.ActionsGateway, agcImage string, proxy
 // the AGC's trust pool keeps the system roots alongside it, so this widens trust for
 // githubURL without narrowing it anywhere else. The matching GITHUB_CA_CONFIGMAP_NAME
 // env is stamped with the rest of the env list, before extraEnv.
-func applyGitHubCABundleV2(pod *corev1.PodSpec, ref *gmcv2alpha1.LocalConfigMapReference) {
+func applyGitHubCABundleV2(pod *corev1.PodSpec, ref *gmcv2.LocalConfigMapReference) {
 	if ref == nil {
 		return
 	}
@@ -615,7 +615,7 @@ func applyGitHubCABundleV2(pod *corev1.PodSpec, ref *gmcv2alpha1.LocalConfigMapR
 // applyPodSchedulingV2 stamps a v2 spec.scheduling block onto a pod spec, deep-copying
 // out of the (shared, informer-owned) CR. A nil block leaves the pod spec untouched,
 // so a gateway that sets no scheduling produces a byte-for-byte unchanged Deployment.
-func applyPodSchedulingV2(pod *corev1.PodSpec, s *gmcv2alpha1.PodScheduling) {
+func applyPodSchedulingV2(pod *corev1.PodSpec, s *gmcv2.PodScheduling) {
 	if s == nil {
 		return
 	}
@@ -657,13 +657,13 @@ func applyPodSchedulingV2(pod *corev1.PodSpec, s *gmcv2alpha1.PodScheduling) {
 // buildAGCDeploymentFrom), never an env var. GitHubApp threads nothing — the AGC
 // reads the mounted Secret files as before, and an absent CREDENTIAL_TYPE defaults
 // to that path.
-func credentialEnvV2(ag *gmcv2alpha1.ActionsGateway) []corev1.EnvVar {
+func credentialEnvV2(ag *gmcv2.ActionsGateway) []corev1.EnvVar {
 	wi := ag.Spec.Credentials.WorkloadIdentity
-	if ag.Spec.Credentials.Type != gmcv2alpha1.CredentialTypeWorkloadIdentity || wi == nil {
+	if ag.Spec.Credentials.Type != gmcv2.CredentialTypeWorkloadIdentity || wi == nil {
 		return nil
 	}
 	env := []corev1.EnvVar{
-		{Name: "CREDENTIAL_TYPE", Value: string(gmcv2alpha1.CredentialTypeWorkloadIdentity)},
+		{Name: "CREDENTIAL_TYPE", Value: string(gmcv2.CredentialTypeWorkloadIdentity)},
 		{Name: "GITHUB_APP_ID", Value: strconv.FormatInt(wi.AppID, 10)},
 		{Name: "GITHUB_INSTALLATION_ID", Value: strconv.FormatInt(wi.InstallationID, 10)},
 		{Name: "VAULT_SA_TOKEN_PATH", Value: vaultTokenMountDir + "/" + vaultTokenFile},
@@ -689,7 +689,7 @@ func credentialEnvV2(ag *gmcv2alpha1.ActionsGateway) []corev1.EnvVar {
 // tracingEnvV2 translates the v2 spec.tracing into the OTEL_* environment the AGC
 // reads. Mirrors v1's tracingEnv (the field set is identical); auth headers are
 // deliberately not mapped (this project keeps secrets out of env vars).
-func tracingEnvV2(t gmcv2alpha1.TracingConfig) []corev1.EnvVar {
+func tracingEnvV2(t gmcv2.TracingConfig) []corev1.EnvVar {
 	if t.Endpoint == "" {
 		return nil
 	}
@@ -787,7 +787,7 @@ func generateMetricsCertsV2(namespace, agcName string) (*metricsCertBundle, erro
 	}, nil
 }
 
-func buildMetricsTLSSecretV2(ag *gmcv2alpha1.ActionsGateway, b *metricsCertBundle) *corev1.Secret {
+func buildMetricsTLSSecretV2(ag *gmcv2.ActionsGateway, b *metricsCertBundle) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: metricsTLSSecretNameV2(ag), Namespace: ag.Namespace, Labels: v2GatewayLabels(ag)},
 		Type:       corev1.SecretTypeTLS,
@@ -799,7 +799,7 @@ func buildMetricsTLSSecretV2(ag *gmcv2alpha1.ActionsGateway, b *metricsCertBundl
 	}
 }
 
-func buildMetricsClientSecretV2(ag *gmcv2alpha1.ActionsGateway, b *metricsCertBundle) *corev1.Secret {
+func buildMetricsClientSecretV2(ag *gmcv2.ActionsGateway, b *metricsCertBundle) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: metricsClientSecretNameV2(ag), Namespace: ag.Namespace, Labels: v2GatewayLabels(ag)},
 		Type:       corev1.SecretTypeTLS,

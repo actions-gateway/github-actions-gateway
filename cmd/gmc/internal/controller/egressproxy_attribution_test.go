@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,18 +23,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
-func attributingPool(allowed ...string) *gmcv2alpha1.EgressProxy {
-	return newEP("shared", "provider", func(ep *gmcv2alpha1.EgressProxy) {
+func attributingPool(allowed ...string) *gmcv2.EgressProxy {
+	return newEP("shared", "provider", func(ep *gmcv2.EgressProxy) {
 		ep.Spec.FailureAttribution = failureAttributionPerConsumerPort
-		ep.Spec.Sharing = &gmcv2alpha1.ProxySharing{AllowedNamespaces: allowed}
+		ep.Spec.Sharing = &gmcv2.ProxySharing{AllowedNamespaces: allowed}
 	})
 }
 
 // gatewayUsing returns a gateway in ns whose defaultProxyRef names provider/shared,
 // opted in when perJob is set.
-func gatewayUsing(ns string, perJob bool) *gmcv2alpha1.ActionsGateway {
-	ag := &gmcv2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "gw"}}
-	ag.Spec.DefaultProxyRef = &gmcv2alpha1.ProxyObjectRef{Name: "shared"}
+func gatewayUsing(ns string, perJob bool) *gmcv2.ActionsGateway {
+	ag := &gmcv2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "gw"}}
+	ag.Spec.DefaultProxyRef = &gmcv2.ProxyObjectRef{Name: "shared"}
 	if ns != "provider" {
 		ag.Spec.DefaultProxyRef.Namespace = "provider"
 	}
@@ -108,9 +108,9 @@ func TestAttributionPortsEnv_RoundTripsThroughTheDeployment(t *testing.T) {
 func TestAttributedNamespacesFor_NeedsOptInReferenceAndGrant(t *testing.T) {
 	other := gatewayUsing("team-e", true)
 	other.Spec.DefaultProxyRef.Name = "another-pool"
-	rsOnly := &gmcv2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: "team-f", Name: "rs"}}
-	rsOnly.Spec.ProxyRef = &gmcv2alpha1.ProxyObjectRef{Namespace: "provider", Name: "shared"}
-	optInNoRef := &gmcv2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Namespace: "team-f", Name: "gw"}}
+	rsOnly := &gmcv2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: "team-f", Name: "rs"}}
+	rsOnly.Spec.ProxyRef = &gmcv2.ProxyObjectRef{Namespace: "provider", Name: "shared"}
+	optInNoRef := &gmcv2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Namespace: "team-f", Name: "gw"}}
 	optInNoRef.Spec.ProxyFailureAttribution = proxyFailureAttributionPerJob
 
 	ep := attributingPool("team-a", "team-b", "team-e", "team-f")
@@ -136,9 +136,9 @@ func TestAttributedNamespacesFor_NeedsOptInReferenceAndGrant(t *testing.T) {
 // Off must be off at the pool: an upgraded GMC rolls no pool whose spec did not
 // opt in, so the children it builds are exactly the ones it built before.
 func TestEgressProxyReconcile_UnattributedPoolIsUnchanged(t *testing.T) {
-	for name, ep := range map[string]*gmcv2alpha1.EgressProxy{
-		"pool disabled": newEP("shared", "provider", func(ep *gmcv2alpha1.EgressProxy) {
-			ep.Spec.Sharing = &gmcv2alpha1.ProxySharing{AllowedNamespaces: []string{"team-a"}}
+	for name, ep := range map[string]*gmcv2.EgressProxy{
+		"pool disabled": newEP("shared", "provider", func(ep *gmcv2.EgressProxy) {
+			ep.Spec.Sharing = &gmcv2.ProxySharing{AllowedNamespaces: []string{"team-a"}}
 		}),
 		"pool on, no namespace opted in": attributingPool("team-a"),
 	} {
@@ -383,8 +383,8 @@ func ingressPortsFor(t *testing.T, c client.Client, ns string) []int32 {
 	return ports
 }
 
-func runnerSetIn(ns string, lifetime *metav1.Duration) *gmcv2alpha1.RunnerSet {
-	rs := &gmcv2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "rs"}}
+func runnerSetIn(ns string, lifetime *metav1.Duration) *gmcv2.RunnerSet {
+	rs := &gmcv2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "rs"}}
 	rs.Spec.GatewayRef.Name = "gw"
 	rs.Spec.MaxWorkerLifetime = lifetime
 	return rs

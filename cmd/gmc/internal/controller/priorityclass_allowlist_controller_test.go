@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -79,7 +79,7 @@ func TestParsePriorityClassNames_RejectsUppercase(t *testing.T) {
 func pcaScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
-	require.NoError(t, v2beta1.AddToScheme(s))
+	require.NoError(t, v2.AddToScheme(s))
 	return s
 }
 
@@ -93,10 +93,10 @@ func reconcilePCA(t *testing.T, worker, infra *allowlist.PriorityClassAllowlist,
 	require.NoError(t, err)
 }
 
-func pcaObject(worker, infra []string) *v2beta1.PriorityClassAllowlist {
-	return &v2beta1.PriorityClassAllowlist{
+func pcaObject(worker, infra []string) *v2.PriorityClassAllowlist {
+	return &v2.PriorityClassAllowlist{
 		ObjectMeta: metav1.ObjectMeta{Name: "gag-priorityclass-allowlist"},
-		Spec: v2beta1.PriorityClassAllowlistSpec{
+		Spec: v2.PriorityClassAllowlistSpec{
 			AllowedPriorityClasses:      worker,
 			AllowedInfraPriorityClasses: infra,
 		},

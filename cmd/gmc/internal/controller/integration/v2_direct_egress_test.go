@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -144,17 +144,17 @@ func TestV2_DirectEgress_ProvisionsRestrictedControlPlane(t *testing.T) {
 	// Status: proxyMode Direct + EgressUnattributed=True; not Degraded; the allowlist
 	// just fetched reads current (Q1249).
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 			return false
 		}
-		unattr := findCondition(got.Status.Conditions, v2alpha1.ConditionEgressUnattributed)
-		degraded := findCondition(got.Status.Conditions, v2alpha1.ConditionDegraded)
-		stale := findCondition(got.Status.Conditions, v2alpha1.ConditionEgressRulesStale)
-		return got.Status.ProxyMode == v2alpha1.ProxyModeDirect &&
-			unattr != nil && unattr.Status == metav1.ConditionTrue && unattr.Reason == v2alpha1.ReasonDirectEgress &&
+		unattr := findCondition(got.Status.Conditions, v2.ConditionEgressUnattributed)
+		degraded := findCondition(got.Status.Conditions, v2.ConditionDegraded)
+		stale := findCondition(got.Status.Conditions, v2.ConditionEgressRulesStale)
+		return got.Status.ProxyMode == v2.ProxyModeDirect &&
+			unattr != nil && unattr.Status == metav1.ConditionTrue && unattr.Reason == v2.ReasonDirectEgress &&
 			degraded != nil && degraded.Status == metav1.ConditionFalse &&
-			stale != nil && stale.Status == metav1.ConditionFalse && stale.Reason == v2alpha1.ReasonRefreshCurrent
+			stale != nil && stale.Status == metav1.ConditionFalse && stale.Reason == v2.ReasonRefreshCurrent
 	}, 15*time.Second, 100*time.Millisecond, "status should report proxyMode Direct + EgressUnattributed=True + EgressRulesStale=False, not Degraded")
 }
 

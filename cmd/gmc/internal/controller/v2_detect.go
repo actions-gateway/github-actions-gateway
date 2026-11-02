@@ -5,10 +5,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
-// v2DetectKinds are the actions-gateway.com/v2alpha1 kinds the GMC's v2
+// v2DetectKinds are the actions-gateway.com/v2 kinds the GMC's v2
 // controllers (ActionsGatewayV2Reconciler, EgressProxyReconciler) and the
 // IPRange reconciler's v2 NetworkPolicy refresh paths depend on. They ship in
 // the opt-in actions-gateway-crds-v2 Helm chart, separate from the main chart
@@ -19,7 +19,7 @@ import (
 // sufficient signal that the whole v2 CRD set is installed.
 var v2DetectKinds = []string{"ActionsGateway", "EgressProxy"}
 
-// V2alpha1Installed reports whether the opt-in actions-gateway.com/v2alpha1 CRDs
+// V2Installed reports whether the opt-in actions-gateway.com/v2 CRDs
 // are installed and served by the apiserver. The GMC calls it once at startup to
 // decide whether to register the v2 controllers and enable the IPRange
 // reconciler's v2 refresh paths: an install of the main chart without
@@ -31,9 +31,9 @@ var v2DetectKinds = []string{"ActionsGateway", "EgressProxy"}
 // the caller can fail fast rather than silently disabling v2 on a transient apiserver
 // hiccup. Detection happens at startup, so installing the v2 CRDs later requires a
 // GMC restart to enable the v2 controllers.
-func V2alpha1Installed(mapper meta.RESTMapper) (bool, error) {
+func V2Installed(mapper meta.RESTMapper) (bool, error) {
 	for _, kind := range v2DetectKinds {
-		gvk := gmcv2alpha1.GroupVersion.WithKind(kind)
+		gvk := gmcv2.GroupVersion.WithKind(kind)
 		if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			if meta.IsNoMatchError(err) {
 				return false, nil

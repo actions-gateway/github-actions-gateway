@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,27 +102,27 @@ func startActionsGatewayV2ReconcilerSync(t *testing.T, mgrCtx context.Context, a
 
 // newV2ActionsGateway builds a v2 ActionsGateway referencing the given GitHub App
 // Secret and (optionally) defaultProxyRef EgressProxy.
-func newV2GatewayWired(name, ns, secretName, proxyRef string) *v2alpha1.ActionsGateway {
-	ag := &v2alpha1.ActionsGateway{
+func newV2GatewayWired(name, ns, secretName, proxyRef string) *v2.ActionsGateway {
+	ag := &v2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.ActionsGatewaySpec{
-			Credentials: v2alpha1.GitHubCredentials{
-				Type:      v2alpha1.CredentialTypeGitHubApp,
-				GitHubApp: &v2alpha1.LocalSecretReference{Name: secretName},
+		Spec: v2.ActionsGatewaySpec{
+			Credentials: v2.GitHubCredentials{
+				Type:      v2.CredentialTypeGitHubApp,
+				GitHubApp: &v2.LocalSecretReference{Name: secretName},
 			},
 			GitHubURL: "https://github.com/example-org",
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }
 
 // newV2EgressProxyObject creates a bare EgressProxy CR (no reconciler needed — the
 // ActionsGateway reconciler only reads its name + spec to wire the AGC's egress).
-func newV2EgressProxyObject(name, ns string) *v2alpha1.EgressProxy {
-	return &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}}
+func newV2EgressProxyObject(name, ns string) *v2.EgressProxy {
+	return &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}}
 }
 
 func hasGatewayOwnerRef(refs []metav1.OwnerReference, name string) bool {
@@ -137,12 +137,12 @@ func hasGatewayOwnerRef(refs []metav1.OwnerReference, name string) bool {
 func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	const ns = "v2-ag-provision"
 	createNamespaceWithLabels(t, ns, map[string]string{
-		v2alpha1.SecurityProfileLabel: v2alpha1.SecurityProfileRestricted,
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
 	})
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired("gw", ns, "github-app", "shared")
@@ -179,7 +179,7 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	assert.Equal(t, "https://shared-proxy."+ns+".svc.cluster.local:8080", envValue(&dep, "HTTP_PROXY"))
 	assert.Equal(t, "https://shared-proxy."+ns+".svc.cluster.local:8080", envValue(&dep, "HTTPS_PROXY"))
 	assert.Equal(t, "shared-proxy-tls", envValue(&dep, "PROXY_TLS_SECRET_NAME"))
-	assert.Equal(t, v2alpha1.SecurityProfileRestricted, envValue(&dep, "SECURITY_PROFILE"))
+	assert.Equal(t, v2.SecurityProfileRestricted, envValue(&dep, "SECURITY_PROFILE"))
 	assert.Equal(t, "gw", envValue(&dep, "GATEWAY_NAME"), "AGC must be scoped to its gateway")
 	assert.Equal(t, gwWorkerSA, envValue(&dep, "WORKER_SERVICE_ACCOUNT"), "per-gateway worker SA")
 	assert.Equal(t, "https://github.com/example-org", envValue(&dep, "GITHUB_ORG_URL"))
@@ -285,18 +285,18 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	// Status: uniform contract. No kubelet ⇒ AGC never ready ⇒ Ready=False/AGCNotReady
 	// (the False reason must not be the AGCReady positive reason — Q309).
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 			return false
 		}
-		ready := findCondition(got.Status.Conditions, v2alpha1.ConditionReady)
-		agc := findCondition(got.Status.Conditions, v2alpha1.ConditionAGCAvailable)
-		degraded := findCondition(got.Status.Conditions, v2alpha1.ConditionDegraded)
-		cred := findCondition(got.Status.Conditions, v2alpha1.ConditionCredentialUnavailable)
+		ready := findCondition(got.Status.Conditions, v2.ConditionReady)
+		agc := findCondition(got.Status.Conditions, v2.ConditionAGCAvailable)
+		degraded := findCondition(got.Status.Conditions, v2.ConditionDegraded)
+		cred := findCondition(got.Status.Conditions, v2.ConditionCredentialUnavailable)
 		return ready != nil && ready.Status == metav1.ConditionFalse &&
-			ready.Reason == v2alpha1.ReasonAGCNotReady &&
+			ready.Reason == v2.ReasonAGCNotReady &&
 			agc != nil && agc.Status == metav1.ConditionFalse &&
-			agc.Reason == v2alpha1.ReasonAGCNotReady &&
+			agc.Reason == v2.ReasonAGCNotReady &&
 			degraded != nil && degraded.Status == metav1.ConditionFalse &&
 			cred != nil && cred.Status == metav1.ConditionFalse &&
 			got.Status.ObservedGeneration == got.Generation
@@ -347,7 +347,7 @@ func TestV2_ActionsGateway_ProvisionsServiceMonitor(t *testing.T) {
 		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc-metrics"}, sm))
 	}, 15*time.Second, 100*time.Millisecond, "teardown should delete the AGC ServiceMonitor")
 	require.Eventually(t, func() bool {
-		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &v2alpha1.ActionsGateway{}))
+		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &v2.ActionsGateway{}))
 	}, 15*time.Second, 100*time.Millisecond, "the gateway should finalize away once teardown is clean")
 }
 
@@ -361,7 +361,7 @@ func TestV2_ActionsGateway_AGCResources(t *testing.T) {
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	// Unset gateway ⇒ platform default footprint.
@@ -416,7 +416,7 @@ func TestV2_ActionsGateway_FailsClosedWithoutCredential(t *testing.T) {
 	createNamespace(t, ns)
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	ag := newV2GatewayWired("gw", ns, "missing-secret", "shared")
@@ -426,13 +426,13 @@ func TestV2_ActionsGateway_FailsClosedWithoutCredential(t *testing.T) {
 	startActionsGatewayV2Reconciler(t)
 
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 			return false
 		}
-		cred := findCondition(got.Status.Conditions, v2alpha1.ConditionCredentialUnavailable)
-		ready := findCondition(got.Status.Conditions, v2alpha1.ConditionReady)
-		return cred != nil && cred.Status == metav1.ConditionTrue && cred.Reason == v2alpha1.ReasonSecretNotFound &&
+		cred := findCondition(got.Status.Conditions, v2.ConditionCredentialUnavailable)
+		ready := findCondition(got.Status.Conditions, v2.ConditionReady)
+		return cred != nil && cred.Status == metav1.ConditionTrue && cred.Reason == v2.ReasonSecretNotFound &&
 			ready != nil && ready.Status == metav1.ConditionFalse
 	}, 15*time.Second, 100*time.Millisecond, "missing credential must surface CredentialUnavailable=True / Ready=False")
 
@@ -465,11 +465,11 @@ func TestV2_ActionsGateway_WorkloadIdentityProvisions(t *testing.T) {
 
 	// CredentialUnavailable is cleared (no Secret is required for this method).
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "wi-gw"}, &got); err != nil {
 			return false
 		}
-		cred := findCondition(got.Status.Conditions, v2alpha1.ConditionCredentialUnavailable)
+		cred := findCondition(got.Status.Conditions, v2.ConditionCredentialUnavailable)
 		return cred != nil && cred.Status == metav1.ConditionFalse
 	}, 15*time.Second, 100*time.Millisecond, "CredentialUnavailable must be False for workload identity")
 
@@ -508,7 +508,7 @@ func TestV2_ActionsGateway_WorkloadIdentityVaultEgressNetworkPolicy(t *testing.T
 	createNamespace(t, ns)
 
 	ag := newV2WorkloadIdentityGateway(ns, "wi-np-gw")
-	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &v2alpha1.EgressPeer{
+	ag.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = &v2.EgressPeer{
 		CIDR: "10.0.5.7/32",
 	}
 	require.NoError(t, k8sClient.Create(ctx, ag))
@@ -562,12 +562,12 @@ func TestV2_ActionsGateway_FailsClosedWhenProxyMissing(t *testing.T) {
 	startActionsGatewayV2Reconciler(t)
 
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
 			return false
 		}
-		ready := findCondition(got.Status.Conditions, v2alpha1.ConditionReady)
-		return ready != nil && ready.Status == metav1.ConditionFalse && ready.Reason == v2alpha1.ReasonProxyNotFound
+		ready := findCondition(got.Status.Conditions, v2.ConditionReady)
+		return ready != nil && ready.Status == metav1.ConditionFalse && ready.Reason == v2.ReasonProxyNotFound
 	}, 15*time.Second, 100*time.Millisecond, "missing EgressProxy must surface Ready=False/ProxyNotFound")
 
 	var dep appsv1.Deployment
@@ -577,7 +577,7 @@ func TestV2_ActionsGateway_FailsClosedWhenProxyMissing(t *testing.T) {
 	// re-enqueues; the AGC Deployment is created).
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("absent", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "absent", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "absent", Namespace: ns}})
 	})
 	require.Eventually(t, func() bool {
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw-agc"}, &dep) == nil
@@ -597,7 +597,7 @@ func TestV2_MultiGateway_CoexistAndPerGatewayGC(t *testing.T) {
 	createGitHubAppSecret(t, ns, "github-app")
 	require.NoError(t, k8sClient.Create(ctx, newV2EgressProxyObject("shared", ns)))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	agA := newV2GatewayWired("alpha", ns, "github-app", "shared")
@@ -637,7 +637,7 @@ func TestV2_MultiGateway_CoexistAndPerGatewayGC(t *testing.T) {
 	// removes alpha's ClusterRoleBinding and lets the object finalize away.
 	require.NoError(t, k8sClient.Delete(ctx, agA))
 	require.Eventually(t, func() bool {
-		var got v2alpha1.ActionsGateway
+		var got v2.ActionsGateway
 		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "alpha"}, &got))
 	}, 15*time.Second, 100*time.Millisecond, "alpha should finalize away")
 
