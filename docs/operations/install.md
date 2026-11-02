@@ -183,7 +183,7 @@ It gives ready-to-apply Argo CD `Application` and Flux `HelmRelease` examples (w
 ### Optional: the v2 API CRDs
 
 The main chart installs the `v1alpha1` (`actions-gateway.github.com`) `RunnerGroup` CRD, [deprecated](v1alpha1-deprecation.md); the `ActionsGateway` kind is served only at `actions-gateway.com`.
-The v2 (`actions-gateway.com`) API that new tenants onboard on ships its five CRDs in a **separate, opt-in chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
+The v2 (`actions-gateway.com`) API that new tenants onboard on ships its five CRDs in a **separate chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
 Install it alongside the main chart: without it the GMC has no `ActionsGateway` kind to reconcile.
 
 Each v2 CRD is served at **three versions**: **`v2beta1`** (the graduated, ScaleSet-only shape, and the conversion hub), **`v2`** (the General Availability (GA) version, identical but for the dropped `CiliumFQDN`/`CalicoFQDN` aliases, and the storage version from 1.10), and **`v2alpha1`** (served as the `gag-migrate` on-ramp, deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md)).
