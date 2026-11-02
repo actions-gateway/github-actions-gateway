@@ -712,10 +712,9 @@ func tracingEnvV2(t gmcv2alpha1.TracingConfig) []corev1.EnvVar {
 // --- metrics mTLS PKI (v2) ---
 
 // metricsServerSANsV2 lists the in-cluster DNS names the v2 metrics server cert
-// must be valid for: this gateway's AGC Service (short + FQDN forms). v1 also
-// covered the proxy Service, but in v2 the proxy is a standalone EgressProxy whose
-// metrics listener is wired separately; the AGC owns this bundle for its own
-// /metrics endpoint. agcName is the per-gateway AGC Service name.
+// must be valid for: this gateway's AGC Service (short + FQDN forms). The proxy is a
+// standalone EgressProxy whose metrics listener is wired separately; the AGC owns
+// this bundle for its own /metrics endpoint. agcName is the per-gateway AGC Service name.
 func metricsServerSANsV2(namespace, agcName string) []string {
 	return []string{
 		agcName,
@@ -726,8 +725,7 @@ func metricsServerSANsV2(namespace, agcName string) []string {
 }
 
 // generateMetricsCertsV2 builds a metrics mTLS bundle (CA + server leaf + client leaf
-// for the scraper). Mirrors v1's generateMetricsCerts, reusing the shared
-// signLeaf/encodeCertPEM helpers; the CA key is not persisted (the whole bundle
+// for the scraper), reusing the shared signLeaf/encodeCertPEM helpers; the CA key is not persisted (the whole bundle
 // regenerates together on renewal). It is keyed on (namespace, Service name) and is
 // used for both the AGC metrics listener (svcName = the AGC Service) and, since Q324,
 // the standalone EgressProxy proxy metrics listener (svcName = the "<ep>-proxy"

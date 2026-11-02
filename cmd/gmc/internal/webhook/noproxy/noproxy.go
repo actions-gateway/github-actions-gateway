@@ -1,5 +1,5 @@
-// Package noproxy holds the admission-time guard shared by the v1 ActionsGateway and
-// v2 EgressProxy webhooks: a tenant-authored NO_PROXY exclusion list must never route
+// Package noproxy holds the EgressProxy webhook's admission-time guard: a
+// tenant-authored NO_PROXY exclusion list must never route
 // GitHub traffic around the per-tenant egress proxy, or the egress-IP attribution
 // that isolates tenants is silently defeated.
 package noproxy
@@ -46,7 +46,7 @@ var GitHubHosts = []string{
 // (see 05-security.md §5.2).
 //
 // This is a webhook check, not a CRD CEL rule, because the protected set is dynamic
-// for the v1 caller (the gitHubURL host parse) and the check is version-agnostic.
+// (the referring gateways' gitHubURL hosts) and the check is version-agnostic.
 func ValidateEntries(fieldPath string, entries, protectedHosts []string) error {
 	for i, entry := range entries {
 		// CIDR / bare-IP entries cannot be a hostname-suffix bypass; the

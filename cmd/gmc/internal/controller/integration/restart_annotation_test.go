@@ -66,29 +66,6 @@ func waitForDeployment(t *testing.T, ns, name string) {
 	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
 }
 
-func TestGMC_V1AGC_RolloutRestartSurvivesReconcile(t *testing.T) {
-	const nsName = "team-agc-restart"
-	createNamespace(t, nsName)
-	createGitHubAppSecret(t, nsName, "github-app")
-
-	ag := newActionsGateway("restart-gateway", nsName, "github-app")
-	require.NoError(t, k8sClient.Create(ctx, ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
-
-	startGMCReconciler(t, nil)
-	waitForDeployment(t, nsName, agcName)
-
-	at := rolloutRestart(t, nsName, agcName)
-	assertRestartedAtSurvives(t, nsName, agcName, at)
-
-	// The reconciler still owns the rest of the template: the annotation is
-	// tolerated, not a licence for arbitrary drift.
-	var dep appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep))
-	require.NotEmpty(t, dep.Spec.Template.Spec.Containers)
-	require.Equal(t, "agc:test", dep.Spec.Template.Spec.Containers[0].Image)
-}
-
 func TestV2_AGC_RolloutRestartSurvivesReconcile(t *testing.T) {
 	const nsName = "v2-agc-restart"
 	const gw = "restart-gw"
@@ -104,36 +81,4 @@ func TestV2_AGC_RolloutRestartSurvivesReconcile(t *testing.T) {
 
 	at := rolloutRestart(t, nsName, gw+"-agc")
 	assertRestartedAtSurvives(t, nsName, gw+"-agc", at)
-}
-
-// TestGMC_V1AGC_UnrelatedTemplateDriftIsReverted pins the negative half: only the
-// listed restart annotation is tolerated. Any other hand-edited pod-template
-// annotation is still reconciled away.
-func TestGMC_V1AGC_UnrelatedTemplateDriftIsReverted(t *testing.T) {
-	const nsName = "team-agc-drift"
-	createNamespace(t, nsName)
-	createGitHubAppSecret(t, nsName, "github-app")
-
-	ag := newActionsGateway("drift-gateway", nsName, "github-app")
-	require.NoError(t, k8sClient.Create(ctx, ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
-
-	startGMCReconciler(t, nil)
-	waitForDeployment(t, nsName, agcName)
-
-	key := types.NamespacedName{Namespace: nsName, Name: agcName}
-	var dep appsv1.Deployment
-	require.NoError(t, k8sClient.Get(ctx, key, &dep))
-	if dep.Spec.Template.Annotations == nil {
-		dep.Spec.Template.Annotations = map[string]string{}
-	}
-	dep.Spec.Template.Annotations["sidecar.istio.io/inject"] = "false"
-	require.NoError(t, k8sClient.Update(ctx, &dep))
-
-	gomega.NewWithT(t).Eventually(func(g gomega.Gomega) map[string]string {
-		var got appsv1.Deployment
-		g.Expect(k8sClient.Get(ctx, key, &got)).To(gomega.Succeed())
-		return got.Spec.Template.Annotations
-	}, 20*time.Second, 25*time.Millisecond).ShouldNot(gomega.HaveKey("sidecar.istio.io/inject"),
-		"an unlisted hand-edited pod-template annotation must still be reverted")
 }

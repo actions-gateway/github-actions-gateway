@@ -177,7 +177,7 @@ run_lane_case() {
 }
 
 agc_file="cmd/agc/internal/provisioner/admission.go"
-gmc_file="cmd/gmc/api/v1alpha1/conditions.go"
+gmc_file="cmd/gmc/internal/controller/shared_reconcile.go"
 agc_commit="$(synth_commit "$agc_file")"
 gmc_commit="$(synth_commit "$gmc_file")"
 

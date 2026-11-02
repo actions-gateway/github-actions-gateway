@@ -4877,9 +4877,6 @@ Common misses: the field omitted entirely, an `http://` (non-TLS) URL, or a bare
 **Resolution.**
 - Set `spec.gitHubURL` to an org URL (`https://github.com/my-org`), a single-repo URL (`https://github.com/my-org/my-repo`), or your GitHub Enterprise Server URL (`https://ghes.example.com/my-org`).
 - It must use `https://` and name the org/enterprise/owner — and must match where the App in `spec.gitHubAppRef` is installed.
-- Setting it through the Helm chart's sample CR?
-  Use the `sampleGateway.gitHubURL` value.
-  See [tenant-onboarding — Step 2](tenant-onboarding.md#step-2-create-the-actionsgateway-resource).
 
 ---
 

@@ -117,7 +117,6 @@ api/config/crd/actions-gateway.com_actionsgateways.yaml
 api/config/crd/actions-gateway.com_egressproxies.yaml
 cmd/gmc/config/rbac/role.yaml
 cmd/gmc/config/webhook/manifests.yaml
-cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml
 cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml
 cmd/gmc/config/admission-policy/namespace-psa-guard.yaml
 cmd/gmc/config/admission-policy/namespace-security-profile-guard.yaml
@@ -217,10 +216,10 @@ echo "==> kubeconform: Helm chart render (dev/test opt-out: allowFloatingImageTa
 helm template ag "$chart" --set allowFloatingImageTags=true \
 	| kubeconform $kubeconform_flags
 
-echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + sample CR + self-signed cert)"
+echo "==> kubeconform: Helm chart render (all optional features: ServiceMonitor + self-signed cert)"
 # shellcheck disable=SC2086
 helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" \
-	--set metrics.serviceMonitor.enabled=true --set sampleGateway.create=true --set certManager.enabled=false \
+	--set metrics.serviceMonitor.enabled=true --set certManager.enabled=false \
 	| kubeconform $kubeconform_flags
 
 echo "==> kubeconform: Helm chart render (cert-manager-verified metrics scrape: ServiceMonitor + metrics.tls.certManager)"

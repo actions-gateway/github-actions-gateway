@@ -308,7 +308,7 @@ def render():
     # GMC fleet rollups.
     L.append("actions_gateway_managed_gateways 4")
     for ns, name in GATEWAYS:
-        L.append(f'actions_gateway_runnergroups_degraded{{namespace="{ns}",name="{name}"}} 0')
+        L.append(f'actions_gateway_runnersets_degraded{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_egress_rules_stale{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_proxy_quota_pressure{{namespace="{ns}",name="{name}"}} 0')
         L.append(f'actions_gateway_proxy_quota_exceeded{{namespace="{ns}",name="{name}"}} 0')

@@ -51,8 +51,8 @@ func TestInstall(t *testing.T) {
 	sink := &captureSink{}
 	install(logr.New(sink))
 
-	// The call shape ActionsGatewayReconciler.deleteIfExists makes: a root
-	// logger fetched from a context that carries none.
+	// A teardown helper's call shape: a root logger fetched from a context that
+	// carries none.
 	logf.FromContext(context.Background()).Error(errors.New("apiserver unavailable"),
 		"failed to delete resource during teardown")
 	require.Equal(t, []string{"failed to delete resource during teardown"}, sink.messages(),

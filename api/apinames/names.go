@@ -3,11 +3,8 @@
 //
 // It lives in the neutral api module for the same reason [apilabels] does: both
 // controllers derive names from the same CRs, and a divergence between their two
-// ideas of a name is not cosmetic. The v1 RunnerGroup name is derived by the GMC,
-// replicated by `gag-migrate` so its synthesized names match what the GMC would
-// have materialized, and consumed by the AGC as a label value on every worker pod
-// and agent Secret. Before this package there were four near-copies of the logic
-// across three packages, two of them held in sync by a comment.
+// ideas of a name is not cosmetic. Before this package there were four near-copies
+// of the logic across three packages, two of them held in sync by a comment.
 //
 // # The failure mode this package exists to prevent
 //

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -15,12 +14,10 @@ import (
 )
 
 // These tests prove the v2alpha1 (actions-gateway.com) GMC kinds install into the
-// real apiserver and round-trip alongside v1alpha1 (Q149, M1 exit criterion), and
-// that the CEL/structural validation behaves under real-apiserver semantics —
-// defaulting and the per-field immutability transitions only the apiserver applies.
-// No reconciler is exercised: M1 is the API foundation only. The v1alpha1 validating
-// webhook is scoped to group actions-gateway.github.com, so it never intercepts
-// these v2 (actions-gateway.com) objects.
+// real apiserver and round-trip (Q149, M1 exit criterion), and that the
+// CEL/structural validation behaves under real-apiserver semantics — defaulting and
+// the per-field immutability transitions only the apiserver applies. No reconciler is
+// exercised: M1 is the API foundation only.
 
 func newV2ActionsGateway(ns, name string) *gmcv2alpha1.ActionsGateway {
 	return &gmcv2alpha1.ActionsGateway{
@@ -294,25 +291,4 @@ func TestV2_EgressProxy_DestinationCIDRsAllowedInAnyMode(t *testing.T) {
 	}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
-}
-
-// TestV2_CoexistsWithV1 proves both API groups are served at once: a v1alpha1 and a
-// v2alpha1 ActionsGateway live in the same namespace without contention (they are
-// distinct CRDs in distinct groups). This is the M1 no-behavior-change non-goal.
-func TestV2_CoexistsWithV1(t *testing.T) {
-	const ns = "v2-coexist"
-	createNamespace(t, ns)
-
-	v1ag := newActionsGateway("legacy", ns, "github-app")
-	require.NoError(t, k8sClient.Create(ctx, v1ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, v1ag) })
-
-	v2ag := newV2ActionsGateway(ns, "modern")
-	require.NoError(t, k8sClient.Create(ctx, v2ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, v2ag) })
-
-	var gotV1 gmcv1alpha1.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "legacy"}, &gotV1))
-	var gotV2 gmcv2alpha1.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "modern"}, &gotV2))
 }

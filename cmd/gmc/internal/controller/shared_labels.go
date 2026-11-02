@@ -7,9 +7,8 @@ import (
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 )
 
-// Label vocabulary shared by every GMC-managed object, across API versions. The
-// v1 and v2 ActionsGateway reconcilers and the EgressProxy reconciler all stamp
-// these; only the per-object label *assembly* (which carries the CR's own name and
+// Label vocabulary shared by every GMC-managed object. The ActionsGateway and
+// EgressProxy reconcilers both stamp these; only the per-object label *assembly* (which carries the CR's own name and
 // is therefore typed on one API version) lives with its version's builder.
 const (
 	labelManagedBy    = "app.kubernetes.io/managed-by"
@@ -23,9 +22,8 @@ const (
 	componentRunnerLabel     = "runner"
 	appNameWorker            = "actions-runner"
 
-	// agcAppName / proxyAppName are the app.kubernetes.io/name values — and, for
-	// v1's fixed-name objects, the workload names themselves. v2 derives per-CR
-	// names but keeps these as the recommended-label app identity.
+	// agcAppName / proxyAppName are the app.kubernetes.io/name values. Workload
+	// names are derived per CR; these stay the recommended-label app identity.
 	proxyAppName = gmcnames.ProxyName
 	agcAppName   = agcnames.ControllerName
 

@@ -126,10 +126,6 @@ The `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; 
 | `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | GMC pod scheduling. |
 | `topologySpreadConstraints.enabled` | `true` | Spread the GMC replicas across nodes (soft, `ScheduleAnyway`) so one node failure can't evict both. Set `false` to drop it. |
 | `topologySpreadConstraints.{maxSkew,topologyKey,whenUnsatisfiable}` | `1` / `kubernetes.io/hostname` / `ScheduleAnyway` | Spread tuning; raise to `topology.kubernetes.io/zone` on multi-zone clusters. |
-| `sampleGateway.create` | `false` | Render an example `ActionsGateway` (dev only). |
-| `sampleGateway.securityProfile` | `baseline` | Profile for the sample CR (`baseline`/`restricted`/`privileged`). |
-| `sampleGateway.gitHubAppSecretName` | `github-app-v1` | GitHub App Secret name referenced by the sample CR. |
-| `sampleGateway.gitHubURL` | `https://github.com/my-org` | GitHub org/enterprise/repo URL the sample CR's runners register against. |
 
 A `values.schema.json` validates these at install/lint time (image digest format, security-profile enum, pull-policy enum, etc.).
 

@@ -704,7 +704,7 @@ build-gmc: ## Build the GMC binary
 	go build -C cmd/gmc/cmd -o ../../../.build/gmc .
 
 .PHONY: build-migrate
-build-migrate: ## Build the gag-migrate one-shot v1->v2 migration CLI into .build/
+build-migrate: ## Build the gag-migrate one-shot upgrade-migration CLI (storage-version) into .build/
 	go build -C cmd/gmc -o ../../.build/gag-migrate ./migrate
 
 .PHONY: build-probe

@@ -26,12 +26,6 @@ import (
 // `cannot list resource "runnersets"`.
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=runnersets,verbs=get;list;watch
 
-// The validator also lists v1alpha1 RunnerGroups and both gateway versions to enforce
-// agent-identity uniqueness across the two derivations (Q1011). The GMC's ClusterRole
-// already carries every one of those reads for the reconciler, so this marker records
-// the webhook's dependency on them rather than widening the role.
-// +kubebuilder:rbac:groups=actions-gateway.github.com,resources=runnergroups;actionsgateways,verbs=get;list;watch
-
 // RunnerSetCustomValidator enforces the RunnerSet invariants a spec-scoped CRD CEL
 // rule cannot express:
 //
@@ -42,9 +36,9 @@ import (
 //     ScaleSet⇒exactly-one-label rule — is enforced by CRD CEL on the RunnerSet type.
 //   - Every priorityTiers[].priorityClassName must be on the platform PriorityClass
 //     allowlist (Q132/Q289): the allowlist is dynamic platform config CEL cannot read.
-//   - No two runner pools may derive the same agent-identity stem (Q1011). The stem
-//     is the CR name, so this is a cross-KIND and cross-NAMESPACE comparison against
-//     v1alpha1 RunnerGroups as well as sibling RunnerSets, which no CEL rule reaches.
+//   - No two RunnerSets may derive the same agent-identity stem (Q1011). The stem
+//     is derived from the CR name, so this is a cross-NAMESPACE comparison against
+//     sibling RunnerSets, which no CEL rule reaches.
 //
 // +kubebuilder:object:generate=false
 type RunnerSetCustomValidator struct {

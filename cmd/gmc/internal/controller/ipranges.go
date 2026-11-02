@@ -25,8 +25,8 @@ import (
 
 // IPRangeCache holds the most recently fetched GitHub IP CIDRs.
 //
-// The cache decouples reads from network I/O: the ActionsGatewayReconciler
-// reads from the cache on every reconcile (non-blocking, in-memory) while
+// The cache decouples reads from network I/O: the gateway and EgressProxy
+// reconcilers read from the cache on every reconcile (non-blocking, in-memory) while
 // IPRangeReconciler refreshes the cache periodically. Without this split,
 // per-reconcile fetches of api.github.com/meta serialise behind a single
 // goroutine and can stall the entire reconciler queue when the GitHub API
@@ -297,8 +297,8 @@ const (
 // IPRangeReconciler is a controller-runtime Runnable that periodically
 // refreshes NetworkPolicy egress rules for all managed ActionsGateway CRs.
 //
-// If Cache is non-nil, each successful fetch updates it. ActionsGatewayReconciler
-// reads from the same cache instead of fetching on every reconcile.
+// If Cache is non-nil, each successful fetch updates it. The gateway and
+// EgressProxy reconcilers read from the same cache instead of fetching on every reconcile.
 type IPRangeReconciler struct {
 	client.Client
 	Fetcher  GitHubIPRangeFetcher
@@ -320,10 +320,9 @@ type IPRangeReconciler struct {
 
 	// V2Enabled gates the v2 NetworkPolicy refresh passes (EgressProxy and v2
 	// ActionsGateway direct egress). It is set from the startup v2alpha1 CRD
-	// detection (V2alpha1Installed): on a v1-only install the
-	// actions-gateway.com/v2alpha1 CRDs are absent, so listing those kinds would
-	// fail with "no matches for kind" on every tick. When false, the v2 passes
-	// are skipped entirely and only the v1 NetworkPolicies are refreshed. Q228.
+	// detection (V2alpha1Installed): without the actions-gateway.com/v2alpha1
+	// CRDs, listing those kinds would fail with "no matches for kind" on every
+	// tick. When false, the passes are skipped entirely. Q228.
 	V2Enabled bool
 
 	// InitialBackoff and MaxBackoff bound the capped exponential backoff used
@@ -367,8 +366,8 @@ func (r *IPRangeReconciler) Start(ctx context.Context) error {
 // until the first fetch succeeds or ctx is cancelled.
 //
 // The first successful fetch populates the IP-range cache. Every managed proxy
-// NetworkPolicy's ipBlock egress allowlist is derived from that cache (by both
-// ActionsGatewayReconciler at NP-creation time and reconcileAll's patch pass),
+// NetworkPolicy's ipBlock egress allowlist is derived from that cache (by the
+// EgressProxy reconciler at NP-creation time and reconcileAll's patch pass),
 // so until the first fetch lands, proxy egress to GitHub is empty and silently
 // dropped. Because the periodic refresh Interval is 24h in production, a single
 // transient failure or stall on the very first fetch would otherwise leave
@@ -473,27 +472,19 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		}
 	}
 
-	// v1 pass (ipranges_v1.go): patch every managed v1 ActionsGateway's proxy
-	// NetworkPolicy. Deleted wholesale by the v1 sunset (Q273).
-	if err := r.refreshV1ProxyNetworkPolicies(ctx, log, cidrs); err != nil {
-		return err
-	}
-
 	// v2 NetworkPolicy refresh passes are gated on the opt-in
 	// actions-gateway.com/v2alpha1 CRDs being installed (detected once at startup,
-	// see V2alpha1Installed). On a v1-only install they are absent, so listing the
-	// v2 kinds below would fail with "no matches for kind" on every tick; skipping
-	// the passes keeps the loop quiet and the v1 NetworkPolicies (already refreshed
-	// above) unaffected. Q228.
+	// see V2alpha1Installed). Without them, listing the v2 kinds below would fail
+	// with "no matches for kind" on every tick; skipping the passes keeps the loop
+	// quiet. Q228.
 	if !r.V2Enabled {
 		return nil
 	}
 
-	// v2: patch every managed EgressProxy NetworkPolicy too. Like the v1 proxy NP,
-	// its GitHub-CIDR egress allowlist is derived from this cache, so it must be
-	// refreshed when GitHub's published ranges rotate. A List failure is logged and
-	// skipped rather than returned: a transient list error must not fail the whole
-	// refresh loop and starve the v1 NetworkPolicies of updates.
+	// Patch every managed EgressProxy NetworkPolicy: its GitHub-CIDR egress
+	// allowlist is derived from this cache, so it must be refreshed when GitHub's
+	// published ranges rotate. A List failure is logged and skipped rather than
+	// returned, so a transient list error does not fail the whole refresh loop.
 	var epList gmcv2alpha1.EgressProxyList
 	if err := r.List(ctx, &epList); err != nil {
 		log.Error("failed to list EgressProxies", "error", err)
@@ -520,7 +511,7 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 	// allowlist instead of a proxy rule. That allowlist is derived from this same
 	// cache, so — like the proxy NetworkPolicies above — it must be refreshed when
 	// GitHub rotates ranges. Proxied gateways have no GitHub rule on these policies,
-	// so they are skipped. A v2 CRD missing on a v1-only install is tolerated.
+	// so they are skipped.
 	var v2agList gmcv2alpha1.ActionsGatewayList
 	if err := r.List(ctx, &v2agList); err != nil {
 		log.Error("failed to list v2 ActionsGateways", "error", err)

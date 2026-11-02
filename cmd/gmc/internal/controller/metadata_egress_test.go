@@ -109,20 +109,15 @@ func ipBlockContains(block *networkingv1.IPBlock, ip net.IP) bool {
 func TestBuildNetworkPolicy_DeniesCloudMetadataServer(t *testing.T) {
 	require.NotNil(t, cloudMetadataIP, "metadata IP must parse")
 
-	v1AG := newTestAG("gateway", "team-a")
 	v2AG := v2Gateway("gateway", "team-a", "github-app", "proxy")
 	v2Direct := v2Gateway("direct", "team-a", "github-app", "")
 	_, githubCIDR, err := net.ParseCIDR("140.82.112.0/20")
 	require.NoError(t, err)
 	githubCIDRs := []net.IPNet{*githubCIDR}
 
-	// Every policy that selects a worker pod, in both API versions and — for v2 —
-	// both egress modes, because direct mode adds GitHub ipBlocks and is the shape
+	// Every policy that selects a worker pod, in both egress modes, because direct mode adds GitHub ipBlocks and is the shape
 	// most likely to grow an over-broad peer.
 	for _, np := range []*networkingv1.NetworkPolicy{
-		buildProxyNetworkPolicy(v1AG, githubCIDRs),
-		buildWorkloadNetworkPolicy(v1AG),
-		buildAGCNetworkPolicy(v1AG, []string{"10.0.0.0/24"}),
 		buildWorkloadNetworkPolicyV2(v2AG, githubCIDRs, false, nil),
 		buildWorkloadNetworkPolicyV2(v2Direct, githubCIDRs, true, nil),
 		buildAGCNetworkPolicyV2(v2AG, []string{"10.0.0.0/24"}, githubCIDRs, false, nil),

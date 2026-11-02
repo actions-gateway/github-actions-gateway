@@ -24,9 +24,8 @@ See the [cmd/ index](../README.md) for how GMC fits into the four-tier system, a
 
 ## Layout
 
-- `api/v1alpha1/` — `ActionsGateway` CRD types (kubebuilder markers; regenerate via [docs/development/code-generation.md](../../docs/development/code-generation.md)).
-- `internal/controller/` — reconciler implementation.
-- `internal/webhook/v1alpha1/` — admission webhooks for `ActionsGateway`.
+- `internal/controller/` — reconciler implementation. The CRD types it reconciles live in the neutral [`api/`](../../api/) module (regenerate via [docs/development/code-generation.md](../../docs/development/code-generation.md)).
+- `internal/webhook/v2/` — admission webhooks for the `actions-gateway.com` kinds.
 - `config/` — controller-gen output (CRDs, manager RBAC role, webhook) used as the codegen + envtest substrate and the single-source inputs to the chart's CRD/RBAC generators, plus the two ValidatingAdmissionPolicies the integration suite applies in envtest.
   Not an install path — the [Helm chart](../../charts/actions-gateway/README.md) is the sole install vehicle (Q142).
 - `cmd/main.go` — manager entrypoint.

@@ -11,11 +11,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// The AGC control-plane Deployment assembly, shared by the v1 and v2
-// ActionsGateway reconcilers. Both versions mount credentials as files (never env),
-// pin the proxy CA, mount the metrics mTLS bundle, and run the same hardened
-// container; they differ only in the derived names, metadata labels, credential
-// Secret name, env list, and container resources, all of which are parameters here.
+// The AGC control-plane Deployment assembly: credentials mounted as files (never
+// env), the proxy CA pin, the metrics mTLS bundle, and the hardened container. The
+// derived names, metadata labels, credential Secret name, env list, and container
+// resources are parameters here.
 
 const (
 	// agcTenantRoleName is the shipped singleton ClusterRole that defines
@@ -116,9 +115,8 @@ func buildNoProxy(userCIDRs []string) string {
 }
 
 // agcWorkloadNames carries the per-gateway derived names for the AGC
-// control-plane Deployment, ServiceAccount, and metrics Secret. v1 (one gateway
-// per namespace) passes the fixed singleton names; v2 (multi-gateway, M3b)
-// derives them per ActionsGateway so two gateways in one namespace never collide
+// control-plane Deployment, ServiceAccount, and metrics Secret, derived per
+// ActionsGateway (multi-gateway, M3b) so two gateways in one namespace never collide
 // on a fixed name (§H.16 #1). The `app` value is load-bearing three ways — it is
 // the Deployment name, the pod `app` label value, and the AGC NetworkPolicy and
 // Service selector — so all of them select exactly this gateway's AGC pods and
@@ -162,13 +160,12 @@ func (s proxyCASource) volumeSource(mode int32) *corev1.VolumeSource {
 // and v2 ActionsGateway reconcilers: the GitHub App credential file mount (never
 // env), the proxy CA pin (public cert only), the metrics mTLS mount, the hardened
 // container/pod SecurityContext, and the probes. The callers differ only in the
-// metadata labels, the derived resource names (v1 fixed, v2 per-gateway), the
+// metadata labels, the derived per-gateway resource names, the
 // credential Secret name, the proxy CA source, the env list, and the container
 // resources, which are passed in. metaLabels are the Deployment's metadata labels; the
 // pod-template `app` label is names.app so it matches the AGC NetworkPolicy and
-// Service selectors. resources is the AGC container's resource requirements — the
-// zero value (v1) leaves the container without requests/limits, unchanged from
-// before; v2 passes the platform default overlaid with spec.agcResources (Q171).
+// Service selectors. resources is the AGC container's resource requirements: the
+// platform default overlaid with spec.agcResources (Q171).
 func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels map[string]string, credSecretName string, proxyCA proxyCASource, agcImage string, env []corev1.EnvVar, resources corev1.ResourceRequirements) *appsv1.Deployment {
 	// 0o440 + fsGroup 65532 — see the matching block in buildProxyDeployment for
 	// why 0o400 alone leaves the file unreadable to the non-root AGC user.
@@ -254,8 +251,8 @@ func buildAGCDeploymentFrom(namespace string, names agcWorkloadNames, metaLabels
 
 	// "app"/"actions-gateway/component: workload" are the functional selectors; the
 	// recommended app.kubernetes.io/* metadata is carried over from the Deployment's
-	// metaLabels additively (works for both the v1 and v2 callers, whose metaLabels
-	// already carry the per-gateway instance).
+	// metaLabels additively (the caller's metaLabels already carry the per-gateway
+	// instance).
 	podLabels := map[string]string{"app": names.app, labelManagedBy: labelManagerValue, labelComponent: componentWorkload}
 	copyRecommendedLabels(podLabels, metaLabels)
 

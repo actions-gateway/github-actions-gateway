@@ -8,17 +8,4 @@ layout:
 - go.kubebuilder.io/v4
 projectName: gmc
 repo: github.com/actions-gateway/github-actions-gateway/gmc
-resources:
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: actions-gateway.github.com
-  group: actions-gateway.github.com
-  kind: ActionsGateway
-  path: github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1
-  version: v1alpha1
-  webhooks:
-    validation: true
-    webhookVersion: v1
 version: "3"

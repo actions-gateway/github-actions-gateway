@@ -23,30 +23,6 @@ webhooks:
     service:
       name: webhook-service
       namespace: {{ .Release.Namespace }}
-      path: /validate-actions-gateway-github-com-v1alpha1-actionsgateway
-    {{- if not .Values.certManager.enabled }}
-    {{- include "actions-gateway.webhookCerts" . }}
-    caBundle: {{ b64enc $.agWebhookCerts.caCert }}
-    {{- end }}
-  failurePolicy: Fail
-  name: vactionsgateway-v1alpha1.kb.io
-  rules:
-  - apiGroups:
-    - actions-gateway.github.com
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - actionsgateways
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: {{ .Release.Namespace }}
       path: /validate-actions-gateway-com-v2-actionsgateway
     {{- if not .Values.certManager.enabled }}
     {{- include "actions-gateway.webhookCerts" . }}

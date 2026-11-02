@@ -181,7 +181,7 @@ func dnsEgressRule() networkingv1.NetworkPolicyEgressRule {
 // CIDRs, and false when the CIDR set is empty (before the IPRangeReconciler's first
 // fetch) so the caller omits the rule entirely. Omitting it is fail-closed: GitHub
 // egress is denied until the refresh loop patches the policy with the fetched ranges,
-// never opened wide. Shared by the v1 proxy NetworkPolicy and the v2 direct-egress
+// never opened wide. Shared by the EgressProxy NetworkPolicy and the direct-egress
 // AGC/workload NetworkPolicies (§H.10).
 func githubCIDREgressRule(githubCIDRs []net.IPNet) (networkingv1.NetworkPolicyEgressRule, bool) {
 	if len(githubCIDRs) == 0 {
@@ -201,7 +201,7 @@ func githubCIDREgressRule(githubCIDRs []net.IPNet) (networkingv1.NetworkPolicyEg
 // agcAPIServerEgressRule returns the AGC's Kubernetes API-server egress rule
 // (443/6443), optionally scoped to apiServerCIDRs (Q145): an empty list leaves
 // `To` nil — any-destination, the secure default that does not depend on a
-// predictable apiserver IP. Shared by the v1 and v2 AGC NetworkPolicy builders.
+// predictable apiserver IP.
 //
 // Why both 443 and 6443: NetworkPolicy port matches are evaluated against the
 // *post-DNAT* destination port. In production clusters the `kubernetes` Service
@@ -229,8 +229,7 @@ func agcAPIServerEgressRule(apiServerCIDRs []string) networkingv1.NetworkPolicyE
 	return rule
 }
 
-// buildAGCNetworkPolicyFrom assembles the AGC egress policy shared by the v1 and
-// v2 ActionsGateway reconcilers: additive to the workload policy, it permits DNS +
+// buildAGCNetworkPolicyFrom assembles the AGC egress policy: additive to the workload policy, it permits DNS +
 // Kubernetes API server egress and admits monitoring-namespace metrics scrapes.
 // The callers differ in the metadata labels and, under v2 multi-gateway, in the
 // policy name and the `app` selector value (both per-gateway, so each AGC NP

@@ -15,19 +15,17 @@ import (
 	"time"
 
 	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/logtest"
-	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,12 +47,7 @@ import (
 // Shared resource name constants — single source of truth for all integration
 // tests in this package. Import the canonical constants rather than repeating
 // string literals so that a rename propagates automatically.
-const (
-	agcName      = agcnames.ControllerName
-	workerSAName = agcnames.WorkerSAName
-	proxyName    = gmcnames.ProxyName
-	workloadName = gmcnames.WorkloadNetworkPolicyName
-)
+const proxyName = gmcnames.ProxyName
 
 var (
 	testEnv       *envtest.Environment
@@ -108,7 +102,6 @@ func TestMain(m *testing.M) {
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
 	_ = agcv1alpha1.AddToScheme(testScheme)
-	_ = gmcv1alpha1.AddToScheme(testScheme)
 	_ = v2alpha1.AddToScheme(testScheme)
 	// Register the v2beta1 hub so envtest's modifyConversionWebhooks recognizes the
 	// five v2 kinds as convertible and redirects their CRD conversion to the local
@@ -120,10 +113,10 @@ func TestMain(m *testing.M) {
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			"../../../config/crd/bases",
-			// The two out-of-module CRD sets are reached through testdata/ symlinks so
-			// the reads resolve inside this module root and go keeps them as test-cache
-			// inputs (Q902).
+			// The out-of-module CRD sets are reached through testdata/ symlinks so the
+			// reads resolve inside this module root and go keeps them as test-cache
+			// inputs (Q902). The AGC set carries the RunnerGroup CRD the
+			// priorityclass-allowlist-guard policy still names.
 			"testdata/agc-crd",
 			// The v2 (actions-gateway.com) CRDs live in the neutral api module —
 			// the five tenant kinds plus the cluster-scoped PriorityClassAllowlist
@@ -214,15 +207,12 @@ func startValidatingWebhook() error {
 	if err != nil {
 		return fmt.Errorf("create webhook manager: %w", err)
 	}
-	if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, nil); err != nil {
-		return fmt.Errorf("register validating webhook: %w", err)
-	}
 	// The envtest WebhookInstallOptions install the whole ValidatingWebhookConfiguration
 	// (failurePolicy=Fail), including the v2 RunnerTemplate/ClusterRunnerTemplate
 	// webhooks, so the same server must serve their paths or every runnertemplate
 	// create in the suite would fail with a connection error.
-	// A nil PriorityClass allowlist is the secure default (no named class permitted),
-	// matching the v1 registration above. Suite templates name no PriorityClass; the
+	// A nil PriorityClass allowlist is the secure default (no named class permitted).
+	// Suite templates name no PriorityClass; the
 	// Q289 gate is exercised against a live, ConfigMap-backed allowlist in
 	// priorityclass_allowlist_test.go.
 	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, nil); err != nil {
@@ -254,12 +244,9 @@ func startValidatingWebhook() error {
 	// (Q264 P3, failurePolicy=Fail), which enforces ScaleSet runnerLabel uniqueness
 	// and gates priorityTiers against the PriorityClass allowlist (Q289); this
 	// server must serve its path or every RunnerSet create in the suite would fail
-	// closed. The static allowlist carries only the tier class the representative
-	// migration fixture names (v2_migration_test.go): in production a migrated
-	// tenant's tier class is necessarily already allowlisted, or the v1 gateway
-	// naming it could never have been admitted. The gate's own semantics — including
-	// the nil/secure default — are exercised in priorityclass_allowlist_test.go and
-	// the webhook unit tests.
+	// closed. The static allowlist carries one tier class, "high". The gate's own
+	// semantics — including the nil/secure default — are exercised in
+	// priorityclass_allowlist_test.go and the webhook unit tests.
 	if err := webhookv2.SetupRunnerSetWebhookWithManager(mgr, allowlist.New([]string{"high"})); err != nil {
 		return fmt.Errorf("register RunnerSet webhook: %w", err)
 	}
@@ -311,7 +298,7 @@ func waitForWebhookReady(opts envtest.WebhookInstallOptions) error {
 
 	readyErr := wait.PollUntilContextTimeout(ctx, 100*time.Millisecond, 30*time.Second, true,
 		func(context.Context) (bool, error) {
-			probe := newActionsGateway("webhook-readiness-probe", readinessNS, "github-app")
+			probe := newV2ActionsGateway(readinessNS, "webhook-readiness-probe")
 			err := k8sClient.Create(ctx, probe)
 			switch {
 			case err == nil:
@@ -331,87 +318,6 @@ func waitForWebhookReady(opts envtest.WebhookInstallOptions) error {
 		return fmt.Errorf("validating webhook never became ready: %w", readyErr)
 	}
 	return nil
-}
-
-// gmcReconcilerOptions tunes startGMCReconcilerWithOptions for tests that need a
-// shared IP-range cache they can manipulate (egress-staleness, Q157) or a custom
-// EgressRulesStale threshold. The zero value reproduces startGMCReconciler.
-type gmcReconcilerOptions struct {
-	// ipCache, when non-nil, is shared with the reconciler so the test can stamp
-	// LastRefresh directly. Nil allocates a fresh cache.
-	ipCache *controller.IPRangeCache
-	// egressThreshold overrides ActionsGatewayReconciler.EgressStaleThreshold; 0
-	// leaves the reconciler's package default.
-	egressThreshold time.Duration
-}
-
-// startGMCReconciler starts an ActionsGatewayReconciler for the duration of a test.
-// Returns the IPRangeReconciler so tests that need to trigger manual reconciles can do so.
-func startGMCReconciler(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher) *controller.IPRangeReconciler {
-	t.Helper()
-	return startGMCReconcilerWithOptions(t, ipFetcher, gmcReconcilerOptions{})
-}
-
-// startGMCReconcilerWithOptions is startGMCReconciler with explicit knobs (see
-// gmcReconcilerOptions).
-func startGMCReconcilerWithOptions(t *testing.T, ipFetcher controller.GitHubIPRangeFetcher, opts gmcReconcilerOptions) *controller.IPRangeReconciler {
-	t.Helper()
-	mgrCtx, mgrCancel := context.WithCancel(ctx)
-	t.Cleanup(mgrCancel)
-
-	skipNameValidation := true
-	syncPeriod := 2 * time.Second
-	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
-		Scheme:                 testScheme,
-		Metrics:                metricsserver.Options{BindAddress: "0"},
-		HealthProbeBindAddress: "0",
-		LeaderElection:         false,
-		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
-		// Short sync period ensures the controller re-reconciles objects even when
-		// no watch event fires (e.g. after a Secret referenced by an ActionsGateway
-		// is deleted — no informer maps Secret deletions to ActionsGateway reconciles).
-		Cache: cache.Options{SyncPeriod: &syncPeriod},
-	})
-	require.NoError(t, err)
-
-	if ipFetcher == nil {
-		ipFetcher = &stubIPFetcher{cidrs: []net.IPNet{}}
-	}
-
-	// Shared cache between the per-CR reconciler (reads) and the periodic
-	// IPRangeReconciler (writes). Pre-populated so tests that assert on
-	// proxy-NetworkPolicy CIDRs see them immediately on the very first
-	// reconcile, mirroring the steady-state production behavior where
-	// IPRangeReconciler's startup fetch has already run.
-	ipCache := opts.ipCache
-	if ipCache == nil {
-		ipCache = &controller.IPRangeCache{}
-	}
-	if cidrs, fetchErr := ipFetcher.FetchIPRanges(ctx); fetchErr == nil {
-		ipCache.Set(cidrs)
-	}
-
-	err = (&controller.ActionsGatewayReconciler{
-		Client:               mgr.GetClient(),
-		Scheme:               mgr.GetScheme(),
-		IPCache:              ipCache,
-		AGCImage:             "agc:test",
-		ProxyImage:           "proxy:test",
-		EgressStaleThreshold: opts.egressThreshold,
-	}).SetupWithManager(mgr)
-	require.NoError(t, err)
-
-	ipRangeReconciler := &controller.IPRangeReconciler{
-		Client:  mgr.GetClient(),
-		Fetcher: ipFetcher,
-		Cache:   ipCache,
-	}
-
-	go func() {
-		_ = mgr.Start(mgrCtx)
-	}()
-
-	return ipRangeReconciler
 }
 
 // agcTenantRoleRulesPath is the Helm chart fragment that single-sources the
@@ -558,3 +464,65 @@ func (f *stubIPFetcher) SetCIDRs(cidrs []net.IPNet) {
 	defer f.mu.Unlock()
 	f.cidrs = cidrs
 }
+
+func createNamespace(t *testing.T, name string) {
+	t.Helper()
+	createNamespaceWithLabels(t, name, nil)
+}
+
+// createNamespaceWithLabels creates a namespace carrying the given labels, such as
+// the security-profile and tenant markers the admission policies key on.
+func createNamespaceWithLabels(t *testing.T, name string, labels map[string]string) {
+	t.Helper()
+	ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: labels}}
+	err := k8sClient.Create(ctx, ns)
+	if err != nil {
+		// namespace might already exist from a previous test run
+		require.NoError(t, client.IgnoreNotFound(err))
+	}
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), ns)
+	})
+}
+
+func createGitHubAppSecret(t *testing.T, ns, name string) {
+	t.Helper()
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Data: map[string][]byte{
+			"appId":          []byte("12345"),
+			"privateKey":     []byte("fake-key"),
+			"installationId": []byte("67890"),
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, secret))
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), secret)
+	})
+}
+
+// envValue returns the value of the named env var on the first container of the
+// Deployment, or "" if absent.
+func envValue(dep *appsv1.Deployment, name string) string {
+	for _, e := range dep.Spec.Template.Spec.Containers[0].Env {
+		if e.Name == name {
+			return e.Value
+		}
+	}
+	return ""
+}
+
+// newImpersonatedClient returns a client that impersonates the given ServiceAccount.
+func newImpersonatedClient(t *testing.T, ns, saName string) client.Client {
+	t.Helper()
+	cfg := rest.CopyConfig(testEnv.Config)
+	cfg.Impersonate = rest.ImpersonationConfig{
+		UserName: "system:serviceaccount:" + ns + ":" + saName,
+		Groups:   []string{"system:serviceaccounts", "system:serviceaccounts:" + ns},
+	}
+	c, err := client.New(cfg, client.Options{Scheme: testScheme})
+	require.NoError(t, err)
+	return c
+}
+
+func ptr32(v int32) *int32 { return &v }

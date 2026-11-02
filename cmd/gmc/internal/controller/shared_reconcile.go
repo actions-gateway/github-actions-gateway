@@ -11,9 +11,15 @@ import (
 // Reconciler plumbing that carries no API version: the step-tagged provisioning
 // error every reconciler wraps its failures in, the RoleBinding recreate sentinel,
 // the EgressRulesStale vocabulary, the tenant-namespace marker the admission policy
-// keys on, and the optional ServiceMonitor GVK. The v1 and v2 ActionsGateway
-// reconcilers, the EgressProxy reconciler and the namespace PSA reconciler all use
-// these.
+// keys on, the status-conflict requeue, and the optional ServiceMonitor GVK. The
+// ActionsGateway reconciler, the EgressProxy reconciler and the namespace PSA
+// reconciler all use these.
+
+// statusConflictRequeue is the retry after a status write loses an update conflict.
+// The conflict is swallowed rather than returned, so the write is retried on a fresh
+// Get without workqueue error backoff; the write that won also fires the primary
+// watch, so this interval is a backstop for that event.
+const statusConflictRequeue = time.Second
 
 // provisioningError wraps a reconcileResources failure with the named step that
 // was in progress when it failed, so Reconcile can surface that step in the

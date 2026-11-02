@@ -25,7 +25,7 @@ func (m errRESTMapper) RESTMapping(_ schema.GroupKind, _ ...string) (*meta.RESTM
 
 func TestV2alpha1Installed_Absent(t *testing.T) {
 	// A DefaultRESTMapper with no kinds registered returns a NoMatch for every
-	// lookup — the v1-only install state.
+	// lookup — an install without the v2 CRDs.
 	mapper := meta.NewDefaultRESTMapper(nil)
 
 	installed, err := V2alpha1Installed(mapper)

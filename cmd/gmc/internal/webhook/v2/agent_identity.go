@@ -9,10 +9,9 @@ import (
 )
 
 // validateAgentIdentityUniqueness rejects a RunnerSet whose agent-identity stem is
-// already claimed — by a v1alpha1 RunnerGroup named "rs-<this set>" in the same
-// namespace, or by any owner deriving the same stem under the same GitHub scope
-// (Q1011). The agentidentity package doc carries why the two halves have different
-// boundaries and why the reverse direction is guarded on the v1 gateway instead.
+// already claimed by another RunnerSet in the same namespace, or under the same
+// GitHub scope (Q1011). The agentidentity package doc carries why the two halves
+// have different boundaries.
 //
 // It reads the request's shared read (runnerSetRead), so a ScaleSet set lists each
 // kind once across both guards. The check is fail-closed, like the Q791 label guard:

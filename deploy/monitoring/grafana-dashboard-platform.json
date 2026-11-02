@@ -93,7 +93,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 6, "w": 6, "x": 6, "y": 1 },
       "id": 3,
-      "description": "Gateways reporting RunnerGroupsDegraded=True (one or more owned RunnerGroups impaired).",
+      "description": "Gateways reporting RunnerSetsDegraded=True (one or more bound RunnerSets impaired).",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -106,7 +106,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum(actions_gateway_runnergroups_degraded)",
+          "expr": "sum(actions_gateway_runnersets_degraded)",
           "legendFormat": "degraded",
           "refId": "A"
         }
@@ -251,7 +251,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "actions_gateway_runnergroups_degraded",
+          "expr": "actions_gateway_runnersets_degraded",
           "legendFormat": "degraded {{namespace}}/{{name}}",
           "refId": "A"
         },

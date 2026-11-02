@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/agentidentity"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,9 +21,7 @@ type runnerSetRead struct {
 
 	done       bool
 	err        error
-	v1Gateways gmcv1alpha1.ActionsGatewayList
 	v2Gateways agcv2alpha1.ActionsGatewayList
-	groups     agcv1alpha1.RunnerGroupList
 	sets       agcv2alpha1.RunnerSetList
 }
 
@@ -34,12 +30,8 @@ func (r *runnerSetRead) load(ctx context.Context) error {
 		return r.err
 	}
 	r.done = true
-	if err := r.reader.List(ctx, &r.v1Gateways); err != nil {
-		r.err = fmt.Errorf("list v1alpha1 ActionsGateways: %w", err)
-	} else if err := r.reader.List(ctx, &r.v2Gateways); err != nil {
+	if err := r.reader.List(ctx, &r.v2Gateways); err != nil {
 		r.err = fmt.Errorf("list v2alpha1 ActionsGateways: %w", err)
-	} else if err := r.reader.List(ctx, &r.groups); err != nil {
-		r.err = fmt.Errorf("list RunnerGroups: %w", err)
 	} else if err := r.reader.List(ctx, &r.sets); err != nil {
 		r.err = fmt.Errorf("list RunnerSets: %w", err)
 	}
@@ -57,5 +49,5 @@ func (r *runnerSetRead) agentIdentities(ctx context.Context) (agentidentity.Inve
 	if err := r.load(ctx); err != nil {
 		return agentidentity.Inventory{}, err
 	}
-	return agentidentity.FromLists(r.v1Gateways.Items, r.v2Gateways.Items, r.groups.Items, r.sets.Items, nil), nil
+	return agentidentity.FromLists(r.v2Gateways.Items, r.sets.Items), nil
 }

@@ -8,8 +8,7 @@ import (
 )
 
 // Small building blocks with no ActionsGateway/EgressProxy API version in their
-// signatures. Kept in a version-neutral file so the v1 sunset (Q273) removes only
-// the v1-typed builders around them.
+// signatures.
 
 func ptr[T any](v T) *T { return &v }
 
@@ -32,8 +31,7 @@ func toStringMapIface(m map[string]string) map[string]interface{} {
 // formatResourceAttributes renders a resource-attribute map as the
 // comma-separated key=value list OTEL_RESOURCE_ATTRIBUTES expects. Keys are
 // sorted so the rendered value is deterministic — without this the random map
-// iteration order would churn the AGC Deployment on every reconcile. Shared by the
-// v1 and v2 tracing env builders.
+// iteration order would churn the AGC Deployment on every reconcile.
 func formatResourceAttributes(attrs map[string]string) string {
 	if len(attrs) == 0 {
 		return ""

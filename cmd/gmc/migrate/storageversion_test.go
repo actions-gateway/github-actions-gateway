@@ -31,12 +31,12 @@ func TestParseStorageVersionOptions_RejectsFanOutFlags(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestRun_DispatchesStorageVersion proves the subcommand is routed before the
-// fan-out's flag parsing, which would otherwise reject it for naming no namespace.
+// TestRun_DispatchesStorageVersion proves the subcommand reaches its own flag set
+// rather than the unknown-command usage.
 func TestRun_DispatchesStorageVersion(t *testing.T) {
 	var stderr bytes.Buffer
 	err := run([]string{storageVersionCommand, "-h"}, nil, &bytes.Buffer{}, &stderr)
 	require.Error(t, err)
-	assert.Contains(t, stderr.String(), "gag-migrate storage-version")
-	assert.NotContains(t, err.Error(), "--namespace or --all-namespaces")
+	assert.Contains(t, stderr.String(), "gag-migrate storage-version — rewrite")
+	assert.NotContains(t, err.Error(), "unknown command")
 }

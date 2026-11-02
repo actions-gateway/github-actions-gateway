@@ -1,11 +1,10 @@
 // Package agentidentity holds the admission-side model of who owns an agent
 // identity: the per-CR claim on an agent-identity stem, the GitHub scope that stem
-// is registered in, and the cluster-wide inventory the two validators read (Q1011).
+// is registered in, and the cluster-wide inventory the RunnerSet validator reads (Q1011).
 //
 // An agent pool derives its agent Secret name and the runner name it registers with
-// GitHub from one stem ([apinames.RunnerGroupAgentStem],
-// [apinames.RunnerSetAgentStem]). Two owners deriving the same stem is not a
-// recoverable state: each finds its Secret held by the other and each 409s on
+// GitHub from one stem ([apinames.RunnerSetAgentStem]). Two owners deriving the same
+// stem is not a recoverable state: each finds its Secret held by the other and each 409s on
 // register, resolved by deleting the incumbent's GitHub record, so both tenants'
 // listeners run unauthorized until an operator renames one of the CRs
 // (agentpool.ErrAgentNameCollision, Q979). Admission is the only place that fight can
@@ -25,45 +24,23 @@
 // Scope keys are [scalesetscope.GitHubScope], so this guard and the Q791 scale-set
 // name guard agree on what "one GitHub scope" means.
 //
-// # Both derivations, both directions
-//
-// A v1alpha1 RunnerGroup named "rs-<x>" derives exactly the stem a v2 RunnerSet named
-// "<x>" derives, because Q466's discriminator is an "rs-" prefix rather than an
-// injection. Both writes are guarded, at the object each is actually authored on:
-//
-//   - RunnerSet create/update (cmd/gmc/internal/webhook/v2) rejects a set whose
-//     stem is already claimed.
-//   - ActionsGateway v1alpha1 create/update (cmd/gmc/internal/webhook/v1alpha1)
-//     rejects a spec.runnerGroups entry whose DERIVED RunnerGroup name would claim
-//     one. RunnerGroups are not tenant-authored — the GMC materializes them from that
-//     spec under a name it derives — so the gateway write is where the operator can
-//     still act, and no v1alpha1 RunnerGroup validator is needed.
-//
 // A stem whose owner cannot be placed in a GitHub scope (its gateway is not stored,
 // §H.7) still collides within its own namespace; it simply matches nothing outside
 // it. An empty scope means "unknown", never "the same unknown".
 //
-// Errors are the caller's to interpret; both current callers fail closed, since
+// Errors are the caller's to interpret; the RunnerSet webhook fails closed, since
 // admitting an unverifiable claim is the collision this prevents.
 package agentidentity
 
 import (
-	"context"
-	"fmt"
-
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Owner kinds, as they appear in a rejection message.
-const (
-	KindRunnerGroup = "RunnerGroup"
-	KindRunnerSet   = "RunnerSet"
-)
+// KindRunnerSet is the owner kind, as it appears in a rejection message.
+const KindRunnerSet = "RunnerSet"
 
 // Claim is one CR's claim on an agent-identity stem: the owner's identity, the stem
 // its pool derives every agent name from, and the GitHub scope its gateway binds
@@ -96,27 +73,12 @@ func (c Claim) CollidesWith(o Claim) bool {
 	return c.Scope != "" && c.Scope == o.Scope
 }
 
-// PendingGateway carries a v1alpha1 ActionsGateway under admission, which is not yet
-// stored: the RunnerGroups it would materialize claim no stem the API can be read
-// for, and its own namespace's stored RunnerGroups must not be counted against it.
-type PendingGateway struct {
-	Key   client.ObjectKey
-	Scope string
-}
-
 // Inventory is every agent-identity claim in the cluster, plus the gateway→scope
-// lookups that place a claim whose own object is not yet stored.
+// lookup that places a claim whose own object is not yet stored.
 type Inventory struct {
 	Claims []Claim
 
-	v1Scopes map[client.ObjectKey]string
 	v2Scopes map[client.ObjectKey]string
-}
-
-// V1Scope returns the GitHub scope bound by the named v1alpha1 ActionsGateway, or ""
-// when no such gateway is stored or its gitHubURL yields no key.
-func (inv Inventory) V1Scope(namespace, gateway string) string {
-	return inv.v1Scopes[client.ObjectKey{Namespace: namespace, Name: gateway}]
 }
 
 // V2Scope returns the GitHub scope bound by the named v2 ActionsGateway, or "" when
@@ -125,72 +87,13 @@ func (inv Inventory) V2Scope(namespace, gateway string) string {
 	return inv.v2Scopes[client.ObjectKey{Namespace: namespace, Name: gateway}]
 }
 
-// Of reads every gateway of both versions and every RunnerGroup and RunnerSet in the
-// cluster, and returns the stem claims among them.
-//
-// pending, when set, replaces the named v1alpha1 gateway's stored RunnerGroups with
-// the ones its incoming spec would materialize: on an update the stored set is the
-// gateway's own previous generation, and counting it would reject a gateway against
-// itself. Its scope is used for every RunnerGroup it owns, since the stored object
-// cannot be read back yet.
-//
-// All reads are cluster-wide, because the GitHub half of the boundary is: a
-// namespace-scoped read cannot see the collision it is looking for. Whether they are
-// cached is the caller's choice — admission passes the uncached API reader, since a
-// just-created sibling may not be in the informer cache yet and admitting a colliding
-// claim through a stale cache is the race the guard exists to prevent.
-func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inventory, error) {
-	var v1Gateways gmcv1alpha1.ActionsGatewayList
-	if err := reader.List(ctx, &v1Gateways); err != nil {
-		return Inventory{}, fmt.Errorf("list v1alpha1 ActionsGateways: %w", err)
-	}
-	var v2Gateways agcv2alpha1.ActionsGatewayList
-	if err := reader.List(ctx, &v2Gateways); err != nil {
-		return Inventory{}, fmt.Errorf("list v2alpha1 ActionsGateways: %w", err)
-	}
-	var groups agcv1alpha1.RunnerGroupList
-	if err := reader.List(ctx, &groups); err != nil {
-		return Inventory{}, fmt.Errorf("list RunnerGroups: %w", err)
-	}
-	var sets agcv2alpha1.RunnerSetList
-	if err := reader.List(ctx, &sets); err != nil {
-		return Inventory{}, fmt.Errorf("list RunnerSets: %w", err)
-	}
-	return FromLists(v1Gateways.Items, v2Gateways.Items, groups.Items, sets.Items, pending), nil
-}
-
-// FromLists derives the inventory [Of] returns from lists the caller has already
-// read, for a caller whose other guards read the same kinds (Q1075).
-func FromLists(
-	v1Gateways []gmcv1alpha1.ActionsGateway,
-	v2Gateways []agcv2alpha1.ActionsGateway,
-	groups []agcv1alpha1.RunnerGroup,
-	sets []agcv2alpha1.RunnerSet,
-	pending *PendingGateway,
-) Inventory {
-	v1Scopes := v1GatewayScopes(v1Gateways)
+// FromLists derives the inventory from the cluster-wide gateway and RunnerSet lists
+// the caller has already read (Q1075). The reads must be cluster-wide, because the
+// GitHub half of the boundary is: a namespace-scoped read cannot see the collision it
+// is looking for.
+func FromLists(v2Gateways []agcv2alpha1.ActionsGateway, sets []agcv2alpha1.RunnerSet) Inventory {
 	v2Scopes := v2GatewayScopes(v2Gateways)
-	if pending != nil {
-		v1Scopes[pending.Key] = pending.Scope
-	}
-
-	inv := Inventory{v1Scopes: v1Scopes, v2Scopes: v2Scopes}
-	for i := range groups {
-		rg := &groups[i]
-		owner := v1GatewayOf(rg, v1Scopes)
-		// A pending gateway supplies its own referrers below; its stored ones are
-		// the generation this write replaces.
-		if pending != nil && owner == pending.Key {
-			continue
-		}
-		inv.Claims = append(inv.Claims, Claim{
-			Namespace: rg.Namespace,
-			Kind:      KindRunnerGroup,
-			Name:      rg.Name,
-			Stem:      apinames.RunnerGroupAgentStem(rg.Name),
-			Scope:     v1Scopes[owner],
-		})
-	}
+	inv := Inventory{v2Scopes: v2Scopes}
 	for i := range sets {
 		rs := &sets[i]
 		inv.Claims = append(inv.Claims, Claim{
@@ -232,29 +135,6 @@ func RunnerSetClaim(namespace, name, scope string) Claim {
 	}
 }
 
-// RunnerGroupClaim is the claim a v1alpha1 RunnerGroup named name in namespace makes.
-func RunnerGroupClaim(namespace, name, scope string) Claim {
-	return Claim{
-		Namespace: namespace,
-		Kind:      KindRunnerGroup,
-		Name:      name,
-		Stem:      apinames.RunnerGroupAgentStem(name),
-		Scope:     scope,
-	}
-}
-
-// v1GatewayScopes maps each stored v1alpha1 ActionsGateway to the GitHub scope it
-// binds. A gateway whose gitHubURL yields no key is present with an empty scope, so
-// v1GatewayOf can still attribute its RunnerGroups to it.
-func v1GatewayScopes(gateways []gmcv1alpha1.ActionsGateway) map[client.ObjectKey]string {
-	scopes := make(map[client.ObjectKey]string, len(gateways))
-	for i := range gateways {
-		gw := &gateways[i]
-		scopes[client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name}] = scalesetscope.GitHubScope(gw.Spec.GitHubURL)
-	}
-	return scopes
-}
-
 // v2GatewayScopes maps each stored v2 ActionsGateway to the GitHub scope it binds.
 func v2GatewayScopes(gateways []agcv2alpha1.ActionsGateway) map[client.ObjectKey]string {
 	scopes := make(map[client.ObjectKey]string, len(gateways))
@@ -265,31 +145,4 @@ func v2GatewayScopes(gateways []agcv2alpha1.ActionsGateway) map[client.ObjectKey
 		}
 	}
 	return scopes
-}
-
-// v1GatewayOf names the v1alpha1 ActionsGateway a RunnerGroup belongs to. The GMC
-// stamps a controller owner reference on every RunnerGroup it materializes, which is
-// exact. A RunnerGroup written directly — a path the GMC does not use, and which
-// bypasses these webhooks anyway — falls back to the namespace's sole gateway, since
-// v1 admission holds one per namespace (validateSingleton); a namespace holding none
-// or several yields no owner, and such a claim is then matched within its namespace
-// only.
-func v1GatewayOf(rg *agcv1alpha1.RunnerGroup, scopes map[client.ObjectKey]string) client.ObjectKey {
-	for _, ref := range rg.OwnerReferences {
-		if ref.Kind == "ActionsGateway" {
-			return client.ObjectKey{Namespace: rg.Namespace, Name: ref.Name}
-		}
-	}
-	var sole client.ObjectKey
-	found := 0
-	for key := range scopes {
-		if key.Namespace == rg.Namespace {
-			sole = key
-			found++
-		}
-	}
-	if found == 1 {
-		return sole
-	}
-	return client.ObjectKey{}
 }

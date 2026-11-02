@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
@@ -67,7 +67,7 @@ func gmcServiceAccountConfig() *rest.Config {
 	return cfg
 }
 
-// startGMCAsServiceAccount runs the v1 gateway reconciler and the tenant Secret
+// startGMCAsServiceAccount runs the gateway reconciler and the tenant Secret
 // access reconciler as the GMC ServiceAccount, with the production Secret
 // cache bypass and the default 10h resync, so a gateway reacts to a Secret change
 // within a test's window only through the per-namespace Secret watch.
@@ -101,12 +101,12 @@ func startGMCAsServiceAccount(t *testing.T) {
 		ServiceAccountNamespace: gmcSANamespace,
 		Watches:                 watches,
 	}).SetupWithManager(mgr))
-	require.NoError(t, (&controller.ActionsGatewayReconciler{
+	require.NoError(t, (&controller.ActionsGatewayV2Reconciler{
 		Client:        mgr.GetClient(),
 		Scheme:        mgr.GetScheme(),
-		IPCache:       &controller.IPRangeCache{},
 		AGCImage:      "agc:test",
-		ProxyImage:    "proxy:test",
+		Recorder:      mgr.GetEventRecorder("actionsgateway-v2-controller"),
+		Reader:        mgr.GetAPIReader(),
 		SecretWatches: watches,
 	}).SetupWithManager(mgr))
 
@@ -115,11 +115,11 @@ func startGMCAsServiceAccount(t *testing.T) {
 
 func credentialUnavailable(t *testing.T, ns, name string) func() bool {
 	return func() bool {
-		var ag gmcv1alpha1.ActionsGateway
+		var ag gmcv2alpha1.ActionsGateway
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &ag); err != nil {
 			return false
 		}
-		return meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv1alpha1.ConditionCredentialUnavailable)
+		return meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2alpha1.ConditionCredentialUnavailable)
 	}
 }
 
@@ -137,7 +137,7 @@ func TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces(t *testing.T) {
 	createNamespace(t, otherNS)
 	require.NoError(t, k8sClient.Create(ctx, newSecret(otherNS, "not-the-gmcs")))
 
-	ag := newActionsGateway("secret-access-gw", tenantNS, "github-app")
+	ag := newV2GatewayWired("secret-access-gw", tenantNS, "github-app", "")
 	require.NoError(t, k8sClient.Create(ctx, ag))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
 
@@ -159,7 +159,7 @@ func TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces(t *testing.T) {
 	createGitHubAppSecret(t, tenantNS, "github-app")
 	g.Eventually(credentialUnavailable(t, tenantNS, ag.Name), 15*time.Second, 25*time.Millisecond).Should(gomega.BeFalse())
 	g.Eventually(func() error {
-		return k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: agcName}, &appsv1.Deployment{})
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: ag.Name + controller.AGCResourceSuffix}, &appsv1.Deployment{})
 	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed(), "the gateway provisions under the shipped RBAC")
 
 	// A healthy gateway has no short requeue and the resync is 10h, so only the

@@ -166,15 +166,17 @@ assert_webhook_enforces() {
 	local answer="" i
 	for ((i = 1; i <= 45; i++)); do
 		answer="$(kc create -f - 2>&1 <<-EOF || true
-			apiVersion: actions-gateway.github.com/v1alpha1
+			apiVersion: actions-gateway.com/v2
 			kind: ActionsGateway
 			metadata:
 			  name: released-upgrade-webhook-probe
 			  namespace: kube-system
 			spec:
 			  gitHubURL: https://github.com/example-org
-			  gitHubAppRef:
-			    name: chart-released-upgrade-check-nonexistent
+			  credentials:
+			    type: GitHubApp
+			    githubApp:
+			      name: chart-released-upgrade-check-nonexistent
 		EOF
 		)"
 		[[ "${answer}" == *"reserved namespace"* ]] && break

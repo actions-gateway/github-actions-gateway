@@ -19,10 +19,9 @@ import (
 
 // nsPSAFieldManager is the Server-Side Apply field manager the NamespacePSAReconciler
 // owns the six pod-security.kubernetes.io/* label keys with on v2 tenant namespaces.
-// It is distinct from the v1 ActionsGatewayReconciler's psaFieldManager: v2 moves the
-// PSA source-of-truth off the per-gateway CR onto the namespace, so a different
-// controller owns the keys, and v1/v2 tenants live in separate namespaces (so the two
-// managers never contend on the same object).
+// It is distinct from the field manager 1.x stamped from the per-gateway CR: v2
+// moves the PSA source-of-truth onto the namespace, and a key that manager still
+// owns surfaces as an apply conflict, re-applied with ForceOwnership below.
 const nsPSAFieldManager = "gmc-namespace-psa"
 
 // NamespacePSAReconciler stamps Pod Security Admission labels on managed v2 tenant
@@ -76,9 +75,8 @@ func (r *NamespacePSAReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 // applyNamespacePSA stamps the six Pod Security Admission labels on the tenant
 // namespace via Server-Side Apply, declaring ownership only of those keys. The profile
-// comes from the namespace's security-profile label (baseline default when absent). It
-// mirrors the v1 ActionsGatewayReconciler.applyNamespacePSA conflict handling: a first
-// apply without ForceOwnership surfaces an out-of-band admin edit as a conflict, which
+// comes from the namespace's security-profile label (baseline default when absent). A
+// first apply without ForceOwnership surfaces an out-of-band admin edit as a conflict, which
 // is re-applied with ForceOwnership to re-establish the controller's invariant.
 func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *corev1.Namespace) error {
 	profile := gmcv2alpha1.EffectiveSecurityProfile(ns.Labels[gmcv2alpha1.SecurityProfileLabel])

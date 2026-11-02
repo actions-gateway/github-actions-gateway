@@ -15,7 +15,7 @@ The panels below query the [Metrics reference](observability-metrics.md) and the
 | [`grafana-dashboard-budget.json`](../../deploy/monitoring/grafana-dashboard-budget.json) | a tenant's AGC (per-tenant mTLS) | Budget owner paying for the fleet |
 | [`grafana-dashboard-security.json`](../../deploy/monitoring/grafana-dashboard-security.json) | the per-tenant proxy and AGC scrapes, the GMC scrape, and the apiserver scrape | Security / compliance reviewer asking for evidence |
 
-The first two split along the scrape boundary each reads from, which mirrors how the metrics are exposed (see [Accessing metrics](observability-metrics-access.md#how-to-access-metrics)): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (`managed_gateways`, `runnergroups_degraded`, `egress_rules_stale`, the proxy-quota gauges) get their own dashboard.
+The first two split along the scrape boundary each reads from, which mirrors how the metrics are exposed (see [Accessing metrics](observability-metrics-access.md#how-to-access-metrics)): a platform operator scrapes the single GMC endpoint and cannot necessarily reach every tenant's mTLS metrics port, so the fleet rollups the GMC exports (`managed_gateways`, `runnersets_degraded`, `egress_rules_stale`, the proxy-quota gauges) get their own dashboard.
 
 The **budget** dashboard splits on a different axis: it reads the same tenant scrape as the tenant dashboard, and exists because the question is different rather than the data.
 A budget owner is asking what each tenant consumed and what it cost, which is one metric read across every namespace at once, not the health of any one of them.
@@ -145,7 +145,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Managed gateways | `actions_gateway_managed_gateways` | Stat |
-| Degraded gateways | `sum(actions_gateway_runnergroups_degraded)` (v1) / `sum(actions_gateway_runnersets_degraded)` (v2) | Stat (>0 = red) |
+| Degraded gateways | `sum(actions_gateway_runnersets_degraded)` | Stat (>0 = red) |
 | Egress allowlist stale | `sum(actions_gateway_egress_rules_stale)` | Stat (>0 = red) |
 | Proxy quota exceeded | `sum(actions_gateway_proxy_quota_exceeded)` | Stat (>0 = red) |
 
@@ -161,7 +161,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Gateway condition rollups | `actions_gateway_runnergroups_degraded` / `_egress_rules_stale` / `_proxy_quota_pressure` / `_proxy_quota_exceeded` (v1); `_runnersets_degraded` / `_agc_available` / `_egress_unattributed` / `_scale_set_name_collision` (v2); `_github_egress_incomplete` (v2 `EgressProxy` only) | State timeline (1 = firing) |
+| Gateway condition rollups | `actions_gateway_runnersets_degraded` / `_egress_rules_stale` / `_proxy_quota_pressure` / `_proxy_quota_exceeded` / `_github_egress_incomplete` / `_scale_set_name_collision` | State timeline (1 = firing) |
 
 **Row 4 — Cross-tenant Throughput (requires per-tenant scrape)**
 

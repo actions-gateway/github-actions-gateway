@@ -74,7 +74,7 @@ type EgressProxyReconciler struct {
 	// allowlist. Populated and refreshed by IPRangeReconciler; reads here never
 	// perform network I/O. A nil cache or empty snapshot is tolerated — the
 	// IPRangeReconciler patches any NetworkPolicy created without CIDRs once its
-	// first fetch lands (mirrors the ActionsGatewayReconciler contract).
+	// first fetch lands (the same contract as ActionsGatewayV2Reconciler).
 	IPCache    *IPRangeCache
 	ProxyImage string
 	// APIReader is the manager's uncached reader, used for every read of a projected
@@ -94,8 +94,7 @@ type EgressProxyReconciler struct {
 	EnableServiceMonitor bool
 	// EgressStaleThreshold is the age past which the shared GitHub IP-range refresh
 	// loop's last success trips the EgressRulesStale condition (Q157). Zero uses
-	// DefaultEgressStaleThreshold. Shares the value the ActionsGatewayReconciler is
-	// given so v1 and v2 proxies report staleness on the same window.
+	// DefaultEgressStaleThreshold.
 	EgressStaleThreshold time.Duration
 	// Recorder emits Kubernetes Events on the EgressProxy (provisioning failure/recovery,
 	// proxy-pool readiness transitions, and TLS-cert issuance/rotation) so they surface in
@@ -446,7 +445,7 @@ func (r *EgressProxyReconciler) recordEvent(ep *gmcv2alpha1.EgressProxy, eventty
 	r.Recorder.Eventf(ep, nil, eventtype, reason, action, note, args...)
 }
 
-// The apply* helpers mirror the ActionsGatewayReconciler pattern: CreateOrPatch
+// The apply* helpers follow the shared applyManagedChild pattern: CreateOrPatch
 // re-reads the object, the mutate closure writes only the controller-managed
 // fields, and every child gets a controller owner reference on the EgressProxy so
 // the apiserver garbage-collects it when the EgressProxy is deleted (§H.8).
@@ -680,7 +679,6 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2alpha
 
 // setDegraded records a Degraded=True condition naming the failing provisioning
 // step and returns the underlying error so the work item is retried with backoff.
-// Mirrors the ActionsGatewayReconciler's Q156 behavior on the v2 contract.
 func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2alpha1.EgressProxy, cause error) (ctrl.Result, error) {
 	// Warn once per transition into Degraded, naming the failing provisioning step.
 	if !meta.IsStatusConditionTrue(ep.Status.Conditions, gmcv2alpha1.ConditionDegraded) {
@@ -721,7 +719,7 @@ func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2alpha1
 // change (or any child drift) re-triggers a reconcile. The proxy TLS Secret is
 // deliberately NOT owned via a watch: a full Secret informer would buffer secret
 // material in the in-process cache, which this project forbids (the
-// ActionsGatewayReconciler uses a metadata-only Secret watch for the same reason).
+// ActionsGatewayV2Reconciler uses a metadata-only Secret watch for the same reason).
 // The Secret still carries a controller owner reference for GC, and ensureProxyCert
 // re-creates it on the next reconcile if it is removed out-of-band.
 func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {

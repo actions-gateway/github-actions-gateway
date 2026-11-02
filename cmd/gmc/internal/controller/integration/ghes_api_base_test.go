@@ -26,30 +26,6 @@ import (
 // have passed on a Deployment that never carried it. Each requires the variable to
 // be present AND to address the appliance, so removing the injection fails both.
 
-// TestGMC_GHESGateway_AGCAddressesTheAppliance covers the v1 path.
-func TestGMC_GHESGateway_AGCAddressesTheAppliance(t *testing.T) {
-	const nsName = "team-ghes-apibase"
-	createNamespace(t, nsName)
-	createGitHubAppSecret(t, nsName, "github-app")
-
-	ag := newActionsGateway("ghes-gateway", nsName, "github-app")
-	ag.Spec.GitHubURL = "https://ghes.example.com/example-org"
-	require.NoError(t, k8sClient.Create(ctx, ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
-
-	startGMCReconciler(t, nil)
-
-	g := gomega.NewWithT(t)
-	g.Eventually(func() string {
-		var dep appsv1.Deployment
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: agcName}, &dep); err != nil {
-			return ""
-		}
-		return envValue(&dep, "GITHUB_API_BASE_URL")
-	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Equal("https://ghes.example.com/api/v3"),
-		"the AGC's token exchange must address the GHES appliance, not api.github.com")
-}
-
 // TestV2_GHESGateway_AGCAddressesTheAppliance covers the v2 path, where the AGC
 // Deployment is named per gateway.
 func TestV2_GHESGateway_AGCAddressesTheAppliance(t *testing.T) {

@@ -1,12 +1,43 @@
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=actionsgateways,verbs=get;list;watch;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=actionsgateways/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=actions-gateway.com,resources=actionsgateways/finalizers,verbs=update
-// The AGC control-plane children (Deployment/SA/RoleBinding/Service/NetworkPolicy/
-// Secret) write verbs are already granted to the GMC ClusterRole by the v1
-// ActionsGateway reconciler markers, which controller-gen aggregates into the same
-// manager-role; the v2 reconciler reuses them. It reads the namespace
-// security-profile label (namespaces get;list;watch already granted) and the
-// referenced EgressProxy (granted above).
+// The AGC control-plane children, and the EgressProxy pool children, which
+// controller-gen aggregates into the same manager-role.
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=serviceaccounts;services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=networkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=autoscaling,resources=horizontalpodautoscalers,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+// The namespace ResourceQuota (and any LimitRange) is platform-owned: the
+// platform admin manages it on the tenant namespace and GAG operates within it.
+// The GMC deliberately holds no resourcequotas/limitranges write verbs — dropping
+// that grant is least privilege (Q122/Q130). See docs/design/05-security.md.
+// Read-only access lets the EgressProxy status correlate the pool's maxReplicas
+// against the quota and surface ProxyQuotaPressure (Q82).
+// +kubebuilder:rbac:groups="",resources=resourcequotas,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch;update;patch
+// Secret reads are not granted here: they come from the per-namespace
+// gmc-tenant-secret-reader RoleBinding (tenant_secret_access.go, Q1188). Nor is
+// patch, which returns the stored object and so would read any Secret admission
+// lets through; owned Secrets are written by applyManagedSecret instead.
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=create;update
+// events: both groups are required — the manager's new-style recorder
+// (mgr.GetEventRecorder) writes events.k8s.io/v1 Events, so with only the core
+// ("") grant every Event is silently 403'd (Q112; same class as the AGC Q95 fix).
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// Per-tenant RoleBindings reference the shipped agc-tenant-role ClusterRole.
+// `bind` is scoped to that single name so a compromised GMC cannot wire its
+// SA into arbitrary ClusterRoles. Without this, the api server would require
+// the GMC to itself hold every permission inside agc-tenant-role (or escalate).
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind,resourceNames=agc-tenant-role
+// servicemonitors: the GMC creates per-tenant Prometheus-Operator ServiceMonitors
+// for the proxy and AGC mTLS metrics ports (Q72). The grant is always present, but
+// is only exercised when an operator opts in via metrics.serviceMonitor.enabled
+// (--enable-tenant-service-monitors) AND the monitoring.coreos.com CRD is installed;
+// the reconciler skips gracefully when the CRD is absent.
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 //
 // Multi-gateway (M3b): each gateway's AGC needs cluster-scoped read of the
 // cluster-scoped ClusterRunnerTemplate kind, which a namespaced RoleBinding cannot
