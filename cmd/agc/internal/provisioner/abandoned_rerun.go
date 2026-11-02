@@ -289,7 +289,7 @@ func (s *AbandonedRerunSweeper) Start(ctx context.Context) error {
 			}
 			// And ends a retry class's pause on time, so its paused gauge drops when the
 			// cooldown passes rather than at the class's next fire (Q1245).
-			s.p.closeExpiredBreakers()
+			s.p.closeExpiredBreakers(s.p.nowFn())
 		}
 	}
 }

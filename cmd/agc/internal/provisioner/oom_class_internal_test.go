@@ -3,6 +3,7 @@ package provisioner
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -260,11 +261,57 @@ func TestRecoverOOMKilled_BreakerPausesAStampede(t *testing.T) {
 	assert.Equal(t, float64(1), testutil.ToFloat64(paused), "the pause reads as a state while the breaker is open")
 
 	clock.advance(classBreakerCooldown - time.Second)
-	p.closeExpiredBreakers()
+	p.closeExpiredBreakers(clock.now())
 	assert.Equal(t, float64(1), testutil.ToFloat64(paused))
 	clock.advance(time.Second)
-	p.closeExpiredBreakers()
+	p.closeExpiredBreakers(clock.now())
 	assert.Zero(t, testutil.ToFloat64(paused), "the sweep's tick drops it when the cooldown ends")
+}
+
+// TestRecoverOOMKilled_BreakerGaugeFollowsAFireAtTheCooldown: a fire whose clock reads
+// cross the cooldown leaves the paused gauge agreeing with the breaker, wherever among
+// the fire's reads the crossing falls.
+func TestRecoverOOMKilled_BreakerGaugeFollowsAFireAtTheCooldown(t *testing.T) {
+	for reads := 1; reads <= 8; reads++ {
+		t.Run(fmt.Sprintf("crossing after %d reads", reads), func(t *testing.T) {
+			ctx := context.Background()
+			var pods []*corev1.Pod
+			for i := 0; i <= classBreakerRuns+1; i++ {
+				pods = append(pods, oomKilled(scaleSetWorkerPod(fmt.Sprintf("runner-gpu-job%d", i),
+					rightSizedAnnotations(fmt.Sprint(5000+i))), "2Gi"))
+			}
+			p, target, m, _, _ := recoveryFixture(t, pods...)
+			target.spec.MemoryRetry = throughputRetry()
+			clock := newTestClock()
+			p.now = clock.now
+			for _, pod := range pods[:classBreakerRuns+1] {
+				done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, pod.DeepCopy())
+				require.NoError(t, err)
+				<-done
+			}
+			breaker := classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}
+			require.True(t, p.classBreakers.open(breaker, clock.now()))
+
+			var mu sync.Mutex
+			tick := clock.now().Add(classBreakerCooldown - time.Duration(reads)*time.Nanosecond)
+			p.now = func() time.Time {
+				mu.Lock()
+				defer mu.Unlock()
+				at := tick
+				tick = tick.Add(time.Nanosecond)
+				return at
+			}
+			done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, pods[classBreakerRuns+1].DeepCopy())
+			require.NoError(t, err)
+			<-done
+
+			p.classBreakers.mu.Lock()
+			open := !p.classBreakers.byKey[breaker].openedAt.IsZero()
+			p.classBreakers.mu.Unlock()
+			paused := testutil.ToFloat64(m.AutoRetryPaused.WithLabelValues("team-a", "gpu", recoveryCauseOOM))
+			assert.Equal(t, open, paused == 1, "the gauge reads %v while the breaker is open=%v", paused, open)
+		})
+	}
 }
 
 func TestClassBreakers(t *testing.T) {

@@ -129,8 +129,9 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		return closedChan()
 	}
 	breaker := classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}
-	p.closeExpiredBreakers()
-	if p.classBreakers.open(breaker, p.nowFn()) {
+	now := p.nowFn()
+	p.closeExpiredBreakers(now)
+	if p.classBreakers.open(breaker, now) {
 		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonBreakerOpen, fmt.Sprintf("worker pod for run %s had its runner killed at its memory limit, but out-of-memory retries on this set are paused: more than %d runs were re-run for memory within %s, which points at a shared cause rather than one job's growth. Retries resume %s after the pause began; re-run it by hand if this job needs it",
 			runID, classBreakerRuns, classBreakerWindow, classBreakerCooldown))
 		return closedChan()
@@ -337,9 +338,9 @@ func (c *classBreakers) closeExpired(now time.Time) []classBreakerKey {
 
 // closeExpiredBreakers closes the breakers whose pause has ended and zeroes their
 // paused gauge. The pending sweep's tick calls it, and every class fire before it reads
-// its breaker.
-func (p *Provisioner) closeExpiredBreakers() {
-	for _, key := range p.classBreakers.closeExpired(p.nowFn()) {
+// its breaker at the same now, so open never closes a breaker the gauge still reports.
+func (p *Provisioner) closeExpiredBreakers(now time.Time) {
+	for _, key := range p.classBreakers.closeExpired(now) {
 		p.setAutoRetryPaused(key, 0)
 	}
 }

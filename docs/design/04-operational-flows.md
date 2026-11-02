@@ -623,7 +623,7 @@ The `MemoryLimitRaisedForRetry` Event and `cause="oom"` count make each raise vi
 **The breaker is in memory, one per set and class cause**, so a restart closes it and the per-run budget still bounds what that costs.
 While it is open `actions_gateway_auto_retry_paused{cause="oom"}` reads 1, and the pending sweep's 30-second tick closes it when the cooldown ends, so the gauge drops then rather than at the next kill (Q1245).
 **Misclassification is an alert** (Q1245): `ActionsGatewayRetryCauseMisclassified` fires when more than half of a cause's re-runs on a set failed again over 7 days, counting at least 5, the cross-job reading the per-job `same_class_again` check cannot take.
-**A re-run's worker pods carry `actions-gateway.com/rerun-cause`**, the cause of GAG's latest re-run of the run, read from the in-memory ledger index the floor lookup loads, so cost attribution can split re-run compute by cause; the ledger records re-runs by run and not by attempt, so a pod the original attempt builds after the reservation carries it too.
+**A re-run's worker pods carry `actions-gateway.com/rerun-cause`**, the cause of GAG's latest re-run of the run, read from the in-memory ledger index the floor lookup loads, so cost attribution can split re-run compute by cause; the ledger records re-runs by run and not by attempt, so a pod the original attempt builds after the reservation carries it too, which for an out-of-memory re-run spans the whole parked wait, including one that expires without a re-run.
 The disruption arms are outside it: a mass Spot preemption is exactly when their recovery is wanted.
 
 **The re-run waits for the run to conclude** (Q1244), the design's [deferred wait](../plan/q555-automatic-recovery-design.md#how-it-waits).
