@@ -36,6 +36,10 @@ const (
 	// pendingRerunExpiryGrace keeps an entry in the ledger past pendingRerunMaxWait, so
 	// the sweep reports its expiry before a prune on another write drops it silently.
 	pendingRerunExpiryGrace = time.Hour
+	// pendingRerunFinalReadWindow is how long past pendingRerunMaxWait a failed run read
+	// is retried, at the poll cadence, before the entry expires: about four reads, well
+	// inside pendingRerunExpiryGrace.
+	pendingRerunFinalReadWindow = pendingRerunExpiryGrace / 2
 )
 
 // pendingRerun is one parked re-run, keyed by failureKey.
@@ -162,14 +166,15 @@ func (s *pendingSets) unwatch(set types.NamespacedName, gen int) {
 	}
 }
 
-// due reports whether entry's run should be read at now, and marks it read if so.
-func (s *pendingSets) due(entry string, age time.Duration, now time.Time) bool {
+// due reports whether entry's run should be read at now, and marks it read if so. A read
+// is due at once where the last one was taken before readFrom.
+func (s *pendingSets) due(entry string, age time.Duration, now, readFrom time.Time) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.releasing[entry] {
 		return false
 	}
-	if last, ok := s.lastRead[entry]; ok && now.Sub(last) < pendingRerunPollInterval(age) {
+	if last, ok := s.lastRead[entry]; ok && !last.Before(readFrom) && now.Sub(last) < pendingRerunPollInterval(age) {
 		return false
 	}
 	if s.lastRead == nil {
@@ -201,11 +206,23 @@ func (s *pendingSets) forget(entry string) {
 	delete(s.releasing, entry)
 }
 
+// settle ends entry's turn: its bookkeeping goes with the entry where dropped, and
+// otherwise keeps lastRead, so the next attempt waits out the poll cadence.
+func (s *pendingSets) settle(entry string, dropped bool) {
+	if dropped {
+		s.forget(entry)
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.releasing, entry)
+}
+
 // sweepPendingReruns is one pass over every parked re-run of every watched set: expire
-// the ones that have waited pendingRerunMaxWait, drop the ones whose run has already
-// been re-run past the attempt they failed in, release the ones whose run has concluded,
-// and leave the rest for a later pass. It returns one done channel per release, closed
-// once the release has finished and its entry is gone.
+// the ones whose run is still running, or cannot be read, at pendingRerunMaxWait, drop
+// the ones whose run has already been re-run past the attempt they failed in, release
+// the ones whose run has concluded, and leave the rest for a later pass. It returns one
+// done channel per release, closed once the release has finished and its entry is gone.
 func (p *Provisioner) sweepPendingReruns(ctx context.Context) []<-chan struct{} {
 	var released []<-chan struct{}
 	for _, set := range p.pendingSets.snapshot() {
@@ -238,19 +255,30 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	now := p.nowFn()
 	age := now.Sub(e.FiredAt)
 
-	if age >= pendingRerunMaxWait {
-		if !p.pendingSets.claimRelease(entry) {
-			return nil, false
-		}
-		defer p.pendingSets.forget(entry)
-		log.Error("the run never concluded while its re-run waited; manual rerun may be required",
-			"runID", e.RunID, "job", e.Job, "cause", e.Cause, "waited", pendingRerunMaxWait)
-		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonNeverConcluded,
-			fmt.Errorf("the run did not conclude within %s of the job failing", pendingRerunMaxWait))
-		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
+	// Past pendingRerunMaxWait the entry's run is read once more at once, whatever the
+	// cadence, so a run that concluded while no process swept, or since the last due read,
+	// is still released. That read ends the entry unless it failed inside
+	// pendingRerunFinalReadWindow, which keeps the wait bounded.
+	deadline := e.FiredAt.Add(pendingRerunMaxWait)
+	final := !now.Before(deadline)
+	readFrom := time.Time{}
+	if final {
+		readFrom = deadline
+	}
+	if !p.pendingSets.due(entry, age, now, readFrom) {
 		return nil, false
 	}
-	if !p.pendingSets.due(entry, age, now) {
+	expire := func(readErr error) (<-chan struct{}, bool) {
+		err := fmt.Errorf("the run did not conclude within %s of the job failing", pendingRerunMaxWait)
+		msg := "the run never concluded while its re-run waited; manual rerun may be required"
+		if readErr != nil {
+			err = fmt.Errorf("the run was not seen to conclude within %s of the job failing: the last read of it failed: %w",
+				pendingRerunMaxWait, readErr)
+			msg = "the run could not be read when its re-run's wait ended; manual rerun may be required"
+		}
+		log.Error(msg, "runID", e.RunID, "job", e.Job, "cause", e.Cause, "waited", pendingRerunMaxWait, "error", err)
+		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonNeverConcluded, err)
+		p.pendingSets.settle(entry, p.dropPendingRerun(ctx, target, key, e.Disruption, log))
 		return nil, false
 	}
 
@@ -266,25 +294,29 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		if !p.pendingSets.claimRelease(entry) {
 			return nil, false
 		}
-		defer p.pendingSets.forget(entry)
 		log.Error("a parked re-run's run is gone at GitHub; manual rerun may be required",
 			"runID", e.RunID, "cause", e.Cause, "error", err)
 		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonAPIError, err)
-		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
+		p.pendingSets.settle(entry, p.dropPendingRerun(ctx, target, key, e.Disruption, log))
 		return nil, false
 	case err != nil:
+		if final && !now.Before(deadline.Add(pendingRerunFinalReadWindow)) && p.pendingSets.claimRelease(entry) {
+			return expire(err)
+		}
 		log.Warn("could not read a parked re-run's run; will retry", "runID", e.RunID, "error", err)
 		return nil, false
 	case run.attempt > e.FailedAttempt:
 		if !p.pendingSets.claimRelease(entry) {
 			return nil, false
 		}
-		defer p.pendingSets.forget(entry)
 		log.Info("the run was already re-run past the attempt this job failed in; the parked re-run is dropped",
 			"runID", e.RunID, "runAttempt", e.FailedAttempt, "cause", e.Cause)
-		p.dropPendingRerun(ctx, target, key, e.Disruption, log)
+		p.pendingSets.settle(entry, p.dropPendingRerun(ctx, target, key, e.Disruption, log))
 		return nil, false
 	case run.status != runStatusCompleted:
+		if final && p.pendingSets.claimRelease(entry) {
+			return expire(nil)
+		}
 		return nil, false
 	}
 
@@ -299,17 +331,17 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		defer p.pendingSets.forget(entry)
 		<-recovered
 		// Dropped only once the release has finished, so a restart mid-release releases
 		// it again and the reservation resumes rather than reserving a second slot.
-		p.dropPendingRerun(context.WithoutCancel(ctx), target, key, e.Disruption, log)
+		p.pendingSets.settle(entry, p.dropPendingRerun(context.WithoutCancel(ctx), target, key, e.Disruption, log))
 	}()
 	return done, true
 }
 
-// dropPendingRerun deletes the entry at key where it is still disruption's.
-func (p *Provisioner) dropPendingRerun(ctx context.Context, target Target, key, disruption string, log *slog.Logger) {
+// dropPendingRerun deletes the entry at key where it is still disruption's, reporting
+// whether the ledger write landed.
+func (p *Provisioner) dropPendingRerun(ctx context.Context, target Target, key, disruption string, log *slog.Logger) bool {
 	err := p.updateRerunLedger(ctx, target, func(l *rerunLedger, _ time.Time) bool {
 		if r := l.Pending[key]; r == nil || r.Disruption != disruption {
 			return false
@@ -320,5 +352,7 @@ func (p *Provisioner) dropPendingRerun(ctx context.Context, target Target, key, 
 	if err != nil {
 		log.Warn("could not remove a finished parked re-run from the failure ledger; a later sweep retries it",
 			"entry", key, "error", err)
+		return false
 	}
+	return true
 }
