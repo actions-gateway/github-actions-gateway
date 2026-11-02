@@ -98,6 +98,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # publish.yml starts from the same tag push, so the images the gate deploys
+      # may not exist yet (Q1162). Waits for that run, and fails on a red one or a
+      # wait that runs out, before any cloud access is taken. A step timeout longer
+      # than the script's own keeps its error message the one that prints.
+      - name: Wait for the candidate's images to publish
+        timeout-minutes: 50
+        env:
+          WAIT_TIMEOUT: '2700'
+        run: scripts/dogfood/wait-for-publish.sh "${TAG}"
+
       - name: Authenticate to GCP through Workload Identity Federation
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:

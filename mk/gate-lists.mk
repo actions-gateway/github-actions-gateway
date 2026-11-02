@@ -279,7 +279,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  docs/queue-test docs/rank-vectors-test \
                  docs/release-gates-hook-test docs/release-version-hook-test \
                  docs/source-links-hook-test docs/offline-links-hook-test \
-                 dogfood/validate-release-test dogfood/pool-test dogfood/workers-test \
+                 dogfood/validate-release-test dogfood/wait-for-publish-test dogfood/pool-test dogfood/workers-test \
                  dogfood/nodes-test dogfood/quota-test \
                  dogfood/gmc-test \
                  dogfood/setup-test dogfood/e2e-setup-test \
