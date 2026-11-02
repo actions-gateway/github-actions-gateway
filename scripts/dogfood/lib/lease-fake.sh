@@ -19,23 +19,36 @@ lease_fake_path() {
 	echo "${RELEASE_LEASE_DIR}/fake-${key//[^A-Za-z0-9._-]/-}.lease"
 }
 
+# lease_fake_exited PID — true once PID has exited. A zombie counts: under a PID 1
+# that does not reap orphans (a GAG worker's wrapper) an exited process stays a
+# zombie, which `kill -0` still reports as alive. `ps -o stat=` works on Linux
+# and macOS.
+lease_fake_exited() {
+	local stat
+	stat="$(ps -o stat= -p "$1" 2>/dev/null)" || true
+	[[ -z "${stat// /}" || "${stat}" == *Z* ]]
+}
+
 # lease_fake_locked PROJECT ZONE CLUSTER CMD ARGS... — run CMD holding the
 # target's lock, so a create, patch or delete is one step as the apiserver's
 # are. Without it a background renewer can read a record, lose a race to a test
-# overwriting it, and write its renewal back over the overwrite. `command sleep`
-# because a suite may stub sleep(). A lock held past 5s belongs to a renewer
-# killed mid-write (lease_renew_stop), so it is broken rather than waited on.
+# overwriting it, and write its renewal back over the overwrite. The lock is a
+# symlink naming its holder's pid, made in one step, and is broken only once
+# that holder has exited: a renewer killed mid-write (lease_renew_stop) leaves
+# one behind, but a renewer starved mid-write still holds it, however long it
+# takes. `command sleep` because a suite may stub sleep().
 lease_fake_locked() {
-	local lock rc=0 tries=0
+	local lock holder rc=0
 	mkdir -p "${RELEASE_LEASE_DIR}"
 	lock="$(lease_fake_path "$1" "$2" "$3").lock"
-	until mkdir "${lock}" 2>/dev/null; do
-		((++tries < 500)) || rmdir "${lock}" 2>/dev/null || true
+	until ln -sn "${BASHPID}" "${lock}" 2>/dev/null; do
+		holder="$(readlink "${lock}" 2>/dev/null)" || holder=""
+		[[ -z "${holder}" ]] || ! lease_fake_exited "${holder}" || rm -f "${lock}"
 		command sleep 0.01
 	done
 	shift 3
 	"$@" || rc=$?
-	rmdir "${lock}"
+	rm -f "${lock}"
 	return "${rc}"
 }
 
