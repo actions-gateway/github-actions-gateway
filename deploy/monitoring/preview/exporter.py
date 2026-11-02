@@ -39,12 +39,11 @@ GATED_SCALESETS = {("team-a", "gpu-a100"), ("team-b", "cpu-standard")}
 RATE_LIMITED_SCALESETS = {("team-a", "cpu-standard")}
 
 # Every validating webhook the chart ships, as (path, apiserver name, requests/s,
-# denials/s). All six are listed rather than a sample because the security
+# denials/s). All five are listed rather than a sample because the security
 # dashboard sums across them: a preview carrying a subset renders totals below
 # what any real install produces, and a legend sized against the wrong series
 # count (Q1061).
 WEBHOOKS = (
-    ("/validate-actions-gateway-github-com-v1alpha1-actionsgateway", "vactionsgateway-v1alpha1.kb.io", 0.02, 0.010),
     ("/validate-actions-gateway-com-v2-actionsgateway", "vactionsgateway-v2.kb.io", 0.02, 0.010),
     ("/validate-actions-gateway-com-v2-clusterrunnertemplate", "vclusterrunnertemplate-v2.kb.io", 0.01, 0.010),
     ("/validate-actions-gateway-com-v2-egressproxy", "vegressproxy-v2.kb.io", 0.02, 0.010),
