@@ -248,8 +248,9 @@ func (r *ActionsGatewayReconciler) reconcileResources(ctx context.Context, ag *g
 
 	// 5. NetworkPolicies, before the proxy Deployment, so a step failing between
 	// them never leaves proxy pods running with no policy selecting them. The
-	// workload policy targets the proxy by PodSelector (kube-proxy rewrites ClusterIP → PodIP before NetworkPolicy enforcement,
-	// so an ipBlock on the ClusterIP would silently drop all proxy-bound traffic).
+	// workload policy targets the proxy by PodSelector (kube-proxy rewrites
+	// ClusterIP → PodIP before NetworkPolicy enforcement, so an ipBlock on the
+	// ClusterIP would silently drop all proxy-bound traffic).
 	step("NetworkPolicies")
 	if err := r.applyNetworkPolicy(ctx, ag, buildProxyNetworkPolicy(ag, githubCIDRs)); err != nil {
 		return fmt.Errorf("proxy NetworkPolicy: %w", err)
