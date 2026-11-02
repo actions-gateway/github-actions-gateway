@@ -75,6 +75,7 @@ verdict="$(jq -r --arg pinned "$pinned" --argjson now "$now" '
 	  | [$f.tag, $f.at, (($now - ($f.at | fromdateiso8601)) / 86400 | floor)] | @tsv
 	  end
 ' <<<"$releases")" || die "could not read the releases feed"
+[[ -n "$verdict" ]] || die "could not read the releases feed: it was empty"
 
 if [[ "$verdict" == "none" ]]; then
 	printf 'actions/runner %s is the newest stable release; no update window is open.\n' "$pinned"
