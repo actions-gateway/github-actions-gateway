@@ -1,0 +1,57 @@
+# Q215, temporary: a fork pull request's cache scope against the in-cluster
+# server. Lives only on spike/q215-fork-base and the fork's head branch.
+name: q215-fork
+on:
+  push:
+    branches: ["spike/q215-fork-base"]
+  pull_request:
+    branches: ["spike/q215-fork-base"]
+permissions:
+  contents: read
+jobs:
+  scope:
+    runs-on: gag-q215-spike
+    steps:
+      - name: context
+        run: |
+          echo "event=${{ github.event_name }} ref=${{ github.ref }}"
+          echo "head-repo=${{ github.event.pull_request.head.repo.full_name }} fork=${{ github.event.pull_request.head.repo.fork }}"
+          echo "ACTIONS_RESULTS_URL=$ACTIONS_RESULTS_URL"
+      # The runtime token's claims only, never the token: the ac claim lists
+      # each cache scope this job may read (1) or write (2).
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const t = process.env.ACTIONS_RUNTIME_TOKEN || '';
+            const p = t.split('.')[1];
+            if (!p) { core.warning('no runtime token'); return; }
+            const c = JSON.parse(Buffer.from(p, 'base64url').toString());
+            core.info('ac=' + c.ac);
+      - name: payload
+        run: mkdir -p payload && echo "${{ github.event_name }}-${{ github.run_id }}" > payload/marker
+      - id: base-entry
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: payload
+          key: q215-fork-base-entry
+          lookup-only: true
+      - id: pr-entry
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: payload
+          key: q215-fork-pr-entry
+          lookup-only: true
+      - name: verdicts
+        run: |
+          echo "base-entry hit=${{ steps.base-entry.outputs.cache-hit }}"
+          echo "pr-entry hit=${{ steps.pr-entry.outputs.cache-hit }}"
+      - if: github.event_name == 'push' && steps.base-entry.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: payload
+          key: q215-fork-base-entry
+      - if: github.event_name == 'pull_request' && steps.pr-entry.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: payload
+          key: q215-fork-pr-entry
