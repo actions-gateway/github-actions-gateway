@@ -1,0 +1,6 @@
+{
+  "_comment": "Extends exit-status-guard's shipped registry. local-throttle.sh matches its generic scripts/*.sh gate, but every subcommand prints a value (a job count, a command prefix, a lock path) and exits non-zero only when the script itself broke, so `$(scripts/agent/local-throttle.sh prefix) go test` and `| head` lose no gate result.",
+  "exempt": [
+    "^\\.?/?scripts/agent/local-throttle\\.sh(\\s|$)"
+  ]
+}
