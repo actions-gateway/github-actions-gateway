@@ -257,6 +257,7 @@ nav:
       - "ResourceQuota sizing": operations/resourcequota-sizing.md
       - Runner template library: operations/runner-template-library.md
       - "Shared worker storage (RWX)": operations/worker-shared-storage.md
+      - "In-cluster actions/cache server": operations/in-cluster-cache.md
       - In-runner image builds: operations/in-runner-image-builds.md
       - "Kata DinD / image-build workloads": operations/kata-dind-workloads.md
       - "P2P image distribution": operations/p2p-image-distribution.md

@@ -4067,7 +4067,8 @@ Take that total with `--limit 200` or higher: `gh cache list` defaults to 30 and
 That pool is shared with the `actions/cache` pre-pulls above, whose whole job is keeping this lane off registry.k8s.io and quay.io under rate limits, and evicting one of those surfaces as a registry-pull flake attributed to the registry rather than as a cache miss.
 Re-check with `gh cache list` if e2e pull flakes rise.
 
-All of this runner-side caching is **hosted-lane-only**: on a self-hosted runner the `actions/cache` steps, the bake's `GHA_CACHE`, and `azure/setup-helm` are skipped (`runner.environment` gates in `e2e-reusable.yml`), because the Actions cache data plane and `get.helm.sh` are job-time egress the managed GitHub egress rule does not admit (the Kata untrusted-PR posture keeps that lane's non-registry fetches GitHub-only, Q408).
+All of this runner-side caching is **hosted-lane-only**: on a self-hosted runner the `actions/cache` steps, the bake's `GHA_CACHE`, and `azure/setup-helm` are skipped (`runner.environment` gates in `e2e-reusable.yml`), because Q408's egress inventory counted the Actions cache data plane and `get.helm.sh` as job-time egress outside GitHub.
+`get.helm.sh` is outside the managed rule; the cache's Azure blob storage is inside GitHub's published ranges, and a Kata worker reached it (Q1253 owns what that admits).
 The pull steps fall back to retried upstream pulls there (helm is baked into the e2e runner image), and the in-cluster registry mirror is what will serve those pulls warm.
 
 #### Runner→GitHub egress attribution (Q352)
@@ -4193,7 +4194,7 @@ make vulncheck
 
 A finding usually means bumping the Go toolchain (`go` directive in `go.work` + every `go.mod`, kept in lockstep) for a stdlib CVE, or `go get`-ing the fixed dependency version for a module CVE.
 
-**trivy** — builds each of the seven images and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
+**trivy** — builds each of the eight images (the seven published plus `fakegithub`) and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires `trivy` and `docker` on `PATH`) with:
 
 ```
@@ -4201,12 +4202,12 @@ make trivy-scan
 ```
 
 The five images we build from a minimal/distroless or scratch base (`gmc`, `agc`, `proxy`, `fakegithub`, and the `FROM scratch` `wrapper`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
-The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner; its leg is the sole **report-only** one (findings printed, never blocks).
+The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner, so its leg is **report-only** (findings printed, never blocks), as are those of `build-runner` and `cache-runner`, which are built `FROM` it.
 Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [the backlog](../queue/README.md) as Q70.
 
 The same `trivy` job also generates an **SBOM** (Software Bill of Materials, SPDX-JSON, via [`syft`](https://github.com/anchore/syft)) for each image it builds and uploads it as a `sbom-<image>.spdx.json` build artifact.
 This runs on every code PR purely so the SBOM-generation path can't silently break before a release — it does **not** sign or publish anything.
-On a `v*` release tag, the separate [`publish.yml`](../../.github/workflows/publish.yml) workflow pushes the six first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`) to GHCR, regenerates each SBOM for the pushed image, signs every image **keyless** with [`cosign`](https://docs.sigstore.dev/) (sigstore/Fulcio via GitHub Actions OIDC — no signing key or stored secret), and attaches the SBOM as a keyless cosign attestation.
+On a `v*` release tag, the separate [`publish.yml`](../../.github/workflows/publish.yml) workflow pushes the seven first-party images (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner`) to GHCR, regenerates each SBOM for the pushed image, signs every image **keyless** with [`cosign`](https://docs.sigstore.dev/) (sigstore/Fulcio via GitHub Actions OIDC — no signing key or stored secret), and attaches the SBOM as a keyless cosign attestation.
 Operator-facing verification (`cosign verify`, SBOM retrieval) is documented in [security-operations.md § Image provenance](../operations/security-operations.md#image-provenance-signature--sbom-verification).
 The signing/attestation steps run only on publish, so PR CI does not exercise them.
 

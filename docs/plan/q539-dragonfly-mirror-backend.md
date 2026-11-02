@@ -105,7 +105,7 @@ So does load order: dfdaemon and Distribution both read the CA at startup, so a 
 |---|---|
 | Images | Yes, as the back end of §4. Not as the worker-facing endpoint (§2) |
 | Artifacts and `actions/cache` restores | Not as a fixed upstream. The read path is a `GET` of a signed URL whose host names the storage account, so a filter can pin no tighter than the `*.blob.core.windows.net` suffix, which admits every account on Azure. Read from the source and the filter's rules, not probed |
-| `actions/cache` saves | No. dfdaemon forwards every non-`GET` to the origin rather than storing it (§2), so it holds no write path to contract. This stays [Q215](../queue/Q215.md)'s question |
+| `actions/cache` saves | No. dfdaemon forwards every non-`GET` to the origin rather than storing it (§2), so it holds no write path to contract. This stays Q215's question |
 
 ## 6. Non-root
 

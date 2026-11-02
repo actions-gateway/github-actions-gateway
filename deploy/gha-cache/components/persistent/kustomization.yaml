@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Opt-in persistence: swaps the base's emptyDir for a PVC so the cache survives
+# a pod restart. The disk bills while the PVC exists, and the PVC is the
+# tenant's, so it counts against the tenant's storage quota.
+#
+# `emptyDir: null` deletes the base's source, since a volume must declare
+# exactly one.
+resources:
+  - pvc.yaml
+patches:
+  - patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: gha-cache
+      spec:
+        template:
+          spec:
+            volumes:
+              - name: data
+                emptyDir: null
+                persistentVolumeClaim:
+                  claimName: gha-cache-data

@@ -171,7 +171,7 @@ expect_rc 'every signature verified passes' 0
 # SBOM attestation on every per-arch manifest (never the attestation manifest),
 # the chart artifacts at the tagless chart version, and each blob bundle.
 want_refs=""
-for img in gmc agc proxy worker wrapper build-runner; do
+for img in gmc agc proxy worker wrapper build-runner cache-runner; do
 	want_refs+="verify ghcr.io/actions-gateway/$img:v1.2.3"$'\n'
 	want_refs+="verify-attestation ghcr.io/actions-gateway/$img@sha256:aaaa"$'\n'
 	want_refs+="verify-attestation ghcr.io/actions-gateway/$img@sha256:bbbb"$'\n'

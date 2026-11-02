@@ -1,0 +1,100 @@
+# One falcondev cache server per tenant, in the tenant's namespace, so its
+# storage counts against that tenant's ResourceQuota (Q215 phase 1). Design and
+# trust model: docs/plan/q215-worker-cache.md.
+#
+# Token validation stays on (SKIP_TOKEN_VALIDATION unset): the server takes each
+# job's cache scope from the signed ACTIONS_RUNTIME_TOKEN, which is the whole
+# defence against an untrusted pull request writing a scope it was not granted.
+# MANAGEMENT_API_KEY stays unset too, which leaves v10's /management-api off.
+#
+# API_BASE_URL is the URL the server hands back in upload and download links,
+# so it must be the fully qualified Service name: the AGC's default NO_PROXY
+# exempts svc.cluster.local and nothing shorter, so a bare `gha-cache` would be
+# sent to the egress proxy. The namespace in it is a placeholder that the
+# tenant kustomization's replacement fills in (see ../example).
+#
+# The image is distroless with no USER, so the pod sets a non-root uid itself,
+# and every path the server writes is under the /data volume.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gha-cache
+  labels:
+    app.kubernetes.io/name: gha-cache
+spec:
+  replicas: 1
+  # Recreate, not RollingUpdate: SQLite on a ReadWriteOnce volume takes one
+  # writer, and a second pod on the persistent component's PVC cannot attach.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gha-cache
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gha-cache
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: ghcr.io/falcondev-oss/github-actions-cache-server:10.0.0@sha256:05c4d9e7169f525f2b74d412c4a081aeec5446a017ec88bae668e63ebfb16aa9
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: API_BASE_URL
+              value: http://gha-cache.NAMESPACE.svc.cluster.local:3000
+            - name: STORAGE_DRIVER
+              value: filesystem
+            - name: STORAGE_FILESYSTEM_PATH
+              value: /data/cache
+            - name: DB_DRIVER
+              value: sqlite
+            - name: DB_SQLITE_PATH
+              value: /data/cache-server.db
+            # GitHub's own policy: an entry unused for 7 days is evicted.
+            - name: CACHE_CLEANUP_OLDER_THAN_DAYS
+              value: "7"
+            # One budget for the whole server, evicted least-recently-read
+            # first; GitHub caps 10 GB per repository, which falcondev cannot
+            # express, so this caps the tenant's total instead.
+            - name: CACHE_MAX_SIZE_BYTES
+              value: "10737418240"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        # Ephemeral by default: a restart empties the cache, which costs a round
+        # of misses and nothing else. ../components/persistent swaps in a PVC.
+        # The limit sits above CACHE_MAX_SIZE_BYTES because the budget is
+        # enforced after an upload finalizes, not during it.
+        - name: data
+          emptyDir:
+            sizeLimit: 16Gi

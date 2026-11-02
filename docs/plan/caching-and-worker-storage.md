@@ -28,8 +28,8 @@ Do not read this table as three deployments.
 | | What it holds | Where it lives today | Row |
 |---|---|---|---|
 | **Image pulls** | Container images the node pulls to start a worker | Upstream registries, over per-tenant egress | Q408, Q539, Q540 |
-| **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works** | [Q215](../queue/Q215.md) |
-| **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere. Workers are storage-less | [Q215](../queue/Q215.md) |
+| **Job cache** | `actions/cache` entries: dependencies, toolchains, build outputs | **GitHub's Azure-blob store, and it works**; opt-in, a per-tenant in-cluster server (Q215) | [Q1225](../queue/Q1225.md) |
+| **Build layer cache** | Docker layers produced by an image build inside a job | Nowhere by default, since workers are storage-less; BuildKit's `type=gha` can use the same per-tenant server, unmeasured | [Q1225](../queue/Q1225.md) |
 
 Alongside them, and not a cache at all:
 
@@ -71,7 +71,7 @@ A job cache is read-write by definition.
 So the artifact cache **cannot simply reuse the mirror role**, however well the same software serves both.
 It needs either a second role with its own contract, or a writable variant whose isolation argument is made separately, and that argument is the hard part: a write path reachable by an untrusted fork pull request is a way to plant content that a later trusted job restores and executes.
 
-That is the sharpest version of the review [Q215](../queue/Q215.md) was blocked on, and it is a contract question rather than a storage question.
+That is the sharpest version of the review Q215 was blocked on, and it is a contract question rather than a storage question.
 [q215-worker-cache.md](q215-worker-cache.md) answers it with a second role whose contract takes each job's scope from GitHub's own signed token.
 
 ### The accurate gap
@@ -85,8 +85,9 @@ Stating it the current way concedes a loss that has not happened, and it hides t
 **This is the reason the two goals cannot be planned separately.**
 
 Q408 Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
-The Actions cache data plane is a **non-GitHub host**, so closing that egress removes `actions/cache`.
-This is already the measured state of GAG's own self-hosted CI lane, where every `actions/cache` step is skipped because the hardened egress rule does not admit it ([testing.md](../development/testing.md#the-e2e-workflows-kindnet-and-calico), and [q408 §3](q408-untrusted-pr-egress.md) has the measurement).
+The Actions cache data plane was read as a **non-GitHub host**, so closing that egress was taken to remove `actions/cache`.
+GAG's own self-hosted CI lane skips every `actions/cache` step on that reading, by a `runner.environment` gate rather than a measured refusal ([testing.md](../development/testing.md#the-e2e-workflows-kindnet-and-calico), [q408 §3](q408-untrusted-pr-egress.md)).
+The reading does not hold for blob storage: on 2026-11-01 a Kata worker under this posture reached Azure blob storage on 443, inside GitHub's published ranges ([the Kata run](q215-worker-cache.md#the-kata-run-2026-11-01)), so the consequences below rest on a premise [Q1253](../queue/Q1253.md) has to settle.
 
 The consequences run one way:
 
@@ -141,15 +142,15 @@ Do not repeat that `actions/cache` has no home.
 
 ## Deliverables
 
-Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28).
+Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28); the per-tenant job cache server (Q215, [q215-worker-cache.md](q215-worker-cache.md), validated 2026-11-01).
 
-Open, with rows: [Q215](../queue/Q215.md) (job and build-layer cache, designed and spiked in [q215-worker-cache.md](q215-worker-cache.md), with publishing and the reference architecture left), [Q1224](../queue/Q1224.md) (retiring the runner patch that design rests on), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q1225](../queue/Q1225.md) (sharing that server across tenants), [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), [Q1224](../queue/Q1224.md) (retiring the runner patch that design rests on), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.
 Answering it there is nearly free while the deployment is already stood up, and expensive later.
 Grade the four contract properties **per content class**, not once: a backend that refuses non-GET for images has said nothing about what it does for a cache save.
-Q539 has answered its half ([q539 §5](q539-dragonfly-mirror-backend.md#5-per-content-class)): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class stays Q215's.
+Q539 has answered its half ([q539 §5](q539-dragonfly-mirror-backend.md#5-per-content-class)): images only, as the back end behind Distribution; the artifact read path admits every Azure storage account, and dfdaemon has no write path for a cache save, so that class belongs to the per-tenant cache server (Q215).
 Q540 shipped image-only as well: its node client carries the kubelet's pulls and no job content.
 
 ## Gaps with no row yet

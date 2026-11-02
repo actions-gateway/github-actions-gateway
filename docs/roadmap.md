@@ -28,10 +28,6 @@ No pill means no release is decided for that item yet.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
 
-- **[A worker cache backend](plan/q215-worker-cache.md)** <!-- q:Q215 --> `actions/cache` already works.
-  What is missing is a cache *inside* the cluster, which an untrusted-PR job under tight egress needs because it has no other.
-  The design enforces GitHub's own ref scope on the server; publishing its runner image and a reference architecture remain.
-
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q273,Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
 

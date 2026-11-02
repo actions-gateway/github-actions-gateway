@@ -5,11 +5,12 @@
 #
 # Build-capable dogfood runner image (Q239). This is NOT a released, signed
 # artifact — it is a dev convenience that lets the GKE dogfood run THIS repo's
-# own make-based CI green. publish.yml builds and signs only the six product
-# images (gmc/agc/proxy/worker/wrapper/build-runner); this one is built ad hoc by
-# scripts/dogfood/runner-build.sh and pushed to GHCR for the dogfood tenant to
-# pin as its RunnerTemplate workerImage. The Q235 wrapper is still injected on
-# top of it at provision time, exactly as it is on the bare upstream default.
+# own make-based CI green. publish.yml builds and signs only the seven product
+# images (gmc/agc/proxy/worker/wrapper/build-runner/cache-runner); this one is
+# built ad hoc by scripts/dogfood/runner-build.sh and pushed to GHCR for the
+# dogfood tenant to pin as its RunnerTemplate workerImage. The Q235 wrapper is
+# still injected on top of it at provision time, exactly as it is on the bare
+# upstream default.
 #
 # Why it exists: the bare upstream ghcr.io/actions/actions-runner (the AGC's
 # DefaultWorkerImage) has no build toolchain, so every `make …` job fails

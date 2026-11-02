@@ -12,7 +12,7 @@ Operators *consuming* a release pin the published digests at install time — se
 
 A release is a `vX.Y.Z` git tag plus its outputs:
 
-- The six first-party images — `gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner` — pushed to GHCR (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit SHA.
+- The seven first-party images — `gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner` — pushed to GHCR (`ghcr.io/actions-gateway/<name>`), each tagged `vX.Y.Z` and by long commit SHA.
   Each is **multi-arch** (`linux/amd64` + `linux/arm64`): the pushed artifact is an OCI image **index**, and the digest recorded everywhere (run summary, release notes, chart pins) is the index digest — the kubelet resolves the per-arch manifest from it at pull time, so one pinned digest schedules on both amd64 and arm64 (e.g.
   Graviton) nodes.
 - A keyless **cosign signature** on every image (sigstore/Fulcio via GitHub Actions OIDC — no signing key, no stored secret), signed **recursively** — the index *and* each per-arch manifest — and an **SPDX-JSON SBOM per architecture** attached as a keyless cosign attestation to that architecture's manifest.
@@ -33,7 +33,7 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 - The **`gag-migrate` CLI binaries** (Q306), cross-compiled by `chart-publish` for the operator platform matrix (`linux/amd64`, `linux/arm64`, `darwin/amd64`, `darwin/arm64`, `windows/amd64`) via `scripts/release/build-migrate-binaries.sh` and attached to the **GitHub Release** as `gag-migrate-<tag>-<os>-<arch>` assets.
   A single `SHA256SUMS` manifest is keyless **cosign `sign-blob`**-signed (`SHA256SUMS.cosign.bundle`) — the same no-secret Fulcio/Rekor path as the v2 CRD manifest — so one signature covers the whole set (verify the manifest signature, then `sha256sum -c`).
   This is the one-shot v1→v2 migration tool, previously source-build-only.
-- The **GitHub Release** itself (Q293), composed by `chart-publish`: the six image index digests, the `make verify-release` command, a generated changelog, and a tag-derived `--prerelease` flag.
+- The **GitHub Release** itself (Q293), composed by `chart-publish`: the seven image index digests, the `make verify-release` command, a generated changelog, and a tag-derived `--prerelease` flag.
   It is created only if the tag has no Release yet, so a maintainer's pre-tag curated notes are never clobbered.
 
 Both the image and chart work are automated by the [`publish.yml`](../../.github/workflows/publish.yml) workflow, which triggers on the `v*` tag push (the `chart-publish` job runs after every image leg succeeds).
@@ -48,6 +48,7 @@ The maintainer's job is to cut the tag and verify the result.
    They inherit the repository's visibility and may start **private**.
    For third parties to run `cosign verify` / `helm pull` (and for an air-gapped operator to pull), set each package to **public** in the org's GHCR package settings, or keep them private and distribute pull credentials.
    Verification by *this project's* CI and by anyone with pull access works either way — but the **released-chart upgrade gate** (`make chart-released-upgrade-check`, run by every e2e CI pass) pulls the chart and the released `gmc` image **anonymously**, so those two packages must be public for PR CI to stay green.
+   An image added in a later release creates its package on that release's publish, so this step recurs then: `build-runner` is public already, and `cache-runner` needs it on the first release that publishes it.
 2. **Workflow permissions** are already declared in `publish.yml` (`packages: write` to push, `id-token: write` for keyless cosign and provenance, `attestations: write` for the build-provenance attestation).
    No repo secret is required — that is the point of keyless signing.
 
@@ -782,7 +783,7 @@ A compat failure is the same stop-ship as a signature failure.
 
 Each run checks every artifact against the publish workflow's keyless identity:
 
-- the six image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`);
+- the seven image signatures (`gmc`, `agc`, `proxy`, `worker`, `wrapper`, `build-runner`, `cache-runner`);
 - the SPDX SBOM attestation on each image's `linux/amd64` and `linux/arm64` manifests, failing if either platform is missing from the index;
 - both chart signatures (tag `X.Y.Z`, without the leading `v`);
 - every `*.cosign.bundle` blob signature on the GitHub Release: the v2 CRD manifest (Q276), which must be present, and `SHA256SUMS` while `gag-migrate` ships.
@@ -1151,7 +1152,7 @@ They also cannot be written in advance: the images are built *from* the tag.
 So after `publish.yml` goes green, resolve them and amend the notes file:
 
 ```bash
-for img in gmc agc proxy worker wrapper build-runner; do
+for img in gmc agc proxy worker wrapper build-runner cache-runner; do
   docker buildx imagetools inspect "ghcr.io/actions-gateway/${img}:vX.Y.Z" \
     --format '{{json .Manifest.Digest}}'
 done
@@ -1403,9 +1404,9 @@ A release is just a tag and a set of immutable, digest-addressed images — noth
 To roll an *installed* release back, re-pin the previous digests and `helm rollback`/`helm upgrade`; the procedure and post-rollback validation are in [upgrade.md](upgrade.md).
 A bad tag can be superseded by a higher patch release; do not retag an existing `vX.Y.Z` (it would break the digest↔tag binding consumers rely on).
 
-## The worker images: `wrapper`, `worker`, and `build-runner`
+## The worker images: `wrapper`, `worker`, `build-runner` and `cache-runner`
 
-`publish.yml` builds and signs **three** worker-related images, all holding the same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
+`publish.yml` builds and signs **four** worker-related images, all holding the same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
 
 - **`ghcr.io/actions-gateway/wrapper`** — a ~2 MB `FROM scratch` image with just the wrapper binary.
   The GMC forwards it to every AGC (`WRAPPER_IMAGE`), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the **unmodified upstream `ghcr.io/actions/actions-runner`** (or any tenant `workerImage`).
@@ -1418,6 +1419,9 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
   What it adds is `docker compose`, which the base ships in no form, and a CLI and buildx GAG pins and bumps rather than whichever versions the runner release vendored.
   The buildx plugin is written to `/usr/local/lib/docker/cli-plugins`, the directory docker/cli searches first, so it replaces the base's rather than sitting behind it.
   Opted into per tenant via `workerImage`, exactly like `worker`, and pinned by digest from these notes.
+- **`ghcr.io/actions-gateway/cache-runner`**: `build-runner` with one string in `Runner.Worker.dll` renamed, so actions take `ACTIONS_RESULTS_URL` from the pod instead of from the job, which is what lets a job reach an in-cluster cache ([design](../plan/q215-worker-cache.md#why-the-hook-is-a-patched-runner)).
+  Its build fails unless that string occurs once in that assembly and nowhere else, so a runner bump that moves it cannot publish an unpatched image.
+  Opted into per tenant via `workerImage` like `build-runner`, and only together with `ACTIONS_RESULTS_URL` set on the runner container: without it, jobs lose both cache and artifacts.
 
 Only `wrapper` is digest-pinned in the chart (`wrapper.image.digest`, like `agc`/`proxy`), so a release must publish the `wrapper` image and pin its digest for the default install to run jobs.
 The `worker` image has no chart `image` block — it is the optional batteries-included image a tenant opts into via its per-RunnerGroup `workerImage`, not a chart-provisioned one — so nothing in the chart pins it.

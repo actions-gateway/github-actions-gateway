@@ -80,13 +80,9 @@ Here is where GAG loses, and to whom.
 | Install base | ARC 6,430 stars, ForgeMT 211, GAG 3 (2026-08-12) | see below |
 | Commercial support | ARC, and every managed service | none planned, by design |
 | `container:`/`services:` without privilege | ARC, via `containerMode: kubernetes` | [declined 2026-08-25](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes); Kata DinD is the answer, and needs nested virtualization |
-| In-cluster cache | GitLab Runner, managed services. **Not ARC** | [worker cache backend](roadmap.md) |
 | GHES tested on a real appliance | ARC | [flagged untested](features.md); needs an operator with one |
 
-Two footnotes on that table.
-
-**Cache is usually misread.** `actions/cache` works on GAG today; what is missing is a cache *inside* the cluster.
-ARC has none either, so this is not a reason to prefer ARC.
+One footnote on that table.
 
 **Install base has no engineering answer.** If being the first production deployment is unacceptable, that settles it.
 The only counterweight is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a [published retraction](design/appendix-a-capacity-slos.md) of the project's own best number once it proved unmeasurable.

@@ -1,6 +1,6 @@
 # In-Cluster Worker Cache — Q215
 
-> **Status: design settled and spiked 2026-10-27; the opt-in `cache-runner` image is built, nothing else is.** Revived on a tenant's request for an in-cluster cache.
+> **Status: design settled and spiked 2026-10-27; the opt-in `cache-runner` image is built and published with each release, and falcondev v10.0.0 closes the upload gap that phase 1 waited on.** Revived on a tenant's request for an in-cluster cache.
 > The primary case is the untrusted-PR tenant, where a shared cache is a vector for compromise by cache poisoning.
 > The same design serves a trusted tenant's `actions/cache` and a Docker build's layer cache, on every profile in [reference-architectures.md](../operations/reference-architectures.md).
 > The umbrella goal and its definition of done are in [caching-and-worker-storage.md](caching-and-worker-storage.md); this file is the design that goal calls for.
@@ -32,7 +32,7 @@ Every action receives `ACTIONS_RUNTIME_TOKEN`, a JWT GitHub signs.
 Its `ac` claim lists the job's cache scopes with a permission each, and its `repository_id` claim names the repository.
 The claim is undocumented: one decode in [actions/toolkit#1053](https://github.com/actions/toolkit/issues/1053) (2022) shows `{"Scope":"refs/heads/master","Permission":3}`.
 
-[falcondev-oss/github-actions-cache-server](https://github.com/falcondev-oss/github-actions-cache-server) (MIT) verifies that token against the JWKS at `token.actions.githubusercontent.com`, takes the scope set from `ac`, writes only into a scope whose permission is at least 2, and keys every entry by scope and repository (`lib/scope.ts`, `CreateCacheEntry.post.ts` at v9.8.0).
+[falcondev-oss/github-actions-cache-server](https://github.com/falcondev-oss/github-actions-cache-server) (MIT) verifies that token against the JWKS at `token.actions.githubusercontent.com`, takes the scope set from `ac`, writes only into a scope whose permission carries the write bit (2), and keys every entry by that scope and the token's repository (`cache_scope` and `WRITE_PERMISSION` in `src/scope.rs`, `save_identity` in `src/routes/cache.rs`, at v10.0.0).
 A client-supplied scope is never read.
 
 That makes the server apply GitHub's policy exactly, including whatever GitHub decides for an event an administrator marks untrusted, with no reimplementation in the gateway.
@@ -71,7 +71,7 @@ Earlier attempts, [actions/runner#3411](https://github.com/actions/runner/pull/3
 
 ## Design
 
-1. **A per-tenant cache server**, falcondev's, in the tenant namespace, with token validation on.
+1. **A per-tenant cache server**, falcondev's, in the tenant namespace, with token validation on, pinned to `10.0.0@sha256:05c4d9e7169f525f2b74d412c4a081aeec5446a017ec88bae668e63ebfb16aa9`.
    It serves `CacheService` from its own storage and forwards every other results call to `https://results-receiver.actions.githubusercontent.com`, so artifacts keep working.
 2. **Workers point at it** by running `cache-runner` with `ACTIONS_RESULTS_URL` set to the server's `svc.cluster.local` name, which the default `NO_PROXY` keeps off the egress proxy.
 3. **NetworkPolicy** admits worker pods to the server's port and nothing else to it.
@@ -83,19 +83,19 @@ The analogue of [q408 §3.5](q408-untrusted-pr-egress.md#35-the-mirror-role-is-a
 
 1. **Selectable by NetworkPolicy**, as the mirror is.
 2. **Scope from GitHub's signed token.** The three `CacheService` calls (reserve an entry, finalize it, look one up) are checked against the scopes and repository in a verified `ACTIONS_RUNTIME_TOKEN`; an unverifiable token gets nothing.
-   The byte transfers those calls hand out are not, as the residuals below say.
+   The uploads those calls hand out are authorized by a per-upload capability instead, and downloads by an unguessable ID, as the residuals below say.
 3. **Writes land only in a scope the token grants write.** GitHub grants a fork pull request `refs/pull/<n>/merge` alone, and the default-branch scope only to its listed triggers.
 4. **Tenant-local storage.** One server holds one tenant's entries, in the per-tenant mode; the shared modes give this up, as [tenancy modes](#tenancy-modes) says.
 
-Residuals, each read from falcondev v9.8.0 (`c866ae4`) and none measured:
+Residuals, each read from falcondev v10.0.0 (`c829dd6`), the first Rust release; the upload's is also measured:
 
 - **The ref boundary's own gap is GitHub's:** a workflow that runs fork code in a default-branch context can write that scope.
   This design reproduces the boundary and does not claim more.
-- **The blob transport takes no token.** `PUT /upload/<id>` and `PUT /devstoreaccount1/upload/<id>` read no `Authorization` header, so while an upload is open its ID is the only credential: 10 decimal digits from `customAlphabet` in `lib/helpers.ts`, about 33 bits.
-  An unknown ID gets `201` with nothing written, so a guess learns nothing from the reply.
-  `GET /download/<id>` is tokenless too, keyed by a random UUID.
-  GitHub hands out signed SAS URLs for the same step, so whether a job can plant parts into another job's open upload has to be measured or closed before [Q215](../queue/Q215.md) ships `deploy/gha-cache/`.
-- **The server holds every job's runtime token in flight.** It forwards each non-cache results call to GitHub with the caller's bearer token (`routes/[...path].ts`), so compromising the server exposes those tokens until they expire.
+- **Uploads need a per-upload capability, and downloads need none.** `CreateCacheEntry` appends 256 random bits to the upload URL as `?sig=`, and a `PUT` without the matching value gets `403` (`authorize_upload` in `src/storage.rs`, a constant-time compare against a stored SHA-256).
+  `GET /download/<id>` takes no token, keyed by a random UUID.
+  Measured on both releases in a local container with a fixture token: on v9.8.0 (2026-10-27) a `PUT` carrying no credential got `201` and its bytes were what the entry restored; on v10.0.0 (2026-11-01) a `PUT` without the `sig` or with a wrong one got `403`, and the issued URL got `201` and round-tripped.
+  The fix is falcondev #308, which closed #299 and shipped in v10.0.0.
+- **The server holds every job's runtime token in flight.** It forwards each non-cache results call to GitHub with the caller's bearer token (`forwardable` in `src/routes/passthrough.rs` drops only hop-by-hop headers), so compromising the server exposes those tokens until they expire.
 - **No job-lifetime credentials.** A token stays valid until its own expiry, as it does against GitHub.
 
 ### Tenancy modes
@@ -119,27 +119,28 @@ So, as §H.9 says of a shared proxy, the shared modes are for cooperating tenant
 #### Phase 1: per tenant (Q215)
 
 One stock falcondev server per tenant, in the tenant namespace.
-Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream.
-The steps are on [Q215](../queue/Q215.md), the tokenless upload first.
+Its budget and its metrics are the tenant's because the server is, so it needs nothing from upstream that v10.0.0 does not already ship.
+It shipped with Q215, validated on kind, under Kata and with a fork pull request ([the runs below](#the-v1000-re-run-2026-11-01)).
 
 #### Phase 2: sharing (Q1225)
 
 Phase 2 adds the shared and platform-operated modes once phase 1 ships.
-Of what a shared server needs, falcondev v9.8.0 has only storage isolation, read from source and not measured:
+Of what a shared server needs, falcondev v10.0.0 has only storage isolation, read from source and not measured:
 
-| A shared server needs | falcondev v9.8.0 |
+| A shared server needs | falcondev v10.0.0 |
 |---|---|
 | Tenants cannot restore each other's entries | Yes: every entry is keyed by the token's `repository_id`. |
-| A budget per tenant | No: `CACHE_MAX_SIZE_BYTES` is one budget for the whole server, evicted least-recently-read first (`enforceStorageBudget` in `lib/storage.ts`), so one tenant's saves evict another's entries. |
-| Metrics per tenant | No: `cache_requests_total`, `cache_uploads_total` and `cache_storage_bytes` carry no repository or owner label (`lib/metrics.ts`). |
-| Admitting only granted owners | No: it accepts a token from any repository GitHub signs, checking the signature and claims but not the owner (`getCacheScope` in `lib/scope.ts`), so the NetworkPolicy grant is the only caller boundary. |
+| A budget per tenant | No: `CACHE_MAX_SIZE_BYTES` is one budget for the whole server, evicted least-recently-read first (`enforce_storage_budget` in `src/storage.rs`), so one tenant's saves evict another's entries. |
+| Metrics per tenant | No: `cache_requests_total`, `cache_uploads_total` and `cache_storage_bytes` carry no repository or owner label (`src/metrics.rs`). |
+| Admitting only granted owners | No: it accepts a token from any repository GitHub signs, checking the signature and claims but not the owner (`cache_scope` in `src/scope.rs`), so the NetworkPolicy grant is the only caller boundary. |
 
 The [residuals](#the-write-path-is-a-contract) also span every tenant a shared server admits.
 None of the three gaps is requested upstream: the titles of falcondev's last 200 issues and pull requests, searched 2026-10-27, hold two metrics requests (#72, #297) and one on storage rotation (#219), none of them per tenant.
 
 The work, in order:
 
-1. **Feature requests upstream** for an owner allowlist, a budget per owner, and an owner label on the metrics, offering the pull requests.
+1. **Feature requests upstream** for an owner allowlist, a budget per owner, and an owner label on the metrics, one issue each.
+   Since v9.10.0 falcondev takes no outside pull requests (its `AGENTS.md`: "External contributions are disabled"), so the issues are the whole upstream ask.
    An owner label rather than a repository one keeps the series count to the number of tenants.
 2. **A CRD shaped like `EgressProxy`** that grants a provider's server to other namespaces, as [tenancy modes](#tenancy-modes) describes, configuring each grant's owner on the server once upstream supports it.
 3. **If upstream declines**, the CRD runs one stock server per granted tenant instead, in the provider namespace and on the provider's bill: per-tenant budget, metrics and admission at the cost of a pod and a volume per grant, the cache's counterpart of `EgressProxy`'s `PerConsumerPort`.
@@ -165,6 +166,42 @@ The toolkit prints that only when the server answers a lookup with no match; an 
 The server's `cache_requests_total` read `hit` 1 and `miss` 2 after both runs: the hit is S1's restore and one miss is this lookup; the second miss is unattributed.
 
 **Not measured.** A fork pull request's scope, which needs a fork; BuildKit's `type=gha` cache, which needs a Docker daemon in the job and rides the same URL by source read only; and the tight-egress profile, since kindnet does not enforce egress negatives.
+
+## The v10.0.0 re-run (2026-11-01)
+
+The same kind setup, fresh, with this branch's gateway images and `cache-runner`, falcondev `10.0.0` by digest, and the server deployed from `deploy/gha-cache/` rather than the spike's hand-written manifests: non-root, read-only root filesystem, and the base's two NetworkPolicies.
+
+- **Save and restore: hold.** [Run 41361268570](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361268570) read `ACTIONS_RESULTS_URL` as the in-cluster server, saved key `q215-41361268570-1`, restored it in a second job on another worker pod, and round-tripped the artifact through the server's forward, `cmp` matching the two.
+  The server counted `cache_uploads_total` 1, a hit of 1, a miss of 0 and 278 bytes stored, and GitHub's cache held no `q215-` key while the same listing returned others.
+- **Sibling branch: holds.** [Run 41361503439](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41361503439) asked for the same key from another branch and got `Cache not found`, and the server's miss count went from 0 to 1, so the miss is the server's answer, not a lost connection.
+- **The ingress policy: holds for the API server.** Reading `/metrics` through the API server's service proxy timed out, because the server admits only workload pods; the readings above came through `kubectl port-forward`, which enters through the kubelet.
+
+## The Kata run (2026-11-01)
+
+The dogfood GKE cluster's e2e tenant (`gag-dogfood-e2e`), brought up by `e2e-start.sh` with the Kata overlay, so its workers carry only the GMC's direct-mode default-deny and the mirror egress policy.
+A temporary namespaced `RunnerTemplate` ran `cache-runner` (this branch at `0494e0c`) under `runtimeClassName: kata` on the e2e pool, and the API server admitted it; the server came from a copy of `deploy/gha-cache/example/` in that namespace.
+The worker reported kernel `6.18.35`, the Kata guest's rather than the node's.
+
+- **Save, restore and artifacts: hold.** [Run 41372318482](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372318482) saved `q215-kata-41372318482`, restored it in a second job on another worker pod, and round-tripped an artifact.
+  The server counted 1 upload, a hit of 1, a miss of 0 and 279 bytes stored, and GitHub's cache held no `q215-kata` key while the same listing returned others.
+- **Sibling branch: holds.** [Run 41372555845](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41372555845) got `Cache not found` for the same key, and the server's miss count went from 0 to 1.
+- **The server and GitHub answer; the open internet does not.** From the Kata worker, the server's `/health` and `api.github.com` returned 200, and `example.com` returned nothing within 20 seconds.
+- **Azure blob storage answers.** `productionresultssa0` and `productionresultssa19.blob.core.windows.net` both returned HTTP 400 from the worker, in [run 41371432425](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41371432425), which gated on them being blocked.
+  Their addresses fall in `20.209.226.0/23` and `20.209.112.0/23`, two of the 8,419 ranges the GMC's workload policy admitted on 443 that evening; the GMC merges the `api`, `actions` and `web` keys of GitHub's `/meta` (`cmd/gmc/internal/controller/ipranges.go`), and both ranges come from `actions`.
+  That is by design: the runner itself uploads to blob storage, and [network-architecture.md](../design/network-architecture.md) lists `*.blob.core.windows.net` among the GitHub hostnames for every egress backend.
+  So a worker under this profile can reach GitHub's own cache storage, and the premise that it cannot does not hold.
+
+## The fork pull request run (2026-11-01)
+
+The kind setup again, fresh at `6513cf2`, with a public fork (`karlkfi/gag-q215-fork`) opening draft PR #2222 against a spike base branch carrying one workflow.
+Each job printed its runtime token's `ac` claim, the cache scopes it may read (1) or write (3), and looked up two fixed keys without downloading them.
+
+- **A fork pull request writes its own scope and reads its base's.** [Run 41375170369](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375170369), from `karlkfi/gag-q215-fork` with `fork=true`, carried `refs/pull/2222/merge` at 3 and the base branch and `main` at 1.
+  It found the base branch's entry and saved its own; falcondev accepted the save.
+- **The base branch cannot restore it.** [Run 41375417452](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375417452), a second push to the base, got `Cache not found` for the pull request's key while finding its own.
+- **The entry is there, under the pull request's scope.** [Run 41375766235](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375766235), the pull request's next push, found it.
+- **The base branch's first push** ([run 41375018321](https://github.com/actions-gateway/github-actions-gateway/actions/runs/41375018321)) saved the base entry the pull request read, with write on its own branch and read on `main`.
+- The server counted 2 uploads, 4 hits and 4 misses across the four runs, and GitHub's cache held no `q215-fork` key.
 
 ## Open decisions
 
