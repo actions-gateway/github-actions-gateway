@@ -65,6 +65,10 @@ There is no separate proxy or worker namespace to reconcile.
 `gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerGroup/RunnerSet name.
 (GAG also sets project-specific `actions-gateway/runner-group` and `actions-gateway.com/runner-set` labels for `kubectl` selection — see [observability.md](observability-metrics.md#drilling-down-to-individual-runner-pods) — but for cost queries prefer the recommended `instance` label.)
 
+**Re-run compute by cause.** A scale-set worker built for a run GAG has re-run carries the annotation `actions-gateway.com/rerun-cause`, valued with the cause of GAG's latest re-run of that run: `eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished` or `oom` (Q1245).
+Its values are few, so aggregating worker cost by it is safe where your cost tool reads pod annotations; a worker with no such annotation is not part of a GAG re-run.
+The AGC records re-runs by run and not by attempt, so a worker the original attempt builds after GAG has reserved the run's re-run carries it too: a long matrix still scheduling jobs when one of them is disrupted over-counts by those jobs.
+
 > **Cardinality caution.** Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods *also* carry per-job annotations like `actions-gateway.com/run-id`).
 > Aggregating allocation by a unique-per-job key explodes the result set the same way it would explode Prometheus — see the [label cardinality warning](observability-metrics.md#label-cardinality-warning).
 

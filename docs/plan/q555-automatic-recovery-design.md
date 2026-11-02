@@ -249,7 +249,8 @@ Notes on the table:
 - **The floor is its own map**, `memoryFloors`, keyed by run and job, not a field on the failure entry: the failure record is written on `JobCompleted`, which can arrive after the re-run's assignment needs the floor, and is deleted by the pairing a later attempt's completion makes.
   A floor lives its 7 days instead, so the second kill it finds is `same_class_again`.
 - **The breaker cools down rather than half-opens**: 30 minutes after it opens it closes with an empty window, since nothing observes a single trial re-run's outcome inside that time.
-- **No `auto_retry_paused` gauge and no misclassification alert**: the pause is a `breaker_open` withhold and one `AutoRetryPaused` Event, and both pieces are [Q1245](../queue/Q1245.md), as is the `rerun-cause` pod annotation.
+- **No `auto_retry_paused` gauge and no misclassification alert at first**: the pause was a `breaker_open` withhold and one `AutoRetryPaused` Event.
+  Q1245 added both and the `rerun-cause` pod annotation since; the alert counts at least 5 re-runs before it judges a share, and the annotation is set from a ledger that records re-runs by run, not attempt.
 - **The profile is read off the killed pod**: its `actions-gateway.com/sizing-profile` annotation says the profile derived its limits when it was built, and the set's current profile supplies the headroom and ceiling.
 
 ### Where a class fires
@@ -569,5 +570,5 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; `already_rerun`, `run_succeeded` and `worker_unstartable` are not built, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
-5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, the alert and the gauge are Q1245, and job-granular re-run still waits on M6.
+5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run still waits on M6.
 6. Q1178 (built); Q1184 after its review.

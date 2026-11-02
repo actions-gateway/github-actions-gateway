@@ -129,6 +129,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 		return closedChan()
 	}
 	breaker := classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}
+	p.closeExpiredBreakers()
 	if p.classBreakers.open(breaker, p.nowFn()) {
 		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonBreakerOpen, fmt.Sprintf("worker pod for run %s had its runner killed at its memory limit, but out-of-memory retries on this set are paused: more than %d runs were re-run for memory within %s, which points at a shared cause rather than one job's growth. Retries resume %s after the pause began; re-run it by hand if this job needs it",
 			runID, classBreakerRuns, classBreakerWindow, classBreakerCooldown))
@@ -154,6 +155,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 	// futile or over-budget one is reported by the recovery path instead.
 	onReserved := func() {
 		if p.classBreakers.record(breaker, runID, p.nowFn()) {
+			p.setAutoRetryPaused(breaker, 1)
 			log.Warn("out-of-memory retries paused on this set: too many runs killed in a short window",
 				"runs", classBreakerRuns, "window", classBreakerWindow, "pause", classBreakerCooldown)
 			target.RecordEvent(corev1.EventTypeWarning, "AutoRetryPaused", "RetryEvictedJob",
@@ -250,6 +252,30 @@ func (p *Provisioner) applyMemoryFloor(ctx context.Context, target Target, spec 
 	return spec
 }
 
+// applyRerunCause returns spec with its template carrying AnnotationRerunCause where
+// GAG has re-run job's run, and without a tenant-set one either way; it never writes
+// through spec. The lookup is the failure index applyMemoryFloor has just loaded, so it
+// costs no API call.
+func (p *Provisioner) applyRerunCause(target Target, spec *ResolvedSpec, job ScaleSetJob) *ResolvedSpec {
+	cause := ""
+	if job.RunID != "" {
+		cause = p.failureIndex.rerunCause(target.Key(), job.RunID)
+	}
+	if _, set := spec.PodTemplate.Annotations[AnnotationRerunCause]; !set && cause == "" {
+		return spec
+	}
+	stamped := *spec
+	stamped.PodTemplate = *spec.PodTemplate.DeepCopy()
+	delete(stamped.PodTemplate.Annotations, AnnotationRerunCause)
+	if cause != "" {
+		if stamped.PodTemplate.Annotations == nil {
+			stamped.PodTemplate.Annotations = map[string]string{}
+		}
+		stamped.PodTemplate.Annotations[AnnotationRerunCause] = cause
+	}
+	return &stamped
+}
+
 // The stampede breaker. A cause firing for many runs at once is a shared outage, not
 // many jobs outgrowing their limits, and re-running every one doubles the load on
 // whatever failed. One breaker per set and class cause, in memory: a restart closes it,
@@ -292,6 +318,38 @@ func (c *classBreakers) open(key classBreakerKey, now time.Time) bool {
 	}
 	b.openedAt, b.fires = time.Time{}, nil
 	return false
+}
+
+// closeExpired closes every breaker whose cooldown has passed at now, returning their
+// keys, so the paused gauge drops when the pause ends rather than at the next fire.
+func (c *classBreakers) closeExpired(now time.Time) []classBreakerKey {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var closed []classBreakerKey
+	for key, b := range c.byKey {
+		if !b.openedAt.IsZero() && now.Sub(b.openedAt) >= classBreakerCooldown {
+			b.openedAt, b.fires = time.Time{}, nil
+			closed = append(closed, key)
+		}
+	}
+	return closed
+}
+
+// closeExpiredBreakers closes the breakers whose pause has ended and zeroes their
+// paused gauge. The pending sweep's tick calls it, and every class fire before it reads
+// its breaker.
+func (p *Provisioner) closeExpiredBreakers() {
+	for _, key := range p.classBreakers.closeExpired(p.nowFn()) {
+		p.setAutoRetryPaused(key, 0)
+	}
+}
+
+// setAutoRetryPaused sets key's actions_gateway_auto_retry_paused series.
+func (p *Provisioner) setAutoRetryPaused(key classBreakerKey, v float64) {
+	if p.Metrics == nil || p.Metrics.AutoRetryPaused == nil {
+		return
+	}
+	p.Metrics.AutoRetryPaused.WithLabelValues(key.set.Namespace, key.set.Name, key.cause).Set(v)
 }
 
 // record counts a fire for runID, reporting whether it opened the breaker: more than

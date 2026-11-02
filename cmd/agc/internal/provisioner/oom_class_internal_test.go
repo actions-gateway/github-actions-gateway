@@ -224,7 +224,8 @@ func TestRecoverOOMKilled_SecondKillIsSameClassAgain(t *testing.T) {
 }
 
 // TestRecoverOOMKilled_BreakerPausesAStampede: past classBreakerRuns distinct runs in
-// the window, the class stops re-running, and says so once.
+// the window, the class stops re-running, says so once, and gauges the pause until its
+// cooldown ends, whether or not another kill comes.
 func TestRecoverOOMKilled_BreakerPausesAStampede(t *testing.T) {
 	ctx := context.Background()
 	var pods []*corev1.Pod
@@ -234,6 +235,9 @@ func TestRecoverOOMKilled_BreakerPausesAStampede(t *testing.T) {
 	}
 	p, target, m, rerunCount, _ := recoveryFixture(t, pods...)
 	target.spec.MemoryRetry = throughputRetry()
+	clock := newTestClock()
+	p.now = clock.now
+	paused := m.AutoRetryPaused.WithLabelValues("team-a", "gpu", recoveryCauseOOM)
 
 	for _, pod := range pods {
 		done, err := p.RecoverDisruptedScaleSetWorker(ctx, target, pod.DeepCopy())
@@ -246,13 +250,21 @@ func TestRecoverOOMKilled_BreakerPausesAStampede(t *testing.T) {
 		"the fire that opens the breaker still runs; the one after it is withheld")
 	assert.Equal(t, float64(1), testutil.ToFloat64(
 		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunWithheldReasonBreakerOpen)))
-	paused := 0
+	events := 0
 	for _, e := range target.events {
 		if e == "AutoRetryPaused" {
-			paused++
+			events++
 		}
 	}
-	assert.Equal(t, 1, paused)
+	assert.Equal(t, 1, events)
+	assert.Equal(t, float64(1), testutil.ToFloat64(paused), "the pause reads as a state while the breaker is open")
+
+	clock.advance(classBreakerCooldown - time.Second)
+	p.closeExpiredBreakers()
+	assert.Equal(t, float64(1), testutil.ToFloat64(paused))
+	clock.advance(time.Second)
+	p.closeExpiredBreakers()
+	assert.Zero(t, testutil.ToFloat64(paused), "the sweep's tick drops it when the cooldown ends")
 }
 
 func TestClassBreakers(t *testing.T) {
@@ -282,6 +294,15 @@ func TestClassBreakers(t *testing.T) {
 	assert.False(t, c.record(key, "after", later.Add(classBreakerCooldown)), "and its window starts empty")
 	assert.False(t, c.open(key, later.Add(classBreakerCooldown)))
 	assert.False(t, c.open(classBreakerKey{cause: "other"}, later), "breakers are per cause")
+
+	reopened := later.Add(time.Hour)
+	for i := 0; i <= classBreakerRuns; i++ {
+		c.record(key, fmt.Sprint("again-", i), reopened)
+	}
+	assert.Empty(t, c.closeExpired(reopened.Add(classBreakerCooldown-time.Second)))
+	assert.Equal(t, []classBreakerKey{key}, c.closeExpired(reopened.Add(classBreakerCooldown)))
+	assert.False(t, c.open(key, reopened.Add(classBreakerCooldown)))
+	assert.Empty(t, c.closeExpired(reopened.Add(classBreakerCooldown)), "a closed breaker is reported once")
 }
 
 // TestProvisionScaleSetWorker_AppliesTheMemoryFloor: the job's next attempt is built at
@@ -361,4 +382,38 @@ func TestApplyMemoryFloor_NeverLowersALimit(t *testing.T) {
 	got := p.applyMemoryFloor(ctx, target, spec("2Gi"), job, log)
 	assert.Equal(t, "3Gi", got.PodTemplate.Spec.Containers[0].Resources.Limits.Memory().String())
 	assert.Equal(t, "1Gi", got.PodTemplate.Spec.Containers[0].Resources.Requests.Memory().String())
+}
+
+// TestProvisionScaleSetWorker_StampsTheRerunCause: a worker built for a run GAG has
+// re-run carries the cause of that re-run, one for any other run carries none, and a
+// tenant cannot set the annotation through its template.
+func TestProvisionScaleSetWorker_StampsTheRerunCause(t *testing.T) {
+	ctx := context.Background()
+	writer, target, _, _, _ := recoveryFixture(t)
+	_, _, err := writer.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "w1", job: "build", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
+	require.NoError(t, err)
+	_, _, err = writer.reserveScaleSetRerun(ctx, target, "4242", rerunDisruption{key: "w2", job: "build", failedAttempt: 2}, recoveryCauseOOM, 2, nil)
+	require.NoError(t, err)
+
+	target.spec.PodTemplate = corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{AnnotationRerunCause: "forged"}},
+		Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: runnerContainer}}},
+	}
+	restarted := NewProvisioner(writer.Client, nil, nil)
+	cause := func(jobID, runID string) (string, bool) {
+		require.NoError(t, restarted.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{
+			JobID: jobID, JITConfig: "eyJ4IjoxfQ==", Owner: "myorg", Repository: "myrepo", RunID: runID, JobName: "build",
+		}))
+		var pod corev1.Pod
+		require.NoError(t, restarted.Client.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: scaleSetPodName("gpu", jobID)}, &pod))
+		v, ok := pod.Annotations[AnnotationRerunCause]
+		return v, ok
+	}
+
+	got, ok := cause("job-uuid-2", "4242")
+	assert.True(t, ok)
+	assert.Equal(t, recoveryCauseOOM, got, "the latest re-run's cause")
+	_, ok = cause("job-uuid-3", "5000")
+	assert.False(t, ok, "a run GAG never re-ran carries no cause, and the tenant's value is dropped")
+	assert.Equal(t, "forged", target.spec.PodTemplate.Annotations[AnnotationRerunCause], "the resolved spec must not be written through")
 }

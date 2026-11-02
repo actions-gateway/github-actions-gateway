@@ -287,6 +287,9 @@ func (s *AbandonedRerunSweeper) Start(ctx context.Context) error {
 			if n := len(s.p.sweepPendingReruns(ctx)); n > 0 {
 				log.Info("released parked re-runs whose run concluded", "count", n)
 			}
+			// And ends a retry class's pause on time, so its paused gauge drops when the
+			// cooldown passes rather than at the class's next fire (Q1245).
+			s.p.closeExpiredBreakers()
 		}
 	}
 }

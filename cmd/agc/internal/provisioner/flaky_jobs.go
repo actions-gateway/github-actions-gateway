@@ -266,11 +266,13 @@ func (w *workerSnapshots) take(key string) *workerSnapshot {
 // or write of it, so a succeeded completion, the common case, costs no API call when
 // its job has no record. A record written by another replica since is missed, and the
 // pairing goes uncounted. floorsBySet is each set's memoryFloors at the same read, for
-// the out-of-memory class's provisioning lookup (oom_class.go).
+// the out-of-memory class's provisioning lookup (oom_class.go), and causesBySet the
+// cause of GAG's latest re-run of each run, for the rerun-cause annotation.
 type failureIndex struct {
 	mu          sync.Mutex
 	bySet       map[types.NamespacedName]map[string]bool
 	floorsBySet map[types.NamespacedName]map[string]memoryFloor
+	causesBySet map[types.NamespacedName]map[string]string
 }
 
 func (x *failureIndex) note(set types.NamespacedName, l *rerunLedger) {
@@ -284,14 +286,36 @@ func (x *failureIndex) note(set types.NamespacedName, l *rerunLedger) {
 			floors[k] = *m
 		}
 	}
+	causes := map[string]string{}
+	for runID, r := range l.Reruns {
+		if r == nil || r.Count == 0 {
+			continue
+		}
+		latest := -1
+		for k, a := range r.Attempts {
+			if n, err := strconv.Atoi(k); err == nil && a != nil && a.Cause != "" && n > latest {
+				latest, causes[runID] = n, a.Cause
+			}
+		}
+	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	if x.bySet == nil {
 		x.bySet = map[types.NamespacedName]map[string]bool{}
 		x.floorsBySet = map[types.NamespacedName]map[string]memoryFloor{}
+		x.causesBySet = map[types.NamespacedName]map[string]string{}
 	}
 	x.bySet[set] = keys
 	x.floorsBySet[set] = floors
+	x.causesBySet[set] = causes
+}
+
+// rerunCause returns the cause of GAG's latest re-run of runID on set, "" where this
+// process read none.
+func (x *failureIndex) rerunCause(set types.NamespacedName, runID string) string {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	return x.causesBySet[set][runID]
 }
 
 // floor returns set's memory floor for key, nil where it holds none, and whether this

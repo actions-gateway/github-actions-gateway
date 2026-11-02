@@ -822,6 +822,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 		return fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
 	}
 	spec = p.applyMemoryFloor(ctx, target, spec, job, log)
+	spec = p.applyRerunCause(target, spec, job)
 
 	secretName := scaleSetSecretName(jobID)
 	podName := scaleSetPodName(key.Name, jobID)

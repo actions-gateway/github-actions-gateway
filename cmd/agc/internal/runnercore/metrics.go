@@ -109,6 +109,10 @@ type Metrics struct {
 	// It is counted so a re-run that did not happen is visible rather than
 	// indistinguishable from a recovery that never armed.
 	EvictionRerunWithheld *prometheus.CounterVec
+	// AutoRetryPaused reads 1 while a retry class's stampede breaker is open on a set,
+	// and 0 once it closes (Q1245): the pause as a state, where breaker_open withholds
+	// are a rate. Scale-set only, per process.
+	AutoRetryPaused *prometheus.GaugeVec
 	// EvictionRerunOutcomes counts the later attempt of each job GAG re-ran, by the
 	// cause it re-ran for, the run's triggering event, and result (succeeded, failed):
 	// failed over the total is a cause's failure rate (Q555). It keeps this family's
@@ -290,6 +294,11 @@ func NewMetrics() *Metrics {
 			Help: "Disruption recoveries that deliberately did not ask GitHub to re-run, by acquisition tier (classic, scaleset), cause (eviction, preemption, node_shutdown, deletion, abandoned, vanished, oom; classic only ever deletion and eviction), and reason (run_cancelled: the run concluded cancelled by someone other than GAG, so a re-run would undo that cancel — Q811 on classic's deletion arm, every cause on scaleset, Q1181, no operator action needed; own_limit: cause eviction, the kubelet evicted the worker for exceeding its own ephemeral-storage or emptyDir limit, which a re-run repeats — Q1177, with no slot spent, and the fix is a higher limit, or with cause oom, scaleset only, Q1183, a runner killed at a memory limit no sizing profile can raise; same_class_again, breaker_open: cause oom, scaleset only, Q1183, the job was killed again after a retry raised its limit, or more than 10 runs were re-run for it within 10 minutes; attempt_limit, run_too_old, superseded: scaleset only, Q1181, decided before the budget is reserved so no slot is spent — the run is past GitHub's 50 re-runs, older than its 30-day re-run window, or a newer commit's run of the same workflow, event and branch has started).",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
 
+		AutoRetryPaused: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_auto_retry_paused",
+			Help: "1 while a retry class's stampede breaker is open on a set, 0 once it closes, by cause (oom). The breaker opens when more than 10 runs were re-run for the cause within 10 minutes, pauses that cause's retries for 30, and is held per AGC process (Q1183, Q1245). Scale-set only.",
+		}, []string{"namespace", "runner_group", "cause"}),
+
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_abandoned_run_force_cancels_total",
 			Help: "REST force-cancels of the workflow run behind a worker pod removed before it ran, so the run and its job conclude cancelled in about a second instead of at GitHub's ~15-minute unstarted-job timeout (Q683). By acquisition tier (classic, scaleset) and outcome (cancelled, identity_unknown, error); on identity_unknown or error the unstarted-job timeout remains the honest backstop.",
@@ -375,6 +384,7 @@ func NewMetrics() *Metrics {
 		m.EvictionRetriesExhausted,
 		m.EvictionRerunFailures,
 		m.EvictionRerunWithheld,
+		m.AutoRetryPaused,
 		m.AbandonedRunForceCancels,
 		m.AbandonedRunRerunWaits,
 		m.EvictionRecoveryIdentityUnknown,

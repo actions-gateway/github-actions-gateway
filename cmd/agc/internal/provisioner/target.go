@@ -91,6 +91,16 @@ const AnnotationSurplusForJob = "actions-gateway.com/surplus-for-job"
 // security enforcement.
 const AnnotationSizingProfile = "actions-gateway.com/sizing-profile"
 
+// AnnotationRerunCause is stamped on a scale-set worker pod of a run GAG has re-run,
+// with the cause of GAG's latest re-run of it (eviction, oom, ...) as its value, so cost
+// tooling can split re-run compute by cause (Q1245). It is read off the failure ledger,
+// which records re-runs by run and not by attempt, so a pod the original attempt builds
+// after GAG reserved its re-run carries it too.
+//
+// Controller-set and informational: never set it by hand and never use it for
+// security enforcement.
+const AnnotationRerunCause = "actions-gateway.com/rerun-cause"
+
 // LabelAcquisitionProtocol records which acquisition tier provisioned a worker pod.
 // Only the scale-set tier stamps it (AcquisitionProtocolScaleSet); a classic worker
 // carries no such label, so presence is the tier test.

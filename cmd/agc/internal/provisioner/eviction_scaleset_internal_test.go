@@ -54,6 +54,9 @@ func evictionRecoveryMetrics() *runnercore.Metrics {
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1177_eviction_rerun_withheld_total",
 		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		AutoRetryPaused: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "t_q1245_auto_retry_paused",
+		}, []string{"namespace", "runner_group", "cause"}),
 	}
 }
 

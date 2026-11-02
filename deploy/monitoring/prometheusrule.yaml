@@ -104,6 +104,24 @@ spec:
             summary: "Eviction retry budget exhausted for {{ $labels.runner_group }} in {{ $labels.namespace }}"
             description: "A job's eviction retry budget has been exhausted. Manual re-run required."
 
+        # Ticket: a retry cause's re-runs mostly fail, so the cause is misclassified (Q1245)
+        - alert: ActionsGatewayRetryCauseMisclassified
+          expr: |
+            (
+              sum by (namespace, runner_group, cause) (increase(actions_gateway_eviction_rerun_outcomes_total{result="failed"}[7d]))
+                /
+              sum by (namespace, runner_group, cause) (increase(actions_gateway_eviction_rerun_outcomes_total[7d]))
+            ) > 0.5
+              and
+            sum by (namespace, runner_group, cause) (increase(actions_gateway_eviction_rerun_outcomes_total[7d])) >= 5
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayretrycausemisclassified"
+            summary: "Most {{ $labels.cause }} re-runs fail for {{ $labels.runner_group }} in {{ $labels.namespace }}"
+            description: "More than half of GAG's {{ $labels.cause }} re-runs on this set failed again over 7 days, so re-running is not fixing what that cause names. Investigate the jobs before trusting its automatic retries."
+
         # Ticket: quota retry budget exhausted — manual re-run required
         - alert: ActionsGatewayQuotaRetriesExhausted
           expr: |
