@@ -115,8 +115,9 @@ func TestBuildNetworkPolicy_DeniesCloudMetadataServer(t *testing.T) {
 	require.NoError(t, err)
 	githubCIDRs := []net.IPNet{*githubCIDR}
 
-	// Every policy that selects a worker pod, in both egress modes, because direct mode adds GitHub ipBlocks and is the shape
-	// most likely to grow an over-broad peer.
+	// Every policy that selects a worker pod, in both egress modes, because direct
+	// mode adds GitHub ipBlocks and is the shape most likely to grow an over-broad
+	// peer.
 	for _, np := range []*networkingv1.NetworkPolicy{
 		buildWorkloadNetworkPolicyV2(v2AG, githubCIDRs, false, nil),
 		buildWorkloadNetworkPolicyV2(v2Direct, githubCIDRs, true, nil),

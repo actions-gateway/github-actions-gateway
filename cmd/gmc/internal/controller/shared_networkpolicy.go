@@ -229,8 +229,9 @@ func agcAPIServerEgressRule(apiServerCIDRs []string) networkingv1.NetworkPolicyE
 	return rule
 }
 
-// buildAGCNetworkPolicyFrom assembles the AGC egress policy: additive to the workload policy, it permits DNS +
-// Kubernetes API server egress and admits monitoring-namespace metrics scrapes.
+// buildAGCNetworkPolicyFrom assembles the AGC egress policy: additive to the workload
+// policy, it permits DNS + Kubernetes API server egress and admits
+// monitoring-namespace metrics scrapes.
 // The callers differ in the metadata labels and, under v2 multi-gateway, in the
 // policy name and the `app` selector value (both per-gateway, so each AGC NP
 // selects exactly its own gateway's AGC pods).

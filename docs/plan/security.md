@@ -104,10 +104,10 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 ### C-1. RunnerGroup `PodTemplate` is not validated; tenant can ship privileged worker pods
 
 - **Status (2026-05-23): Done.** Closed by W2.
-  `SecurityProfile` enum on `ActionsGatewaySpec` (default `baseline`); `applyNamespacePSA` in [actionsgateway_controller.go:509](../../cmd/gmc/internal/controller/actionsgateway_controller.go) stamps `pod-security.kubernetes.io/{enforce,warn,audit}` labels on the tenant namespace at every reconcile.
+  `SecurityProfile` enum on `ActionsGatewaySpec` (default `baseline`); `applyNamespacePSA` in actionsgateway_controller.go:509 stamps `pod-security.kubernetes.io/{enforce,warn,audit}` labels on the tenant namespace at every reconcile.
   The in-tree PodSecurity admission plugin rejects any worker pod that violates the profile, including pods built by the AGC from a tenant's PodTemplate.
   A CEL `XValidation` on `RunnerGroupSpec.PodTemplate` also rejects `privileged: true` at `kubectl apply` time for the kinder failure path (per D-7).
-- **Location:** [cmd/agc/api/v1alpha1/runnergroup_types.go:30-60](../../cmd/agc/api/v1alpha1/runnergroup_types.go), [cmd/agc/internal/provisioner/provisioner.go:349-439](../../cmd/agc/internal/provisioner/provisioner.go), [cmd/gmc/internal/controller/actionsgateway_controller.go](../../cmd/gmc/internal/controller/actionsgateway_controller.go)
+- **Location:** [cmd/agc/api/v1alpha1/runnergroup_types.go:30-60](../../cmd/agc/api/v1alpha1/runnergroup_types.go), [cmd/agc/internal/provisioner/provisioner.go:349-439](../../cmd/agc/internal/provisioner/provisioner.go), cmd/gmc/internal/controller/actionsgateway_controller.go
 - **Category:** OWASP A04:2025 — Insecure Design / OWASP A01:2025 — Broken Access Control
 - **Why Critical:** Container breakout via privileged PodSpec fields is a direct path from "tenant author" to "root on the node".
   On any cluster that co-locates tenant workers on shared nodes (the common case for GPU capacity), `privileged: true` is cross-tenant impact.
@@ -160,10 +160,10 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 ### H-1. GitHub App private key injected into AGC pod as an environment variable
 
 - **Status (2026-05-23): Done.** Closed by W3.
-  `buildAGCDeployment` mounts the `gitHubAppRef` Secret as a volume at `/etc/actions-gateway/github-app/` with mode `0o400` ([builder.go:33,450,481](../../cmd/gmc/internal/controller/builder.go)).
+  `buildAGCDeployment` mounts the `gitHubAppRef` Secret as a volume at `/etc/actions-gateway/github-app/` with mode `0o400` (builder.go:33,450,481).
   `cmd/agc/main.go:91-111` reads `appId`, `installationId`, and `privateKey` from files.
   The three `GITHUB_APP_*` env-var entries are gone; `kubectl describe pod` no longer shows the key bytes.
-- **Location:** [cmd/gmc/internal/controller/builder.go:291-321](../../cmd/gmc/internal/controller/builder.go), [cmd/agc/main.go:42-55](../../cmd/agc/main.go)
+- **Location:** cmd/gmc/internal/controller/builder.go:291-321, [cmd/agc/main.go:42-55](../../cmd/agc/main.go)
 - **Category:** OWASP A02:2025 — Cryptographic Failures / A05:2025 — Misconfiguration
 - **Why High:** The control documented in the design *does not exist* in the code, and the actual control (env-var Secret reference) is weaker.
   Anyone with `get pod` in the tenant namespace — or any sidecar, debug exec, or crash dump that captures `os.Environ()` — sees the private key.
@@ -192,7 +192,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### H-2. AGC namespaced Role grants broad Secret read/list/watch + create/delete
 
-- **Location:** [cmd/gmc/internal/controller/builder.go:81-92](../../cmd/gmc/internal/controller/builder.go)
+- **Location:** cmd/gmc/internal/controller/builder.go:81-92
 - **Category:** OWASP A01:2025 — Broken Access Control
 - **Why High:** A compromised AGC has more access than the design implies.
   Not cross-tenant (it's still namespace-scoped), but the AGC can enumerate every Secret the tenant owns — including user-managed ones unrelated to GitHub Actions.
@@ -251,7 +251,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   The naive implementation — `Watches(&corev1.Secret{}, ...)` — establishes a full Secret informer, buffering all Secret `.data` (GitHub App private keys) in the controller's in-process cache indefinitely.
   This was briefly shipped and then reverted when the security intent was confirmed.
 - **Implementation:**
-  1. **`WatchesMetadata(&corev1.Secret{}, ...)`** in [actionsgateway_controller.go](../../cmd/gmc/internal/controller/actionsgateway_controller.go) — registers a metadata-only informer.
+  1. **`WatchesMetadata(&corev1.Secret{}, ...)`** in actionsgateway_controller.go — registers a metadata-only informer.
      The cache holds only `ObjectMeta` (name, namespace, resourceVersion, deletionTimestamp); `.data` is never buffered.
      The controller gets event-driven reconcilation on Secret create/delete.
      The GMC ClusterRole retains `list`/`watch` on Secrets (required for the metadata informer).
@@ -272,8 +272,8 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 - **Status (2026-05-23): Done.** Closed by W1.
   The single empty-selector NetworkPolicy was replaced with three `podSelector`-scoped policies: `buildProxyNetworkPolicy` (proxy pods → DNS + GitHub CIDRs:443), `buildWorkloadNetworkPolicy` (AGC + worker pods → DNS + proxy ClusterIP:proxyPort only), and `buildAGCNetworkPolicy` (AGC additive: also reaches k8s API on 443).
-  Workers are now selected only by the workload policy and cannot egress directly to GitHub ([builder.go:112-223](../../cmd/gmc/internal/controller/builder.go)).
-- **Location:** [cmd/gmc/internal/controller/builder.go:103-151](../../cmd/gmc/internal/controller/builder.go)
+  Workers are now selected only by the workload policy and cannot egress directly to GitHub (builder.go:112-223).
+- **Location:** cmd/gmc/internal/controller/builder.go:103-151
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Why Medium:** Listed here as a security finding because the gap weakens GitHub-side incident containment (a flag against a node IP affects every tenant whose workers share that node), but the underlying issue is an implementation deviation from a documented design choice, not a privilege boundary failure.
   The design choice (route worker traffic through the proxy) and its rationale, tradeoffs, and acceptance criteria are tracked in [docs/plan/worker-egress-proxy.md](archive/worker-egress-proxy.md).
@@ -344,7 +344,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-5. AGC→proxy hop uses plaintext HTTP — **Fixed (W7, 2026-05-23)**
 
-- **Location:** [cmd/gmc/internal/controller/builder.go:243-245](../../cmd/gmc/internal/controller/builder.go), [cmd/gmc/internal/controller/builder.go:298-300](../../cmd/gmc/internal/controller/builder.go)
+- **Location:** cmd/gmc/internal/controller/builder.go:243-245, cmd/gmc/internal/controller/builder.go:298-300
 - **Category:** OWASP A02:2025 — Cryptographic Failures (Transport)
 - **Why Medium:** The CONNECT-tunneled payload is itself TLS to GitHub, so the actual job traffic remains end-to-end encrypted.
   Only the CONNECT *request line* (target hostname:port) is observable on-wire.
@@ -382,9 +382,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 ### M-7. AGC Deployment lacks SecurityContext
 
 - **Status (2026-05-23): Done.** Closed by W8.
-  `buildAGCDeployment` now sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: ALL`, and `SeccompProfile: RuntimeDefault` on the AGC container ([builder.go:492-497](../../cmd/gmc/internal/controller/builder.go)).
+  `buildAGCDeployment` now sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`, `Capabilities.Drop: ALL`, and `SeccompProfile: RuntimeDefault` on the AGC container (builder.go:492-497).
   The same hardening was applied to the proxy container (line 323-327) alongside `Capabilities`/`SeccompProfile` that were missing there.
-- **Location:** [cmd/gmc/internal/controller/builder.go:291-321](../../cmd/gmc/internal/controller/builder.go)
+- **Location:** cmd/gmc/internal/controller/builder.go:291-321
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Description:** `buildAGCDeployment` sets no `securityContext` on the AGC pod or container.
   The proxy Deployment (lines 220-225) correctly sets `RunAsNonRoot: true`, `ReadOnlyRootFilesystem: true`, `AllowPrivilegeEscalation: false`.
@@ -404,9 +404,9 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 ### M-8. NetworkPolicy ingress to proxy and AGC is overly permissive
 
 - **Status (2026-05-23): Done.** Closed by W1.
-  The proxy NetworkPolicy now selects only proxy pods, and its single ingress rule restricts inbound to pods carrying `labelComponent: componentWorkload` on `proxyPort` ([builder.go:138-146](../../cmd/gmc/internal/controller/builder.go)).
+  The proxy NetworkPolicy now selects only proxy pods, and its single ingress rule restricts inbound to pods carrying `labelComponent: componentWorkload` on `proxyPort` (builder.go:138-146).
   Dev/debug pods in the namespace can no longer reach the proxy or AGC.
-- **Location:** [cmd/gmc/internal/controller/builder.go:137-139](../../cmd/gmc/internal/controller/builder.go)
+- **Location:** cmd/gmc/internal/controller/builder.go:137-139
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Description:** `proxyIngress` allows traffic from any pod in the namespace via an empty `PodSelector`.
   Combined with M-1, every pod in the tenant namespace can hit the proxy and the AGC, including any user-created pod (a dev's debugging container).
@@ -429,7 +429,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-10. Untyped admission webhook: only namespace check, no spec validation
 
-- **Location:** [cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go:50-65](../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go)
+- **Location:** cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go:50-65
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** The validating webhook checks only the reserved-namespace list.
   It does not reject:
@@ -517,7 +517,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-16. `safeName` collapses arbitrary characters; collisions possible
 
-- **Location:** [cmd/agc/internal/provisioner/provisioner.go:508-526](../../cmd/agc/internal/provisioner/provisioner.go), [cmd/gmc/internal/controller/builder.go:454-466](../../cmd/gmc/internal/controller/builder.go)
+- **Location:** [cmd/agc/internal/provisioner/provisioner.go:508-526](../../cmd/agc/internal/provisioner/provisioner.go), cmd/gmc/internal/controller/builder.go:454-466
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** Both `safeName` variants replace any non-DNS character with `-`.
   Two distinct inputs (e.g.
@@ -640,7 +640,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
   Kubelet probe traffic needs no rule — it originates from the node and is exempted from NetworkPolicy enforcement by every CNI this project targets (and node IPs are not portably expressible as a NetworkPolicy peer).
   Operators must label their Prometheus namespace `metrics: enabled` to scrape; see [troubleshooting.md](../operations/troubleshooting.md).
   The metrics endpoints remain unauthenticated plain HTTP gated only by the NetworkPolicy; authenticated secure-serving (as the GMC already does) is tracked as a follow-up.
-- **Location:** [cmd/gmc/internal/controller/builder.go](../../cmd/gmc/internal/controller/builder.go) (NetworkPolicy section)
+- **Location:** cmd/gmc/internal/controller/builder.go (NetworkPolicy section)
 - **Category:** OWASP A05:2025 — Security Misconfiguration
 - **Description:** M-8 narrowed CONNECT-port (`:8080`) ingress to `labelComponent: componentWorkload`, but `:8081` (health + Prometheus metrics) is not the target of an explicit ingress rule.
   The namespace's default-deny posture relies on no NetworkPolicy targeting that port, which means any pod in the namespace that can route to the proxy/AGC's `:8081` can scrape per-tenant traffic-volume metrics (CONNECT counts, active tunnels, dial errors).

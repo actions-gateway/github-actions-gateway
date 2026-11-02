@@ -4,9 +4,9 @@
 //
 // An agent pool derives its agent Secret name and the runner name it registers with
 // GitHub from one stem ([apinames.RunnerSetAgentStem]). Two owners deriving the same
-// stem is not a recoverable state: each finds its Secret held by the other and each 409s on
-// register, resolved by deleting the incumbent's GitHub record, so both tenants'
-// listeners run unauthorized until an operator renames one of the CRs
+// stem is not a recoverable state: each finds its Secret held by the other and each
+// 409s on register, resolved by deleting the incumbent's GitHub record, so both
+// tenants' listeners run unauthorized until an operator renames one of the CRs
 // (agentpool.ErrAgentNameCollision, Q979). Admission is the only place that fight can
 // be prevented rather than reported.
 //

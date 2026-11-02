@@ -27,7 +27,7 @@ The repro predates v2, so `<agc-name>` below is v1's fixed `actions-gateway-cont
 app=<agc-name>,actions-gateway/component=workload
 ```
 
-Manifests are not checked in — copy `buildAGCNetworkPolicyFrom` ([`shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go)) and `buildWorkloadNetworkPolicy` ([`builder.go`](../../cmd/gmc/internal/controller/builder.go)) into a single YAML, point them at a `repro` namespace, add a stand-in proxy pod so the workload NP's proxy podSelector has a real target.
+Manifests are not checked in — copy `buildAGCNetworkPolicyFrom` ([`shared_networkpolicy.go`](../../cmd/gmc/internal/controller/shared_networkpolicy.go)) and `buildWorkloadNetworkPolicyV2` ([`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go)) into a single YAML, point them at a `repro` namespace, add a stand-in proxy pod so the workload NP's proxy podSelector has a real target.
 
 ### Observations
 
@@ -123,7 +123,7 @@ Listing both ports keeps the rule precise (only apiserver-style ports) while wor
 The fix is symmetric with how PR #59 handled the proxy `ipBlock` → PodSelector case: align the rule with the **post-DNAT** shape of the packet, not the pre-DNAT one.
 The code comment on the rule calls out the reason explicitly so the next reader (in particular: the next person tempted to "tidy up" the duplicate ports) doesn't strip `6443` thinking it's redundant.
 
-A regression unit test in [`builder_test.go`](../../cmd/gmc/internal/controller/builder_test.go) asserts both ports appear in the apiserver egress rule, and the integration test in [`network_policy_test.go`](../../cmd/gmc/internal/controller/integration/network_policy_test.go) covers the same property end-to-end against envtest.
+A regression unit test in [`actionsgateway_v2_test.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_test.go) asserts both ports appear in the apiserver egress rule, and the integration tests in [`v2_actionsgateway_test.go`](../../cmd/gmc/internal/controller/integration/v2_actionsgateway_test.go) and [`v2_direct_egress_test.go`](../../cmd/gmc/internal/controller/integration/v2_direct_egress_test.go) cover the same property end-to-end against envtest.
 
 The cluster-only e2e spec `E2E_GMC_TenantProvisioning_ProxyConnectWorks` in [`cmd/gmc/test/e2e/provisioning_test.go`](../../cmd/gmc/test/e2e/provisioning_test.go) is the live-cluster guard: a single label-matched debug pod doing `nc -zv 10.96.0.1 443` would have caught both PR #59's proxy `ipBlock` bug and the AGC `port: 443` bug from one spec, locally, in seconds.
 

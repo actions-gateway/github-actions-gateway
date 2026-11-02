@@ -74,10 +74,11 @@ func (r *NamespacePSAReconciler) Reconcile(ctx context.Context, req ctrl.Request
 }
 
 // applyNamespacePSA stamps the six Pod Security Admission labels on the tenant
-// namespace via Server-Side Apply, declaring ownership only of those keys. The profile
-// comes from the namespace's security-profile label (baseline default when absent). A
-// first apply without ForceOwnership surfaces an out-of-band admin edit as a conflict, which
-// is re-applied with ForceOwnership to re-establish the controller's invariant.
+// namespace via Server-Side Apply, declaring ownership only of those keys. The
+// profile comes from the namespace's security-profile label (baseline default when
+// absent). A first apply without ForceOwnership surfaces an out-of-band admin edit as
+// a conflict, which is re-applied with ForceOwnership to re-establish the
+// controller's invariant.
 func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *corev1.Namespace) error {
 	profile := gmcv2alpha1.EffectiveSecurityProfile(ns.Labels[gmcv2alpha1.SecurityProfileLabel])
 	desired := corev1ac.Namespace(ns.Name).WithLabels(map[string]string{

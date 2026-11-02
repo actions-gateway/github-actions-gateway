@@ -181,8 +181,8 @@ func TestIntegration_PriorityClassAllowlist_Watch(t *testing.T) {
 // test against a real apiserver. Every tenant-reachable route to a worker pod's
 // priorityClassName is gated: the RunnerTemplate.podTemplate, which the AGC copies
 // verbatim into the pod, and the RunnerSet's own priorityTiers, whose matched tier
-// the AGC stamps over the template. The same platform allowlist — including its CR-sourced dynamic
-// half — must govern all of them.
+// the AGC stamps over the template. The same platform allowlist — including its
+// CR-sourced dynamic half — must govern all of them.
 //
 // The webhook server runs without TLS in envtest, so the validators are called
 // directly; the allowlist they read is the live one the reconciler maintains.

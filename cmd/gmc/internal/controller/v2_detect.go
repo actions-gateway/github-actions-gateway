@@ -26,11 +26,11 @@ var v2DetectKinds = []string{"ActionsGateway", "EgressProxy"}
 // actions-gateway-crds-v2 must come up clean rather than spinning a
 // source.Kind retry loop and logging "no matches for kind" on every reconcile.
 //
-// A NoMatch (the kinds are absent) returns (false, nil) — the expected,
-// non-error state of an install without the v2 CRDs. Any other discovery error is returned so the caller
-// can fail fast rather than silently disabling v2 on a transient apiserver
-// hiccup. Detection happens at startup, so installing the v2 CRDs later requires
-// a GMC restart to enable the v2 controllers.
+// A NoMatch (the kinds are absent) returns (false, nil) — the expected, non-error
+// state of an install without the v2 CRDs. Any other discovery error is returned so
+// the caller can fail fast rather than silently disabling v2 on a transient apiserver
+// hiccup. Detection happens at startup, so installing the v2 CRDs later requires a
+// GMC restart to enable the v2 controllers.
 func V2alpha1Installed(mapper meta.RESTMapper) (bool, error) {
 	for _, kind := range v2DetectKinds {
 		gvk := gmcv2alpha1.GroupVersion.WithKind(kind)

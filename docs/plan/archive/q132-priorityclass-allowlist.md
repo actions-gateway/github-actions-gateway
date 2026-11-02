@@ -10,7 +10,7 @@ Same "platform owns it, not the tenant" family as [Q130](platform-owned-quota.md
 ## Why
 
 `priorityTiers[].priorityClassName` is **tenant-authored and unvalidated**.
-The GMC copies the `RunnerGroupSpec` verbatim into the namespaced `RunnerGroup` ([builder.go](../../../cmd/gmc/internal/controller/builder.go), `Spec: spec`), and the AGC provisioner stamps it onto worker pods ([provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go), `pod.Spec.PriorityClassName = priorityClass`).
+The GMC copies the `RunnerGroupSpec` verbatim into the namespaced `RunnerGroup` (builder.go, `Spec: spec`), and the AGC provisioner stamps it onto worker pods ([provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go), `pod.Spec.PriorityClassName = priorityClass`).
 
 `PriorityClass` is **cluster-scoped** and carries a `value` (priority) and a `preemptionPolicy` (k8s default `PreemptLowerPriority`).
 A tenant who names a high-`value` class with `PreemptLowerPriority` gets the scheduler to **preempt (evict) other tenants' running worker pods** to make room for its own.

@@ -8,8 +8,9 @@ import (
 )
 
 // Label vocabulary shared by every GMC-managed object. The ActionsGateway and
-// EgressProxy reconcilers both stamp these; only the per-object label *assembly* (which carries the CR's own name and
-// is therefore typed on one API version) lives with its version's builder.
+// EgressProxy reconcilers both stamp these; only the per-object label *assembly*
+// (which carries the CR's own name and is therefore typed on one API version) lives
+// with its version's builder.
 const (
 	labelManagedBy    = "app.kubernetes.io/managed-by"
 	labelManagerValue = "actions-gateway-gmc"

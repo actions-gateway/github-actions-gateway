@@ -21,7 +21,8 @@ func TestAGCPodSelectorIsStable(t *testing.T) {
 	ag := v2Gateway("gw", "team-a", "github-app", "shared")
 	pod := buildAGCDeploymentV2(ag, "agc:test", nil, gmcv2alpha1.SecurityProfileRestricted, nil).Spec.Template.Labels
 
-	// The bare `app` label is what diverges per gateway, which is why the docs could not keep it.
+	// The bare `app` label is what diverges per gateway, which is why the docs could
+	// not keep it.
 	assert.Equal(t, agcNameV2(ag), pod["app"])
 	require.NotEqual(t, agcAppName, pod["app"],
 		"if these ever converge, the recommended-label selector below is no longer load-bearing")

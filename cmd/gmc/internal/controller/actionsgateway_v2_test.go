@@ -442,6 +442,29 @@ func TestBuildAGCNetworkPolicyV2_ApiserverEgressScoping(t *testing.T) {
 	assert.Equal(t, "10.0.0.0/24", apiRule.To[0].IPBlock.CIDR)
 }
 
+// TestBuildAGCNetworkPolicyV2_KubernetesAPIEgressOnBothPorts: the apiserver egress
+// rule must carry 6443 beside 443. kube-proxy DNATs the kubernetes Service's
+// ClusterIP:443 to the endpoint port, 6443 on kind, and NetworkPolicy matches the
+// post-DNAT port, so a 443-only rule silently drops API traffic there
+// (docs/development/networkpolicy-port-matching.md).
+func TestBuildAGCNetworkPolicyV2_KubernetesAPIEgressOnBothPorts(t *testing.T) {
+	ag := v2Gateway("gw", "team-a", "github-app", "shared")
+	np := buildAGCNetworkPolicyV2(ag, nil, nil, false, nil)
+
+	ports := map[int32]bool{}
+	for _, rule := range np.Spec.Egress {
+		for _, port := range rule.Ports {
+			if port.Port == nil || (port.Port.IntVal != 443 && port.Port.IntVal != 6443) {
+				continue
+			}
+			ports[port.Port.IntVal] = true
+			assert.Empty(t, rule.To, "port-%d rule must allow egress to any destination for k8s API access", port.Port.IntVal)
+		}
+	}
+	assert.True(t, ports[443], "AGC NP must include egress on 443 (k8s API server, production)")
+	assert.True(t, ports[6443], "AGC NP must include egress on 6443 (k8s API server post-DNAT in kind)")
+}
+
 // TestBuildAGCNetworkPolicyV2_DirectEgressGitHubRule: in direct mode the AGC policy
 // additively permits the GitHub CIDRs on 443 (so the AGC reaches GitHub directly),
 // keeps the apiserver egress, and omits the GitHub rule when the cache is empty

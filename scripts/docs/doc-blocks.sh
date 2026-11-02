@@ -84,7 +84,7 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 # procedure needing a kind cluster and real GitHub credentials — out of this
 # venue's reach, and tracked as its own item rather than declared here.
 COVERED_FILES=(
-	"docs/getting-started.md	10"
+	"docs/getting-started.md	9"
 )
 
 VALID_MODES='apply run dry-run render skip'

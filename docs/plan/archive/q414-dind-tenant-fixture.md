@@ -10,7 +10,7 @@ Building the fixture surfaced a defect that makes both of those impossible today
 
 ## Finding — `gag-migrate` cannot migrate a DinD tenant (measured 2026-07-26)
 
-`FanOut` always emits a **namespaced** `RunnerTemplate` for a v1 `RunnerGroup`'s `podTemplate` ([migrate.go](../../../cmd/gmc/internal/migrate/migrate.go)).
+`FanOut` always emits a **namespaced** `RunnerTemplate` for a v1 `RunnerGroup`'s `podTemplate` (migrate.go).
 The v2 admission webhook rejects a privileged container on that kind by design — privileged worker shapes belong on the platform-owned, cluster-scoped `ClusterRunnerTemplate` ([§H.6](../../design/appendix-h-v2-api-decomposition.md), [runnertemplate_webhook.go](../../../cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go)).
 A DinD tenant's worker pod is privileged by construction (the `dockerd` sidecar), so the two rules collide.
 
@@ -100,7 +100,7 @@ The tool also warns on every emitted cluster template — creating a cluster-sco
 | # | Deliverable | Status |
 |---|---|---|
 | 1 | Measure the DinD migration path end to end | ✅ Done — finding above |
-| 2 | `FanOut` emits `ClusterRunnerTemplate` for privileged shapes; `RenderManifests` + `applyResult` carry it | ✅ [`migrate.go`](../../../cmd/gmc/internal/migrate/migrate.go) `templateRefFor` |
+| 2 | `FanOut` emits `ClusterRunnerTemplate` for privileged shapes; `RenderManifests` + `applyResult` carry it | ✅ `migrate.go` `templateRefFor` |
 | 2b | A lone privileged tenant keeps its profile (finding 2) | ✅ `MostRestrictiveProfile` seeds from the input |
 | 2c | The downgrade guard's rejection is warned about, not self-granted (finding 3) | ✅ `warnIfDowngradeGuardWillReject` |
 | 3 | One reusable v1 tenant fixture in `cmd/gmc/test/utils`, replacing the four near-duplicate `ApplyActionsGatewayCR*` builders, with a DinD preset | ✅ [`fixtures.go`](../../../cmd/gmc/test/utils/fixtures.go); 13 call sites converted |
@@ -109,7 +109,7 @@ The tool also warns on every emitted cluster template — creating a cluster-sco
 
 ## Test coverage
 
-- **Unit** ([`privileged_test.go`](../../../cmd/gmc/internal/migrate/privileged_test.go)) — the kind choice, per-group splitting on a mixed tenant, within-namespace reuse collapse, cross-namespace non-sharing, name truncation, and a golden manifest for the DinD tenant.
+- **Unit** (`privileged_test.go`) — the kind choice, per-group splitting on a mixed tenant, within-namespace reuse collapse, cross-namespace non-sharing, name truncation, and a golden manifest for the DinD tenant.
   The decisive one is `TestFanOut_EmittedTemplatesAreAdmissible`: it runs the **real** v2 admission validators over everything `FanOut` emits, so the assertion is made against the admission rule itself rather than a restatement of it — that is the invariant that actually broke.
 - **e2e** ([`migration_v1_to_v2_test.go`](../../../cmd/gmc/test/e2e/migration_v1_to_v2_test.go)) — dry-run writes nothing and warns; `--apply` produces an object set the live apiserver admits, with the namespace patch applied and v1 still running beside it; and the migrated tenant reconciles into a working per-gateway AGC + proxy pool.
   The last one is what a unit test can never reach: admissible YAML is not the same as a tenant that runs.
