@@ -32,10 +32,11 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
 | [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1262 and Q1263; step 4 of [the split](q1167-v2-retype-split.md) |
-| [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate` (Phase 3) | `2.0-gate` | 🚫 blocked on the 1.10 tag |
+| [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate`'s fan-out (Phase 3) | `2.0-gate` | 🔲 the GMC half is on `main`; the AGC half (`RunnerGroup`) is open |
 | [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q273; lands before Q1263 ([why](q1167-v2-retype-split.md#where-q264s-boundary-falls-before-the-agc-retype)) |
 | [Q1262](../queue/Q1262.md) | Retype the GMC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 1 of [the split](q1167-v2-retype-split.md): after Q273, beside Q264 |
 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 3 of [the split](q1167-v2-retype-split.md): after Q273 and Q264 |
+| [Q1258](../queue/Q1258.md) | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | 🚫 blocked on Q273 |
 | [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q273 and Q264 |
 | Q555 | Detect flaky jobs and record each failure's platform context | `2.0-gate` | ✅ landed on the scale-set tier: the failure ledger's `failures` map, the worker snapshot, the pairing and its three metrics; the dogfood readings it rests on are [Q1236](../queue/Q1236.md) |
 | Q1183 | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | ✅ landed on the scale-set tier: the out-of-memory class, its stampede breaker and the per-job memory floor, without R12's dogfood reproduction; the deferred wait landed in Q1244 and the misclassification alert in Q1245, neither gated |
