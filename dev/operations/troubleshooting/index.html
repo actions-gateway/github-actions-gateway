@@ -5991,14 +5991,14 @@ In short:
 - For "require limits" on AGC v1alpha1: migrate the tenant to a v2alpha1 <code>ActionsGateway</code>, or exempt AGC pods.</p>
 <hr />
 <h2 id="actionsgateway-reports-egressrulesstale">ActionsGateway Reports EgressRulesStale<a class="headerlink" href="#actionsgateway-reports-egressrulesstale" title="Permanent link">&para;</a></h2>
-<p><strong>Symptoms.</strong> <code>kubectl get actionsgateway</code> shows an <code>EgressRulesStale=True</code> condition, or the <code>actions_gateway_egress_rules_stale</code> gauge is <code>1</code>.
+<p><strong>Symptoms.</strong> <code>kubectl get actionsgateway</code> shows an <code>EgressRulesStale=True</code> condition, or the <code>actions_gateway_egress_rules_stale</code> gauge (v1 <code>ActionsGateway</code>, <code>EgressProxy</code>) or <code>actions_gateway_direct_egress_rules_stale</code> gauge (direct-egress v2 <code>ActionsGateway</code>) is <code>1</code>.
 Optionally, jobs intermittently fail to reach newly-rotated GitHub endpoints.</p>
-<p><strong>Cause.</strong> The GMC refreshes each managed proxy <code>NetworkPolicy</code>'s egress allowlist from <code>api.github.com/meta</code> on a ~24h cycle.
+<p><strong>Cause.</strong> The GMC refreshes each managed proxy <code>NetworkPolicy</code>'s egress allowlist from <code>api.github.com/meta</code> on a ~24h cycle, and on a v2 <code>ActionsGateway</code> with no <code>defaultProxyRef</code> the GitHub allowlist on its AGC and workload <code>NetworkPolicies</code> too.
 If that refresh loop stalls (GitHub meta API unreachable, persistent fetch errors), the allowlist freezes.
 GitHub periodically rotates its published IP ranges, so a frozen allowlist eventually drops egress to the new ranges silently.
 The condition trips when the last successful refresh is older than the staleness window (just over two refresh cycles), so a single missed/slow refresh does not false-trip it.
 It is advisory and does <strong>not</strong> gate <code>Ready</code> — existing egress keeps working until GitHub rotates.
-It is only evaluated for gateways whose proxy <code>NetworkPolicy</code> is gateway-managed (<code>spec.proxy.managedNetworkPolicy</code> unset or <code>true</code>), and on an <code>EgressProxy</code> only in <code>CIDR</code> mode.</p>
+It is only evaluated for gateways whose proxy <code>NetworkPolicy</code> is gateway-managed (<code>spec.proxy.managedNetworkPolicy</code> unset or <code>true</code>), on an <code>EgressProxy</code> only in <code>CIDR</code> mode, and on a v2 <code>ActionsGateway</code> only in direct egress: a proxied one reads <code>False</code> / <code>RefreshPending</code>, and its <code>EgressProxy</code> reports the allowlist.</p>
 <p>The reason says which of two states you are in:</p>
 <table>
 <thead>
@@ -6011,16 +6011,19 @@ It is only evaluated for gateways whose proxy <code>NetworkPolicy</code> is gate
 <tbody>
 <tr>
 <td><code>RefreshStalled</code></td>
-<td>The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied.</td>
+<td>The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied, except through a direct-egress policy the message names as keeping its ranges.</td>
 <td>The diagnostics below.</td>
 </tr>
 <tr>
 <td><code>RefreshNeverSucceeded</code></td>
-<td>The GMC holds no ranges at all, from neither a fetch nor its persisted copy. The policy carries no GitHub rule, so GitHub egress is denied now.</td>
+<td>The GMC holds no ranges at all, from neither a fetch nor its persisted copy. On an <code>EgressProxy</code> or v1 <code>ActionsGateway</code> the policy carries no GitHub rule, so GitHub egress is denied now. On a direct-egress v2 <code>ActionsGateway</code> a policy may still carry the ranges it was last programmed with; the message says which (below).</td>
 <td><a href="#proxy-pools-have-no-github-egress-after-a-gmc-start">Proxy Pools Have No GitHub Egress After a GMC Start</a>.</td>
 </tr>
 </tbody>
 </table>
+<p><strong>A direct-egress v2 gateway can still be reaching GitHub when the GMC serves no ranges.</strong> The GMC does not blank a direct-egress <code>NetworkPolicy</code> that already carries GitHub ranges, so after a restart with no usable persisted copy, or once that copy expires, those policies keep the ranges they were last programmed with.
+The condition stays <code>True</code>, because nothing is refreshing them, and its message says which policies keep their ranges and which carry no GitHub rule.
+Only a named policy denies GitHub egress now: a gateway provisioned while the GMC held no ranges, or a policy deleted and recreated in that window.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Read the condition — its message reports how long ago the last refresh succeeded.</span>
 <a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>

@@ -4341,6 +4341,8 @@ See <a href="../07-test-plan/#73-end-to-end-tests">§7.3 of the test plan</a>.</
 <li><strong>Direct egress is a structurally explicit state.</strong> An unset <code>proxyRef</code> resolves to direct egress, and the gateway/runner-set status records <code>proxyMode: Direct</code> rather than leaving "no proxy" to be inferred from an absent field.</li>
 <li><strong>Surface the attribution trade.</strong> The proxy-less gateway and runner set carry an advisory <code>EgressUnattributed</code> condition (True), so an operator sees at a glance that this workload has no per-tenant egress identity — the property they opted out of — without grepping specs.
   It is advisory only and never gates Ready.</li>
+<li><strong>Report the allowlist's freshness where it lives (Q1249).</strong> In direct egress the GitHub allowlist sits on the gateway's own AGC and workload NetworkPolicies, so the gateway carries the <code>EgressRulesStale</code> condition the CIDR-mode <code>EgressProxy</code> carries, exported on its own gauge, <code>actions_gateway_direct_egress_rules_stale</code>.
+  While the GMC serves no ranges it keeps an already-programmed policy's rules (Q246), so the condition's message reads the policies to say whether GitHub egress is denied, rather than inferring it from the empty cache.</li>
 </ul>
 <p><strong>Composition bonus.</strong> §H.9 and §H.10 combine: a platform team runs one shared <code>EgressProxy</code> in a central namespace, grants it to the EMU/allowlist tenants who need stable IPs, and everyone else runs proxy-less.</p>
 <h2 id="h11-migration-v2-tool-assisted">H.11. Migration (v2, tool-assisted)<a class="headerlink" href="#h11-migration-v2-tool-assisted" title="Permanent link">&para;</a></h2>

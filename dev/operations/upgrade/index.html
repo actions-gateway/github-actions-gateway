@@ -1761,6 +1761,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a direct-egress v2 gateway reports EgressRulesStale and pages on it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3746,6 +3757,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: a direct-egress v2 gateway reports EgressRulesStale and pages on it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4589,6 +4611,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
 <li><a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run">Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded">Non-breaking: <code>EgressRulesStale</code> now fires when no GitHub ranges have loaded</a></li>
+<li><a href="#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it">Non-breaking: a direct-egress v2 gateway reports <code>EgressRulesStale</code> and pages on it</a></li>
 <li><a href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart</a></li>
 <li><a href="#non-breaking-a-reaped-scale-set-worker-whose-job-ran-elsewhere-recovers-the-job-left-without-a-runner">Non-breaking: a reaped scale-set worker whose job ran elsewhere recovers the job left without a runner</a></li>
 <li><a href="#non-breaking-a-worker-whose-node-shuts-down-before-it-starts-is-force-cancelled-then-re-run">Non-breaking: a worker whose node shuts down before it starts is force-cancelled, then re-run</a></li>
@@ -4783,6 +4806,14 @@ It now reads <code>True</code> with the new reason <code>RefreshNeverSucceeded</
 <code>RefreshPending</code> remains only for an unmanaged or FQDN-mode policy.
 While the state lasts, the GMC re-checks it every minute, so it clears within a minute of the first fetch.</p>
 <p><strong>Rolling back</strong> returns the state to <code>False</code> / <code>RefreshPending</code>.</p>
+<h3 id="non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it">Non-breaking: a direct-egress v2 gateway reports <code>EgressRulesStale</code> and pages on it<a class="headerlink" href="#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone running a v2 <code>ActionsGateway</code> with no <code>defaultProxyRef</code>, and anyone applying <code>deploy/monitoring/prometheusrule.yaml</code>.
+Nothing to do.</p>
+<p>Such a gateway carries the GitHub allowlist on its own AGC and workload <code>NetworkPolicies</code>, and no condition reported whether that allowlist was being refreshed.
+It now carries <code>EgressRulesStale</code>, with the reasons the <code>EgressProxy</code> uses, exported as the new gauge <code>actions_gateway_direct_egress_rules_stale</code> and paged on by the new <code>ActionsGatewayDirectEgressRulesStale</code> alert after 15 minutes (Q1249).
+A proxied gateway reads <code>False</code> / <code>RefreshPending</code>, since its <code>EgressProxy</code> reports the allowlist.
+The gauge has its own name, rather than a series on <code>actions_gateway_egress_rules_stale</code>, because a gateway and an <code>EgressProxy</code> may share a namespace and a name.</p>
+<p><strong>Rolling back</strong> removes the gauge and stops updating the condition, which keeps its last value until the gateway is next written by a GMC that sets it.</p>
 <h3 id="non-breaking-the-gmc-keeps-github-egress-across-a-restart">Non-breaking: the GMC keeps GitHub egress across a restart<a class="headerlink" href="#non-breaking-the-gmc-keeps-github-egress-across-a-restart" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every install whose proxy pools or direct-egress gateways use the default <code>CIDR</code> egress mode.
 Nothing to do.</p>

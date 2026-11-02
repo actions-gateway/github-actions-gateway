@@ -2658,21 +2658,23 @@
 
 
 <h1 id="flake-lease-tests-another-holder-renewer-loses-its-lock-and-survives">Flake: lease-test's another-holder renewer loses its lock and survives<a class="headerlink" href="#flake-lease-tests-another-holder-renewer-loses-its-lock-and-survives" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that finds another holder TERMs its gate</code> on a tree that changes nothing under <code>scripts/dogfood/</code>.</p>
-<p>Observed 2026-11-02 at 01:04Z in CI <code>scripts-test</code> (job 125038110299, run 41369763048) on a GitHub-hosted <code>ubuntu-26.04</code> runner, on PR 2212's head <code>ae1082f</code>, whose diff touches only the gmc e2e suite, the <code>Makefile</code> e2e target and docs.
-The same suite passed in a local <code>make check</code> of that tree on macOS.
+<p><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that finds another holder TERMs its gate</code>, or <code>a waiter does not break a live holder's lock</code>, on <code>main</code>.</p>
+<p>Observed 2026-11-02 at 01:04Z in CI <code>scripts-test</code> (job 125038110299, run 41369763048) on a GitHub-hosted <code>ubuntu-26.04</code> runner, on PR 2212's head <code>ae1082f</code>, whose diff touches nothing under <code>scripts/dogfood/</code>.
 Three lines failed together:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[lease-test] FAIL a renewer that finds another holder TERMs its gate: want '143', got '0'
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[lease-test] FAIL the renewer says why it stopped the gate: 'another holder took' not in 'rmdir: failed to remove '/tmp/tmp.wCwpjk66D2/lease/fake-dogfood-proj-us-east1-b-gag-dogfood.lease.lock': No such file or directory
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>survived'
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>[lease-test] FAIL the stopped gate leaves the new holder's record: want 'ci-runner-7/4242', got 'owner-host/65490'
 </code></pre></div>
-<p><strong>Mechanism, unverified.</strong> <code>lease_fake_locked</code> breaks the lock after 500 failed <code>mkdir</code> tries 10 ms apart, which assumes a lock held for 5 s belongs to a renewer killed mid-write.
-A renewer that is merely starved inside its locked write would have its lock broken by the test's <code>remote_lease</code> write.
-Its own <code>rmdir</code> would then fail under <code>set -e</code>, so the renewer dies without TERMing its gate, the gate sleeps out its 10 s and prints <code>survived</code>, and the renewer's write lands over the test's.
-That chain fits all three lines, but nothing here measured the renewer's hold time on the runner or reproduced it.</p>
+<p><strong>Mechanism, reproduced 2026-11-01.</strong> <code>lease_fake_locked</code> broke any lock held past 500 failed <code>mkdir</code> tries 10 ms apart, which takes at least 5 s and took 15 s at load 68 on the 18-core dev host.
+A renewer starved inside its locked write therefore had its lock broken by the test's <code>remote_lease</code>.
+The renewer runs <code>set +e</code>, so its failed <code>rmdir</code> did not stop it: its patch reported <code>renewed</code>, its write landed over the test's record, and the gate slept out its 10 s and printed <code>survived</code>.
+Stalling the renewer's patch 45 s inside the lock, with the owner sleeping 60 s, printed all three lines above on the old lock.</p>
+<p><strong>The fix makes the lock a symlink naming its holder's pid</strong>, broken only once that pid has exited, zombies included.
+The same stalled-renewer harness passes on it, and lease-test's new live-holder case fails on the old lock.
+Both lock cases wait 10 s, so they bracket the old timed break's return: a break finishing inside 10 s fails the live-holder case, and one taking longer fails the killed-holder case, as it did at load 80 on the dev host.</p>
 <p>This is a different case and a different mechanism from Q1202, which is the lost-lease renewer racing the owner's sleep.
-It is also not the zombie <code>kill -0</code> failure that PR 2207 (Q1205) fixes, which happens on GAG runners and not GitHub-hosted ones.</p>
+It is also not the zombie <code>kill -0</code> failure that PR 2207 (Q1205) fixed, which happens on GAG runners and not GitHub-hosted ones.</p>
 
 
 

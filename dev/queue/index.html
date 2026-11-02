@@ -2765,9 +2765,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1252/">Q1252</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease-fake.sh">Flake: lease-test's another-holder renewer loses its lock and survives</a></td>
 <td><code>flake</code> <code>tests</code></td>
-<td>🔲</td>
+<td>💤</td>
 <td>S</td>
-<td><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that finds another holder TERMs its gate</code> on a tree that changes nothing under <code>scripts/dogfood/</code>.</td>
+<td><strong>Event:</strong> <code>lease-test</code> fails <code>a renewer that finds another holder TERMs its gate</code>, or <code>a waiter does not break a live holder's lock</code>, on …</td>
 </tr>
 <tr>
 <td><a href="Q1242/">Q1242</a></td>
@@ -2856,14 +2856,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> <code>check-release-ladder-test</code> is reported KILLED by <code>make scripts-test</code>, or exits 1 with a shell error from a <code>write_*</code> fixture …</td>
-</tr>
-<tr>
-<td><a href="Q1249/">Q1249</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Report stale or missing GitHub ranges on a v2 direct-egress gateway</a></td>
-<td><code>bug</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>A v2 <code>ActionsGateway</code> with no <code>defaultProxyRef</code> egresses directly, and its <code>&lt;gateway&gt;-workload</code> and <code>&lt;gateway&gt;-agc</code> NetworkPolicies carry …</td>
 </tr>
 <tr>
 <td><a href="Q1133/">Q1133</a></td>
