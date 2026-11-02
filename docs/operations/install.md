@@ -294,7 +294,7 @@ It could also fail *open*, silently enforcing a stale allowlist from a frozen ca
 For a CRD `paramKind` the apiserver allocates a fresh dynamic informer per context, so the same uninstall/reinstall cycle is survivable.
 This is measured rather than inferred: `scripts/e2e/vap-param-informer-check.sh` runs the identical empty-binding-set transition against both kinds on one apiserver, and `scripts/e2e/chart-reinstall-check.sh` drives a real uninstall/reinstall in CI.
 
-**One consequence, and it is not install-time.** This CRD ships in the chart-root `crds/` directory rather than `templates/crds/` like the others, because the same release also creates a `PriorityClassAllowlist` object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
+**One consequence, and it is not install-time.** This CRD ships in the chart-root `crds/` directory rather than as a template, because the same release also creates a `PriorityClassAllowlist` object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
 A **fresh `helm install` handles this for you**; `crds/` is applied first.
 
 An **upgrade does not**.
