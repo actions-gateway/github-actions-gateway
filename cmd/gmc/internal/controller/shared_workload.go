@@ -6,8 +6,8 @@ import (
 
 // Pod-level facts every GMC-managed workload shares regardless of the API version
 // that asked for it: the listener ports, the hardened security baseline, the proxy's
-// shutdown budget, and the log-level default. The v1 ActionsGateway, the v2
-// ActionsGateway, and the standalone EgressProxy all build on these.
+// shutdown budget, and the log-level default. The ActionsGateway and the
+// standalone EgressProxy both build on these.
 
 const (
 	// agcContainerName is the AGC control-plane container's name inside the AGC pod.

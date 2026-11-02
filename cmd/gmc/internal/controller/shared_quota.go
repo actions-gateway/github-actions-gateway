@@ -43,8 +43,7 @@ var proxyQuotaChecks = []quotaCheck{
 // plus the pod count. Keys mirror ResourceQuota hard keys (pods, requests.cpu,
 // requests.memory, limits.cpu, limits.memory). It is linear in replicas, so the
 // *additional* demand to grow a pool from m to n pods is
-// footprintFromResources(res, n-m). Shared by the v1 ActionsGateway proxy
-// (proxyFootprint) and the v2 EgressProxy quota eval (egressProxyFootprint).
+// footprintFromResources(res, n-m).
 func footprintFromResources(res corev1.ResourceRequirements, replicas int32) corev1.ResourceList {
 	if replicas < 0 {
 		replicas = 0
@@ -97,8 +96,7 @@ type proxyQuotaConditions struct {
 // ProxyQuotaExceeded (error) conditions for a namespace-ResourceQuota-bounded,
 // HPA-scaled proxy pool against the platform-owned namespace ResourceQuota (Q82).
 // Both are advisory and do NOT gate Ready — the pool keeps serving at its current
-// scale. Shared by the v1 ActionsGateway proxy (evalProxyQuota) and the v2
-// EgressProxy (evalEgressProxyQuota); the caller supplies the pool's namespace,
+// scale. The caller (evalEgressProxyQuota) supplies the pool's namespace,
 // maxReplicas, per-replica resources, and current proxy Deployment.
 //
 //   - ProxyQuotaExceeded (error): the proxy Deployment is *currently* having replica
@@ -237,7 +235,6 @@ func resourceListEqual(a, b corev1.ResourceList) bool {
 // quotaHardChangedPredicate enqueues ResourceQuota create/delete and only those
 // updates that change .spec.hard, ignoring the high-frequency .status.used churn
 // as pods come and go — only the hard cap feeds the ProxyQuota conditions (Q82).
-// Shared by the v1 ActionsGateway and v2 EgressProxy quota watches (Q326).
 func quotaHardChangedPredicate() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {

@@ -175,7 +175,7 @@ A `paramKind` carries the allowlist because CRD CEL `XValidation` cannot read ex
 ## G.8. Optional (Disable-able) Egress Proxy
 
 **Current behavior.** The per-tenant egress proxy pool ([§2.3](02-architecture.md#23-tier-3--egress-proxy-pool)) is provisioned unconditionally for every `ActionsGateway`.
-The Gateway Manager Controller (GMC) always emits the proxy `Deployment`, `Service`, `HPA`, `PodDisruptionBudget`, and TLS cert `Secret`, and the workload `NetworkPolicy` ([`buildWorkloadNetworkPolicy`](../../cmd/gmc/internal/controller/builder.go)) grants Actions Gateway Controller (AGC) and worker pods egress to *only* cluster DNS and the proxy on port 8080 — so with no proxy, those pods have no network path to GitHub at all.
+The Gateway Manager Controller (GMC) always emits the proxy `Deployment`, `Service`, `HPA`, `PodDisruptionBudget`, and TLS cert `Secret`, and the workload `NetworkPolicy` ([`buildWorkloadNetworkPolicyV2`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go)) grants Actions Gateway Controller (AGC) and worker pods egress to *only* cluster DNS and the proxy on port 8080 — so with no proxy, those pods have no network path to GitHub at all.
 `spec.proxy` is `+optional`, but only its *tuning* (replica counts, resources) is; the pool itself cannot be turned off.
 `spec.proxy.managedNetworkPolicy: false` is **not** a disable switch — it only drops the GitHub-CIDR rule from the proxy's own NetworkPolicy (for FQDN-based CNI policies); the proxy still runs and still carries all traffic.
 
@@ -210,7 +210,7 @@ It must never become the default or a silent behavior.
 
 ## G.9. NetworkPolicy Egress Extensibility (signers, telemetry, job dependencies)
 
-**Current behavior.** The GMC reconciles three default-deny per-tenant NetworkPolicies (§5.2, [`builder.go`](../../cmd/gmc/internal/controller/builder.go)).
+**Current behavior.** The GMC reconciles three default-deny per-tenant NetworkPolicies (§5.2, [`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go)).
 The **AGC** policy permits egress to cluster DNS + the kube API server (+ the GitHub CIDR allowlist in direct mode), and — once the Vault egress work landed — a *scoped* AGC→Vault rule when a workload-identity gateway declares `signer.vault.networkPolicy` (a pod/namespace selector or a CIDR; the rule targets only that peer, on the Vault API port from the signer address, and only the AGC pod selects into it).
 The **workload** policy permits worker pods egress to cluster DNS + the proxy on 8080 (+ the GitHub CIDRs in direct mode) and nothing else.
 The link-local block `169.254.0.0/16` is permitted on **port 53 only** (NodeLocal DNSCache), not for anything else.
@@ -249,7 +249,7 @@ If KMS, telemetry, and worker-egress had each grown their own near-duplicate des
 
 **What would trigger building any of it.** A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.
 
-**Related.** [05-security.md](05-security.md) (the per-tenant NetworkPolicy isolation model); [G.1 Proxy-Enforced Destination Allowlist](#g1-proxy-enforced-destination-allowlist); [G.8 Optional Egress Proxy](#g8-optional-disable-able-egress-proxy); [`builder.go`](../../cmd/gmc/internal/controller/builder.go).
+**Related.** [05-security.md](05-security.md) (the per-tenant NetworkPolicy isolation model); [G.1 Proxy-Enforced Destination Allowlist](#g1-proxy-enforced-destination-allowlist); [G.8 Optional Egress Proxy](#g8-optional-disable-able-egress-proxy); [`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go).
 
 ---
 

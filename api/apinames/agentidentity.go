@@ -1,7 +1,5 @@
 package apinames
 
-import "strconv"
-
 // The agent-identity stem, shared by the AGC that derives names from it and the GMC
 // admission that rejects two owners deriving the same one (Q1011).
 //
@@ -37,33 +35,4 @@ func RunnerGroupAgentStem(name string) string {
 // [RunnerSetStemPrefix].
 func RunnerSetAgentStem(name string) string {
 	return RunnerSetStemPrefix + name
-}
-
-// RunnerGroupName derives the v1alpha1 RunnerGroup CR name the GMC materializes for
-// one ActionsGateway spec.runnerGroups[index] entry: the gateway name joined to a
-// sanitised form of the entry's FIRST runner label, or to the entry's index when the
-// entry carries no labels at all.
-//
-// It lives here because four callers must agree on it exactly and none of them
-// materializes the object the others read: the GMC controller creates the CR,
-// gag-migrate synthesizes the same name so its standalone-vs-inline dedup is exact,
-// GMC admission derives it to reject a name that would claim a taken agent-identity
-// stem (Q1011), and the AGC stamps it as a label value on every worker pod and agent
-// Secret.
-//
-// The [MaxLabelValue] budget is that last consumer's, NOT the 253-character limit on
-// a CR name: an unbounded name is accepted at create and rejected wherever it is
-// used as a label value. A 15-character gateway with a 40-character runner label was
-// enough to overrun it, after which every worker pod create failed and the tenant ran
-// no jobs while GitHub reported only that the runner had lost communication. v2 caps
-// CR names at 52 characters in CEL ([§H.6]); v1 has no such cap, so the bound is
-// applied where the name is derived. [Join] returns a name that already fits
-// unchanged, so only a tenant that is already broken is renamed.
-//
-// [§H.6]: https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/design/appendix-h-v2-api-decomposition.md#h6-naming-and-length-budgets
-func RunnerGroupName(gatewayName string, runnerLabels []string, index int) string {
-	if len(runnerLabels) > 0 {
-		return Join(MaxLabelValue, gatewayName, Segment(runnerLabels[0], "label"))
-	}
-	return Join(MaxLabelValue, gatewayName, strconv.Itoa(index))
 }

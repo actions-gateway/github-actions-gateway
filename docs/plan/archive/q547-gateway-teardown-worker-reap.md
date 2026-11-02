@@ -22,7 +22,7 @@ All of this is read off the code, not inferred from the symptom.
 **Worker pods already carry an owner reference.** Every worker pod and job Secret is stamped with a controller `OwnerReference` to its owning CR — [`pod.go:265`](../../../cmd/agc/internal/provisioner/pod.go), built by `Target.OwnerRef()` ([`runnergroup_target.go:41`](../../../cmd/agc/internal/provisioner/runnergroup_target.go) for v1, the RunnerSet target for v2).
 So the Queue row's "add pod ownerRefs" option is already in place; it is the *owner* that survives, not the reference that is missing.
 
-**v1 is not affected.** The v1 gateway's `reconcileDelete` ([`actionsgateway_controller.go:374`](../../../cmd/gmc/internal/controller/actionsgateway_controller.go)) deletes the gateway's `RunnerGroup` CRs first and waits for them to be gone.
+**v1 is not affected.** The v1 gateway's `reconcileDelete` (`actionsgateway_controller.go:374`) deletes the gateway's `RunnerGroup` CRs first and waits for them to be gone.
 RunnerGroups are the gateway's own children (`spec.runnerGroups`), so deleting them cascades to the worker pods through the owner reference, and the RunnerGroup's `agentpool-cleanup` finalizer orders the GitHub-side cleanup.
 
 **v2 is affected, and it is a regression from the v2 API decomposition.** v2 RunnerSets are standalone tenant-authored CRs that only *reference* the gateway via `spec.gatewayRef`. v2 teardown deliberately leaves them alone — [`actionsgateway_v2_controller.go:828`](../../../cmd/gmc/internal/controller/actionsgateway_v2_controller.go): "RunnerSets reference the gateway but are not owned by it, so they are not deleted — they degrade to Ready=False/GatewayNotFound via their own watch."

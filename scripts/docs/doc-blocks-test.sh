@@ -319,8 +319,8 @@ fi
 # parser that silently stopped matching would return zero records and every
 # per-block assertion in the Go walk would pass vacuously.
 executed="$("$GATE" --emit docs/getting-started.md | awk -F'\t' '$2 != "skip"' | wc -l | tr -d ' ')"
-if ((executed < 10)); then
-	printf 'FAIL: docs/getting-started.md emits %s executable blocks, expected at least 10\n' "$executed" >&2
+if ((executed < 9)); then
+	printf 'FAIL: docs/getting-started.md emits %s executable blocks, expected at least 9\n' "$executed" >&2
 	fail=$((fail + 1))
 else
 	pass=$((pass + 1))

@@ -75,6 +75,12 @@ rules:
 - apiGroups:
   - actions-gateway.com
   resources:
+  - actionsgateways/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - actions-gateway.com
+  resources:
   - actionsgateways/status
   - egressproxies/status
   verbs:
@@ -88,43 +94,6 @@ rules:
   verbs:
   - get
   - list
-  - watch
-- apiGroups:
-  - actions-gateway.com
-  - actions-gateway.github.com
-  resources:
-  - actionsgateways/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - actions-gateway.github.com
-  resources:
-  - actionsgateways
-  verbs:
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - actions-gateway.github.com
-  resources:
-  - actionsgateways/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - actions-gateway.github.com
-  resources:
-  - runnergroups
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - apiextensions.k8s.io
@@ -266,10 +235,3 @@ rules:
   - clusterroles
   verbs:
   - bind
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - roles
-  verbs:
-  - delete
-  - get

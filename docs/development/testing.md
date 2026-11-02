@@ -1948,7 +1948,7 @@ Each is a claim about state, and each has a cheap way of being wrong:
 
 - **An explanation offered to the user is a claim, and this repo has usually already written the answer down.** Four went wrong across the 1.5 release cycle in one session, and three were caught by the user asking a follow-up rather than by any check.
   A sentinel event was called a defect when it was [Q630's reconciliation working as designed](../operations/release.md#run-it-detached-the-sentinel-reports-it-back), documented in the previous release's plan doc.
-  A tier-parity claim was said to rest on a hand-verified walk when `E2E_Migration_V1ToV2` gates the migration end to end, including reconcile-to-Ready.
+  A tier-parity claim was said to rest on a hand-verified walk when `E2E_Migration_V1ToV2` gated the migration end to end, including reconcile-to-Ready.
   A `Throughput: Active` result was written up as unexpected in both the release notes and a plan doc, when [Q773](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/README.md) had said since 2026-08-09 that it is the norm and the runbook is stale.
   Each was plausible, none was checked, and each reached a document before it reached a doubt.
   The Queue, the plan doc of the release that shipped it, and the runbook are where this project keeps its answers.

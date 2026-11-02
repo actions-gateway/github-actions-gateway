@@ -7,7 +7,6 @@ import (
 	"time"
 
 	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -125,94 +124,4 @@ func TestV2_EgressProxy_ReconcilerRestoresFloorFromZero(t *testing.T) {
 	// restore the floor itself — otherwise the tenant's only egress path stays down.
 	scaleDeployment(t, ns, name, 0)
 	waitForDeploymentReplicas(t, ns, name, minR)
-}
-
-func TestGMC_V1Proxy_ReconcilerPreservesHPAScaleOut(t *testing.T) {
-	const nsName = "team-hpa-scaleout"
-	createNamespace(t, nsName)
-	createGitHubAppSecret(t, nsName, "github-app")
-
-	ag := newActionsGateway("scaleout-gateway", nsName, "github-app")
-	ag.Spec.Proxy.MinReplicas = ptr32(2)
-	require.NoError(t, k8sClient.Create(ctx, ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
-
-	startGMCReconciler(t, nil)
-
-	// The floor applies at create, then the HPA takes over above it.
-	waitForDeploymentReplicas(t, nsName, proxyName, 2)
-	scaleDeployment(t, nsName, proxyName, 4)
-	assertReplicasSurviveReconciles(t, nsName, proxyName, 4)
-
-	// The AGC Deployment is not HPA-targeted: the reconciler still owns its replica
-	// count outright and pins it back to 1.
-	scaleDeployment(t, nsName, agcName, 3)
-	waitForDeploymentReplicas(t, nsName, agcName, 1)
-}
-
-// TestGMC_V1Proxy_HPABoundsAreReconciledFromTheCR pins the *other* half of the Q176
-// root cause: the GMC owns the HPA's whole spec, so an out-of-band edit to the HPA's
-// own spec.minReplicas is reverted to the ActionsGateway's spec.proxy.minReplicas.
-//
-// This is correct — the CR is the source of truth for the pool's bounds — but it is
-// what made the E2E_GMC_HPADrivesScaleUp e2e flaky: that test raised the *HPA's*
-// minReplicas and waited for status.desiredReplicas to follow. The HPA's resulting
-// scale-out wrote the proxy Deployment, the Owns(&Deployment{}) watch turned that
-// write into a reconcile, and the reconcile put minReplicas back. desiredReplicas
-// was 2 only inside that window, so a longer timeout could never help. The e2e now
-// drives the floor through the CR instead.
-func TestGMC_V1Proxy_HPABoundsAreReconciledFromTheCR(t *testing.T) {
-	const nsName = "team-hpa-bounds-revert"
-	createNamespace(t, nsName)
-	createGitHubAppSecret(t, nsName, "github-app")
-
-	ag := newActionsGateway("bounds-gateway", nsName, "github-app")
-	ag.Spec.Proxy.MinReplicas = ptr32(1)
-	require.NoError(t, k8sClient.Create(ctx, ag))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ag) })
-
-	startGMCReconciler(t, nil)
-
-	g := gomega.NewWithT(t)
-	hpaKey := types.NamespacedName{Namespace: nsName, Name: proxyName}
-
-	g.Eventually(func(g gomega.Gomega) int32 {
-		var hpa autoscalingv2.HorizontalPodAutoscaler
-		g.Expect(k8sClient.Get(ctx, hpaKey, &hpa)).To(gomega.Succeed())
-		g.Expect(hpa.Spec.MinReplicas).NotTo(gomega.BeNil())
-		return *hpa.Spec.MinReplicas
-	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Equal(int32(1)))
-
-	// Edit the HPA out of band, the way the old e2e did.
-	var hpa autoscalingv2.HorizontalPodAutoscaler
-	require.NoError(t, k8sClient.Get(ctx, hpaKey, &hpa))
-	hpa.Spec.MinReplicas = ptr32(2)
-	require.NoError(t, k8sClient.Update(ctx, &hpa))
-
-	// The next reconcile — which in a real cluster the HPA's own scale-out would
-	// trigger via the Deployment watch — reverts it to the CR's value.
-	g.Eventually(func(g gomega.Gomega) int32 {
-		var got autoscalingv2.HorizontalPodAutoscaler
-		g.Expect(k8sClient.Get(ctx, hpaKey, &got)).To(gomega.Succeed())
-		g.Expect(got.Spec.MinReplicas).NotTo(gomega.BeNil())
-		return *got.Spec.MinReplicas
-	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Equal(int32(1)),
-		"GMC must reconcile the HPA's bounds back to the ActionsGateway spec")
-
-	// Raising the floor on the CR is the supported path, and it sticks.
-	require.Eventually(t, func() bool {
-		var fetched gmcv1alpha1.ActionsGateway
-		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: nsName, Name: "bounds-gateway"}, &fetched); err != nil {
-			return false
-		}
-		fetched.Spec.Proxy.MinReplicas = ptr32(2)
-		return k8sClient.Update(ctx, &fetched) == nil
-	}, 5*time.Second, 25*time.Millisecond, "raise proxy.minReplicas on the CR")
-
-	g.Eventually(func(g gomega.Gomega) int32 {
-		var got autoscalingv2.HorizontalPodAutoscaler
-		g.Expect(k8sClient.Get(ctx, hpaKey, &got)).To(gomega.Succeed())
-		g.Expect(got.Spec.MinReplicas).NotTo(gomega.BeNil())
-		return *got.Spec.MinReplicas
-	}, 20*time.Second, 25*time.Millisecond).Should(gomega.Equal(int32(2)))
 }

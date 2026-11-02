@@ -10,7 +10,8 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
 
 ## What it installs
 
-- The two tenant CRDs — `ActionsGateway` and `RunnerGroup` — under `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall` preserves tenant objects.
+- The `v1alpha1` `RunnerGroup` CRD under `templates/crds/` with `helm.sh/resource-policy: keep` so `helm upgrade` carries CRD field changes (Helm never upgrades the chart-root `crds/` dir) and `helm uninstall` preserves tenant objects.
+  The `ActionsGateway` kind ships in the separate `actions-gateway-crds-v2` chart.
 - The `PriorityClassAllowlist` CRD, uniquely, under the chart-root **`crds/`** dir: the chart also renders a `PriorityClassAllowlist` CR (the `priorityclass-allowlist-guard` policy's param).
   Helm resolves REST mappings for the entire manifest before applying any of it, so a CR whose CRD is a template in the same release fails the install with `no matches for kind`.
   Only `crds/` is installed ahead of that resolution.
@@ -126,10 +127,6 @@ The `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; 
 | `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | GMC pod scheduling. |
 | `topologySpreadConstraints.enabled` | `true` | Spread the GMC replicas across nodes (soft, `ScheduleAnyway`) so one node failure can't evict both. Set `false` to drop it. |
 | `topologySpreadConstraints.{maxSkew,topologyKey,whenUnsatisfiable}` | `1` / `kubernetes.io/hostname` / `ScheduleAnyway` | Spread tuning; raise to `topology.kubernetes.io/zone` on multi-zone clusters. |
-| `sampleGateway.create` | `false` | Render an example `ActionsGateway` (dev only). |
-| `sampleGateway.securityProfile` | `baseline` | Profile for the sample CR (`baseline`/`restricted`/`privileged`). |
-| `sampleGateway.gitHubAppSecretName` | `github-app-v1` | GitHub App Secret name referenced by the sample CR. |
-| `sampleGateway.gitHubURL` | `https://github.com/my-org` | GitHub org/enterprise/repo URL the sample CR's runners register against. |
 
 A `values.schema.json` validates these at install/lint time (image digest format, security-profile enum, pull-policy enum, etc.).
 

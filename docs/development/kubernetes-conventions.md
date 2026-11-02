@@ -14,7 +14,7 @@ Why:
 - **YAML coercion footgun.** In a manifest, `my-label: true` parses as a YAML boolean, not the string `"true"`.
   A Kubernetes label/annotation value must be a string, so the unquoted form either errors or has to be remembered as `"true"` (quoted) every time.
   YAML 1.1 coerces `yes`/`no`/`on`/`off` (and their capitalised variants) the same way, so the trap is wider than just `true`/`false`.
-- **Self-documenting.** `actions-gateway.github.com/privileged-profile: allowed` reads as a deliberate grant.
+- **Self-documenting.** `actions-gateway.com/privileged-profile: allowed` reads as a deliberate grant.
   `…: "true"` carries no meaning and invites the reader to drop the quotes.
 
 The value is always matched **exactly** and the check is **fail-closed**: any value other than the sentinel keyword (and an absent label) is treated as "not granted".
@@ -25,10 +25,10 @@ So even if someone fat-fingers `true`, eligibility is denied rather than silentl
 ```yaml
 metadata:
   labels:
-    actions-gateway.github.com/privileged-profile: allowed   # not "true"
+    actions-gateway.com/privileged-profile: allowed   # not "true"
 ```
 
-See `PrivilegedProfileLabel` / `PrivilegedProfileAllowed` in [`cmd/gmc/api/v1alpha1/actionsgateway_types.go`](../../cmd/gmc/api/v1alpha1/actionsgateway_types.go) and [§5.3 of the security design](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
+See `PrivilegedProfileLabel` / `PrivilegedProfileAllowed` in [`api/v2/shared_types.go`](../../api/v2/shared_types.go) and [§5.3 of the security design](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
 
 **v2 operator-set label — namespace security profile.** v2 relocates the Pod Security Admission level off the per-gateway `ActionsGateway.spec.securityProfile` (v1) onto the **tenant namespace** (Q175 / appendix-h §H.16 #7): the operator sets
 

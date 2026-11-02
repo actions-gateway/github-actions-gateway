@@ -17,7 +17,7 @@ Migrate a real, running `v1alpha1` Docker-in-Docker tenant to v2 on the GKE dogf
 
 ## Why the existing e2e is not enough
 
-[Q414](../../../cmd/gmc/test/e2e/migration_v1_to_v2_test.go) already covers the tool on a live `kind` cluster, and covers it well: dry-run fan-out, the `ClusterRunnerTemplate`-vs-`RunnerTemplate` admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
+[Q414](https://github.com/actions-gateway/github-actions-gateway/blob/7012cb4e8/cmd/gmc/test/e2e/migration_v1_to_v2_test.go) already covers the tool on a live `kind` cluster, and covers it well: dry-run fan-out, the `ClusterRunnerTemplate`-vs-`RunnerTemplate` admission split, the namespace patch, v1/v2 coexistence, and the migrated control plane reconciling to Ready.
 That spec says so itself — it names this plan as the follow-up.
 
 Three things it deliberately does not do, each of which is where a real migration can still fail:
@@ -45,8 +45,8 @@ Both describe a path that **ceases to exist at `v2.0.0`**, when `v1alpha1` is re
 
 | Asset | Purpose |
 |---|---|
-| [`deploy/dogfood-migrate/`](../../../deploy/dogfood-migrate/README.md) | The `v1alpha1` DinD tenant, mirroring the `utils.DinDTenant` fixture shape the Queue row names, sized for a smoke job rather than the full e2e suite. |
-| [`.github/workflows/dogfood-migrate-validate.yml`](../../../.github/workflows/dogfood-migrate-validate.yml) | A `workflow_dispatch`-only DinD smoke job targeting the tenant's runner label. Never runs on push or PR. |
+| `deploy/dogfood-migrate/` | The `v1alpha1` DinD tenant, mirroring the `utils.DinDTenant` fixture shape the Queue row names, sized for a smoke job rather than the full e2e suite. |
+| `.github/workflows/dogfood-migrate-validate.yml` | A `workflow_dispatch`-only DinD smoke job targeting the tenant's runner label. Never runs on push or PR. |
 
 ### Why a smoke job, not the full e2e suite
 
@@ -144,10 +144,10 @@ The dry-run fans the tenant out to all four expected v2 kinds (`ActionsGateway`,
 
 ### Defect found: `gag-migrate`'s grant detection does not dual-read
 
-The v1 validating webhook **dual-reads** the privileged-eligibility grant across both label domains for the v1/v2 coexistence window — deliberately, per §H.12, so that relabelling a namespace onto the v2 domain does not strand a still-running v1 gateway ([actionsgateway_webhook.go:279](../../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go)).
+The v1 validating webhook **dual-reads** the privileged-eligibility grant across both label domains for the v1/v2 coexistence window — deliberately, per §H.12, so that relabelling a namespace onto the v2 domain does not strand a still-running v1 gateway (actionsgateway_webhook.go:279).
 
 `gag-migrate` does not.
-Its carry-forward check reads only the **v1** domain ([migrate.go:387](../../../cmd/gmc/internal/migrate/migrate.go)), while the warning it emits on a miss names the **v2** label:
+Its carry-forward check reads only the **v1** domain (migrate.go:387), while the warning it emits on a miss names the **v2** label:
 
 > namespace … migrates to securityProfile=privileged but holds no `actions-gateway.com/privileged-profile=allowed` grant; a platform administrator must apply the v2 eligibility label or the profile will be rejected
 
@@ -254,7 +254,7 @@ The GMC now exempts the API server by the address the cluster reports — its ow
 `kubernetes.default.svc` joins the static half for clusters whose cluster domain is not `cluster.local`.
 Worker pods lose the range outright and gain nothing: they hold no kubeconfig and never dial the API server.
 The net effect is a *narrower* default on every distribution — one API server address instead of a /12 of unrelated hosts.
-The workaround `noProxyCIDRs: [34.118.224.0/20]` was removed from [`deploy/dogfood-migrate/resources.yaml`](../../../deploy/dogfood-migrate/resources.yaml) so that a clean AGC startup would itself be the verification — [confirmed live 2026-07-31](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
+The workaround `noProxyCIDRs: [34.118.224.0/20]` was removed from `deploy/dogfood-migrate/resources.yaml` so that a clean AGC startup would itself be the verification — [confirmed live 2026-07-31](#re-validation-on-a-fixed-control-plane-2026-07-31-q472).
 
 ### Defect: v1 and v2 collide during coexistence (Q466)
 
@@ -336,7 +336,7 @@ The tenant ran with `noProxyCIDRs` unset **and** its natural gateway name `dogfo
 Both smoke jobs went green with the natural name — baseline [run 30647304201](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647304201) on the v1 classic path (runner `dogfood-migrate-gag-migrate-v1-18c32e1-0`) and [run 30647976704](https://github.com/actions-gateway/github-actions-gateway/actions/runs/30647976704) after the migration on the scale-set path (runner `gag-migrate-v1-1085497c-…`, provisioned via `scaleSetPodName`).
 The Q231 recreate flipped the stored annotation `Classic` → `ScaleSet` as before.
 Teardown followed the documented order and deadlocked nowhere: RunnerSets, gateway, namespace and the cluster-scoped `ClusterRunnerTemplate` all cleared without a stranded finalizer, leaving no orphan.
-Both workarounds are now removed from [`resources.yaml`](../../../deploy/dogfood-migrate/resources.yaml) permanently.
+Both workarounds are now removed from `resources.yaml` permanently.
 
 **The workarounds were load-bearing, and removing them proved it.** The natural name is the case Q467 originally failed on: the old derivation cut `runner-dogfood-migrate-gag-migrate-v1-18c32e1-<planID>` at index 63, landing on the UUID's hyphen at index 8, and every worker pod was rejected.
 

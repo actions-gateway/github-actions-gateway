@@ -39,7 +39,7 @@ Before beginning, confirm all of the following:
   Decide this before provisioning — see [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md).
 - [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`.
   Install it with the [`actions-gateway` Helm chart](../../charts/actions-gateway/README.md) (`helm install gag charts/actions-gateway -n gmc-system --create-namespace …`).
-- [ ] **CRDs are installed.** `kubectl get crd actionsgateways.actions-gateway.github.com && kubectl get crd runnergroups.actions-gateway.github.com`.
+- [ ] **CRDs are installed.** `kubectl get crd actionsgateways.actions-gateway.com && kubectl get crd runnergroups.actions-gateway.github.com`.
 - [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with the permissions in [Step 0a](#0a-create-the-app-web-ui): `Actions: Read and write`, plus `Self-hosted runners: Read and write` (organization `gitHubURL`) or `Administration: Read and write` (repository `gitHubURL`).
   The platform team has the `appId`, `installationId`, and private key `.pem` file.
   First time?

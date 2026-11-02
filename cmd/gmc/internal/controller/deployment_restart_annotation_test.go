@@ -27,37 +27,12 @@ func injectRestartedAt(t *testing.T, c client.Client, key types.NamespacedName, 
 	require.NoError(t, c.Update(context.Background(), &dep))
 }
 
-// TestApplyDeployment_PreservesRestartedAt is the Q552 regression: an operator
-// runs `kubectl rollout restart` on the v1 AGC Deployment and the next GMC
-// reconcile must not revert the restartedAt annotation — reverting it rolls the
-// pod template back to the pre-restart hash, so the Deployment controller never
-// creates a new ReplicaSet and the restart is a silent no-op.
-func TestApplyDeployment_PreservesRestartedAt(t *testing.T) {
-	scheme := applyTestScheme(t)
-	c := fake.NewClientBuilder().WithScheme(scheme).Build()
-	r := applyTestReconciler(t, c, scheme)
-	ag := applyTestAG()
-	key := types.NamespacedName{Namespace: ag.Namespace, Name: agcAppName}
-
-	desired := func() *appsv1.Deployment {
-		return buildAGCDeployment(ag, "agc:test", "proxy:8080", nil)
-	}
-	require.NoError(t, r.applyDeployment(context.Background(), ag, desired()))
-	injectRestartedAt(t, c, key, "2026-07-31T12:00:00Z")
-
-	require.NoError(t, r.applyDeployment(context.Background(), ag, desired()))
-
-	var dep appsv1.Deployment
-	require.NoError(t, c.Get(context.Background(), key, &dep))
-	assert.Equal(t, "2026-07-31T12:00:00Z", dep.Spec.Template.Annotations[kubectlRestartedAtAnnotation],
-		"an operator-injected restartedAt must survive reconcile, or the rollout restart is a no-op")
-	// The builder still owns the rest of the template.
-	require.Len(t, dep.Spec.Template.Spec.Containers, 1)
-	assert.Equal(t, "agc:test", dep.Spec.Template.Spec.Containers[0].Image)
-}
-
-// TestV2ApplyDeployment_PreservesRestartedAt is the v2 AGC half of Q552 — the
-// tier the dogfood `agc-bounce` escape hatch actually targets.
+// TestV2ApplyDeployment_PreservesRestartedAt is the Q552 regression: an operator
+// runs `kubectl rollout restart` on the AGC Deployment and the next GMC reconcile
+// must not revert the restartedAt annotation — reverting it rolls the pod template
+// back to the pre-restart hash, so the Deployment controller never creates a new
+// ReplicaSet and the restart is a silent no-op. The dogfood `agc-bounce` escape
+// hatch depends on it.
 func TestV2ApplyDeployment_PreservesRestartedAt(t *testing.T) {
 	scheme := actionsGatewayV2TestScheme(t)
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -111,10 +86,10 @@ func TestApplyDeployment_RevertsUnrelatedTemplateDrift(t *testing.T) {
 	c := fake.NewClientBuilder().WithScheme(scheme).Build()
 	r := applyTestReconciler(t, c, scheme)
 	ag := applyTestAG()
-	key := types.NamespacedName{Namespace: ag.Namespace, Name: agcAppName}
+	key := types.NamespacedName{Namespace: ag.Namespace, Name: agcNameV2(ag)}
 
 	desired := func() *appsv1.Deployment {
-		return buildAGCDeployment(ag, "agc:test", "proxy:8080", nil)
+		return buildAGCDeploymentV2(ag, "agc:test", nil, "restricted", nil)
 	}
 	require.NoError(t, r.applyDeployment(context.Background(), ag, desired()))
 

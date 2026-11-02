@@ -83,7 +83,7 @@ func (r *EgressProxyReconciler) evalEgressProxyEgressRulesStale(ep *gmcv2alpha1.
 }
 
 // egressStaleThreshold returns the configured EgressRulesStale threshold, defaulting
-// to DefaultEgressStaleThreshold when unset (shared with the v1 ActionsGateway).
+// to DefaultEgressStaleThreshold when unset.
 func (r *EgressProxyReconciler) egressStaleThreshold() time.Duration {
 	if r.EgressStaleThreshold > 0 {
 		return r.EgressStaleThreshold

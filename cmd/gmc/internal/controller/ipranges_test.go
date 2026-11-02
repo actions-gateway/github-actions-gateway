@@ -13,19 +13,25 @@ import (
 	"testing"
 	"time"
 
+	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 )
+
+func newIPRangeScheme(t *testing.T) *runtime.Scheme {
+	t.Helper()
+	s := runtime.NewScheme()
+	_ = clientgoscheme.AddToScheme(s)
+	_ = gmcv2alpha1.AddToScheme(s)
+	return s
+}
 
 // stubFetcher is a test double for GitHubIPRangeFetcher.
 type stubFetcher struct {
@@ -37,173 +43,11 @@ func (s *stubFetcher) FetchIPRanges(_ context.Context) ([]net.IPNet, error) {
 	return s.cidrs, s.err
 }
 
-func newIPRangeScheme(t *testing.T) *runtime.Scheme {
-	t.Helper()
-	s := runtime.NewScheme()
-	_ = clientgoscheme.AddToScheme(s)
-	_ = gmcv1alpha1.AddToScheme(s)
-	_ = agcv1alpha1.AddToScheme(s)
-	return s
-}
-
 func parseCIDR(t *testing.T, s string) net.IPNet {
 	t.Helper()
 	_, cidr, err := net.ParseCIDR(s)
 	require.NoError(t, err)
 	return *cidr
-}
-
-func TestIPRangeReconciler_UpdatesNetworkPolicy(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	scheme := newIPRangeScheme(t)
-
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
-		Spec: gmcv1alpha1.ActionsGatewaySpec{
-			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"},
-		},
-	}
-	// Create a pre-existing proxy NetworkPolicy that the reconciler should update.
-	np := buildProxyNetworkPolicy(ag, nil)
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(ag, np).
-		Build()
-
-	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
-	r := &IPRangeReconciler{
-		Client:   fc,
-		Fetcher:  &stubFetcher{cidrs: cidrs},
-		Interval: time.Hour,
-	}
-
-	// Run one tick synchronously.
-	_ = r.reconcileAll(ctx, slog.Default())
-
-	// Check that the proxy NetworkPolicy was updated with the new CIDRs.
-	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npProxyName}, &updated))
-
-	found := false
-	for _, rule := range updated.Spec.Egress {
-		for _, port := range rule.Ports {
-			if port.Port != nil && port.Port.IntVal == 443 {
-				for _, peer := range rule.To {
-					if peer.IPBlock != nil && peer.IPBlock.CIDR == "140.82.112.0/20" {
-						found = true
-					}
-				}
-			}
-		}
-	}
-	assert.True(t, found, "proxy NetworkPolicy should contain the updated GitHub CIDR")
-}
-
-func TestIPRangeReconciler_SkipsManagedFalse(t *testing.T) {
-	ctx := context.Background()
-	scheme := newIPRangeScheme(t)
-
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
-		Spec: gmcv1alpha1.ActionsGatewaySpec{
-			GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"},
-			Proxy:        gmcv1alpha1.ProxyConfig{ManagedNetworkPolicy: ptr(false)},
-		},
-	}
-	np := buildProxyNetworkPolicy(ag, nil)
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(ag, np).
-		Build()
-
-	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
-	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
-	_ = r.reconcileAll(ctx, slog.Default())
-
-	// Proxy NetworkPolicy should not contain the GitHub CIDR.
-	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npProxyName}, &updated))
-
-	for _, rule := range updated.Spec.Egress {
-		for _, port := range rule.Ports {
-			if port.Port != nil && port.Port.IntVal == 443 {
-				for _, peer := range rule.To {
-					if peer.IPBlock != nil {
-						assert.NotEqual(t, "140.82.112.0/20", peer.IPBlock.CIDR, "should not patch when managedNetworkPolicy=false")
-					}
-				}
-			}
-		}
-	}
-}
-
-func TestIPRangeReconciler_FetchError(t *testing.T) {
-	ctx := context.Background()
-	scheme := newIPRangeScheme(t)
-
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
-		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
-	}
-	np := buildProxyNetworkPolicy(ag, nil)
-	originalEgress := np.Spec.Egress
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, np).Build()
-
-	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{err: errors.New("network error")}}
-	_ = r.reconcileAll(ctx, slog.Default()) // must not panic
-
-	// Proxy NetworkPolicy should be unchanged.
-	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npProxyName}, &updated))
-	assert.Equal(t, len(originalEgress), len(updated.Spec.Egress))
-}
-
-// TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh is a regression test for M-9:
-// the IPRangeReconciler used to rebuild the (now-removed) single NetworkPolicy with an empty
-// proxyClusterIP, which dropped the worker→proxy egress rule on every refresh. With the split
-// into proxy and workload policies, the reconciler only patches the proxy NP; the workload NP
-// is untouched by IP range refreshes.
-func TestIPRangeReconciler_WorkloadEgressPreservedAfterRefresh(t *testing.T) {
-	ctx := context.Background()
-	scheme := newIPRangeScheme(t)
-
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
-		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
-	}
-	proxyNP := buildProxyNetworkPolicy(ag, nil)
-	workloadNP := buildWorkloadNetworkPolicy(ag)
-
-	fc := fake.NewClientBuilder().WithScheme(scheme).
-		WithObjects(ag, proxyNP, workloadNP).
-		Build()
-
-	cidrs := []net.IPNet{parseCIDR(t, "140.82.112.0/20")}
-	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: cidrs}}
-	_ = r.reconcileAll(ctx, slog.Default())
-
-	// Workload NP must still have the proxy egress rule (PodSelector on the proxy
-	// app label) — the reconciler must not touch it.
-	var updated networkingv1.NetworkPolicy
-	require.NoError(t, fc.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: npWorkloadName}, &updated))
-
-	found := false
-	for _, rule := range updated.Spec.Egress {
-		for _, port := range rule.Ports {
-			if port.Port != nil && port.Port.IntVal == proxyPort {
-				for _, peer := range rule.To {
-					if peer.PodSelector != nil &&
-						peer.PodSelector.MatchLabels["app"] == proxyAppName {
-						found = true
-					}
-				}
-			}
-		}
-	}
-	assert.True(t, found, "workload NP proxy egress rule must survive an IP range reconcile (M-9 regression)")
 }
 
 // §3 — HTTPGitHubIPRangeFetcher production path
@@ -575,55 +419,6 @@ func (f *flakyFetcher) count() int {
 	return f.calls
 }
 
-func proxyNPHasCIDR(t *testing.T, fc client.Client, ns, cidr string) bool {
-	t.Helper()
-	var np networkingv1.NetworkPolicy
-	if err := fc.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: npProxyName}, &np); err != nil {
-		return false
-	}
-	return hasGitHubCIDREgress(&np, cidr)
-}
-
-// TestIPRangeReconciler_Start_RetriesInitialFetch is the regression test for Q61.
-// The IPRangeReconciler used to run the initial fetch exactly once on Start; a
-// transient failure left the cache (and every proxy NetworkPolicy's ipBlock
-// egress allowlist) empty until the next Interval tick — 24h in production —
-// surfacing as the ProxyConnectWorks e2e flake. Start must now retry the initial
-// fetch on a sub-Interval cadence until it succeeds and patches the proxy NP.
-func TestIPRangeReconciler_Start_RetriesInitialFetch(t *testing.T) {
-	scheme := newIPRangeScheme(t)
-
-	ag := &gmcv1alpha1.ActionsGateway{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "team-a"},
-		Spec:       gmcv1alpha1.ActionsGatewaySpec{GitHubAppRef: gmcv1alpha1.SecretReference{Name: "s"}},
-	}
-	np := buildProxyNetworkPolicy(ag, nil)
-	fc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, np).Build()
-
-	const cidr = "140.82.112.0/20"
-	ff := &flakyFetcher{failCount: 2, cidrs: []net.IPNet{parseCIDR(t, cidr)}}
-	r := &IPRangeReconciler{
-		Client:         fc,
-		Fetcher:        ff,
-		Cache:          &IPRangeCache{},
-		Interval:       time.Hour, // ticker must not fire during the test — only the retry loop should
-		InitialBackoff: time.Millisecond,
-		MaxBackoff:     5 * time.Millisecond,
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- r.Start(ctx) }()
-
-	require.Eventually(t, func() bool { return proxyNPHasCIDR(t, fc, "team-a", cidr) },
-		2*time.Second, 5*time.Millisecond,
-		"initial fetch should be retried until it succeeds and patches the proxy NP")
-	assert.GreaterOrEqual(t, ff.count(), 3, "two failures plus the successful retry")
-
-	cancel()
-	require.NoError(t, <-done)
-}
-
 // TestIPRangeReconciler_Start_RetryStopsOnCancel ensures the initial-fetch retry
 // loop honours context cancellation when the fetch never recovers, rather than
 // spinning forever.
@@ -735,4 +530,117 @@ func TestIPRangeReconciler_RateLimitedInitialFetchWaits(t *testing.T) {
 		28 * time.Minute, time.Minute, time.Hour, time.Minute, 2 * time.Minute, time.Second,
 	}, waits)
 	assert.Len(t, r.Cache.Snapshot(), 1, "the loop must still finish once the fetch succeeds")
+}
+
+// TestIPRangeCache_LastRefresh: the cache reports zero/false before the first
+// refresh and the stamped time after.
+func TestIPRangeCache_LastRefresh(t *testing.T) {
+	cache := &IPRangeCache{}
+	if _, ok := cache.LastRefresh(); ok {
+		t.Fatal("a fresh cache must report no refresh yet")
+	}
+	now := time.Now()
+	cache.MarkRefreshed(now)
+	got, ok := cache.LastRefresh()
+	assert.True(t, ok)
+	assert.Equal(t, now, got)
+}
+
+// ipRangeTestPool returns a CIDR-mode EgressProxy and the NetworkPolicy its
+// reconcile would have created, carrying no GitHub CIDRs yet.
+func ipRangeTestPool() (*gmcv2alpha1.EgressProxy, *networkingv1.NetworkPolicy) {
+	ep := newEP("pool", "team-a", nil)
+	return ep, buildEgressProxyNetworkPolicy(ep, nil)
+}
+
+// poolNPHasCIDR reports whether the pool NetworkPolicy's egress admits cidr.
+func poolNPHasCIDR(t *testing.T, fc client.Client, ep *gmcv2alpha1.EgressProxy, cidr string) bool {
+	t.Helper()
+	var np networkingv1.NetworkPolicy
+	if err := fc.Get(context.Background(), client.ObjectKey{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &np); err != nil {
+		return false
+	}
+	for _, rule := range np.Spec.Egress {
+		for _, peer := range rule.To {
+			if peer.IPBlock != nil && peer.IPBlock.CIDR == cidr {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TestIPRangeReconciler_UpdatesEgressProxyNetworkPolicy(t *testing.T) {
+	ep, np := ipRangeTestPool()
+	fc := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(ep, np).Build()
+	const cidr = "140.82.112.0/20"
+	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{cidrs: []net.IPNet{parseCIDR(t, cidr)}}, V2Enabled: true}
+
+	require.NoError(t, r.reconcileAll(context.Background(), slog.Default()))
+	assert.True(t, poolNPHasCIDR(t, fc, ep, cidr))
+}
+
+func TestIPRangeReconciler_FetchErrorLeavesNetworkPolicy(t *testing.T) {
+	ep, np := ipRangeTestPool()
+	fc := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(ep, np).Build()
+	r := &IPRangeReconciler{Client: fc, Fetcher: &stubFetcher{err: errors.New("network error")}, V2Enabled: true}
+
+	_ = r.reconcileAll(context.Background(), slog.Default()) // must not panic
+
+	var updated networkingv1.NetworkPolicy
+	require.NoError(t, fc.Get(context.Background(), client.ObjectKeyFromObject(np), &updated))
+	assert.Equal(t, np.Spec.Egress, updated.Spec.Egress)
+}
+
+func TestIPRangeReconciler_Start_RetriesInitialFetch(t *testing.T) {
+	ep, np := ipRangeTestPool()
+	fc := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(ep, np).Build()
+
+	const cidr = "140.82.112.0/20"
+	ff := &flakyFetcher{failCount: 2, cidrs: []net.IPNet{parseCIDR(t, cidr)}}
+	r := &IPRangeReconciler{
+		Client:         fc,
+		Fetcher:        ff,
+		Cache:          &IPRangeCache{},
+		Interval:       time.Hour, // ticker must not fire during the test — only the retry loop should
+		InitialBackoff: time.Millisecond,
+		MaxBackoff:     5 * time.Millisecond,
+		V2Enabled:      true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- r.Start(ctx) }()
+
+	require.Eventually(t, func() bool { return poolNPHasCIDR(t, fc, ep, cidr) },
+		2*time.Second, 5*time.Millisecond,
+		"initial fetch should be retried until it succeeds and patches the pool NetworkPolicy")
+	assert.GreaterOrEqual(t, ff.count(), 3, "two failures plus the successful retry")
+
+	cancel()
+	require.NoError(t, <-done)
+}
+
+func TestIPRangeReconciler_IncrementsUpdateCounter(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ep, np := ipRangeTestPool()
+	fc := fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(ep, np).Build()
+	m := testIPRangeUpdates()
+	r := &IPRangeReconciler{
+		Client:    fc,
+		Fetcher:   &stubFetcher{cidrs: []net.IPNet{parseCIDR(t, "140.82.112.0/20")}},
+		Interval:  time.Hour,
+		Metrics:   m,
+		V2Enabled: true,
+	}
+
+	require.NoError(t, r.reconcileAll(ctx, slog.Default()))
+	assert.Equal(t, 1.0, testutil.ToFloat64(m.IPRangeUpdates.WithLabelValues("team-a")),
+		"one successful patch should record one update")
+
+	// A second refresh patches again.
+	require.NoError(t, r.reconcileAll(ctx, slog.Default()))
+	assert.Equal(t, 2.0, testutil.ToFloat64(m.IPRangeUpdates.WithLabelValues("team-a")))
 }

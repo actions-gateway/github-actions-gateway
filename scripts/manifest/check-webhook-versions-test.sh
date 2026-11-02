@@ -88,7 +88,7 @@ PY
 
 root="$(fixture)"
 run_checker "${root}"
-expect 'the shipped tree matches' 0 'webhook rules match a served version: 6 rules over 8 CRDs'
+expect 'the shipped tree matches' 0 'webhook rules match a served version: 5 rules over 7 CRDs'
 
 # --- the v2.0.0 removal: v2alpha1 is no longer served ------------------------
 #
@@ -103,8 +103,7 @@ expect 'unserving v2alpha1 passes, since no rule names it' 0 'match a served ver
 # --- a removal the rules still depend on: v2 is no longer served -------------
 #
 # The same defect aimed at the version the rules do name. Each actions-gateway.com
-# rule names v2 alone, so each must be named; the v1alpha1 rule names another group
-# and must not be.
+# rule names v2 alone, so each must be named.
 
 root="$(fixture)"
 unserve "${root}" v2
@@ -113,12 +112,6 @@ expect 'unserving v2 fails the rules that name only it' 1 'at v2, none of which 
 for wh in vactionsgateway vclusterrunnertemplate vegressproxy vrunnerset vrunnertemplate; do
 	expect "  and names ${wh}-v2" 1 "${wh}-v2.kb.io: names"
 done
-if [[ "${out}" == *"vactionsgateway-v1alpha1.kb.io"* ]]; then
-	echo "FAIL the v1alpha1 rule was named, though its version is still served" >&2
-	fails=$((fails + 1))
-else
-	echo "ok   the v1alpha1 rule is not named"
-fi
 
 # --- the fix: a rule pointed at a version that survives ----------------------
 #
@@ -141,13 +134,13 @@ expect 'a rule that also names a served version passes' 0 'match a served versio
 
 # --- a whole CRD removed -----------------------------------------------------
 #
-# Deleting the v1alpha1 CRD outright leaves its webhook as unmatched as dropping
-# one version does, and the group no longer appears anywhere to compare against.
+# Deleting a CRD outright leaves its webhook as unmatched as dropping one version
+# does, and the kind no longer appears anywhere to compare against.
 
 root="$(fixture)"
-rm "${root}/${V1_CRDS}/actions-gateway.github.com_actionsgateways.yaml"
+rm "${root}/${V2_CRDS}/actions-gateway.com_runnersets.yaml"
 run_checker "${root}"
-expect 'a rule whose CRD is gone fails' 1 'vactionsgateway-v1alpha1.kb.io: names actionsgateways.actions-gateway.github.com, which no CRD in this repo defines'
+expect 'a rule whose CRD is gone fails' 1 'vrunnerset-v2.kb.io: names runnersets.actions-gateway.com, which no CRD in this repo defines'
 
 # --- reads that cannot be taken are refusals, never passes ------------------
 

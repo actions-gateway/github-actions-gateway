@@ -14,8 +14,8 @@ import (
 )
 
 func TestGenerateMetricsCerts_Valid(t *testing.T) {
-	ag := newTestAG("gateway", "team-a")
-	b, err := generateMetricsCerts(ag)
+	const namespace, svc = "team-a", "gateway-agc"
+	b, err := generateMetricsCertsV2(namespace, svc)
 	require.NoError(t, err)
 	require.NotNil(t, b)
 
@@ -38,10 +38,8 @@ func TestGenerateMetricsCerts_Valid(t *testing.T) {
 	require.NoError(t, err)
 	_, err = serverCert.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}})
 	assert.NoError(t, err, "server cert must verify for ServerAuth against the CA")
-	assert.Contains(t, serverCert.DNSNames, fmt.Sprintf("%s.%s.svc", proxyServiceName, ag.Namespace),
-		"server cert must list the proxy Service FQDN as a SAN")
-	assert.Contains(t, serverCert.DNSNames, fmt.Sprintf("%s.%s.svc", agcAppName, ag.Namespace),
-		"server cert must list the AGC Service FQDN as a SAN")
+	assert.Contains(t, serverCert.DNSNames, fmt.Sprintf("%s.%s.svc", svc, namespace),
+		"server cert must list the Service FQDN as a SAN")
 
 	// Client cert chains to the CA and is valid for client auth.
 	clientCert, err := parseCertPEM(b.clientCertPEM)
@@ -60,8 +58,8 @@ func TestGenerateMetricsCerts_Valid(t *testing.T) {
 // RequireAndVerifyClientCert accepts the scraper client cert and rejects a
 // request without one.
 func TestGenerateMetricsCerts_MTLSHandshake(t *testing.T) {
-	ag := newTestAG("gateway", "team-a")
-	b, err := generateMetricsCerts(ag)
+	const namespace, svc = "team-a", "gateway-agc"
+	b, err := generateMetricsCertsV2(namespace, svc)
 	require.NoError(t, err)
 
 	serverKP, err := tls.X509KeyPair(b.serverCertPEM, b.serverKeyPEM)
@@ -81,7 +79,7 @@ func TestGenerateMetricsCerts_MTLSHandshake(t *testing.T) {
 	srv.StartTLS()
 	defer srv.Close()
 
-	sni := fmt.Sprintf("%s.%s.svc", proxyServiceName, ag.Namespace)
+	sni := fmt.Sprintf("%s.%s.svc", svc, namespace)
 
 	// With the scraper client cert → success.
 	clientKP, err := tls.X509KeyPair(b.clientCertPEM, b.clientKeyPEM)

@@ -25,9 +25,3 @@ docs/operations/upgrade.md.
 {{ end -}}
 
 Onboard a tenant: docs/operations/tenant-onboarding.md
-{{- if .Values.sampleGateway.create }}
-
-WARNING: sampleGateway.create=true rendered an ActionsGateway into
-"{{ .Release.Namespace }}", which the webhook forbids for the GMC's own
-namespace. Move it to a marked tenant namespace before applying for real.
-{{- end }}

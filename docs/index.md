@@ -382,7 +382,7 @@ spec:
 6.  The first 5 GPU pods get the higher-priority `PriorityClass`; the next tier bursts opportunistically; the final threshold caps total concurrency.
     The `priorityClassName` values must be on the platform's allowlist (a watched `PriorityClassAllowlist` CR, grown without a GMC restart; the `--allowed-priority-classes` flag remains the fail-safe baseline), and whether a tier preempts is set on the platform-owned `PriorityClass` object, so a tenant cannot name a class that evicts other tenants' pods.
 
-The legacy single-CR `v1alpha1` shape, which expresses this whole gateway in one `ActionsGateway` CR, is still fully served but **[deprecated, and removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**; see the [getting-started walkthrough](getting-started.md#legacy-the-v1alpha1-api-deprecated) for it and the [v1 → v2 migration guide](operations/migration-v1-to-v2.md) to move across without changing how your jobs are acquired.
+The legacy single-CR `v1alpha1` shape, which expressed this whole gateway in one `ActionsGateway` CR, is **[removed at `v2.0.0`](operations/v1alpha1-deprecation.md)**; the [v1 → v2 migration guide](operations/migration-v1-to-v2.md) moves a v1 tenant across without changing how its jobs are acquired.
 
 Ready to try it?
 Follow the [getting-started guide](getting-started.md).

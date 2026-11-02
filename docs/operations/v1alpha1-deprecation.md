@@ -145,7 +145,8 @@ There is deliberately **no date**.
 ## Before you upgrade past `v2.0.0`
 
 1. **Migrate off `v1alpha1`.** Run [`gag-migrate`](migration-v1-to-v2.md), which also relabels the namespace markers and annotations onto the `actions-gateway.com/` spellings.
-   Do this *before* upgrading: after removal the legacy spellings and the v1 finalizer names are no longer honored, and any remaining `v1alpha1` objects have no served version.
+   Do this *before* upgrading, and [decommission v1](migration-v1-to-v2.md#step-4--decommission-v1-when-ready) while the 1.x controllers still run: after removal the legacy spellings are no longer honored, and nothing reconciles a remaining `v1alpha1` object.
+   Helm keeps the two `v1alpha1` CRDs on upgrade (`helm.sh/resource-policy: keep`), so a leftover object stays stored and a `RunnerGroup`'s finalizer never clears; [upgrade.md](upgrade.md#before-upgrading-to-v200-no-v1alpha1-object-is-left) has the check and the cleanup.
 2. **Move `v2alpha1` and `v2beta1` objects to `v2`.** Re-apply them at `v2` (or let the conversion webhook serve them there and re-record your GitOps manifests at that version) so nothing in Git still names a removed version.
 3. **Replace Classic runner sets with `ScaleSet` sets.** Created fresh, since `acquisitionProtocol` is immutable.
    The labels carry across as they are, since a `ScaleSet` set registers every `runnerLabel`, so a multi-label group does not have to be split.

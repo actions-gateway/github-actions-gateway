@@ -7,8 +7,8 @@
 # The shipped tree passes, and so would a checker that had stopped reading
 # anything, so every case below breaks a copy of the real files and demands the
 # verdict change. The central one is Q1267's own defect: the -v2alpha1 names
-# every selector carried after Q1150 renamed the webhooks to -v2. The removal Q273
-# makes, deleting the v1alpha1 webhook, must fail until the selectors drop it.
+# every selector carried after Q1150 renamed the webhooks to -v2. A selector still
+# naming the v1alpha1 webhook Q273 removed must fail too.
 #
 # Each case mutates a copy of the real files rather than a hand-written fixture,
 # so the shapes under test are the ones the docs and dashboards actually carry.
@@ -86,15 +86,14 @@ PY
 
 root="$(fixture)"
 run_checker "${root}"
-expect 'the shipped tree matches' 0 '3 selectors and the preview exporter over 6 webhooks'
+expect 'the shipped tree matches' 0 '3 selectors and the preview exporter over 5 webhooks'
 
 # --- Q1267: the names every selector carried after Q1150 ---------------------
 #
-# Each -v2 webhook must be named as missed, in each of the three sites, and the
-# v1alpha1 webhook, whose name never changed, must not be.
+# Each -v2 webhook must be named as missed, in each of the three sites.
 
-fixed='actionsgateway-v1alpha1|actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)'
-stale='actionsgateway-v1alpha1|actionsgateway-v2alpha1|clusterrunnertemplate-v2alpha1|egressproxy-v2alpha1|runnerset-v2alpha1|runnertemplate-v2alpha1)'
+fixed='actionsgateway-v2|clusterrunnertemplate-v2|egressproxy-v2|runnerset-v2|runnertemplate-v2)'
+stale='actionsgateway-v2alpha1|clusterrunnertemplate-v2alpha1|egressproxy-v2alpha1|runnerset-v2alpha1|runnertemplate-v2alpha1)'
 root="$(fixture)"
 rewrite "${root}/${ALERT}" "${fixed}" "${stale}"
 rewrite "${root}/${DASHBOARD}" "${fixed}" "${stale}"
@@ -106,12 +105,6 @@ for f in "${ALERT}" "${TABLE}" "${DASHBOARD}"; do
 		expect "  ${f} misses v${kind}-v2" 1 "${f}: does not match v${kind}-v2.kb.io"
 	done
 done
-if [[ "${out}" == *"vactionsgateway-v1alpha1"* ]]; then
-	echo "FAIL the v1alpha1 webhook was named, though every selector still matches it" >&2
-	fails=$((fails + 1))
-else
-	echo "ok   the v1alpha1 webhook is not named"
-fi
 
 # --- one site alone drifting is caught ---------------------------------------
 #
@@ -155,28 +148,13 @@ expect '  and a negative matcher is refused' 2 'is not name=~'
 
 # --- Q273: the v1alpha1 webhook removed --------------------------------------
 #
-# Deleting the webhook leaves its alternative in every selector, so all three
-# must fail until the selectors drop it, and pass once they do.
+# The chart no longer ships vactionsgateway-v1alpha1.kb.io, so a selector that
+# keeps its alternative names a webhook nothing serves.
 
 root="$(fixture)"
-python3 - "${root}/${WEBHOOKS}" <<'PY'
-import re, sys
-p = sys.argv[1]
-s = open(p).read()
-t = re.sub(r"^- [^\n]*\n(?:  [^\n]*\n|    [^\n]*\n)*?  name: vactionsgateway-v1alpha1\.kb\.io\n(?:  [^\n]*\n)*", "", s, flags=re.M)
-if t == s:
-    sys.exit("remove: no vactionsgateway-v1alpha1 webhook block")
-open(p, "w").write(t)
-PY
+rewrite "${root}/${ALERT}" 'v(actionsgateway-v2|' 'v(actionsgateway-v1alpha1|actionsgateway-v2|'
 run_checker "${root}"
-expect 'removing the v1alpha1 webhook fails the selectors that still name it' 1 "${ALERT}: names vactionsgateway-v1alpha1.kb.io, which the chart does not ship"
-for f in "${ALERT}" "${DASHBOARD}"; do
-	rewrite "${root}/${f}" 'v(actionsgateway-v1alpha1|' 'v('
-done
-rewrite "${root}/${TABLE}" 'v(actionsgateway-v1alpha1\|' 'v('
-rewrite "${root}/${EXPORTER}" '"vactionsgateway-v1alpha1.kb.io"' '"vactionsgateway-v1alpha1-retired"'
-run_checker "${root}"
-expect '  and passes once every site drops it' 0 'over 5 webhooks'
+expect 'a selector keeping the removed v1alpha1 webhook fails' 1 "${ALERT}: names vactionsgateway-v1alpha1.kb.io, which the chart does not ship"
 
 # --- reads that cannot be taken are refusals, never passes ------------------
 

@@ -7,7 +7,7 @@
     `v2` is the General Availability (GA) version, ScaleSet-only, and the storage version from 1.10.
     `v2beta1` stays served beside it until `v2.0.0` removes it, with the same shape apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so manifests already on `v2beta1` move by re-applying at `v2`.
     `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the versions.
-    The older single-custom-resource (CR) **`v1alpha1`** API is still fully served but **[deprecated](operations/v1alpha1-deprecation.md)**: reach for it only if you have a specific reason to, and see the [legacy v1 path](#legacy-the-v1alpha1-api-deprecated).
+    The older single-custom-resource (CR) **`v1alpha1`** API is no longer served by this GMC.
     `v1alpha1`, `v2alpha1`, `v2beta1` and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md).
     Already on v1?
     [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without changing how your jobs are acquired.
@@ -67,7 +67,7 @@ helm template actions-gateway-crds-v2 \
 ```
 
 Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the hub version), `v2` (the storage version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#optional-the-v2-api-crds) for signature verification and the full options).
-The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean on v1 only (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`).
+The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean with no gateway controllers running (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`).
 See the [chart README](../charts/actions-gateway-crds-v2/README.md).
@@ -152,7 +152,7 @@ stringData:
 ## 4. Create your gateway and runner set (v2, recommended)
 
 The **v2 API** (`actions-gateway.com/v2`) decomposes the single v1 CR into small, composable kinds: an `ActionsGateway` (identity + GitHub binding), a `RunnerTemplate` (a reusable pod shape), a `RunnerSet` per runner type, and an optional `EgressProxy`.
-The set below is feature-equivalent to the legacy v1 example, a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.
+The set below is a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.
 
 **You can skip authoring the template.** GAG ships three validated worker pod shapes; `kubectl apply -k deploy/templates/plain` gives you the baseline one, and a `RunnerSet` then points at it with `templateRef: { name: plain, kind: ClusterRunnerTemplate }` in place of the inline `RunnerTemplate` below.
 If your jobs build container images, start from `kata-dind` instead.
@@ -241,68 +241,6 @@ For the proxy-less flow, reusable/cluster-default templates, multiple gateways p
 Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation.
 See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.
 
-## Legacy: the `v1alpha1` API (deprecated)
-
-!!! warning "`v1alpha1` is deprecated: new tenants should use v2 above"
-    The `actions-gateway.github.com/v1alpha1` single-CR API is still fully served and supported, but it is **[deprecated](operations/v1alpha1-deprecation.md)** in favor of the decomposed v2 API, and it is **removed at `v2.0.0`** (announced with `v1.3.0`, one release ahead, per the project's removal policy).
-    Use it only if you have a specific reason not to adopt v2 yet; if you are already on v1, [`gag-migrate`](operations/migration-v1-to-v2.md) moves you to v2 without changing how your jobs are acquired.
-
-The v1 API expresses the whole gateway, proxy and all runner groups, in a single `ActionsGateway` CR:
-
-<!-- gag:verify id=v1-gateway mode=apply needs=tenant-namespace,github-app-secret teardown=object -->
-```yaml
-apiVersion: actions-gateway.github.com/v1alpha1
-kind: ActionsGateway
-metadata:
-  name: team-a-gateway
-  namespace: team-a
-spec:
-  gitHubAppRef:
-    name: my-github-app
-  # gitHubURL is the org/enterprise/repo URL the runners register against
-  # (required). The App above must be installed on this same org/enterprise.
-  gitHubURL: https://github.com/my-org
-  # securityProfile selects the Pod Security Admission level the GMC stamps
-  # on the tenant namespace. Defaults to "baseline", which blocks privileged
-  # containers, host namespaces, hostPath, and dangerous capabilities, with
-  # no external policy engine required. Use "restricted" for stricter
-  # isolation (runAsNonRoot, drop ALL caps, seccomp RuntimeDefault) or
-  # "privileged" for workloads like docker-in-docker that need an unrestricted
-  # PodSpec. See docs/design/05-security.md §5.3 for the full semantics.
-  securityProfile: baseline
-  proxy:
-    minReplicas: 2
-    maxReplicas: 10
-  # The namespace ResourceQuota is platform-owned and set on the namespace in
-  # step 2. It is not a field on this CR.
-  #
-  # A runner group has no `name` field. Its RunnerGroup CR name is derived by the
-  # GMC from the gateway name + the group's FIRST runnerLabel, so make that first
-  # label distinctive per group ("gpu", "linux" below). Two groups whose first
-  # label matches would derive the same name and collide.
-  runnerGroups:
-    - runnerLabels: ["gpu", "self-hosted"]
-      maxListeners: 10
-      # No priorityTiers here, for the reason given in the v2 example above: the
-      # platform allowlist ships empty, so a tier named at onboarding time is
-      # refused by admission until the platform admin has allowlisted the class.
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
-              resources:
-                limits:
-                  nvidia.com/gpu: "1"
-    - runnerLabels: ["linux", "self-hosted"]
-      maxWorkers: 30
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
-```
-
-The GMC will provision the AGC, proxy pool, RBAC, and network policies in `team-a` automatically.
-
 ## Rotating GitHub App Credentials
 
 When your GitHub App private key expires or is compromised, follow these steps to rotate credentials without downtime:
@@ -330,58 +268,33 @@ When your GitHub App private key expires or is compromised, follow these steps t
        -----END RSA PRIVATE KEY-----
    ```
 
-3. **Update the `ActionsGateway` CR** to reference the new Secret name.
-   The field differs between the two APIs, so take the one matching the gateway you created:
+3. **Update the `ActionsGateway` CR** to reference the new Secret name, which the credentials union names:
 
    <!-- gag:verify id=rotate-patch-ref mode=run needs=v2-gateway-set,github-app-secret-rotated teardown=none -->
    ```sh
-   # v2 (the shape Step 4 creates): the credentials union names the Secret.
    kubectl patch actionsgateway.actions-gateway.com -n team-a team-a-gateway \
      --type=merge -p '{"spec":{"credentials":{"githubApp":{"name":"my-github-app-v2"}}}}'
-   ```
-
-   <!-- gag:verify id=rotate-patch-ref-v1 mode=skip reason=needs-the-legacy-v1-gateway-applied -->
-   ```sh
-   # v1 (legacy): the Secret is named by a top-level ref.
-   kubectl patch actionsgateway.actions-gateway.github.com -n team-a team-a-gateway \
-     --type=merge -p '{"spec":{"gitHubAppRef":{"name":"my-github-app-v2"}}}'
    ```
 
    The GMC detects the Secret reference change, updates the AGC pod template (including an `actions-gateway/github-app-secret` annotation that records the new Secret name), and triggers a rolling update.
    The new pod mounts the new Secret and immediately begins using the new credentials.
 
-4. **Confirm the rollout completed**, against the right Deployment: the AGC is named **per gateway** in v2, as `<gateway-name>-agc`, so a `team-a-gateway` tenant rolls `deploy/team-a-gateway-agc`.
-   Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+4. **Confirm the rollout completed**, against the right Deployment: the AGC is named **per gateway**, as `<gateway-name>-agc`, so a `team-a-gateway` tenant rolls `deploy/team-a-gateway-agc`.
 
    <!-- gag:verify id=rotate-rollout-status mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
    ```sh
-   # v2
    kubectl rollout status deploy/team-a-gateway-agc -n team-a
    # Optionally inspect rotation history:
    kubectl rollout history deploy/team-a-gateway-agc -n team-a
-   ```
-
-   <!-- gag:verify id=rotate-rollout-status-v1 mode=skip reason=needs-a-kubelet-to-roll-a-deployment -->
-   ```sh
-   # v1 (legacy)
-   kubectl rollout status deploy/actions-gateway-controller -n team-a
-   kubectl rollout history deploy/actions-gateway-controller -n team-a
    ```
 
 5. **Verify the new token is working:**
 
    <!-- gag:verify id=rotate-verify-logs mode=skip reason=needs-a-running-agc-pod -->
    ```sh
-   # v2
    kubectl logs -n team-a deploy/team-a-gateway-agc --tail=20
    # Look for: "token ready", logged on every refresh. A failure reads
    # "token fetch failed; retrying after backoff".
-   ```
-
-   <!-- gag:verify id=rotate-verify-logs-v1 mode=skip reason=needs-a-running-agc-pod -->
-   ```sh
-   # v1 (legacy)
-   kubectl logs -n team-a deploy/actions-gateway-controller --tail=20
    ```
 
 6. **Delete the old Secret** once the rollout is confirmed healthy:
@@ -394,16 +307,16 @@ When your GitHub App private key expires or is compromised, follow these steps t
 7. **Revoke the old key** in the GitHub App settings.
 
 **Important:** Do not update the Secret in-place.
-The GMC watches the reference, not the Secret's contents: `spec.credentials.githubApp.name` in v2, `spec.gitHubAppRef.name` in v1.
+The GMC watches the reference, not the Secret's contents: `spec.credentials.githubApp.name`.
 Changing the Secret data without changing the reference name does not trigger an AGC rollout.
 The AGC continues using the cached token derived from the old key until it restarts or the token expires.
 Creating a new Secret and updating the reference is the correct rotation path.
 
 **If the referenced Secret is deleted before you complete the rotation**, the GMC sets a `CredentialUnavailable=True` condition on the `ActionsGateway` CR and stops reconciling child resources.
-Recreating the Secret (with the same name, or updating `gitHubAppRef.name`) clears the condition and resumes normal operation.
+Recreating the Secret (with the same name, or updating `spec.credentials.githubApp.name`) clears the condition and resumes normal operation.
 To inspect the condition:
 
-<!-- gag:verify id=credential-condition mode=run needs=v1-gateway teardown=none -->
+<!-- gag:verify id=credential-condition mode=run needs=v2-gateway-set teardown=none -->
 ```sh
 kubectl get actionsgateway -n team-a team-a-gateway -o jsonpath='{.status.conditions}' | jq .
 ```

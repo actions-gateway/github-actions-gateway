@@ -4,10 +4,8 @@ import (
 	"context"
 	"testing"
 
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,16 +19,14 @@ import (
 // with the given objects, so the cross-object guards can be exercised without a live
 // apiserver. Production wires mgr.GetAPIReader().
 //
-// All four kinds the validator reads are registered, not only the RunnerSet: the
-// agent-identity guard (Q1011) lists v1alpha1 RunnerGroups and both gateway versions
-// and is fail-closed, so a scheme missing any of them fails every admission with a
-// List error rather than exercising the check under test.
+// Every kind the validator reads is registered, not only the RunnerSet: the
+// agent-identity guard (Q1011) lists the gateways too and is fail-closed, so a
+// scheme missing one fails every admission with a List error rather than
+// exercising the check under test.
 func runnerSetValidatorWith(t *testing.T, existing ...client.Object) *RunnerSetCustomValidator {
 	t.Helper()
 	scheme := runtime.NewScheme()
-	require.NoError(t, agcv1alpha1.AddToScheme(scheme))
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
-	require.NoError(t, gmcv1alpha1.AddToScheme(scheme))
 	return &RunnerSetCustomValidator{
 		reader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, existing...)...).Build(),
 	}

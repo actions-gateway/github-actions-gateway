@@ -12,8 +12,7 @@
 # `helm upgrade` carries field changes and `helm uninstall` preserves the CRD).
 #
 # It covers both API groups served side by side: the v1alpha1
-# actions-gateway.github.com CRDs (ActionsGateway, RunnerGroup) and the v2alpha1
-# actions-gateway.com CRDs (ActionsGateway, EgressProxy, RunnerSet, RunnerTemplate,
+# actions-gateway.github.com RunnerGroup CRD and the actions-gateway.com CRDs (ActionsGateway, EgressProxy, RunnerSet, RunnerTemplate,
 # ClusterRunnerTemplate — the v2 decomposition, Q149).
 #
 #   scripts/manifest/sync-chart-crds.sh            # write the chart CRD templates and refresh the
@@ -39,16 +38,8 @@ GMC_BUNDLED_RUNNERGROUP="cmd/gmc/config/crd/bases/actions-gateway.github.com_run
 
 # Per-CRD annotation block injected after the controller-gen version line. Kept
 # here (not in the chart copies) so the chart files are fully generated. The
-# v1alpha1 ActionsGateway and RunnerGroup blocks are preserved verbatim so their
-# rendered chart copies stay byte-identical; the v2 CRDs share one generic block.
-ACTIONSGATEWAY_BLOCK="$(cat <<'EOF'
-    # Shipped under templates/crds/ (not the chart-root crds/ dir) so day-2
-    # `helm upgrade` carries CRD field changes — Helm never upgrades crds/.
-    # resource-policy: keep also makes `helm uninstall` preserve the CRD (and
-    # therefore every tenant's ActionsGateway objects) rather than cascade-delete.
-    helm.sh/resource-policy: keep
-EOF
-)"
+# v1alpha1 RunnerGroup block is preserved verbatim so its rendered chart copy
+# stays byte-identical; the v2 CRDs share one generic block.
 RUNNERGROUP_BLOCK="$(cat <<'EOF'
     # Sourced from the AGC authoritative copy (cmd/agc/config/crd/), not the
     # GMC's stale crd/bases/ copy (Q73 drift). Shipped under templates/crds/
@@ -138,8 +129,6 @@ add_crd() { # add_crd SRC DST BLOCK [CONVERSION_BLOCK]
 }
 
 # v1alpha1 — actions-gateway.github.com.
-add_crd "cmd/gmc/config/crd/bases/actions-gateway.github.com_actionsgateways.yaml" \
-	"charts/actions-gateway/templates/crds/actionsgateway-crd.yaml" "$ACTIONSGATEWAY_BLOCK"
 add_crd "$SRC_RUNNERGROUP" \
 	"charts/actions-gateway/templates/crds/runnergroup-crd.yaml" "$RUNNERGROUP_BLOCK"
 

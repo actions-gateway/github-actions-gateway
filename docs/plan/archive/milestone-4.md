@@ -30,13 +30,13 @@ Last refreshed 2026-06-12.
 |---|---|---|
 | Two `ActionsGateway` CRs → two independent tenants | ✅ Done | 2026-06-12 live on kind via `helm install` (digest-pinned): `tenant-a`+`tenant-b` both `Ready=True` with 2/2 proxy pods in <1 min — see §12 |
 | Deleting one CR removes only that tenant's resources | ✅ Done | 2026-06-12 live: deleting `gateway-b` removed all GMC-managed resources in `tenant-b` only; `tenant-a` stayed Ready and ran a subsequent green job — see §12 |
-| `spec.proxy.maxReplicas` change reflected in HPA | ✅ Done in code | `buildHPA` reads `ag.Spec.Proxy.MaxReplicas` ([builder.go:385](../../../cmd/gmc/internal/controller/builder.go)); `hpa_update_test.go` covers it |
-| Webhook rejects CRs in `kube-system`/`kube-public`/`gmc-system`/`$POD_NAMESPACE` | ✅ Done | [actionsgateway_webhook.go:21-47](../../../cmd/gmc/internal/webhook/v1alpha1/actionsgateway_webhook.go) |
+| `spec.proxy.maxReplicas` change reflected in HPA | ✅ Done in code | `buildHPA` reads `ag.Spec.Proxy.MaxReplicas` (builder.go:385); `hpa_update_test.go` covers it |
+| Webhook rejects CRs in `kube-system`/`kube-public`/`gmc-system`/`$POD_NAMESPACE` | ✅ Done | actionsgateway_webhook.go:21-47 |
 | End-to-end job via proxy (green checkmark + `HTTPS_PROXY` in worker env) | ✅ Done | 2026-06-12 live: runs [27386891757](https://github.com/actions-gateway/gateway-test/actions/runs/27386891757) + [27395702908](https://github.com/actions-gateway/gateway-test/actions/runs/27395702908) concluded `success`; worker pod env carried `HTTPS_PROXY=https://actions-gateway-proxy.tenant-a.svc.cluster.local:8080` — see §12 (needed the Q115 `runAsUser` workaround) |
 | RBAC: no `*` verbs on `secrets`/`pods`/`nodes` in GMC ClusterRole | ✅ Done | `rbac_test.go` has 2 wildcard-detection tests |
 | `go test -race ./...` passes across all four modules | ✅ Done | Per-module test commands pass |
-| Worker ServiceAccount `actions-gateway-worker` created by GMC | ✅ Done | `buildWorkerServiceAccount` ([builder.go:77](../../../cmd/gmc/internal/controller/builder.go)); injected into AGC via `WORKER_SERVICE_ACCOUNT` env |
-| Proxy pods: `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false` | ✅ Done | [builder.go:323-327](../../../cmd/gmc/internal/controller/builder.go); also `Caps Drop ALL` + `Seccomp RuntimeDefault` via W8 |
+| Worker ServiceAccount `actions-gateway-worker` created by GMC | ✅ Done | `buildWorkerServiceAccount` (builder.go:77); injected into AGC via `WORKER_SERVICE_ACCOUNT` env |
+| Proxy pods: `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false` | ✅ Done | builder.go:323-327; also `Caps Drop ALL` + `Seccomp RuntimeDefault` via W8 |
 | IP range reconciler updates NetworkPolicy on 24h tick | ✅ Done | `time.NewTicker(24 * time.Hour)` in [ipranges.go:135-151](../../../cmd/gmc/internal/controller/ipranges.go); `ipranges_test.go` covers the path |
 | GMC runs with leader election | ✅ Done | `--leader-elect` flag wired ([cmd/gmc/cmd/main.go:61,158](../../../cmd/gmc/cmd/main.go)); enabled in `config/manager/manager.yaml:64` |
 | Code committed | ✅ Done | |

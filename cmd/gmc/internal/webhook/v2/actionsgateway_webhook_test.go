@@ -5,11 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,16 +23,13 @@ import (
 // object is stored as its v2alpha1 view (asV2alpha1), the version the validators
 // read siblings at.
 //
-// It registers every kind the validators read, not only the v2 ones: the
-// agent-identity guard (Q1011) lists v1alpha1 RunnerGroups and v1alpha1
-// ActionsGateways and is fail-closed, so an unregistered kind fails admission with a
-// List error rather than exercising the guard under test.
+// It registers every kind the validators read: the agent-identity guard (Q1011) is
+// fail-closed, so an unregistered kind fails admission with a List error rather
+// than exercising the guard under test.
 func fakeReader(t *testing.T, objs ...client.Object) client.Reader {
 	t.Helper()
 	scheme := runtime.NewScheme()
-	require.NoError(t, agcv1alpha1.AddToScheme(scheme))
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
-	require.NoError(t, gmcv1alpha1.AddToScheme(scheme))
 	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, objs...)...).Build()
 }
 

@@ -20,7 +20,6 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
-	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 )
@@ -34,7 +33,7 @@ import (
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
 	// Dedupe API server warnings to one log line per unique message per process.
-	// The default handler logs every occurrence, and the v1alpha1/v2alpha1
+	// The default handler logs every occurrence, and the v2alpha1/v2beta1
 	// deprecation warnings repeat on every read/write of a deprecated-version CR —
 	// under reconcile churn they dominate the log (Q515).
 	restCfg := ctrl.GetConfigOrDie()
@@ -77,7 +76,7 @@ func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Opt
 // returns an error instead of exiting so the flow stays test-reachable and main
 // owns the single exit. The v2 detection must happen before NewMetrics so the
 // scrape-time collectors can count v2 gateways without spinning a failed informer
-// on a v1-only cluster (Q320).
+// on a cluster without the v2 CRDs (Q320).
 func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, img gmcImages) error {
 	// Bounded client for the GitHub meta IP-range fetch (Q138): an overall 60s
 	// deadline plus a transport ResponseHeaderTimeout, so a slow api.github.com
@@ -91,8 +90,8 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 
 	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
 	// the actions-gateway.com/v2alpha1 CRDs, which ship in the SEPARATE, opt-in
-	// actions-gateway-crds-v2 chart. Detect them once at startup: on a v1-only
-	// install the kinds are absent, so registering the v2 controllers
+	// actions-gateway-crds-v2 chart. Detect them once at startup: on an install
+	// without that chart the kinds are absent, so registering the v2 controllers
 	// unconditionally would spin a source.Kind retry loop. Installing the v2 CRDs
 	// later requires a GMC restart to enable the v2 controllers (Q228).
 	v2Enabled, err := controller.V2alpha1Installed(mgr.GetRESTMapper())
@@ -187,22 +186,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		return fmt.Errorf("create tenant-secret-access controller: %w", err)
 	}
 
-	if err := (&controller.ActionsGatewayReconciler{
-		Client:                      mgr.GetClient(),
-		Scheme:                      mgr.GetScheme(),
-		IPCache:                     ipCache,
-		AGCImage:                    img.agcImage,
-		ProxyImage:                  img.proxyImage,
-		AGCExtraEnv:                 img.agcExtraEnv,
-		EnableTenantServiceMonitors: cfg.enableTenantServiceMonitors,
-		APIServerCIDRs:              parsedAPIServerCIDRs,
-		EgressStaleThreshold:        egressStaleThreshold,
-		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
-		SecretWatches:               secretWatches,
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("create actionsgateway controller: %w", err)
-	}
-
 	if v2Enabled {
 		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
 		// plane and wires its egress through the EgressProxy named by defaultProxyRef.
@@ -258,7 +241,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		Metrics:        gmcMetrics,
 		Store:          ipStore,
 		APIServerCIDRs: parsedAPIServerCIDRs,
-		// On a v1-only install the v2 EgressProxy / ActionsGateway refresh passes
+		// Without the v2 CRDs the EgressProxy / ActionsGateway refresh passes
 		// are disabled to avoid a "no matches for kind" error on every tick (Q228).
 		V2Enabled: v2Enabled,
 	}); err != nil {
@@ -302,9 +285,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 // caller gates this on ENABLE_WEBHOOKS != "false". It returns an error instead of
 // exiting so the flow stays test-reachable and main owns the single exit.
 func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
-	if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, rc.priorityClassAllowlist); err != nil {
-		return fmt.Errorf("create ActionsGateway (v1alpha1) webhook: %w", err)
-	}
 	// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
 	// kinds. Q289: the namespaced kind's podTemplate.spec.priorityClassName is gated
 	// against the same platform PriorityClass allowlist as priorityTiers.
