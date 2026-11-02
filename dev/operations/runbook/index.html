@@ -2513,6 +2513,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayretrycausemisclassified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayRetryCauseMisclassified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayquotaretriesexhausted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3380,6 +3391,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayretrycausemisclassified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayRetryCauseMisclassified
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayquotaretriesexhausted" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3848,6 +3870,12 @@ For <strong>abuse and compromise</strong> detection (eviction-retry loops, proxy
 <td>Each increment requires a manual re-run</td>
 </tr>
 <tr>
+<td><code>actions_gateway_eviction_rerun_outcomes_total</code> <code>result="failed"</code> share per cause</td>
+<td>&gt; 50% over 7d, at least 5 re-runs</td>
+<td>Ticket</td>
+<td>Re-running is not clearing that cause: it is misclassified (Q1245)</td>
+</tr>
+<tr>
 <td><code>actions_gateway_active_sessions</code></td>
 <td>= 0 for a RunnerGroup</td>
 <td>Page</td>
@@ -3914,6 +3942,11 @@ Triage with <a href="#pod_creation_latency_seconds-p95--15s"><code>pod_creation_
 <h3 id="actionsgatewayevictionretriesexhausted">ActionsGatewayEvictionRetriesExhausted<a class="headerlink" href="#actionsgatewayevictionretriesexhausted" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> A job's eviction-retry budget is exhausted and the job requires a manual re-run.
 See <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">Evicted Worker Pods Exhausting Retry Budget</a>.</p>
+<h3 id="actionsgatewayretrycausemisclassified">ActionsGatewayRetryCauseMisclassified<a class="headerlink" href="#actionsgatewayretrycausemisclassified" title="Permanent link">&para;</a></h3>
+<p><strong>Ticket.</strong> More than half of GAG's re-runs for one cause on a set failed again over 7 days, counting at least 5, so re-running is not clearing what the cause names (Q1245).
+For <code>cause="oom"</code> the raised memory limit is not enough, or the jobs fail for something else after their limit was raised: read the jobs behind the <code>MemoryLimitRaisedForRetry</code> Events, and see <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a>.
+For a disruption cause, the re-runs are being disrupted again or the jobs fail on their own; see <a href="../troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Which Disruptions Auto-Re-Run a Job</a>.
+The per-job <code>same_class_again</code> withhold already stops one job being retried twice for memory; this alert is the same reading across jobs.</p>
 <h3 id="actionsgatewayquotaretriesexhausted">ActionsGatewayQuotaRetriesExhausted<a class="headerlink" href="#actionsgatewayquotaretriesexhausted" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> A job's quota-retry budget is exhausted — worker pod creation kept being rejected by the namespace <code>ResourceQuota</code> — and the job was abandoned and requires a manual re-run.
 Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a> and <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>.</p>

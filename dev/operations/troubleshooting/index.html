@@ -7199,7 +7199,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 <tr>
 <td><code>AutoRetryPaused</code></td>
 <td>Warning</td>
-<td>More than 10 distinct runs on this set were re-run after a runner was killed for memory within 10 minutes, so out-of-memory retries are paused for 30 (Q1183). That many at once points at a shared cause, such as a node packed past its memory or a dependency that bloated every job, rather than each job's own growth. Each kill in the pause is withheld as <code>reason="breaker_open"</code>.</td>
+<td>More than 10 distinct runs on this set were re-run after a runner was killed for memory within 10 minutes, so out-of-memory retries are paused for 30 (Q1183). That many at once points at a shared cause, such as a node packed past its memory or a dependency that bloated every job, rather than each job's own growth. Each kill in the pause is withheld as <code>reason="breaker_open"</code>, and <code>actions_gateway_auto_retry_paused{cause="oom"}</code> reads 1 until the pause ends (Q1245).</td>
 <td><a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a></td>
 </tr>
 <tr>

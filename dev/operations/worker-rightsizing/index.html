@@ -3155,7 +3155,9 @@ The raised limit stays with that job of that run for 7 days, so a manual re-run 
 <p>A sidecar killed for memory, such as <code>dind</code>, is not retried: the runner survives it and reports the job's own result.
 Neither is a runner with no memory limit, which the kernel killed for the node's memory rather than its own.</p>
 <p><strong>What it hides.</strong> A change that doubles a job's memory gets the memory on its one retry instead of failing.
-Watch <code>actions_gateway_eviction_retries_total{cause="oom"}</code> and the <code>MemoryLimitRaisedForRetry</code> Events; <code>actions_gateway_eviction_rerun_outcomes_total{cause="oom"}</code> says how often the raised retry passed.</p>
+Watch <code>actions_gateway_eviction_retries_total{cause="oom"}</code> and the <code>MemoryLimitRaisedForRetry</code> Events; <code>actions_gateway_eviction_rerun_outcomes_total{cause="oom"}</code> says how often the raised retry passed, and the <code>ActionsGatewayRetryCauseMisclassified</code> alert fires when more than half of them fail over 7 days (Q1245).
+<code>actions_gateway_auto_retry_paused{cause="oom"}</code> reads 1 while the breaker has retries paused.
+The re-run's worker pods carry <code>actions-gateway.com/rerun-cause: oom</code>, so <a href="../cost-attribution/#the-labels-and-namespaces-to-query">cost attribution</a> can count what the retries cost.</p>
 <h3 id="getting-guaranteed-qos-out-of-nodeshare">Getting Guaranteed QoS out of <code>NodeShare</code><a class="headerlink" href="#getting-guaranteed-qos-out-of-nodeshare" title="Permanent link">&para;</a></h3>
 <p><code>Binpack</code> is the profile that sets <code>requests == limits</code> for you.
 <code>NodeShare</code> does not — it derives the runner container's <em>requests</em> and leaves limits to the template — so a GPU pool that wants both an even node split <strong>and</strong> Guaranteed QoS has to arrange the second part itself.

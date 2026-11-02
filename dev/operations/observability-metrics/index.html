@@ -3244,7 +3244,13 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>event</code>, <code>result</code></td>
-<td>The result of the later attempt of each job GAG re-ran for a disruption, by the <code>cause</code> it re-ran for, the run's triggering <code>event</code> (<code>push</code>, <code>pull_request</code>, <code>pull_request_target</code>, <code>merge_group</code>, <code>schedule</code>, <code>workflow_dispatch</code>, <code>workflow_run</code>, <code>repository_dispatch</code>, <code>release</code>; anything else is <code>other</code>, and a completion that named none is <code>unknown</code>), and <code>result</code> (<code>succeeded</code>, <code>failed</code>). <code>result="failed"</code> over the total is a cause's failure rate: a re-run that fails again was not a recovery. Counted when the job's next attempt completes, from the failure ledger (Q555); a pairing lost to a ledger write that failed, or to another replica's write this process has not read, is not counted. Scale-set tier only.</td>
+<td>The result of the later attempt of each job GAG re-ran for a disruption, by the <code>cause</code> it re-ran for, the run's triggering <code>event</code> (<code>push</code>, <code>pull_request</code>, <code>pull_request_target</code>, <code>merge_group</code>, <code>schedule</code>, <code>workflow_dispatch</code>, <code>workflow_run</code>, <code>repository_dispatch</code>, <code>release</code>; anything else is <code>other</code>, and a completion that named none is <code>unknown</code>), and <code>result</code> (<code>succeeded</code>, <code>failed</code>). <code>result="failed"</code> over the total is a cause's failure rate: a re-run that fails again was not a recovery, and the shipped <code>ActionsGatewayRetryCauseMisclassified</code> alert fires when that share passes 50% over 7 days with at least 5 re-runs (Q1245). Counted when the job's next attempt completes, from the failure ledger (Q555); a pairing lost to a ledger write that failed, or to another replica's write this process has not read, is not counted. Scale-set tier only.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_auto_retry_paused</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>1 while a retry class's stampede breaker is open on a set, 0 once it closes (Q1245). The breaker opens when more than 10 runs on the set were re-run for that cause within 10 minutes, and pauses the cause's retries for 30; each kill in the pause is withheld as <code>eviction_rerun_withheld_total{reason="breaker_open"}</code>, and the opening emits one <code>AutoRetryPaused</code> Warning Event. <code>cause="oom"</code> is the only class today. Held per AGC process, so a restart closes every breaker and the series is absent until a breaker opens again; with more than one AGC replica, read it with <code>max</code>. A pause points at a shared cause such as a dependency that grew every job or nodes packed past their memory; see <a href="../worker-rightsizing/#when-a-job-runs-out-of-memory">When a job runs out of memory</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
@@ -3972,6 +3978,11 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
 <td>Scale-set only</td>
 <td>Read from the same <code>JobCompleted</code> pairing, which only the scale-set listener reports. The classic tier's re-runs are counted by <code>eviction_retries_total</code> with no outcome.</td>
+</tr>
+<tr>
+<td><code>actions_gateway_auto_retry_paused</code></td>
+<td>Scale-set only</td>
+<td>Set only by the out-of-memory class's stampede breaker in <code>cmd/agc/internal/provisioner/oom_class.go</code>, which only the scale-set judge reaches (Q1245).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
