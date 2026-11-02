@@ -275,6 +275,10 @@ The dogfood scripts pin GAG to any published ref via `GAG_IMAGE_TAG`, which reso
 
 **Pushing a candidate tag also starts the gate in CI.** [`validate-candidate.yml`](../../.github/workflows/validate-candidate.yml) dispatches the gate on `main` for the tag, and the run waits for approval in the `dogfood-validation` environment: open the run, choose **Review deployments**, tick the environment, and approve.
 It runs the same script from a GitHub-hosted runner with no stored credential; how that identity is set up and bounded is in the [Q880 plan](../plan/archive/q880-ci-release-validation.md).
+
+The tag also starts [`publish.yml`](../../.github/workflows/publish.yml) from the same push, so the gate's first step waits for that run (up to 45 minutes) and fails if it concluded anything but `success` or never finished, before taking any cloud access (Q1162).
+A gate that fails there says the publish needs attention, not the candidate: fix or re-run `publish.yml` for the tag, then re-run the gate.
+
 **Only the CI run produces a verdict `publish.yml` accepts.** Run the gate locally to diagnose or to iterate on the gate itself; a local run records nothing a stable tag can use.
 A local gate and a CI one read the same lease, so whichever starts second refuses rather than resizing the cluster under the first ([why](#a-killed-gate-is-reclaimed-by-the-next-one)).
 
