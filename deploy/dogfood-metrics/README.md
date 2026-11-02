@@ -47,7 +47,7 @@ kubectl --context "gke_${PROJECT}_${ZONE}_${CLUSTER}" apply -k deploy/dogfood-me
 Applied to dogfood on 2026-11-02, with the label and the `PodMonitoring` left in place, so the scrape resumes whenever `scripts/dogfood/start.sh` brings the AGC back.
 Both survived 9 hours at zero nodes; whether a cluster upgrade keeps the `gmp-system` label is still unmeasured.
 
-- **The scrape holds.** `up{namespace="gag-dogfood"}` first read `1` about a minute after the AGC rolled out, then held `1` at every 60-second sample for 17 minutes (`count_over_time(...[15m])` read `15`, `min_over_time` read `1`).
+- **The scrape holds.** `up{namespace="gag-dogfood"}` first read `1` about a minute after the AGC rolled out; 16 minutes later `count_over_time(...[15m])` read `15` and `min_over_time(...[15m])` read `1`, so all 15 scrapes at the 60-second interval landed and none read `0`.
   `actions_gateway_scaleset_jobs_completed_total{result="succeeded"}` reached `12` over one validation run and stayed queryable after the pod stopped.
 - **The series count.** `scrape_samples_scraped` reads one scrape's sample count, the non-comment lines of `/metrics`, without handling the client Secret.
   It read `342` on an idle AGC and `405` once a validation run had completed jobs, of which `77` were `actions_gateway_*` and the rest the Go, process, controller-runtime, workqueue and client-go families.
