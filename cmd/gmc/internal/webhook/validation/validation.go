@@ -1,13 +1,5 @@
-// Package validation holds the platform checks shared by the GMC's versioned
-// webhook packages. The v1alpha1 and v2alpha1 validators enforce the same
-// platform invariants on different API groups; keeping the single source of
-// truth here (rather than a copy per version, the drift the Q323 audit found)
-// means the guards survive the planned v1 sunset unchanged.
-//
-// Non-webhook consumers that must reach the SAME verdict as admission live here
-// too: `gag-migrate` reads the privileged-eligibility grant through
-// PrivilegedGrantPresent so the tool and the webhook can never disagree about
-// whether a namespace is granted (Q463).
+// Package validation holds the platform checks the GMC's webhooks share, kept in
+// one place rather than a copy per validator (the drift the Q323 audit found).
 package validation
 
 import (
@@ -15,8 +7,6 @@ import (
 	"net/url"
 	"strings"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -45,28 +35,6 @@ func ReservedNamespaces(podNamespace string) map[string]bool {
 		s[podNamespace] = true
 	}
 	return s
-}
-
-// PrivilegedGrantPresent reports whether the supplied namespace labels carry the
-// platform's privileged-eligibility grant on EITHER label domain: the v1
-// actions-gateway.github.com/privileged-profile or the aligned v2
-// actions-gateway.com/privileged-profile, each set to the "allowed" keyword.
-//
-// The dual-read spans the v1/v2 coexistence window (§H.12). The M5 migration
-// relabels the grant onto the v2 domain, and a still-running v1 ActionsGateway in
-// that namespace must stay admitted as privileged, so both spellings of the one
-// platform grant are honored until v1alpha1 is removed. This widens only the
-// accepted *spelling* of an existing grant — the value keyword is identical on
-// both domains — so the check stays fail-closed: an absent label, or any other
-// value, is not a grant.
-//
-// Every consumer that decides on this grant must call this rather than read one
-// domain. Reading only v1 makes a v2-domain-only grant — legal, and admitted by
-// the webhook — look absent; `gag-migrate` did exactly that and warned operators
-// mid-migration that a grant they already held was missing (Q463).
-func PrivilegedGrantPresent(nsLabels map[string]string) bool {
-	return nsLabels[gmcv1alpha1.PrivilegedProfileLabel] == gmcv1alpha1.PrivilegedProfileAllowed ||
-		nsLabels[v2alpha1.PrivilegedProfileLabel] == v2alpha1.PrivilegedProfileAllowed
 }
 
 // DeletionOnlyUpdate reports whether an update is a deletion-only write: the

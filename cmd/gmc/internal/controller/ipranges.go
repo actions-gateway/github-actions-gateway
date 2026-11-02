@@ -473,12 +473,6 @@ func (r *IPRangeReconciler) reconcileAll(ctx context.Context, log *slog.Logger) 
 		}
 	}
 
-	// v1 pass (ipranges_v1.go): patch every managed v1 ActionsGateway's proxy
-	// NetworkPolicy. Deleted wholesale by the v1 sunset (Q273).
-	if err := r.refreshV1ProxyNetworkPolicies(ctx, log, cidrs); err != nil {
-		return err
-	}
-
 	// v2 NetworkPolicy refresh passes are gated on the opt-in
 	// actions-gateway.com/v2alpha1 CRDs being installed (detected once at startup,
 	// see V2alpha1Installed). On a v1-only install they are absent, so listing the

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

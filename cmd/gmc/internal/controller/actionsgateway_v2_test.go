@@ -601,6 +601,12 @@ func hasDNSEgress(np *networkingv1.NetworkPolicy) bool {
 	return false
 }
 
+// gkeAPIServerIP is the API server ClusterIP of the GKE cluster where Q465 was
+// measured. It is outside 10.96.0.0/12 (the kind/kubeadm Service CIDR that used to
+// be hardcoded), which is precisely why the AGC dialled the API server through the
+// tenant's egress proxy there and CrashLoopBackOffed.
+const gkeAPIServerIP = "34.118.224.1"
+
 func TestBuildAGCDeploymentV2_TracingAndNoProxyWiring(t *testing.T) {
 	// A managed-distribution API server ClusterIP (Q465): the v2 path must exempt it
 	// too, or a proxied v2 tenant's AGC dials the API server through the proxy.

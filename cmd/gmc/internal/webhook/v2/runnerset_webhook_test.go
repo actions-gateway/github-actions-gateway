@@ -4,10 +4,8 @@ import (
 	"context"
 	"testing"
 
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	gmcv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,9 +26,7 @@ import (
 func runnerSetValidatorWith(t *testing.T, existing ...client.Object) *RunnerSetCustomValidator {
 	t.Helper()
 	scheme := runtime.NewScheme()
-	require.NoError(t, agcv1alpha1.AddToScheme(scheme))
 	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
-	require.NoError(t, gmcv1alpha1.AddToScheme(scheme))
 	return &RunnerSetCustomValidator{
 		reader: fake.NewClientBuilder().WithScheme(scheme).WithObjects(asV2alpha1(t, existing...)...).Build(),
 	}

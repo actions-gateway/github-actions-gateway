@@ -112,9 +112,7 @@ type runnerSetTarget struct {
 	key  client.ObjectKey
 	uid  types.UID
 	// events routes owner-scoped provisioning Events (quota/eviction-retry exhaustion)
-	// to the RunnerSet reconciler's event channel. Distinct from the v1 path's
-	// Provisioner.Events because one Provisioner is shared across both owners. Nil
-	// disables event recording.
+	// to the RunnerSet reconciler's event channel. Nil disables event recording.
 	events runnercore.EventRecorder
 }
 

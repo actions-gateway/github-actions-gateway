@@ -2,7 +2,6 @@ package agentpool_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -291,7 +290,6 @@ func legacySecret(index int, agentID int64) *corev1.Secret {
 
 func TestAdoptLegacyRunnerSetSecrets(t *testing.T) {
 	ctx := context.Background()
-	never := func(context.Context) (bool, error) { return false, nil }
 
 	t.Run("carries an existing v2 install across the rename", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(scheme()).Build()
@@ -303,7 +301,7 @@ func TestAdoptLegacyRunnerSetSecrets(t *testing.T) {
 		var before corev1.Secret
 		require.NoError(t, c.Get(ctx, client.ObjectKey{Namespace: testNS, Name: "agentpool-shared-name-0"}, &before))
 
-		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner(), never)
+		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner())
 		require.NoError(t, err)
 		assert.Equal(t, 2, n)
 
@@ -330,35 +328,13 @@ func TestAdoptLegacyRunnerSetSecrets(t *testing.T) {
 		assert.Equal(t, 2, registrar.RegisterCalls(), "adoption must not re-register the agents")
 	})
 
-	t.Run("leaves a live v1 RunnerGroup's Secrets alone", func(t *testing.T) {
-		c := fake.NewClientBuilder().WithScheme(scheme()).
-			WithObjects(legacySecret(0, 7001)).Build()
-		claimed := func(context.Context) (bool, error) { return true, nil }
-
-		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner(), claimed)
-		require.NoError(t, err)
-		assert.Zero(t, n)
-		assert.Equal(t, []string{"agentpool-shared-name-0"}, secretNames(t, c),
-			"taking the RunnerGroup's agents would break the tenant rollback depends on")
-	})
-
-	t.Run("fails closed when ownership cannot be determined", func(t *testing.T) {
-		c := fake.NewClientBuilder().WithScheme(scheme()).
-			WithObjects(legacySecret(0, 7001)).Build()
-		boom := func(context.Context) (bool, error) { return false, errors.New("apiserver down") }
-
-		_, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner(), boom)
-		require.Error(t, err)
-		assert.Equal(t, []string{"agentpool-shared-name-0"}, secretNames(t, c))
-	})
-
 	t.Run("is a no-op once the RunnerSet scheme is in use", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(scheme()).
 			WithObjects(legacySecret(0, 7001)).Build()
 		pool := agentpool.NewRunnerSetPool(c, testNS, testName, "2.335.1", nil, agentpool.NewStubRegistrar(), agentpool.KeyTypeEd25519)
 		require.NoError(t, pool.EnsureAgents(ctx, 1, "tok"))
 
-		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner(), never)
+		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner())
 		require.NoError(t, err)
 		assert.Zero(t, n, "once the set has its own agents the legacy names are none of its business")
 		assert.Contains(t, secretNames(t, c), "agentpool-shared-name-0")
@@ -366,7 +342,7 @@ func TestAdoptLegacyRunnerSetSecrets(t *testing.T) {
 
 	t.Run("does nothing when there is nothing to adopt", func(t *testing.T) {
 		c := fake.NewClientBuilder().WithScheme(scheme()).Build()
-		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner(), never)
+		n, err := agentpool.AdoptLegacyRunnerSetSecrets(ctx, c, testNS, testName, runnerSetOwner())
 		require.NoError(t, err)
 		assert.Zero(t, n)
 	})

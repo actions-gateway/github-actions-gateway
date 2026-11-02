@@ -16,6 +16,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+func ptrInt32(v int32) *int32 { return &v }
+
 func egressProxy(name string) *gmcv2alpha1.EgressProxy {
 	return &gmcv2alpha1.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name},

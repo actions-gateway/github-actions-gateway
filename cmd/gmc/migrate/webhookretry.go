@@ -59,15 +59,11 @@ func retryAfter(d time.Duration) <-chan time.Time {
 // retryOnTransientWebhookError runs op, retrying ONLY while the apiserver reports it
 // could not REACH an admission webhook.
 //
-// Every v2 object gag-migrate creates passes through a validating webhook served by
-// the GMC Deployment under `failurePolicy: Fail`, and the apiserver does not retry a
-// webhook call of its own. So any transient unavailability of that endpoint — a
+// Every object the storage sweep rewrites passes through a validating webhook served
+// by the GMC Deployment under `failurePolicy: Fail`, and the apiserver does not retry
+// a webhook call of its own. So any transient unavailability of that endpoint — a
 // rolling update, a node drain, an evicted pod, a cold TLS listener — aborts the
-// create outright. That matters more here than almost anywhere else in the codebase
-// because applyResult is a non-atomic sequence: a stall on the fourth object leaves
-// the first three created, and the cluster-scoped ClusterRunnerTemplate among them is
-// the one output that deleting the tenant namespace does not reclaim (§H.17.1).
-// Riding out the blip keeps a one-shot migration from half-landing on a hiccup.
+// write outright, and riding out the blip keeps one hiccup from failing the sweep.
 //
 // It is NOT a blind retry: a clean call returns nil immediately, and a genuine
 // webhook DENIAL (or any other error — AlreadyExists, Forbidden, a CEL rejection) is

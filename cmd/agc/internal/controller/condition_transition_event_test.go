@@ -3,7 +3,6 @@ package controller
 import (
 	"testing"
 
-	v1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -31,21 +30,6 @@ func TestRunnerSetReadyConditionEventsEveryTransition(t *testing.T) {
 
 	// A reconcile that changes nothing must still not re-warn.
 	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive, "up again")
-	assert.Len(t, rec.Events, 3, "no transition, no Event")
-}
-
-func TestRunnerGroupReadyConditionEventsEveryTransition(t *testing.T) {
-	rec := events.NewFakeRecorder(16)
-	r := &RunnerGroupReconciler{Recorder: rec}
-	rg := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "grp", Namespace: "ns"}}
-
-	r.setReadyCondition(rg, true)
-	r.setReadyCondition(rg, false)
-	r.setReadyCondition(rg, true)
-
-	assert.Len(t, rec.Events, 3, "True→False→True is three transitions, so three Events")
-
-	r.setReadyCondition(rg, true)
 	assert.Len(t, rec.Events, 3, "no transition, no Event")
 }
 
@@ -80,22 +64,5 @@ func TestRunnerSetRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
 	assert.Len(t, rec.Events, 1, "the workerImage was downgraded below the minimum")
 
 	r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
-	assert.Len(t, rec.Events, 1, "still too old, no transition, no second Event")
-}
-
-func TestRunnerGroupRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
-	rec := events.NewFakeRecorder(16)
-	r := &RunnerGroupReconciler{Provisioner: &provisioner.Provisioner{}, Recorder: rec}
-	rg := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "grp", Namespace: "ns"}}
-
-	rg.Spec.WorkerImage = names.DefaultWorkerImage
-	r.setRunnerVersionStatus(rg)
-	assert.Len(t, rec.Events, 0, "a current image is not a warning")
-
-	rg.Spec.WorkerImage = staleImage
-	r.setRunnerVersionStatus(rg)
-	assert.Len(t, rec.Events, 1, "the workerImage was downgraded below the minimum")
-
-	r.setRunnerVersionStatus(rg)
 	assert.Len(t, rec.Events, 1, "still too old, no transition, no second Event")
 }

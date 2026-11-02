@@ -1,3 +1,6 @@
+// Package migrate holds the storage-version sweep behind `gag-migrate
+// storage-version`: it rewrites every stored actions-gateway.com object at
+// StorageVersion and prunes each CRD's status.storedVersions to it (Q1086).
 package migrate
 
 import (

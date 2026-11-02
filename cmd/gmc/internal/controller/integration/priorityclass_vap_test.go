@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"

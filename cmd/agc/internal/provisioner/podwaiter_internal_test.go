@@ -809,10 +809,10 @@ func TestInformerPodWaiter_DurationCarriesOwnerFromPodLabel(t *testing.T) {
 	w.JobDuration = newDurationHistogram()
 
 	p := startedPod("ns", "p", corev1.PodSucceeded, time.Second)
-	p.Labels = map[string]string{LabelRunnerGroup: "group-v1"}
+	p.Labels = map[string]string{LabelRunnerSet: "set-b"}
 	w.onPodEvent(p, false)
 
-	expectDuration(t, w.JobDuration, "ns", "group-v1", 1, (time.Second + podRunFor).Seconds())
+	expectDuration(t, w.JobDuration, "ns", "set-b", 1, (time.Second + podRunFor).Seconds())
 }
 
 // The tenant namespace holds the AGC's own pods too. A pod carrying no owner

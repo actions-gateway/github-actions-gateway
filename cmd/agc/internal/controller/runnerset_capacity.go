@@ -19,14 +19,13 @@ import (
 // two v1 RunnerGroup evaluations that a stalled set would otherwise hide behind a
 // rising status.pendingJobs with Ready=True:
 //   - the two-tier namespace-ResourceQuota ladder (WorkerQuotaPressure/Exceeded, Q82),
-//     ported from worker_quota.go, and
-//   - the scheduler-verdict signal (WorkersUnschedulable, Q157), ported from
-//     runnergroup_unschedulable.go.
+//     whose core is in worker_quota.go, and
+//   - the scheduler-verdict signal (WorkersUnschedulable, Q157), whose core is in
+//     workers_unschedulable.go.
 //
-// Both reuse the owner-agnostic cores those v1 files now expose (evalWorkerQuotaFor,
-// countActiveWorkerPodsByLabel, evalWorkersUnschedulableForPods). Only the v2 sources
-// of the pod shape (the resolved RunnerTemplate) and the ceiling
-// (spec.priorityTiers/maxWorkers) differ.
+// Both reuse the owner-agnostic cores (evalWorkerQuotaFor,
+// countActiveWorkerPodsByLabel, evalWorkersUnschedulableForPods), fed the pod shape
+// from the resolved RunnerTemplate and the ceiling from spec.priorityTiers/maxWorkers.
 //
 // A third, v2-only, joins them: the kubelet's startup verdict (WorkersNotStarting,
 // Q906). That one is computed by the same shared core but published nowhere on v1,
@@ -563,10 +562,12 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkersUnschedulable(ctx context.Cont
 }
 
 // runnerSetUnschedulableGrace is how long a worker pod must sit Pending+Unschedulable
-// before WorkersUnschedulable trips — half the set's pendingPodDeadline, so the
+// before WorkersUnschedulable trips. It is half the set's pendingPodDeadline so the
 // condition latches and stays stable for a window before the reaper deletes the pod at
-// the full deadline (mirrors unschedulableGrace for the v1 RunnerGroup; see its doc for
-// why the factor of one-half avoids flapping).
+// the full deadline (Q95): were the grace equal to the deadline, the condition would be
+// set in the same pass the pod is reaped and clear on the next reconcile — flapping.
+// The factor of one-half gives the operator a visible early-warning window while the
+// unschedulable pod still exists.
 func runnerSetUnschedulableGrace(rs *v2alpha1.RunnerSet) time.Duration {
 	d := provisioner.PendingPodDeadlineOrDefault(rs.Spec.PendingPodDeadline) / 2
 	if d <= 0 {

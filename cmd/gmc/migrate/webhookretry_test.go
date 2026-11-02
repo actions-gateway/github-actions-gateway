@@ -10,17 +10,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
-
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/gmc/internal/migrate"
 )
 
 // shrinkRetryPacing shortens the retry budget/gap for the duration of a test so the
@@ -193,115 +184,4 @@ func TestRetryOnTransientWebhookError_HonoursContext(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Less(t, time.Since(start), 10*time.Second, "a cancelled context must not wait out the gap")
-}
-
-// TestMigrateAll_ApplyRidesOutTransientWebhookStall is the wiring test: it proves the
-// retry is actually reached through applyResult, not merely present as a helper. The
-// interceptor stalls the FIRST create the way an unreachable webhook does; without the
-// retry, --apply aborts there and the later objects (and the namespace patch) never
-// happen — the partial-migration failure mode Q461 describes.
-func TestMigrateAll_ApplyRidesOutTransientWebhookStall(t *testing.T) {
-	shrinkRetryPacing(t, 5*time.Second, time.Millisecond)
-
-	stalled := false
-	c := fake.NewClientBuilder().
-		WithScheme(newScheme()).
-		WithObjects(
-			v1Namespace("team-a", map[string]string{"actions-gateway.github.com/tenant": "true"}, nil),
-			v1Gateway("team-a", "team-a", "restricted"),
-			v1RunnerGroup("team-a-linux", "team-a", "img:1", []string{"linux"}),
-		).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-				if !stalled {
-					stalled = true
-					return unreachableErr()
-				}
-				return cl.Create(ctx, obj, opts...)
-			},
-		}).
-		Build()
-
-	ctx := context.Background()
-	var stderr bytes.Buffer
-	require.NoError(t, migrateAll(ctx, c, options{namespace: "team-a", apply: true}, &bytes.Buffer{}, &stderr),
-		"a transient webhook stall must not abort --apply")
-	assert.True(t, stalled, "the interceptor must actually have stalled a create")
-
-	// The whole fan-out landed — including the objects created after the stall and
-	// the namespace patch, which is the last step.
-	var v2gw v2alpha1.ActionsGateway
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "team-a"}, &v2gw))
-	var proxy v2alpha1.EgressProxy
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: "team-a-egress"}, &proxy))
-	var sets v2alpha1.RunnerSetList
-	require.NoError(t, c.List(ctx, &sets, client.InNamespace("team-a")))
-	assert.Len(t, sets.Items, 1)
-
-	var ns corev1.Namespace
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Name: "team-a"}, &ns))
-	assert.Equal(t, "restricted", ns.Labels[v2alpha1.SecurityProfileLabel],
-		"the namespace patch runs last, so it only lands if the stall was ridden out")
-}
-
-// TestMigrateAll_ApplyPropagatesWebhookDenial is the negative wiring test: a genuine
-// rejection must still abort --apply immediately with the webhook's own reason.
-func TestMigrateAll_ApplyPropagatesWebhookDenial(t *testing.T) {
-	shrinkRetryPacing(t, 5*time.Second, time.Millisecond)
-
-	creates := 0
-	c := fake.NewClientBuilder().
-		WithScheme(newScheme()).
-		WithObjects(
-			v1Namespace("team-a", nil, nil),
-			v1Gateway("team-a", "team-a", "restricted"),
-			v1RunnerGroup("team-a-linux", "team-a", "img:1", []string{"linux"}),
-		).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Create: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.CreateOption) error {
-				creates++
-				return deniedErr()
-			},
-		}).
-		Build()
-
-	err := migrateAll(context.Background(), c, options{namespace: "team-a", apply: true},
-		&bytes.Buffer{}, &bytes.Buffer{})
-
-	require.Error(t, err, "a webhook denial must fail the migration")
-	assert.Contains(t, err.Error(), "denied the request")
-	assert.Equal(t, 1, creates, "the denial must abort on the first create, not be retried")
-}
-
-// TestPatchNamespace_RidesOutTransientStall covers the second write path: the
-// namespace patch is a read-modify-write, and the whole of it is the retry unit.
-func TestPatchNamespace_RidesOutTransientStall(t *testing.T) {
-	shrinkRetryPacing(t, 5*time.Second, time.Millisecond)
-
-	patches := 0
-	c := fake.NewClientBuilder().
-		WithScheme(newScheme()).
-		WithObjects(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team-a"}}).
-		WithInterceptorFuncs(interceptor.Funcs{
-			Patch: func(ctx context.Context, cl client.WithWatch, obj client.Object, p client.Patch, opts ...client.PatchOption) error {
-				patches++
-				if patches == 1 {
-					return unreachableErr()
-				}
-				return cl.Patch(ctx, obj, p, opts...)
-			},
-		}).
-		Build()
-
-	ctx := context.Background()
-	patch := &migrate.NamespacePatch{
-		Name:   "team-a",
-		Labels: map[string]string{v2alpha1.SecurityProfileLabel: "restricted"},
-	}
-	require.NoError(t, patchNamespace(ctx, c, patch, &bytes.Buffer{}))
-	assert.Equal(t, 2, patches, "the stalled patch must be retried")
-
-	var ns corev1.Namespace
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Name: "team-a"}, &ns))
-	assert.Equal(t, "restricted", ns.Labels[v2alpha1.SecurityProfileLabel])
 }

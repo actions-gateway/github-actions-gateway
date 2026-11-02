@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -26,14 +26,12 @@ func wqScheme(t *testing.T) *runtime.Scheme {
 	if err := corev1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := v1alpha1.AddToScheme(s); err != nil {
-		t.Fatal(err)
-	}
 	return s
 }
 
-func wqRunnerGroup(maxWorkers int32, perCPU, perMem string) *v1alpha1.RunnerGroup {
-	mw := maxWorkers
+// wqPool is a worker pool of up to maxWorkers pods, each requesting perCPU and
+// perMem, counted under the RunnerSet label "rg".
+func wqPool(maxWorkers int32, perCPU, perMem string) workerQuotaPool {
 	req := corev1.ResourceList{}
 	if perCPU != "" {
 		req[corev1.ResourceCPU] = resource.MustParse(perCPU)
@@ -41,16 +39,15 @@ func wqRunnerGroup(maxWorkers int32, perCPU, perMem string) *v1alpha1.RunnerGrou
 	if perMem != "" {
 		req[corev1.ResourceMemory] = resource.MustParse(perMem)
 	}
-	return &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "rg", Namespace: "tenant-ns"},
-		Spec: v1alpha1.RunnerGroupSpec{
-			MaxWorkers: &mw,
-			PodTemplate: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{Name: "runner", Resources: corev1.ResourceRequirements{Requests: req}}},
-				},
-			},
+	return workerQuotaPool{
+		namespace: "tenant-ns",
+		podSpec: &corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "runner", Resources: corev1.ResourceRequirements{Requests: req}}},
 		},
+		ceiling: maxWorkers,
+		bounded: true,
+		label:   provisioner.LabelRunnerSet,
+		name:    "rg",
 	}
 }
 
@@ -67,15 +64,14 @@ func wqWorkerPod(name string, phase corev1.PodPhase) *corev1.Pod {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: "tenant-ns",
-			Labels:    map[string]string{provisioner.LabelRunnerGroup: "rg"},
+			Labels:    map[string]string{provisioner.LabelRunnerSet: "rg"},
 		},
 		Status: corev1.PodStatus{Phase: phase},
 	}
 }
 
 func TestWorkerFootprint(t *testing.T) {
-	rg := wqRunnerGroup(10, "100m", "256Mi")
-	fp := provisioner.WorkerFootprint(&rg.Spec.PodTemplate.Spec, 10)
+	fp := provisioner.WorkerFootprint(wqPool(10, "100m", "256Mi").podSpec, 10)
 	pods := fp[corev1.ResourcePods]
 	assert.Equal(t, int64(10), pods.Value())
 	cpu := fp[corev1.ResourceRequestsCPU]
@@ -85,19 +81,19 @@ func TestWorkerFootprint(t *testing.T) {
 }
 
 func TestCountActiveWorkerPods(t *testing.T) {
-	r := &RunnerGroupReconciler{Client: fake.NewClientBuilder().WithScheme(wqScheme(t)).WithObjects(
+	c := fake.NewClientBuilder().WithScheme(wqScheme(t)).WithObjects(
 		wqWorkerPod("a", corev1.PodRunning),
 		wqWorkerPod("b", corev1.PodPending),
 		wqWorkerPod("c", corev1.PodSucceeded), // terminal — not counted
 		wqWorkerPod("d", corev1.PodFailed),    // terminal — not counted
-	).Build()}
-	assert.Equal(t, int32(2), r.countActiveWorkerPods(context.Background(), wqRunnerGroup(10, "100m", "")))
+	).Build()
+	assert.Equal(t, int32(2), countActiveWorkerPodsByLabel(context.Background(), c, "tenant-ns", provisioner.LabelRunnerSet, "rg"))
 }
 
 func TestEvalWorkerQuota(t *testing.T) {
 	tests := []struct {
 		name         string
-		rg           *v1alpha1.RunnerGroup
+		pool         workerQuotaPool
 		objs         []client.Object
 		wantPressure bool
 		wantPReason  string
@@ -106,13 +102,13 @@ func TestEvalWorkerQuota(t *testing.T) {
 	}{
 		{
 			name:        "no quota",
-			rg:          wqRunnerGroup(10, "100m", ""),
+			pool:        wqPool(10, "100m", ""),
 			wantPReason: "NoQuota",
 			wantEReason: "NoRejection",
 		},
 		{
 			name: "ample headroom",
-			rg:   wqRunnerGroup(10, "100m", ""),
+			pool: wqPool(10, "100m", ""),
 			objs: []client.Object{wqQuota("c",
 				corev1.ResourceList{corev1.ResourcePods: resource.MustParse("100")},
 				corev1.ResourceList{corev1.ResourcePods: resource.MustParse("2")})},
@@ -121,7 +117,7 @@ func TestEvalWorkerQuota(t *testing.T) {
 		},
 		{
 			name: "exceeded: cannot fit one more pod supersedes pressure",
-			rg:   wqRunnerGroup(10, "100m", ""),
+			pool: wqPool(10, "100m", ""),
 			objs: []client.Object{wqQuota("c",
 				corev1.ResourceList{corev1.ResourcePods: resource.MustParse("5")},
 				corev1.ResourceList{corev1.ResourcePods: resource.MustParse("5")})},
@@ -132,7 +128,7 @@ func TestEvalWorkerQuota(t *testing.T) {
 		},
 		{
 			name: "pressure: cannot reach ceiling but can fit some",
-			rg:   wqRunnerGroup(10, "100m", ""),
+			pool: wqPool(10, "100m", ""),
 			// 8 pods free; 2 active workers seeded → need 8 more to reach 10.
 			objs: []client.Object{
 				wqQuota("c",
@@ -147,7 +143,7 @@ func TestEvalWorkerQuota(t *testing.T) {
 		},
 		{
 			name: "cpu headroom exhausted → exceeded",
-			rg:   wqRunnerGroup(10, "1", ""),
+			pool: wqPool(10, "1", ""),
 			objs: []client.Object{wqQuota("c",
 				corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse("1")},
 				corev1.ResourceList{corev1.ResourceRequestsCPU: resource.MustParse("1")})},
@@ -158,8 +154,8 @@ func TestEvalWorkerQuota(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			r := &RunnerGroupReconciler{Client: fake.NewClientBuilder().WithScheme(wqScheme(t)).WithObjects(tc.objs...).Build()}
-			st := r.evalWorkerQuota(context.Background(), tc.rg)
+			c := fake.NewClientBuilder().WithScheme(wqScheme(t)).WithObjects(tc.objs...).Build()
+			st := evalWorkerQuotaFor(context.Background(), c, tc.pool)
 			assert.Equal(t, tc.wantPressure, st.pressure, "pressure")
 			assert.Equal(t, tc.wantPReason, st.pressureReason, "pressureReason")
 			assert.Equal(t, tc.wantExceeded, st.exceeded, "exceeded")
@@ -169,24 +165,21 @@ func TestEvalWorkerQuota(t *testing.T) {
 }
 
 func TestEvalWorkerQuota_ListErrorIsBenign(t *testing.T) {
-	r := &RunnerGroupReconciler{Client: fake.NewClientBuilder().WithScheme(wqScheme(t)).
+	c := fake.NewClientBuilder().WithScheme(wqScheme(t)).
 		WithInterceptorFuncs(interceptor.Funcs{
 			List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
 				return errors.New("forbidden")
 			},
-		}).Build()}
-	st := r.evalWorkerQuota(context.Background(), wqRunnerGroup(10, "100m", ""))
+		}).Build()
+	st := evalWorkerQuotaFor(context.Background(), c, wqPool(10, "100m", ""))
 	assert.False(t, st.pressure)
 	assert.False(t, st.exceeded)
 	assert.Equal(t, "QuotaUnknown", st.pressureReason)
 }
 
-// TestWorkerQuotaTwinsAgree pins the v1 RunnerGroup and v2 RunnerSet evaluations to
-// one verdict (Q521). Fed an equivalent pod shape, ceiling, and namespace quota, the
-// two must publish identical reasons AND messages in every tier — they were
-// byte-identical twins before evalWorkerQuotaFor merged them, and this is what
-// catches a re-divergence.
-func TestWorkerQuotaTwinsAgree(t *testing.T) {
+// TestRunnerSetWorkerQuota pins the RunnerSet evaluation's verdict in every tier
+// against an equivalent pod shape, ceiling, and namespace quota (Q521).
+func TestRunnerSetWorkerQuota(t *testing.T) {
 	const ns = "tenant-ns"
 	const ceiling = 3
 
@@ -237,20 +230,13 @@ func TestWorkerQuotaTwinsAgree(t *testing.T) {
 				return objs
 			}
 
-			rg := wqRunnerGroup(ceiling, "500m", "")
-			rg.Name = "pool"
-			rgr := &RunnerGroupReconciler{Client: fake.NewClientBuilder().WithScheme(wqScheme(t)).
-				WithObjects(objsFor(provisioner.LabelRunnerGroup)...).Build()}
-			v1 := rgr.evalWorkerQuota(context.Background(), rg)
-
 			rs := rsObj("pool", ns, func(r *v2alpha1.RunnerSet) { r.Spec.MaxWorkers = ptr.To(int32(ceiling)) })
 			rsr := &RunnerSetReconciler{Client: fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).
 				WithObjects(objsFor(provisioner.LabelRunnerSet)...).Build()}
-			v2 := rsr.evalRunnerSetWorkerQuota(context.Background(), rs, capTemplate("500m"))
+			st := rsr.evalRunnerSetWorkerQuota(context.Background(), rs, capTemplate("500m"))
 
-			assert.Equal(t, tc.wantPReason, v1.pressureReason)
-			assert.Equal(t, tc.wantEReason, v1.exceededReason)
-			assert.Equal(t, v1, v2, "the v1 and v2 evaluations must agree in full")
+			assert.Equal(t, tc.wantPReason, st.pressureReason)
+			assert.Equal(t, tc.wantEReason, st.exceededReason)
 		})
 	}
 }
@@ -263,7 +249,7 @@ func TestResourceListEqual_AGC(t *testing.T) {
 }
 
 func TestConditionGaugeValue_AGC(t *testing.T) {
-	conds := []metav1.Condition{{Type: conditionWorkerQuotaExceeded, Status: metav1.ConditionTrue}}
-	assert.Equal(t, float64(1), conditionGaugeValue(conds, conditionWorkerQuotaExceeded))
-	assert.Equal(t, float64(0), conditionGaugeValue(conds, conditionWorkerQuotaPressure))
+	conds := []metav1.Condition{{Type: apiconditions.ConditionWorkerQuotaExceeded, Status: metav1.ConditionTrue}}
+	assert.Equal(t, float64(1), conditionGaugeValue(conds, apiconditions.ConditionWorkerQuotaExceeded))
+	assert.Equal(t, float64(0), conditionGaugeValue(conds, apiconditions.ConditionWorkerQuotaPressure))
 }

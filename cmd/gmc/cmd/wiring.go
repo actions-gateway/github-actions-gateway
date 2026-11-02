@@ -20,7 +20,6 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
-	webhookv1alpha1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v1alpha1"
 	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 )
@@ -34,7 +33,7 @@ import (
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
 	// Dedupe API server warnings to one log line per unique message per process.
-	// The default handler logs every occurrence, and the v1alpha1/v2alpha1
+	// The default handler logs every occurrence, and the v2alpha1
 	// deprecation warnings repeat on every read/write of a deprecated-version CR —
 	// under reconcile churn they dominate the log (Q515).
 	restCfg := ctrl.GetConfigOrDie()
@@ -187,22 +186,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		return fmt.Errorf("create tenant-secret-access controller: %w", err)
 	}
 
-	if err := (&controller.ActionsGatewayReconciler{
-		Client:                      mgr.GetClient(),
-		Scheme:                      mgr.GetScheme(),
-		IPCache:                     ipCache,
-		AGCImage:                    img.agcImage,
-		ProxyImage:                  img.proxyImage,
-		AGCExtraEnv:                 img.agcExtraEnv,
-		EnableTenantServiceMonitors: cfg.enableTenantServiceMonitors,
-		APIServerCIDRs:              parsedAPIServerCIDRs,
-		EgressStaleThreshold:        egressStaleThreshold,
-		Recorder:                    mgr.GetEventRecorder("actionsgateway-controller"),
-		SecretWatches:               secretWatches,
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("create actionsgateway controller: %w", err)
-	}
-
 	if v2Enabled {
 		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
 		// plane and wires its egress through the EgressProxy named by defaultProxyRef.
@@ -302,9 +285,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 // caller gates this on ENABLE_WEBHOOKS != "false". It returns an error instead of
 // exiting so the flow stays test-reachable and main owns the single exit.
 func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
-	if err := webhookv1alpha1.SetupActionsGatewayWebhookWithManager(mgr, rc.priorityClassAllowlist); err != nil {
-		return fmt.Errorf("create ActionsGateway (v1alpha1) webhook: %w", err)
-	}
 	// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
 	// kinds. Q289: the namespaced kind's podTemplate.spec.priorityClassName is gated
 	// against the same platform PriorityClass allowlist as priorityTiers.
