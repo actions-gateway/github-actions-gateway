@@ -234,9 +234,10 @@ jobs:
         #   - mkdocs.yml's `extra.version` block: a pre-versioning tag has none,
         #     so its pages would render with no version selector, stranding a
         #     visitor on an old release.
-        #   - mkdocs.yml's `hooks:` block: a tag cut before Q393 does not wire
-        #     hooks/release_version.py, so its announce bar would render the
-        #     version-free fallback instead of naming the newest release.
+        #   - mkdocs.yml's `hooks:` block, copied whole: a tag cut before Q393
+        #     does not wire hooks/release_version.py, so its announce bar would
+        #     render the version-free fallback, and a one-entry list would drop
+        #     source_links.py and the rest for every tag that does (Q1041).
         #
         # A stable tag push takes this path too: its `handoff` dispatch sets
         # `docs_ref` to the tag (Q1041), so every release builds the tag's docs
@@ -252,6 +253,14 @@ jobs:
             site_url="$(awk '/^site_url:/ {print $2; exit}' mkdocs.yml)"
             if [[ -z "${site_url}" ]]; then
               echo "::error::Could not read site_url from mkdocs.yml"
+              exit 1
+            fi
+            # INHERIT replaces a list rather than merging it, so the overlay
+            # carries this checkout's whole hooks list, not just the one a
+            # pre-Q393 tag lacks.
+            hooks="$(awk '/^hooks:/ {on = 1; next} on && /^[[:space:]]+- / {print; next} on {exit}' mkdocs.yml)"
+            if [[ -z "${hooks}" ]]; then
+              echo "::error::Could not read the hooks list from mkdocs.yml"
               exit 1
             fi
 
@@ -274,7 +283,7 @@ jobs:
               echo 'INHERIT: ./mkdocs.yml'
               echo "site_url: ${site_url}"
               echo 'hooks:'
-              echo '  - hooks/release_version.py'
+              printf '%s\n' "${hooks}"
               echo 'extra:'
               echo '  version:'
               echo '    provider: mike'
@@ -491,7 +500,8 @@ jobs:
         # its own verification and reported green. Assert the version tree and
         # the alias mike actually claimed as well.
         #
-        # STABLE_TAG comes from `resolve`, which reads the git ref, so the check
+        # STABLE_TAG comes from `resolve`, which reads the git ref or the
+        # hand-off's `stable_tag` input, never the mike step, so the check
         # can re-derive the highest-release rule for itself rather than trusting
         # the mike step's report of the alias it claimed. Without that the
         # assertion is fail-open exactly where it matters: a `mike list` that

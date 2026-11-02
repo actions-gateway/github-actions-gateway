@@ -741,12 +741,17 @@ gh run watch "$(gh run list --workflow=publish.yml --branch=vX.Y.Z -L1 --json da
 Every stable tag from `v1.6.0` to `v1.10.0` that deployed from the tag's own run reported success and never served, while a dispatch of the same content from `main` served each time.
 The ref the deploy ran from is the only difference measured between the two; why Pages ignores the tag one is not known.
 
-If the dispatched run fails, re-run it by hand:
+If the dispatched run fails, re-run it by hand with the same inputs:
 
 ```bash
 gh workflow run pages --ref main \
-  -f version=X.Y.Z -f alias=stable -f set_default=true -f docs_ref=vX.Y.Z
+  -f version=X.Y.Z -f docs_ref=vX.Y.Z -f stable_tag=true
 ```
+
+`stable_tag=true` moves `stable` only when `X.Y.Z` is the highest release, so the same command is safe for a backport.
+
+**A backport tag cut from a `release-X.Y` branch older than this change deploys from the tag ref**, because a tag push runs the `pages.yml` on its own commit.
+`release-1.4` through `release-1.7` predate the hand-off, so a tag cut from one of them needs the command above run by hand.
 
 Then read the site rather than the run:
 
