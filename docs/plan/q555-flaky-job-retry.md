@@ -40,7 +40,7 @@ The requirements below span several separable pieces of work, filed 2026-10-10 s
 | [Q1237](../queue/Q1237.md) | The colocated egress proxy's readiness in R7's snapshot | Nothing |
 | Q1181 (built on the scale-set tier) | R18's futility checks, on the arms that exist today | Nothing |
 | Q1183 (built on the scale-set tier) | Classified retry, R9 to R17, starting with `OOMKilled` under right-sizing | Q555 (built) |
-| [Q1244](../queue/Q1244.md), [Q1245](../queue/Q1245.md) | What Q1183 left: the persistent deferred wait, and the misclassification alert with a paused-breaker gauge | Q1183 (built) |
+| Q1244 (built), [Q1245](../queue/Q1245.md) | What Q1183 left: the persistent deferred wait, and the misclassification alert with a paused-breaker gauge | Q1183 (built) |
 | Q1177 (closed by the `own_limit` withhold), Q1179 (closed by the `node_shutdown` arm) | Two possible defects in the existing arms | A measurement each |
 | [Q1180](../queue/Q1180.md) | Keeping dogfood's retry metrics at all | Nothing |
 | Q1178, Q1184 (both shipped) | The proxy's outcome metrics, and per-job failure attribution | Nothing |

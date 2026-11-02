@@ -468,6 +468,12 @@ type Provisioner struct {
 	// question rather than a per-reconcile one. Its zero value is ready to use. See
 	// orphaned_scaleset.go.
 	orphanScans orphanScanState
+
+	// pendingSets is the sets whose ledgers hold parked retry-class re-runs, and
+	// pendingAdoptions the sets this process has already read for entries a previous
+	// one parked (Q1244, pending_rerun.go). Their zero values are ready to use.
+	pendingSets      pendingSets
+	pendingAdoptions orphanScanState
 }
 
 // NewProvisioner creates a Provisioner with sensible defaults.

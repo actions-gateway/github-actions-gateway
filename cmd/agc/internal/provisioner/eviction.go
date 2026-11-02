@@ -202,7 +202,9 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 // The futility checks (futileRerun, Q1181) run on that read, before the reservation, so
 // a re-run they withhold spends no slot. The reservation then resumes, merges, refuses
 // or reserves (reserveScaleSetRerun).
-// Every outcome but a refusal goes on to the re-run loop, which reads the run before
+// A disruption carrying d.park stops there, its re-run parked in the ledger for the
+// pending sweep to release into this function once the run concludes (Q1244).
+// Every other outcome but a refusal goes on to the re-run loop, which reads the run before
 // each call and stands down once its attempt has moved past the one the job failed in
 // (errRerunCovered). That is what makes a merge safe: a merged disruption re-runs only
 // if the reservation it joined never landed, because its owner's loop failed or its
@@ -251,7 +253,12 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			return
 		}
 
-		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, d, cause, maxRetries)
+		var park *pendingRerun
+		if d.park {
+			park = &pendingRerun{Cause: cause, Repository: owner + "/" + repo, RunID: runID,
+				Job: d.job, Disruption: d.key, FailedAttempt: d.failedAttempt}
+		}
+		outcome, number, err := p.reserveScaleSetRerun(rctx, target, runID, d, cause, maxRetries, park)
 		switch {
 		case err != nil:
 			log.Error("could not record the run's re-run budget decision; the re-run is withheld, manual rerun may be required",
@@ -272,6 +279,14 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		}
 		if d.onReserved != nil && outcome != rerunResumed {
 			d.onReserved()
+		}
+		if d.park {
+			// The reservation parked the re-run; the pending sweep releases it once the run
+			// concludes (pending_rerun.go).
+			p.watchPendingReruns(target)
+			log.Info("the re-run waits in the failure ledger until the run concludes",
+				"runID", runID, "runAttempt", d.failedAttempt, "cause", cause)
+			return
 		}
 
 		select {

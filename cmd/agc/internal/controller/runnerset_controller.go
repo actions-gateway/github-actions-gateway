@@ -462,6 +462,11 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// the next reconcile retries them. Worth surfacing, not worth requeuing for.
 			log.Warn("scale-set eviction recovery scan failed", "error", err)
 		}
+		// 2a. Hand the set to the pending sweep where a previous process left re-runs
+		// parked in its ledger (Q1244). Once per process per set; a failed read retries.
+		if err := r.Provisioner.AdoptPendingReruns(ctx, r.provisionerTarget(&rs)); err != nil {
+			log.Warn("could not read the failure ledger for parked re-runs", "error", err)
+		}
 		// 2b. Recover workers that were already gone when this process started (Q844) —
 		// the preemption and drain victims whose pod, the only record of the disruption,
 		// was deleted while no AGC was watching. Reads the in-flight set the listener
