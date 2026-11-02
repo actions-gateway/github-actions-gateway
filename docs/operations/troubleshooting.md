@@ -3387,7 +3387,9 @@ kubectl get configmap -n <namespace> scaleset-failures-<runnerset> -o jsonpath='
 
 **A `PlatformFaultOnFailedJob` Warning** names the fault.
 `OOMKilled` means the job needs more memory than the worker template gives it; a `DisruptionTarget` condition or a `Failed` pod means the node or the scheduler removed the worker, which the [disruption arms](#which-disruptions-auto-re-run-a-job-and-which-never-do) recover on their own.
-`EgressProxy <name> not Ready` or `has no ready replicas` means the set's proxy pool could not carry the job's egress when the worker finished; read the pool with `kubectl get egressproxy -n <namespace> <name>`.
+`EgressProxy <name> has no ready replicas` means no proxy pod could carry the job's egress when the worker finished.
+`EgressProxy <name> not Ready`, with its ready count, means the pool had fewer ready pods than its floor (`spec.minReplicas`, or the Deployment's replicas under bring-your-own autoscaling), as during a rolling update or after an eviction, so the remaining pods may still have carried the job's egress.
+Read the pool with `kubectl get egressproxy -n <namespace> <name>`.
 
 **What detection cannot see.** Node conditions are not recorded (the AGC has no `nodes` read), nor is a registry mirror's readiness.
 A proxy pool shared from another namespace is recorded as `proxy.mode: shared` with no readiness, since the AGC's cache does not reach that namespace.

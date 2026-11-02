@@ -304,7 +304,7 @@ func TestFlakyJobs_AnUnreadyColocatedProxyIsAPlatformFault(t *testing.T) {
 		proxy     *ProxySnapshot
 		wantFault string
 	}{
-		{name: "not Ready", proxy: colocated("False", 1), wantFault: "EgressProxy ep not Ready PodsUnavailable"},
+		{name: "not Ready", proxy: colocated("False", 1), wantFault: "EgressProxy ep not Ready PodsUnavailable, 1 ready replicas"},
 		{name: "no ready replicas", proxy: colocated("True", 0), wantFault: "EgressProxy ep has no ready replicas"},
 		{name: "ready", proxy: colocated("True", 2)},
 		{name: "unread colocated pool", proxy: &ProxySnapshot{Name: "ep", Mode: ProxyModeColocated}},

@@ -216,7 +216,11 @@ func (s *workerSnapshot) faults() []string {
 	if px := s.Proxy; px != nil && px.Mode == ProxyModeColocated {
 		switch {
 		case px.Ready == string(metav1.ConditionFalse):
-			out = append(out, strings.TrimSpace("EgressProxy "+px.Name+" not Ready "+px.Reason))
+			fault := strings.TrimSpace("EgressProxy " + px.Name + " not Ready " + px.Reason)
+			if px.ReadyReplicas != nil {
+				fault += fmt.Sprintf(", %d ready replicas", *px.ReadyReplicas)
+			}
+			out = append(out, fault)
 		case px.ReadyReplicas != nil && *px.ReadyReplicas == 0:
 			out = append(out, "EgressProxy "+px.Name+" has no ready replicas")
 		}
