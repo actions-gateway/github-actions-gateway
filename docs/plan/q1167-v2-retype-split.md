@@ -57,9 +57,10 @@ Retyping the AGC first means reading the classic marker from the conversion anno
 Q264 would then delete all of it a PR later.
 
 **Q264's stated blocker does not bind inside the bundle.** Its row reads "removing it while either version is served breaks those sets": a `v2alpha1` set written `Classic` would run as ScaleSet.
-That is true of a *release* and not of a commit on `main`.
-`main`'s next tag is `v2.0.0`, which carries all of the removals, and the 1.10 fallback is cut from a `release-1.10` branch off the `v1.10.0` tag rather than from `main` (open PR #2234's `release-ladder.md` change, read 2026-11-02).
-So no tag can ship the state between Q264 and Q1167.
+That matters for a tag, and only a `v2.0.0` candidate can be tagged off `main` in the window: the 1.10 fallback is cut from a `release-1.10` branch off the `v1.10.0` tag (open PR #2234's `release-ladder.md` change, read 2026-11-02).
+Candidates are cut from `main`, so what keeps one out of the window is the process, not the tag mechanics: Q1107, the cut, is blocked on every removal, and the scope ledger lists them all.
+No gate under `scripts/release/` refuses a candidate while a ledger row is open (searched 2026-11-02), so this holds only as long as nobody cuts one early.
+Inside the window a `Classic` set also skips the scale-set label-uniqueness check (`cmd/gmc/internal/webhook/v2/runnerset_webhook.go:178:	if acquisitionProtocolOf(rs) != acquisitionProtocolScaleSet {`) while running as ScaleSet once Q264 lands.
 
 Q264's row and the [v2-ga.md scope ledger](v2-ga.md#scope-ledger) carry this order, and both retype rows gate `v2.0.0` beside Q1167, since the tag waits on them as much as on the drop.
 
@@ -103,7 +104,7 @@ After Q1167 nothing reads one, so they are inert; removing them is not needed fo
 
 ## What compiles and still breaks
 
-Five things a green build does not catch, each owed by the step that would trip it.
+Six things a green build does not catch, each owed by the step that would trip it.
 
 1. **The GMC's CRD schema check names versions as strings.** `cmd/gmc/internal/controller/crd_schema.go:50:	{crd: "runnersets.actions-gateway.com", version: "v2beta1", path: []string{"spec", "runnerGroup"}},` and three sibling entries check a field at `v2beta1` and `v2alpha1`.
    After the drop those versions are absent from the CRD; `VerifyCRDSchemas` runs at startup, so Q1167 repoints the entries at `v2`.
@@ -118,6 +119,10 @@ Five things a green build does not catch, each owed by the step that would trip 
    The check runs in the e2e lanes, which are merge-group-only, so Q1167 gets an earlier verdict from `make e2e` before it is enqueued.
 5. **Dogfood's storage leg.** A `v2.0.0` candidate can only be applied to a cluster the 1.10 sweep has pruned to `["v2"]`; `scripts/dogfood/validate-release.sh` reads it.
    This binds the release candidate, not the merge.
+6. **The `v2.0.0` sweep would fail on the cluster it was built for.** `gag-migrate storage-version` survives `v2.0.0`, and the candidate gate's `storage` leg, one of its default legs (`GATE_LEGS_ALL` in `scripts/dogfood/lib/gate-legs.sh`), applies the candidate's own CRDs and then runs the candidate's own sweep.
+   The sweep lists `EgressProxy` at `v2beta1` to look for aliases (`cmd/gmc/internal/migrate/storageversion.go:215:func aliasEgressProxies(`) before it reaches the per-kind "`storedVersions` already `[v2]`; nothing to do" short-circuit, and a `v2.0.0` CRD set serves no `v2beta1`.
+   Read from the code; the list error itself is inferred, not measured.
+   Q1167 skips the alias check when every kind already stores `[v2]`, since an alias cannot be stored at `v2`, or treats a no-match error from the list as no aliases, and tests the sweep against a `v2`-only CRD set.
 
 Beyond the Go: `scripts/go/check-v2-api-sync.sh` fails on any stale exemption entry, so Q1167 deletes the script, its `v2-api-sync-check` target and its `unit-test.yml` step together with the packages.
 Non-Go files naming `actions-gateway.com/v2alpha1` or `v2beta1` (charts, `deploy/`, `scripts/`, operator docs and examples) move to `v2` in Q1167, since they stop applying the moment the CRDs stop serving those versions.
@@ -138,6 +143,7 @@ The removal leaves six more files importing one gone.
 **What survives of `gag-migrate` is in scope, and the sweep is the exception.** `cmd/gmc/migrate/main.go` and any fan-out helper Q273 keeps (`cmd/gmc/internal/migrate/names.go` takes `v2alpha1.RunnerTemplateSpec`) retype with the GMC in Q1262.
 `cmd/gmc/internal/migrate/storageversion.go` does not: it reads `EgressProxy` at `v2beta1` on purpose, because the sweep runs against a 1.10 cluster before the upgrade and only `v2beta1` still shows a stored alias.
 It cannot retype onto `v2` and keep that check, so Q1167 replaces its import of the deleted package with the version string and the two alias values held locally; it already reads through unstructured objects.
+It must also keep working against a `v2`-only cluster, which it does not today ([item 6 above](#what-compiles-and-still-breaks)).
 
 **34 surviving files import both `v1alpha1` and `v2alpha1`/`v2beta1`, 29 after the test port.** Q273 edits each to drop its `v1alpha1` half, and Q1262 or Q1263 then edits the same file, so each retype starts by rebasing onto Q273's edits.
 Seven are non-test: `cmd/agc/main.go`, `cmd/agc/internal/controller/runnerset_controller.go`, `cmd/gmc/cmd/main.go`, `cmd/gmc/internal/agentidentity/agentidentity.go`, `cmd/gmc/internal/webhook/v2/runnerset_read.go`, `cmd/gmc/internal/webhook/validation/validation.go` and `cmd/gmc/migrate/main.go`.
