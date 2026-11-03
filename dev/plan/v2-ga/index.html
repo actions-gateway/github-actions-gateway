@@ -2931,6 +2931,12 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: no <code>actions-gateway.github.com</code> kind, controller, CRD or webhook is left, and <code>gag-migrate</code> keeps only <code>storage-version</code></td>
 </tr>
 <tr>
+<td>Q1275</td>
+<td>Give the shipped alerts and dashboards scale-set twins before Q264</td>
+<td><code>2.0-gate</code></td>
+<td>✅ landed: <code>ActionsGatewayScaleSetNoSession</code> pages on a listener holding no session and <code>ActionsGatewayMessagePollFailing</code> tickets an open one whose polls fail, both reading series the scale-set listener writes; the tenant and platform dashboards chart what a scale set has queued at GitHub</td>
+</tr>
+<tr>
 <td><a href="../../queue/Q264/">Q264</a></td>
 <td>Remove the classic acquisition machinery (Phase 3)</td>
 <td><code>2.0-gate</code></td>

@@ -2719,6 +2719,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetnosession" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetNoSession
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewaymessagepollfailing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayMessagePollFailing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayscalesetprovisionerrors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3608,6 +3630,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#actionsgatewayscalesetnosession" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayScaleSetNoSession
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#actionsgatewaymessagepollfailing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionsGatewayMessagePollFailing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#actionsgatewayscalesetprovisionerrors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3934,6 +3978,18 @@ For <strong>abuse and compromise</strong> detection (eviction-retry loops, proxy
 <td>No listener polling; jobs queue indefinitely</td>
 </tr>
 <tr>
+<td><code>actions_gateway_scaleset_session_open</code></td>
+<td>= 0 for a RunnerSet, for 10m</td>
+<td>Page</td>
+<td>Scale-set listener holds no session; jobs queue indefinitely</td>
+</tr>
+<tr>
+<td><code>actions_gateway_message_poll_errors_total</code></td>
+<td>more than 10 in 15m per namespace, for 10m</td>
+<td>Ticket</td>
+<td>Most of a listener's polls failing while its session is open</td>
+</tr>
+<tr>
 <td><code>controller_runtime_reconcile_errors_total</code></td>
 <td>rate &gt; 1/5min</td>
 <td>Ticket</td>
@@ -4055,8 +4111,34 @@ Investigate long-running or wedged winning jobs; see <a href="../troubleshooting
 See <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)</a>.</p>
 <h3 id="actionsgatewayscalesetprovisioningstalled">ActionsGatewayScaleSetProvisioningStalled<a class="headerlink" href="#actionsgatewayscalesetprovisioningstalled" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The scale-set acquisition tier (the default protocol) is receiving <code>JobAssigned</code> messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start.
-A ScaleSet-protocol RunnerSet emits no <code>actions_gateway_active_sessions</code>, so this demand-vs-supply signal is the scale-set analog of <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>.
+A ScaleSet-protocol RunnerSet emits no <code>actions_gateway_active_sessions</code>, so this demand-vs-supply signal is half the scale-set analog of <a href="#active_sessions-flatlining-at-zero"><code>active_sessions</code> Flatlining at Zero</a>.
+It needs jobs to be assigned, so a listener whose poll keeps failing is covered by <a href="#actionsgatewaymessagepollfailing">ActionsGatewayMessagePollFailing</a> instead, and one that holds no session at all by <a href="#actionsgatewayscalesetnosession">ActionsGatewayScaleSetNoSession</a>.
 Respond with <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
+<h3 id="actionsgatewayscalesetnosession">ActionsGatewayScaleSetNoSession<a class="headerlink" href="#actionsgatewayscalesetnosession" title="Permanent link">&para;</a></h3>
+<p><strong>Page.</strong> A scale-set listener has held no message session for 10 minutes, so GitHub delivers it no jobs and they queue indefinitely.
+It is the scale-set analog of <a href="#actionsgatewaynoactivesessions">ActionsGatewayNoActiveSessions</a>, for a listener that never reaches the queue: such a listener counts no poll error and is assigned nothing, so no other scale-set rule fires.</p>
+<ol>
+<li>Read the cause: <code>kubectl describe runnerset &lt;name&gt; -n &lt;namespace&gt;</code>.
+   A failed start leaves <code>Ready=False</code> with reason <code>NoActiveSessions</code> (or <code>RunnerGroupNotFound</code>) and a <code>ScaleSetListenerStartFailed</code> Event whose message names the step that failed.</li>
+<li>If the Event or <code>Degraded=True</code> says unauthorized, the GitHub App credentials were revoked or lack access: see <a href="../troubleshooting/#token-refresh-errors-spiking">Token Refresh Errors Spiking</a>.</li>
+<li>If the RunnerSet is <code>Ready=True</code> but the gauge is 0, the session expired and its re-create inside the poll loop is failing: the AGC log shows <code>scaleset: re-create session failed</code> with the cause.</li>
+<li>A failure to reach GitHub at all is a network problem: see <a href="../troubleshooting/#network-connectivity-failures">Network Connectivity Failures</a>.</li>
+<li>During a rollout the new AGC reads 0 while its predecessor still holds the session, which normally frees when the old pod exits.
+   A 0 that outlasts the rollout can be a session the old pod leaked on shutdown, which holds until GitHub expires it (Q968).</li>
+</ol>
+<h3 id="actionsgatewaymessagepollfailing">ActionsGatewayMessagePollFailing<a class="headerlink" href="#actionsgatewaymessagepollfailing" title="Permanent link">&para;</a></h3>
+<p><strong>Ticket.</strong> More than 10 <code>GetMessage</code> long polls have failed in 15 minutes, sustained for 10 minutes, in one namespace.
+A listener whose polls fail is delivered nothing, so jobs queue at GitHub, and on a scale set nothing else alerts on it: <a href="#actionsgatewayscalesetprovisioningstalled">ActionsGatewayScaleSetProvisioningStalled</a> needs jobs to be assigned first.</p>
+<ol>
+<li>Read the <code>reason</code> label: <code>sum by (reason) (increase(actions_gateway_message_poll_errors_total{namespace="&lt;namespace&gt;"}[15m]))</code>.</li>
+<li><code>timeout</code> is a long poll GitHub accepted and never answered within the 55-second response deadline, the black-holed-connection class: check the egress path to GitHub, and the egress proxy if the tenant has one.</li>
+<li><code>rate_limited</code> is a 429: the RunnerSet's <code>RateLimited</code> condition trips once an episode passes ten minutes (<code>kubectl get runnerset -n &lt;namespace&gt; -o yaml</code>).</li>
+<li><code>other</code> is any remaining transport or decode error: see <a href="../troubleshooting/#network-connectivity-failures">Network Connectivity Failures</a>.</li>
+<li>On the tenant dashboard, <em>Queued at GitHub vs advertised capacity</em> shows what is waiting; queued jobs with a flat assigned rate confirm the listener is not taking work.</li>
+</ol>
+<p>A rejected credential is not counted here, because the listener heals a 401/403 rather than retrying the poll: it shows as <a href="#actionsgatewaytokenrefresherrors">ActionsGatewayTokenRefreshErrors</a> or the RunnerSet's <code>Degraded=True</code>.
+Nor is a listener that cannot open its session at all: that is <a href="#actionsgatewayscalesetnosession">ActionsGatewayScaleSetNoSession</a>.
+The threshold sums every set in the namespace, so a namespace with several sets reaches it sooner than one listener failing alone would.</p>
 <h3 id="actionsgatewayscalesetprovisionerrors">ActionsGatewayScaleSetProvisionErrors<a class="headerlink" href="#actionsgatewayscalesetprovisionerrors" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate.
 A transient failure retries on a later poll; a sustained rate means provisioning is degraded.
