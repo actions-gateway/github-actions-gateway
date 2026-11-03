@@ -214,7 +214,10 @@ type Stub struct {
 	// caller reading only the status cannot tell from a real prune (Q583).
 	deleteWithoutPruning bool
 
-	adminToken    string
+	// adminTokens holds every admin JWT the registration hop has minted. A new mint
+	// leaves earlier ones valid, as the real backend's independent JWTs are, so
+	// clients sharing one stub do not revoke each other's connections.
+	adminTokens   map[string]bool
 	adminTokenTTL time.Duration
 
 	// pollTimeout bounds how long an empty poll is held open; zero answers 202 at once.
@@ -270,9 +273,9 @@ func New(baseURL func(*http.Request) string) *Stub {
 		onlineRunners:    make(map[string]bool),
 		hiddenRunners:    make(map[string]bool),
 		nextRunnerID:     5000,
+		adminTokens:      make(map[string]bool),
 	}
 	s.handler = s.buildMux()
-	s.adminToken = s.mintAdminJWT(s.adminTokenTTL)
 	return s
 }
 
@@ -1003,7 +1006,7 @@ func (s *Stub) credentialKind(r *http.Request, ss *scaleSet) string {
 	switch {
 	case ss.session != nil && auth == "Bearer "+ss.session.queueToken:
 		return "queue"
-	case auth == "Bearer "+s.adminToken:
+	case s.isAdminAuth(auth):
 		return "admin"
 	default:
 		return "other"
@@ -1028,10 +1031,17 @@ func (s *Stub) mintAdminJWT(ttl time.Duration) string {
 	return header + "." + payload + ".sig"
 }
 
+// isAdminAuth reports whether an Authorization header presents a minted admin JWT.
+// Caller holds s.mu.
+func (s *Stub) isAdminAuth(auth string) bool {
+	token, ok := strings.CutPrefix(auth, "Bearer ")
+	return ok && s.adminTokens[token]
+}
+
 // requireAdmin validates the admin JWT on an _apis/runtime call, writing 401 and
 // returning false on mismatch.
 func (s *Stub) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	if r.Header.Get("Authorization") != "Bearer "+s.adminToken {
+	if !s.isAdminAuth(r.Header.Get("Authorization")) {
 		http.Error(w, `{"message":"invalid admin token"}`, http.StatusUnauthorized)
 		return false
 	}
@@ -1121,8 +1131,9 @@ func (s *Stub) handleRunnerRegistration(w http.ResponseWriter, r *http.Request) 
 	}
 	// Mint a fresh admin JWT with the current TTL — a short TTL forces the client
 	// to re-mint on its next admin call.
-	s.adminToken = s.mintAdminJWT(s.adminTokenTTL)
-	_ = json.NewEncoder(w).Encode(scaleset.AdminConnection{URL: s.baseURL(r), Token: s.adminToken})
+	token := s.mintAdminJWT(s.adminTokenTTL)
+	s.adminTokens[token] = true
+	_ = json.NewEncoder(w).Encode(scaleset.AdminConnection{URL: s.baseURL(r), Token: token})
 }
 
 func (s *Stub) handleRunnerGroups(w http.ResponseWriter, r *http.Request) {
