@@ -556,7 +556,7 @@ The condition clears automatically on the next reconcile once a worker pod sched
 
 **Symptoms.** `kubectl get runnerset` shows a `WorkerCapacityDeclined=True` condition and a `WorkerCapacityDeclined` Warning event.
 Jobs sit **queued at GitHub** and are never picked up — no worker pods are being created, and no jobs are being cancelled either.
-On the classic tier `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` climbs; on the default `ScaleSet` tier `actions_gateway_scaleset_advertised_capacity` has dropped and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the remainder of the ceiling.
+`actions_gateway_scaleset_advertised_capacity` has dropped and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the remainder of the ceiling.
 Those two count the *cost* of the refusal; the gate's own state is `actions_gateway_runnerset_worker_capacity_declined`, which reads `1` under the `reason` label below and is emitted only for a set that opted in — so `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)` is the fleet-wide "which sets are gated, and on what evidence" query.
 
 **Cause.** This is **deliberate, and only ever happens on a set that opted in.** The runner set has `spec.capacityGate.mode: Observe` (Q405, Q406, Q470), and the signal the gate reads is currently saying the cluster cannot place another worker pod of this set's shape.
@@ -585,8 +585,8 @@ A set with no `capacityGate` (the default) never carries this condition at all �
 > A latched set is invisible to the scheduler-side signals: the pod that produced the verdict is gone, so `WorkersUnschedulable` — and its gauge — is back to `0` while intake is still throttled.
 > `worker_capacity_declined{reason="AwaitingProbe"}` is the series that stays `1`, which is why the gauge carries the reason.
 
-**What alerts on this.** Two ticket-severity rules cover the gate, one per acquisition tier: [`ActionsGatewayCapacityGateRejectingJobs`](runbook.md#actionsgatewaycapacitygaterejectingjobs) on the classic tier and [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) on the default `ScaleSet` one.
-Both watch the *cost* series above rather than `worker_capacity_declined` itself, and the scale-set rule additionally requires the set to have been assigned work in the last hour.
+**What alerts on this.** The ticket-severity rule [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) covers the gate.
+It watches the *cost* series above rather than `worker_capacity_declined` itself, and requires the set to have been assigned work in the last hour.
 That is deliberate: the gauge alone cannot tell a gate that is costing throughput from the harmless latched state this section describes, so alerting on it directly would open a ticket against an idle set doing exactly what it should.
 
 **Diagnostics.**

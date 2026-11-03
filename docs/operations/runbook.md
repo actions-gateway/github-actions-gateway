@@ -89,12 +89,10 @@ For **abuse and compromise** detection (eviction-retry loops, proxy slowloris, c
 | Metric | Recommended threshold | Severity | Notes |
 | --- | --- | --- | --- |
 | `actions_gateway_token_refresh_errors_total` | rate > 1/hour per namespace | Page | Token expiry causes session failures within ~1 hour |
-| `actions_gateway_renew_job_errors_total` | rate > 5/minute per namespace | Page | Sustained failures cancel running jobs |
 | `actions_gateway_pod_creation_latency_seconds` p95 | > 15s | Ticket | SLO target from Appendix A |
 | `actions_gateway_pod_creation_latency_seconds` p99 | > 60s | Page | Indicates scheduling stall or quota exhaustion |
 | `actions_gateway_eviction_retries_exhausted_total` | rate > 0 | Ticket | Each increment requires a manual re-run |
 | `actions_gateway_eviction_rerun_outcomes_total` `result="failed"` share per cause | > 50% over 7d, at least 5 re-runs | Ticket | Re-running is not clearing that cause: it is misclassified (Q1245) |
-| `actions_gateway_active_sessions` | = 0 for a RunnerGroup | Page | No listener polling; jobs queue indefinitely |
 | `actions_gateway_scaleset_session_open` | = 0 for a RunnerSet, for 10m | Page | Scale-set listener holds no session; jobs queue indefinitely |
 | `actions_gateway_message_poll_errors_total` | more than 10 in 15m per namespace, for 10m | Ticket | Most of a listener's polls failing while its session is open |
 | `controller_runtime_reconcile_errors_total` | rate > 1/5min | Ticket | Persistent reconcile failure; resources may be stale |
@@ -105,8 +103,7 @@ For **abuse and compromise** detection (eviction-retry loops, proxy slowloris, c
 ### Page-Worthy vs. Ticket-Worthy
 
 **Page** (requires immediate response, typically < 15 minutes):
-- `active_sessions = 0` — no jobs can be acquired until fixed.
-- `renew_job_errors_total` rate high — jobs will be cancelled.
+- `scaleset_session_open = 0` for 10 minutes — the listener holds no session, so no jobs can be acquired until fixed.
 - `token_refresh_errors_total` spiking — token will expire within ~1 hour.
 - `pod_creation_latency p99 > 60s` — scheduling is stalled.
 - `RateLimited` condition > 10 minutes — installation is over budget.
@@ -125,20 +122,10 @@ For **abuse and compromise** detection (eviction-retry loops, proxy slowloris, c
 Every alert shipped in the reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml) (reproduced in [Recommended Alert Rules](observability-alerting.md#recommended-alert-rules)) carries a `runbook_url` annotation that resolves to the matching entry below, so on-call lands on a response procedure rather than just the alert's `summary`/`description`.
 Severity classes follow [Page-Worthy vs. Ticket-Worthy](#page-worthy-vs-ticket-worthy).
 
-### ActionsGatewayNoActiveSessions
-
-**Page.** The AGC has no open long-poll sessions, so no jobs are acquired and the queue backs up indefinitely.
-Restore sessions with [`active_sessions` Flatlining at Zero](#active_sessions-flatlining-at-zero).
-
 ### ActionsGatewayTokenRefreshErrors
 
 **Page.** GitHub App token refresh has been failing; sessions will fail once the current token expires (~1 hour).
 See [Token Refresh Errors Spiking](troubleshooting.md#token-refresh-errors-spiking).
-
-### ActionsGatewayRenewJobErrors
-
-**Page.** RenewJob is failing at a sustained rate, so running jobs may be cancelled by GitHub.
-See [RenewJob Failures Rising](troubleshooting.md#renewjob-failures-rising).
 
 ### ActionsGatewayPodCreationLatencyP99
 
@@ -232,32 +219,16 @@ Admission rejects every new such pair, so this one predates the guard (an upgrad
 It will not self-heal, and the condition names only the alerting gateway's own runner sets: the other holder is in the GMC log, because gateway status is tenant-readable.
 See [`ActionsGateway` Reports `ScaleSetNameCollision`](troubleshooting.md#actionsgateway-reports-scalesetnamecollision).
 
-### ActionsGatewayAgentRecycleErrors
-
-**Ticket.** Single-use JIT agent re-registration is failing; sustained growth shrinks listener capacity and decays tenant throughput job by job.
-See [Concurrent Job Burst Serializes to ~1 Worker (Recycle Blocked on a Still-Running Runner)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner).
-
-### ActionsGatewayFanoutFallbackTimeout
-
-**Ticket.** Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners.
-Investigate long-running or wedged winning jobs; see [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition).
-
-### ActionsGatewayAbandonedDeliveryErrors
-
-**Ticket.** The winner of a fanned-out job is failing to issue `completejob` on a deduped sibling delivery; affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout.
-See [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition).
-
 ### ActionsGatewayScaleSetProvisioningStalled
 
 **Page.** The scale-set acquisition tier (the default protocol) is receiving `JobAssigned` messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start.
-A ScaleSet-protocol RunnerSet emits no `actions_gateway_active_sessions`, so this demand-vs-supply signal is half the scale-set analog of [`active_sessions` Flatlining at Zero](#active_sessions-flatlining-at-zero).
 It needs jobs to be assigned, so a listener whose poll keeps failing is covered by [ActionsGatewayMessagePollFailing](#actionsgatewaymessagepollfailing) instead, and one that holds no session at all by [ActionsGatewayScaleSetNoSession](#actionsgatewayscalesetnosession).
 Respond with [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
 
 ### ActionsGatewayScaleSetNoSession
 
 **Page.** A scale-set listener has held no message session for 10 minutes, so GitHub delivers it no jobs and they queue indefinitely.
-It is the scale-set analog of [ActionsGatewayNoActiveSessions](#actionsgatewaynoactivesessions), for a listener that never reaches the queue: such a listener counts no poll error and is assigned nothing, so no other scale-set rule fires.
+Such a listener never reaches the queue: it counts no poll error and is assigned nothing, so no other rule fires.
 
 1. Read the cause: `kubectl describe runnerset <name> -n <namespace>`.
    A failed start leaves `Ready=False` with reason `NoActiveSessions` (or `RunnerGroupNotFound`) and a `ScaleSetListenerStartFailed` Event whose message names the step that failed.
@@ -310,26 +281,10 @@ Every increment is an explicit allowlist denial (sharper than `dial_errors`, whi
 3. If the destinations are unexpected, treat it as SSRF probing or a compromised workload — inspect the workflow acquiring the affected runner and correlate with `proxy_dial_errors_total`.
 4. If a legitimate egress target is missing, add it to the platform-owned egress allowlist rather than to the workflow — see [security-operations.md § Worker egress destinations](security-operations.md#worker-egress-destinations-the-egress-allowlist).
 
-### ActionsGatewayCapacityGateRejectingJobs
-
-**Ticket.** A runner set opted into [`spec.capacityGate`](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) and the gate has been leaving delivered jobs queued at GitHub for half an hour, because the cluster cannot place another worker pod of that set's shape.
-This is the **classic** acquisition tier, where every increment is one job GitHub delivered and the AGC declined to claim.
-
-Refusing is the gate working: claiming a job the cluster cannot run spends a single-use JIT runner record and ends in a cancelled workflow run.
-What the alert reports is that the refusal is not clearing.
-The gate throttles rather than seals, so intake continues at roughly one claim per `pendingPodDeadline` window; over 30 minutes that is at least three probes that failed to find capacity.
-
-1. Read the gate's evidence: `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)`.
-   `ScaleUpDeclined` is the cluster autoscaler's own refusal, `PodsUnschedulable` is the scheduler's verdict, `PodsNotStarting` is the kubelet's on a pod that bound and then could not pull its image, and `AwaitingProbe` is the latched state that outlives the pod which produced it.
-   The gauge keys on `runner_set` while this alert's series keys on `runner_group`; both carry the same set's name, because the rejection counter is shared with v1 `RunnerGroup` owners.
-2. Work the reason with [RunnerSet Reports WorkerCapacityDeclined](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs), which maps each one to the node, taint, quota, or image fix that clears it.
-   `PodsNotStarting` is the odd one out and the quickest: the cluster placed the pod, so read the pod's own backoff message for the image it cannot pull rather than looking at nodes at all.
-3. The one-line rollback, if the gate is wrong about the cluster, is `spec.capacityGate.mode: "Off"`; the same section covers when that is the right call.
-   **Quote the `Off`.** YAML reads a bare one as the boolean false, so an unquoted rollback is rejected naming a value you never typed, during an incident, which is the worst time to debug a manifest (Q985).
-
 ### ActionsGatewayScaleSetCapacityWithheld
 
-**Ticket.** The same gate on the **scale-set** (default) tier, where a declined job is never assigned at all, so there is no rejected delivery to count.
+**Ticket.** A runner set opted into [`spec.capacityGate`](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) and the gate is declining work because the cluster cannot place another worker pod of that set's shape.
+A declined job is never assigned at all, so there is no rejected delivery to count.
 The gate shows up instead as slots removed from the ceiling the set advertises to GitHub, and runs wait in the queue for capacity the set is declining to offer.
 
 The alert requires the set to have been assigned work in the last hour, which is what separates a gate doing its job from one worth a ticket.
@@ -338,7 +293,12 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 
 1. Read `actions_gateway_scaleset_advertised_capacity` for what the set is still offering and `actions_gateway_scaleset_capacity_withheld` by `reason` for who took the rest; a `quota` share alongside the `capacity` one means the [ResourceQuota](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) is binding too.
    The budget dashboard's [Throttled Intake row](observability-dashboards.md#budget-dashboard) plots both as one stack whose total is the declared ceiling, which is the fastest way to see the split.
-2. Then follow the same evidence and remediation path as [ActionsGatewayCapacityGateRejectingJobs](#actionsgatewaycapacitygaterejectingjobs) above.
+2. Read the gate's evidence: `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)`.
+   `ScaleUpDeclined` is the cluster autoscaler's own refusal, `PodsUnschedulable` is the scheduler's verdict, `PodsNotStarting` is the kubelet's on a pod that bound and then could not pull its image, and `AwaitingProbe` is the latched state that outlives the pod which produced it.
+3. Work the reason with [RunnerSet Reports WorkerCapacityDeclined](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs), which maps each one to the node, taint, quota, or image fix that clears it.
+   `PodsNotStarting` is the odd one out and the quickest: the cluster placed the pod, so read the pod's own backoff message for the image it cannot pull rather than looking at nodes at all.
+4. The one-line rollback, if the gate is wrong about the cluster, is `spec.capacityGate.mode: "Off"`; the same section covers when that is the right call.
+   **Quote the `Off`.** YAML reads a bare one as the boolean false, so an unquoted rollback is rejected naming a value you never typed, during an incident, which is the worst time to debug a manifest (Q985).
 
 ---
 
@@ -354,36 +314,9 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 6. If PriorityClass is missing: create it.
    See [Troubleshooting — Worker Pods Stuck Pending](troubleshooting.md#worker-pods-stuck-pending).
 
-### `active_sessions` Flatlining at Zero
-
-1. Check AGC pod status: `kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller`.
-2. Check AGC logs:
-
-   ```sh
-   # v2
-   kubectl logs -n <namespace> deploy/<gateway>-agc --tail=100
-   ```
-
-   ```sh
-   # v1 (legacy)
-   kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100
-   ```
-
-3. Check RunnerGroup conditions: `kubectl get runnergroup -n <namespace> -o yaml`.
-4. If pod is `CrashLoopBackOff` or `Error`: see [Troubleshooting — AGC CrashLoopBackOff](troubleshooting.md#agc-crashloopbackoff-or-not-acquiring-jobs).
-5. If pod is running but sessions are zero: check for token errors (see [Token Refresh Errors](troubleshooting.md#token-refresh-errors-spiking)) and network connectivity (see [Network Connectivity Failures](troubleshooting.md#network-connectivity-failures)).
-
-### `jobs_acquired_total` Stops Incrementing
-
-1. Verify jobs are actually queued: check the GitHub Actions UI for the repository.
-2. Check `active_sessions` — if zero, restore sessions first (see above).
-3. Check `RateLimited` condition — if true, reduce session load or wait for the burst to subside.
-4. Check `message_poll_errors_total` — persistent poll errors indicate a broken GitHub connection.
-5. If sessions are active and no errors, the queue may simply be empty.
-
 ### Scale-set provisioning stalled
 
-The scale-set tier is the default protocol; it emits no `active_sessions` gauge, so a wedge shows up as `scaleset_jobs_assigned_total` climbing while `scaleset_jobs_provisioned_total` stays flat.
+A wedge shows up as `scaleset_jobs_assigned_total` climbing while `scaleset_jobs_provisioned_total` stays flat.
 
 1. Confirm the wedge: `scaleset_jobs_assigned_total` is rising but `scaleset_jobs_provisioned_total` is not, for the affected `namespace`/`runner_set`.
 2. Check the provision-error rate: `rate(actions_gateway_scaleset_provision_errors_total[5m])`.
@@ -503,9 +436,8 @@ Before handing off to the next on-call:
 
 - [ ] All `ActionsGateway` conditions `Ready=True` across active tenant namespaces.
 - [ ] No sustained `RateLimited` conditions.
-- [ ] `active_sessions` > 0 for all active RunnerGroups.
+- [ ] `scaleset_session_open` = 1 for every active RunnerSet.
 - [ ] `token_refresh_errors_total` rate is zero (or below 1/hour).
-- [ ] `renew_job_errors_total` rate is zero.
 - [ ] No pods in `CrashLoopBackOff` or `OOMKilled` state.
 - [ ] No open incidents or unresolved pages.
 - [ ] Any `eviction_retries_exhausted_total` increments from the shift are documented and re-runs are queued.

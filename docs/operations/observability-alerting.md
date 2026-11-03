@@ -11,18 +11,15 @@ For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix
 | Symptom | Metric(s) to check | Notes |
 | --- | --- | --- |
 | Jobs are slow to start | `pod_creation_latency_seconds` p95/p99 | SLO: p95 ≤ 15s, p99 ≤ 60s. Emitted on both acquisition tiers; observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it |
-| Jobs are randomly cancelled | `renew_job_errors_total` | Each sustained error risks a job cancellation |
-| Jobs are not being acquired | `active_sessions` (should be ≥ 1 per RunnerGroup), `job_acquisition_errors_total` | Zero sessions = no polling |
-| Jobs are queuing but not starting | `active_sessions` (OK) vs `jobs_acquired_total` not incrementing | Check `RateLimited` condition |
-| Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota (scale-set has no `active_sessions` gauge) |
+| Jobs are not being acquired | `scaleset_session_open` (should be 1 per RunnerSet), `message_poll_errors_total` | `0` = the listener holds no session, so GitHub delivers it nothing; a rising poll-error rate = a session whose polls fail |
+| Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota |
 | One scale-set job never starts, the rest do | `scaleset_jobs_deferred{reason="name_conflict"}` > 0 | Its runner name will not register; the listener re-offers it on a backoff. Read the `RunnerSet`'s `JobProvisionStalled` condition for the job ids; see the [runbook](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | Scale-set assignments give up without running | `rate(scaleset_jobs_abandoned_total[15m])` > 0 | GitHub stopped holding jobs the listener was still trying to place, so those runs will not start. Expected in a burst around a mass cancellation or a drain; investigate a sustained rate. See the [runbook](troubleshooting.md#scale-set-assignments-abandoned-assignmentabandoned) |
 | Scale-set jobs queue while its workers all run | `scaleset_jobs_deferred{reason="ceiling"}` > 0 | Expected: the set is at the worker ceiling its spec declares, and the held jobs start as workers finish. Alert only on it being sustained; see the [runbook](troubleshooting.md#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
-| A gated set has stopped claiming work | `runnerset_worker_capacity_declined` grouped by `reason`; the cost shows as `jobs_admission_rejected_total{reason="capacity"}` (classic) or `scaleset_capacity_withheld{reason="capacity"}` (scale set) | The opt-in capacity gate is refusing intake because the cluster cannot place another worker of this set's shape. Alert on the two cost series rather than the gauge: a latched `AwaitingProbe` decline sits `True` indefinitely on an idle set and costs nothing. See the [runbook](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) |
+| A gated set has stopped claiming work | `runnerset_worker_capacity_declined` grouped by `reason`; the cost shows as `scaleset_capacity_withheld{reason="capacity"}` | The opt-in capacity gate is refusing intake because the cluster cannot place another worker of this set's shape. Alert on the cost series rather than the gauge: a latched `AwaitingProbe` decline sits `True` indefinitely on an idle set and costs nothing. See the [runbook](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs) |
 | Runner credentials are broken | `token_refresh_errors_total` | Spikes indicate Secret or GitHub App issue |
 | Evictions causing re-runs | `eviction_retries_total`, `eviction_retries_exhausted_total` | Exhausted budget requires manual intervention |
 | Quota rejecting worker pods | `quota_retries_total`, `quota_retries_exhausted_total` | Sustained retries mean tight quota headroom; exhausted budget requires manual intervention |
-| Throughput decaying job by job | `agent_recycle_errors_total` rising, `active_sessions` shrinking | Agent re-registration failing; see the [runbook](troubleshooting.md#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero) |
 | Jobs cancelled without ever starting | `worker_pods_reaped_total{reason="pending_deadline"}` | Worker pod stuck Pending past the deadline — fix the image/scheduling cause; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending) |
 | Jobs ending before their worker can start | `worker_pods_reaped_total{reason="completed_pending"}` | Worker pod still Pending when GitHub reported its job terminal — cancellations outrunning pod startup, or an AGC replaying a queue after a restart; see the [runbook](troubleshooting.md#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending) |
 | Workers idling after their job is over | `worker_pods_reaped_total{reason="orphaned_running"}` | ScaleSet worker still Running five minutes after GitHub reported its job terminal — it never received the job, or a sidecar outlived the runner; see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning) |
@@ -49,18 +46,6 @@ groups:
   - name: actions-gateway
     rules:
 
-      # Page: no sessions means no job acquisition
-      - alert: ActionsGatewayNoActiveSessions
-        expr: |
-          actions_gateway_active_sessions == 0
-        for: 2m
-        labels:
-          severity: critical
-        annotations:
-          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaynoactivesessions"
-          summary: "No active listener sessions for {{ $labels.runner_group }} in {{ $labels.namespace }}"
-          description: "The AGC has no open long-poll sessions. Jobs queue indefinitely until sessions are restored."
-
       # Page: token refresh errors risk job failures within ~1 hour
       - alert: ActionsGatewayTokenRefreshErrors
         expr: |
@@ -72,18 +57,6 @@ groups:
           runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaytokenrefresherrors"
           summary: "GitHub App token refresh errors in {{ $labels.namespace }}"
           description: "Token refresh has been failing for 5+ minutes. Sessions will fail once the current token expires (~1 hour)."
-
-      # Page: sustained renewjob failures will cancel running jobs
-      - alert: ActionsGatewayRenewJobErrors
-        expr: |
-          rate(actions_gateway_renew_job_errors_total[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayrenewjoberrors"
-          summary: "RenewJob errors in {{ $labels.namespace }}"
-          description: "RenewJob is failing at >0.1/s for 5+ minutes. Running jobs may be cancelled."
 
       # Page: p99 pod creation latency SLO breach
       - alert: ActionsGatewayPodCreationLatencyP99
@@ -274,42 +247,6 @@ groups:
           summary: "Scale-set name shared across tenants for {{ $labels.name }} in {{ $labels.namespace }}"
           description: "A ScaleSet RunnerSet bound to this gateway claims a scale-set name another RunnerSet already claims in the same GitHub scope, so both tenants' AGCs drive one scale set and each acquires the other's jobs. Admission rejects every new such pair, so this one predates the guard or was applied with the webhook uninstalled; it will not self-heal."
 
-      # Ticket: agent re-registration failing — listener capacity decays job by job (Q267)
-      - alert: ActionsGatewayAgentRecycleErrors
-        expr: |
-          rate(actions_gateway_agent_recycle_errors_total[5m]) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayagentrecycleerrors"
-          summary: "Agent recycle errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
-          description: "Single-use JIT agent re-registration is failing. Sustained growth shrinks listener capacity and decays tenant throughput job by job."
-
-      # Ticket: fan-out losers recycling on the fallback timeout — a class of stuck winners (Q266)
-      - alert: ActionsGatewayFanoutFallbackTimeout
-        expr: |
-          rate(actions_gateway_fanout_loser_recycle_deferred_total{outcome="fallback_timeout"}[5m]) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayfanoutfallbacktimeout"
-          summary: "Fan-out recycle fallback timeouts for {{ $labels.runner_group }} in {{ $labels.namespace }}"
-          description: "Deduped fan-out losers are recycling on the fallback timeout because their winner never concluded within the bound — a class of stuck winners. Investigate long-running or wedged winning jobs."
-
-      # Ticket: fan-out completion (completejob on a deduped sibling) is failing (Q260)
-      - alert: ActionsGatewayAbandonedDeliveryErrors
-        expr: |
-          rate(actions_gateway_abandoned_delivery_completions_total{outcome="error"}[5m]) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayabandoneddeliveryerrors"
-          summary: "Abandoned-delivery completion errors for {{ $labels.runner_group }} in {{ $labels.namespace }}"
-          description: "The winner of a fanned-out job is failing to issue completejob on a deduped sibling delivery; the affected jobs may be cancelled at GitHub's ~15-minute unstarted-job timeout. Investigate the run service's completejob responses."
-
       # Ticket: egress proxy denying CONNECTs to off-allowlist destinations —
       # an SSRF / egress-policy signal, sharper than dial_errors (Q316)
       - alert: ActionsGatewayProxyConnectDenied
@@ -324,10 +261,8 @@ groups:
           description: "The egress proxy is refusing CONNECT requests to off-allowlist destinations at >0.1/s for 10m — an SSRF / egress-policy signal (a workload probing blocked destinations, or a misconfigured egress target). Unlike dial errors, every denial here is an explicit allowlist rejection."
 
       # Page: scale-set tier wedged — jobs are being assigned but none are
-      # getting provisioned (Q311). One half of the scale-set analog of
-      # ActionsGatewayNoActiveSessions: a ScaleSet-protocol RunnerSet never
-      # emits actions_gateway_active_sessions, so throughput stalls are only
-      # visible as demand (assigned) flowing while supply (provisioned) is flat.
+      # getting provisioned (Q311). A throughput stall is visible as demand
+      # (assigned) flowing while supply (provisioned) is flat.
       # A listener whose poll keeps failing is assigned nothing, which this
       # cannot see; ActionsGatewayMessagePollFailing covers that case, and
       # ActionsGatewayScaleSetNoSession covers a session that never opens.
@@ -353,8 +288,7 @@ groups:
           description: "The scale-set acquisition tier is receiving JobAssigned messages but has provisioned no worker pods for 10+ minutes — the tier is wedged. Acquired jobs will not start. Check actions_gateway_scaleset_provision_errors_total, the worker-pod ResourceQuota, and the listener session health."
 
       # Ticket: the listener's long poll keeps failing, so no job reaches it
-      # (Q1275). Part of the scale-set analog of ActionsGatewayNoActiveSessions:
-      # a set whose poll fails is assigned nothing, so ProvisioningStalled's
+      # (Q1275). A set whose poll fails is assigned nothing, so ProvisioningStalled's
       # demand conjunct never holds. A session that never opens counts no poll
       # error; ActionsGatewayScaleSetNoSession covers that case.
       #
@@ -381,13 +315,11 @@ groups:
           description: "GetMessage has failed more than 10 times in 15 minutes, sustained for 10 minutes: most of a listener's polls are failing, so GitHub is not delivering jobs to it and they queue at GitHub. Read the reason label on actions_gateway_message_poll_errors_total: timeout is a black-holed broker connection, rate_limited a 429, other any remaining transport error."
 
       # Page: a scale-set listener holds no message session, so GitHub delivers it
-      # nothing and its jobs queue indefinitely (Q1275). The scale-set analog of
-      # ActionsGatewayNoActiveSessions for a session that never opens: Start
-      # failing at any step, or the re-create after a 404 failing inside the poll
-      # loop. Neither counts a poll error or assigns a job, so the two rules above
-      # cannot see it. The gauge is published by the listener and dropped when
-      # the RunnerSet is deleted. `for` is 10m rather than classic's 2m because a
-      # rollout's successor waits on its predecessor's session and reads 0 until
+      # nothing and its jobs queue indefinitely (Q1275): Start failing at any
+      # step, or the re-create after a 404 failing inside the poll loop. Neither
+      # counts a poll error or assigns a job, so the two rules above cannot see
+      # it. The gauge is published by the listener and dropped when the
+      # RunnerSet is deleted. `for` is 10m because a rollout's successor waits on its predecessor's session and reads 0 until
       # the old pod exits.
       - alert: ActionsGatewayScaleSetNoSession
         expr: |
@@ -426,25 +358,9 @@ groups:
           summary: "Scale-set job cannot register a runner name for {{ $labels.runner_set }} in {{ $labels.namespace }}"
           description: "One or more jobs assigned to the scale set cannot register their runner name (generate-jitconfig 409), so no worker is running them; the listener keeps re-offering them. Each is a workflow run queued at GitHub. Read the RunnerSet's JobProvisionStalled condition for the job ids, then free the conflicting runner records."
 
-      # Ticket: an opted-in capacity gate has been refusing job intake for
-      # 30+ minutes without clearing (Q695). Classic tier only: every
-      # increment is a job GitHub delivered and the gate left queued, so the
-      # counter is its own demand signal and needs no second conjunct.
-      - alert: ActionsGatewayCapacityGateRejectingJobs
-        expr: |
-          rate(actions_gateway_jobs_admission_rejected_total{reason="capacity"}[15m]) > 0
-        for: 30m
-        labels:
-          severity: warning
-        annotations:
-          runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaycapacitygaterejectingjobs"
-          summary: "Capacity gate refusing job intake for {{ $labels.runner_group }} in {{ $labels.namespace }}"
-          description: "A runner set opted into spec.capacityGate and the gate has been leaving delivered jobs queued at GitHub for 30+ minutes because the cluster cannot place another worker pod of its shape. The gate throttles rather than seals, so expect roughly one claim per pendingPodDeadline window — but over this long it is not clearing on its own. Read the reason label on actions_gateway_runnerset_worker_capacity_declined for the evidence it is holding."
-
-      # Ticket: the scale-set tier's half of the same gate (Q695). A job the
-      # ladder declines here is never assigned, so jobs_admission_rejected_total
-      # is structurally unreachable (Q443) and the withheld gauge is the signal.
-      # That gauge alone cannot say the gate is costing anything: an idle set
+      # Ticket: an opted-in capacity gate is holding back job intake (Q695). A
+      # job the ladder declines is never assigned, so the withheld gauge is the
+      # signal. That gauge alone cannot say the gate is costing anything: an idle set
       # whose worker shape stays unplaceable holds a latched AwaitingProbe
       # decline indefinitely, truthfully and harmlessly (Q512, Q658). Recent
       # assignments are the demand conjunct that tells the two apart — under a
@@ -520,30 +436,8 @@ groups:
             increase(actions_gateway_token_refresh_errors_total[1h])
           )
 
-      # Job acquisition success rate — fraction of acquisitions that succeed,
-      # per namespace. Grouped by namespace only (not runner_group):
-      # job_acquisition_errors_total is labelled namespace+reason with no
-      # runner_group, so grouping the denominator by runner_group would leave
-      # the error rate unmatched and the ratio would evaluate to empty.
-      - record: actions_gateway:job_acquisition_success_rate:rate5m
-        expr: |
-          sum by (namespace) (
-            rate(actions_gateway_jobs_acquired_total[5m])
-          )
-          /
-          (
-            sum by (namespace) (
-              rate(actions_gateway_jobs_acquired_total[5m])
-            )
-            +
-            sum by (namespace) (
-              rate(actions_gateway_job_acquisition_errors_total[5m])
-            )
-          )
-
       # Scale-set provision success rate — fraction of provision attempts that
-      # succeeded, per namespace. The scale-set analog of
-      # job_acquisition_success_rate: a provision attempt either succeeds
+      # succeeded, per namespace: a provision attempt either succeeds
       # (…_jobs_provisioned_total) or fails (…_provision_errors_total).
       - record: actions_gateway:scaleset_provision_success_rate:rate5m
         expr: |
