@@ -621,6 +621,29 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "Queued at GitHub vs advertised capacity",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 38 },
+      "id": 46,
+      "description": "The scale-set tier's stand-in for Active sessions, which a ScaleSet-protocol RunnerSet never emits. Queued is the jobs GitHub holds for the set and has assigned to nobody; advertised is how many the set offered to take. Queued staying up beside advertised capacity while the assigned rate is flat means GitHub has work the listener is not taking: check Message poll errors/s and the RunnerSet's conditions. Queued holds its last reading across an empty poll, so read it as a level rather than a rate.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_set) (actions_gateway_scaleset_jobs_available{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
+          "legendFormat": "queued {{namespace}}/{{runner_set}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace, runner_set) (actions_gateway_scaleset_advertised_capacity{namespace=~\"$namespace\", runner_set=~\"$runner_set\"})",
+          "legendFormat": "advertised {{namespace}}/{{runner_set}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
       "type": "row",
       "title": "Tenant Health Conditions",
       "collapsed": false,

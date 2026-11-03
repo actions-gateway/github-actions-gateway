@@ -184,9 +184,10 @@ def render():
     for ns in NAMESPACES:
         L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {counter_total(0.05, elapsed)}')
         L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="delivery_window_expired"}} {counter_total(0.01, elapsed)}')
-        # GetMessage errors by reason (excludes empty polls / session expiry).
-        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="timeout"}} {counter_total(0.06, elapsed)}')
-        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="rate_limited"}} {counter_total(0.01, elapsed)}')
+        # GetMessage errors by reason (excludes empty polls / session expiry). One
+        # reason at the counter floor, about 9 per 15m, is all that stays under the
+        # MessagePollFailing alert's 10, so the preview fleet is not failing its polls.
+        L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="timeout"}} {counter_total(MIN_COUNTER_RATE, elapsed)}')
         # renewjob teardowns: definitive lock loss (Q254).
         L.append(f'actions_gateway_renew_job_teardowns_total{{namespace="{ns}",reason="job_not_found"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_token_refreshes_total{{namespace="{ns}"}} {counter_total(0.02, elapsed)}')
@@ -277,6 +278,11 @@ def render():
             advertised -= slots
             L.append(f'actions_gateway_scaleset_capacity_withheld{{namespace="{ns}",runner_set="{rs}",reason="{reason}"}} {slots}')
         L.append(f'actions_gateway_scaleset_advertised_capacity{{namespace="{ns}",runner_set="{rs}"}} {advertised}')
+        # Demand GitHub holds for the set and has assigned to nobody (Q720): a small
+        # queue, well under the advertisement, as a set keeping up with its work shows.
+        L.append(f'actions_gateway_scaleset_jobs_available{{namespace="{ns}",runner_set="{rs}"}} {max(0, int(min(advertised, 2) + jitter(hash((rs, ns)) % 5, 1.5)))}')
+        # Every preview listener holds its session, so the no-session alert stays quiet.
+        L.append(f'actions_gateway_scaleset_session_open{{namespace="{ns}",runner_set="{rs}"}} 1')
 
     # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
     # the per-tenant ServiceMonitor stamps one from the scrape target's namespace

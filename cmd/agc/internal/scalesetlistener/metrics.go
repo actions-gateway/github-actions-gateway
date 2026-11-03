@@ -71,6 +71,12 @@ type Metrics struct {
 	// own, and it is what distinguishes a deferred set that cleared because the jobs ran
 	// from one that cleared because they evaporated.
 	JobsAbandonedTotal *prometheus.CounterVec
+	// SessionOpen is 1 while the Listener holds an open message session and 0 once
+	// opening one has failed: Start failing at any step, or the re-create after a 404
+	// failing inside the poll loop. It is this tier's analogue of the classic
+	// actions_gateway_active_sessions, the one signal for a listener that never reaches
+	// the queue, which counts no poll error and is assigned nothing (Q1275).
+	SessionOpen *prometheus.GaugeVec
 }
 
 // NewMetrics creates the scale-set tier's metrics and registers them with reg, which
@@ -131,6 +137,11 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "actions_gateway_scaleset_jobs_abandoned_total",
 			Help: "Total assigned jobs the listener gave up on because the scale set no longer counts them as assigned (GitHub dropped the assignment without reporting the job complete); each is a workflow run that will never run.",
 		}, []string{"namespace", "runner_set"}),
+
+		SessionOpen: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "actions_gateway_scaleset_session_open",
+			Help: "1 while the scale set's listener holds an open message session, 0 once opening one has failed (listener start, or the re-create after the session expired); a set at 0 receives no jobs.",
+		}, []string{"namespace", "runner_set"}),
 	}
 	reg.MustRegister(
 		m.JobsAssignedTotal,
@@ -142,6 +153,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		m.JobsDeferred,
 		m.AvailableJobs,
 		m.JobsAbandonedTotal,
+		m.SessionOpen,
 	)
 	return m
 }
@@ -183,6 +195,7 @@ func (m *Metrics) DeleteRunnerSet(namespace, runnerSet string) {
 	m.CapacityWithheld.DeletePartialMatch(labels)
 	m.JobsDeferred.DeletePartialMatch(labels)
 	m.AvailableJobs.Delete(labels)
+	m.SessionOpen.Delete(labels)
 }
 
 // RecorderFor returns a MetricsRecorder that records into m's vectors under the given
@@ -231,4 +244,12 @@ func (r *recorder) SetAvailableJobs(n int) {
 
 func (r *recorder) IncJobsAbandoned(n int) {
 	r.m.JobsAbandonedTotal.WithLabelValues(r.namespace, r.runnerSet).Add(float64(n))
+}
+
+func (r *recorder) SetSessionOpen(open bool) {
+	v := 0.0
+	if open {
+		v = 1
+	}
+	r.m.SessionOpen.WithLabelValues(r.namespace, r.runnerSet).Set(v)
 }

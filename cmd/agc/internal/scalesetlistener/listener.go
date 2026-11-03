@@ -442,6 +442,9 @@ type MetricsRecorder interface {
 	// set no longer counts them as assigned (Q553). Each is a workflow run that will
 	// never run, so unlike the deferred gauge this is a loss, not backpressure.
 	IncJobsAbandoned(n int)
+	// SetSessionOpen publishes whether the Listener holds an open message session:
+	// false when Start fails or a re-create after a 404 fails, true once one opens.
+	SetSessionOpen(open bool)
 }
 
 // DeferReason* name why the Listener is holding an assigned job, and are the values of
@@ -807,7 +810,19 @@ func (l *Listener) setLastStats(stats scaleset.RunnerScaleSetStatistic) {
 // returns a done channel closed when the loop exits (ctx cancellation or an
 // unrecoverable error). On exit it deletes the session so a later Listener replays the
 // queue to a fresh session.
+//
+// Every failure publishes the session gauge at 0 (Q1275): a listener that never opens
+// its session counts no poll error and is assigned nothing, so the gauge is the one
+// signal for it.
 func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
+	done, err := l.start(ctx)
+	if err != nil {
+		l.metricsSetSessionOpen(false)
+	}
+	return done, err
+}
+
+func (l *Listener) start(ctx context.Context) (<-chan struct{}, error) {
 	ssID, err := l.ensureScaleSet(ctx)
 	if err != nil {
 		if isUnauthorized(err) {
@@ -833,6 +848,8 @@ func (l *Listener) Start(ctx context.Context) (<-chan struct{}, error) {
 		}
 		return nil, fmt.Errorf("scalesetlistener: open session for %q: %w", l.cfg.ScaleSetName, err)
 	}
+	// Before the loop goroutine exists, so a 404 it handles cannot be overwritten here.
+	l.metricsSetSessionOpen(true)
 
 	// The session response carries the same statistics a queue message does, and it is
 	// the only reading a set with nothing to deliver ever gets: without it the demand
@@ -1223,6 +1240,7 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 		l.log.Info("scaleset: session gone, re-creating", "scaleSet", l.cfg.ScaleSetName)
 		fresh, cerr := l.createSession(ctx, ssID)
 		if cerr != nil {
+			l.metricsSetSessionOpen(false)
 			l.log.Warn("scaleset: re-create session failed", "scaleSet", l.cfg.ScaleSetName, "err", cerr)
 			if isUnauthorized(cerr) {
 				l.surfaceUnauthorized("CreateSession", cerr)
@@ -1230,6 +1248,7 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 			return l.backoff(ctx)
 		}
 		l.clearUnauthorized()
+		l.metricsSetSessionOpen(true)
 		*sess = *fresh
 		l.mu.Lock()
 		l.lastMessageID = 0
@@ -2557,6 +2576,13 @@ func (l *Listener) metricsSetDeferred(byReason map[string]int) {
 func (l *Listener) metricsSetAvailable(n int) {
 	if l.cfg.Metrics != nil {
 		l.cfg.Metrics.SetAvailableJobs(n)
+	}
+}
+
+// metricsSetSessionOpen publishes whether the Listener holds an open session (Q1275).
+func (l *Listener) metricsSetSessionOpen(open bool) {
+	if l.cfg.Metrics != nil {
+		l.cfg.Metrics.SetSessionOpen(open)
 	}
 }
 

@@ -143,6 +143,7 @@ type countingMetrics struct {
 	completedResults             map[string]int
 	available                    int
 	availableWrites              int
+	sessionOpen                  []bool
 }
 
 func newCountingMetrics() *countingMetrics {
@@ -171,6 +172,18 @@ func (m *countingMetrics) SetAvailableJobs(n int) {
 	m.mu.Unlock()
 }
 func (m *countingMetrics) IncJobsAbandoned(n int) { m.mu.Lock(); m.abandoned += n; m.mu.Unlock() }
+func (m *countingMetrics) SetSessionOpen(open bool) {
+	m.mu.Lock()
+	m.sessionOpen = append(m.sessionOpen, open)
+	m.mu.Unlock()
+}
+
+// sessionOpenWrites returns every SetSessionOpen value in the order written.
+func (m *countingMetrics) sessionOpenWrites() []bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]bool(nil), m.sessionOpen...)
+}
 
 // availableJobs returns the latest queued-but-unassigned reading and how many times one
 // has been published — the count separates "never written" from "written as zero" (Q720).

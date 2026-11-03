@@ -74,6 +74,7 @@ Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable d
 | Provision errors/s | `sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total[5m]))` | Stat (threshold: >0 = yellow) |
 | Jobs completed by result (1h) | `sum by (result) (increase(actions_gateway_scaleset_jobs_completed_total[1h]))` | Bar chart by result |
 | Worker pods reaped/s (by reason) | `sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))` | Time series — the reaper counter's per-`RunnerSet` series (Q514), joinable with the capacity gauges above on `(namespace, runner_set)`. The label keys on the owning kind, so a Classic-protocol `RunnerSet` appears here too |
+| Queued at GitHub vs advertised capacity | `sum by (namespace, runner_set) (actions_gateway_scaleset_jobs_available)` and `…_advertised_capacity` | Time series, the stand-in for *Active sessions*: queued jobs holding beside advertised capacity while the assigned rate is flat means the listener is not taking work. The queued gauge holds its last reading across an empty poll, so read it as a level |
 
 **Row 5 — Tenant Health Conditions**
 
@@ -169,6 +170,7 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 | Jobs acquired/min by namespace (classic) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
 | Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
 | Jobs assigned/min by namespace (scale-set) | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
+| Jobs queued at GitHub by namespace (scale-set) | `sum by (namespace) (actions_gateway_scaleset_jobs_available)` | Time series: the stand-in for *Active sessions by namespace* on a scale-set fleet |
 
 **Row 5 — Build Versions**
 
