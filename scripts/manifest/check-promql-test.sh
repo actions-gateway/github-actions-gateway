@@ -90,7 +90,7 @@ expect_rc "the same file still passes jq empty (what this gate adds)" 0 -- jq em
 
 # A malformed expression is caught.
 cp "$REPO_ROOT/deploy/monitoring/prometheusrule.yaml" "$TMP/rule.yaml"
-awk '{ if ($0 ~ /actions_gateway_active_sessions == 0/) print "            actions_gateway_active_sessions =="; else print }' \
+awk '{ if ($0 ~ /actions_gateway_scaleset_session_open == 0/) print "            actions_gateway_scaleset_session_open =="; else print }' \
     "$REPO_ROOT/deploy/monitoring/prometheusrule.yaml" > "$TMP/broken-expr.yaml"
 expect_rc "malformed expr fails" 1 -- "$GATE" "$TMP/broken-expr.yaml" \
     "$REPO_ROOT/docs/operations/observability-alerting.md" "$REPO_ROOT/docs/operations/runbook.md"
