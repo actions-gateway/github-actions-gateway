@@ -5,8 +5,8 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,8 +77,7 @@ import (
 // (Q502).
 //
 // Serial and multi-node: it advertises a resource on a named node, creates
-// cluster-scoped PriorityClasses, edits the cluster-scoped PriorityClassAllowlist, and
-// pins fakegithub's global AcquireJob response.
+// cluster-scoped PriorityClasses, and edits the cluster-scoped PriorityClassAllowlist.
 var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"), func() {
 	const (
 		tenantNS   = "tenant-preempt"
@@ -90,12 +89,6 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		// (Q497). Spelled out here rather than imported so the spec asserts the literal
 		// Kubernetes contract rather than whatever constant the AGC happens to compare.
 		preemptionConditionReason = "PreemptionByScheduler"
-
-		// runID scopes the rerun assertion to this spec: /control/reruns is
-		// process-wide, and another spec's rerun must not be readable as ours.
-		runID     = "4230423"
-		repoOwner = "preemptorg"
-		repoName  = "preemptrepo"
 
 		// unpullableImage holds the worker pod scheduled-but-Pending (see the note
 		// above). `.invalid` is a reserved TLD, so the pull can never succeed.
@@ -184,22 +177,7 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
-		By("starting port-forward to the fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 19990+GinkgoParallelProcess())
-		preemptPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(preemptPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		preemptPFCmd = startFakegithubPortForward(19990)
 	})
 
 	AfterEach(func() {
@@ -253,7 +231,14 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		Expect(agcEnvValue(tenantNS, agcName, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
 			"the AGC must address fakegithub for REST calls, or the rerun assertion proves nothing")
 
-		By("recording the pre-existing rerun count for this run")
+		By("enqueuing a job on this tenant's own scale set")
+		// The assignment carries the job's workflow run and repository, which is the
+		// identity recovery needs; without it no rerun could fire regardless of the
+		// preemption. The run is this spec's own, which scopes the rerun assertions:
+		// /control/reruns is process-wide.
+		waitForScaleSetSession(tenant.ScaleSetName(0))
+		job := scaleSetEnqueue(tenant.ScaleSetName(0))
+		runID := strconv.FormatInt(job.WorkflowRunID, 10)
 		Expect(rerunCountForRun(runID)).To(Equal(0),
 			"no rerun may exist for this spec's run before the spec has done anything")
 
@@ -267,45 +252,6 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		setRunConcluded(runID, false)
 		DeferCleanup(func() { setRunConcluded(runID, true) })
 
-		By("pinning the next AcquireJob response to a payload carrying a complete run identity")
-		// Without owner/repo/run_id, handleEviction returns early and no rerun could
-		// fire regardless of the preemption — a pass would be vacuous and a failure
-		// would be about the payload rather than about recovery.
-		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-			fakegithubServiceName, infraNamespace, fakegithubServicePort)
-		setAcquireJobResponse(map[string]interface{}{
-			"plan": map[string]string{"planId": "preempt-plan-" + runID},
-			"variables": map[string]interface{}{
-				"system.github.repository": map[string]string{"value": repoOwner + "/" + repoName},
-				"system.github.run_id":     map[string]string{"value": runID},
-			},
-			"resources": map[string]interface{}{
-				"endpoints": []map[string]interface{}{{
-					"name": "SystemVssConnection",
-					"url":  fakegithubSvcURL,
-					"authorization": map[string]interface{}{
-						"scheme": "OAuth",
-						//nolint:gosec // G101: a literal handed to fakegithub in-cluster, not a credential.
-						"parameters": map[string]string{"AccessToken": "preempt-job-token"},
-					},
-				}},
-			},
-		})
-		defer setAcquireJobResponse(nil)
-
-		By("enqueuing a job onto this tenant's own session")
-		var sessionID string
-		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
-			g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
-			sessionID = sessions[0]
-		}, 3*time.Minute, 2*time.Second).Should(Succeed())
-		fakegithubEnqueueJob(sessionID, map[string]interface{}{
-			"jobId":           "preempt-job-1",
-			"jobName":         "preempt probe",
-			"run_service_url": fakegithubSvcURL,
-		})
-
 		By("waiting for the worker pod to be scheduled onto the slot node")
 		var podName string
 		var podNode string
@@ -317,10 +263,6 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 		AddReportEntry("Q423 worker pod", podName+" on node "+podNode)
 		Expect(podNode).To(Equal(slotNode),
 			"the worker must hold the only preempt slot, or the displacing pod would simply schedule elsewhere")
-
-		// The payload has been read; restore the shared fakegithub default so nothing
-		// after this spec inherits our run identity.
-		setAcquireJobResponse(nil)
 
 		By("confirming priorityTiers actually put the worker in the opportunistic class")
 		// The load-bearing precondition for the whole oversubscription claim. If the
@@ -407,7 +349,7 @@ var _ = Describe("E2E_AGC_WorkerPreemption", Ordered, Serial, Label("multi-node"
 
 		By("asserting the recovery's first re-run attempt was refused, not accepted")
 		// The behaviour Q497 added, and the half of the oversubscription claim that was
-		// unbacked before it: displaced work comes back without a human. handleEviction
+		// unbacked before it: displaced work comes back without a human. Eviction recovery
 		// waits out evictionRetryDelay before calling GitHub, so the attempt needs room
 		// to appear — Eventually, not an immediate read. With the run non-concluded the
 		// attempt lands as a refusal, which the AGC must treat as "not yet" (Q503).

@@ -4,6 +4,7 @@
 package utils
 
 import (
+	"cmp"
 	"strings"
 	"time"
 
@@ -25,32 +26,30 @@ import (
 // so a field renamed in api/v2alpha1 breaks the compile instead of silently applying
 // a CR with an ignored (pruned) field.
 
-// e2eGitHubURL is the placeholder org URL every fixture tenant carries. githubURL is a
-// required field, but the e2e AGC reaches fakegithub through the stub registrar
-// (STUB_AUTH_URL/STUB_BROKER_URL win over GITHUB_ORG_URL), so this value is not used
-// for registration in the default stub flow. The real-GitHub suite overrides it with
-// AGC_EXTRA_GITHUB_ORG_URL.
-const e2eGitHubURL = "https://github.com/e2e-org"
+// FakeGitHubURL is the githubURL every fixture tenant carries unless it sets its own:
+// the in-cluster fakegithub Service, over https at the port it serves plaintext on.
+// The AGC re-points a gateway at the stub only when githubURL already names the host
+// STUB_BROKER_URL does, swapping in the plaintext scheme the CRD forbids writing, so
+// any other host would send the scale-set listener to that host instead. The e2e
+// suite deploys fakegithub as "fakegithub" in "e2e-infra" on 8080. Every fixture
+// tenant shares the org, which is why each set's scale-set name is derived from its
+// own name (see ScaleSetName).
+const FakeGitHubURL = "https://fakegithub.e2e-infra.svc.cluster.local:8080/e2e-org"
 
 // NeverSchedulesNodeSelector pins every worker pod Pending by demanding a node label
 // nothing carries. A Pending pod still counts toward maxWorkers (activePodCount counts
-// Pending) and holds its reservation — the listener's job handler blocks in
-// waitForCompletion until the pod reaches a terminal phase — so a spec can hold
-// capacity busy deterministically and free it on demand by deleting the pod (the
-// InformerPodWaiter treats deletion as completion). This is the seam the Q154
-// worker-ceiling e2e drives the admission gate with, without depending on a runner
-// image that actually runs.
+// Pending), so a spec can hold capacity busy deterministically and free it on demand by
+// deleting the pod. This is the seam the worker-ceiling e2e drives the admission gate
+// with, without depending on a runner image that actually runs.
 var NeverSchedulesNodeSelector = map[string]string{"q154.actions-gateway/never-schedules": "true"}
 
 // RunnerSetFixture describes one RunnerSet, and the RunnerTemplate it binds, inside a
 // TenantFixture. The zero value is not useful on its own — build it through a
 // TenantFixture preset and adjust.
 type RunnerSetFixture struct {
-	// RunnerLabels are the runs-on labels this set matches. The first one also names
-	// the set (see TenantFixture.RunnerSetName).
+	// RunnerLabels are the runs-on labels this set matches after its scale-set name.
+	// The first one also names the set (see TenantFixture.RunnerSetName).
 	RunnerLabels []string
-	// MaxListeners is the concurrency ceiling for the set's listener pool.
-	MaxListeners int32
 	// MaxWorkers, when non-zero, sets the worker pod-capacity ceiling the Q59
 	// admission gate enforces. Zero omits the field (unbounded).
 	MaxWorkers int32
@@ -82,6 +81,9 @@ type TenantFixture struct {
 	Namespace  string
 	Name       string
 	SecretName string
+	// GitHubURL is the gateway's githubURL. Empty means FakeGitHubURL; the live-GitHub
+	// suite sets the real org or repo.
+	GitHubURL string
 	// LogLevel defaults to debug for every fixture tenant, on the gateway and the
 	// proxy pool alike. The session/job specs gate a DumpAGCSessionDiagnostics dump on
 	// failure, but the listener's per-session lifecycle trail — session start, job
@@ -95,8 +97,9 @@ type TenantFixture struct {
 	ProxyMinReplicas int32
 	ProxyMaxReplicas int32
 	// NoProxyCIDRs are destinations workers reach directly rather than through the
-	// proxy. Fixture tenants with a runner set include svc.cluster.local so the AGC
-	// reaches the in-cluster fakegithub Service.
+	// proxy. The GMC always appends svc.cluster.local, which is how the AGC reaches the
+	// in-cluster fakegithub Service; naming it here would be rejected, because it
+	// matches the gateway's GitHub host and so would route GitHub around the proxy.
 	NoProxyCIDRs []string
 	RunnerSets   []RunnerSetFixture
 }
@@ -117,14 +120,12 @@ func BaseTenant(ns, name, secretName string) TenantFixture {
 }
 
 // RunnerTenant is BaseTenant plus one minimal runner set, so the AGC has something to
-// reconcile and can register broker sessions — the prerequisite for every
+// reconcile and opens a scale-set session at fakegithub — the prerequisite for every
 // job-lifecycle spec.
 func RunnerTenant(ns, name, secretName, workerImage string) TenantFixture {
 	f := BaseTenant(ns, name, secretName)
-	f.NoProxyCIDRs = []string{"svc.cluster.local"}
 	f.RunnerSets = []RunnerSetFixture{{
 		RunnerLabels: []string{"e2e"},
-		MaxListeners: 2,
 		WorkerImage:  workerImage,
 	}}
 	return f
@@ -173,11 +174,11 @@ func (f TenantFixture) RunnerSetName(i int) string {
 	return f.Name + "-" + f.RunnerSets[i].RunnerLabels[0]
 }
 
-// SessionOwnerPrefix scopes a fakegithub session query to this tenant's RunnerSets. A
-// classic listener registers its runner as "rs-<runnerSet>-<agentIndex>" (Q677), and
-// every set's name starts "<gateway>-", so the prefix matches all of this gateway's
-// sets and no other spec's — fakegithub is shared across parallel specs.
-func (f TenantFixture) SessionOwnerPrefix() string { return "rs-" + f.Name + "-" }
+// ScaleSetName is the name the i'th set registers its scale set under at fakegithub:
+// its first runnerLabel, which the fixture sets to the RunnerSet's own name. Every
+// fixture tenant shares one org URL and fakegithub is shared across parallel specs, so
+// a label common to all of them would collide at admission and at fakegithub alike.
+func (f TenantFixture) ScaleSetName(i int) string { return f.RunnerSetName(i) }
 
 // WithLifecycle sets the Q95 worker-pod lifecycle knobs on every runner set, so a
 // spec can prove reaping on a short clock instead of the production defaults. Both
@@ -338,7 +339,7 @@ func (f TenantFixture) Gateway() *v2alpha1.ActionsGateway {
 				Type:      v2alpha1.CredentialTypeGitHubApp,
 				GitHubApp: &v2alpha1.LocalSecretReference{Name: f.SecretName},
 			},
-			GitHubURL:       e2eGitHubURL,
+			GitHubURL:       cmp.Or(f.GitHubURL, FakeGitHubURL),
 			DefaultProxyRef: &v2alpha1.ProxyObjectRef{Name: f.EgressProxyName()},
 			LogLevel:        f.LogLevel,
 		},
@@ -388,23 +389,20 @@ func (f TenantFixture) runnerTemplate(i int) *v2alpha1.RunnerTemplate {
 	}
 }
 
-// runnerSet builds the i'th RunnerSet. It pins the Classic acquisition protocol: the
-// default is ScaleSet (Q264 P5), but these specs drive fakegithub's classic broker
-// sessions, which is the tier their session and job assertions are written against.
+// runnerSet builds the i'th RunnerSet. Its first runnerLabel is ScaleSetName, ahead of
+// the fixture's own labels.
 func (f TenantFixture) runnerSet(i int) *v2alpha1.RunnerSet {
 	s := f.RunnerSets[i]
 	rs := &v2alpha1.RunnerSet{
 		TypeMeta:   metav1.TypeMeta{APIVersion: v2alpha1.GroupVersion.String(), Kind: "RunnerSet"},
 		ObjectMeta: metav1.ObjectMeta{Name: f.RunnerSetName(i), Namespace: f.Namespace},
 		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:          v2alpha1.ObjectRef{Name: f.Name},
-			TemplateRef:         &v2alpha1.ObjectRef{Name: f.RunnerSetName(i)},
-			AcquisitionProtocol: v2alpha1.AcquisitionProtocolClassic,
-			MaxListeners:        s.MaxListeners,
-			RunnerLabels:        s.RunnerLabels,
-			PriorityTiers:       s.PriorityTiers,
-			CompletedPodTTL:     mustParseDuration(s.CompletedPodTTL),
-			PendingPodDeadline:  mustParseDuration(s.PendingPodDeadline),
+			GatewayRef:         v2alpha1.ObjectRef{Name: f.Name},
+			TemplateRef:        &v2alpha1.ObjectRef{Name: f.RunnerSetName(i)},
+			RunnerLabels:       append([]string{f.ScaleSetName(i)}, s.RunnerLabels...),
+			PriorityTiers:      s.PriorityTiers,
+			CompletedPodTTL:    mustParseDuration(s.CompletedPodTTL),
+			PendingPodDeadline: mustParseDuration(s.PendingPodDeadline),
 		},
 	}
 	if s.MaxWorkers > 0 {

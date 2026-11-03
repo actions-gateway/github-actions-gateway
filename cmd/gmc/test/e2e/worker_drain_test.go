@@ -6,9 +6,9 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,8 +23,8 @@ import (
 //
 // The two disruptions are different mechanisms and the AGC only handles one of
 // them. The kubelet's node-pressure eviction leaves the worker pod in PodFailed
-// with Status.Reason "Evicted", which both tiers act on — classic inline in
-// provision(), scale-set from the owning reconciler (Q417). `kubectl drain` does
+// with Status.Reason "Evicted", which the AGC acts on from the owning reconciler
+// (Q417). `kubectl drain` does
 // something else entirely: it cordons the node and POSTs to each pod's eviction
 // subresource, and an admitted eviction is a graceful DELETE. Reading the code
 // says that never produces reason "Evicted" and so never reaches recovery, and
@@ -36,15 +36,14 @@ import (
 // (cmd/agc/internal/controller/integration/drain_eviction_test.go) cannot supply:
 // there a worker pod has no node, so eviction removes it instantly and the
 // question of what a real `kubectl drain` does to a real scheduled pod cannot even
-// be asked. Here the pod is bound to a node, the AGC's provisioning goroutine is
-// blocked on it, and a real drain is what takes it away.
+// be asked. Here the pod is bound to a node and holds one of its set's worker slots,
+// and a real drain is what takes it away.
 //
 // # Why the drained pod is deliberately held Pending
 //
 // The worker pod here never starts its container: its image cannot be pulled, so
 // it is *scheduled* (it has a nodeName, and a drain evicts it) and stays Pending
-// indefinitely, holding the AGC's waitForCompletion open until the drain removes
-// it. That is the only way to make the drain the cause of the pod's removal at
+// indefinitely, holding its worker slot until the drain removes it. That is the only way to make the drain the cause of the pod's removal at
 // this tier. A worker pod running the real runner image against fakegithub exits
 // on its own within seconds — fakegithub's synthetic payload is not a job the
 // runner can execute — so a drain aimed at it would land on a pod that had already
@@ -56,7 +55,7 @@ import (
 // Q385's, covered by the wrapper unit tests, and its end-to-end form needs a real
 // GitHub job to report — a live-GitHub question, not a fake-GitHub one. What is measured
 // here is the half that decides recovery: what a real drain does to the worker
-// *pod object*, which is the only thing either tier's eviction detection reads.
+// *pod object*, which is the only thing the AGC's eviction detection reads.
 //
 // The held-Pending shape also pins this spec on the side of the Q502 boundary that
 // stays unrecovered — and it is the spec that caught a mark-only rule crossing it: a
@@ -72,25 +71,13 @@ import (
 // docs/operations/troubleshooting.md, "Draining a Worker Auto-Re-Runs the Jobs It
 // Interrupts".
 //
-// Serial and multi-node. Serial because it cordons a node and sets fakegithub's
-// global AcquireJob response; multi-node because a cordoned node must leave
-// somewhere for the cluster's other workloads to live.
+// Serial and multi-node. Serial because it cordons a node; multi-node because a
+// cordoned node must leave somewhere for the cluster's other workloads to live.
 var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node"), func() {
 	const (
 		tenantNS   = "tenant-drain"
 		agName     = "drainprobe-ag"
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
-
-		// runID is this spec's own workflow run. It is what scopes the rerun
-		// assertion to this spec: /control/reruns is process-wide, and another
-		// spec's (or a later experiment's) rerun must not be readable as ours.
-		runID = "4210421"
-		// repoOwner/repoName complete the run identity handleEviction needs. With
-		// any of the three missing it returns early and no rerun fires for reasons
-		// that have nothing to do with drain — which would make this spec pass
-		// while measuring nothing.
-		repoOwner = "drainorg"
-		repoName  = "drainrepo"
 
 		// unpullableImage holds the worker pod scheduled-but-Pending for as long as
 		// the spec needs it (see the package-level note above). `.invalid` is a
@@ -127,22 +114,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
-		By("starting port-forward to the fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 19890+GinkgoParallelProcess())
-		drainPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(drainPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		drainPFCmd = startFakegithubPortForward(19890)
 	})
 
 	AfterEach(func() {
@@ -179,64 +151,19 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		Expect(agcEnvValue(tenantNS, agcName, "GITHUB_API_BASE_URL")).To(ContainSubstring(fakegithubServiceName),
 			"the AGC must address fakegithub for REST calls, or an absent rerun proves nothing")
 
-		By("recording the pre-existing rerun count for this run")
-		// Scoped to this spec's run, so a rerun another spec triggered cannot be
-		// mistaken for ours (and vice versa).
+		By("enqueuing a job on this tenant's own scale set")
+		// The assignment carries the job's workflow run and repository, which is the
+		// identity recovery needs; without it no rerun could fire regardless of the
+		// drain, and the measurement would be vacuous. The run is this spec's own,
+		// which is what scopes the rerun assertion: /control/reruns is process-wide,
+		// and another spec's rerun must not be readable as ours.
+		waitForScaleSetSession(tenant.ScaleSetName(0))
+		job := scaleSetEnqueue(tenant.ScaleSetName(0))
+		runID := strconv.FormatInt(job.WorkflowRunID, 10)
+		Expect(job.OwnerName).NotTo(BeEmpty(), "the assignment must name the job's repository owner")
+		Expect(job.RepositoryName).NotTo(BeEmpty(), "the assignment must name the job's repository")
 		Expect(rerunCountForRun(runID)).To(Equal(0),
 			"no rerun may exist for this spec's run before the spec has done anything")
-
-		By("pinning the next AcquireJob response to a payload carrying a complete run identity")
-		// The default fakegithub response carries no run identity, and handleEviction
-		// returns early without one — so a rerun could not fire regardless of the
-		// drain, and the measurement would be vacuous. This is a global on the shared
-		// fakegithub, which is why the spec is Serial; it is reset the moment the
-		// worker pod exists and the payload has been consumed.
-		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-			fakegithubServiceName, infraNamespace, fakegithubServicePort)
-		setAcquireJobResponse(map[string]interface{}{
-			"plan": map[string]string{"planId": "drain-plan-" + runID},
-			// The identity rides in the serialised `github` context — the shape a real
-			// acquirejob body uses, and so the shape this spec must exercise. Building
-			// it as system.github.* variables instead would assert against a shape
-			// GitHub never sends, which is how the classic tier came to ship unable to
-			// name a real job's run at all (Q495). The top-level `run_id` the payload
-			// also accepts is an int64 there, and a string in it makes the whole
-			// payload fail to unmarshal — costing the identity this spec depends on
-			// rather than adding to it.
-			"contextData": map[string]interface{}{
-				"github": map[string]interface{}{
-					"t": 2,
-					"d": []map[string]interface{}{
-						{"k": "repository", "v": repoOwner + "/" + repoName},
-						{"k": "run_id", "v": runID},
-					},
-				},
-			},
-			"resources": map[string]interface{}{
-				"endpoints": []map[string]interface{}{{
-					"name": "SystemVssConnection",
-					"url":  fakegithubSvcURL,
-					"authorization": map[string]interface{}{
-						"scheme":     "OAuth",
-						"parameters": map[string]string{"AccessToken": "drain-job-token"},
-					},
-				}},
-			},
-		})
-		defer setAcquireJobResponse(nil)
-
-		By("enqueuing a job onto this tenant's own session")
-		var sessionID string
-		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
-			g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
-			sessionID = sessions[0]
-		}, 3*time.Minute, 2*time.Second).Should(Succeed())
-		fakegithubEnqueueJob(sessionID, map[string]interface{}{
-			"jobId":           "drain-job-1",
-			"jobName":         "drain probe",
-			"run_service_url": fakegithubSvcURL,
-		})
 
 		By("waiting for the worker pod to be scheduled onto a node")
 		var podName string
@@ -250,10 +177,6 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 		// whose numbers we want. Report entries survive into the suite output and the
 		// JUnit report either way.
 		AddReportEntry("Q421 drained worker pod", podName+" on node "+drainedNode)
-
-		// The payload has been read; let the shared fakegithub go back to its default
-		// so nothing after this spec inherits our run identity.
-		setAcquireJobResponse(nil)
 
 		By("confirming the drain's subject is a live worker, not one that already ended")
 		// The load-bearing precondition. If the pod had reached a terminal phase on
@@ -322,7 +245,7 @@ var _ = Describe("E2E_AGC_WorkerNodeDrain", Ordered, Serial, Label("multi-node")
 				"the drain path DOES reach recovery: re-read the experiment before trusting either")
 
 		By("asserting no automatic rerun was requested for this run")
-		// handleEviction waits out evictionRetryDelay before calling GitHub, so a
+		// Eviction recovery waits out evictionRetryDelay before calling GitHub, so a
 		// rerun that was going to fire needs room to appear. Consistently is the
 		// right assertion shape here: the claim is that none ever arrives.
 		Consistently(func(g Gomega) {
@@ -395,19 +318,6 @@ func workerPodAndNode(g Gomega, ns, rsName string) (podName, nodeName string) {
 		nodeName = fields[1]
 	}
 	return podName, nodeName
-}
-
-// setAcquireJobResponse pins (or, with a nil body, resets) fakegithub's AcquireJob
-// response through the control API.
-func setAcquireJobResponse(payload map[string]interface{}) {
-	GinkgoHelper()
-	var body []byte
-	if payload != nil {
-		var err error
-		body, err = json.Marshal(payload)
-		Expect(err).NotTo(HaveOccurred())
-	}
-	fakegithubControlRequest(nil, "POST", "/control/acquirejob", body)
 }
 
 // rerunCountForRun reports how many rerun-failed-jobs calls fakegithub has

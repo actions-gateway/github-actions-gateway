@@ -62,9 +62,8 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		setName    = "set-ssacq"
 		secretName = "github-app-secret" //nolint:gosec // G101: the NAME of a Kubernetes Secret object, not a credential value.
 
-		// The scale set's name IS the RunnerSet's single runs-on label (CEL enforces
-		// exactly one for a ScaleSet set), so this is also how the control API
-		// addresses the scale set the AGC registered.
+		// The scale set's name IS the RunnerSet's first runs-on label, so this is also
+		// how the control API addresses the scale set the AGC registered.
 		scaleSetLabel = "e2e-ssacq"
 
 		// The worker-pod stamps ProvisionScaleSetWorker applies, restated as literals
@@ -93,22 +92,7 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		By("waiting for the per-gateway AGC Deployment to become ready")
 		utils.WaitForDeploymentReady(tenantNS, agcDeploy, 4*time.Minute)
 
-		By("starting port-forward to the fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 20290+GinkgoParallelProcess())
-		ssacqPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(ssacqPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		ssacqPFCmd = startFakegithubPortForward(20290)
 	})
 
 	AfterEach(func() {
@@ -151,7 +135,7 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		// Server-side, not log-scraped: an absent session and a session that opened and
 		// died are different failures, and only the server can tell them apart.
 		Eventually(func(g Gomega) {
-			state := scaleSetState(g)
+			state := scaleSetState(g, scaleSetLabel)
 			g.Expect(state["activeSession"]).To(BeTrue(),
 				"no live message-queue session for scale set %q; the listener never completed "+
 					"its bootstrap (check the AGC logs for 'scale-set listener failed to start')", scaleSetLabel)
@@ -160,7 +144,7 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 
 	It("E2E_AGC_ScaleSetAssignedJobProvisionsAWorker: an auto-assigned job is provisioned as a worker pod carrying the assignment's run identity", func() {
 		By("enqueuing a job on the scale set")
-		job := scaleSetEnqueue()
+		job := scaleSetEnqueue(scaleSetLabel)
 
 		By("waiting for the worker pod the assignment provisioned")
 		var podName string
@@ -200,7 +184,7 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 
 		By("asserting the server counts the job as assigned")
 		Eventually(func(g Gomega) {
-			g.Expect(scaleSetState(g)["assignedJobs"]).To(BeNumerically(">=", 1))
+			g.Expect(scaleSetState(g, scaleSetLabel)["assignedJobs"]).To(BeNumerically(">=", 1))
 		}, 30*time.Second, time.Second).Should(Succeed())
 	})
 
@@ -210,8 +194,8 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		// above may have produced claims of its own on a retry.
 		var before float64
 		Eventually(func(g Gomega) {
-			g.Expect(scaleSetState(g)["acquireJobsCalls"]).To(BeAssignableToTypeOf(float64(0)))
-			before = scaleSetState(g)["acquireJobsCalls"].(float64)
+			g.Expect(scaleSetState(g, scaleSetLabel)["acquireJobsCalls"]).To(BeAssignableToTypeOf(float64(0)))
+			before = scaleSetState(g, scaleSetLabel)["acquireJobsCalls"].(float64)
 		}, 30*time.Second, time.Second).Should(Succeed())
 
 		By("switching fakegithub to the GHES JobAvailable→acquire flow")
@@ -219,13 +203,13 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("enqueuing a job that must be claimed before it is assigned")
-		job := scaleSetEnqueue()
+		job := scaleSetEnqueue(scaleSetLabel)
 
 		By("asserting the AGC claimed the offer")
 		// The rung auto-assign skips entirely. Without it a GHES tenant's jobs are
 		// offered and never taken, which looks identical to no jobs being queued.
 		Eventually(func(g Gomega) {
-			g.Expect(scaleSetState(g)["acquireJobsCalls"]).To(BeNumerically(">", before),
+			g.Expect(scaleSetState(g, scaleSetLabel)["acquireJobsCalls"]).To(BeNumerically(">", before),
 				"the AGC never issued acquirejobs for the offered job; a GHES tenant would never run it")
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 
@@ -243,7 +227,7 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		// pass and a vacuous one indistinguishable from spec timings alone.
 		Eventually(func(g Gomega) {
 			AddReportEntry("Q528 fakegithub scale-set call log",
-				fmt.Sprintf("%v", scaleSetState(g)["calls"]))
+				fmt.Sprintf("%v", scaleSetState(g, scaleSetLabel)["calls"]))
 		}, 30*time.Second, time.Second).Should(Succeed())
 	})
 
@@ -258,7 +242,7 @@ var _ = Describe("E2E_AGC_ScaleSetAcquisition", Ordered, func() {
 		// scale set, so a later listener for the same set is refused 409 and the tenant
 		// silently stops acquiring.
 		Eventually(func(g Gomega) {
-			g.Expect(scaleSetState(g)["activeSession"]).To(BeFalse(),
+			g.Expect(scaleSetState(g, scaleSetLabel)["activeSession"]).To(BeFalse(),
 				"the session outlived its RunnerSet; the next listener for this scale set would be refused")
 		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
@@ -296,27 +280,37 @@ func scaleSetControl(method, path string) (string, error) {
 	return string(body), nil
 }
 
-// scaleSetEnqueue queues one job on the spec's scale set and returns the identity
-// its assignment will carry.
-func scaleSetEnqueue() scaleSetJob {
+// scaleSetEnqueue queues one job on the named scale set and returns the identity its
+// assignment will carry. fakegithub is shared across parallel specs, so name is always
+// the spec's own scale set.
+func scaleSetEnqueue(name string) scaleSetJob {
 	GinkgoHelper()
-	body, err := scaleSetControl(http.MethodPost, "/control/scaleset/enqueue?name=e2e-ssacq")
-	Expect(err).NotTo(HaveOccurred(), "enqueue a scale-set job")
+	body, err := scaleSetControl(http.MethodPost, "/control/scaleset/enqueue?name="+name)
+	Expect(err).NotTo(HaveOccurred(), "enqueue a scale-set job on %s", name)
 	var job scaleSetJob
 	Expect(json.Unmarshal([]byte(body), &job)).To(Succeed())
 	Expect(job.JobID).NotTo(BeEmpty())
 	return job
 }
 
-// scaleSetState reads fakegithub's server-side view of the spec's scale set. It is
+// scaleSetState reads fakegithub's server-side view of the named scale set. It is
 // polled inside Eventually blocks, so a transient port-forward hiccup fails the
 // iteration rather than the spec.
-func scaleSetState(g Gomega) map[string]any {
-	body, err := scaleSetControl(http.MethodGet, "/control/scaleset/state?name=e2e-ssacq")
-	g.Expect(err).NotTo(HaveOccurred(), "read scale-set state")
+func scaleSetState(g Gomega, name string) map[string]any {
+	body, err := scaleSetControl(http.MethodGet, "/control/scaleset/state?name="+name)
+	g.Expect(err).NotTo(HaveOccurred(), "read scale-set state of %s", name)
 	var state map[string]any
 	g.Expect(json.Unmarshal([]byte(body), &state)).To(Succeed())
 	return state
+}
+
+// waitForScaleSetSession waits until the named scale set holds a live message-queue
+// session at fakegithub, which is when an enqueued job can be assigned to it.
+func waitForScaleSetSession(name string) {
+	GinkgoHelper()
+	Eventually(func(g Gomega) {
+		g.Expect(scaleSetState(g, name)["activeSession"]).To(BeTrue())
+	}, 2*time.Minute, time.Second).Should(Succeed(), "scale set %s must open a session", name)
 }
 
 // scaleSetWorkerPodSelector selects the RunnerSet's worker pods on the scale-set tier.

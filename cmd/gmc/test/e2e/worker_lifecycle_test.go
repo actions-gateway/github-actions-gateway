@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -26,20 +25,11 @@ import (
 //   - a stuck-Pending worker pod (unpullable image) is reaped once
 //     pendingPodDeadline elapses, with a WorkerPodStuckPending Warning event.
 //
-// NOT Serial. It used to be, because it enqueued a job onto every active
-// fakegithub session — session IDs are opaque, so that was the only way to be
-// sure both of its tenants got one, and it would have handed other suites'
-// tenants jobs they never asked for. fakegithub's control API grew an owner
-// filter since (GET /control/sessions?owner=<prefix>), so the enqueue below
-// scopes to this suite's own RunnerSets and the specs can run in the parallel
-// phase. That matters: Ginkgo runs Serial specs after every parallel spec
-// completes, so these three were 60s of pure tail on the suite's wall time.
-//
-// The two tenants therefore need ActionsGateway names distinct from each other
-// AND from every other session-registering suite's — session ownerName is
-// "rs-<runnerSet>-<agentIndex>" and RunnerSet name is "<ag>-<first label>", so
-// the ActionsGateway name is what makes the owner prefix selective. Sharing
-// "test-ag" with job_lifecycle is exactly what made the spray unavoidable.
+// NOT Serial: each tenant's scale set is named after its own RunnerSet, and the
+// RunnerSet after its ActionsGateway, so a job enqueued by name reaches exactly this
+// suite's tenant and the specs can run in the parallel phase. That matters: Ginkgo
+// runs Serial specs after every parallel spec completes. The two tenants therefore
+// need ActionsGateway names distinct from each other AND from every other suite's.
 var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 	const (
 		cleanNS    = "tenant-pod-clean" // worker completes fast; short completedPodTTL
@@ -76,51 +66,26 @@ var _ = Describe("E2E_AGC_WorkerPodLifecycle", Ordered, func() {
 		utils.WaitForDeploymentReady(cleanNS, cleanTenant.AGCName(), 4*time.Minute)
 		utils.WaitForDeploymentReady(stuckNS, stuckTenant.AGCName(), 4*time.Minute)
 
-		By("starting port-forward to fakegithub control API")
-		// fakegithubLocalPort is the package-level var the control helpers read.
-		// Every session-consuming suite assigns it from its own base port in its
-		// own BeforeAll; that is safe without Serial because Ginkgo runs an
-		// Ordered container's specs contiguously within one process, so no other
-		// container can reassign it mid-suite.
-		fakegithubLocalPort = fmt.Sprintf("%d", 19300+GinkgoParallelProcess())
-		lifecyclePFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(lifecyclePFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		// fakegithubLocalPort is the package-level var the control helpers read. Every
+		// suite assigns it from its own base port in its own BeforeAll; that is safe
+		// without Serial because Ginkgo runs an Ordered container's specs contiguously
+		// within one process, so no other container can reassign it mid-suite.
+		lifecyclePFCmd = startFakegithubPortForward(19300)
 
-		By("enqueuing one job per session of this suite's own two tenants")
-		// Owner-scoped, not sprayed across every active session: "<ag>-" selects
-		// exactly one ActionsGateway's sessions, so a job can never land on
-		// another suite's tenant and this suite does not need to be Serial.
-		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-			fakegithubServiceName, infraNamespace, fakegithubServicePort)
-		enqueued := map[string]bool{}
+		By("enqueuing one job on each of this suite's two scale sets")
+		for _, t := range []utils.TenantFixture{cleanTenant, stuckTenant} {
+			waitForScaleSetSession(t.ScaleSetName(0))
+			scaleSetEnqueue(t.ScaleSetName(0))
+		}
+		// Each tenant counts once its pod has been seen: the clean tenant's one pod can
+		// complete and be reaped on its 15s TTL before the stuck tenant's appears.
+		seen := map[string]bool{}
 		Eventually(func(g Gomega) {
-			for _, ownerPrefix := range []string{cleanTenant.SessionOwnerPrefix(), stuckTenant.SessionOwnerPrefix()} {
-				for _, id := range fakegithubActiveSessionsForOwner(g, ownerPrefix) {
-					if !enqueued[id] {
-						fakegithubEnqueueJob(id, map[string]interface{}{
-							"jobId":           "q95-" + id,
-							"run_service_url": fakegithubSvcURL,
-						})
-						enqueued[id] = true
-					}
-				}
+			for _, ns := range []string{cleanNS, stuckNS} {
+				seen[ns] = seen[ns] || len(workerPodNames(g, ns)) > 0
 			}
-			// Pods appearing in both namespaces is the success signal — it
-			// means a session of each tenant received a job.
-			g.Expect(workerPodNames(g, cleanNS)).NotTo(BeEmpty(), "no worker pod in %s yet", cleanNS)
-			g.Expect(workerPodNames(g, stuckNS)).NotTo(BeEmpty(), "no worker pod in %s yet", stuckNS)
+			g.Expect(seen[cleanNS]).To(BeTrue(), "no worker pod in %s yet", cleanNS)
+			g.Expect(seen[stuckNS]).To(BeTrue(), "no worker pod in %s yet", stuckNS)
 		}, 4*time.Minute, 3*time.Second).Should(Succeed())
 	})
 

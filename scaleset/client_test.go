@@ -303,6 +303,26 @@ func TestClient_AdminJWTRefreshedBeforeExpiry(t *testing.T) {
 	}
 }
 
+// TestClient_SecondClientKeepsFirstAdminJWTValid pins that a second client's
+// registration does not revoke the admin connection the first holds, which every
+// e2e tenant sharing one fakegithub depends on.
+func TestClient_SecondClientKeepsFirstAdminJWTValid(t *testing.T) {
+	srv := scalesettest.New()
+	defer srv.Close()
+	ctx := testContext(t)
+	first := newClient(t, srv, nil)
+	if err := first.Connect(ctx); err != nil {
+		t.Fatalf("first Connect: %v", err)
+	}
+	time.Sleep(1100 * time.Millisecond) // a later exp second, so the second JWT differs
+	if err := newClient(t, srv, nil).Connect(ctx); err != nil {
+		t.Fatalf("second Connect: %v", err)
+	}
+	if _, _, err := first.ResolveRunnerGroup(ctx, "Default"); err != nil {
+		t.Fatalf("first client's admin call after a second registration: %v", err)
+	}
+}
+
 // TestClient_QueueTokenRefreshOn401 proves the queue-token lifecycle: an expired
 // queue token 401s the poll (as *UnauthorizedError), and RefreshSession restores it
 // (§2b-2).
