@@ -27,9 +27,7 @@ const (
 
 	// The probe client namespaces. mirrorMarkedNS carries the v2 managed-tenant
 	// marker the shared ingress peer selects on; mirrorUnmarkedNS has that marker
-	// removed after utils.CreateNamespace stamps it, and carries only the v1-domain
-	// marker, which that peer matches on nothing (the component's own "V1-DOMAIN
-	// TENANTS ARE NOT ADMITTED" note).
+	// removed after utils.CreateNamespace stamps it.
 	//
 	// NEITHER IS gag-dogfood-e2e, and that is the control. The base's ingress admits
 	// that one namespace literally, so a run in which the shared component silently
@@ -126,9 +124,7 @@ var _ = Describe("E2E_Mirror_SharedTenantsNP", Ordered, ContinueOnFailure, func(
 			"actions-gateway.com/tenant": "managed",
 		})
 		DeferCleanup(func() { utils.DeleteNamespace(mirrorMarkedNS) })
-		utils.CreateNamespace(mirrorUnmarkedNS, map[string]string{
-			"actions-gateway.github.com/tenant": "true",
-		})
+		utils.CreateNamespace(mirrorUnmarkedNS, nil)
 		DeferCleanup(func() { utils.DeleteNamespace(mirrorUnmarkedNS) })
 		utils.UnlabelNamespace(mirrorUnmarkedNS, "actions-gateway.com/tenant")
 

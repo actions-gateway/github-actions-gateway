@@ -143,10 +143,8 @@ Both selectors are keys of **one** `from` element, which ANDs them.
 Split across two elements they would OR, and the result is strictly wider than the base's; the render was read both ways.
 
 That marker is what the GMC's own confinement ValidatingAdmissionPolicies key on ([`api/v2beta1/shared_types.go`](../../api/v2beta1/shared_types.go)), so the mirror reads the same label a platform admin already sets rather than a list of its own.
-It is not the same tenant set as those policies while v1 and v2 coexist: they accept the v2 marker **or** the legacy `actions-gateway.github.com/tenant: "true"`, and this accepts only v2, so the mirror's set is a strict subset of theirs until the window closes.
 It also admits tenants created later, automatically: a namespace becomes a mirror client the moment the administrator marks it.
 That is the point on a cluster whose tenant set churns and the risk on one where it must not, so the overlay's header carries the `matchExpressions` form that admits a fixed subset instead.
-A namespace still on the v1alpha1 marker (`actions-gateway.github.com/tenant: "true"`) matches nothing here and its pulls stop, which is the fail-closed direction; migrate the namespace rather than widening the selector.
 
 The pod selector is what keeps this narrower than the namespace it admits.
 Without it the component would admit any pod in **every** managed tenant namespace, and the GMC's default-deny selects only workload-labelled pods, so a pod without that label is governed by no egress policy at all and reaches whatever it likes.

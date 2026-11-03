@@ -87,7 +87,7 @@ The classic recipe — a `docker:dind` sidecar or a runner container with `secur
   Under `baseline` and `restricted` the GMC validating webhook rejects any `privileged: true` worker container outright, and PSA would reject the pod even if the webhook were bypassed (PSA is the backstop on both paths).
   The `privileged` profile is the *only* one that admits it.
   See [Security § Privileged worker containers](../design/05-security.md#privileged-worker-containers-are-admitted-only-under-the-privileged-profile).
-- **`privileged` is gated twice.** Selecting it is necessary but not sufficient: the namespace must also be labelled `actions-gateway.github.com/privileged-profile: allowed` by a platform administrator (a tenant cannot self-grant it), and an update that lowers rank into `privileged` needs the `actions-gateway.github.com/allow-profile-downgrade` annotation.
+- **`privileged` is gated twice.** Selecting it is necessary but not sufficient: the namespace must also be labelled `actions-gateway.com/privileged-profile: allowed` by a platform administrator (a tenant cannot self-grant it), and an update that lowers rank into `privileged` needs the `actions-gateway.com/allow-profile-downgrade: allowed` annotation.
   See [Privileged eligibility is a platform decision](../design/05-security.md#privileged-eligibility-is-a-platform-decision) and the [tenant-onboarding privileged checklist](tenant-onboarding.md).
 - **The security trade-off.** A privileged container is effectively root on the node's kernel: a container escape escapes to the *host*, breaking the cross-tenant isolation the per-tenant model promises.
   Container-escape risk is High by design — admission imposes no restrictions.

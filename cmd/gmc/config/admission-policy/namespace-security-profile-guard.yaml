@@ -13,9 +13,8 @@
 #
 # Unlike those two policies this one is NOT scoped to the GMC ServiceAccount: the
 # security-profile label is operator-set, so the guard must constrain whoever edits it.
-# It is scoped instead to managed tenant namespaces (dual-marker: the v1
-# actions-gateway.github.com/tenant=true and the v2 actions-gateway.com/tenant=managed
-# are both accepted during the v1/v2 coexistence window, §H.12).
+# It is scoped instead to managed tenant namespaces, those labelled
+# actions-gateway.com/tenant=managed.
 #
 # Three invariants, none weaker than the v1 webhook:
 #   1. Enum     — security-profile, when set, is one of baseline|restricted|privileged.
@@ -59,23 +58,20 @@ spec:
       expression: "variables.newProfile == 'restricted' ? 2 : (variables.newProfile == 'privileged' ? 0 : 1)"
     - name: oldRank
       expression: "variables.oldProfile == 'restricted' ? 2 : (variables.oldProfile == 'privileged' ? 0 : 1)"
-    # Privileged eligibility — dual-read the v2 and v1 grant labels.
+    # Privileged eligibility — the platform-applied grant label.
     - name: privEligible
       expression: >-
-        (('actions-gateway.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.com/privileged-profile'] == 'allowed')
-        || ('actions-gateway.github.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.github.com/privileged-profile'] == 'allowed'))
-    # Deliberate-downgrade opt-in — dual-read the v2 ('allowed') and v1 ('true') keywords.
+        'actions-gateway.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.com/privileged-profile'] == 'allowed'
+    # Deliberate-downgrade opt-in.
     - name: downgradeAllowed
       expression: >-
-        (('actions-gateway.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.com/allow-profile-downgrade'] == 'allowed')
-        || ('actions-gateway.github.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.github.com/allow-profile-downgrade'] == 'true'))
+        'actions-gateway.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.com/allow-profile-downgrade'] == 'allowed'
   matchConditions:
     # Only managed tenant namespaces are guarded; every other namespace is admitted
-    # unchanged. Dual-marker so v1 and v2 tenants are both covered during coexistence.
+    # unchanged.
     - name: is-managed-tenant
       expression: >-
-        (has(object.metadata.labels) && 'actions-gateway.github.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.github.com/tenant'] == 'true')
-        || (has(object.metadata.labels) && 'actions-gateway.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.com/tenant'] == 'managed')
+        has(object.metadata.labels) && 'actions-gateway.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.com/tenant'] == 'managed'
   validations:
     # Invariant 1 — enum. An absent label is the valid baseline default.
     - expression: "!(variables.profileKey in variables.newLabels) || variables.newLabels[variables.profileKey] in ['baseline', 'restricted', 'privileged']"

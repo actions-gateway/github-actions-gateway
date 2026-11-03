@@ -962,7 +962,7 @@ A GHES tenant behind a private CA must be on the v2 API.
 `kubectl describe` shows a `Warning` event with reason `NamespaceMarkerMissing`, and the GMC log reports a `Forbidden` error stamping Pod Security Admission labels, citing the `namespace-psa-guard` admission policy.
 This is common immediately after upgrading a cluster whose tenant namespaces predate the policy (see [Upgrade — Migration Notes](upgrade.md#migration-notes)).
 
-**Cause.** The GMC's cluster-wide `namespaces:patch` grant is gated by the `namespace-psa-guard` ValidatingAdmissionPolicy, which denies the GMC any namespace that is not labelled `actions-gateway.github.com/tenant: "true"`.
+**Cause.** The GMC's cluster-wide `namespaces:patch` grant is gated by the `namespace-psa-guard` ValidatingAdmissionPolicy, which denies the GMC any namespace that is not labelled `actions-gateway.com/tenant: managed`.
 The label confines the grant to managed tenants so a compromised GMC cannot relabel `kube-system` PSA (see [Security §5.1/§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)).
 The GMC never sets this label itself — a trusted administrator must apply it.
 The same marker also gates the `gmc-tenant-resource-guard` policy, which confines every tenant-resource write (Deployments, Secrets, RoleBindings, …) to marked namespaces; provisioning fails at the PSA-stamping step first, so `NamespaceMarkerMissing` is the signal you will see, but applying the label clears both gates.
@@ -975,7 +975,7 @@ kubectl describe actionsgateway -n <namespace> <name> | grep -A2 NamespaceMarker
 
 # Check whether the marker label is present
 kubectl get namespace <namespace> \
-  -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'   # want: true
+  -o jsonpath='{.metadata.labels.actions-gateway\.com/tenant}'   # want: managed
 
 # Confirm both policies and their bindings are installed
 kubectl get validatingadmissionpolicy gmc-namespace-psa-guard gmc-tenant-resource-guard
@@ -985,8 +985,10 @@ kubectl get validatingadmissionpolicybinding gmc-namespace-psa-guard-binding gmc
 **Resolution.** Apply the marker label as an administrator, then the GMC reconciler retries automatically:
 
 ```sh
-kubectl label namespace <namespace> actions-gateway.github.com/tenant=true
+kubectl label namespace <namespace> actions-gateway.com/tenant=managed
 ```
+
+A namespace carrying only the 1.x `actions-gateway.github.com/tenant=true` marker is unmarked: `v2.0.0` no longer honours it.
 
 If the GMC's ServiceAccount is installed under a non-default namespace or name, also confirm the policy's `matchConditions` username (`system:serviceaccount:gmc-system:gmc-controller-manager`) matches your install.
 
@@ -1015,7 +1017,7 @@ kubectl describe actionsgateway -n <namespace> <name> | grep -A3 TeardownIncompl
 kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=50 | grep -i "delete resource during teardown"
 ```
 
-**Resolution.** Fix the underlying delete failure — restore API-server health, or re-grant the GMC the delete verb / re-apply the `gmc-tenant-resource-guard` marker if the namespace lost its `actions-gateway.github.com/tenant=true` label (the policy gates DELETE too, so an unmarked namespace blocks teardown).
+**Resolution.** Fix the underlying delete failure — restore API-server health, or re-grant the GMC the delete verb / re-apply the `gmc-tenant-resource-guard` marker if the namespace lost its `actions-gateway.com/tenant=managed` label (the policy gates DELETE too, so an unmarked namespace blocks teardown).
 The reconciler retries on its own backoff and removes the finalizer automatically once every delete is confirmed.
 **Do not** manually strip the finalizer to force the CR away — that re-introduces the orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real delete error instead.
 
@@ -4189,7 +4191,7 @@ Privileged worker containers are permitted **only** under the explicit `security
 
 **Resolution.**
 - If the privileged worker is intended (e.g. the Kata/DinD pattern), set `spec.securityProfile: privileged` on the same `ActionsGateway`.
-  This requires the namespace to be **eligible** for privileged — a platform admin must label it `actions-gateway.github.com/privileged-profile=allowed` (see [Privileged securityProfile Rejected](#privileged-securityprofile-rejected-namespace-not-eligible) below).
+  This requires the namespace to be **eligible** for privileged — a platform admin must label it `actions-gateway.com/privileged-profile=allowed` (see [Privileged securityProfile Rejected](#privileged-securityprofile-rejected-namespace-not-eligible) below).
   Privileged is a deliberate, audited relaxation — pair it with a sandboxed `runtimeClassName` (Kata, gVisor) per [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
 - If the privileged flag is accidental, remove `securityContext.privileged: true` from the pod template; the secure-by-default profiles reject it on purpose.
 
@@ -4777,27 +4779,28 @@ A variant names a read failure (`cannot verify privileged eligibility for namesp
 
 **Likely cause.** Whether a namespace may run privileged workers is a **platform** decision, not a tenant one.
 Because the tenant owns the `ActionsGateway` CR, they could otherwise self-select the cluster's least-restrictive Pod Security Admission posture simply by creating a CR.
-The webhook therefore gates `securityProfile: privileged` behind a label the platform applies to the *namespace* (which the tenant does not own): `actions-gateway.github.com/privileged-profile=allowed`.
+The webhook therefore gates `securityProfile: privileged` behind a label the platform applies to the *namespace* (which the tenant does not own): `actions-gateway.com/privileged-profile=allowed`.
 Absent the label — or with any other value — privileged is ineligible and rejected.
 (The value is the enum keyword `allowed`, not `true`, to avoid the YAML boolean-coercion footgun.)
 
 **Resolution (platform administrator).** If this tenant is approved to run privileged workers, label the namespace:
 
 ```bash
-kubectl label namespace <tenant-namespace> actions-gateway.github.com/privileged-profile=allowed
+kubectl label namespace <tenant-namespace> actions-gateway.com/privileged-profile=allowed
 ```
 
+From `v2.0.0` the 1.x `actions-gateway.github.com/privileged-profile` key grants nothing.
 Apply it with a trusted (administrator) identity — the GMC must never set it itself, and tenants cannot.
 Verify:
 
 ```bash
 kubectl get namespace <tenant-namespace> \
-  -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/privileged-profile}'
+  -o jsonpath='{.metadata.labels.actions-gateway\.com/privileged-profile}'
 # Expected: allowed
 ```
 
 Re-apply the `ActionsGateway`; the create/update is now admitted.
-To **revoke** eligibility, remove the label (`kubectl label namespace <ns> actions-gateway.github.com/privileged-profile-`); existing CRs already at `privileged` keep running, but any future create or profile change to `privileged` is rejected again.
+To **revoke** eligibility, remove the label (`kubectl label namespace <ns> actions-gateway.com/privileged-profile-`); existing CRs already at `privileged` keep running, but any future create or profile change to `privileged` is rejected again.
 
 > On an **update** that raises an existing CR from a stricter profile to `privileged`, the webhook also requires the `actions-gateway.github.com/allow-profile-downgrade: "true"` annotation (anything → `privileged` is a rank downgrade — see [securityProfile Downgrade Rejected](#securityprofile-downgrade-rejected-by-admission-webhook)).
 > Both gates are independent: the namespace label is the platform's eligibility decision, the annotation is the tenant's deliberate relaxation.

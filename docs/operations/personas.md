@@ -31,7 +31,7 @@ Read it as one question: which side of the tenancy boundary are you on?
 
 Owns the cluster and everything shared in it, and carries the pager when the control plane itself misbehaves.
 
-**Owns:** the GMC install and upgrades; the `actions-gateway.github.com/tenant` namespace marker; each tenant namespace's `ResourceQuota`; the [`PriorityClassAllowlist`](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298); `ClusterRunnerTemplate` objects; the Pod Security Admission level and the `privileged-profile: allowed` grant; whether the cluster has a node autoscaler.
+**Owns:** the GMC install and upgrades; the `actions-gateway.com/tenant` namespace marker; each tenant namespace's `ResourceQuota`; the [`PriorityClassAllowlist`](security-operations.md#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298); `ClusterRunnerTemplate` objects; the Pod Security Admission level and the `privileged-profile: allowed` grant; whether the cluster has a node autoscaler.
 At 03:00 the same person owns the [shipped alerts](observability-alerting.md), the [runbook](runbook.md), [backup and restore](backup-restore.md), and upgrades.
 
 **Cannot, by design:** be required in the loop for a tenant's day-to-day runner changes.

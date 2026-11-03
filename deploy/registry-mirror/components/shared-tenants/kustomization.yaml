@@ -51,15 +51,6 @@ kind: Component
 # (cmd/agc/internal/provisioner/pod.go), but an adopter running its own
 # non-worker puller must label that pod. `scripts/dogfood/e2e-mirror-clients.sh`
 # is the reading that says who is actually connecting, taken BEFORE narrowing.
-#
-# V1-DOMAIN TENANTS ARE NOT ADMITTED. A namespace still marked
-# `actions-gateway.github.com/tenant: "true"` (the v1alpha1 domain, which the
-# GMC's confinement policies dual-read through the coexistence window) carries no
-# v2 marker and so matches nothing here. matchLabels cannot OR, so admitting both
-# means a SECOND peer under `from:` rather than a second key. The failure is
-# closed -- that tenant's pulls stop rather than an unmarked namespace being
-# admitted -- so migrate the namespace (docs/operations/migration-v1-to-v2.md) in
-# preference to widening this.
 patches:
   # Strategic merge REPLACES `ingress` wholesale: NetworkPolicyIngressRule has no
   # patch merge key, so the list is atomic. That is what is wanted -- the base's

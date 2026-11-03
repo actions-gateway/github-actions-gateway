@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -103,14 +103,16 @@ func TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope(t *testing.T) {
 
 	const unmarkedNS = "psa-guard-unmarked"
 	const markedNS = "psa-guard-marked"
+	const legacyNS = "psa-guard-legacy"
 
 	createNamespace(t, unmarkedNS)
+	createNamespaceWithLabels(t, legacyNS, map[string]string{legacyTenantMarkerLabel: "true"})
 
 	// Marked tenant namespace — the marker is applied by the admin client (the
 	// trusted actor), mirroring the onboarding step. The GMC never sets it.
 	marked := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 		Name:   markedNS,
-		Labels: map[string]string{controller.TenantNamespaceMarkerLabel: "true"},
+		Labels: map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue},
 	}}
 	require.NoError(t, k8sClient.Create(ctx, marked))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), marked) })
@@ -130,6 +132,14 @@ func TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope(t *testing.T) {
 		return apierrors.IsForbidden(err)
 	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
 		"GMC SA must be denied patching an unmarked namespace")
+
+	t.Run("legacy-marked namespace denied", func(t *testing.T) {
+		err := setNamespaceLabel(gmc, legacyNS, func(ns *corev1.Namespace) {
+			ns.Labels["pod-security.kubernetes.io/enforce"] = "baseline"
+		})
+		require.True(t, apierrors.IsForbidden(err),
+			"the v1 actions-gateway.github.com/tenant marker must not make a namespace a tenant; got: %v", err)
+	})
 
 	t.Run("marked namespace PSA labels allowed", func(t *testing.T) {
 		err := setNamespaceLabel(gmc, markedNS, func(ns *corev1.Namespace) {

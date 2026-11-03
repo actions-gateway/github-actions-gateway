@@ -459,6 +459,10 @@ func (f *stubIPFetcher) SetCIDRs(cidrs []net.IPNet) {
 	f.cidrs = cidrs
 }
 
+// legacyTenantMarkerLabel is the v1alpha1 tenant marker, which no admission
+// policy or controller honours; tests label a namespace with it to show it grants nothing.
+const legacyTenantMarkerLabel = "actions-gateway.github.com/tenant"
+
 func createNamespace(t *testing.T, name string) {
 	t.Helper()
 	createNamespaceWithLabels(t, name, nil)

@@ -4,7 +4,7 @@
 # a tampered controller image, or a hand-edited PodTemplate cannot quietly
 # downgrade it. Scoped to GAG tenant namespaces via the marker label the GMC
 # requires on every namespace it provisions into:
-#   actions-gateway.github.com/tenant: "true"
+#   actions-gateway.com/tenant: managed
 #
 # Ships in Audit mode. Review Policy Reports, then switch
 # validationFailureAction to Enforce once clean:
@@ -44,7 +44,7 @@ spec:
               kinds: [Pod]
               namespaceSelector:
                 matchLabels:
-                  actions-gateway.github.com/tenant: "true"
+                  actions-gateway.com/tenant: managed
       validate:
         message: >-
           GAG pods must set runAsNonRoot:true and seccompProfile RuntimeDefault
@@ -78,7 +78,7 @@ spec:
               kinds: [Pod]
               namespaceSelector:
                 matchLabels:
-                  actions-gateway.github.com/tenant: "true"
+                  actions-gateway.com/tenant: managed
       validate:
         message: "Host namespaces (hostPID/hostIPC/hostNetwork) are not allowed for GAG pods."
         pattern:
@@ -97,7 +97,7 @@ spec:
               kinds: [Pod]
               namespaceSelector:
                 matchLabels:
-                  actions-gateway.github.com/tenant: "true"
+                  actions-gateway.com/tenant: managed
       validate:
         message: "Privileged containers are not allowed for GAG pods (use securityProfile: privileged + a PolicyException for DinD tenants)."
         pattern:
@@ -118,7 +118,7 @@ spec:
               kinds: [Pod]
               namespaceSelector:
                 matchLabels:
-                  actions-gateway.github.com/tenant: "true"
+                  actions-gateway.com/tenant: managed
       validate:
         message: "GAG pod images must be pinned by @sha256: digest, not a floating tag."
         foreach:
