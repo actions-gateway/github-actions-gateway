@@ -2967,10 +2967,10 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: the admission policies and the GMC read only the <code>actions-gateway.com</code> tenant marker, privileged grant and downgrade annotation</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1271/">Q1271</a></td>
+<td>Q1271</td>
 <td>The GMC deletes its Secret-reader RoleBinding from ex-tenant namespaces</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open: needs a delete-only exception in <code>gmc-tenant-resource-guard</code></td>
+<td>✅ landed: the GMC deletes its own binding once a namespace loses the tenant marker, through a delete-only exception in <code>gmc-tenant-resource-guard</code></td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1107/">Q1107</a></td>
