@@ -84,8 +84,8 @@ Re-measured 2026-09-12 on the same harness and machine: **12.57 KiB/session** (8
 
 ### The scale-set tier measures a different unit, and a smaller one
 
-The probe above drives the **classic** tier, where one listener goroutine holds one virtual runner session, so per-session and per-goroutine are the same quantity.
-The scale-set tier is the default protocol and had never been measured (Q722).
+The probe above drove the **classic** tier, which `v2.0.0` removes (Q264), where one listener goroutine held one virtual runner session, so per-session and per-goroutine were the same quantity.
+The scale-set tier, now the only one, had never been measured (Q722).
 `TestScaleSetPerListenerMemory` (`cmd/agc/test/load/scaleset_mem_test.go`, `make scaleset-mem-profile`) isolates it the same way, against `scalesetMemTransport` rather than `scalesettest`, whose `httptest.Server` would hold a parked goroutine and its read/write buffers per session in the same process.
 
 **The unit differs, which is the substance rather than a detail.** One scale-set `Listener` holds one *scale set's* acquisition session and multiplexes every job assigned to that set through it, so the resident cost scales with the **RunnerSet count**, not with the number of concurrent jobs.
@@ -115,10 +115,9 @@ GAG runs every listener as a goroutine in **one shared AGC pod per tenant** — 
 These numbers should still be re-derived once two consecutive weeks of production telemetry are available.
 Treat the locally-measured figures as validated lower bounds on efficiency, not as a production-scale contract.
 
-> **Validation status.** The session-multiplexing core **has been load-tested**, and its **per-session memory is now pinned**.
-> The in-process harness ([`cmd/agc/test/load/` at `v1.10.0`](https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/test/load), Q13; its `load-test-quick` make target) held **~1,000 concurrent virtual sessions in a single AGC** — a representative run sustained avg 998/1,000 with **zero goroutine leak** and 1.0 re-registrations per job (the single-use model under load).
-> The faithful results from that tier are the **sustained-session count, the no-leak guarantee, and the re-registration rate**; it deliberately stubs the apiserver, registrar, and broker, so it does not speak to real apiserver/GitHub latency or worker-pod scheduling.
-> The earlier ~127 KiB/session figure was an **upper bound inflated by the in-process broker stub**; the stub-free probe above (Q181) isolates the AGC's own structures at **~12.2 KiB/session**, well under the ~60 KiB conservative design bound.
+> **Validation status.** The scale-set tier's **per-set memory is pinned**, and nothing else about it has been load-tested.
+> `TestScaleSetPerListenerMemory` holds 200 parked sessions and measures memory only: it runs no jobs through them, so it says nothing about throughput with many jobs in flight or about goroutine leaks, and [Q1279](../queue/Q1279.md) asks for that run.
+> The classic tier's in-process harness ([`cmd/agc/test/load/` at `v1.10.0`](https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/test/load), Q13) did test both, holding **~1,000 concurrent virtual sessions in a single AGC** with **zero goroutine leak**, but it drove the classic multiplexer, which `v2.0.0` removes (Q264), so none of its results describe the scale-set path.
 > One caveat remains: the **real-cluster, real-GitHub scale run** — worker-pod scheduling and cross-tenant network at full concurrency — is still deferred.
 > Operators should size against their own observed telemetry rather than treat these ceilings as proven.
 

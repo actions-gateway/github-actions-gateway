@@ -193,8 +193,8 @@ Every GitHub request from the AGC and from worker pods leaves the cluster throug
 Because worker pods exist only while a job is running, zero compute is idle between jobs, and GPU nodes return to the cluster scheduler the moment a job finishes.
 
 > [!NOTE]
-> **The thousands-of-sessions-per-AGC ceiling is a design target, not yet validated at scale.** An in-process load test holds ~1,000 concurrent sessions in a single AGC with zero goroutine leak, at a measured ~12 KiB of AGC state per session (~60 KiB as the conservative design bound, including live HTTP-connection buffers).
-> The real-cluster load test that would confirm the ceiling is deferred post-1.0.
+> **How many runner sets one AGC can hold is a design target, not yet load-tested.** A memory probe holds 200 parked scale-set sessions in one AGC at a measured ~7.7 KiB of AGC state per set, excluding the HTTP-connection buffers a live long poll holds.
+> No run yet drives jobs through many sets at once or checks for goroutine leaks ([Q1279](docs/queue/Q1279.md)), and the real-cluster load test is deferred.
 > See [Capacity Targets and SLOs](docs/design/appendix-a-capacity-slos.md), which also carries a published retraction of this project's own best number once it proved unmeasurable.
 
 For the full design, see [docs/design/](docs/design/README.md).
