@@ -123,7 +123,6 @@ const (
 	defaultWorkerRunAsUser int64 = 1001
 
 	payloadMountPath = "/run/secrets/job-payload"
-	payloadKey       = "payload"
 	planIDKey        = "plan-id"
 	// jitConfigKey is the Secret data key that carries the agent's
 	// encoded_jit_config blob to the worker wrapper. The wrapper base64-decodes
@@ -488,10 +487,8 @@ type ScaleSetJob struct {
 	WorkflowRef string
 }
 
-// jobMeta converts the job's run identity into the annotation set shared with the
-// classic path, so both tiers stamp one vocabulary of worker-pod annotations
-// (actions-gateway.com/run-id, /repository, /job-name). The classic path derives the
-// same shape from the acquire payload via jobMetaFrom.
+// jobMeta converts the job's run identity into the worker-pod annotation set
+// (actions-gateway.com/run-id, /repository, /job-name).
 func (j ScaleSetJob) jobMeta() jobMeta {
 	m := jobMeta{runID: j.RunID, jobName: j.JobName}
 	if j.Owner != "" && j.Repository != "" {
@@ -558,7 +555,7 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	// to create one). Deleting another delivery's Secret would strand its pod in
 	// ContainerCreating, so a replay cleans up nothing it does not own (Q373).
 	staged := false
-	secret := p.buildSecret(target, secretName, jobID, workerVersion, nil, jitConfig)
+	secret := p.buildSecret(target, secretName, jobID, workerVersion, jitConfig)
 	fresh := secret.DeepCopy()
 	if err := p.Client.Create(ctx, secret); err != nil {
 		if !apierrors.IsAlreadyExists(err) {

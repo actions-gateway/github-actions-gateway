@@ -2,7 +2,6 @@ package provisioner_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
@@ -232,36 +231,6 @@ func (t *testGroupTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, e
 		spec.QuotaRetryDelay = g.Spec.QuotaRetryDelay.Duration
 	}
 	return spec, nil
-}
-
-func stubPayload(runID int64) []byte {
-	b, _ := json.Marshal(map[string]interface{}{"run_id": runID})
-	return b
-}
-
-// stubPayloadFull returns a payload carrying a complete run identity in the shape a
-// real AcquireJob response uses: the identity in the serialised `github` context,
-// the job name as a variable. Deliberately NOT the variables-only shape the tests
-// used to build — that shape is one GitHub never sends, and building it here is what
-// let the classic tier ship unable to read a real payload's run identity (Q495).
-// testdata/job_payload.json is the capture this mirrors.
-func stubPayloadFull(owner, repo string, runID int64) []byte {
-	b, _ := json.Marshal(map[string]interface{}{
-		"variables": map[string]interface{}{
-			"system.github.job": map[string]interface{}{"value": "build"},
-		},
-		"contextData": map[string]interface{}{
-			"github": map[string]interface{}{
-				"t": 2,
-				"d": []map[string]interface{}{
-					{"k": "run_id", "v": fmt.Sprintf("%d", runID)},
-					{"k": "repository", "v": owner + "/" + repo},
-					{"k": "workflow", "v": "CI"},
-				},
-			},
-		},
-	})
-	return b
 }
 
 // evictPod sets the pod's phase to Failed with reason "Evicted".

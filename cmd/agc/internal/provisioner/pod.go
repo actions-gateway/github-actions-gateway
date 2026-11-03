@@ -66,15 +66,9 @@ func imageVersion(image string) string {
 	return names.RunnerVersion
 }
 
-func (p *Provisioner) buildSecret(target Target, name, planID, version string, payload []byte, jitConfig string) *corev1.Secret {
+func (p *Provisioner) buildSecret(target Target, name, planID, version string, jitConfig string) *corev1.Secret {
 	data := map[string][]byte{
 		planIDKey: []byte(planID),
-	}
-	// The classic path always carries the acquired AcquireJob payload; the scale-set
-	// path (ProvisionScaleSetWorker) carries none — the runner pulls its own job — so
-	// the key is omitted rather than stored empty.
-	if len(payload) > 0 {
-		data[payloadKey] = payload
 	}
 	if jitConfig != "" {
 		data[jitConfigKey] = []byte(jitConfig)

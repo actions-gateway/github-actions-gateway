@@ -81,7 +81,7 @@ func TestProvisionScaleSetWorker_ReplayLeavesAnInFlightSecretAlone(t *testing.T)
 	p := NewProvisioner(fc, nil, nil)
 	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
 
-	staged := p.buildSecret(target, scaleSetSecretName("job-a"), "job-a", "", nil, "aW5mbGlnaHQ=")
+	staged := p.buildSecret(target, scaleSetSecretName("job-a"), "job-a", "", "aW5mbGlnaHQ=")
 	require.NoError(t, fc.Create(ctx, staged))
 
 	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target,
