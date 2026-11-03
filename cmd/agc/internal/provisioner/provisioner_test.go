@@ -233,45 +233,6 @@ func (t *testGroupTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, e
 	return spec, nil
 }
 
-// evictPod sets the pod's phase to Failed with reason "Evicted".
-func evictPod(ctx context.Context, t *testing.T, c client.Client, ns, name string) {
-	t.Helper()
-	var pod corev1.Pod
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
-	pod.Status.Phase = corev1.PodFailed
-	pod.Status.Reason = "Evicted"
-	require.NoError(t, c.Status().Update(ctx, &pod))
-}
-
-// preemptPod marks the named pod as kube-scheduler marks a preemption victim — the
-// DisruptionTarget/PreemptionByScheduler condition — and moves it to phase in the same
-// status write, which is what the classic path's single poll Get observes.
-//
-// The pod is left in the API rather than deleted because the scheduler's delete is
-// graceful: the victim stays readable for its termination grace period, and it is that
-// window the AGC observes it in.
-func preemptPod(ctx context.Context, t *testing.T, c client.Client, ns, name string, phase corev1.PodPhase) {
-	t.Helper()
-	var pod corev1.Pod
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
-	pod.Status.Phase = phase
-	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
-		Type:   corev1.DisruptionTarget,
-		Status: corev1.ConditionTrue,
-		Reason: corev1.PodReasonPreemptionByScheduler,
-	})
-	require.NoError(t, c.Status().Update(ctx, &pod))
-}
-
-// completePod transitions the named pod in the fake client to Succeeded.
-func completePod(ctx context.Context, t *testing.T, c client.Client, ns, name string, phase corev1.PodPhase) {
-	t.Helper()
-	var pod corev1.Pod
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
-	pod.Status.Phase = phase
-	require.NoError(t, c.Status().Update(ctx, &pod))
-}
-
 // findPod returns the first pod in the namespace (test helper for single-pod scenarios).
 func findPod(ctx context.Context, t *testing.T, c client.Client, ns string) *corev1.Pod {
 	t.Helper()

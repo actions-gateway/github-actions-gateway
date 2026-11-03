@@ -5,10 +5,9 @@
 // short-lived Secret holding the job's JIT config and creates an ephemeral
 // worker pod that mounts it (ProvisionScaleSetWorker). The Secret is staged
 // with the RunnerSet as its owner and handed to the pod once the pod exists,
-// so CR, namespace or pod deletion garbage-collects it. The pod is deleted on
-// completion when the set's completedPodTTL is zero, and otherwise by the
-// RunnerSet reconciler's reaper once the TTL elapses (stuck-Pending pods are
-// reaped after pendingPodDeadline by the same reaper).
+// so CR, namespace or pod deletion garbage-collects it. The RunnerSet
+// reconciler's reaper deletes the pod once its completedPodTTL elapses
+// (stuck-Pending pods are reaped after pendingPodDeadline by the same reaper).
 //
 // It enforces the concurrency ceilings from the RunnerSet spec:
 //   - priorityTiers: assign PriorityClass by cumulative pod count; hold if at last tier ceiling.
@@ -25,22 +24,14 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// tracer is the OpenTelemetry tracer for the provisioner. It resolves to the
-// global provider, which is the no-op provider unless main.go's tracing.Init
-// installed an exporter — so these spans cost almost nothing when tracing is off.
-var tracer = otel.Tracer(tracing.InstrumentationName)
 
 // defaultProvisionerClient is the bounded fallback used when Provisioner.HTTPClient
 // is nil. Shared so the nil path does not allocate a connection pool per call.
@@ -1187,22 +1178,6 @@ func (p *Provisioner) markJobCompleted(ctx context.Context, pod *corev1.Pod, job
 		return fmt.Errorf("provisioner: stamp job completion on worker pod %s: %w", pod.Name, err)
 	}
 	p.logFor().Debug("stamped job completion on worker pod", "pod", pod.Name, "jobID", jobID)
-	return nil
-}
-
-// traceStep runs fn inside a child span named name (parented to the span carried
-// by ctx), recording and stamping any error fn returns and always ending the
-// span. It centralises the start/record/end boilerplate for the provision
-// phases. When tracing is disabled the span is a no-op, so the only overhead is
-// the closure call.
-func traceStep(ctx context.Context, name string, fn func(context.Context) error) error {
-	ctx, span := tracer.Start(ctx, name)
-	defer span.End()
-	if err := fn(ctx); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
 	return nil
 }
 

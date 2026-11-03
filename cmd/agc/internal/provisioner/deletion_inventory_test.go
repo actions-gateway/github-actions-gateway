@@ -44,7 +44,6 @@ func (s deleteSite) String() string { return s.file + " " + s.fn }
 // pod-only: "not a worker pod" is a judgement the reviewer of a new delete has to
 // make, and recording it is what makes the omission of a real one visible.
 var declaredDeleteSites = map[deleteSite]string{
-	{"internal/provisioner/completion.go", "(*Provisioner).deletePod"}:                         "worker pod, unstamped — the completedPodTTL=0 cleanup of a pod that has already reached its terminal phase, so the deletion request lands after the container's recorded exit and externallyDeletedBeforeTerminal rejects it",
 	{"internal/provisioner/completion.go", "(*Provisioner).deleteSecret"}:                      "job Secret, not a worker pod",
 	{"internal/provisioner/provisioner.go", "(*Provisioner).replaceStaleScaleSetSecret"}:       "job Secret of a worker already gone, not a worker pod (Q1174)",
 	{"internal/controller/runner_shared.go", "(reapTarget).delete"}:                            "worker pod — stamped with the reap reason before the delete (Q502)",
