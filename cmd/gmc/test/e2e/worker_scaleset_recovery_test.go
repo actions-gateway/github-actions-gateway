@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -128,22 +127,7 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		By("waiting for the per-gateway AGC Deployment to become ready")
 		utils.WaitForDeploymentReady(tenantNS, agcDeploy, 4*time.Minute)
 
-		By("starting port-forward to the fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 20190+GinkgoParallelProcess())
-		ssrecPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(ssrecPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		ssrecPFCmd = startFakegithubPortForward(20190)
 	})
 
 	AfterEach(func() {

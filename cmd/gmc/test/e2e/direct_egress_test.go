@@ -511,8 +511,6 @@ spec:
     name: direct
   templateRef:
     name: tmpl
-  maxListeners: 2
-  acquisitionProtocol: Classic   # pinned to the classic tier; the default is ScaleSet (Q264 P5)
   runnerLabels: ["e2e-direct"]
 `, ns, secretName, workerImage)
 }

@@ -317,8 +317,6 @@ spec:
     name: %[2]s
   templateRef:
     name: tmpl
-  maxListeners: 1
-  acquisitionProtocol: Classic   # see v2MultiGatewayManifest (Q264 P5)
   runnerLabels: ["e2e-attr"]
 `, ns, gateway, org, set, secretName, image, pool, poolNS)
 	}

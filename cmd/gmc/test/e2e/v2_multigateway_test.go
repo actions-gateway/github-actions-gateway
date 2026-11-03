@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
 	"slices"
 	"strings"
@@ -68,22 +67,7 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 		By("waiting for the shared EgressProxy pool to become ready")
 		utils.WaitForDeploymentReady(tenantNS, proxyDeploy, 4*time.Minute)
 
-		By("starting persistent port-forward to fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 19090+GinkgoParallelProcess())
-		fakegithubPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(fakegithubPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		fakegithubPFCmd = startFakegithubPortForward(19090)
 	})
 
 	AfterEach(func() {
@@ -143,8 +127,8 @@ var _ = Describe("E2E_V2_MultiGateway", Ordered, func() {
 		// alpha's job → a worker pod for set-alpha that runs as alpha-worker (the
 		// per-gateway worker SA only alpha's AGC carries). That the pod exists AND
 		// runs as alpha-worker proves alpha's scoped AGC handled it.
-		assertGatewayJobYieldsScopedWorker(tenantNS, "set-alpha", "alpha-worker")
-		assertGatewayJobYieldsScopedWorker(tenantNS, "set-beta", "beta-worker")
+		assertGatewayJobYieldsScopedWorker(tenantNS, "set-alpha", "e2e-alpha", "alpha-worker")
+		assertGatewayJobYieldsScopedWorker(tenantNS, "set-beta", "e2e-beta", "beta-worker")
 	})
 
 	It("E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy", Label(realGitHubEgressLabel), func() {
@@ -238,29 +222,14 @@ func agcGatewayNameEnv(ns, deploy string) string {
 	return strings.TrimSpace(out)
 }
 
-// assertGatewayJobYieldsScopedWorker enqueues a job onto a live session owned by
-// runnerSet and asserts a worker pod for that set appears running as wantSA — the
-// per-gateway worker ServiceAccount that only the gateway's scoped AGC carries.
-func assertGatewayJobYieldsScopedWorker(ns, runnerSet, wantSA string) {
+// assertGatewayJobYieldsScopedWorker enqueues a job on runnerSet's scale set and
+// asserts a worker pod for that set appears running as wantSA — the per-gateway worker
+// ServiceAccount that only the gateway's scoped AGC carries.
+func assertGatewayJobYieldsScopedWorker(ns, runnerSet, scaleSet, wantSA string) {
 	GinkgoHelper()
-	fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-		fakegithubServiceName, infraNamespace, fakegithubServicePort)
-
-	By(fmt.Sprintf("picking a live session owned by %s", runnerSet))
-	var session string
-	Eventually(func(g Gomega) {
-		// "rs-" prefix: a RunnerSet listener owns its session as its registered
-		// runner name, which is kind-scoped (Q677).
-		sessions := fakegithubActiveSessionsForOwner(g, "rs-"+runnerSet+"-")
-		g.Expect(sessions).NotTo(BeEmpty(), "no live session for RunnerSet %s", runnerSet)
-		session = sessions[0]
-	}, 3*time.Minute, 2*time.Second).Should(Succeed())
-
-	By(fmt.Sprintf("enqueuing a job onto %s", session))
-	fakegithubEnqueueJob(session, map[string]interface{}{
-		"jobId":           "e2e-" + runnerSet,
-		"run_service_url": fakegithubSvcURL,
-	})
+	waitForScaleSetSession(scaleSet)
+	By("enqueuing a job on " + scaleSet)
+	scaleSetEnqueue(scaleSet)
 
 	By(fmt.Sprintf("waiting for a worker pod for %s running as %s", runnerSet, wantSA))
 	Eventually(func(g Gomega) {
@@ -298,7 +267,7 @@ metadata:
   name: alpha
   namespace: %[1]s
 spec:
-  githubURL: https://github.com/example-org-alpha
+  githubURL: %[4]s/example-org-alpha
   credentials:
     type: GitHubApp
     githubApp:
@@ -313,7 +282,7 @@ metadata:
   name: beta
   namespace: %[1]s
 spec:
-  githubURL: https://github.com/example-org-beta
+  githubURL: %[4]s/example-org-beta
   credentials:
     type: GitHubApp
     githubApp:
@@ -345,13 +314,6 @@ spec:
     name: alpha
   templateRef:
     name: tmpl
-  maxListeners: 2
-  # Classic (deprecated): the default is now ScaleSet (Q264 P5). These tests exercise
-  # gateway plumbing, not acquisition, and the classic tier is the one whose session
-  # registration they already assert on — so the tier is pinned rather than left to
-  # the default. (fakegithub does serve the scale-set protocol as of Q528; that is no
-  # longer the reason.)
-  acquisitionProtocol: Classic
   runnerLabels: ["e2e-alpha"]
 ---
 apiVersion: actions-gateway.com/v2alpha1
@@ -364,8 +326,6 @@ spec:
     name: beta
   templateRef:
     name: tmpl
-  maxListeners: 2
-  acquisitionProtocol: Classic   # see set-alpha (Q264 P5)
   runnerLabels: ["e2e-beta"]
-`, ns, secretName, workerImage)
+`, ns, secretName, workerImage, fakegithubHTTPSBase())
 }

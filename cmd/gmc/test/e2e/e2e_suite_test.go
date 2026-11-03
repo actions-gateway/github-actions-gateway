@@ -189,6 +189,10 @@ var _ = SynchronizedAfterSuite(
 func setupGMC() {
 	fakegithubBaseURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
 		fakegithubServiceName, infraNamespace, fakegithubServicePort)
+	// The fixtures cannot import this package, so they restate the Service's address;
+	// a fixture gateway naming any other host is not re-pointed at the stub.
+	Expect(utils.FakeGitHubURL).To(HavePrefix("https://%s.%s.svc.cluster.local:%s/",
+		fakegithubServiceName, infraNamespace, fakegithubServicePort))
 
 	// A prior run under E2E_SKIP_TEARDOWN=true leaves this Deployment behind with
 	// .spec.template.spec.containers[name="manager"].args owned by the

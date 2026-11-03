@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
 	"strings"
 	"time"
@@ -32,9 +31,9 @@ import (
 // lifecycle specs use runs as a numeric UID (distroless nonroot) and would mask
 // it — exactly how this bug reached live validation uncaught (milestone-4 §12).
 //
-// Not Serial: like job_lifecycle it owner-scopes its fakegithub session lookup
-// (unique agName), so it is isolated from other tenants' sessions and can run
-// concurrently with the other parallel specs.
+// Not Serial: its scale set is named after its own RunnerSet (unique agName), so it is
+// isolated from other tenants' scale sets and can run concurrently with the other
+// parallel specs.
 var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 	const (
 		tenantNS   = "tenant-worker-sec"
@@ -45,7 +44,7 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 	var secPFCmd *exec.Cmd
 
 	tenant := utils.RunnerTenant(tenantNS, agName, secretName, workerImage)
-	agcName := tenant.AGCName()
+	agcName, scaleSet := tenant.AGCName(), tenant.ScaleSetName(0)
 
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
@@ -58,35 +57,19 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
-		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
+		By("waiting for the AGC to complete a full reconcile")
 		// Deployment-ready only means the health server is up; it is decoupled
 		// from token acquisition. Gate on a reconciled RunnerSet so the session
 		// wait below starts from an operational AGC rather than absorbing the
 		// AGC's whole startup budget (Q134).
 		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
-		By("starting port-forward to fakegithub control API")
-		// Distinct port base from job_lifecycle (19090) and worker_lifecycle
-		// (19300); fakegithubLocalPort is reread by the control helpers.
-		fakegithubLocalPort = fmt.Sprintf("%d", 19500+GinkgoParallelProcess())
-		secPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(secPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		// Distinct port base from job_lifecycle (19090) and worker_lifecycle (19300).
+		secPFCmd = startFakegithubPortForward(19500)
 	})
 
 	// On failure, dump AGC + fakegithub state before AfterAll tears down the
-	// namespace, so a "no session registered" / "no worker pod" timeout (Q134)
+	// namespace, so a "no session" / "no worker pod" timeout (Q134)
 	// is debuggable from CI logs rather than a bare Eventually timeout.
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
@@ -103,21 +86,9 @@ var _ = Describe("E2E_AGC_WorkerSecurityContext", Ordered, func() {
 	})
 
 	It("E2E_AGC_WorkerPodAdmittedWithNonNumericUserImage: the default SecurityContext lets the real runner image pass kubelet runAsNonRoot admission", func() {
-		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-			fakegithubServiceName, infraNamespace, fakegithubServicePort)
-
-		By("waiting for an owner-scoped session, then enqueuing a job to trigger a worker pod")
-		var sessionID string
-		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
-			g.Expect(sessions).NotTo(BeEmpty(), "no session registered for this RunnerSet yet")
-			sessionID = sessions[0]
-		}, 3*time.Minute, 2*time.Second).Should(Succeed())
-
-		fakegithubEnqueueJob(sessionID, map[string]interface{}{
-			"jobId":           "q115-admission",
-			"run_service_url": fakegithubSvcURL,
-		})
+		By("waiting for the scale set's session, then enqueuing a job to trigger a worker pod")
+		waitForScaleSetSession(scaleSet)
+		scaleSetEnqueue(scaleSet)
 
 		By("locating the worker pod")
 		var podName string

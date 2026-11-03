@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -32,58 +31,37 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 	)
 
 	tenant := utils.RunnerTenant(tenantNS, agName, secretName, agcImage)
-	agcName := tenant.AGCName()
+	agcName, rsName, scaleSet := tenant.AGCName(), tenant.RunnerSetName(0), tenant.ScaleSetName(0)
 
 	BeforeAll(func() {
 		utils.CreateNamespace(tenantNS, nil)
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
-		// Use a RunnerSet so AGC has something to reconcile and can register
-		// broker sessions with fakegithub. The worker image is the agc image
-		// (already loaded into the cluster); it acts as a placeholder since
-		// job-lifecycle tests only verify session registration and pod creation,
-		// not that runner pods complete successfully.
+		// The worker image is the agc image (already loaded into the cluster); it is a
+		// placeholder, since this spec asserts pod creation, not that a runner runs.
 		tenant.ApplyWithWebhookRetry()
 
 		By("granting workload pods egress to fakegithub in e2e-infra")
 		// The GMC-built workload NP restricts 8080 egress to proxy pods only
-		// (production-correct shape). fakegithub lives in another namespace on
-		// 8080 and is reached directly via the AGC_EXTRA_* URLs (NO_PROXY
-		// matches svc.cluster.local). Stamp an additive NP so the AGC can
-		// reach fakegithub for broker session registration.
+		// (production-correct shape). fakegithub lives in another namespace on 8080 and
+		// is reached directly (NO_PROXY matches svc.cluster.local), so stamp an
+		// additive NP that lets the AGC open its scale-set session there.
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
 
 		By("waiting for AGC to be ready")
 		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 
-		By("waiting for the AGC to complete a full reconcile (token + agent registration)")
-		// Deployment-ready only means the health server is up; it is decoupled
-		// from token acquisition. Gate on a reconciled RunnerSet so the session
-		// waits start from an operational AGC rather than absorbing the AGC's
-		// whole startup budget (Q134).
+		By("waiting for the AGC to complete a full reconcile")
+		// Deployment-ready only means the health server is up; gate on a reconciled
+		// RunnerSet so the session wait starts from an operational AGC (Q134).
 		utils.WaitForRunnerSetReconciled(tenantNS, 4*time.Minute)
 
-		By("starting persistent port-forward to fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 19090+GinkgoParallelProcess())
-		fakegithubPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(fakegithubPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		fakegithubPFCmd = startFakegithubPortForward(19090)
+		waitForScaleSetSession(scaleSet)
 	})
 
 	// On failure, dump AGC + fakegithub state before AfterAll tears down the
-	// namespace, so a "no session registered" / "no worker pod" timeout
-	// (Q134/Q135) is debuggable from CI logs rather than a bare Eventually
-	// timeout.
+	// namespace, so a "no worker pod" timeout is debuggable from CI logs rather than
+	// a bare Eventually timeout.
 	AfterEach(func() {
 		if CurrentSpecReport().Failed() {
 			utils.DumpAGCSessionDiagnostics(tenantNS, agcName, infraNamespace, fakegithubServiceName)
@@ -98,144 +76,54 @@ var _ = Describe("E2E_AGC_JobLifecycle", Ordered, func() {
 		utils.DeleteNamespace(tenantNS)
 	})
 
-	SetDefaultEventuallyTimeout(3 * time.Minute)
-	SetDefaultEventuallyPollingInterval(2 * time.Second)
-
-	It("E2E_AGC_SessionRegistered: AGC creates broker sessions after startup", func() {
-		By("waiting for at least one active session to appear in fakegithub")
-		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
-			g.Expect(sessions).NotTo(BeEmpty(), "no sessions registered yet")
-		}, 3*time.Minute, 2*time.Second).Should(Succeed())
-	})
-
-	It("E2E_AGC_JobDelivered: enqueuing a job triggers worker pod creation", func() {
-		By("getting the first active session ID")
-		var sessionID string
-		Eventually(func(g Gomega) {
-			sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
-			g.Expect(sessions).NotTo(BeEmpty())
-			sessionID = sessions[0]
-		}, 2*time.Minute, 2*time.Second).Should(Succeed())
-
-		// run_service_url causes the listener to call /acquirejob on fakegithub,
-		// which returns a unique planId ("plan-N") so each job gets a distinct pod name.
-		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-			fakegithubServiceName, infraNamespace, fakegithubServicePort)
-
-		By("enqueuing a job for that session")
-		fakegithubEnqueueJob(sessionID, map[string]interface{}{
-			"jobId":           "e2e-job-1",
-			"jobName":         "e2e test job",
-			"run_service_url": fakegithubSvcURL,
-		})
-
-		By("waiting for a worker pod to appear in the tenant namespace")
-		Eventually(func(g Gomega) {
-			cmd := exec.Command("kubectl", "get", "pods",
-				"-n", tenantNS,
-				"-l", "app.kubernetes.io/managed-by=actions-gateway-controller",
-				"-o", "jsonpath={.items[*].metadata.name}",
-			)
-			out, err := utils.Run(cmd)
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(strings.TrimSpace(out)).NotTo(BeEmpty(), "no worker pod scheduled yet")
-		}, 3*time.Minute, 2*time.Second).Should(Succeed())
-	})
-
 	It("E2E_AGC_MultipleJobsQueued: each queued job gets its own worker pod", func() {
-		// run_service_url causes /acquirejob to be called, yielding a unique planId
-		// per job so each job gets a distinct pod name.
-		fakegithubSvcURL := fmt.Sprintf("http://%s.%s.svc.cluster.local:%s",
-			fakegithubServiceName, infraNamespace, fakegithubServicePort)
-
-		// Under the Q114 single-use JIT lifecycle a session serves exactly one
-		// job: acquiring it consumes the agent's runner record and the listener
-		// re-registers into a fresh session. fakegithub redelivers a job whose
-		// session recycled away to the next live session (modelling GitHub's
-		// pool-wide delivery), so jobs are not lost — but to assert precisely
-		// that *each* job yields its own pod, deliver each onto a freshly
-		// queried live session and count the distinct worker pods that appear
-		// beyond the ones an earlier spec in this Ordered container created.
-		//
-		// "Live" here means registered, not polling: this enqueue can land on a
-		// session that is mid-job, or one the AGC recycled away but failed to
-		// delete. Both are covered by fakegithub ageing an undelivered job into
-		// the owner pool (Q436) — before that, the failed-delete case stranded
-		// the job outright and this spec failed at its full budget.
-		baseline := map[string]bool{}
-		Eventually(func(g Gomega) {
-			for _, name := range workerPodNames(g, tenantNS) {
-				baseline[name] = true
-			}
-		}, 30*time.Second, 2*time.Second).Should(Succeed())
-
-		fresh := map[string]bool{}
-		for i := 1; i <= 2; i++ {
-			var session string
-			By(fmt.Sprintf("job %d: picking a live session", i))
+		// The session and the first job's pod are E2E_AGC_ScaleSetAcquisition's; what
+		// this adds is two jobs on one scale set, each provisioned on its own. Each
+		// assignment carries its own workflow run, so a pod per run is a pod per job.
+		jobs := []scaleSetJob{scaleSetEnqueue(scaleSet), scaleSetEnqueue(scaleSet)}
+		for _, job := range jobs {
+			runID := fmt.Sprintf("%d", job.WorkflowRunID)
+			By("waiting for the worker pod of run " + runID)
 			Eventually(func(g Gomega) {
-				sessions := fakegithubActiveSessionsForOwner(g, tenant.SessionOwnerPrefix())
-				g.Expect(sessions).NotTo(BeEmpty(), "no live session for this RunnerSet")
-				session = sessions[0]
-			}, 2*time.Minute, 2*time.Second).Should(Succeed())
-
-			By(fmt.Sprintf("job %d: enqueuing onto %s", i, session))
-			fakegithubEnqueueJob(session, map[string]interface{}{
-				"jobId":           fmt.Sprintf("e2e-job-2-%d", i),
-				"run_service_url": fakegithubSvcURL,
-			})
-
-			By(fmt.Sprintf("job %d: waiting for a new worker pod (%d total)", i, i))
-			// 6-min window: a recycled single-use session redelivers pool-wide, so
-			// the worker pod for this job can lag behind the enqueue by a full
-			// re-register + acquire cycle — plus the pool ageing window (Q436)
-			// when the enqueue landed on a session that never polls again; on a
-			// loaded kindnet runner that has exceeded the old 4-min budget while
-			// calico passed (Q179).
-			Eventually(func(g Gomega) {
-				for _, name := range workerPodNames(g, tenantNS) {
-					if !baseline[name] {
-						fresh[name] = true
-					}
-				}
-				g.Expect(len(fresh)).To(BeNumerically(">=", i),
-					"expected >= %d new worker pods, have %d", i, len(fresh))
-			}, 6*time.Minute, 2*time.Second).Should(Succeed())
+				g.Expect(scaleSetWorkerPodsWithRunID(g, tenantNS, rsName, runID)).To(HaveLen(1),
+					"run %s must be provisioned exactly one worker pod", runID)
+			}, 3*time.Minute, 2*time.Second).Should(Succeed())
 		}
 	})
 })
 
-// fakegithubActiveSessionsForOwner queries active sessions whose ownerName has
-// the given prefix. A session's ownerName is the listener's own registered runner
-// name, which is kind-scoped (Q677): "rs-<runnerSet>-<agentIndex>" for a RunnerSet,
-// so a spec passes "rs-<runnerSet>-", or a fixture tenant's SessionOwnerPrefix to
-// scope to all of its gateway's sets. fakegithub is shared across parallel specs and tenants —
-// an unfiltered sessions[0] can belong to another spec, sending its enqueued job to
-// the wrong tenant.
-func fakegithubActiveSessionsForOwner(g Gomega, ownerPrefix string) []string {
-	path := "/control/sessions"
-	if ownerPrefix != "" {
-		path += "?owner=" + ownerPrefix
-	}
-	out := fakegithubControlRequest(g, "GET", path, nil)
-	var sessions []string
-	err := json.Unmarshal([]byte(out), &sessions)
-	g.Expect(err).NotTo(HaveOccurred(), "parse sessions response: %s", out)
-	if sessions == nil {
-		sessions = []string{}
-	}
-	return sessions
+// fakegithubHTTPSBase is the fakegithub Service's address as a gateway githubURL
+// names it: https, at the port the Service serves plaintext on. The AGC re-points
+// only a gateway naming this host:port at the stub, so a spec manifest that wants its
+// listener up appends an org path to this.
+func fakegithubHTTPSBase() string {
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%s",
+		fakegithubServiceName, infraNamespace, fakegithubServicePort)
 }
 
-// fakegithubEnqueueJob enqueues a job for the given session via the fakegithub control API.
-func fakegithubEnqueueJob(sessionID string, payload map[string]interface{}) {
+// startFakegithubPortForward opens a port-forward to the fakegithub control API on a
+// per-process local port derived from base, records it in fakegithubLocalPort, and
+// waits until the port answers. Any response proves the tunnel, so the probe asks for
+// a path that needs no scale set to exist yet.
+func startFakegithubPortForward(base int) *exec.Cmd {
 	GinkgoHelper()
-	body, _ := json.Marshal(payload)
-	fakegithubControlRequest(nil, "POST",
-		fmt.Sprintf("/control/enqueue?sessionId=%s", sessionID),
-		body,
+	By("starting port-forward to the fakegithub control API")
+	fakegithubLocalPort = fmt.Sprintf("%d", base+GinkgoParallelProcess())
+	cmd := exec.Command("kubectl", "port-forward",
+		"-n", infraNamespace,
+		"service/"+fakegithubServiceName,
+		fakegithubLocalPort+":9090",
 	)
+	Expect(cmd.Start()).To(Succeed())
+	Eventually(func() error {
+		resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/scaleset/state")
+		if err != nil {
+			return err
+		}
+		_ = resp.Body.Close()
+		return nil
+	}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+	return cmd
 }
 
 // fakegithubControlRequest executes an HTTP request against the fakegithub control API

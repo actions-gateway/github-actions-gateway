@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"fmt"
-	"net/http"
 	"os/exec"
 	"time"
 
@@ -76,22 +75,7 @@ var _ = Describe("E2E_VaultWorkloadIdentity", Ordered, Label("vault-workload-ide
 		By("waiting for the workload-identity AGC Deployment to become ready")
 		utils.WaitForDeploymentReady(tenantNS, gwAGC, 4*time.Minute)
 
-		By("starting persistent port-forward to the fakegithub control API")
-		fakegithubLocalPort = fmt.Sprintf("%d", 19790+GinkgoParallelProcess())
-		fakegithubPFCmd = exec.Command("kubectl", "port-forward",
-			"-n", infraNamespace,
-			"service/"+fakegithubServiceName,
-			fakegithubLocalPort+":9090",
-		)
-		Expect(fakegithubPFCmd.Start()).To(Succeed())
-		Eventually(func() error {
-			resp, err := http.Get("http://localhost:" + fakegithubLocalPort + "/control/sessions")
-			if err != nil {
-				return err
-			}
-			_ = resp.Body.Close()
-			return nil
-		}, 15*time.Second, 500*time.Millisecond).Should(Succeed())
+		fakegithubPFCmd = startFakegithubPortForward(19790)
 	})
 
 	AfterEach(func() {
@@ -140,15 +124,13 @@ var _ = Describe("E2E_VaultWorkloadIdentity", Ordered, Label("vault-workload-ide
 		Expect(aud).To(ContainSubstring("vault"), "AGC must project a Vault-audience SA token")
 	})
 
-	It("E2E_VaultWI_NoPEMRoundTrip: the AGC opens a broker session via a Vault-signed App JWT", func() {
-		// A live session for the RunnerSet owner can only exist if the AGC minted an
+	It("E2E_VaultWI_NoPEMRoundTrip: the AGC opens a scale-set session via a Vault-signed App JWT", func() {
+		// A live session for the scale set can only exist if the AGC minted an
 		// installation token — which, with no PEM in the cluster, required a successful
 		// Vault login + transit sign. This is the keystone no-PEM round-trip assertion.
 		Eventually(func(g Gomega) {
-			// "rs-" prefix: kind-scoped registered runner name (Q677).
-			sessions := fakegithubActiveSessionsForOwner(g, "rs-"+runnerSet+"-")
-			g.Expect(sessions).NotTo(BeEmpty(),
-				"no live broker session for RunnerSet %s — the AGC could not mint a token via Vault (no-PEM round-trip failed)", runnerSet)
+			g.Expect(scaleSetState(g, "e2e-wi")["activeSession"]).To(BeTrue(),
+				"no live scale-set session for RunnerSet %s — the AGC could not mint a token via Vault (no-PEM round-trip failed)", runnerSet)
 		}, 4*time.Minute, 2*time.Second).Should(Succeed())
 	})
 })
@@ -281,7 +263,7 @@ spec:
 
 // vaultWorkloadIdentityManifest renders the workload-identity object set: an
 // ActionsGateway (no Secret, direct egress), a RunnerTemplate, and a RunnerSet bound
-// to it so the AGC opens broker sessions (the no-PEM round-trip under test). The
+// to it so the AGC opens a scale-set session (the no-PEM round-trip under test). The
 // gateway declares signer.vault.networkPolicy so the GMC auto-provisions the scoped
 // AGC→Vault egress rule (Q202) — no hand-applied NetworkPolicy is needed.
 func vaultWorkloadIdentityManifest(ns, gw, runnerSet, vaultAddr, key, role, workerImage, vaultNS string) string {
@@ -291,7 +273,7 @@ metadata:
   name: %[2]s
   namespace: %[1]s
 spec:
-  githubURL: https://github.com/example-org
+  githubURL: %[9]s/example-org
   credentials:
     type: WorkloadIdentity
     workloadIdentity:
@@ -336,8 +318,6 @@ spec:
     name: %[2]s
   templateRef:
     name: tmpl
-  maxListeners: 2
-  acquisitionProtocol: Classic   # pinned to the classic tier; the default is ScaleSet (Q264 P5)
   runnerLabels: ["e2e-wi"]
-`, ns, gw, runnerSet, vaultAddr, key, role, workerImage, vaultNS)
+`, ns, gw, runnerSet, vaultAddr, key, role, workerImage, vaultNS, fakegithubHTTPSBase())
 }
