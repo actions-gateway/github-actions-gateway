@@ -7,22 +7,13 @@
 // condition reason or a Kubernetes Event, and neither of those was derived from
 // the source or gated.
 //
-// Six checks:
+// Five checks:
 //
 //	inventory     the reasons the AGC emits and the ledger's name the same set
 //	vocabulary    every ledger row states one of the four tiers, with a reason
 //	contradiction no single-tier row is emitted from the tier it excludes
 //	resolution    every recorder call's reason argument resolves to a name
 //	reference     every Event reason also has a runbook entry
-//	ownership     a condition type with two producers enumerates one of them in
-//	              one place, and that enumeration holds every reason the producer
-//	              publishes on it
-//
-// ownership is the one check that reconciles the source against itself rather
-// than against a doc, and it is here because it reads the same emissions the
-// other five do — a reason paired with the condition type it is published on
-// (Q994). It reaches only the enumerations that ask for it, by a marker comment;
-// ownership.go carries the shape and the polarity argument.
 //
 // resolution is the check with no metric counterpart, and it exists because an
 // Event reason is an argument rather than a declaration. It reaches the recorder
@@ -100,12 +91,8 @@ var eventTypeSelectors = map[string]bool{
 	"EventTypeWarning": true,
 }
 
-// reasonConstRE matches the condition-reason constants' declared names, and
-// conditionConstRE the condition types those reasons are published on.
-var (
-	reasonConstRE    = regexp.MustCompile(`^Reason[A-Z][A-Za-z0-9]*$`)
-	conditionConstRE = regexp.MustCompile(`^Condition[A-Z][A-Za-z0-9]*$`)
-)
+// reasonConstRE matches the condition-reason constants' declared names.
+var reasonConstRE = regexp.MustCompile(`^Reason[A-Z][A-Za-z0-9]*$`)
 
 // reasonPkgs are the packages a condition reason is declared in, keyed by the
 // last segment of the import path rather than by the identifier a file reaches
@@ -230,7 +217,7 @@ func list(srcDir, apiDir string) ([]string, error) {
 }
 
 func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
-	values, conditions, err := apiValues(apiDir, srcDir)
+	values, err := reasonValues(apiDir, srcDir)
 	if err != nil {
 		return nil, err
 	}
@@ -273,11 +260,6 @@ func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
 	findings = append(findings, checkContradiction(conds, condRows)...)
 	findings = append(findings, checkContradiction(events, eventRows)...)
 	findings = append(findings, checkEventReference(events, string(eventDocBytes), eventDoc)...)
-	ownership, err := checkOwnership(srcDir, values, conditions)
-	if err != nil {
-		return nil, err
-	}
-	findings = append(findings, ownership...)
 	sort.Strings(findings)
 	return findings, nil
 }
@@ -293,13 +275,6 @@ func errEmptySide(srcDir string, conds, events map[string]*reason) error {
 
 // parseGo parses every non-test Go file under root, calling fn for each.
 func parseGo(root string, fn func(file *ast.File, fset *token.FileSet, rel string) error) error {
-	return parseGoMode(root, 0, fn)
-}
-
-// parseGoMode is parseGo with the parser mode exposed. The ownership check reads
-// a marker off a declaration's doc comment, which is only attached under
-// parser.ParseComments.
-func parseGoMode(root string, mode parser.Mode, fn func(file *ast.File, fset *token.FileSet, rel string) error) error {
 	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -314,7 +289,7 @@ func parseGoMode(root string, mode parser.Mode, fn func(file *ast.File, fset *to
 			return nil
 		}
 		fset := token.NewFileSet()
-		file, perr := parser.ParseFile(fset, path, nil, mode)
+		file, perr := parser.ParseFile(fset, path, nil, 0)
 		if perr != nil {
 			return fmt.Errorf("parse %s: %w", path, perr)
 		}
@@ -322,22 +297,12 @@ func parseGoMode(root string, mode parser.Mode, fn func(file *ast.File, fset *to
 	})
 }
 
-// reasonValues resolves every Reason* constant to the string an operator sees.
+// reasonValues resolves every Reason* constant to the string an operator sees,
+// keyed by constant name. The v2 version packages alias api/apiconditions, so the
+// alias targets are resolved after the literals are read.
 func reasonValues(apiDir, srcDir string) (map[string]string, error) {
-	values, _, err := apiValues(apiDir, srcDir)
-	return values, err
-}
-
-// apiValues resolves the Reason* and Condition* constants to the strings an
-// operator sees, keyed by constant name. The v2 version packages alias
-// api/apiconditions, so the alias targets are resolved after the literals are
-// read. Condition types are read alongside the reasons because the ownership
-// check pairs an emitted reason with the condition type it is published on, and
-// that type reaches the scan as a constant reference like any reason.
-func apiValues(apiDir, srcDir string) (reasons, conditions map[string]string, err error) {
 	literals := map[string]string{} // constant name -> value
 	aliases := map[string]string{}  // constant name -> constant name it re-exports
-	kind := map[string]bool{}       // constant name -> is a condition type
 
 	read := func(file *ast.File, _ *token.FileSet, _ string) error {
 		for _, decl := range file.Decls {
@@ -351,11 +316,9 @@ func apiValues(apiDir, srcDir string) (reasons, conditions map[string]string, er
 					continue
 				}
 				name := vs.Names[0].Name
-				isCond := conditionConstRE.MatchString(name)
-				if !isCond && !reasonConstRE.MatchString(name) {
+				if !reasonConstRE.MatchString(name) {
 					continue
 				}
-				kind[name] = isCond
 				switch v := vs.Values[0].(type) {
 				case *ast.BasicLit:
 					if v.Kind != token.STRING {
@@ -373,12 +336,12 @@ func apiValues(apiDir, srcDir string) (reasons, conditions map[string]string, er
 	}
 
 	if err := parseGo(apiDir, read); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	// The v1 vocabulary lives under the AGC rather than in the shared api module.
 	if agcAPI := filepath.Join(srcDir, "api"); dirExists(agcAPI) {
 		if err := parseGo(agcAPI, read); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -387,18 +350,10 @@ func apiValues(apiDir, srcDir string) (reasons, conditions map[string]string, er
 			literals[name] = v
 		}
 	}
-	reasons, conditions = map[string]string{}, map[string]string{}
-	for name, v := range literals {
-		if kind[name] {
-			conditions[name] = v
-			continue
-		}
-		reasons[name] = v
+	if len(literals) == 0 {
+		return nil, fmt.Errorf("no Reason* constants found under %s — the vocabulary cannot be empty", apiDir)
 	}
-	if len(reasons) == 0 {
-		return nil, nil, fmt.Errorf("no Reason* constants found under %s — the vocabulary cannot be empty", apiDir)
-	}
-	return reasons, conditions, nil
+	return literals, nil
 }
 
 // recorderSignatures reads the reason argument's index off every event-recorder

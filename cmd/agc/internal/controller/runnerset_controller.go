@@ -541,10 +541,6 @@ func (r *RunnerSetReconciler) drainConditions(rs *v2alpha1.RunnerSet) {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rs.Namespace && upd.name == rs.Name {
-				prev := meta.FindStatusCondition(rs.Status.Conditions, upd.condition.Type)
-				if runnercore.DropListenerCondition(prev, upd.condition) {
-					continue // refused: neither merged nor retained
-				}
 				meta.SetStatusCondition(&rs.Status.Conditions, upd.condition)
 				r.pendingConds.retain(key, upd.condition)
 			} else {
@@ -768,17 +764,6 @@ func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, tem
 	cond := runnercore.WorkerRunnerVersionConditionWithRegistry(image, lookup, rs.Generation)
 
 	prev := conditionValue(rs.Status.Conditions, cond.Type)
-	// The two producers of this condition report different facts through one type. A
-	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
-	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
-	// healthy image reading therefore does not refute it, and writing over it would
-	// drop a live rejection from status. Which reasons are the listener's is asked of
-	// runnercore rather than compared here: the two consumers held the set at
-	// different widths, and a listener reason this one did not know about was wiped
-	// rather than deferred to (Q994).
-	if prev.Status == metav1.ConditionTrue && runnercore.IsSessionSourcedRunnerVersion(prev.Reason) {
-		return
-	}
 	meta.SetStatusCondition(&rs.Status.Conditions, cond)
 	// Warn once on a genuine transition into too-old so the deadline lands in the event
 	// stream while there is still time to change the image.
