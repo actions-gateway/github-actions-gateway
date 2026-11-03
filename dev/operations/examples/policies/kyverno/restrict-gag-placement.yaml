@@ -71,7 +71,7 @@ spec:
                 - Pod
               namespaceSelector:
                 matchLabels:
-                  actions-gateway.github.com/tenant: "true"
+                  actions-gateway.com/tenant: managed
       context:
         - name: tenantPool
           apiCall:
@@ -127,7 +127,7 @@ spec:
                 - Pod
               namespaceSelector:
                 matchLabels:
-                  actions-gateway.github.com/tenant: "true"
+                  actions-gateway.com/tenant: managed
       validate:
         message: >-
           A toleration with `operator: Exists` and no `key` tolerates every taint

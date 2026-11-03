@@ -2669,10 +2669,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#pre-existing-true-values-are-grandfathered" class="md-nav__link">
+  <a href="#the-true-values-v1-shipped-were-retired-by-a-migration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pre-existing "true" values are grandfathered
+        The "true" values v1 shipped were retired by a migration
       
     </span>
   </a>
@@ -2939,17 +2939,12 @@ So even if someone fat-fingers <code>true</code>, eligibility is denied rather t
 <p>on the namespace, and the GMC <code>NamespacePSAReconciler</code> stamps the <code>pod-security.kubernetes.io/*</code> labels from it.
 The value follows the enum-keyword convention above (not a boolean), and the <code>gmc-namespace-security-profile-guard</code> ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a <code>privileged</code> selection without the <code>actions-gateway.com/privileged-profile=allowed</code> eligibility label.
 See <code>SecurityProfileLabel</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/shared_types.go"><code>api/v2alpha1/shared_types.go</code></a>.</p>
-<h3 id="pre-existing-true-values-are-grandfathered">Pre-existing <code>"true"</code> values are grandfathered<a class="headerlink" href="#pre-existing-true-values-are-grandfathered" title="Permanent link">&para;</a></h3>
-<p>Two shipped keys predate this convention and still use <code>"true"</code>:</p>
-<ul>
-<li><code>actions-gateway.github.com/tenant: "true"</code> — the managed-tenant marker label.</li>
-<li><code>actions-gateway.github.com/allow-profile-downgrade: "true"</code> — the downgrade opt-in annotation.</li>
-</ul>
-<p>These were <strong>not</strong> to be changed casually.
-The <code>tenant</code> marker in particular is load-bearing: the <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code> objects, the onboarding scripts, and operator runbooks all match it as <code>"true"</code>, so changing the value is a breaking change to deployed clusters.
-The convention above applies to <strong>new</strong> keys; the existing two stay as-is unless there is a separate, deliberate migration.</p>
-<p><strong>The v2 API cutover is that deliberate migration.</strong> v2 aligns both values to self-documenting keywords (<code>tenant: managed</code>, <code>allow-profile-downgrade: allowed</code>) on the renamed <code>actions-gateway.com/</code> domain (see <code>shared_types.go</code>).
-During the v1/v2 coexistence window every consumer <strong>dual-reads</strong> both spellings, so deployed clusters are not broken mid-cutover; the <a href="../../operations/migration-v1-to-v2/">M5 migration tool</a> relabels live namespaces additively, and the legacy <code>"true"</code> arms drop when <code>v1alpha1</code> is removed (design <a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).</p>
+<h3 id="the-true-values-v1-shipped-were-retired-by-a-migration">The <code>"true"</code> values v1 shipped were retired by a migration<a class="headerlink" href="#the-true-values-v1-shipped-were-retired-by-a-migration" title="Permanent link">&para;</a></h3>
+<p>Two v1 keys predated this convention and used <code>"true"</code>: the managed-tenant marker <code>actions-gateway.github.com/tenant: "true"</code> and the downgrade opt-in annotation <code>actions-gateway.github.com/allow-profile-downgrade: "true"</code>.
+Changing a value every admission policy and runbook matches is a breaking change to deployed clusters, so it took a deliberate migration rather than an edit.</p>
+<p>The v2 API cutover was that migration: v2 aligned both values to keywords (<code>tenant: managed</code>, <code>allow-profile-downgrade: allowed</code>) on the <code>actions-gateway.com/</code> domain (see <code>shared_types.go</code>).
+Through the v1/v2 coexistence window every consumer <strong>dual-read</strong> both spellings while the <a href="../../operations/migration-v1-to-v2/">M5 migration tool</a> relabelled live namespaces additively, and <code>v2.0.0</code> dropped the legacy arms (design <a href="../../design/appendix-h-v2-api-decomposition/#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>).
+Nothing reads an <code>actions-gateway.github.com</code> namespace key now.</p>
 <h2 id="label--annotation-key-conventions">Label &amp; annotation key conventions<a class="headerlink" href="#label--annotation-key-conventions" title="Permanent link">&para;</a></h2>
 <p>Use the <code>actions-gateway.github.com/&lt;name&gt;</code> prefix for every label and annotation key the project defines, matching the API group.
 Define the key (and its sentinel value, if any) as an exported <code>const</code> in the relevant <code>api/v1alpha1</code> package with godoc, and reference that const from controllers, webhooks, and tests — never re-type the literal string, so a rename can't drift between the producer and the consumers.</p>

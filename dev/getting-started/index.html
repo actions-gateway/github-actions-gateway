@@ -2919,11 +2919,10 @@ See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
 <!-- gag:verify id=tenant-namespace mode=run teardown=namespace -->
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>team-a
-<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/tenant<span class="o">=</span>managed
 </code></pre></div>
 <blockquote>
-<p><strong>v2 namespace markers.</strong> In the recommended v2 flow the tenant marker aligns to <code>actions-gateway.com/tenant=managed</code>, and the Pod Security level moves off the CR onto the namespace as the <code>actions-gateway.com/security-profile</code> label (absent ⇒ <code>baseline</code>).
-The GMC dual-reads both spellings during coexistence.
+<p><strong>v2 namespace labels.</strong> The Pod Security level lives on the namespace as the <code>actions-gateway.com/security-profile</code> label (absent ⇒ <code>baseline</code>), not on the CR.
 For the exact v2 namespace labels and the profile-guard admission policy, see <a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a>.</p>
 </blockquote>
 <p>The namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is <strong>platform-owned</strong>: the platform admin creates and manages it on the tenant namespace, and the gateway operates <em>within</em> it but never creates or mutates it.

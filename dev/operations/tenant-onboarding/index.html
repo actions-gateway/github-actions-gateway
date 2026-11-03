@@ -3431,9 +3431,9 @@ The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsg
 <h2 id="pre-conditions">Pre-Conditions<a class="headerlink" href="#pre-conditions" title="Permanent link">&para;</a></h2>
 <p>Before beginning, confirm all of the following:</p>
 <ul>
-<li>[ ] <strong>Namespace exists and is marked as a managed tenant.</strong> The tenant's Kubernetes namespace has been created and carries the marker label <code>actions-gateway.github.com/tenant=true</code>:
+<li>[ ] <strong>Namespace exists and is marked as a managed tenant.</strong> The tenant's Kubernetes namespace has been created and carries the marker label <code>actions-gateway.com/tenant=managed</code>:
   <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w">   </span><span class="c1"># if it does not exist yet</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>actions-gateway.com/tenant<span class="o">=</span>managed
 </code></pre></div>
   This label is what authorizes the GMC to operate in the namespace at all.
   Two admission policies key on it: <code>namespace-psa-guard</code> denies the GMC any namespace patch (the PSA-stamping step) it has <em>not</em> been marked for, and <code>gmc-tenant-resource-guard</code> denies the GMC any create/update/delete of tenant resources (Deployments, Secrets, RoleBindings, NetworkPolicies, …) outside marked namespaces.
@@ -3501,10 +3501,10 @@ The downgrade and privileged-eligibility rules are identical to v1 but enforced 
 Co-located v2 gateways share the one namespace profile; tenants needing different postures use different namespaces.
 - [ ] <strong>Privileged eligibility granted (only if the tenant needs <code>privileged</code>).</strong> <code>securityProfile: privileged</code> is a <strong>platform</strong> decision, not tenant-settable: the GMC validating webhook rejects it (at create <em>and</em> update) unless the namespace carries the eligibility label, applied by a trusted administrator:</p>
 </blockquote>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>actions-gateway.github.com/privileged-profile<span class="o">=</span>allowed
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>actions-gateway.com/privileged-profile<span class="o">=</span>allowed
 </code></pre></div>
 <p>The granting value is the enum keyword <code>allowed</code>, not <code>true</code> — a boolean-looking label value is a YAML footgun.
-  This is a separate gate from the <code>actions-gateway.github.com/tenant</code> marker (which authorizes GMC management at all): without <code>privileged-profile</code>, the tenant can still run <code>baseline</code>/<code>restricted</code> but not <code>privileged</code>.
+  This is a separate gate from the <code>actions-gateway.com/tenant</code> marker (which authorizes GMC management at all): without <code>privileged-profile</code>, the tenant can still run <code>baseline</code>/<code>restricted</code> but not <code>privileged</code>.
   The gate is fail-closed — absent the label (or any value other than <code>allowed</code>), privileged is refused — so a tenant cannot self-grant the cluster's least-restrictive PSA posture by creating a CR.
   Apply this only for tenants approved for docker-in-docker / kernel-module workloads, ideally paired with a sandbox <code>runtimeClassName</code>.
   Verify: <code>kubectl get namespace &lt;tenant-namespace&gt; -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/privileged-profile}'</code> → <code>allowed</code>.
@@ -3721,7 +3721,7 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 <a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="w">  </span><span class="c1"># Set to "restricted" for stricter isolation, or "privileged" only if the workload</span>
 <a id="__codelineno-9-17" name="__codelineno-9-17" href="#__codelineno-9-17"></a><span class="w">  </span><span class="c1"># genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).</span>
 <a id="__codelineno-9-18" name="__codelineno-9-18" href="#__codelineno-9-18"></a><span class="w">  </span><span class="c1"># "privileged" requires the namespace to be eligible: a platform admin must label it</span>
-<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span><span class="c1"># actions-gateway.github.com/privileged-profile=allowed (see Pre-Conditions), else the webhook</span>
+<a id="__codelineno-9-19" name="__codelineno-9-19" href="#__codelineno-9-19"></a><span class="w">  </span><span class="c1"># actions-gateway.com/privileged-profile=allowed (see Pre-Conditions), else the webhook</span>
 <a id="__codelineno-9-20" name="__codelineno-9-20" href="#__codelineno-9-20"></a><span class="w">  </span><span class="c1"># rejects the CR at create/update. It is deliberately not tenant-settable.</span>
 <a id="__codelineno-9-21" name="__codelineno-9-21" href="#__codelineno-9-21"></a><span class="w">  </span><span class="c1"># A privileged worker container (securityContext.privileged: true in a podTemplate)</span>
 <a id="__codelineno-9-22" name="__codelineno-9-22" href="#__codelineno-9-22"></a><span class="w">  </span><span class="c1"># is ONLY admitted under securityProfile: privileged — under baseline/restricted the</span>

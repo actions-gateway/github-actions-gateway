@@ -2782,7 +2782,7 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 </code></pre></div>
 <h2 id="2-onboard-a-tenant">2. Onboard a tenant<a class="headerlink" href="#2-onboard-a-tenant" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>team-a
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>ns<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>kubectl<span class="w"> </span>label<span class="w"> </span>ns<span class="w"> </span>team-a<span class="w"> </span>actions-gateway.com/tenant<span class="o">=</span>managed
 </code></pre></div>
 <p>Apply a platform-owned <code>ResourceQuota</code> and a <code>LimitRange</code> that supplies default container requests (so pods without explicit requests are admitted under the quota):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># tenant-quota.yaml</span>

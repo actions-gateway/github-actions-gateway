@@ -6,7 +6,7 @@
 # container, and digest-pinned images.
 #
 # Scoped to GAG tenant namespaces by the marker label the GMC requires:
-#   actions-gateway.github.com/tenant: "true"
+#   actions-gateway.com/tenant: managed
 #
 # Ships with enforcementAction: dryrun. Inspect violations, then remove that
 # line (default is deny) once clean:
@@ -121,4 +121,4 @@ spec:
     # Restrict to GAG tenant namespaces by the marker label.
     namespaceSelector:
       matchLabels:
-        actions-gateway.github.com/tenant: "true"
+        actions-gateway.com/tenant: managed

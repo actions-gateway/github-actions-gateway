@@ -51,7 +51,7 @@
 #     wildcard, so you must list one entry per tenant namespace and add a line
 #     when you onboard a new tenant. (If maintaining that list is impractical,
 #     replace the `users:` selector in rule 3 with a `namespaces:` list of every
-#     namespace marked `actions-gateway.github.com/tenant: "true"`; that is
+#     namespace marked `actions-gateway.com/tenant: managed`; that is
 #     coarser — it also logs node/kubelet Secret mounts in those namespaces —
 #     but needs no per-SA enumeration.)
 #

@@ -3075,7 +3075,7 @@ Capturing the owned children too is fine — they make the backup a useful point
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span>--include-namespaces<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span>--ttl<span class="w"> </span>720h0m0s
 </code></pre></div>
-<p>For multi-tenant clusters, drive one schedule per tenant namespace, or select across them with a shared label (for example <code>--selector 'actions-gateway.github.com/tenant=managed'</code> if you label tenant namespaces).</p>
+<p>For multi-tenant clusters, drive one schedule per tenant namespace, or select across them with a shared label (for example <code>--selector 'actions-gateway.com/tenant=managed'</code>, the tenant marker).</p>
 <hr />
 <h2 id="restoring">Restoring<a class="headerlink" href="#restoring" title="Permanent link">&para;</a></h2>
 <h3 id="ordering-crds--inputs-and-crs--reconcile">Ordering: CRDs → inputs and CRs → reconcile<a class="headerlink" href="#ordering-crds--inputs-and-crs--reconcile" title="Permanent link">&para;</a></h3>
