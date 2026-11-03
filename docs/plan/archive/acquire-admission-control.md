@@ -161,7 +161,7 @@ This is the comparison to land in the docs.
 ## End-to-end verification (Q154)
 
 The load-bearing assumption — *a ceiling-held, already-acquired job is cancelled (owned by the runner; the unrenewed lock lapses), not redelivered* — was, until Q154, only unit-tested and source-read.
-Per CLAUDE.md's PR #59 lesson (✅ source-read findings are unverified until run), it is now confirmed by a cluster-only kind e2e: `E2E_AGC_AcquireAdmissionControl` in [`cmd/gmc/test/e2e/acquire_admission_test.go`](../../../cmd/gmc/test/e2e/acquire_admission_test.go).
+Per CLAUDE.md's PR #59 lesson (✅ source-read findings are unverified until run), it is now confirmed by a cluster-only kind e2e: `E2E_AGC_AcquireAdmissionControl` in [`cmd/gmc/test/e2e/acquire_admission_test.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/gmc/test/e2e/acquire_admission_test.go).
 
 The spec proves both halves of the contract the gate rests on, observing GitHub's behaviour through fakegithub (extended with an opt-in, owner-scoped **lease / acquire-vs-redeliver** model so the two paths have distinct, observable outcomes — `test/fakegithub/main.go`, `/control/redelivery` + `/control/jobstats`):
 
