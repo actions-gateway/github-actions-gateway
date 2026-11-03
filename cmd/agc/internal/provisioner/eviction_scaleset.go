@@ -14,18 +14,11 @@ import (
 
 // Eviction recovery on the scale-set tier (Q417).
 //
-// # Why this is not the classic mechanism
-//
-// On the classic tier, provision() holds a goroutine open for the whole job: it waits
-// for the worker pod's terminal phase, reads reason == "Evicted" off it, and calls
-// handleEviction with the owner/repo/run_id it parsed out of the AcquireJob payload it
-// still has in hand. Every input is in memory, because the acquiring goroutine never
-// left.
+// # Why recovery cannot run in memory
 //
 // ProvisionScaleSetWorker is fire-and-forget by design — the runner pulls and completes
-// its own job through its own session, so there is no payload and no goroutine. Both of
-// the classic mechanism's inputs are therefore missing, and the capability did not
-// exist on the tier that v2beta1 is built on.
+// its own job through its own session, so no goroutine waits on the worker pod's
+// terminal phase or holds the job's run identity for the life of the job.
 //
 // # The shape that replaces it
 //

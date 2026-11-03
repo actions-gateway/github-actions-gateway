@@ -1,17 +1,16 @@
 // Package provisioner creates and manages ephemeral worker pods for acquired
 // GitHub Actions jobs.
 //
-// The Provisioner replaces the M2 stubJobHandler: it stages a short-lived
-// Kubernetes Secret containing the raw AcquireJob payload, creates an
-// Ephemeral Worker Pod that mounts the Secret, watches for pod completion,
-// and cleans up the Secret when the pod terminates. Both objects carry a
-// controller OwnerReference to the RunnerGroup so CR/namespace deletion
-// garbage-collects them; the pod itself is deleted on completion when the
-// group's completedPodTTL is zero, and otherwise by the RunnerGroup
-// reconciler's reaper once the TTL elapses (stuck-Pending pods are reaped
-// after pendingPodDeadline by the same reaper).
+// For each job the scale-set listener is assigned, the Provisioner stages a
+// short-lived Secret holding the job's JIT config and creates an ephemeral
+// worker pod that mounts it (ProvisionScaleSetWorker). The Secret is staged
+// with the RunnerSet as its owner and handed to the pod once the pod exists,
+// so CR, namespace or pod deletion garbage-collects it. The pod is deleted on
+// completion when the set's completedPodTTL is zero, and otherwise by the
+// RunnerSet reconciler's reaper once the TTL elapses (stuck-Pending pods are
+// reaped after pendingPodDeadline by the same reaper).
 //
-// It enforces the concurrency ceilings from the RunnerGroup spec:
+// It enforces the concurrency ceilings from the RunnerSet spec:
 //   - priorityTiers: assign PriorityClass by cumulative pod count; hold if at last tier ceiling.
 //   - maxWorkers: simple pod-count ceiling without PriorityClass.
 package provisioner
@@ -460,11 +459,10 @@ func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *P
 // the scale-set listener minted (JobID, JITConfig) plus the workflow-run identity the
 // assignment message carried.
 //
-// The run identity is what makes eviction recovery possible on this tier. The classic
-// tier reads owner/repo/run_id out of the AcquireJob payload it holds in memory for
-// the life of the job; a scale-set worker has no payload and no owning goroutine, so
-// the identity is stamped onto the worker pod at creation and read back off the pod
-// when the pod turns up evicted (Q417).
+// The run identity is what makes eviction recovery possible. A scale-set worker has no
+// owning goroutine to hold it for the life of the job, so the identity is stamped onto
+// the worker pod at creation and read back off the pod when the pod turns up evicted
+// (Q417).
 //
 // Owner, Repository, and RunID are empty together when the assignment carried no
 // complete identity — the worker provisions and runs normally, and only automatic

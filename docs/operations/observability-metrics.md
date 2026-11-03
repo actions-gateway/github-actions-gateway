@@ -459,9 +459,8 @@ Add `-o wide` for node placement or `-w` to watch phase transitions live.
 | `actions-gateway.com/run-id` | `12345678` | GitHub workflow run ID |
 | `actions-gateway.com/repository` | `myorg/myrepo` | Repository the job belongs to |
 | `actions-gateway.com/job-name` | `build` | Job name as defined in the workflow YAML |
-| `actions-gateway.com/workflow` | `CI` | Workflow name. Classic only — the scale-set protocol delivers no workflow name |
 
-On the scale-set tier these are more than diagnostics: `run-id` and `repository` are the **only** record of which workflow run a worker was serving, because that tier provisions fire-and-forget with no in-process job state.
+These are more than diagnostics: `run-id` and `repository` are the **only** record of which workflow run a worker was serving, because the AGC provisions fire-and-forget with no in-process job state.
 GitHub gives a scale-set job to whichever of the set's runners asks first, so the AGC rewrites `run-id`, `repository`, and `job-name` when the pod's runner starts a job: before that they name the job the pod was created for, after it the job the runner is running (Q1152).
 Eviction recovery reads them back off the pod to name the run to re-run (Q417), so a worker missing them cannot be recovered automatically — that case is counted by `actions_gateway_eviction_recovery_identity_unknown_total`.
 Do not remove or overwrite them by hand.

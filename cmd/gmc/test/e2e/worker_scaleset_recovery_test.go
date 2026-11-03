@@ -43,7 +43,7 @@ import (
 // ProvisionScaleSetWorker stamps — the runner-set owner label, the
 // acquisition-protocol label the recovery scan filters on, and the run-identity
 // annotations it re-runs from (cmd/agc/internal/provisioner/target.go,
-// payload.go); the envtest pair covers that those stamps really come from the
+// jobmeta.go); the envtest pair covers that those stamps really come from the
 // provisioning path. Recovery itself does not care who created the pod: it lists
 // by labels and reads annotations, which is what makes a staged pod a faithful
 // subject for the RBAC question this spec asks.
@@ -103,7 +103,7 @@ var _ = Describe("E2E_AGC_ScaleSetRecovery", Ordered, func() {
 		// The recovery-relevant shape ProvisionScaleSetWorker stamps, restated as
 		// literals because this module cannot import the AGC's internal provisioner
 		// package. If a constant moves in cmd/agc/internal/provisioner/target.go or
-		// payload.go, the staged pod stops matching the scan and this spec fails
+		// jobmeta.go, the staged pod stops matching the scan and this spec fails
 		// loudly on the rerun assertion — the right direction for drift.
 		labelRunnerSet           = "actions-gateway.com/runner-set"
 		labelAcquisitionProtocol = "actions-gateway.com/acquisition-protocol"

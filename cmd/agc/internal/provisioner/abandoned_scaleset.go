@@ -44,9 +44,8 @@ import (
 //     nothing deletes (LostToNodeShutdownBeforeStart, Q1198).
 //
 // Run identity comes off the pod's run-id/repository annotations, the same
-// runIdentityFromPod read the Q417 eviction port relies on. The classic tier reads it
-// from the AcquireJob payload its goroutine still holds; a scale-set worker has neither
-// payload nor goroutine.
+// runIdentityFromPod read the Q417 eviction port relies on; a scale-set worker has no
+// goroutine holding it in memory.
 //
 // What is deliberately NOT recovered: a completed_pending reap (the job is already
 // terminal at GitHub, so there is nothing to cancel and the re-run would re-run
