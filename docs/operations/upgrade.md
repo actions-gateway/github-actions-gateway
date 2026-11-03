@@ -177,6 +177,7 @@ kubectl delete crd actionsgateways.actions-gateway.github.com runnergroups.actio
 
 A namespace carrying only the old tenant marker is no longer a tenant namespace once the `v2.0.0` GMC starts.
 The GMC stops watching Secrets there, so a gateway in it cannot read its credential, and the `gmc-tenant-resource-guard` policy denies every write the GMC makes there, deletes included, so its teardown cannot finish either.
+The GMC's Secret *access* stays, though: the `gmc-tenant-secret-reader` RoleBinding 1.x created there is left in place, because the same guard denies the GMC deleting it.
 A namespace whose privileged grant is only on the old key loses it, and the `namespace-security-profile-guard` policy rejects the next change that selects `privileged` there.
 A tenant migrated with [`gag-migrate`](migration-v1-to-v2.md) already carries both spellings and needs nothing.
 
@@ -193,6 +194,12 @@ Label each one it prints, as an administrator:
 ```sh
 kubectl label namespace <namespace> actions-gateway.com/tenant=managed
 kubectl label namespace <namespace> actions-gateway.com/privileged-profile=allowed
+```
+
+A namespace the first command lists that you do not relabel, because it should no longer be a tenant, still grants the GMC Secret reads until you delete its binding:
+
+```sh
+kubectl delete rolebinding -n <namespace> gmc-tenant-secret-reader
 ```
 
 The downgrade annotation is read only on the update that lowers a profile, so nothing breaks at upgrade; replace the old spelling in any manifest or GitOps source that sets it.

@@ -760,11 +760,11 @@ Whether a namespace may run privileged workers is a **platform** decision, not a
 The GMC validating webhook therefore rejects any `ActionsGateway` requesting `securityProfile: privileged` — at **create or update** — unless its namespace carries the label
 
 ```
-actions-gateway.github.com/privileged-profile: allowed
+actions-gateway.com/privileged-profile: allowed
 ```
 
 applied by a platform administrator.
-This is the same trust model as the `actions-gateway.github.com/tenant` marker (see [Constraining the GMC's PSA-stamping privilege](#constraining-the-gmcs-psa-stamping-privilege)): a label on the *namespace*, an object the tenant does not own and cannot edit, set by a trusted identity.
+This is the same trust model as the `actions-gateway.com/tenant` marker (see [Constraining the GMC's PSA-stamping privilege](#constraining-the-gmcs-psa-stamping-privilege)): a label on the *namespace*, an object the tenant does not own and cannot edit, set by a trusted identity.
 The GMC never sets it itself.
 
 The granting value is the enum keyword `allowed`, **not** `true`, deliberately: a boolean-looking label value invites the YAML coercion footgun (`privileged-profile: true` parses as a boolean, which a string label value then rejects or mishandles — and YAML 1.1 coerces `yes`/`no`/`on`/`off` too), so a non-boolean keyword is both safer to author and self-documenting.
