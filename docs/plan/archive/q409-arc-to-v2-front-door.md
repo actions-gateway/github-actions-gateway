@@ -8,7 +8,7 @@
 Two defects with one root cause: the v2 front-door work (Q273) routed the *onboarding* docs to v2 but left two tenant-facing surfaces behind.
 
 1. **[`migration-from-arc.md`](../../operations/migration-from-arc.md) still teaches the whole ARC migration on `v1alpha1`**, and asserts v1 is "the GA default".
-   Both halves are wrong: `v1alpha1` is alpha, is [deprecated](../../operations/v1alpha1-deprecation.md), and is queued for removal (Q273 → [Q264](../../queue/Q264.md)).
+   Both halves are wrong: `v1alpha1` is alpha, is [deprecated](../../operations/v1alpha1-deprecation.md), and is queued for removal (Q273 → Q264).
 2. **Every onboarding doc names `v2alpha1` while also claiming v2 "has reached its first stability contract at `v2beta1`"** — self-contradictory, and it points new tenants at the coexistence version rather than the graduated one.
 
 The ARC guide is the worse of the two, because the version it names is not merely stale positioning — it changes the job-acquisition protocol the reader ends up on.

@@ -85,17 +85,15 @@ Four marks qualify a disruption:
 **The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, workers the gateway's own cleanup reaped as stuck, and a worker evicted for exceeding its own storage limit are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
 A configurable retry budget, one per workflow run in each runner set and shared across every cause, prevents loops on persistently failing workloads.
 
-Both acquisition tiers run the flow, with different mechanisms: the classic tier also stops renewing the job lock the moment it detects the loss, while on the default scale-set tier the runner owns renewal, so the scale-set path records the workflow run on the worker pod and detects the disruption from the owning reconciler instead.
+On the scale-set tier the runner owns job-lock renewal, so the AGC records the workflow run on the worker pod and detects the disruption from the owning reconciler.
 [The full boundary, with detection marks and metrics](docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do) · [design detail](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry)
 
-### Quotas are safe to enforce, because admission happens before the claim
+### Quotas are safe to enforce, because admission happens before the assignment
 
-GAG gates admission at the **broker-claim layer**: it decides whether to take on a job *before* the job is claimed, so a job it cannot place is left queued at GitHub rather than claimed-then-cancelled.
+GAG gates admission *before* GitHub assigns a job: it decides how many jobs to take on before any is assigned, so a job it cannot place is left queued at GitHub rather than assigned-then-cancelled.
 The gate reads both limits that can block a worker: the group's own configured ceiling, and live namespace `ResourceQuota` headroom (`hard − used`) for the pod the job would need.
 
-Both acquisition tiers enforce it in the form each one allows.
-The default scale-set protocol folds both limits into the single capacity integer it advertises to GitHub, so surplus jobs are never assigned.
-The classic protocol declines the claim per delivered job.
+The scale-set protocol folds both limits into the single capacity integer it advertises to GitHub, so surplus jobs are never assigned.
 
 An opt-in `capacityGate.mode` adds a third rung, *placeability*, for the case where quota has room but the cluster does not: a worker shape that no node can take and the node autoscaler will not grow for.
 Without it, a set with a drained node pool or vanished spot capacity keeps claiming, and each job spends a single-use runner registration and ends as a cancelled run.
@@ -126,8 +124,7 @@ The job a preempting tier displaces concludes on GitHub rather than hanging, and
 
 **Scale workers to zero with low listener overhead.** The AGC creates a worker pod only when a job is acquired and deletes it on completion, the same scale-to-zero behavior as ARC scale-set mode with `minRunners: 0`.
 The difference is the listener.
-GAG runs every `RunnerGroup`'s listener as a goroutine inside one shared AGC pod (~12 KiB of measured session state, see [Appendix A](docs/design/appendix-a-capacity-slos.md)) instead of one always-on listener pod per scale set, so 10 runner sets is still one pod at rest.
-(The ~12 KiB figure is measured against the classic listener; the pod-count claim holds on both tiers.)
+GAG runs every runner set's listener as a goroutine inside one shared AGC pod (~7.7 KiB of measured session state per set, see the [memory probe](cmd/agc/test/load/README.md)) instead of one always-on listener pod per scale set, so 10 runner sets is still one pod at rest.
 Tenants also do not need to pin `minRunners > 0` to mask cold-start latency, the pattern that quietly puts idle GPU pods back on the cluster.
 
 **Measured worker right-sizing.** Every worker's CPU and memory `requests` start as a guess in the tenant's `RunnerTemplate`.
@@ -177,7 +174,7 @@ A four-tier system:
   ┌──────────────────────────────────────────────────────────────────────┐
   │  Tenant namespace                                                    │
   │    • Egress Proxy Pool           HPA-managed, per-tenant egress IPs  │
-  │    • Actions Gateway Controller  AGC, goroutine multiplexer          │
+  │    • Actions Gateway Controller  AGC, one listener per runner set    │
   │    • Ephemeral Worker Pods       one per job, GC'd on completion     │
   └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -253,7 +250,7 @@ It is the storage version from 1.10, and the version `v2.0.0` keeps when it remo
 | --- | --- |
 | `v2` | **Start here.** The GA version, served since 1.9 and the storage version since 1.10 |
 | `v2beta1` | Served until [`v2.0.0` removes it](docs/operations/v1alpha1-deprecation.md). Same shape as `v2` apart from two deprecated `EgressProxy` aliases, so moving is a re-apply |
-| `v2alpha1` | Deprecated, apiserver warns on every apply. Stays served as the `gag-migrate` on-ramp so a migrating v1 tenant can keep Classic until it no longer needs it. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
+| `v2alpha1` | Deprecated, apiserver warns on every apply. Stays served as the `gag-migrate` on-ramp. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | `v1alpha1` | Deprecated single-CR API, still served. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 | Classic protocol | Deprecated. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 

@@ -115,7 +115,7 @@ Worker pods provisioned for **real** GitHub jobs on the classic tier carry **no*
 Observed 2026-07-28 while scoping the spec's worker lookup to its own run; the jsonpath was verified against a control pod carrying a known annotation, so the empty value is the pod's, not the query's.
 
 That matters well beyond this plan.
-[`repoInfo()`](../../../cmd/agc/internal/provisioner/payload.go) — which supplies the `runID` that eviction recovery re-runs — and `jobMetaFrom()` — which supplies the annotation — read the *same two sources*: `Variables["system.github.run_id"]`, falling back to `ap.RunID`.
+[`repoInfo()`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/agc/internal/provisioner/payload.go) — which supplies the `runID` that eviction recovery re-runs — and `jobMetaFrom()` — which supplies the annotation — read the *same two sources*: `Variables["system.github.run_id"]`, falling back to `ap.RunID`.
 An absent annotation therefore means both were empty, so `runID` is `"0"`, and [`handleEviction`](../../../cmd/agc/internal/provisioner/eviction.go) opens with `if runID == "0" || runID == ""` → log and return.
 
 **Inference, not yet a direct observation:** classic-tier eviction recovery cannot name the run to re-run against real GitHub, so it cannot fire.

@@ -5,7 +5,7 @@ See [Findings](#findings).
 The remedy (Q676) is measured and decided the same day: the listener reports **nothing** for its own unrun delivery, per [the remedy measurements](#q676--the-remedy-measurements-2026-08-04).
 The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST force-cancel concludes run and job `cancelled` in ~1 s, per [the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
 The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run is re-run automatically once capacity returns, bounded by the shared per-run retry budget, per [the recovery re-run arm](#q691--the-recovery-re-run-arm-2026-08-08).
-Remaining follow-up: [Q682](../queue/Q682.md) (sibling `skipped` arm).
+The sibling `skipped` arm (Q682) was never measured; Q264 removed the classic fan-out that sent it.
 
 Queue item: Q645 (completed; done rows are deleted).
 Origin: [release-1.3.md § The rc.5 re-run](archive/release-1.3.md#the-rc5-re-run-2026-08-02).
@@ -123,7 +123,7 @@ Secondary observations, recorded because a stub would have answered otherwise:
 - Q676: the Q628 release path must not ship `result=abandoned` for the winner's own delivery as-is; pick and measure a remedy.
   Done: see [the remedy measurements](#q676--the-remedy-measurements-2026-08-04).
   The Q260 sibling case (`result=skipped` on deduped deliveries while the winner still runs) is **not** covered by this measurement.
-  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and needs its own probe arm ([Q682](../queue/Q682.md)).
+  Whether a sibling completion also concludes the whole run is exactly the semantics brokertest's fan-out accounting assumes it does not, and was left to a probe arm (Q682) that Q264 retired with the fan-out.
 - `broker/types.go` and `listener/job.go` comments updated to cite this measurement instead of the unmeasured ~15-minute-timeout rationale.
 
 ## Q676 — the remedy measurements (2026-08-04)
@@ -145,7 +145,7 @@ Every accepted completejob value drives the run to `success`, `failed` is refuse
 
 The listener **reports nothing** for its own unrun delivery: the Q628 `completejob(abandoned)` release is removed (it was live **by default**, since `AGC_FANOUT_COMPLETION` defaults on, contrary to what the pre-remedy comments here and in `broker/types.go` claimed), and a reaped-Pending worker's job now ends in the measured told-nothing cancel.
 The Q260 sibling fan-out completion is untouched: with the winner's own delivery still open, sibling completions conclude nothing (the 2026-07-04 dogfood re-route #5 measured per-delivery scoping), though the sibling `skipped` value has no live probe measurement.
-That arm is Q682.
+That arm was Q682, retired with the fan-out by Q264.
 Making the released job's ending faster than 15 minutes was Q683, measured and shipped 2026-08-05: [the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
 
 Secondary observations, each load-bearing for the remedy choice:

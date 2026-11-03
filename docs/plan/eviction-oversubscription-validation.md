@@ -221,7 +221,7 @@ The provisioning log line now carries `runID` alongside `jobID` so that capture 
 The harness behind the result above, and the two verifications that rode the same work.
 
 **The run is pinned to published images, so the result can be cited.** The 2026-07-29 measurement is quotable for latency but not for recovery, because its images came from `719e67f1` and predate the Q495 fix — the defect and the build are inseparable in it.
-`v1.3.0` (tagged 2026-08-03) carries both behaviours under measurement, verified by content rather than by SHA: `rerunUntilAccepted` in [eviction.go](../../cmd/agc/internal/provisioner/eviction.go) (Q503) and the `contextData.github.run_id` extraction in [payload.go](../../cmd/agc/internal/provisioner/payload.go) (Q495).
+`v1.3.0` (tagged 2026-08-03) carries both behaviours under measurement, verified by content rather than by SHA: `rerunUntilAccepted` in [eviction.go](../../cmd/agc/internal/provisioner/eviction.go) (Q503) and the `contextData.github.run_id` extraction in [payload.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/agc/internal/provisioner/payload.go) (Q495).
 All five images are published at that tag, so the run sets `GMC_IMG`/`AGC_IMG`/`WORKER_IMG`/`WRAPPER_IMG`/ `PROXY_IMG` to `ghcr.io/actions-gateway/<name>:v1.3.0` and lets the specs compile from the branch.
 Test code does not ship in the image, so the new assertions run against released binaries.
 
