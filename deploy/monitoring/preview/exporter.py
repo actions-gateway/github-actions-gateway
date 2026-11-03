@@ -281,6 +281,8 @@ def render():
         # Demand GitHub holds for the set and has assigned to nobody (Q720): a small
         # queue, well under the advertisement, as a set keeping up with its work shows.
         L.append(f'actions_gateway_scaleset_jobs_available{{namespace="{ns}",runner_set="{rs}"}} {max(0, int(min(advertised, 2) + jitter(hash((rs, ns)) % 5, 1.5)))}')
+        # Every preview listener holds its session, so the no-session alert stays quiet.
+        L.append(f'actions_gateway_scaleset_session_open{{namespace="{ns}",runner_set="{rs}"}} 1')
 
     # Per-tenant egress proxy. The proxy exposes no intrinsic namespace label, but
     # the per-tenant ServiceMonitor stamps one from the scrape target's namespace

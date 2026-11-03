@@ -95,7 +95,8 @@ For **abuse and compromise** detection (eviction-retry loops, proxy slowloris, c
 | `actions_gateway_eviction_retries_exhausted_total` | rate > 0 | Ticket | Each increment requires a manual re-run |
 | `actions_gateway_eviction_rerun_outcomes_total` `result="failed"` share per cause | > 50% over 7d, at least 5 re-runs | Ticket | Re-running is not clearing that cause: it is misclassified (Q1245) |
 | `actions_gateway_active_sessions` | = 0 for a RunnerGroup | Page | No listener polling; jobs queue indefinitely |
-| `actions_gateway_message_poll_errors_total` | more than 10 in 15m per namespace, for 10m | Ticket | Most of a listener's polls failing; on a scale set, the signal `active_sessions` gives classic |
+| `actions_gateway_scaleset_session_open` | = 0 for a RunnerSet, for 10m | Page | Scale-set listener holds no session; jobs queue indefinitely |
+| `actions_gateway_message_poll_errors_total` | more than 10 in 15m per namespace, for 10m | Ticket | Most of a listener's polls failing while its session is open |
 | `controller_runtime_reconcile_errors_total` | rate > 1/5min | Ticket | Persistent reconcile failure; resources may be stale |
 | `ActionsGateway` condition `RateLimited=True` | duration > 10 minutes | Page | Installation is over API budget |
 | Proxy HPA `TARGETS: <unknown>` | any | Ticket | HPA metric broken; autoscaling not working |
@@ -250,8 +251,21 @@ See [Concurrent Job Burst Serializes to ~1 Worker (Duplicate Job Acquisition)](t
 
 **Page.** The scale-set acquisition tier (the default protocol) is receiving `JobAssigned` messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start.
 A ScaleSet-protocol RunnerSet emits no `actions_gateway_active_sessions`, so this demand-vs-supply signal is half the scale-set analog of [`active_sessions` Flatlining at Zero](#active_sessions-flatlining-at-zero).
-It needs jobs to be assigned, so a listener whose poll keeps failing is covered by [ActionsGatewayMessagePollFailing](#actionsgatewaymessagepollfailing) instead.
+It needs jobs to be assigned, so a listener whose poll keeps failing is covered by [ActionsGatewayMessagePollFailing](#actionsgatewaymessagepollfailing) instead, and one that holds no session at all by [ActionsGatewayScaleSetNoSession](#actionsgatewayscalesetnosession).
 Respond with [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
+
+### ActionsGatewayScaleSetNoSession
+
+**Page.** A scale-set listener has held no message session for 10 minutes, so GitHub delivers it no jobs and they queue indefinitely.
+It is the scale-set analog of [ActionsGatewayNoActiveSessions](#actionsgatewaynoactivesessions), for a listener that never reaches the queue: such a listener counts no poll error and is assigned nothing, so no other scale-set rule fires.
+
+1. Read the cause: `kubectl describe runnerset <name> -n <namespace>`.
+   A failed start leaves `Ready=False` with reason `NoActiveSessions` (or `RunnerGroupNotFound`) and a `ScaleSetListenerStartFailed` Event whose message names the step that failed.
+2. If the Event or `Degraded=True` says unauthorized, the GitHub App credentials were revoked or lack access: see [Token Refresh Errors Spiking](troubleshooting.md#token-refresh-errors-spiking).
+3. If the RunnerSet is `Ready=True` but the gauge is 0, the session expired and its re-create inside the poll loop is failing: the AGC log shows `scaleset: re-create session failed` with the cause.
+4. A failure to reach GitHub at all is a network problem: see [Network Connectivity Failures](troubleshooting.md#network-connectivity-failures).
+5. During a rollout the new AGC reads 0 while its predecessor still holds the session, which normally frees when the old pod exits.
+   A 0 that outlasts the rollout can be a session the old pod leaked on shutdown, which holds until GitHub expires it (Q968).
 
 ### ActionsGatewayMessagePollFailing
 
@@ -265,7 +279,7 @@ A listener whose polls fail is delivered nothing, so jobs queue at GitHub, and o
 5. On the tenant dashboard, *Queued at GitHub vs advertised capacity* shows what is waiting; queued jobs with a flat assigned rate confirm the listener is not taking work.
 
 A rejected credential is not counted here, because the listener heals a 401/403 rather than retrying the poll: it shows as [ActionsGatewayTokenRefreshErrors](#actionsgatewaytokenrefresherrors) or the RunnerSet's `Degraded=True`.
-Nor is a listener that cannot open its session at all, which no rule covers yet: the RunnerSet reports `Ready=False` with reason `NoActiveSessions` and a `ScaleSetListenerStartFailed` Event carrying the cause (`kubectl describe runnerset -n <namespace>`).
+Nor is a listener that cannot open its session at all: that is [ActionsGatewayScaleSetNoSession](#actionsgatewayscalesetnosession).
 The threshold sums every set in the namespace, so a namespace with several sets reaches it sooner than one listener failing alone would.
 
 ### ActionsGatewayScaleSetProvisionErrors

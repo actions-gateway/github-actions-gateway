@@ -310,8 +310,8 @@ spec:
         # emits actions_gateway_active_sessions, so throughput stalls are only
         # visible as demand (assigned) flowing while supply (provisioned) is flat.
         # A listener whose poll keeps failing is assigned nothing, which this
-        # cannot see; ActionsGatewayMessagePollFailing covers that case. A listener
-        # that cannot open its session at all is covered by neither (Q1276).
+        # cannot see; ActionsGatewayMessagePollFailing covers that case, and
+        # ActionsGatewayScaleSetNoSession covers a session that never opens.
         - alert: ActionsGatewayScaleSetProvisioningStalled
           expr: |
             (
@@ -337,8 +337,7 @@ spec:
         # (Q1275). Part of the scale-set analog of ActionsGatewayNoActiveSessions:
         # a set whose poll fails is assigned nothing, so ProvisioningStalled's
         # demand conjunct never holds. A session that never opens counts no poll
-        # error, so a listener whose Start fails, or whose re-create after a 404
-        # fails, is not covered here (Q1276).
+        # error; ActionsGatewayScaleSetNoSession covers that case.
         #
         # The threshold is derived from the listener's constants, not from live
         # traffic: a fully black-holed poll times out at 55s (the 50s hold plus
@@ -361,6 +360,26 @@ spec:
             runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaymessagepollfailing"
             summary: "Listener long polls failing in {{ $labels.namespace }}"
             description: "GetMessage has failed more than 10 times in 15 minutes, sustained for 10 minutes: most of a listener's polls are failing, so GitHub is not delivering jobs to it and they queue at GitHub. Read the reason label on actions_gateway_message_poll_errors_total: timeout is a black-holed broker connection, rate_limited a 429, other any remaining transport error."
+
+        # Page: a scale-set listener holds no message session, so GitHub delivers it
+        # nothing and its jobs queue indefinitely (Q1275). The scale-set analog of
+        # ActionsGatewayNoActiveSessions for a session that never opens: Start
+        # failing at any step, or the re-create after a 404 failing inside the poll
+        # loop. Neither counts a poll error or assigns a job, so the two rules above
+        # cannot see it. The gauge is published by the listener and dropped when
+        # the RunnerSet is deleted. `for` is 10m rather than classic's 2m because a
+        # rollout's successor waits on its predecessor's session and reads 0 until
+        # the old pod exits.
+        - alert: ActionsGatewayScaleSetNoSession
+          expr: |
+            actions_gateway_scaleset_session_open == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayscalesetnosession"
+            summary: "Scale-set listener has no session for {{ $labels.runner_set }} in {{ $labels.namespace }}"
+            description: "The scale-set listener could not open its message session for 10+ minutes, so GitHub delivers it no jobs and they queue indefinitely. The RunnerSet reports Ready=False with reason NoActiveSessions and a ScaleSetListenerStartFailed Event carrying the cause, or the AGC log shows the session re-create failing."
 
         # Ticket: scale-set provision attempts failing at a sustained rate (Q311)
         - alert: ActionsGatewayScaleSetProvisionErrors
