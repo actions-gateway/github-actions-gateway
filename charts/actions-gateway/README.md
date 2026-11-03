@@ -90,7 +90,8 @@ helm upgrade gag charts/actions-gateway --namespace gmc-system --reset-then-reus
 
 CRDs ship as templates, so field changes are applied on upgrade — except the `PriorityClassAllowlist` CRD, which ships in `crds/` and needs its CRD applied first (see *What it installs*).
 Setting the removed `priorityClassAllowlist.configMapName` now fails the render with migration instructions.
-The `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if you are upgrading a cluster whose tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them first (or temporarily set both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
+The `namespace-psa-guard` and `tenant-resource-guard` bindings deny by default; if you are upgrading a cluster whose tenant namespaces are not yet labeled `actions-gateway.com/tenant=managed`, label them first (or temporarily set both bindings to `Audit`) — see [upgrade](../../docs/operations/upgrade.md).
+From `v2.0.0` the policies and the GMC no longer honour the 1.x `actions-gateway.github.com/tenant=true` marker or the `actions-gateway.github.com/privileged-profile` grant, so a namespace carrying only those stops being a tenant: the GMC stops reading its Secrets and the guards deny its writes there.
 
 ## Values
 

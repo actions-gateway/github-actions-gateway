@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -100,7 +100,7 @@ func newDeployment(ns, name string) *appsv1.Deployment {
 // TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces verifies Q121/Q122:
 // the GMC ServiceAccount may create tenant resources (Secrets — Q121 write path,
 // and workload kinds like Deployments — Q122) only in namespaces carrying the
-// actions-gateway.github.com/tenant=true marker. A compromised GMC therefore
+// actions-gateway.com/tenant=managed marker. A compromised GMC therefore
 // cannot write a Secret or deploy a workload into kube-system or any unmarked
 // namespace.
 func TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces(t *testing.T) {
@@ -108,12 +108,14 @@ func TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces(t *testing.T) 
 
 	const unmarkedNS = "resguard-unmarked"
 	const markedNS = "resguard-marked"
+	const legacyNS = "resguard-legacy"
 
 	createNamespace(t, unmarkedNS)
+	createNamespaceWithLabels(t, legacyNS, map[string]string{legacyTenantMarkerLabel: "true"})
 
 	marked := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
 		Name:   markedNS,
-		Labels: map[string]string{controller.TenantNamespaceMarkerLabel: "true"},
+		Labels: map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue},
 	}}
 	require.NoError(t, k8sClient.Create(ctx, marked))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), marked) })
@@ -132,6 +134,12 @@ func TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces(t *testing.T) 
 	t.Run("Secret write denied in unmarked namespace (Q121)", func(t *testing.T) {
 		err := gmc.Create(ctx, newSecret(unmarkedNS, "leak"))
 		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+	})
+
+	t.Run("Secret write denied in legacy-marked namespace", func(t *testing.T) {
+		err := gmc.Create(ctx, newSecret(legacyNS, "leak"))
+		require.True(t, apierrors.IsForbidden(err),
+			"the v1 actions-gateway.github.com/tenant marker must not make a namespace a tenant; got: %v", err)
 	})
 
 	t.Run("Secret write allowed in marked namespace (Q121)", func(t *testing.T) {

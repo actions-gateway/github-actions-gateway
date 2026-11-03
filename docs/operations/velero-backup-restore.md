@@ -87,7 +87,7 @@ velero schedule create gag-tenant-<namespace> \
   --ttl 720h0m0s
 ```
 
-For multi-tenant clusters, drive one schedule per tenant namespace, or select across them with a shared label (for example `--selector 'actions-gateway.github.com/tenant=managed'` if you label tenant namespaces).
+For multi-tenant clusters, drive one schedule per tenant namespace, or select across them with a shared label (for example `--selector 'actions-gateway.com/tenant=managed'`, the tenant marker).
 
 ---
 

@@ -15,6 +15,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
   - [Before upgrading to v2.0.0: no v1alpha1 object is left](#before-upgrading-to-v200-no-v1alpha1-object-is-left)
+  - [Before upgrading to v2.0.0: every tenant namespace carries the actions-gateway.com labels](#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
@@ -164,6 +165,38 @@ After upgrading, delete the two CRDs the chart left behind:
 kubectl delete crd actionsgateways.actions-gateway.github.com runnergroups.actions-gateway.github.com
 ```
 
+### Before upgrading to `v2.0.0`: every tenant namespace carries the `actions-gateway.com` labels
+
+`v2.0.0` stops honouring the `actions-gateway.github.com` namespace keys that 1.x accepted beside their replacements:
+
+| 1.x also accepted | `v2.0.0` honours only |
+|---|---|
+| label `actions-gateway.github.com/tenant: "true"` | label `actions-gateway.com/tenant: managed` |
+| label `actions-gateway.github.com/privileged-profile: allowed` | label `actions-gateway.com/privileged-profile: allowed` |
+| annotation `actions-gateway.github.com/allow-profile-downgrade: "true"` | annotation `actions-gateway.com/allow-profile-downgrade: allowed` |
+
+A namespace carrying only the old tenant marker is no longer a tenant namespace once the `v2.0.0` GMC starts.
+The GMC stops watching Secrets there, so a gateway in it cannot read its credential, and the `gmc-tenant-resource-guard` policy denies every write the GMC makes there, deletes included, so its teardown cannot finish either.
+A namespace whose privileged grant is only on the old key loses it, and the `namespace-security-profile-guard` policy rejects the next change that selects `privileged` there.
+A tenant migrated with [`gag-migrate`](migration-v1-to-v2.md) already carries both spellings and needs nothing.
+
+Run these and expect `No resources found` from each:
+
+```sh
+kubectl get namespaces -l 'actions-gateway.github.com/tenant=true,actions-gateway.com/tenant!=managed'
+kubectl get namespaces -l 'actions-gateway.github.com/privileged-profile=allowed,actions-gateway.com/privileged-profile!=allowed'
+```
+
+A `!=` selector also matches a namespace with no such label, so each line lists exactly the namespaces holding the old key without its replacement.
+Label each one it prints, as an administrator:
+
+```sh
+kubectl label namespace <namespace> actions-gateway.com/tenant=managed
+kubectl label namespace <namespace> actions-gateway.com/privileged-profile=allowed
+```
+
+The downgrade annotation is read only on the update that lowers a profile, so nothing breaks at upgrade; replace the old spelling in any manifest or GitOps source that sets it.
+
 Also check the release notes for the new version before upgrading, particularly:
 - CRD schema changes (new required fields, removed fields, validation tightening).
 - Behavior changes that require configuration updates before the new binary takes effect.
@@ -253,10 +286,10 @@ On a cluster with the v2 CRDs, run it again for `actionsgateways.actions-gateway
 Label each namespace that `kubectl get namespace <namespace> --show-labels` shows without a marker:
 
 ```sh
-kubectl label namespace <namespace> actions-gateway.github.com/tenant=true
+kubectl label namespace <namespace> actions-gateway.com/tenant=managed
 ```
 
-Use `actions-gateway.com/tenant=managed` instead for a namespace holding only v2 kinds.
+`v2.0.0` honours only this marker ([why](#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels)), so apply it rather than the 1.x `actions-gateway.github.com/tenant=true`.
 
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
@@ -1232,6 +1265,8 @@ kubectl get actionsgateway -A -o jsonpath='{range .items[*]}{.metadata.namespace
 
 For a phased rollout where you cannot label every namespace up front, temporarily set **both** bindings' `validationActions` to `[Audit]` (instead of `[Deny]`) so denials are logged but not enforced, label the namespaces, then restore `[Deny]` on each.
 
+From `v2.0.0` the marker is `actions-gateway.com/tenant=managed` instead ([why](#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels)).
+
 ### Worker quota accounting now counts native sidecars, `RuntimeClass` overhead, and storage
 
 The worker footprint behind `WorkerQuotaPressure`/`WorkerQuotaExceeded`, the pre-claim quota gate, and the capacity a scale-set advertises to GitHub previously summed CPU and memory over `podTemplate.spec.containers` only.
@@ -1461,7 +1496,7 @@ The following upgrade-time behaviors are specific to this chart:
   Re-run the upgrade with `--force-conflicts` to hand the field back to Helm — your manual edit is reverted, which is the point of the flag.
   The durable fix is to express the change in chart values so it survives every upgrade instead of being reapplied by hand.
   Do **not** reach for `--force-replace`: it replaces objects wholesale and is destructive.
-- **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.github.com/tenant=true`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied.
+- **The `namespace-psa-guard` and `gmc-tenant-resource-guard` bindings deny by default.** If you are upgrading a cluster whose existing tenant namespaces are not yet labeled `actions-gateway.com/tenant=managed`, label them **before** the upgrade (see the migration note above), or the GMC's namespace patches *and all tenant-resource writes* will be denied.
   To stage the rollout you can temporarily set both bindings to `Audit` by editing `validationActions` on each `ValidatingAdmissionPolicyBinding`, then flip them back to `Deny` once the labels are in place.
 
 ### PriorityClass allowlist: ConfigMap to CR

@@ -3,7 +3,7 @@
 # write grants for tenant provisioning resources (Deployments, Services,
 # ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, VPAs,
 # PodDisruptionBudgets, and Secret create/update) to namespaces marked
-# actions-gateway.github.com/tenant=true — the gate RBAC cannot express (Q121/Q122).
+# actions-gateway.com/tenant=managed — the gate RBAC cannot express (Q121/Q122).
 # It also restricts the GMC's ClusterRoleBinding writes to the
 # agc-clusterrunnertemplate-reader role, so its reader `bind` grants cannot be
 # turned into cluster-wide Secret reads (Q1188).
@@ -72,13 +72,10 @@ spec:
     # is immutable to it under the namespace-psa-guard policy).
     - name: nsLabels
       expression: "(has(namespaceObject.metadata) && has(namespaceObject.metadata.labels)) ? namespaceObject.metadata.labels : {}"
-    # Dual-marker tenant scope: the v1 actions-gateway.github.com/tenant=true and the
-    # v2 actions-gateway.com/tenant=managed are both accepted during the v1/v2
-    # coexistence window (§H.12), so the GMC can provision v2 tenants.
+    # Tenant scope: only the actions-gateway.com/tenant=managed marker counts.
     - name: isManagedTenant
       expression: >-
-        (('actions-gateway.github.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.github.com/tenant'] == 'true')
-        || ('actions-gateway.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.com/tenant'] == 'managed'))
+        'actions-gateway.com/tenant' in variables.nsLabels && variables.nsLabels['actions-gateway.com/tenant'] == 'managed'
     # The GMC holds `bind` on agc-tenant-role, gmc-tenant-secret-reader and
     # agc-clusterrunnertemplate-reader, and RBAC lets a `bind` grant back a
     # ClusterRoleBinding as well as a RoleBinding. A ClusterRoleBinding to either of
@@ -93,7 +90,7 @@ spec:
       messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
       reason: Forbidden
     - expression: "variables.isClusterRoleBinding || variables.isManagedTenant"
-      messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed (or the legacy actions-gateway.github.com/tenant=true); namespace ' + request.namespace + ' is not a managed tenant namespace'"
+      messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed; namespace ' + request.namespace + ' is not a managed tenant namespace'"
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

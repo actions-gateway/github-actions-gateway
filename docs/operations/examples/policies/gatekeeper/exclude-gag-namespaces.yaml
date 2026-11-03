@@ -56,9 +56,9 @@ spec:
     # Constraint only where the selector matches, so NotIn excludes GAG.
     namespaceSelector:
       matchExpressions:
-        - key: actions-gateway.github.com/tenant
+        - key: actions-gateway.com/tenant
           operator: NotIn
-          values: ["true"]
+          values: ["managed"]
     # The GMC install namespace has no marker label, so exclude it by name too.
     excludedNamespaces:
       - actions-gateway-system

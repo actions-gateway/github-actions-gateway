@@ -126,15 +126,16 @@ func credentialUnavailable(t *testing.T, ns, name string) func() bool {
 // TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces pins Q1188: the GMC,
 // running under its shipped RBAC, provisions a tenant gateway and reacts to its
 // credential Secret appearing and disappearing, while it cannot read a Secret in
-// an unmarked namespace, list Secrets cluster-wide, or bind its reader there.
+// an unmarked namespace, list Secrets cluster-wide, or bind its reader there. The
+// unmarked namespace carries the v1 marker, which grants nothing.
 func TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces(t *testing.T) {
 	installTenantResourceGuard(t)
 	installGMCShippedRBAC(t)
 
 	const tenantNS = "secret-access-tenant"
 	const otherNS = "secret-access-unmarked"
-	createNamespaceWithLabels(t, tenantNS, map[string]string{controller.TenantNamespaceMarkerLabel: "true"})
-	createNamespace(t, otherNS)
+	createNamespaceWithLabels(t, tenantNS, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	createNamespaceWithLabels(t, otherNS, map[string]string{legacyTenantMarkerLabel: "true"})
 	require.NoError(t, k8sClient.Create(ctx, newSecret(otherNS, "not-the-gmcs")))
 
 	ag := newV2GatewayWired("secret-access-gw", tenantNS, "github-app", "")

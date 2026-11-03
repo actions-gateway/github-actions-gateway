@@ -22,7 +22,7 @@ Threats are grouped by which tier they affect.
 
 The GMC's ClusterRole grants cluster-wide *write* (`create`/`update`/`delete`) on the tenant provisioning kinds — Deployments, Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, VerticalPodAutoscalers (Q360; the grant is inert on a cluster without the optional `autoscaling.k8s.io` CRDs, and a VPA only ever resizes the workload it targets), PodDisruptionBudgets, RunnerGroups, and Secret `create`/`update` — because RBAC cannot express "only namespaces that carry a marker label".
 
-Two `ValidatingAdmissionPolicy` objects close that gap by confining the GMC ServiceAccount at admission: `namespace-psa-guard` confines `namespaces:patch` to the six `pod-security.kubernetes.io/*` keys on marked namespaces, and **`gmc-tenant-resource-guard` confines every `create`/`update`/`delete` of the kinds above to namespaces an administrator has marked `actions-gateway.github.com/tenant: "true"`** (Q121 write path / Q122).
+Two `ValidatingAdmissionPolicy` objects close that gap by confining the GMC ServiceAccount at admission: `namespace-psa-guard` confines `namespaces:patch` to the six `pod-security.kubernetes.io/*` keys on marked namespaces, and **`gmc-tenant-resource-guard` confines every `create`/`update`/`delete` of the kinds above to namespaces an administrator has marked `actions-gateway.com/tenant: managed`** (Q121 write path / Q122).
 So a compromised GMC cannot create a Deployment or RoleBinding in `kube-system`, write a Secret into an arbitrary namespace, or relabel `kube-system` PSA to `privileged` (see [§5.3](#53-security-profiles-and-the-privileged-opt-in)).
 
 Secret **reads** need a different mechanism, because admission never runs on `get`/`list`/`watch`.
@@ -787,7 +787,7 @@ Stamping a PSA label on a namespace requires `patch` on `namespaces`, which is c
 Left unconstrained, a compromised GMC pod could relabel `kube-system` (or any namespace) to `privileged`.
 Two controls confine the grant:
 
-- **A trusted marker label.** A namespace is eligible for GMC management only if an administrator has labelled it `actions-gateway.github.com/tenant: "true"`.
+- **A trusted marker label.** A namespace is eligible for GMC management only if an administrator has labelled it `actions-gateway.com/tenant: managed`.
   This is a tenant onboarding pre-condition (see [Tenant Onboarding](../operations/tenant-onboarding.md)).
   The GMC never sets this label itself — doing so would defeat the control.
 - **The `namespace-psa-guard` ValidatingAdmissionPolicy.** Scoped to the GMC ServiceAccount only, it denies any namespace `UPDATE` unless the *existing* namespace already carries the marker (read from `oldObject`, which the requester cannot forge), and denies any change to a namespace label other than the six `pod-security.kubernetes.io/*` keys or to any annotation.

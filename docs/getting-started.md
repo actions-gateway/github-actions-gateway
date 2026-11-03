@@ -80,11 +80,10 @@ The marker label authorizes the GMC to stamp Pod Security Admission labels on it
 <!-- gag:verify id=tenant-namespace mode=run teardown=namespace -->
 ```sh
 kubectl create namespace team-a
-kubectl label namespace team-a actions-gateway.github.com/tenant=true
+kubectl label namespace team-a actions-gateway.com/tenant=managed
 ```
 
-> **v2 namespace markers.** In the recommended v2 flow the tenant marker aligns to `actions-gateway.com/tenant=managed`, and the Pod Security level moves off the CR onto the namespace as the `actions-gateway.com/security-profile` label (absent ⇒ `baseline`).
-> The GMC dual-reads both spellings during coexistence.
+> **v2 namespace labels.** The Pod Security level lives on the namespace as the `actions-gateway.com/security-profile` label (absent ⇒ `baseline`), not on the CR.
 > For the exact v2 namespace labels and the profile-guard admission policy, see [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#v2-api-multiple-gateways-per-namespace).
 
 The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the platform admin creates and manages it on the tenant namespace, and the gateway operates *within* it but never creates or mutates it.

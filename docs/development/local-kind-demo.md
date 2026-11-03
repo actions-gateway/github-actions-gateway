@@ -58,7 +58,7 @@ kubectl -n gmc-system rollout status deploy/gmc-controller-manager
 
 ```sh
 kubectl create namespace team-a
-kubectl label ns team-a actions-gateway.github.com/tenant=true
+kubectl label ns team-a actions-gateway.com/tenant=managed
 ```
 
 Apply a platform-owned `ResourceQuota` and a `LimitRange` that supplies default container requests (so pods without explicit requests are admitted under the quota):

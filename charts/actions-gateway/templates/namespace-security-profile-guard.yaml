@@ -38,18 +38,15 @@ spec:
       expression: "variables.oldProfile == 'restricted' ? 2 : (variables.oldProfile == 'privileged' ? 0 : 1)"
     - name: privEligible
       expression: >-
-        (('actions-gateway.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.com/privileged-profile'] == 'allowed')
-        || ('actions-gateway.github.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.github.com/privileged-profile'] == 'allowed'))
+        'actions-gateway.com/privileged-profile' in variables.newLabels && variables.newLabels['actions-gateway.com/privileged-profile'] == 'allowed'
     - name: downgradeAllowed
       expression: >-
-        (('actions-gateway.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.com/allow-profile-downgrade'] == 'allowed')
-        || ('actions-gateway.github.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.github.com/allow-profile-downgrade'] == 'true'))
+        'actions-gateway.com/allow-profile-downgrade' in variables.newAnnotations && variables.newAnnotations['actions-gateway.com/allow-profile-downgrade'] == 'allowed'
   matchConditions:
-    # Only managed tenant namespaces are guarded; dual-marker for v1/v2 coexistence.
+    # Only managed tenant namespaces are guarded.
     - name: is-managed-tenant
       expression: >-
-        (has(object.metadata.labels) && 'actions-gateway.github.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.github.com/tenant'] == 'true')
-        || (has(object.metadata.labels) && 'actions-gateway.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.com/tenant'] == 'managed')
+        has(object.metadata.labels) && 'actions-gateway.com/tenant' in object.metadata.labels && object.metadata.labels['actions-gateway.com/tenant'] == 'managed'
   validations:
     # Invariant 1 — enum. An absent label is the valid baseline default.
     - expression: "!(variables.profileKey in variables.newLabels) || variables.newLabels[variables.profileKey] in ['baseline', 'restricted', 'privileged']"

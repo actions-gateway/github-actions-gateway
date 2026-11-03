@@ -39,11 +39,10 @@ const TenantSecretReaderName = "gmc-tenant-secret-reader" //nolint:gosec // G101
 
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind,resourceNames=gmc-tenant-secret-reader
 
-// isTenantNamespace reports whether labels carry the v1 or the v2 tenant marker,
-// the same two markers gmc-tenant-resource-guard accepts.
+// isTenantNamespace reports whether labels carry the tenant marker, the same one
+// gmc-tenant-resource-guard accepts.
 func isTenantNamespace(labels map[string]string) bool {
-	return labels[TenantNamespaceMarkerLabel] == "true" ||
-		labels[gmcv2.TenantNamespaceMarkerLabel] == gmcv2.TenantNamespaceMarkerValue
+	return labels[gmcv2.TenantNamespaceMarkerLabel] == gmcv2.TenantNamespaceMarkerValue
 }
 
 // secretMetadata is the object type every per-namespace Secret source watches:

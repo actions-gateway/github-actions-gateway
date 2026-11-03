@@ -70,16 +70,6 @@ func refreshStalledMessage(cache *IPRangeCache, age, threshold time.Duration) st
 	return msg + "egress to rotated GitHub ranges may be silently dropped"
 }
 
-// TenantNamespaceMarkerLabel is the label a trusted administrator must apply to a
-// tenant namespace to mark it as managed by the GMC. The namespace-psa-guard
-// ValidatingAdmissionPolicy (config/admission-policy/namespace-psa-guard.yaml)
-// denies the GMC ServiceAccount any namespace patch unless the existing namespace
-// already carries this label set to "true" — confining the GMC's cluster-wide
-// namespaces:patch grant to managed tenants so a compromised GMC cannot relabel
-// kube-system PSA (k8s best-practices audit finding B2 / Queue Q56). The GMC never
-// sets this label itself; doing so would defeat the control.
-const TenantNamespaceMarkerLabel = "actions-gateway.github.com/tenant"
-
 // serviceMonitorGVK is the Prometheus-Operator ServiceMonitor GroupVersionKind.
 // Per-tenant ServiceMonitors are built as unstructured objects so the GMC does
 // not take a compile-time dependency on the prometheus-operator API module;

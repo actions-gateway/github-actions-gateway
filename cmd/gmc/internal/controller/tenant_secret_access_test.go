@@ -29,12 +29,11 @@ import (
 )
 
 func TestIsTenantNamespace(t *testing.T) {
-	assert.True(t, isTenantNamespace(map[string]string{TenantNamespaceMarkerLabel: "true"}), "v1 marker")
 	assert.True(t, isTenantNamespace(map[string]string{
 		gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue,
-	}), "v2 marker")
-	assert.False(t, isTenantNamespace(map[string]string{TenantNamespaceMarkerLabel: "false"}), "v1 marker set false")
-	assert.False(t, isTenantNamespace(map[string]string{gmcv2.TenantNamespaceMarkerLabel: "true"}), "v2 marker with the v1 value")
+	}), "marker")
+	assert.False(t, isTenantNamespace(map[string]string{"actions-gateway.github.com/tenant": "true"}), "legacy v1 marker")
+	assert.False(t, isTenantNamespace(map[string]string{gmcv2.TenantNamespaceMarkerLabel: "true"}), "marker with the v1 value")
 	assert.False(t, isTenantNamespace(nil), "no labels")
 }
 
@@ -45,7 +44,7 @@ func TestTenantMarkerPredicate_PassesUnmark(t *testing.T) {
 	ns := func(labels map[string]string) *corev1.Namespace {
 		return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "team", Labels: labels}}
 	}
-	tenant := map[string]string{TenantNamespaceMarkerLabel: "true"}
+	tenant := map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue}
 
 	assert.True(t, p.Create(event.CreateEvent{Object: ns(tenant)}))
 	assert.False(t, p.Create(event.CreateEvent{Object: ns(nil)}))
@@ -126,7 +125,7 @@ func TestTenantSecretWatches_EnsureIsIdempotentAndStopEnds(t *testing.T) {
 func TestTenantSecretAccessReconciler(t *testing.T) {
 	scheme := runtime.NewScheme()
 	require.NoError(t, clientgoscheme.AddToScheme(scheme))
-	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant", Labels: map[string]string{TenantNamespaceMarkerLabel: "true"}}}
+	tenant := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "tenant", Labels: map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue}}}
 	other := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "other"}}
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tenant, other).Build()
 	w, _ := newTestSecretWatches(t)

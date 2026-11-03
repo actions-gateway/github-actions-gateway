@@ -71,7 +71,7 @@ All AGC and worker traffic to GitHub flows through the proxy pool; Kubernetes AP
 Deployed once by the platform team in a dedicated system namespace.
 The default install uses `gmc-system`.
 It holds a ClusterRole that grants it read access to `ActionsGateway` resources across all namespaces, and write access (cluster-wide at the RBAC layer) to Deployments, Roles, RoleBindings, and NetworkPolicies.
-Per-namespace confinement of those writes is enforced not by RBAC — which cannot express "only namespaces carrying a marker label" — but by the `gmc-tenant-resource-guard` `ValidatingAdmissionPolicy`, which denies the GMC ServiceAccount any `create`/`update`/`delete` of those kinds outside namespaces an administrator has marked `actions-gateway.github.com/tenant: "true"` (Q122).
+Per-namespace confinement of those writes is enforced not by RBAC — which cannot express "only namespaces carrying a marker label" — but by the `gmc-tenant-resource-guard` `ValidatingAdmissionPolicy`, which denies the GMC ServiceAccount any `create`/`update`/`delete` of those kinds outside namespaces an administrator has marked `actions-gateway.com/tenant: managed` (Q122).
 It does **not** hold `resourcequotas`/`limitranges` write verbs: the namespace `ResourceQuota` is platform-owned and the GMC operates within it without creating or mutating it *(Q130 — dropping that grant is least privilege, partially subsuming Q122)*.
 
 * **Deployment Model:** Runs as a `Deployment` with `replicas: 2` and `controller-runtime` leader election enabled (`leaderElectionID: "actions-gateway-gmc-leader"`).
@@ -82,7 +82,7 @@ It does **not** hold `resourcequotas`/`limitranges` write verbs: the namespace `
   The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned** — the platform admin provisions it on the namespace and the GMC operates within it without ever creating or mutating it (Q130).
   The initial `NetworkPolicy` egress rules for the proxy pods are populated by fetching GitHub's current IP ranges from `api.github.com/meta` at provisioning time.
   The Tenant Provisioner also stamps `pod-security.kubernetes.io/enforce` on the tenant namespace at the level chosen by `spec.securityProfile` (default `baseline`), so the in-tree PodSecurity admission plugin rejects privileged worker pods at admission without requiring an external policy engine.
-  Stamping PSA labels requires cluster-wide `namespaces:patch`; the `namespace-psa-guard` ValidatingAdmissionPolicy confines that grant to namespaces an administrator has marked `actions-gateway.github.com/tenant: "true"` (and to the PSA label keys only), so a compromised GMC cannot relabel system namespaces.
+  Stamping PSA labels requires cluster-wide `namespaces:patch`; the `namespace-psa-guard` ValidatingAdmissionPolicy confines that grant to namespaces an administrator has marked `actions-gateway.com/tenant: managed` (and to the PSA label keys only), so a compromised GMC cannot relabel system namespaces.
   See [§5.3](05-security.md#53-security-profiles-and-the-privileged-opt-in) for the profile semantics and the privileged opt-in pattern.
   (In the `v2alpha1` (`actions-gateway.com`) API this `spec.securityProfile` field is **removed**: the level is chosen by the namespace label `actions-gateway.com/security-profile` instead — GMC-guarded, namespace-scoped, shared by co-located gateways — see [Appendix H §H.16 #7](appendix-h-v2-api-decomposition.md).
   The stamping mechanism described here is unchanged.)

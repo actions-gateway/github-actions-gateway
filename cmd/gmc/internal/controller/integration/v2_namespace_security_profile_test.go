@@ -127,6 +127,16 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		})
 		require.True(t, apierrors.IsForbidden(err), "a silent downgrade must be denied; got: %v", err)
 
+		// The v1 annotation spelling permits nothing.
+		err = setNamespaceLabel(k8sClient, ns, func(n *corev1.Namespace) {
+			if n.Annotations == nil {
+				n.Annotations = map[string]string{}
+			}
+			n.Annotations["actions-gateway.github.com/allow-profile-downgrade"] = "true"
+			n.Labels[gmcv2.SecurityProfileLabel] = gmcv2.SecurityProfileBaseline
+		})
+		require.True(t, apierrors.IsForbidden(err), "the v1 downgrade annotation must not permit a downgrade; got: %v", err)
+
 		// Same downgrade WITH the opt-in annotation: allowed.
 		require.NoError(t, setNamespaceLabel(k8sClient, ns, func(n *corev1.Namespace) {
 			if n.Annotations == nil {
@@ -145,6 +155,16 @@ func TestGMC_NamespaceSecurityProfileGuard(t *testing.T) {
 		}})
 		require.True(t, apierrors.IsForbidden(err),
 			"privileged must be denied without the eligibility label; got: %v", err)
+
+		err = k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+			Name: ineligibleNS,
+			Labels: tenantLabels(map[string]string{
+				gmcv2.SecurityProfileLabel:                      gmcv2.SecurityProfilePrivileged,
+				"actions-gateway.github.com/privileged-profile": gmcv2.PrivilegedProfileAllowed,
+			}),
+		}})
+		require.True(t, apierrors.IsForbidden(err),
+			"the v1 privileged-profile label must not grant eligibility; got: %v", err)
 
 		const eligibleNS = "secprof-priv-eligible"
 		require.NoError(t, k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{

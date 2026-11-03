@@ -42,19 +42,14 @@ on the namespace, and the GMC `NamespacePSAReconciler` stamps the `pod-security.
 The value follows the enum-keyword convention above (not a boolean), and the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a `privileged` selection without the `actions-gateway.com/privileged-profile=allowed` eligibility label.
 See `SecurityProfileLabel` in [`api/v2alpha1/shared_types.go`](../../api/v2alpha1/shared_types.go).
 
-### Pre-existing `"true"` values are grandfathered
+### The `"true"` values v1 shipped were retired by a migration
 
-Two shipped keys predate this convention and still use `"true"`:
+Two v1 keys predated this convention and used `"true"`: the managed-tenant marker `actions-gateway.github.com/tenant: "true"` and the downgrade opt-in annotation `actions-gateway.github.com/allow-profile-downgrade: "true"`.
+Changing a value every admission policy and runbook matches is a breaking change to deployed clusters, so it took a deliberate migration rather than an edit.
 
-- `actions-gateway.github.com/tenant: "true"` — the managed-tenant marker label.
-- `actions-gateway.github.com/allow-profile-downgrade: "true"` — the downgrade opt-in annotation.
-
-These were **not** to be changed casually.
-The `tenant` marker in particular is load-bearing: the `namespace-psa-guard` and `gmc-tenant-resource-guard` `ValidatingAdmissionPolicy` objects, the onboarding scripts, and operator runbooks all match it as `"true"`, so changing the value is a breaking change to deployed clusters.
-The convention above applies to **new** keys; the existing two stay as-is unless there is a separate, deliberate migration.
-
-**The v2 API cutover is that deliberate migration.** v2 aligns both values to self-documenting keywords (`tenant: managed`, `allow-profile-downgrade: allowed`) on the renamed `actions-gateway.com/` domain (see `shared_types.go`).
-During the v1/v2 coexistence window every consumer **dual-reads** both spellings, so deployed clusters are not broken mid-cutover; the [M5 migration tool](../operations/migration-v1-to-v2.md) relabels live namespaces additively, and the legacy `"true"` arms drop when `v1alpha1` is removed (design [§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
+The v2 API cutover was that migration: v2 aligned both values to keywords (`tenant: managed`, `allow-profile-downgrade: allowed`) on the `actions-gateway.com/` domain (see `shared_types.go`).
+Through the v1/v2 coexistence window every consumer **dual-read** both spellings while the [M5 migration tool](../operations/migration-v1-to-v2.md) relabelled live namespaces additively, and `v2.0.0` dropped the legacy arms (design [§H.12](../design/appendix-h-v2-api-decomposition.md#h12-folding-in-the-grandfathered-label-value-alignment-q147)).
+Nothing reads an `actions-gateway.github.com` namespace key now.
 
 ## Label & annotation key conventions
 

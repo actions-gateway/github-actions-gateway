@@ -111,7 +111,7 @@ Two complementary kinds, for both engines:
 
 All samples key off two stable signals so they keep working as tenants come and go:
 
-- The **tenant-namespace marker** `actions-gateway.github.com/tenant: "true"`, which the GMC requires on every namespace it provisions into (worker, proxy, and AGC pods all live in marked namespaces).
+- The **tenant-namespace marker** `actions-gateway.com/tenant: managed`, which the GMC requires on every namespace it provisions into (worker, proxy, and AGC pods all live in marked namespaces).
 - The **GMC install namespace**, where only the GMC manager pod runs.
 
 ### Apply the enforce policies
