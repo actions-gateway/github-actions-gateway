@@ -30,9 +30,9 @@ func TestRunnerSetAgentIdentityUniqueness(t *testing.T) {
 		v := runnerSetValidatorWith(t,
 			identityV2Gateway("tenant-a", "gw1", acme),
 			identityV2Gateway("tenant-b", "gw2", "https://GitHub.com/Acme/"),
-			classicRS("build", "tenant-a", "gw1", "linux"),
+			labelledRS("build", "tenant-a", "gw1", "linux"),
 		)
-		_, err := v.ValidateCreate(ctx, classicRS("build", "tenant-b", "gw2", "linux"))
+		_, err := v.ValidateCreate(ctx, labelledRS("build", "tenant-b", "gw2", "windows"))
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), `"rs-build"`, "the message must name the contested stem")
 		assert.Contains(t, err.Error(), "github.com/acme", "the message names the scope, not the other tenant")
@@ -43,23 +43,23 @@ func TestRunnerSetAgentIdentityUniqueness(t *testing.T) {
 		v := runnerSetValidatorWith(t,
 			identityV2Gateway("tenant-a", "gw1", acme),
 			identityV2Gateway("tenant-b", "gw2", "https://github.com/other"),
-			classicRS("build", "tenant-a", "gw1", "linux"),
+			labelledRS("build", "tenant-a", "gw1", "linux"),
 		)
-		_, err := v.ValidateCreate(ctx, classicRS("build", "tenant-b", "gw2", "linux"))
+		_, err := v.ValidateCreate(ctx, labelledRS("build", "tenant-b", "gw2", "windows"))
 		assert.NoError(t, err)
 	})
 
 	t.Run("an update does not reject the set against its own stored copy", func(t *testing.T) {
-		stored := classicRS("build", "tenant", "gw2", "linux")
+		stored := labelledRS("build", "tenant", "gw2", "linux")
 		v := runnerSetValidatorWith(t, identityV2Gateway("tenant", "gw2", acme), stored)
-		updated := classicRS("build", "tenant", "gw2", "linux", "x64")
+		updated := labelledRS("build", "tenant", "gw2", "linux", "x64")
 		_, err := v.ValidateUpdate(ctx, stored, updated)
 		assert.NoError(t, err)
 	})
 
 	t.Run("a nil reader disables the check", func(t *testing.T) {
 		v := &RunnerSetCustomValidator{}
-		_, err := v.ValidateCreate(ctx, classicRS("build", "tenant", "gw2", "linux"))
+		_, err := v.ValidateCreate(ctx, labelledRS("build", "tenant", "gw2", "linux"))
 		assert.NoError(t, err)
 	})
 }

@@ -4,14 +4,13 @@
 // handler covers every version. The GMC is the cluster-singleton operator, so it — not
 // the per-tenant AGC — hosts cluster-wide admission for the whole v2 API surface.
 //
-// Two values the older versions carry have no v2 field, and the conversion leaves them
-// in annotations the validators read: an EgressProxy's CiliumFQDN/CalicoFQDN alias
-// (egressPolicyModeOf) and a RunnerSet's acquisitionProtocol (acquisitionProtocolOf).
-// Both readers go when v2.0.0 stops serving the versions that can write those values.
+// One value the older versions carry has no v2 field, and the conversion leaves it in
+// an annotation the validators read: an EgressProxy's CiliumFQDN/CalicoFQDN alias
+// (egressPolicyModeOf). The reader goes when v2.0.0 stops serving the versions that
+// can write it.
 //
 // Only the object under admission is v2. Reads of its siblings stay at v2alpha1, as
-// the scalesetscope and agentidentity inventories do, since the label guard needs the
-// acquisitionProtocol field v2alpha1 still serves; v2.0.0 moves them all at once.
+// the scalesetscope and agentidentity inventories do, until Q1167 retypes them.
 package v2
 
 import (

@@ -78,32 +78,11 @@ test-rwx-storage: ## Assert workers share one RWX volume across nodes (needs `ma
 
 ##@ Load test
 
-# The in-process AGC load harness (Q13, cmd/agc/test/load). It needs no cluster
-# and no real credentials — it drives the real listener-multiplexing core
-# against an in-process broker stub + fake k8s client. LOAD_THROTTLE is the
-# desktop-safety QoS prefix from scripts/agent/local-throttle.sh (a no-op on
-# CI/headless): a run holds ~1,000 goroutines, so on a GUI dev machine it is
-# demoted to keep the UI responsive (Q92). Tune any run via the LOAD_* env vars
-# documented in test/load/load_test.go. NOT run under -race by default: -race on
-# ~1,000 goroutines is heavy and distorts the throughput/memory numbers; add it
-# for a smaller leak hunt (LOAD_LISTENERS_PER_TENANT=10 ... go test -race).
+# The in-process scale-set memory probe (Q722, cmd/agc/test/load). It needs no
+# cluster and no real credentials. LOAD_THROTTLE is the desktop-safety QoS prefix
+# from scripts/agent/local-throttle.sh (a no-op on CI/headless), so a run on a GUI
+# dev machine is demoted to keep the UI responsive (Q92).
 LOAD_THROTTLE := $(shell $(REPO_ROOT)/scripts/agent/local-throttle.sh prefix)
-
-.PHONY: load-test-quick
-load-test-quick: ## Load smoke: 10 tenants × 100 sessions = 1,000, short window (~1 min)
-	LOAD_DURATION=$(or $(LOAD_DURATION),20s) LOAD_JOB_DURATION=$(or $(LOAD_JOB_DURATION),100ms) \
-		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestAGCLoad -v ./test/load/...
-
-.PHONY: load-test-full
-load-test-full: ## Load acceptance: 10 tenants × 100 sessions = 1,000, realistic hold (~3-5 min)
-	LOAD_DURATION=$(or $(LOAD_DURATION),60s) LOAD_JOB_DURATION=$(or $(LOAD_JOB_DURATION),1s) \
-	LOAD_REPORT=$(or $(LOAD_REPORT),results/latest.md) \
-		$(LOAD_THROTTLE) go test -tags load -timeout 10m -run TestAGCLoad -v ./test/load/...
-
-.PHONY: mem-profile
-mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked sessions, in-process transport, no broker stub
-	MEM_TENANTS=$(or $(MEM_TENANTS),10) MEM_LISTENERS_PER_TENANT=$(or $(MEM_LISTENERS_PER_TENANT),100) \
-		$(LOAD_THROTTLE) go test -tags load -timeout 5m -run TestAGCPerSessionMemory -v ./test/load/...
 
 .PHONY: scaleset-mem-profile
 scaleset-mem-profile: ## Isolate AGC-only per-scale-set memory on the scale-set tier (Q722): 200 parked sessions, in-process transport, no protocol stub

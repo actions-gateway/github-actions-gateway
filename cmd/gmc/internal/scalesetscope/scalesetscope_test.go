@@ -40,20 +40,8 @@ func scaleSetRS(name, namespace, gw, label string) *agcv2alpha1.RunnerSet {
 	return &agcv2alpha1.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:          agcv2alpha1.ObjectRef{Name: gw},
-			AcquisitionProtocol: agcv2alpha1.AcquisitionProtocolScaleSet,
-			RunnerLabels:        []string{label},
-		},
-	}
-}
-
-func classicRS(name, namespace, gw string, labels ...string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:          agcv2alpha1.ObjectRef{Name: gw},
-			AcquisitionProtocol: agcv2alpha1.AcquisitionProtocolClassic,
-			RunnerLabels:        labels,
+			GatewayRef:   agcv2alpha1.ObjectRef{Name: gw},
+			RunnerLabels: []string{label},
 		},
 	}
 }
@@ -168,11 +156,10 @@ func TestClaimCollidesWith(t *testing.T) {
 func TestOf(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("classic sets and unresolvable gateways", func(t *testing.T) {
+	t.Run("unresolvable gateways", func(t *testing.T) {
 		inv, err := Of(ctx, fakeReader(t,
 			gateway("tenant-a", "gw-a", "https://github.com/acme"),
 			scaleSetRS("scaled", "tenant-a", "gw-a", "linux"),
-			classicRS("classic", "tenant-a", "gw-a", "linux"),
 			scaleSetRS("orphan", "tenant-b", "gw-missing", "linux"),
 		), nil)
 		require.NoError(t, err)
@@ -181,10 +168,9 @@ func TestOf(t *testing.T) {
 		for _, c := range inv.Claims {
 			byName[c.Name] = c
 		}
-		require.Len(t, inv.Claims, 2, "the Classic set claims no scale-set name")
+		require.Len(t, inv.Claims, 2)
 		assert.Equal(t, "github.com/acme", byName["scaled"].Scope)
 		assert.Empty(t, byName["orphan"].Scope, "an unapplied gateway resolves no scope")
-		assert.NotContains(t, byName, "classic")
 	})
 
 	t.Run("pending gateway places its own referrers", func(t *testing.T) {

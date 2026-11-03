@@ -4,29 +4,21 @@ package integration_test
 
 import (
 	"context"
-	"errors"
-	"log/slog"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
-	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/config"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 // These tests exercise the v2 RunnerSet reconciler (Q164, M3a) against the real
@@ -36,104 +28,36 @@ import (
 // its egress wired through the resolved EgressProxy (the provisioner Target seam).
 
 // startRunnerSetReconciler wires and starts a RunnerSetReconciler against the
-// shared envtest apiserver with a real Provisioner attached. It returns the
-// reconciler so tests can drive its test-only hooks (e.g. SetConditionForTest).
-func startRunnerSetReconciler(t *testing.T, tweaks ...func(*controller.RunnerSetReconciler)) *controller.RunnerSetReconciler {
-	t.Helper()
-	return startRunnerSetReconcilerWithRegistrar(t, nil, tweaks...)
-}
-
-// startRunnerSetReconcilerWithRegistrar is startRunnerSetReconciler with an optional
-// Registrar override (nil selects the default brokerRegistrar). A failing registrar
-// drives agentpool.EnsureAgents to error so the reconciler's Ready=False provisioning
-// path can be asserted against the real apiserver (Q308).
+// shared envtest apiserver with a real Provisioner attached, its sets' protocol
+// clients pointed at a fake scale-set server of its own. It returns the reconciler
+// so tests can drive its test-only hooks (e.g. SetConditionForTest).
 //
 // tweaks run against the assembled reconciler before SetupWithManager, so a test may
 // pull a production cadence in without racing the started manager.
-func startRunnerSetReconcilerWithRegistrar(t *testing.T, registrar agentpool.Registrar, tweaks ...func(*controller.RunnerSetReconciler)) *controller.RunnerSetReconciler {
+func startRunnerSetReconciler(t *testing.T, tweaks ...func(*controller.RunnerSetReconciler)) *controller.RunnerSetReconciler {
 	t.Helper()
-	mgrCtx, mgrCancel := context.WithCancel(ctx)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	return startRunnerSetReconcilerOn(t, srv, tweaks...)
+}
 
-	skipNameValidation := true
-	mgr, err := ctrl.NewManager(testEnv.Config, ctrl.Options{
-		Scheme:                 testScheme,
-		Metrics:                metricsserver.Options{BindAddress: "0"},
-		HealthProbeBindAddress: "0",
-		LeaderElection:         false,
-		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
-		Client: client.Options{
-			Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}},
-		},
-	})
-	require.NoError(t, err)
-
-	tm := token.NewManager(stubProvider{}, nil)
-	go tm.Start(mgrCtx)
-	_, _ = tm.Token(mgrCtx)
-
-	p := provisioner.NewProvisioner(mgr.GetClient(), nil, slog.Default())
-	p.PollInterval = 50 * time.Millisecond
-	p.WorkerSA = agcnames.WorkerSAName
-	p.DefaultWorkerImage = "runner:test"
-	p.HTTPClient = brokerStub.HTTPClient()
-	p.TokenFunc = stubProvider{}.Token
-
-	var reg agentpool.Registrar = &brokerRegistrar{stub: brokerStub}
-	if registrar != nil {
-		reg = registrar
-	}
-	r := &controller.RunnerSetReconciler{
-		Client:       mgr.GetClient(),
-		TokenManager: tm,
-		Registrar:    reg,
-		AgentKeyType: agentpool.KeyTypeEd25519,
-		Provisioner:  p,
-		// The uncached reader the projected proxy-share ConfigMap is read through
-		// (Q166, Q1078), exactly as main.go wires it.
-		APIReader: mgr.GetAPIReader(),
-		// The uncached reader the capacity gate reads pod Events through on a cluster
-		// that can grow (Q406, Q470), exactly as main.go wires it.
-		EventReader: mgr.GetAPIReader(),
-		// The same process-wide counters the v1 suite asserts on, so a v2 classic test
-		// can read jobs_admission_rejected_total as a delta against a baseline.
-		Metrics: sharedListenerMetrics(),
-		// A mutable stub sizing source (Q359 Phase 2): empty by default (no
-		// sizing status is written), populated per-test via sizingStub.Set —
-		// concurrency-safe, so tests may seed it while the manager runs.
-		Sizing: &sizingStub{},
-		BrokerConfig: controller.BrokerConfig{
-			BrokerURL:        brokerStub.URL,
-			RunnerVersion:    "2.335.1",
-			RunnerOS:         "linux",
-			UseV2Flow:        true,
-			HTTPClient:       brokerStub.HTTPClient(),
-			IdleThreshold:    500,
-			RenewJobInterval: 50 * time.Millisecond,
-		},
-	}
-	for _, tweak := range tweaks {
-		tweak(r)
-	}
-	require.NoError(t, r.SetupWithManager(mgr))
-
-	mgrDone := make(chan struct{})
-	go func() { defer close(mgrDone); _ = mgr.Start(mgrCtx) }()
-	t.Cleanup(func() { mgrCancel(); <-mgrDone })
+// startRunnerSetReconcilerOn is startRunnerSetReconciler against a fake the caller
+// holds, for a test that assigns jobs through it.
+func startRunnerSetReconcilerOn(t *testing.T, srv *scalesettest.Server, tweaks ...func(*controller.RunnerSetReconciler)) *controller.RunnerSetReconciler {
+	t.Helper()
+	r, _ := startRunnerSetReconcilerWithScaleSetClients(t, scaleSetClientsFor(srv), tweaks...)
 	return r
 }
 
+// newRunnerSet builds a RunnerSet whose single runnerLabel, and so its scale set's
+// name, is the set's own name, so sets sharing a gateway never collide.
 func newRunnerSet(name, ns, gateway string) *v2alpha1.RunnerSet {
 	return &v2alpha1.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:  v2alpha1.ObjectRef{Name: gateway},
-			TemplateRef: &v2alpha1.ObjectRef{Name: "tmpl"},
-			// Pin Classic: the default is ScaleSet (Q264 P5), but these reconciler tests
-			// exercise the classic acquisition path. The ScaleSet path has its own suite
-			// (v2_runnerset_scaleset_test.go).
-			AcquisitionProtocol: v2alpha1.AcquisitionProtocolClassic,
-			MaxListeners:        1,
-			RunnerLabels:        []string{"self-hosted"},
+			GatewayRef:   v2alpha1.ObjectRef{Name: gateway},
+			TemplateRef:  &v2alpha1.ObjectRef{Name: "tmpl"},
+			RunnerLabels: []string{name},
 		},
 	}
 }
@@ -345,10 +269,11 @@ func TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	startRunnerSetReconcilerOn(t, srv)
 
-	id := enqueueJobOnSetSession(15*time.Second, "direct-worker-set", nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for direct-worker-set should register")
+	require.True(t, enqueueScaleSetJob(srv, "direct-worker-set", 15*time.Second), "a session for direct-worker-set should register")
 
 	var pod corev1.Pod
 	require.Eventually(t, func() bool {
@@ -465,12 +390,13 @@ func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
-	startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	startRunnerSetReconcilerOn(t, srv)
 
 	// A session registers; enqueue a job on it, then the provisioner creates a
 	// worker pod for the RunnerSet.
-	id := enqueueJobOnSetSession(15*time.Second, "worker-set", nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for worker-set should register")
+	require.True(t, enqueueScaleSetJob(srv, "worker-set", 15*time.Second), "a session for worker-set should register")
 
 	var pod corev1.Pod
 	require.Eventually(t, func() bool {
@@ -521,42 +447,4 @@ func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
 		}
 	}
 	assert.True(t, foundProxyCA, "worker pod must project the resolved EgressProxy's CA cert")
-}
-
-// failingRegistrar makes agentpool.EnsureAgents fail by rejecting every Register call —
-// the AGC can never provision a listener agent's Secret for the set.
-type failingRegistrar struct{}
-
-func (failingRegistrar) Register(_ context.Context, _ string, _ agentpool.RegisterParams) (*agentpool.AgentCredentials, error) {
-	return nil, errAgentRegisterRejected
-}
-func (failingRegistrar) Deregister(_ context.Context, _ string, _ int64) error { return nil }
-func (failingRegistrar) ResolveAgentID(_ context.Context, _, _ string) (int64, error) {
-	return 0, nil
-}
-
-var errAgentRegisterRejected = errors.New("registration API rejected the agent")
-
-// TestV2_RunnerSet_AgentProvisioningFailure_SetsReadyFalse: when every reference
-// resolves but agentpool.EnsureAgents fails (the registration API rejects the agent),
-// the RunnerSet must report Ready=False/AgentProvisioningFailed rather than silently
-// staying healthy until the next reconcile (Q308). Direct egress keeps the fixture to
-// a gateway + template.
-func TestV2_RunnerSet_AgentProvisioningFailure_SetsReadyFalse(t *testing.T) {
-	const ns = "v2-rs-agentfail"
-	createNSForAGC(t, ns)
-
-	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
-	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	rs := newRunnerSet("set", ns, "gw")
-	require.NoError(t, k8sClient.Create(ctx, rs))
-	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
-	})
-
-	startRunnerSetReconcilerWithRegistrar(t, failingRegistrar{})
-
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonAgentProvisioningFailed)
 }

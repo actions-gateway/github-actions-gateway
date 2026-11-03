@@ -59,9 +59,8 @@ func (scalesetMemTokenProvider) Token(context.Context) (string, error) {
 // The headline is (mFull-mClients)/N for heap+stack: the marginal cost of holding
 // one more live scale-set session given its client already exists. Nothing from the
 // server side is in it, because scalesetMemTransport answers every call in-process
-// with no server, socket, or per-session server-side state — the same reason the
-// classic probe does not use the Q13 broker stub, and the reason this one does not
-// use scalesettest, whose httptest.Server would hold a parked goroutine and its
+// with no server, socket, or per-session server-side state — the reason this probe
+// does not use scalesettest, whose httptest.Server would hold a parked goroutine and its
 // read/write buffers per session in this same process.
 //
 // Runs only under `-tags load`, via `make scaleset-mem-profile`. Knobs (env):

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -28,32 +28,18 @@ func createNSForAGC(t *testing.T, name string) {
 	})
 }
 
-// enqueueJobOnOwnerSession blocks until the broker stub has an active session for
-// the given OWNER STEM that is not in alreadySeen, then enqueues a job on it and
-// returns its ID (or "" on timeout). It scopes to one owner, so it never enqueues
-// onto a session another test left active on the shared stub.
-func enqueueJobOnOwnerSession(timeout time.Duration, group string, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
+// enqueueScaleSetJob blocks until a listener holds a session for the scale set
+// named label on srv, then assigns it one job. It reports false on timeout.
+func enqueueScaleSetJob(srv *scalesettest.Server, label string, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		for _, id := range brokerStub.ActiveSessionsForOwner(group) {
-			if !alreadySeen[id] {
-				brokerStub.EnqueueJob(id, payload)
-				return id
-			}
+		if id, ok := srv.ScaleSetIDByName(label); ok && srv.HasActiveSession(id) {
+			srv.EnqueueJob(id)
+			return true
 		}
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
-	return ""
-}
-
-// enqueueJobOnSetSession is enqueueJobOnOwnerSession for a v2 RunnerSet. A
-// RunnerSet's listener owns its session as its registered runner name, which is
-// kind-scoped to "rs-<set>-<index>" (Q466/Q677), so the owner stem is not the bare
-// CR name. Separate helper rather than a prefix at each call site: passing the bare
-// name matches nothing and the failure reads as "no session was ever created",
-// which is what it looked like when Q677 first landed.
-func enqueueJobOnSetSession(timeout time.Duration, set string, alreadySeen map[string]bool, payload broker.RunnerJobRequestBody) string {
-	return enqueueJobOnOwnerSession(timeout, "rs-"+set, alreadySeen, payload)
+	return false
 }
 
 // podGone reports whether the named pod no longer exists.

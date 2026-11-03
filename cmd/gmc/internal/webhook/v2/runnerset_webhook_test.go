@@ -33,7 +33,7 @@ func runnerSetValidatorWith(t *testing.T, existing ...client.Object) *RunnerSetC
 	}
 }
 
-// scaleSetRS builds a ScaleSet-protocol RunnerSet with a single runnerLabel bound to
+// scaleSetRS builds a RunnerSet with a single runnerLabel bound to
 // the named gateway.
 func scaleSetRS(name, namespace, gateway, label string) *agcv2.RunnerSet {
 	return &agcv2.RunnerSet{
@@ -45,16 +45,10 @@ func scaleSetRS(name, namespace, gateway, label string) *agcv2.RunnerSet {
 	}
 }
 
-// classicRS builds a Classic-protocol RunnerSet with the given labels, as the v2 view
-// of a v2alpha1 write: v2 has no acquisitionProtocol, so the conversion carries it in
-// annAcquisitionProtocol.
-func classicRS(name, namespace, gateway string, labels ...string) *agcv2.RunnerSet {
+// labelledRS builds a RunnerSet bound to the named gateway with the given labels.
+func labelledRS(name, namespace, gateway string, labels ...string) *agcv2.RunnerSet {
 	return &agcv2.RunnerSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Namespace:   namespace,
-			Annotations: map[string]string{annAcquisitionProtocol: "Classic"},
-		},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 		Spec: agcv2.RunnerSetSpec{
 			GatewayRef:   agcv2.ObjectRef{Name: gateway},
 			RunnerLabels: labels,
@@ -71,7 +65,7 @@ func classicRS(name, namespace, gateway string, labels ...string) *agcv2.RunnerS
 func TestRunnerSetWebhook_ProxyGitHubBypass(t *testing.T) {
 	ctx := context.Background()
 	newRS := func(proxy string) *agcv2.RunnerSet {
-		rs := classicRS("rs", "team-a", "gw", "linux")
+		rs := labelledRS("rs", "team-a", "gw", "linux")
 		if proxy != "" {
 			rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: proxy}
 		}
@@ -128,15 +122,6 @@ func TestRunnerSetWebhook_ProxyGitHubBypass(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot verify")
 	})
-}
-
-func TestRunnerSetWebhook_ClassicIsNeverChecked(t *testing.T) {
-	// Two Classic sets sharing a label under one gateway are fine: no scale-set
-	// object exists, so there is no name collision at GitHub. Even with a colliding
-	// ScaleSet sibling preloaded, a Classic create is admitted.
-	v := runnerSetValidatorWith(t, scaleSetRS("existing", "tenant", "gw", "linux"))
-	_, err := v.ValidateCreate(context.Background(), classicRS("newset", "tenant", "gw", "linux", "amd64"))
-	require.NoError(t, err)
 }
 
 func TestRunnerSetWebhook_RejectsDuplicateScaleSetLabel(t *testing.T) {
@@ -250,15 +235,6 @@ func TestRunnerSetWebhook_ScaleSetLabelScope(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("a classic set in the same scope claims no name", func(t *testing.T) {
-		v := &RunnerSetCustomValidator{reader: fakeReader(t,
-			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
-			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
-			classicRS("existing", "tenant-a", "gw-a", "linux"))}
-		_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
-		require.NoError(t, err)
-	})
-
 	t.Run("update onto a cross-namespace collision is rejected", func(t *testing.T) {
 		self := scaleSetRS("self", "tenant-b", "gw-b", "windows")
 		v := &RunnerSetCustomValidator{reader: fakeReader(t,
@@ -287,17 +263,9 @@ func TestRunnerSetWebhook_ScaleSetLabelScope(t *testing.T) {
 	})
 }
 
-func TestRunnerSetWebhook_DuplicateAgainstClassicSiblingIsAllowed(t *testing.T) {
-	// A Classic sibling with the same label does not register a scale set, so it
-	// cannot collide with a new ScaleSet set claiming that label.
-	v := runnerSetValidatorWith(t, classicRS("existing", "tenant", "gw", "linux"))
-	_, err := v.ValidateCreate(context.Background(), scaleSetRS("newset", "tenant", "gw", "linux"))
-	require.NoError(t, err)
-}
-
 func TestRunnerSetWebhook_UpdateOntoCollidingLabelIsRejected(t *testing.T) {
 	// The set already exists under a distinct label; an update that moves it onto a
-	// sibling's label is rejected (acquisitionProtocol is immutable, but labels are not).
+	// sibling's label is rejected: labels are mutable.
 	sibling := scaleSetRS("sibling", "tenant", "gw", "linux")
 	self := scaleSetRS("self", "tenant", "gw", "windows")
 	v := runnerSetValidatorWith(t, sibling, self)
@@ -324,9 +292,9 @@ func TestRunnerSetWebhook_NilReaderSkips(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// tieredRS builds a Classic RunnerSet whose priorityTiers name the given classes.
+// tieredRS builds a RunnerSet whose priorityTiers name the given classes.
 func tieredRS(name string, classes ...string) *agcv2.RunnerSet {
-	rs := classicRS(name, "tenant", "gw", "linux")
+	rs := labelledRS(name, "tenant", "gw", "linux")
 	for i, c := range classes {
 		rs.Spec.PriorityTiers = append(rs.Spec.PriorityTiers, agcv2.PriorityTier{
 			PriorityClassName: c,
@@ -420,6 +388,6 @@ func TestRunnerSetWebhook_NoTiersNeedsNoAllowlist(t *testing.T) {
 	// A RunnerSet with no priorityTiers is admitted under the secure default — the
 	// gate must not forbid ordinary, unprioritized runner sets.
 	v := &RunnerSetCustomValidator{}
-	_, err := v.ValidateCreate(context.Background(), classicRS("newset", "tenant", "gw", "linux"))
+	_, err := v.ValidateCreate(context.Background(), labelledRS("newset", "tenant", "gw", "linux"))
 	require.NoError(t, err)
 }

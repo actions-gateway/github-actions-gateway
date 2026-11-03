@@ -25,8 +25,7 @@ func scopedGateway(name, ns, gitHubURL string) *gmcv2alpha1.ActionsGateway {
 }
 
 // asV2Gateway is ag as the reconciler reads it. The fake store holds v2alpha1 objects
-// because scalesetscope lists at v2alpha1 to read spec.acquisitionProtocol, which v2
-// lacks; it retypes with scalesetscope in Q1167.
+// because scalesetscope lists at v2alpha1; it retypes with scalesetscope in Q1167.
 func asV2Gateway(ag *gmcv2alpha1.ActionsGateway) *gmcv2.ActionsGateway {
 	return &gmcv2.ActionsGateway{
 		ObjectMeta: *ag.ObjectMeta.DeepCopy(),
@@ -34,15 +33,14 @@ func asV2Gateway(ag *gmcv2alpha1.ActionsGateway) *gmcv2.ActionsGateway {
 	}
 }
 
-// claimingRunnerSet builds a ScaleSet RunnerSet whose first runnerLabel is the
+// claimingRunnerSet builds a RunnerSet whose first runnerLabel is the
 // scale-set name it claims at GitHub.
 func claimingRunnerSet(name, ns, gateway string, labels ...string) *gmcv2alpha1.RunnerSet {
 	return &gmcv2alpha1.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Spec: gmcv2alpha1.RunnerSetSpec{
-			GatewayRef:          gmcv2alpha1.ObjectRef{Name: gateway},
-			AcquisitionProtocol: gmcv2alpha1.AcquisitionProtocolScaleSet,
-			RunnerLabels:        labels,
+			GatewayRef:   gmcv2alpha1.ObjectRef{Name: gateway},
+			RunnerLabels: labels,
 		},
 	}
 }
@@ -72,25 +70,6 @@ func TestEvalScaleSetNameCollisions_Clean(t *testing.T) {
 	assert.False(t, got.collided)
 	assert.Equal(t, gmcv2alpha1.ReasonScaleSetNamesUnique, got.reason)
 	assert.Contains(t, got.message, "github.com/acme")
-}
-
-// TestEvalScaleSetNameCollisions_ClassicIsUnaffected: a Classic set registers no
-// scale-set object, so it claims no name and cannot collide (Q726).
-func TestEvalScaleSetNameCollisions_ClassicIsUnaffected(t *testing.T) {
-	ag := scopedGateway("gw-a", "tenant-a", "https://github.com/acme")
-	classic := claimingRunnerSet("rs-classic", "tenant-b", "gw-b", "acme-linux")
-	classic.Spec.AcquisitionProtocol = gmcv2alpha1.AcquisitionProtocolClassic
-
-	r := collisionReconciler(t,
-		ag,
-		scopedGateway("gw-b", "tenant-b", "https://github.com/acme"),
-		claimingRunnerSet("rs-a", "tenant-a", "gw-a", "acme-linux"),
-		classic,
-	)
-
-	got := r.evalScaleSetNameCollisions(context.Background(), asV2Gateway(ag))
-	assert.True(t, got.observed)
-	assert.False(t, got.collided)
 }
 
 // TestEvalScaleSetNameCollisions_CrossTenant is the case admission never re-validates:

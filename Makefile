@@ -796,21 +796,8 @@ test-integration: ## Run envtest-backed integration tests for cmd/agc and cmd/gm
 	$(MAKE) -C cmd/agc test-integration
 	$(MAKE) -C cmd/gmc test-integration
 
-# The in-process AGC load harness (Q13) pins the headline capacity claim —
-# thousands of virtual runner sessions per AGC, each costing one re-registration
-# per job (Q114). It needs no cluster or credentials; see cmd/agc/test/load.
-.PHONY: load-test-quick
-load-test-quick: ## Load smoke: 1,000 concurrent virtual sessions, short window (~1 min)
-	$(MAKE) -C cmd/agc load-test-quick
-
-.PHONY: load-test-full
-load-test-full: ## Load acceptance: 1,000 concurrent virtual sessions, realistic hold, writes a report
-	$(MAKE) -C cmd/agc load-test-full
-
-.PHONY: mem-profile
-mem-profile: ## Isolate AGC-only per-session memory (Q181): 1,000 parked sessions, in-process transport, no broker stub
-	$(MAKE) -C cmd/agc mem-profile
-
+# The in-process scale-set memory probe (Q722) measures the AGC's own cost of one
+# live scale-set session. It needs no cluster or credentials; see cmd/agc/test/load.
 .PHONY: scaleset-mem-profile
 scaleset-mem-profile: ## Isolate AGC-only per-scale-set memory on the scale-set tier (Q722)
 	$(MAKE) -C cmd/agc scaleset-mem-profile

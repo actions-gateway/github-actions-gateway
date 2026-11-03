@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
@@ -69,7 +68,11 @@ var scaleSetTestMetrics = scalesetlistener.NewMetrics(prometheus.NewRegistry())
 // GitHub REST base at a fake for the eviction-recovery rerun call).
 func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server, tweaks ...func(*provisioner.Provisioner)) func() {
 	t.Helper()
-	_, stop := startRunnerSetReconcilerWithScaleSetClients(t, scaleSetClientsFor(srv), tweaks...)
+	_, stop := startRunnerSetReconcilerWithScaleSetClients(t, scaleSetClientsFor(srv), func(r *controller.RunnerSetReconciler) {
+		for _, tweak := range tweaks {
+			tweak(r.Provisioner)
+		}
+	})
 	return stop
 }
 
@@ -93,8 +96,9 @@ func scaleSetClientsFor(srv *scalesettest.Server) scaleSetClientFactory {
 // startRunnerSetReconcilerWithScaleSetClients is startRunnerSetReconcilerWithScaleSet
 // with the per-set protocol client chosen by the caller, for a suite that needs one set
 // talking to something other than the shared fake, and with the reconciler returned so
-// its test hooks are reachable.
-func startRunnerSetReconcilerWithScaleSetClients(t *testing.T, clients scaleSetClientFactory, tweaks ...func(*provisioner.Provisioner)) (*controller.RunnerSetReconciler, func()) {
+// its test hooks are reachable. tweaks run against the assembled reconciler before
+// SetupWithManager.
+func startRunnerSetReconcilerWithScaleSetClients(t *testing.T, clients scaleSetClientFactory, tweaks ...func(*controller.RunnerSetReconciler)) (*controller.RunnerSetReconciler, func()) {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 
@@ -125,33 +129,30 @@ func startRunnerSetReconcilerWithScaleSetClients(t *testing.T, clients scaleSetC
 	p.DefaultWorkerImage = "runner:test"
 	p.HTTPClient = brokerStub.HTTPClient()
 	p.TokenFunc = stubProvider{}.Token
-	for _, tweak := range tweaks {
-		tweak(p)
-	}
 
 	r := &controller.RunnerSetReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tm,
-		Registrar:    &brokerRegistrar{stub: brokerStub},
-		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
-		// The uncached reader the scale-set guard ConfigMap is read through (Q606,
-		// Q1064, Q1078), exactly as main.go wires it.
-		APIReader:       mgr.GetAPIReader(),
+		// The uncached reader the scale-set guard ConfigMap and the projected proxy-share
+		// ConfigMap are read through (Q166, Q606, Q1064, Q1078), exactly as main.go
+		// wires it.
+		APIReader: mgr.GetAPIReader(),
+		// The process-wide counters, so a test can read a metric as a delta against a
+		// baseline.
+		Metrics:         sharedListenerMetrics(),
 		ScaleSetMetrics: scaleSetTestMetrics,
 		// The uncached reader the capacity gate reads pod Events through on a cluster
 		// that can grow (Q406, Q470), exactly as main.go wires it.
 		EventReader: mgr.GetAPIReader(),
-		BrokerConfig: controller.BrokerConfig{
-			BrokerURL:        brokerStub.URL,
-			RunnerVersion:    "2.335.1",
-			RunnerOS:         "linux",
-			UseV2Flow:        true,
-			HTTPClient:       brokerStub.HTTPClient(),
-			IdleThreshold:    500,
-			RenewJobInterval: 50 * time.Millisecond,
-		},
+		// A mutable stub sizing source (Q359 Phase 2): empty by default (no sizing
+		// status is written), populated per-test via sizingStub.Set — concurrency-safe,
+		// so tests may seed it while the manager runs.
+		Sizing:                &sizingStub{},
 		ScaleSetClientFactory: clients,
+	}
+	for _, tweak := range tweaks {
+		tweak(r)
 	}
 	require.NoError(t, r.SetupWithManager(mgr))
 
@@ -529,45 +530,6 @@ func TestV2_RunnerSet_ScaleSet_EvictedWorkerTriggersRerun(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	assert.Equal(t, int64(1), rerunCalls.Load(),
 		"repeated reconciles of one evicted pod must not spend more of the run's retry budget")
-}
-
-// TestV2_RunnerSet_Classic_DoesNotRegisterScaleSet proves the default path is
-// unaffected: a Classic RunnerSet (the default protocol) reaches Ready via the classic
-// multiplexer and never registers a scale set on the fake — the scale-set client is
-// built only for ScaleSet sets.
-func TestV2_RunnerSet_Classic_DoesNotRegisterScaleSet(t *testing.T) {
-	const ns = "v2-rs-classic-untouched"
-	createNSForAGC(t, ns)
-
-	srv := scalesettest.New()
-	t.Cleanup(srv.Close)
-
-	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
-	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	rs := newRunnerSet("classic-set", ns, "gw") // default acquisitionProtocol = Classic
-	require.NoError(t, k8sClient.Create(ctx, rs))
-	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
-	})
-
-	startRunnerSetReconcilerWithScaleSet(t, srv)
-
-	// The classic set comes up via the classic multiplexer (ListenerActive).
-	waitForSetReadyReason(t, ns, "classic-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
-
-	// It defaulted to Classic and never touched the scale-set backend.
-	var got v2alpha1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "classic-set"}, &got))
-	assert.Equal(t, v2alpha1.AcquisitionProtocolClassic, got.Spec.AcquisitionProtocol, "a set with no protocol defaults to Classic")
-
-	// Give the reconciler ample time; the fake must have served zero calls (no scale
-	// set registered, no session opened) — the classic path is byte-for-byte unchanged.
-	time.Sleep(500 * time.Millisecond)
-	assert.Empty(t, srv.Calls(), "a Classic RunnerSet must never reach the scale-set backend")
-	_, ok := srv.ScaleSetIDByName("self-hosted")
-	assert.False(t, ok, "no scale set is registered for a Classic set")
 }
 
 // TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion is the Q373 proof at the tier

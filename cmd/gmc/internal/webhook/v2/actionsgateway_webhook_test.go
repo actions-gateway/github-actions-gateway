@@ -36,8 +36,8 @@ func fakeReader(t *testing.T, objs ...client.Object) client.Reader {
 // withV2alpha1Views returns objs plus the v2alpha1 view of each v2 object, converted
 // through the v2beta1 hub as the apiserver serves a stored object to a v2alpha1 read.
 // The fake client does not convert, and the guards read at both versions: the
-// scale-set and agent-identity inventories list at v2alpha1 because scalesetscope
-// reads spec.acquisitionProtocol, which v2 lacks, and the rest read at v2. A fixture
+// scale-set and agent-identity inventories list at v2alpha1 until Q1167 retypes them,
+// and the rest read at v2. A fixture
 // can then be both the object under admission and a sibling.
 func withV2alpha1Views(t *testing.T, objs ...client.Object) []client.Object {
 	t.Helper()
@@ -131,7 +131,7 @@ func TestV2ActionsGatewayWebhook_RejectsGHESHostExcludedByDefaultProxy(t *testin
 // RunnerSets, not just its own defaultProxyRef.
 func TestV2ActionsGatewayWebhook_RejectsGHESHostExcludedByRunnerSetProxy(t *testing.T) {
 	ep := proxyWithNoProxy("team-a", "ep", ".corp.example")
-	rs := classicRS("rs", "team-a", "gw", "linux")
+	rs := labelledRS("rs", "team-a", "gw", "linux")
 	rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "ep"}
 	v := &ActionsGatewayCustomValidator{reader: fakeReader(t, ep, rs)}
 
@@ -171,7 +171,7 @@ func TestV2ActionsGatewayWebhook_AdmitsCompatibleProxyPairs(t *testing.T) {
 
 	t.Run("RunnerSet under another gateway does not bind this host", func(t *testing.T) {
 		ep := proxyWithNoProxy("team-a", "ep", "ghes.corp.example")
-		rs := classicRS("rs", "team-a", "other-gw", "linux")
+		rs := labelledRS("rs", "team-a", "other-gw", "linux")
 		rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "ep"}
 		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, ep, rs)}
 		_, err := v.ValidateCreate(ctx, v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", ""))
@@ -296,16 +296,6 @@ func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
 			scaleSetRS("two", "tenant-b", "gw-b", "linux"))}
 
 		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-c", "gw-c", "https://github.com/acme", ""))
-		require.NoError(t, err)
-	})
-
-	t.Run("a gateway with no ScaleSet referrers admits", func(t *testing.T) {
-		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
-			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
-			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
-			classicRS("classic", "tenant-b", "gw-b", "linux"))}
-
-		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""))
 		require.NoError(t, err)
 	})
 

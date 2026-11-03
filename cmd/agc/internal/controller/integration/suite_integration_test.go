@@ -4,14 +4,11 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
@@ -104,25 +101,3 @@ func (stubProvider) TokenWithExpiry(_ context.Context) (*githubapp.InstallationT
 // registry, so it must be created a single time per test binary; counters
 // accumulate across tests, so assertions read before/after deltas.
 var sharedListenerMetrics = sync.OnceValue(runnercore.NewMetrics)
-
-// brokerRegistrar returns credentials pointing to the stub server.
-type brokerRegistrar struct {
-	stub   *brokertest.Server
-	nextID atomic.Int64
-}
-
-func (r *brokerRegistrar) Register(_ context.Context, _ string, _ agentpool.RegisterParams) (*agentpool.AgentCredentials, error) {
-	id := r.nextID.Add(1)
-	return &agentpool.AgentCredentials{
-		AgentID:          id,
-		ClientID:         fmt.Sprintf("client-%d", id),
-		AuthorizationURL: r.stub.URL + "token",
-		BrokerURL:        r.stub.URL,
-	}, nil
-}
-
-func (r *brokerRegistrar) Deregister(_ context.Context, _ string, _ int64) error { return nil }
-
-func (r *brokerRegistrar) ResolveAgentID(_ context.Context, _, _ string) (int64, error) {
-	return 0, nil
-}

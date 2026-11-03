@@ -10,7 +10,6 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
@@ -22,8 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// The capacity gate against a real apiserver, on BOTH acquisition tiers and across
-// both cluster facts (Q405, Q406, Q470).
+// The capacity gate against a real apiserver, across both cluster facts (Q405, Q406,
+// Q470).
 //
 // The gate takes two inputs from two parties: a tenant's spec.capacityGate.mode on the
 // RunnerSet, and the platform operator's spec.clusterCapacity.nodeAutoscaling on the
@@ -36,7 +35,7 @@ import (
 // envtest can show is the loop closing: a real Pod carrying a real
 // PodScheduled=False/Unschedulable status, aged past the scheduling grace by the
 // reconciler's own RequeueAfter, publishing a condition that the admission rung then
-// reads back on a live listener's next delivery. A unit test can assert each half; it
+// reads back on a live listener's next poll. A unit test can assert each half; it
 // cannot assert that the two halves agree about the same object.
 //
 // Both tiers are covered because Q443 established that a rung expressed in only one
@@ -175,9 +174,6 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 	//
 	// Same set, same shape of stuck pod, one difference: cluster-autoscaler itself
 	// records that it will not add a node.
-	acquiresBefore := brokerStub.AcquireJobCalls()
-	capacityBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCapacity)
-
 	declined := createV2WorkerPod(t, ns, setName, "worker-declined")
 	markUnschedulable(t, declined, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
 	recordPodEvent(t, declined, "worker-declined.ca", corev1.EventTypeNormal,
@@ -192,89 +188,11 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 		"the autoscaler's own per-node-group text must reach the operator — that is what makes "+
 			"this condition actionable rather than merely true")
 
-	// End to end: the closed gate refuses a delivered job rather than claiming it.
-	// maxWorkers is 3 against two in-flight pods, so the ceiling rung cannot be what
-	// refused — which is what makes the reason label meaningful here.
-	id := enqueueJobOnSetSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for %s should be active", setName)
-
-	require.Eventually(t, func() bool {
-		return admissionRejections(ns, setName, runnercore.AdmitReasonCapacity) > capacityBefore
-	}, 20*time.Second, 25*time.Millisecond,
-		"a delivery under an autoscaler-declined capacity gate must be rejected with reason=capacity")
-	require.Equal(t, acquiresBefore, brokerStub.AcquireJobCalls(),
-		"a job no node is coming for must be left queued at GitHub, never claimed by acquirejob")
-}
-
-// TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire is the classic tier on a cluster
-// the operator has asserted cannot grow:
-// with the gate closed, a delivered job must be left queued at GitHub rather than
-// claimed.
-//
-// The acquire assertion is made server-side on the broker stub's call counter, not by
-// the absence of a worker pod: "no pod appeared" would also pass if the AGC had claimed
-// the job and then failed to place it, which is exactly the claim-and-stall this rung
-// exists to prevent.
-//
-// maxWorkers is deliberately 3 against a single in-flight pod, so the ceiling rung
-// cannot be what refused. That isolation is what makes the reason label meaningful:
-// a rung misordered behind the ceiling would report reason="ceiling" here.
-func TestV2_RunnerSet_CapacityGate_FixedClusterSkipsAcquire(t *testing.T) {
-	const ns = "v2-rs-capgate-classic"
-	const setName = "capgate-set"
-	createNSForAGC(t, ns)
-
-	require.NoError(t, k8sClient.Create(ctx, newFixedSizeGatewayForSet("gw", ns)))
-	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	rs := newRunnerSet(setName, ns, "gw")
-	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
-	// A 30s deadline gives a 15s scheduling grace and a further 15s before the reaper
-	// deletes the pod — enough window to observe the closed gate refuse a delivery.
-	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
-	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
-	require.NoError(t, k8sClient.Create(ctx, rs))
-	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
-	})
-
-	rec := startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
-
-	acquiresBefore := brokerStub.AcquireJobCalls()
-	capacityBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCapacity)
-	ceilingBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCeiling)
-	quotaBefore := admissionRejections(ns, setName, runnercore.AdmitReasonQuota)
-
-	// The scheduler cannot place this set's worker shape.
-	pod := createV2WorkerPod(t, ns, setName, "worker-unplaceable")
-	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
-	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonPodsUnschedulable, 25*time.Second)
-
-	id := enqueueJobOnSetSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for %s should be active", setName)
-
-	require.Eventually(t, func() bool {
-		return admissionRejections(ns, setName, runnercore.AdmitReasonCapacity) > capacityBefore
-	}, 20*time.Second, 25*time.Millisecond,
-		"a delivery under a closed capacity gate must be rejected with reason=capacity")
-
-	// The job was never claimed. The counter is monotonic and only this test enqueues
-	// while it runs, so a flat count is a real skip rather than a slow claim.
-	require.Never(t, func() bool {
-		return brokerStub.AcquireJobCalls() > acquiresBefore
-	}, 2*time.Second, 100*time.Millisecond,
-		"a job the cluster cannot place must be left queued at GitHub, never claimed by acquirejob")
-
-	// Attribution: neither sibling rung may absorb a capacity refusal. The ceiling
-	// series is the load-bearing one — a capacity rung ordered after the ceiling, or one
-	// that reserved a slot, would show up here.
-	require.Equal(t, ceilingBefore, admissionRejections(ns, setName, runnercore.AdmitReasonCeiling),
-		"the capacity rung reserves nothing and must never be attributed to the ceiling")
-	require.Equal(t, quotaBefore, admissionRejections(ns, setName, runnercore.AdmitReasonQuota),
-		"an unplaceable pod is not a quota rejection; the two rungs answer different questions")
+	// End to end: the closed gate withholds the set's capacity from GitHub, so no job
+	// is assigned that no node is coming for. The reaper may already have deleted the
+	// first pod past its deadline, so the set advertises one or two in-flight pods of
+	// its ceiling of 3 and withholds the rest.
+	waitForCapacityWithheld(t, ns, setName, inFlightWorkerPods(t, ns, setName), 3)
 }
 
 // TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity is the same rung's
@@ -381,9 +299,9 @@ func markImagePullBackOff(t *testing.T, pod *corev1.Pod, image string) {
 	require.NoError(t, k8sClient.Status().Update(ctx, pod))
 }
 
-// TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire is Q714 through the
+// TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartWithholdsCapacity is Q714 through the
 // whole loop: a real Pod that BOUND to a node and then could not start must close the
-// gate and leave the next delivered job queued at GitHub.
+// gate and withhold the set's capacity from GitHub.
 //
 // The gateway is the ELASTIC one, which is the load-bearing choice. Under
 // nodeAutoscaling: Present the only other signal is the autoscaler's own declination,
@@ -392,11 +310,10 @@ func markImagePullBackOff(t *testing.T, pod *corev1.Pod, image string) {
 // startup verdict, which is what makes this the assertion that the verdict is not
 // selected by the cluster fact the other two are.
 //
-// Like the sibling classic test, the skip is asserted on the broker stub's acquire
-// counter rather than on the absence of a pod: "no pod appeared" would also pass if the
-// AGC had claimed the job and then failed to place it, which is the claim-and-stall
-// this rung exists to prevent.
-func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire(t *testing.T) {
+// The skip is asserted on the advertised capacity rather than on the absence of a pod:
+// "no pod appeared" would also pass if GitHub had assigned the job and the AGC had then
+// failed to place it, which is the claim-and-stall this rung exists to prevent.
+func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartWithholdsCapacity(t *testing.T) {
 	const ns = "v2-rs-capgate-nostart"
 	const setName = "capgate-nostart-set"
 	const image = "example.invalid/build-capable-runner:replace-me"
@@ -420,10 +337,6 @@ func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire(t *testing.
 	rec := startRunnerSetReconciler(t)
 	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
 
-	acquiresBefore := brokerStub.AcquireJobCalls()
-	capacityBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCapacity)
-	ceilingBefore := admissionRejections(ns, setName, runnercore.AdmitReasonCeiling)
-
 	pod := createV2WorkerPod(t, ns, setName, "worker-unpullable")
 	markImagePullBackOff(t, pod, image)
 	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonPodsNotStarting, 25*time.Second)
@@ -441,19 +354,39 @@ func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartSkipsAcquire(t *testing.
 	require.Contains(t, declined.Message, image,
 		"the condition must name the image, which is the operator's whole remedy")
 
-	id := enqueueJobOnSetSession(15*time.Second, setName, nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for %s should be active", setName)
+	// The closed gate withholds the set's capacity from GitHub: one in-flight pod
+	// against a ceiling of 3 advertises that one and withholds the other two.
+	waitForCapacityWithheld(t, ns, setName, inFlightWorkerPods(t, ns, setName), 3)
+}
 
+// waitForCapacityWithheld waits until set advertises only its inflight worker pods,
+// with the capacity rung withholding the rest of ceiling. inflight is read on every
+// poll, so a pod the reaper deletes mid-wait moves the target with it.
+func waitForCapacityWithheld(t *testing.T, ns, set string, inflight func() int32, ceiling int32) {
+	t.Helper()
 	require.Eventually(t, func() bool {
-		return admissionRejections(ns, setName, runnercore.AdmitReasonCapacity) > capacityBefore
-	}, 20*time.Second, 25*time.Millisecond,
-		"a delivery under a gate closed by the kubelet's startup verdict must be rejected with reason=capacity")
+		n := inflight()
+		advertised := testutil.ToFloat64(scaleSetTestMetrics.AdvertisedCapacity.WithLabelValues(ns, set))
+		withheld := testutil.ToFloat64(
+			scaleSetTestMetrics.CapacityWithheld.WithLabelValues(ns, set, runnercore.AdmitReasonCapacity))
+		return n > 0 && advertised == float64(n) && withheld == float64(ceiling-n)
+	}, 20*time.Second, 100*time.Millisecond,
+		"a closed gate must advertise only the set's %d in-flight worker(s) and withhold the rest of %d", inflight, ceiling)
+}
 
-	require.Never(t, func() bool {
-		return brokerStub.AcquireJobCalls() > acquiresBefore
-	}, 2*time.Second, 100*time.Millisecond,
-		"a job whose worker cannot start must be left queued at GitHub, never claimed by acquirejob")
-
-	require.Equal(t, ceilingBefore, admissionRejections(ns, setName, runnercore.AdmitReasonCeiling),
-		"the capacity rung reserves nothing and must never be attributed to the ceiling")
+// inFlightWorkerPods counts set's worker pods that are not being deleted, which is
+// the in-flight figure the scale-set tier advertises.
+func inFlightWorkerPods(t *testing.T, ns, set string) func() int32 {
+	return func() int32 {
+		var pods corev1.PodList
+		require.NoError(t, k8sClient.List(ctx, &pods, client.InNamespace(ns),
+			client.MatchingLabels{provisioner.LabelRunnerSet: set}))
+		var n int32
+		for i := range pods.Items {
+			if pods.Items[i].DeletionTimestamp == nil {
+				n++
+			}
+		}
+		return n
+	}
 }
