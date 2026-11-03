@@ -41,7 +41,8 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | Q1258 | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | ✅ landed: the admission policies and the GMC read only the `actions-gateway.com` tenant marker, privileged grant and downgrade annotation |
 | Q1271 | The GMC deletes its Secret-reader RoleBinding from ex-tenant namespaces | `2.0-gate` | ✅ landed: the GMC deletes its own binding once a namespace loses the tenant marker, through a delete-only exception in `gmc-tenant-resource-guard` |
 | [Q1273](../queue/Q1273.md) | Retire the classic tier ledgers, runbooks and unread AGC env vars | `2.0-gate` | 🔲 open |
-| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167 and Q1273 |
+| [Q1278](../queue/Q1278.md) | Trace the scale-set provision path; the AGC emits no spans after Q264 | `2.0-gate` | 🔲 open |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q1273 and Q1278 |
 | Q555 | Detect flaky jobs and record each failure's platform context | `2.0-gate` | ✅ landed on the scale-set tier: the failure ledger's `failures` map, the worker snapshot, the pairing and its three metrics; the dogfood readings it rests on are [Q1236](../queue/Q1236.md) |
 | Q1183 | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | ✅ landed on the scale-set tier: the out-of-memory class, its stampede breaker and the per-job memory floor, without R12's dogfood reproduction; the deferred wait landed in Q1244 and the misclassification alert in Q1245, neither gated |
 | Q1181 | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | ✅ landed on the scale-set tier: `run_cancelled` on every arm, `attempt_limit`, `run_too_old` and `superseded` before the budget is reserved; classic takes none, and Q264 removes it |
