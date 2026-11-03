@@ -2662,7 +2662,9 @@
 An enqueued PR is the case it is armed for, since catching the merge is how a dispatcher learns the PR landed, so an eviction leaves the PR open and CLEAN with nobody told.</p>
 <p>Measured on the 2026-10-27 dispatch run: #2190 was enqueued at 17:29Z on 2026-10-30, removed at 17:56Z with reason <code>failed_checks</code>, and found 72 minutes later only because a manual snapshot listed the queue without it.
 Its watch stayed silent throughout.
-A second eviction of the same PR at 19:16Z was also caught by hand.</p>
+A second eviction of the same PR at 19:16Z was also caught by hand.
+The 2026-11-02 dispatch run hit it again: #2235 was removed from the queue by hand (reason <code>manual</code>) with its watch armed, and the dispatcher learned of it only from a peer session's message.
+An eviction for any reason goes unreported, not only <code>failed_checks</code>.</p>
 <p>The eviction is readable from the PR's timeline (<code>RemovedFromMergeQueueEvent</code>, with <code>reason</code>), so a <code>dequeued</code> event can name the reason and the failing run's candidate branch.</p>
 <p><strong>Also in scope: the timeout.</strong> The 21600 s default fits a PR whose CI is running.
 A PR handed to the maintainer waits on a human: on the same run, eight such watches timed out over two days and were re-armed by hand about ten times.

@@ -3106,6 +3106,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Several alerts in <code>deploy/monitoring/prometheusrule.yaml</code> fire on <code>increase(&lt;counter&gt;[window]) &gt; 0</code>, among them …</td>
 </tr>
 <tr>
+<td><a href="Q1243/">Q1243</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.py">Mergeability watch reports no merge-queue eviction</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
+</tr>
+<tr>
 <td><a href="Q1185/">Q1185</a></td>
 <td><a href="../development/maintaining-backlog/#plan-level-status-lives-in-the-plan-index">Should feature PRs stop editing a release plan's Status cell?</a></td>
 <td><code>retro</code> <code>open-question</code></td>
@@ -4168,14 +4176,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The per-tenant scrape docs …</td>
-</tr>
-<tr>
-<td><a href="Q1243/">Q1243</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.py">Mergeability watch reports no merge-queue eviction</a></td>
-<td><code>debt</code> <code>retro</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>pr-mergeability-watch.py</code> emits <code>head_change</code>, <code>conflict</code>, <code>closed</code> and <code>timeout</code>, and nothing when the merge queue evicts a PR.</td>
 </tr>
 <tr>
 <td><a href="Q1251/">Q1251</a></td>
