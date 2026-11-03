@@ -3562,6 +3562,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>It follows the <code>v1alpha1</code> removal (Q273), since classic was <code>v1alpha1</code>'s only acquisition path.</td>
 </tr>
 <tr>
+<td><a href="Q1271/">Q1271</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">GMC deletes its Secret-reader RoleBinding from ex-tenant namespaces</a></td>
+<td><code>security</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A namespace that stops being a tenant keeps the <code>gmc-tenant-secret-reader</code> RoleBinding the GMC created there, so the GMC keeps …</td>
+</tr>
+<tr>
 <td><a href="Q1259/">Q1259</a></td>
 <td>v2 envtest twins for behaviours only the deleted v1 suites covered</td>
 <td><code>tests</code> <code>security</code></td>
