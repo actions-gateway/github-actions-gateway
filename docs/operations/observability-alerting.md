@@ -329,7 +329,8 @@ groups:
       # emits actions_gateway_active_sessions, so throughput stalls are only
       # visible as demand (assigned) flowing while supply (provisioned) is flat.
       # A listener whose poll keeps failing is assigned nothing, which this
-      # cannot see; ActionsGatewayMessagePollFailing is the other half.
+      # cannot see; ActionsGatewayMessagePollFailing covers that case. A listener
+      # that cannot open its session at all is covered by neither (Q1276).
       - alert: ActionsGatewayScaleSetProvisioningStalled
         expr: |
           (
@@ -352,16 +353,19 @@ groups:
           description: "The scale-set acquisition tier is receiving JobAssigned messages but has provisioned no worker pods for 10+ minutes — the tier is wedged. Acquired jobs will not start. Check actions_gateway_scaleset_provision_errors_total, the worker-pod ResourceQuota, and the listener session health."
 
       # Ticket: the listener's long poll keeps failing, so no job reaches it
-      # (Q1275). The other half of the scale-set analog of
-      # ActionsGatewayNoActiveSessions: a set whose poll fails is assigned
-      # nothing, so ProvisioningStalled's demand conjunct never holds.
+      # (Q1275). Part of the scale-set analog of ActionsGatewayNoActiveSessions:
+      # a set whose poll fails is assigned nothing, so ProvisioningStalled's
+      # demand conjunct never holds. A session that never opens counts no poll
+      # error, so a listener whose Start fails, or whose re-create after a 404
+      # fails, is not covered here (Q1276).
       #
       # The threshold is derived from the listener's constants, not from live
       # traffic: a fully black-holed poll times out at 55s (the 50s hold plus
       # 5s slack) and retries after 2s, about 15 errors per 15m per listener,
       # and a fast-failing transport error retries every 2s. Above 10 in 15m
       # is most of one listener's polls failing; a lone blip never reaches it.
-      # Grouped by namespace because the series carries no runner_set. 401/403
+      # Grouped by namespace because the series carries no runner_set, so a
+      # namespace with several sets reaches the threshold sooner. 401/403
       # and 404/410 are heal paths the counter skips, so a rejected credential
       # shows up as ActionsGatewayTokenRefreshErrors or Degraded=True instead.
       - alert: ActionsGatewayMessagePollFailing
