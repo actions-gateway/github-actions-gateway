@@ -23,7 +23,7 @@
     
     
       
-        <title>Retire v1alpha1 from the design docs and GMC comments after Q273 - GitHub Actions Gateway</title>
+        <title>Retire v1alpha1 from the design docs and controller comments - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#retire-v1alpha1-from-the-design-docs-and-gmc-comments-after-q273" class="md-skip">
+        <a href="#retire-v1alpha1-from-the-design-docs-and-controller-comments" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Retire v1alpha1 from the design docs and GMC comments after Q273
+              Retire v1alpha1 from the design docs and controller comments
             
           </span>
         </div>
@@ -2657,15 +2657,18 @@
   
 
 
-<h1 id="retire-v1alpha1-from-the-design-docs-and-gmc-comments-after-q273">Retire v1alpha1 from the design docs and GMC comments after Q273<a class="headerlink" href="#retire-v1alpha1-from-the-design-docs-and-gmc-comments-after-q273" title="Permanent link">&para;</a></h1>
-<p>Blocked by <a href="../Q273/">Q273</a>'s AGC half: until the <code>RunnerGroup</code> kind is gone too, half of what these describe still ships.</p>
+<h1 id="retire-v1alpha1-from-the-design-docs-and-controller-comments">Retire v1alpha1 from the design docs and controller comments<a class="headerlink" href="#retire-v1alpha1-from-the-design-docs-and-controller-comments" title="Permanent link">&para;</a></h1>
 <p><strong>The design docs.</strong> <a href="../../design/03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md § 3.1</a> is roughly 790 lines of <code>v1alpha1</code> Go schema, introduced as "authoritative for the running <code>v1alpha1</code> API", and <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H</a> is the v2 shape's source of truth.
 Once neither v1 kind is served, § 3.1 describes nothing that runs and should point at Appendix H, or carry the v2 schema, rather than be edited in place.
 <code>git grep -c "v1alpha1\|actions-gateway.github.com" -- docs/design</code> counts 35 lines in Appendix H, 11 in 03, 8 in 05-security and a handful elsewhere (measured 2026-11-01); some are history that should stay, so each wants reading rather than a sweep.
+<a href="../../design/07-test-plan/">07-test-plan.md</a> is the same shape: Q273 fixed the bullets that named a deleted test, and its AGC envtest bullets (reconciler end-to-end, Secret lifecycle, pod provisioning, failure recovery) still describe <code>RunnerGroup</code> suites that left with it; <code>git grep -c "RunnerGroup\|v1alpha1" -- docs/design/07-test-plan.md</code> counts 11 lines (measured 2026-11-02).
 This is design docs only; the operator pages under <code>docs/operations/</code> are <a href="../Q1107/">Q1107</a>'s.</p>
 <p><strong>The GMC comments.</strong> The GMC half of Q273 fixed the comments that stated something false once v1 left, and left the ones that only narrate the port: "Mirrors v1's buildHPA", "v1 parity (Q327)", "the v2 counterpart of v1's evalRunnerGroupHealth".
 They name functions that no longer exist, so a reader cannot follow them, and the repo's comment standard is present tense with no history.
 <code>git grep -n -i "v1's\|mirrors v1\|v1 parity\|counterpart of v1" -- cmd/gmc</code> finds them; <code>egressproxy_builder.go</code>, <code>actionsgateway_v2_builder.go</code> and <code>actionsgateway_v2_controller.go</code> hold most.</p>
+<p><strong>The AGC comments.</strong> The AGC half did the same: it fixed what turned false and left the narration, such as "the v2 counterpart of RunnerGroupReconciler" and "mirrors the v1 RunnerGroup watch".
+<code>git grep -n -i -E "v1's|mirrors v1|v1 parity|counterpart of v1|v1 RunnerGroup|RunnerGroupReconciler|v2 twin" -- cmd/agc ':!cmd/agc/vendor' ':!cmd/agc/test/load'</code> finds 26 lines (measured 2026-11-02), 8 in <code>runnerset_controller.go</code>; <code>runner_shared.go</code> still introduces itself as machinery shared by the two kinds.
+<code>cmd/agc/test/load</code> is <a href="../Q264/">Q264</a>'s, and it is also why <code>agentpool.SchemeRunnerGroup</code> and <code>apinames.RunnerGroupAgentStem</code> survive: the load harness builds its pools with <code>agentpool.NewPool</code>.</p>
 
 
 

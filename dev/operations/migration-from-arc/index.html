@@ -3460,7 +3460,7 @@ Full rules: <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre
 <p>This migrates a single ARC scale set to a GAG runner set with <strong>zero downtime</strong> — ARC keeps serving until you cut workflows over, and rollback is one line.</p>
 <p>Worked example: an ARC scale set named <strong><code>gpu-large</code></strong> in namespace <strong><code>team-a</code></strong>, authenticated with a GitHub App, running GPU workflows.</p>
 <h3 id="0-confirm-prerequisites">0. Confirm prerequisites<a class="headerlink" href="#0-confirm-prerequisites" title="Permanent link">&para;</a></h3>
-<p>The GMC is installed <strong>with the v2 CRD chart</strong> (<a href="../install/#optional-the-v2-api-crds">Install</a>), the cluster is <strong>Kubernetes ≥ 1.31</strong>, and its CNI enforces egress NetworkPolicy (<a href="#egress-isolation-the-big-difference">Egress isolation</a>).
+<p>The GMC is installed <strong>with the v2 CRD chart</strong> (<a href="../install/#the-v2-api-crds">Install</a>), the cluster is <strong>Kubernetes ≥ 1.31</strong>, and its CNI enforces egress NetworkPolicy (<a href="#egress-isolation-the-big-difference">Egress isolation</a>).
 Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned <code>ResourceQuota</code> — see the <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre-Conditions</a>.
 <strong>Leave the ARC scale set running</strong> throughout.</p>
 <h3 id="1-create-the-github-app-secret">1. Create the GitHub App Secret<a class="headerlink" href="#1-create-the-github-app-secret" title="Permanent link">&para;</a></h3>

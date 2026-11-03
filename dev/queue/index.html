@@ -3530,20 +3530,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>actions/scaleset</code> reaches GA/v1.0 or the auto-assign contract (<code>actions/scaleset#107</code>) is documented.</td>
 </tr>
 <tr>
-<td><a href="Q273/">Q273</a></td>
-<td><a href="../plan/q273-v2-front-door/">Complete v1 removal (full v2-only)</a></td>
-<td><code>docs</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>The <code>actions-gateway.github.com</code> group (<code>v1alpha1</code>) leaves in two halves, and the GMC half is on <code>main</code>: no v1 <code>ActionsGateway</code> API …</td>
-</tr>
-<tr>
 <td><a href="Q1263/">Q1263</a></td>
 <td><a href="../plan/q1167-v2-retype-split/">Retype the AGC onto api/v2 once classic acquisition is gone</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>M</td>
-<td>Blocked on Q273 (the <code>v1alpha1</code> removal) and Q264 (the classic removal): <code>runnerset_controller.go</code> reads <code>spec.acquisitionProtocol</code> and …</td>
+<td>Blocked on Q264 (the classic removal): <code>runnerset_controller.go</code> reads <code>spec.acquisitionProtocol</code> and <code>spec.maxListeners</code> at nine sites …</td>
 </tr>
 <tr>
 <td><a href="Q1167/">Q1167</a></td>
@@ -3557,25 +3549,25 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q264/">Q264</a></td>
 <td><a href="../plan/q264-scale-set-protocol/">Remove deprecated classic acquisition machinery</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>L</td>
-<td>Blocked by <a href="Q273/">Q273</a>: classic is <code>v1alpha1</code>'s only acquisition path, so it cannot go while <code>v1alpha1</code> is served.</td>
+<td>It follows the <code>v1alpha1</code> removal (Q273), since classic was <code>v1alpha1</code>'s only acquisition path.</td>
 </tr>
 <tr>
 <td><a href="Q1258/">Q1258</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Strip the Q147 legacy tenant-label dual-read once v1alpha1 is gone</a></td>
 <td><code>security</code> <code>2.0-gate</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked by <a href="Q273/">Q273</a>'s AGC half: once no <code>actions-gateway.github.com</code> kind is served, nothing should still accept that group's …</td>
+<td>No <code>actions-gateway.github.com</code> kind is served since Q273, so nothing should still accept that group's namespace labels as a tenant or …</td>
 </tr>
 <tr>
 <td><a href="Q1259/">Q1259</a></td>
-<td>v2 envtest twins for behaviours only the deleted v1 GMC suites covered</td>
+<td>v2 envtest twins for behaviours only the deleted v1 suites covered</td>
 <td><code>tests</code> <code>security</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>The GMC half of <a href="Q273/">Q273</a> deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a …</td>
+<td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>
@@ -3583,15 +3575,15 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>S</td>
-<td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q273/">Q273</a>, <a href="Q264/">Q264</a>: the coupled removals land first, after Q1086's storage migration in 1.10 …</td>
+<td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q264/">Q264</a>: the coupled removals land first, after Q1086's storage migration in 1.10, so the surface the …</td>
 </tr>
 <tr>
 <td><a href="Q1260/">Q1260</a></td>
-<td>Retire v1alpha1 from the design docs and GMC comments after Q273</td>
+<td>Retire v1alpha1 from the design docs and controller comments</td>
 <td><code>docs</code> <code>debt</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked by <a href="Q273/">Q273</a>'s AGC half: until the <code>RunnerGroup</code> kind is gone too, half of what these describe still ships.</td>
+<td><strong>The design docs.</strong> <a href="../design/03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md § 3.1</a> is roughly 790 lines of …</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>
@@ -3683,11 +3675,11 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </tr>
 <tr>
 <td><a href="Q1008/">Q1008</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>MaxWorkersCeiling</code> breached its 20s wait on a spent broker session</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/reconciler_test.go"><code>MaxWorkersCeiling</code> breached its 20s wait on a spent broker session</a></td>
 <td><code>flake</code> <code>tests</code></td>
 <td>💤</td>
 <td>M</td>
-<td><strong>Event:</strong> <code>TestAGC_PodProvisioning_MaxWorkersCeiling</code> breaches its 20 s wait again on <code>main</code>, or any test in the <code>cmd/agc</code> integration …</td>
+<td><strong>Event:</strong> any test in the <code>cmd/agc</code> integration suite breaches a wait with no matching <code>AcquireJob</code> in the log.</td>
 </tr>
 <tr>
 <td><a href="Q823/">Q823</a></td>

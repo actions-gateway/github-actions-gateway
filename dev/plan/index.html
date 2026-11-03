@@ -2780,7 +2780,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: <a href="../queue/Q1167/">Q1167</a>, <a href="../queue/Q273/">Q273</a> and <a href="../queue/Q264/">Q264</a>, blocked behind it; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, blocked on all four</td>
+<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: Q273's <code>v1alpha1</code> removal is on <code>main</code>, and <a href="../queue/Q1167/">Q1167</a> and <a href="../queue/Q264/">Q264</a> remain; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, blocked on both</td>
 </tr>
 <tr>
 <td><a href="v2beta1-retirement/">v2beta1-retirement.md</a></td>
@@ -3004,7 +3004,7 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="v1-classic-sunset-review/">v1-classic-sunset-review.md</a></td>
 <td>Two-axis (v1alpha1 API vs classic protocol) strategic review of the "sunset v1 faster" hypothesis: per-workload viability, scaling/perf, structural-ceiling verdict, and a sequenced sunset-timeline recommendation</td>
-<td>ⓘ Review — revised 2026-07-05 (§6.2): v2/scale-set is the product, classic is terminal, and the earlier "hold both removals" hedge is dropped — removal is committed to <code>v2.0.0</code> gated on v2 <em>stability</em>, not adopters. Follow-ups filed as <a href="../queue/Q272/">Q272</a>/<a href="../queue/Q273/">Q273</a> — both now parked in Deferred, behind upstream scale-set GA and <a href="v2-ga/">v2-ga.md</a> Phase 3 respectively; sequencing lives in <a href="v2-ga/">v2-ga.md</a></td>
+<td>ⓘ Review — revised 2026-07-05 (§6.2): v2/scale-set is the product, classic is terminal, and the earlier "hold both removals" hedge is dropped — removal is committed to <code>v2.0.0</code> gated on v2 <em>stability</em>, not adopters. Follow-ups filed as <a href="../queue/Q272/">Q272</a> and Q273: the first parked in Deferred behind upstream scale-set GA, and the second, the <code>v1alpha1</code> removal, landed for <code>v2.0.0</code>; sequencing lives in <a href="v2-ga/">v2-ga.md</a></td>
 </tr>
 <tr>
 <td><a href="v2-api/">v2-api.md</a></td>
@@ -3024,12 +3024,7 @@ Each has inline ✓ markers per item.</p>
 <tr>
 <td><a href="q264-scale-set-protocol/">q264-scale-set-protocol.md</a></td>
 <td>The open residual of the scale-set migration: the terminal PR that removes the deprecated classic acquisition machinery + transitional API fields (the shipped P0–P5 narrative is archived — see <a href="archive/q264-scale-set-protocol-phases/">archive/q264-scale-set-protocol-phases.md</a>)</td>
-<td>❌ Open — the one-minor-deprecation-window framing is superseded: <a href="../queue/Q264/">Q264</a> is blocked on the <code>v2</code>-group and <code>v1alpha1</code> removals (<a href="../queue/Q1167/">Q1167</a>, <a href="../queue/Q273/">Q273</a>; <a href="v2-ga/">v2-ga.md</a> Phase 3), stripping classic in the same <code>v2.0.0</code> bundle as <code>v1alpha1</code> and <code>v2alpha1</code> rather than on its own schedule</td>
-</tr>
-<tr>
-<td><a href="q273-v2-front-door/">q273-v2-front-door.md</a></td>
-<td>Route the front door (README, onboarding, positioning) to the v2 API, add deprecate-v1 banners, and make the <code>gag-migrate</code> v1→v2 story exemplary — the do-now slice of the sunset review §6.2 (<a href="../queue/Q273/">Q273</a>)</td>
-<td>⚠️ Front-door slice done — v2-first onboarding, the v1 deprecation banners, and the <code>gag-migrate</code> polish all shipped. The residual full v1 removal (<a href="../queue/Q273/">Q273</a>) is no longer gated on v2beta1 (Q74 shipped); it is parked in Deferred and lands in the <code>v2.0.0</code> bundle — <a href="v2-ga/">v2-ga.md</a> Phase 3</td>
+<td>❌ Open — the one-minor-deprecation-window framing is superseded: <a href="../queue/Q264/">Q264</a> follows the <code>v1alpha1</code> removal (Q273, landed; <a href="v2-ga/">v2-ga.md</a> Phase 3), stripping classic in the same <code>v2.0.0</code> bundle as <code>v1alpha1</code> and <code>v2alpha1</code> rather than on its own schedule</td>
 </tr>
 <tr>
 <td><a href="q224-fanout-dispatch-lever-spike/">q224-fanout-dispatch-lever-spike.md</a></td>
@@ -3071,6 +3066,11 @@ The doc remains available — the rationale is often more valuable than the diff
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><a href="archive/q273-v2-front-door/">archive/q273-v2-front-door.md</a></td>
+<td>Route the front door (README, onboarding, positioning) to the v2 API, add deprecate-v1 banners, and make the <code>gag-migrate</code> v1→v2 story exemplary — the do-now slice of the sunset review §6.2</td>
+<td>2026-11-02 — Q273; the front-door slice shipped first, then the <code>v2.0.0</code> removal of the <code>actions-gateway.github.com</code> group in two halves: the GMC's v1 <code>ActionsGateway</code> and <code>gag-migrate</code>'s fan-out, then the AGC's <code>RunnerGroup</code></td>
+</tr>
 <tr>
 <td><a href="archive/release-1.10/">archive/release-1.10.md</a></td>
 <td>The storage advance: <code>v2</code> becomes the storage version on every kind and <code>gag-migrate storage-version</code> rewrites what is stored, so <code>v2.0.0</code> can be removals only; with it, scale-set recovery keyed on the job a runner took and per-job egress-proxy failure attribution</td>
@@ -3394,7 +3394,7 @@ The doc remains available — the rationale is often more valuable than the diff
 <tr>
 <td><a href="archive/q365-shared-foundation-out-of-v1-files/">archive/q365-shared-foundation-out-of-v1-files.md</a></td>
 <td>Audit finding F6: relocate the cross-version GMC foundation out of the v1-named <code>builder.go</code>/<code>actionsgateway_controller.go</code>/<code>cert.go</code>/<code>metrics_cert.go</code>, and the AGC's version-neutral <code>Metrics</code>/<code>AdmitFunc</code>/sink contracts out of the classic-only <code>listener</code> package — the measured version-neutral vs v1-specific classification, and why <code>JobHandlerFunc</code> did not move</td>
-<td>2026-07-25 — Q365; eight <code>shared_*.go</code> files plus <code>ipranges_v1.go</code> in the GMC package, a new <code>cmd/agc/internal/runnercore</code> leaf package in the AGC. Proven behaviour-free by an AST diff of every top-level declaration before and after. Turns the v1 removal (<a href="../queue/Q273/">Q273</a>) and the classic removal (<a href="../queue/Q264/">Q264</a>) into file deletions</td>
+<td>2026-07-25 — Q365; eight <code>shared_*.go</code> files plus <code>ipranges_v1.go</code> in the GMC package, a new <code>cmd/agc/internal/runnercore</code> leaf package in the AGC. Proven behaviour-free by an AST diff of every top-level declaration before and after. Turns the v1 removal (Q273) and the classic removal (<a href="../queue/Q264/">Q264</a>) into file deletions</td>
 </tr>
 <tr>
 <td><a href="archive/versioned-docs/">archive/versioned-docs.md</a></td>

@@ -3361,40 +3361,22 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td>Broker OAuth token-exchange retries a freshly recycled agent made while GitHub's token endpoint still returned a transient <code>400 "Registration … was not found"</code> for its just-created runner record (the <code>generate-jitconfig</code> → OAuth-service propagation window, Q267). The listener rides these out with a bounded, jittered backoff instead of exiting and churning a new record. A brief non-zero blip during a burst is normal; a <strong>sustained</strong> rate means wide-pool recycle churn is repeatedly hitting the propagation seam — see the <a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-recycle-blocked-on-a-still-running-runner">runbook</a>.</td>
 </tr>
 <tr>
-<td><code>actions_gateway_worker_quota_pressure</code></td>
-<td>Gauge</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td><code>1</code> when <code>WorkerQuotaPressure=True</code> (Q82): workers can't scale to the configured ceiling within the namespace <code>ResourceQuota</code> headroom. Warning — load-dependent; alert with <code>for:</code>, don't page.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_quota_exceeded</code></td>
-<td>Gauge</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td><code>1</code> when <code>WorkerQuotaExceeded=True</code> (Q82): the <code>ResourceQuota</code> can't admit another worker pod — the next acquired job's pod will be rejected. Error — page.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_workers_unschedulable</code></td>
-<td>Gauge</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td><code>1</code> when <code>WorkersUnschedulable=True</code> (Q157): worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (no matching node / affinity / taints — <strong>not</strong> quota, which <code>WorkerQuotaExceeded</code> covers). Capacity is not materializing — page if sustained. The stuck pods and the scheduler verdict are named in the condition message.</td>
-</tr>
-<tr>
 <td><code>actions_gateway_runnerset_worker_quota_pressure</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td><code>1</code> when <code>WorkerQuotaPressure=True</code> on a v2 <code>RunnerSet</code> (Q303, exported in Q319) — the per-set twin of <code>actions_gateway_worker_quota_pressure</code>, same semantics and same warning grade. Alert with <code>for:</code>, don't page.</td>
+<td><code>1</code> when <code>WorkerQuotaPressure=True</code> on a v2 <code>RunnerSet</code> (Q303, exported in Q319): workers can't scale to the configured ceiling within the namespace <code>ResourceQuota</code> headroom. Warning — load-dependent; alert with <code>for:</code>, don't page.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_runnerset_worker_quota_exceeded</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td><code>1</code> when <code>WorkerQuotaExceeded=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_worker_quota_exceeded</code>: the <code>ResourceQuota</code> can't admit another worker pod. Error — page. On a <code>ScaleSet</code> set the same headroom also drives <code>scaleset_capacity_withheld{reason="quota"}</code>, but the two are not equivalent: that gauge counts the slots quota removed from the ceiling, while this one trips only once there is no room for even one more worker pod.</td>
+<td><code>1</code> when <code>WorkerQuotaExceeded=True</code> on a v2 <code>RunnerSet</code> (Q82, Q319): the <code>ResourceQuota</code> can't admit another worker pod. Error — page. On a <code>ScaleSet</code> set the same headroom also drives <code>scaleset_capacity_withheld{reason="quota"}</code>, but the two are not equivalent: that gauge counts the slots quota removed from the ceiling, while this one trips only once there is no room for even one more worker pod.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_runnerset_workers_unschedulable</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td><code>1</code> when <code>WorkersUnschedulable=True</code> on a v2 <code>RunnerSet</code> — the per-set twin of <code>actions_gateway_workers_unschedulable</code>: worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (<strong>not</strong> quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message.</td>
+<td><code>1</code> when <code>WorkersUnschedulable=True</code> on a v2 <code>RunnerSet</code> (Q157, Q319): worker pods are stuck Pending past the scheduling grace because the scheduler can't place them (<strong>not</strong> quota). Page if sustained; the stuck pods and the scheduler verdict are named in the condition message.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_runnerset_workers_not_starting</code></td>
@@ -3424,7 +3406,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>controller_runtime_reconcile_errors_total</code></td>
 <td>Counter</td>
 <td><code>controller</code></td>
-<td>GMC/AGC reconcile errors. Emitted by controller-runtime (no <code>actions_gateway_</code> prefix); the <code>controller</code> label distinguishes <code>actionsgateway</code>, <code>runnergroup</code>, etc. Non-zero values deserve investigation.</td>
+<td>GMC/AGC reconcile errors. Emitted by controller-runtime (no <code>actions_gateway_</code> prefix); the <code>controller</code> label distinguishes <code>actionsgateway-v2</code>, <code>runnerset</code>, etc. Non-zero values deserve investigation.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_ip_range_updates_total</code></td>
@@ -3526,23 +3508,16 @@ Reading one as another sends an operator hunting in entirely the wrong place.</p
 <p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being disrupted means the recovery is not firing, not that nothing happened.
 Check <code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then <code>actions_gateway_eviction_recovery_identity_unknown_total</code> and the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.
 For preemption specifically, see <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a> — its scale-set path has a time limit the eviction path does not.</p>
-<p><strong>Proxy conditions on a v2 deploy.</strong> On a v2 install (the opt-in <code>actions-gateway-crds-v2</code> CRDs), the GMC also counts v2 <code>ActionsGateway</code>s in <code>managed_gateways</code> and reflects each <code>EgressProxy</code>'s proxy conditions in <code>proxy_quota_pressure</code>, <code>proxy_quota_exceeded</code>, and <code>egress_rules_stale</code> — the EgressProxy reconciler sets those conditions with the same semantics as the v1 <code>ActionsGateway</code> (a namespace-<code>ResourceQuota</code>-bounded, HPA-scaled pool whose default CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache) (Q320).
-The v1 and v2 series share one metric family; the <code>name</code> label distinguishes them by object — both kinds carry the same <code>namespace</code>/<code>name</code> labels, so nothing about the v1 series changes.
-The worker-capacity gauges below take the other route, and the note on them says why.</p>
-<p><code>github_egress_incomplete</code> is the exception among the proxy gauges: its condition exists only on the <code>EgressProxy</code> — v1 has no twin — so the family is emitted only on a v2 install (Q537).</p>
-<p><strong>Worker-capacity conditions on v2 <code>RunnerSet</code>s.</strong> The <code>WorkerQuotaPressure</code>, <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are also set on a v2 <code>RunnerSet</code> (Q303) with the same semantics as the v1 <code>RunnerGroup</code>, so a stalled set surfaces the capacity blocker in <code>.status.conditions</code> instead of only a rising <code>pendingJobs</code> with <code>Ready=True</code>.
-<code>WorkersNotStarting</code> (Q906) joins them as a v2-only fourth: the kubelet's startup verdict, which the v1 <code>RunnerGroup</code> computes but does not publish.
+<p><strong>Proxy conditions.</strong> The <code>EgressProxy</code> reconciler sets the proxy conditions on each pool — a namespace-<code>ResourceQuota</code>-bounded, HPA-scaled pool whose default CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache — and the GMC reflects them in <code>proxy_quota_pressure</code>, <code>proxy_quota_exceeded</code>, <code>egress_rules_stale</code>, and <code>github_egress_incomplete</code>, keyed by the pool's <code>namespace</code>/<code>name</code> (Q320, Q537).</p>
+<p><strong>Worker-capacity conditions on <code>RunnerSet</code>s.</strong> The <code>WorkerQuotaPressure</code>, <code>WorkerQuotaExceeded</code>, and <code>WorkersUnschedulable</code> conditions are set on a <code>RunnerSet</code> (Q303), so a stalled set surfaces the capacity blocker in <code>.status.conditions</code> instead of only a rising <code>pendingJobs</code> with <code>Ready=True</code>.
+<code>WorkersNotStarting</code> (Q906) joins them as a fourth: the kubelet's startup verdict.
 Each has its own gauge — the <code>actions_gateway_runnerset_*</code> set above (Q319, Q906) — so a <code>RunnerSet</code> is alertable without scraping CRD conditions through kube-state-metrics.</p>
 <p><strong><code>WorkerCapacityDeclined</code> is gauged too, and differs in two ways</strong> (Q643).
 It carries a <code>reason</code> label, because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions — one has stuck pods to inspect, the other has none and means intake is throttled to one probe job per <code>pendingPodDeadline</code> window.
 And it is emitted only for a set whose gate is on, because the reconciler <em>removes</em> the condition for an ungated set rather than publishing it <code>False</code>; the family follows the condition, so absence means "no gate here".
 The per-consequence series stay as they are: <code>jobs_admission_rejected_total{reason="capacity"}</code> counts jobs the classic tier left queued and <code>scaleset_capacity_withheld{reason="capacity"}</code> counts slots the scale-set tier withheld.
 Those answer "how much did the gate cost this tenant"; this gauge answers "is the gate closed right now, and on what evidence".</p>
-<p><strong>Why separate families instead of a <code>runner_set</code> label on the v1 gauges.</strong> Unlike the proxy conditions above, the two objects do not share a label set: the v1 series key on <code>runner_group</code>, which a <code>RunnerSet</code> has none of.
-Folding both into one family would leave every set at <code>runner_group=""</code>, which silently breaks the <code>sum by (namespace, runner_group)</code> groupings the v1 series promise — every set would collapse into a single unnamed bucket — and would add an always-empty <code>runner_set</code> label to every existing v1 series.
-Separate names cost existing queries nothing, and a v2 dashboard selects on <code>runner_set</code> directly rather than filtering <code>{runner_set!=""}</code> on every query.
-The v1 families are unchanged and stay <code>RunnerGroup</code>-only.</p>
-<p><strong><code>RunnerSetsDegraded</code> on a v2 <code>ActionsGateway</code>.</strong> The v2 <code>ActionsGateway</code> carries a <code>RunnerSetsDegraded</code> condition (Q304) — the child-health rollup counterpart of the v1 <code>RunnerGroupsDegraded</code> above.
+<p><strong><code>RunnerSetsDegraded</code> on a v2 <code>ActionsGateway</code>.</strong> The v2 <code>ActionsGateway</code> carries a <code>RunnerSetsDegraded</code> condition (Q304), a child-health rollup.
 It is <code>True</code> when one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) are impaired — not serving jobs: a non-transient <code>Ready=False</code> (a reference did not resolve or a provisioning step failed) <strong>or</strong> any abnormal-is-True impairing condition — <code>Degraded</code> (revoked/invalid credentials, pushed by the listener independently of <code>Ready</code>, Q330), <code>CredentialUnavailable</code>, <code>RunnerVersionTooOld</code>, or <code>WorkersUnschedulable</code>.
 The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>EgressAuditUnattributed</code>, <code>PossibleReapBlockingSidecar</code>, <code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load.
 The condition message names the impaired sets and their tripped signals, giving the operator a single pane without inspecting each child.
@@ -3878,21 +3853,6 @@ Neither binary acquires jobs, so neither has a tier.</p>
 <td><code>actions_gateway_broker_session_leaks_total</code></td>
 <td>Classic only</td>
 <td>Absent by design. One long-lived session per set cannot accumulate the abandoned sessions a recycling pool does.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_quota_pressure</code></td>
-<td>Classic only</td>
-<td>A v1 <code>RunnerGroup</code> collector, and a <code>RunnerGroup</code> only acquires classically. <code>actions_gateway_runnerset_worker_quota_pressure</code> is the v2 twin and covers both tiers.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_quota_exceeded</code></td>
-<td>Classic only</td>
-<td>As above; the twin is <code>actions_gateway_runnerset_worker_quota_exceeded</code>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_workers_unschedulable</code></td>
-<td>Classic only</td>
-<td>As above; the twin is <code>actions_gateway_runnerset_workers_unschedulable</code>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
@@ -4282,8 +4242,7 @@ A capability that reaches only one tier is as invisible in a condition as it is 
 <li><strong>The reasons are the AGC's.</strong> The GMC's own conditions are not listed, for the reason the metric ledger gives: the GMC acquires no jobs, so it has no tier.</li>
 </ul>
 <h3 id="condition-reasons">Condition reasons<a class="headerlink" href="#condition-reasons" title="Permanent link">&para;</a></h3>
-<p>The <code>reason</code> field of a <code>.status.conditions[]</code> entry on a <code>RunnerGroup</code> (<code>v1alpha1</code>) or <code>RunnerSet</code> (<code>v2alpha1</code>).
-A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 path writes is classic-only by construction.</p>
+<p>The <code>reason</code> field of a <code>.status.conditions[]</code> entry on a <code>RunnerSet</code>.</p>
 <table>
 <thead>
 <tr>
@@ -4322,11 +4281,6 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <td><code>CapacityAvailable</code></td>
 <td>Both</td>
 <td>The capacity gate's cleared state, from the same shared call.</td>
-</tr>
-<tr>
-<td><code>CredentialAvailable</code></td>
-<td>Classic only</td>
-<td>A <code>RunnerGroup</code> condition, and a <code>RunnerGroup</code> only acquires classically. A v2 set reports the same state as <code>Ready</code>/<code>TokenUnavailable</code>.</td>
 </tr>
 <tr>
 <td><code>DirectEgress</code></td>
@@ -4411,7 +4365,7 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 <tr>
 <td><code>PodsUnschedulable</code></td>
 <td>Both</td>
-<td>The scheduler's verdict on worker pods, evaluated for <code>RunnerGroup</code> and <code>RunnerSet</code> alike.</td>
+<td>The scheduler's verdict on worker pods, evaluated on both tiers alike.</td>
 </tr>
 <tr>
 <td><code>PollingHealthy</code></td>
@@ -4566,7 +4520,7 @@ A <code>RunnerGroup</code> only ever acquires classically, so a reason no v2 pat
 </tbody>
 </table>
 <h3 id="event-reasons">Event reasons<a class="headerlink" href="#event-reasons" title="Permanent link">&para;</a></h3>
-<p>The <code>Reason</code> on a Kubernetes Event the AGC records on the owning <code>RunnerGroup</code>/<code>RunnerSet</code>, listed by the reason string <code>kubectl get events --field-selector reason=…</code> matches.
+<p>The <code>Reason</code> on a Kubernetes Event the AGC records on the owning <code>RunnerSet</code>, listed by the reason string <code>kubectl get events --field-selector reason=…</code> matches.
 Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook entry</a> naming the remedy, which the gate holds it to.</p>
 <table>
 <thead>
@@ -4745,7 +4699,7 @@ Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergro
 <tr>
 <td><code>WorkersUnschedulable</code></td>
 <td>Both</td>
-<td>The scheduler's verdict, recorded for <code>RunnerGroup</code> and <code>RunnerSet</code> alike.</td>
+<td>The scheduler's verdict, recorded on both tiers alike.</td>
 </tr>
 </tbody>
 </table>

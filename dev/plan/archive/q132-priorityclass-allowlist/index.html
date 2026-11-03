@@ -2822,14 +2822,14 @@ Rejected for the cost above.</p>
 <h2 id="scope">Scope<a class="headerlink" href="#scope" title="Permanent link">&para;</a></h2>
 <h3 id="api--crd-breaking-pre-10">API / CRD (breaking, pre-1.0)<a class="headerlink" href="#api--crd-breaking-pre-10" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Remove the dead <code>PreemptionPolicy</code> field</strong> from <code>PriorityTier</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>).
+<li><strong>Remove the dead <code>PreemptionPolicy</code> field</strong> from <code>PriorityTier</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>).
   It has existed since Milestone 2 but is <strong>never consumed</strong> — the provisioner only sets <code>PriorityClassName</code>, never <code>pod.Spec.PreemptionPolicy</code>.
   The design doc already calls it "informational only."
   Keeping a tenant-settable preemption field is misleading <em>and</em> a latent preemption lever; preemption is governed by the platform-owned <code>PriorityClass</code> object's own <code>preemptionPolicy</code>.
   Field removal is a breaking CRD change — free pre-1.0 (no conversion webhook; same window as Q130).
   Zero behavioural change (the field never reached a pod).</li>
 <li><code>PriorityClassName</code> stays required and unchanged in shape (tenant still names a class; the webhook gates <em>which</em> names are legal).</li>
-<li>Regenerate per <a href="../../../development/code-generation/">code-generation.md</a>: <code>make -C cmd/agc generate manifests</code> → <code>zz_generated.deepcopy.go</code>, both CRD YAML copies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml">cmd/agc/.../runnergroups.yaml</a>, the GMC-bundled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml">cmd/gmc/.../runnergroups.yaml</a>), and the chart CRD template.
+<li>Regenerate per <a href="../../../development/code-generation/">code-generation.md</a>: <code>make -C cmd/agc generate manifests</code> → <code>zz_generated.deepcopy.go</code>, both CRD YAML copies (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml">cmd/agc/.../runnergroups.yaml</a>, the GMC-bundled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml">cmd/gmc/.../runnergroups.yaml</a>), and the chart CRD template.
   Keep all copies in sync (Q73).</li>
 </ul>
 <h3 id="gmc-config-allowlist-source">GMC config (allowlist source)<a class="headerlink" href="#gmc-config-allowlist-source" title="Permanent link">&para;</a></h3>

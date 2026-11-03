@@ -23,7 +23,7 @@
     
     
       
-        <title>v2 envtest twins for behaviours only the deleted v1 GMC suites covered - GitHub Actions Gateway</title>
+        <title>v2 envtest twins for behaviours only the deleted v1 suites covered - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#v2-envtest-twins-for-behaviours-only-the-deleted-v1-gmc-suites-covered" class="md-skip">
+        <a href="#v2-envtest-twins-for-behaviours-only-the-deleted-v1-suites-covered" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              v2 envtest twins for behaviours only the deleted v1 GMC suites covered
+              v2 envtest twins for behaviours only the deleted v1 suites covered
             
           </span>
         </div>
@@ -2657,8 +2657,8 @@
   
 
 
-<h1 id="v2-envtest-twins-for-behaviours-only-the-deleted-v1-gmc-suites-covered">v2 envtest twins for behaviours only the deleted v1 GMC suites covered<a class="headerlink" href="#v2-envtest-twins-for-behaviours-only-the-deleted-v1-gmc-suites-covered" title="Permanent link">&para;</a></h1>
-<p>The GMC half of <a href="../Q273/">Q273</a> deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level comparison against the remaining <code>v2_*</code> suites finds no twin for the behaviours below.
+<h1 id="v2-envtest-twins-for-behaviours-only-the-deleted-v1-suites-covered">v2 envtest twins for behaviours only the deleted v1 suites covered<a class="headerlink" href="#v2-envtest-twins-for-behaviours-only-the-deleted-v1-suites-covered" title="Permanent link">&para;</a></h1>
+<p>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level comparison against the remaining <code>v2_*</code> suites finds no twin for the behaviours below.
 That comparison is the whole measurement: each item is a candidate, so read the named v2 suites for an assertion that already covers it before writing one.
 The deletion removed no v2 coverage, since the two reconcilers never shared these paths; the gaps were there before, and the v1 suites were standing in for them.</p>
 <p>Highest first, because the first is a tenant-isolation property:</p>
@@ -2679,6 +2679,15 @@ The deletion removed no v2 coverage, since the two reconcilers never shared thes
 <li><strong>No ResourceQuota is created</strong> (<code>TestGMC_TenantProvisioning_NoResourceQuotaCreated</code>), the least-privilege property <code>docs/design/05-security.md</code> states.</li>
 </ul>
 <p>The deleted functions are readable at the parent of the Q273 GMC-half commit, under <code>cmd/gmc/internal/controller/integration/</code>.</p>
+<p>The AGC half deleted the <code>RunnerGroup</code> envtests in <code>cmd/agc/internal/controller/integration/</code>, readable at the parent of its commit.
+Most were classic-only, which Q264 retires, or already had a <code>TestV2_RunnerSet_*</code> twin, and four that had neither were ported first (<code>WorkersUnschedulable_NotTrippedForPlainPending</code>, <code>WorkerPodEventTriggersReconcile</code>, <code>ScaleSet_TemplateEditTakesEffectWithoutRestart</code>, <code>ScaleSet_PriorityTiers</code>).
+These left with no envtest twin, each pinned at the unit tier only:</p>
+<ul>
+<li><strong>The worker pod's enforced invariants on a real apiserver</strong> (<code>TestAGC_PodProvisioning_CorrectSpec</code>): <code>automountServiceAccountToken: false</code>, the worker ServiceAccount, the proxy env and the security-profile defaults; <code>TestProvisioner_ReservedFieldsOverwritten</code> covers the overwrite on a fake client.</li>
+<li><strong>The reaper's TTL and Pending-deadline arms driven by the real Pod watch and <code>RequeueAfter</code> timer</strong> (<code>TestAGC_Reaper_CompletedPodDeletedAfterTTL</code>, <code>_StuckPendingPodDeletedAfterDeadline</code>); <code>TestReaper_ReapsExpiredWorkerPods</code> covers the arithmetic.</li>
+<li><strong>A worker pod name at the 63-character DNS-label boundary admitted by the apiserver</strong> (<code>TestAGC_Q467_WorkerPodNameAtTheDNSLabelBoundary</code>); the naming unit tests cover the truncation.</li>
+<li><strong>A crashed worker leaving no job Secret behind</strong> (<code>TestAGC_FailureRecovery_PodCrash_NoSecretLeak</code>); <code>TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion</code> covers the completed case.</li>
+</ul>
 <p>The unit tier has the same shape.
 The GMC half ported the deleted unit tests whose subject v2 still calls (the shared builders, <code>evalProxyPoolQuota</code>, <code>footprintFromResources</code>, <code>refreshStalledMessage</code>), and left these, where v1 had its own implementation and the v2 one has no direct test (<code>git grep -l -w &lt;name&gt; -- cmd/gmc/internal</code> lists no <code>_test.go</code> file for each, measured 2026-11-02):</p>
 <ul>

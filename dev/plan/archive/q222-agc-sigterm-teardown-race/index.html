@@ -2857,7 +2857,7 @@ The original CI failure was <strong>not</strong> reproduced locally, so the caus
 <p>Defect 2 stands on its own regardless: it is a real production session leak on every rollout that catches a listener in its post-job recycle, and it is proven by a test that fails without the fix.</p>
 <h2 id="test-side-consequence">Test-side consequence<a class="headerlink" href="#test-side-consequence" title="Permanent link">&para;</a></h2>
 <p>With the drain in place, <code>mgr.Start</code> returning means every session DELETE has already been issued and answered.
-The ceiling in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/sigterm_test.go">sigterm_test.go</a> drops from 60s to 10s and no longer scales with runner load — it now only absorbs the broker stub's own signal-delivery hop.
+The ceiling in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/integration/sigterm_test.go">sigterm_test.go</a> drops from 60s to 10s and no longer scales with runner load — it now only absorbs the broker stub's own signal-delivery hop.
 A recurrence there is a real teardown regression and must be investigated, not bumped.</p>
 
 

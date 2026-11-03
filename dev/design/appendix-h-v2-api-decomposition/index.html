@@ -4457,7 +4457,7 @@ It is keyless-signed via the same Fulcio/Rekor path as the images and charts (<c
 The asset covers the default-namespace case; a GMC in a non-default namespace, or a GitOps render, still uses the <code>helm template --set … | kubectl apply --server-side</code> path (the conversion webhook <code>clientConfig</code> namespace bakes in at render time).
 Argo CD renders the chart itself and never builds a release Secret, so it is unaffected by the 1 MiB limit; Flux <code>HelmRelease</code> <em>does</em> build one and uses the rendered manifest or a Kustomization instead.</p>
 <p>The properties this forgoes — <code>helm upgrade</code> revision history, <code>helm rollback</code>, <code>helm uninstall</code> cleanup — are <strong>low-value for CRDs specifically</strong> and partly anti-patterns: rolling a CRD schema <em>backward</em> can strand stored objects (removing a served/storage version or field is a deliberate migration, never a casual rollback), and cascading <code>helm uninstall</code> of a CRD deletes every custom resource with it (data loss — exactly what <code>resource-policy: keep</code> prevents).
-The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a>.</p>
+The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operations/install/#the-v2-api-crds">install.md § the v2 API CRDs</a>.</p>
 <p>Alternatives, each measured by reconstructing Helm's stored-Secret encoding:</p>
 <table>
 <thead>

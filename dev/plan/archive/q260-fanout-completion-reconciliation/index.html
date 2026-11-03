@@ -3097,7 +3097,7 @@ At the unstarted-job timeout the dangling assignments cancel the whole job — t
 <hr />
 <h2 id="3-why-envtest-passed-while-production-wedged--and-the-repro-that-fixes-that">3. Why envtest passed while production wedged — and the repro that fixes that<a class="headerlink" href="#3-why-envtest-passed-while-production-wedged--and-the-repro-that-fixes-that" title="Permanent link">&para;</a></h2>
 <p>The default <code>brokertest.Server</code> modeled <strong>neither</strong> the fan-out <strong>nor</strong> per-delivery completion: every <code>acquirejob</code> returned a fresh <code>test-plan-N</code>, and <code>completejob</code> was just a counter.
-The Q260 envtest (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go"><code>q260_duplicate_delivery_test.go</code></a>) forced a constant planID and asserted the <strong>dedup</strong> — then had the winner <strong>block forever</strong> in <code>waitForCompletion</code>.
+The Q260 envtest (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go"><code>q260_duplicate_delivery_test.go</code></a>) forced a constant planID and asserted the <strong>dedup</strong> — then had the winner <strong>block forever</strong> in <code>waitForCompletion</code>.
 It never modeled a job <em>concluding</em>, so the accounting gap was invisible.
 That is exactly why the dedup looked green offline yet wedged live.</p>
 <p><strong>Repro landed in this PR</strong> (opt-in, so existing tests are unaffected):</p>

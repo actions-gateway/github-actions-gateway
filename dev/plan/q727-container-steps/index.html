@@ -2762,7 +2762,7 @@ What was left is the pod-per-step execution model itself.</p>
 </tr>
 <tr>
 <td>GAG refuses that token twice: <code>RunnerTemplate</code> admission rejects <code>automountServiceAccountToken</code> and <code>serviceAccountName</code> as reserved, and the provisioner overwrites both after the tenant template merges</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2alpha1_crd_test.go"><code>v2alpha1_crd_test.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/pod_provisioning_test.go"><code>pod_provisioning_test.go</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/pod.go"><code>pod.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/integration/v2alpha1_crd_test.go"><code>v2alpha1_crd_test.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner_test.go"><code>provisioner_test.go</code></a> <code>TestProvisioner_ReservedFieldsOverwritten</code></td>
 </tr>
 <tr>
 <td>The control is rated Critical, and worker pods are described as holding no API server entry at all</td>

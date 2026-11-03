@@ -2860,12 +2860,12 @@
 
 <h1 id="agent-reference-code-generation">Agent reference: Code generation<a class="headerlink" href="#agent-reference-code-generation" title="Permanent link">&para;</a></h1>
 <h2 id="when-to-regenerate">When to regenerate<a class="headerlink" href="#when-to-regenerate" title="Permanent link">&para;</a></h2>
-<p>Whenever you modify CRD types (<code>api/</code> for the shared v2 kinds, <code>cmd/agc/api/</code> or <code>cmd/gmc/api/</code> for the v1 kinds), run the corresponding targets.
+<p>Whenever you modify CRD types (<code>api/</code>), run the corresponding targets.
 Also run <code>make manifests</code> whenever you add or remove RBAC verbs/resources in a controller.</p>
 <p>A <code>v2</code> change also has a second output: <code>make api-reference</code> rewrites the published field reference from the same markers.
 It is not part of <code>make generate</code> — that target is controller-gen's three modules — so a doc-comment edit that changes no schema still owes it.
 See <a href="#the-generated-api-reference">§ The generated API reference</a>.</p>
-<p>The v2 (<code>actions-gateway.com</code>) <code>v2alpha1</code> kinds live in the neutral <code>api/</code> module shared by both controllers — the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164); the v1 (<code>actions-gateway.github.com</code>) kinds stay split across <code>cmd/agc/api/v1alpha1</code> and <code>cmd/gmc/api/v1alpha1</code>.</p>
+<p>The <code>actions-gateway.com</code> kinds live in the neutral <code>api/</code> module shared by both controllers, the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164).</p>
 <h2 id="the-root-targets-regenerate-everything-start-here">The root targets regenerate everything (start here)<a class="headerlink" href="#the-root-targets-regenerate-everything-start-here" title="Permanent link">&para;</a></h2>
 <p>From the repo root, either target covers all three modules — you do not need to know which module a type change reaches:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>generate<span class="w">    </span><span class="c1"># manifests + DeepCopy, for all of api, cmd/gmc, cmd/agc</span>
@@ -2897,11 +2897,8 @@ It emits <strong>no</strong> RBAC or webhook manifests — those markers live on
 <h2 id="codegen-drift-is-gated-by-make-check">Codegen drift is gated by <code>make check</code><a class="headerlink" href="#codegen-drift-is-gated-by-make-check" title="Permanent link">&para;</a></h2>
 <p><code>make codegen-check</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-codegen-drift.sh"><code>scripts/go/check-codegen-drift.sh</code></a>) regenerates every module's CRD/RBAC/webhook manifests <strong>and</strong> its <code>zz_generated.deepcopy.go</code> into a scratch tree and fails if any committed copy differs.
 It runs in <code>make check</code> and in CI's <code>lint</code> job, so a forgotten <code>make generate</code> is caught on the PR that caused it rather than by the next contributor.</p>
-<p><strong>The cross-module case is why it exists.</strong> The GMC's <code>ActionsGateway</code> CRD embeds AGC types (<code>RunnerGroupSpec</code>), so a doc comment or field edited in <code>cmd/agc/api/</code> changes the <em>GMC</em> manifest — and only <code>make -C cmd/gmc manifests</code> propagates it.
-<code>make -C cmd/agc manifests</code> does not.
-PR #793 edited a <code>quotaRetryDelay</code> doc comment in <code>RunnerGroupSpec</code> and the GMC CRD stayed stale, handing every later GMC contributor that hunk as unrelated diff noise (<a href="../../queue/">Q440</a>).</p>
-<p>The root <code>make generate</code> (or <code>make manifests</code>) is the way not to have to reason about this: it covers all three modules, so an AGC type edit reaches the GMC manifest without you knowing it had to.
-<strong>If you use the per-module targets instead, regenerate every module that embeds the type you changed, not just the one you edited.</strong></p>
+<p><strong>It exists because nothing ran <code>make generate</code> on a contributor's behalf.</strong> PR #793 edited a <code>quotaRetryDelay</code> doc comment and the CRD stayed stale, handing every later contributor that hunk as unrelated diff noise (<a href="../../queue/">Q440</a>).
+The root <code>make generate</code> (or <code>make manifests</code>) covers all three modules, so a type edit reaches every manifest that carries it.</p>
 <p><strong>The DeepCopy half is gated for a different reason.</strong> Missing DeepCopy code was assumed to fail the build, and for a <em>changed</em> type it does.
 For an <em>added</em> one it does not: <code>ClusterCapacity</code> (<a href="../../queue/">Q470</a>) shipped with no <code>DeepCopy</code>/<code>DeepCopyInto</code> and an <code>ActionsGatewaySpec.DeepCopyInto</code> that never copied the field, so <code>ActionsGateway.DeepCopy()</code> handed back an object aliasing the caller's pointer into the shared informer cache — compiling cleanly and passing CI (<a href="../../queue/">Q477</a>).
 <strong><code>make manifests</code> alone no longer satisfies the gate after a type change; <code>make generate</code> does.</strong></p>
@@ -2936,23 +2933,15 @@ Readers on any of them get <code>kubectl explain</code> and the <a href="../../o
   A tool that finds no API types exits 0 having rendered a stub, which would make <code>--check</code> pass on any tree and the writing mode quietly replace a good page.</li>
 </ul>
 <h2 id="sync-the-helm-chart-crds-after-any-crd-change">Sync the Helm chart CRDs (after any CRD change)<a class="headerlink" href="#sync-the-helm-chart-crds-after-any-crd-change" title="Permanent link">&para;</a></h2>
-<p>The Helm charts ship the CRDs under <code>templates/crds/</code>, but the <strong>authoritative</strong> schema is the controller-gen output under <code>cmd/*/config/crd</code> (the v1alpha1 CRDs) and <code>api/config/crd</code> (the v2alpha1 CRDs).
+<p>The <code>actions-gateway-crds-v2</code> chart ships the five tenant CRDs (<code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>) under <code>charts/actions-gateway-crds-v2/templates/crds/</code>, but the <strong>authoritative</strong> schema is the controller-gen output under <code>api/config/crd</code>.
 The chart copies are <em>generated</em> from those sources — do not hand-edit them.
-The split:</p>
-<ul>
-<li><strong><code>charts/actions-gateway/templates/crds/</code></strong> — the two <strong>v1alpha1</strong> (<code>actions-gateway.github.com</code>) CRDs: <code>ActionsGateway</code>, <code>RunnerGroup</code> (sourced from <code>cmd/*/config/crd</code>).</li>
-<li><strong><code>charts/actions-gateway-crds-v2/templates/crds/</code></strong> — the five <strong>v2alpha1</strong> (<code>actions-gateway.com</code>) CRDs: <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code> (sourced from <code>api/config/crd</code>).
-  They live in a <strong>separate, opt-in chart</strong> because the <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> CRDs each embed a full <code>PodTemplateSpec</code> (~600 KB) and adding them to the main chart pushed its Helm release Secret past the hard <strong>1 MiB</strong> limit (Helm stores the rendered manifest <em>plus</em> a copy of the chart source, gzipped, in one Secret).
-  A separate release keeps each chart within budget and makes v2 opt-in (<a href="../../queue/">Q149</a>).</li>
-</ul>
-<p><code>scripts/manifest/sync-chart-crds.sh</code> writes both charts in one pass.
+They live in a <strong>separate chart</strong> because the <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> CRDs each embed a full <code>PodTemplateSpec</code> (~600 KB), and adding them to the main chart pushed its Helm release Secret past the hard <strong>1 MiB</strong> limit (Helm stores the rendered manifest <em>plus</em> a copy of the chart source, gzipped, in one Secret) (<a href="../../queue/">Q149</a>).
+The main chart ships one CRD, <code>PriorityClassAllowlist</code>, in its chart-root <code>crds/</code> directory.</p>
+<p><code>scripts/manifest/sync-chart-crds.sh</code> writes the chart copies in one pass.
 After regenerating manifests, re-sync:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>chart-crds<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources</span>
 </code></pre></div>
-<p><code>make chart-crds-check</code> (run by <code>make check</code>, <code>make manifest-validate</code>, and CI's <code>manifest-validate.yml</code>) fails if a chart copy drifted from its source, or if the <strong>GMC-bundled</strong> RunnerGroup CRD (<code>cmd/gmc/config/crd/bases/…runnergroups.yaml</code>, a bundled copy of the <em>imported</em> type) has drifted from the AGC-authoritative copy — a k8s.io/api skew that would otherwise silently prune fields on deploy (<a href="../../queue/">Q73</a>).
-<strong><code>make -C cmd/gmc manifests</code> cannot refresh the bundled copy</strong> — controller-gen walks only the GMC module's own packages (<code>paths="./..."</code>), and the <code>RunnerGroup</code> type lives in <code>cmd/agc/api/</code>.
-The remedy after any RunnerGroup type change: regenerate the AGC copy (<code>make -C cmd/agc manifests</code>), <code>cp</code> it over the GMC-bundled path, then <code>make chart-crds</code>.
-For a k8s.io/api skew, align the module versions (<a href="../../queue/">Q68</a>) first, then do the same.</p>
+<p><code>make chart-crds-check</code> (run by <code>make check</code>, <code>make manifest-validate</code>, and CI's <code>manifest-validate.yml</code>) fails if a chart copy drifted from its source (<a href="../../queue/">Q73</a>).</p>
 <h2 id="sync-the-helm-chart-rbac-after-any-rbac-marker-change">Sync the Helm chart RBAC (after any RBAC marker change)<a class="headerlink" href="#sync-the-helm-chart-rbac-after-any-rbac-marker-change" title="Permanent link">&para;</a></h2>
 <p>The chart's GMC <code>manager-role</code> ClusterRole templates the metadata/binding, but its <strong>rules</strong> are the controller-gen output of the GMC controllers' <code>+kubebuilder:rbac</code> markers (<code>cmd/gmc/config/rbac/role.yaml</code>).
 The chart embeds them via <code>.Files.Get</code> from a <em>generated</em> fragment — do not hand-edit it.
@@ -2971,8 +2960,7 @@ After regenerating manifests, re-sync the chart:</p>
 <p>Both AGC ClusterRoles the chart ships are hand-maintained, and both are gated by <code>cmd/agc/internal/controller/rbac_chart_drift_test.go</code> (a unit test, so <code>make check</code> runs it): every <code>(group, resource)</code> the AGC's <code>+kubebuilder:rbac</code> markers declare must be shipped by one of the two fragments, or a real install 403s on it.</p>
 <h3 id="agc-tenant-role">agc-tenant-role<a class="headerlink" href="#agc-tenant-role" title="Permanent link">&para;</a></h3>
 <p>The <code>agc-tenant-role</code> ClusterRole — the permission set every AGC ServiceAccount runs as — is <strong>not</strong> generated from a <code>+kubebuilder:rbac</code> marker.
-It deliberately withholds permissions the AGC's own marker role (<code>cmd/agc/config/rbac/role.yaml</code>, ClusterRole <code>agc-role</code>) grants (e.g.
-<code>runnergroups</code> create/delete, <code>secrets</code> patch) for least privilege, so generating it from the markers would be a privilege escalation.
+It is kept apart from the AGC's own marker role (<code>cmd/agc/config/rbac/role.yaml</code>, ClusterRole <code>agc-role</code>) so it can withhold a verb a marker grants, for least privilege, which generating it from the markers could not.
 Its single source is the hand-maintained fragment <code>charts/actions-gateway/files/agc-tenant-role-rules.yaml</code>: the chart embeds it via <code>.Files.Get</code> in <code>templates/agc-tenant-role.yaml</code>, and the GMC integration suite (<code>installAGCTenantClusterRole</code>) reads the same file — so the shipped role and the RBAC-scope test can never drift.
 Edit the fragment, not either consumer (<a href="../../queue/">Q143</a>).</p>
 <h3 id="agc-clusterrunnertemplate-reader">agc-clusterrunnertemplate-reader<a class="headerlink" href="#agc-clusterrunnertemplate-reader" title="Permanent link">&para;</a></h3>

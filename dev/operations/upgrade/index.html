@@ -5632,7 +5632,7 @@ For the default <code>gmc-system</code> namespace, apply the signed manifest att
 <a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 </code></pre></div>
 <p>For a custom GMC namespace, render the chart instead.
-Either way, see <a href="../install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a> for the full lifecycle (upgrade/rollback/uninstall), signature verification, and namespace/cert-manager overrides:</p>
+Either way, see <a href="../install/#the-v2-api-crds">install.md § the v2 API CRDs</a> for the full lifecycle (upgrade/rollback/uninstall), signature verification, and namespace/cert-manager overrides:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>helm<span class="w"> </span>template<span class="w"> </span>actions-gateway-crds-v2<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
@@ -5920,9 +5920,9 @@ Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="http
   <code>--reset-then-reuse-values</code> and <code>--reuse-values</code> both carry the previously pinned digests forward; pass <code>--set &lt;image&gt;.image.digest=sha256:&lt;new&gt;</code> for each image you are moving to the new release's build.
   See the <a href="../troubleshooting/#helm-render-fails-gmcimage-must-be-pinned-by-digest">troubleshooting runbook</a>.
   Dev/test only: <code>allowFloatingImageTags=true</code> opts out.
-- <strong>Most CRDs upgrade with the release; one does not, so apply the chart's CRDs every time.</strong> The <code>RunnerGroup</code> CRD ships as a template under <code>templates/crds/</code> with <code>helm.sh/resource-policy: keep</code>, so <code>helm upgrade</code> applies its additive field changes automatically and <code>helm uninstall</code> preserves it (and every tenant's objects) rather than cascade-deleting.
-  The <code>PriorityClassAllowlist</code> CRD cannot: the same release <em>creates</em> a <code>PriorityClassAllowlist</code> object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright.
-  It therefore ships in the chart-root <code>crds/</code> directory — which Helm installs on <code>helm install</code> <strong>only, never on upgrade</strong>.</p>
+- <strong>Helm never upgrades this chart's one CRD, so apply the chart's CRDs every time.</strong> The <code>PriorityClassAllowlist</code> CRD cannot ship as a template: the same release <em>creates</em> a <code>PriorityClassAllowlist</code> object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright.
+  It therefore ships in the chart-root <code>crds/</code> directory — which Helm installs on <code>helm install</code> <strong>only, never on upgrade</strong>.
+  The tenant CRDs are not in this chart: they ship in <code>actions-gateway-crds-v2</code>, applied with <code>kubectl apply --server-side</code>.</p>
 <p>Rather than make that a conditional "did your release predate X?" step, the upgrade command above applies the chart's CRDs unconditionally:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
@@ -5930,7 +5930,6 @@ Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="http
 </code></pre></div>
 <p>It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
   The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster.
-  The <code>RunnerGroup</code> CRD is sourced from the AGC authoritative copy.
 - <strong>The webhook cert path depends on <code>certManager.enabled</code>.</strong> With the default <code>certManager.enabled=true</code>, cert-manager issues and rotates the serving cert; nothing to do on upgrade.
   With <code>certManager.enabled=false</code>, the chart generates a self-signed serving cert and wires the webhook <code>caBundle</code> itself.
   On an in-place <code>helm upgrade</code> the chart <strong>reuses the existing <code>webhook-server-cert</code> Secret</strong> (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation).

@@ -1666,10 +1666,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#optional-the-v2-api-crds" class="md-nav__link">
+  <a href="#the-v2-api-crds" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Optional: the v2 API CRDs
+        The v2 API CRDs
       
     </span>
   </a>
@@ -2996,10 +2996,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#optional-the-v2-api-crds" class="md-nav__link">
+  <a href="#the-v2-api-crds" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Optional: the v2 API CRDs
+        The v2 API CRDs
       
     </span>
   </a>
@@ -3258,10 +3258,10 @@ Do <strong>not</strong> work around the admission rejection by clearing <code>pr
 <h3 id="gitops-argo-cd--flux">GitOps (Argo CD / Flux)<a class="headerlink" href="#gitops-argo-cd--flux" title="Permanent link">&para;</a></h3>
 <p>To install the chart declaratively from Git instead of running <code>helm install</code> by hand, see <a href="../gitops/">gitops.md</a>.
 It gives ready-to-apply Argo CD <code>Application</code> and Flux <code>HelmRelease</code> examples (with the CRD-pruning gotcha handled) and shows how to source the GitHub App credential Secret securely — External Secrets Operator or Sealed Secrets — so the private key is never committed to Git.</p>
-<h3 id="optional-the-v2-api-crds">Optional: the v2 API CRDs<a class="headerlink" href="#optional-the-v2-api-crds" title="Permanent link">&para;</a></h3>
-<p>The main chart installs the <code>v1alpha1</code> (<code>actions-gateway.github.com</code>) <code>RunnerGroup</code> CRD, <a href="../v1alpha1-deprecation/">deprecated</a>; the <code>ActionsGateway</code> kind is served only at <code>actions-gateway.com</code>.
-The v2 (<code>actions-gateway.com</code>) API that new tenants onboard on ships its five CRDs in a <strong>separate chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
-Install it alongside the main chart: without it the GMC has no <code>ActionsGateway</code> kind to reconcile.</p>
+<h3 id="the-v2-api-crds">The v2 API CRDs<a class="headerlink" href="#the-v2-api-crds" title="Permanent link">&para;</a></h3>
+<p>The main chart installs no tenant CRD.
+The <code>actions-gateway.com</code> API ships its five CRDs in a <strong>separate chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
+Install it alongside the main chart: without it neither controller has a kind to reconcile.</p>
 <p>Each v2 CRD is served at <strong>three versions</strong>: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only shape, and the conversion hub), <strong><code>v2</code></strong> (the General Availability (GA) version, identical but for the dropped <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, and the storage version from 1.10), and <strong><code>v2alpha1</code></strong> (served as the <code>gag-migrate</code> on-ramp, deprecated, and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>).
 An unpinned <code>kubectl get</code> returns <code>v2</code>, the version the apiserver prefers (<a href="../upgrade/#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">what that changes</a>).
 The apiserver converts between them through a <strong>conversion webhook hosted by the GMC</strong> (the <code>/convert</code> endpoint on the same <code>webhook-service</code> that fronts the validating webhooks).
@@ -3273,12 +3273,11 @@ Two consequences for an operator:</p>
 <li><strong>Create v2 objects only once the GMC is running.</strong> The CRDs may be installed in any order, but a <code>RunnerSet</code>/<code>RunnerTemplate</code>/… create is routed through <code>/convert</code>, so it fails until the GMC (the conversion webhook server) is <code>Ready</code>.
   On a fresh install this resolves itself; on an existing cluster, install the CRDs and let the GMC roll out before applying v2 objects.</li>
 </ul>
-<p>They are genuinely optional:</p>
+<p>Installing them:</p>
 <ul>
-<li><strong>You do not need them for v1.</strong> A plain <code>helm install</code> of the main chart (without <code>actions-gateway-crds-v2</code>) is a complete, supported v1-only install.
-  The GMC <strong>detects the v2 CRDs at startup</strong>: when they are absent it logs a single info line — <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code> — and does <strong>not</strong> start the v2 controllers or the v2 IP-range refresh passes.
-  Each per-tenant AGC does the same for its v2 RunnerSet reconciler, logging <code>actions-gateway.com/v2alpha1 RunnerSet CRD not installed; v1-only mode, v2 RunnerSet reconciler disabled</code> and running only the v1 RunnerGroup reconciler. v1alpha1 tenants reconcile normally.</li>
-<li><strong>To use v2,</strong> apply the CRDs server-side — do <strong>not</strong> <code>helm install</code> the chart.
+<li><strong>Without them, nothing reconciles.</strong> The GMC <strong>detects the v2 CRDs at startup</strong>: when they are absent it logs a single info line — <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code> — and starts no tenant controller or IP-range refresh pass.
+  A per-tenant AGC exits at startup with an error naming the missing <code>RunnerSet</code> CRD.</li>
+<li><strong>Apply them server-side</strong> — do <strong>not</strong> <code>helm install</code> the chart.
   The two <code>RunnerTemplate</code> CRDs each embed a full <code>PodTemplateSpec</code>, so the rendered chart (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit and <code>helm install</code> cannot store it.
   Applying the CRDs server-side is the <strong>supported, deliberate install/upgrade path</strong>, not a stopgap (see below for why, and the <a href="../../design/appendix-h-v2-api-decomposition/#h132-installupgrade-lifecycle--apply-render-not-helm-install-q276">design decision</a> for the rejected alternatives).
   Two equivalent ways:</li>
@@ -3383,7 +3382,7 @@ The knobs an operator is most likely to override:</p>
 <tr>
 <td><code>admissionPolicy.enabled</code></td>
 <td><code>true</code></td>
-<td>Leave it on. It ships the <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code>, the backstop that gates direct <code>runnergroups</code> writes (which have no webhook) against the PriorityClass allowlist. The managed-control-plane caveat that used to sit here is <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">resolved</a>. Set <code>false</code> to rely on the GMC webhook allowlist alone.</td>
+<td>Leave it on. It ships the <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code>, the backstop that holds <code>runnersets</code> and <code>runnertemplates</code> writes to the PriorityClass allowlist if the GMC webhook is bypassed or down. The managed-control-plane caveat that used to sit here is <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">resolved</a>. Set <code>false</code> to rely on the GMC webhook allowlist alone.</td>
 </tr>
 </tbody>
 </table>
@@ -3394,11 +3393,11 @@ The <strong>full reference</strong> — every value with its default and descrip
 One object, two consumers, so the webhook and the policy cannot disagree.</p>
 <p>That it is a <strong>CRD</strong> and not a <code>ConfigMap</code> is load-bearing, not incidental.
 Releases that used a ConfigMap were exposed to a kube-apiserver defect (Q444): the apiserver keys one <em>shared</em> parameter informer per core-type <code>paramKind</code>, tears it down as soon as no binding names that kind, and never restarts it.
-A <code>helm uninstall</code> deletes the guard's only binding and so tripped exactly that, leaving every <code>runnergroups</code>/<code>runnersets</code>/<code>runnertemplates</code> write denied cluster-wide with <code>no params found for policy binding</code> — recoverable only by restarting kube-apiserver, which EKS/GKE/AKS do not offer.
+A <code>helm uninstall</code> deletes the guard's only binding and so tripped exactly that, leaving every write the guard matched denied cluster-wide with <code>no params found for policy binding</code> — recoverable only by restarting kube-apiserver, which EKS/GKE/AKS do not offer.
 It could also fail <em>open</em>, silently enforcing a stale allowlist from a frozen cache.</p>
 <p>For a CRD <code>paramKind</code> the apiserver allocates a fresh dynamic informer per context, so the same uninstall/reinstall cycle is survivable.
 This is measured rather than inferred: <code>scripts/e2e/vap-param-informer-check.sh</code> runs the identical empty-binding-set transition against both kinds on one apiserver, and <code>scripts/e2e/chart-reinstall-check.sh</code> drives a real uninstall/reinstall in CI.</p>
-<p><strong>One consequence, and it is not install-time.</strong> This CRD ships in the chart-root <code>crds/</code> directory rather than <code>templates/crds/</code> like the others, because the same release also creates a <code>PriorityClassAllowlist</code> object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
+<p><strong>One consequence, and it is not install-time.</strong> This CRD ships in the chart-root <code>crds/</code> directory rather than as a template, because the same release also creates a <code>PriorityClassAllowlist</code> object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
 A <strong>fresh <code>helm install</code> handles this for you</strong>; <code>crds/</code> is applied first.</p>
 <p>An <strong>upgrade does not</strong>.
 Helm skips <code>crds/</code> entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:</p>
@@ -3426,12 +3425,12 @@ Migrating an existing release off the ConfigMap: <a href="../upgrade/#prioritycl
 <a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
 <a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="c1"># Expected: a lease whose HOLDER is one of the GMC pods</span>
 <a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>
-<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 3. Both CRDs are installed and Established.</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="c1"># 3. The ActionsGateway and RunnerSet CRDs are installed and Established.</span>
 <a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>crd<span class="w"> </span>actionsgateways.actions-gateway.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">                </span>runnergroups.actions-gateway.github.com
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">                </span>runnersets.actions-gateway.com
 <a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>kubectl<span class="w"> </span><span class="nb">wait</span><span class="w"> </span>--for<span class="o">=</span><span class="nv">condition</span><span class="o">=</span>Established<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">  </span>crd/actionsgateways.actions-gateway.com<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>crd/runnergroups.actions-gateway.github.com
+<a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">  </span>crd/runnersets.actions-gateway.com
 <a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a>
 <a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="c1"># 4. The validating webhook and the admission policies are present.</span>
 <a id="__codelineno-10-20" name="__codelineno-10-20" href="#__codelineno-10-20"></a><span class="c1"># (Resource names carry the chart namePrefix, default "gmc-".)</span>
@@ -3452,12 +3451,7 @@ For other failure modes, see <a href="../troubleshooting/">troubleshooting.md</a
 <h2 id="uninstall">Uninstall<a class="headerlink" href="#uninstall" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>helm<span class="w"> </span>uninstall<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
 </code></pre></div>
-<p>The <code>RunnerGroup</code> CRD ships as a template carrying <code>helm.sh/resource-policy: keep</code>, so <code>helm uninstall</code> <strong>preserves the CRD and every tenant's <code>RunnerGroup</code> object</strong> rather than cascade-deleting them; the v2 CRDs, <code>ActionsGateway</code> among them, follow the <a href="#optional-the-v2-api-crds"><code>actions-gateway-crds-v2</code> lifecycle</a>.
-To fully remove the <code>RunnerGroup</code> CRD, delete the tenant objects first, then the CRD explicitly:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Only after confirming no tenant still needs their gateways:</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>--all<span class="w"> </span>--all-namespaces
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>crd<span class="w"> </span>runnergroups.actions-gateway.github.com
-</code></pre></div>
+<p>The main chart ships no tenant CRD, so <code>helm uninstall</code> leaves every tenant's objects in place; the tenant CRDs follow the <a href="#the-v2-api-crds"><code>actions-gateway-crds-v2</code> lifecycle</a>.</p>
 <p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by <code>helm uninstall</code> along with its binding and its parameter object; the <code>PriorityClassAllowlist</code> <strong>CRD</strong> is left behind, as <code>crds/</code> contents always are.
 Removing the binding used to be the trigger for a cluster-wide outage (Q444) when the parameter was a ConfigMap — a reinstall could not repair it.
 It is safe now that the parameter is a CRD, which is <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">why it is one</a>; the uninstall/reinstall cycle is covered by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.

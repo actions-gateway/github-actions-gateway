@@ -2658,9 +2658,9 @@
 
 
 <h1 id="strip-the-q147-legacy-tenant-label-dual-read-once-v1alpha1-is-gone">Strip the Q147 legacy tenant-label dual-read once v1alpha1 is gone<a class="headerlink" href="#strip-the-q147-legacy-tenant-label-dual-read-once-v1alpha1-is-gone" title="Permanent link">&para;</a></h1>
-<p>Blocked by <a href="../Q273/">Q273</a>'s AGC half: once no <code>actions-gateway.github.com</code> kind is served, nothing should still accept that group's namespace labels as a tenant or privileged grant.
+<p>No <code>actions-gateway.github.com</code> kind is served since Q273, so nothing should still accept that group's namespace labels as a tenant or privileged grant.
 Q147 had the admission policies and the GMC read both namespace markers through the coexistence window, the legacy <code>actions-gateway.github.com/tenant=true</code> and <code>actions-gateway.github.com/privileged-profile=allowed</code> beside <code>actions-gateway.com/tenant=managed</code> and its v2 eligibility label.
-<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> orders the strip after the served versions drop, and the GMC half of Q273 deliberately left it in place.</p>
+<a href="../../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">v2-ga.md</a> orders the strip after the served versions drop, and Q273 deliberately left it in place.</p>
 <p>The legacy arms, measured 2026-11-01 with <code>git grep "actions-gateway.github.com/tenant\|actions-gateway.github.com/privileged-profile"</code>:</p>
 <ul>
 <li><code>cmd/gmc/config/admission-policy/</code> <code>namespace-psa-guard.yaml</code>, <code>namespace-security-profile-guard.yaml</code> and <code>tenant-resource-guard.yaml</code>, with their chart twins under <code>charts/actions-gateway/templates/</code>, including the denial <code>messageExpression</code> text naming the legacy label.</li>

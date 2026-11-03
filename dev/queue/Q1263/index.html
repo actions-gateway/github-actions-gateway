@@ -2658,7 +2658,7 @@
 
 
 <h1 id="retype-the-agc-onto-apiv2-once-classic-acquisition-is-gone">Retype the AGC onto api/v2 once classic acquisition is gone<a class="headerlink" href="#retype-the-agc-onto-apiv2-once-classic-acquisition-is-gone" title="Permanent link">&para;</a></h1>
-<p>Blocked on Q273 (the <code>v1alpha1</code> removal) and Q264 (the classic removal): <code>runnerset_controller.go</code> reads <code>spec.acquisitionProtocol</code> and <code>spec.maxListeners</code> at nine sites, <code>v2</code> has neither field, and Q264 deletes those reads.
+<p>Blocked on Q264 (the classic removal): <code>runnerset_controller.go</code> reads <code>spec.acquisitionProtocol</code> and <code>spec.maxListeners</code> at nine sites, <code>v2</code> has neither field, and Q264 deletes those reads.
 Retyping first would mean reading both values back from conversion annotations, code Q264 then deletes (<a href="../../plan/q1167-v2-retype-split/#where-q264s-boundary-falls-before-the-agc-retype">the boundary</a>).
 The second of three PRs that let <a href="../Q1167/">Q1167</a> delete <code>api/v2alpha1</code> and <code>api/v2beta1</code>.</p>
 <p>Once classic is gone the swap is mechanical, measured 2026-11-02: 20 AGC non-test files and 67 tests import <code>v2alpha1</code> or <code>v2beta1</code> off <code>7b292627a</code>, with Q273's deletions and its test port onto <code>api/v2</code> subtracted.

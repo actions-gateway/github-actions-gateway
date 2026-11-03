@@ -4016,7 +4016,7 @@ Plan a quota increase before the next load spike — see <a href="#adjusting-ten
 See <a href="../troubleshooting/#gmc-not-provisioning-tenant-resources">GMC Not Provisioning Tenant Resources</a>.</p>
 <h3 id="actionsgatewayworkersunschedulable">ActionsGatewayWorkersUnschedulable<a class="headerlink" href="#actionsgatewayworkersunschedulable" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> Worker pods are stuck <code>Pending</code> past the scheduling grace because the scheduler cannot place them (no matching node / affinity / taints — not quota); capacity is not materializing.
-See <a href="../troubleshooting/#runnergroup-reports-workersunschedulable">RunnerGroup Reports WorkersUnschedulable</a> and <a href="../troubleshooting/#worker-pods-stuck-pending">Worker Pods Stuck Pending</a>.</p>
+See <a href="../troubleshooting/#runnerset-reports-workersunschedulable">RunnerSet Reports WorkersUnschedulable</a> and <a href="../troubleshooting/#worker-pods-stuck-pending">Worker Pods Stuck Pending</a>.</p>
 <h3 id="actionsgatewayworkersnotstarting">ActionsGatewayWorkersNotStarting<a class="headerlink" href="#actionsgatewayworkersnotstarting" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> Worker pods were placed on a node and the kubelet could not start them, almost always a <code>workerImage</code> that will not pull.
 The <code>RunnerSet</code>'s <code>WorkersNotStarting</code> condition message carries the kubelet's own text, which names the image, so read that before anything else:</p>

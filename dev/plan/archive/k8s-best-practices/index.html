@@ -2800,7 +2800,7 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <td>A1</td>
 <td>✅</td>
 <td>~~No <code>EventRecorder</code> used anywhere — <code>kubectl describe ag/rg</code> shows no events for credential/quota/eviction failures.~~ Fixed 2026-06-03. GMC already carried a <code>Recorder</code> (added with B2/B3); the AGC RunnerGroup reconciler now gets one too (<code>mgr.GetEventRecorder("runnergroup-controller")</code>), emitting <code>Warning</code> events on token-fetch, agent-provisioning, listener-restart, and deregistration failures, plus a <code>Normal</code>/<code>Warning</code> on genuine Ready transitions (not per-reconcile).</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>recordEvent</code>)</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">agc/main.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>recordEvent</code>)</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">agc/main.go</a></td>
 <td>—</td>
 </tr>
 <tr>
@@ -2814,7 +2814,7 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <td>A3</td>
 <td>✅</td>
 <td>~~RunnerGroup controller has no <code>Owns()</code> / watch on worker Pods or agent Secrets — evicted pods leave <code>ActiveSessions</code> stale until the next Generation bump.~~ Fixed 2026-06-03 (<a href="../../../queue/">Q63</a>): <code>SetupWithManager</code> now adds <code>.Watches(&amp;corev1.Pod{}, podToRunnerGroup)</code> filtered by <code>workerPodPredicate</code> (label <code>actions-gateway/runner-group</code> present; Create/Delete, plus Update only on a phase change so eviction — which surfaces as <code>Running→Failed</code>, not a delete — still wakes the controller). The watch reuses the shared Pod informer (same one Q64's <code>InformerPodWaiter</code> drives), so it adds no second cache. <strong>Pods only, deliberately:</strong> the agent-Secret half is <em>not</em> implemented — a Secret watch would establish a Secret informer and cache credential material, violating W3/H-2 (Secrets bypass the cache via <code>DisableFor</code>). Covered by <code>runnergroup_podwatch_internal_test.go</code> (predicate/map-func) + <code>TestAGC_Reconciler_WorkerPodEventTriggersReconcile</code> (envtest end-to-end).</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>podToRunnerGroup</code>/<code>workerPodPredicate</code>)</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>podToRunnerGroup</code>/<code>workerPodPredicate</code>)</a></td>
 <td>—</td>
 </tr>
 <tr>
@@ -2849,14 +2849,14 @@ These baseline properties are documented durably in <a href="../../../design/05-
 <td>A8</td>
 <td>✅</td>
 <td>~~RunnerGroup <code>mergeCondition</code> overwrites <code>LastTransitionTime</code> every reconcile, not only on Status transition.~~ Fixed 2026-06-03: <code>mergeCondition</code> now delegates to <code>meta.SetStatusCondition</code>, so <code>LastTransitionTime</code> advances only on a genuine status transition. Covered by <code>TestReconcile_ConditionTransitionTimeStable</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>mergeCondition</code>)</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>mergeCondition</code>)</a></td>
 <td>—</td>
 </tr>
 <tr>
 <td>A9</td>
 <td>✅</td>
 <td>~~Finalizer-add path races with deletion — can leak provisioner pool maps across reconciler restart.~~ Fixed 2026-06-03. The <code>DeletionTimestamp.IsZero()</code> guard before the finalizer-add <code>Update</code> was already present; added a <code>cleanupLocalState</code> helper that drops the in-memory multiplexer + pool for a key, and a <code>NotFound</code> branch in <code>Reconcile</code> that calls it so state cannot leak when the object disappears across a restart. Covered by <code>TestReconcile_NotFoundCleansLocalState</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>cleanupLocalState</code>)</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go (<code>cleanupLocalState</code>)</a></td>
 <td>—</td>
 </tr>
 </tbody>
@@ -2972,14 +2972,14 @@ Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened 
 <td>D1</td>
 <td>✅</td>
 <td>~~No printer column for <code>observedGeneration</code> / Reason on RunnerGroup — operators can't see generation skew.~~ Fixed 2026-06-06: both CRDs now carry <code>Reason</code> + <code>ObservedGen</code> columns at <code>priority=1</code> (shown only under <code>kubectl get … -o wide</code>, keeping the default view narrow).</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>, actionsgateway_types.go</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a>, actionsgateway_types.go</td>
 <td>—</td>
 </tr>
 <tr>
 <td>D2</td>
 <td>✅</td>
 <td>~~<code>RunnerGroupStatus.Conditions</code> missing <code>+listType=map</code> / <code>+listMapKey=type</code> markers — server-side apply treats as atomic list, causing churn.~~ Fixed 2026-06-06: mirrored the markers already on <code>ActionsGatewayStatus.Conditions</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a></td>
 <td>—</td>
 </tr>
 <tr>
@@ -3007,7 +3007,7 @@ Proxy pods (GMC <code>buildProxyDeployment</code>) already ship a full hardened 
 <td>D6</td>
 <td>✅</td>
 <td>~~<code>RunnerLabels</code> has no <code>MinItems=1</code> or per-item pattern — empty list silently matches every workflow.~~ Fixed 2026-06-06: <code>MinItems=1</code> + per-item <code>MaxLength=256</code> and <code>Pattern=^[^,\s]+$</code> (no whitespace/commas; comma is the runs-on separator). Covered by <code>TestCRD_RunnerGroup_RunnerLabels_Validation</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/api/v1alpha1/runnergroup_types.go">runnergroup_types.go</a></td>
 <td>—</td>
 </tr>
 <tr>
@@ -3121,7 +3121,7 @@ Resolved under Q34; the secure-by-default vs install-prerequisite trade-off for 
 <td>F2</td>
 <td>✅</td>
 <td>~~No OpenTelemetry tracing — Reconcile → provision → waitForPodCompletion spans would be operationally invaluable.~~ Added an opt-in OTel tracer (<code>cmd/agc/internal/tracing</code>) wired in <code>cmd/agc/main.go</code>: off by default (no exporter unless an OTLP endpoint is configured), enabled + fully tuned via the standard <code>OTEL_*</code> SDK env vars, honours <code>OTEL_SDK_DISABLED</code>, flushes on shutdown. Spans: <code>RunnerGroup.Reconcile</code> and <code>Provisioner.provision</code> (child spans <code>stageJobSecret</code>/<code>countActivePods</code>/<code>createPod</code>/<code>waitForCompletion</code>, with namespace/group/plan/pod/phase/duration attributes). Production wiring of <code>OTEL_*</code> through the GMC-built AGC Deployment is split to a follow-up Queue item (env-vs-spec + OTLP-auth-headers-in-env design). Documented in <a href="../../../operations/observability-logging/#distributed-tracing-agc">observability.md</a> + <a href="../../../design/02-architecture/#distributed-tracing">02-architecture.md</a>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">agc/main.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/main.go">agc/main.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/agc/internal/controller/runnergroup_controller.go">runnergroup_controller.go</a></td>
 <td>—</td>
 </tr>
 <tr>

@@ -3305,7 +3305,7 @@ The default is <code>atomic</code>: one applier replaces the whole list, and no 
   Every status conditions slice in this repo uses that.</li>
 <li><code>priorityTiers</code> is atomic, and its "strictly ascending threshold" ordering is a <em>caller contract</em> that neither admission nor a status condition enforces — an out-of-order tier is simply unreachable.
   If an ordering or uniqueness rule is load-bearing, either validate it or say plainly in the godoc that it is not validated.
-  It is documented in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/api/v1alpha1/runnergroup_types.go"><code>runnergroup_types.go</code></a>.</li>
+  It is documented in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/runnerset_types.go"><code>runnerset_types.go</code></a>.</li>
 </ul>
 <h3 id="put-a-constraint-on-the-narrowest-field-that-expresses-it">Put a constraint on the narrowest field that expresses it<a class="headerlink" href="#put-a-constraint-on-the-narrowest-field-that-expresses-it" title="Permanent link">&para;</a></h3>
 <p>CRD validation ratcheting (KEP-4008, default-on from Kubernetes 1.30) suppresses a rule only while <em>the value it sits on</em> is unchanged.

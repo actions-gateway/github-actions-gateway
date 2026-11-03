@@ -2806,17 +2806,17 @@ It changes no code; the background is <a href="../v2-ga/">v2-ga.md</a> Phase 3.<
 <tbody>
 <tr>
 <td>0a</td>
-<td>Q273's test port (in flight, ID not yet allocated)</td>
+<td>Q273's test port</td>
 <td>Port the e2e tenant fixtures, the RunnerGroup-driven AGC envtests and <code>cmd/agc/test/load</code> onto <code>v2</code> tenants typed on <code>api/v2</code></td>
 <td>none</td>
-<td>in flight</td>
+<td>✅ done</td>
 </tr>
 <tr>
 <td>0b</td>
-<td>Q273 (in flight)</td>
+<td>Q273</td>
 <td>Remove <code>v1alpha1</code> and <code>gag-migrate</code>'s v1→v2 fan-out</td>
 <td>0a</td>
-<td>in flight</td>
+<td>✅ done, in a GMC half and an AGC half</td>
 </tr>
 <tr>
 <td>1</td>
@@ -2936,7 +2936,7 @@ After Q1167 nothing reads one, so they are inert; removing them is not needed fo
 <p>Beyond the Go: <code>scripts/go/check-v2-api-sync.sh</code> fails on any stale exemption entry, so Q1167 deletes the script, its <code>v2-api-sync-check</code> target and its <code>unit-test.yml</code> step together with the packages.
 Non-Go files naming <code>actions-gateway.com/v2alpha1</code> or <code>v2beta1</code> (charts, <code>deploy/</code>, <code>scripts/</code>, operator docs and examples) move to <code>v2</code> in Q1167, since they stop applying the moment the CRDs stop serving those versions.</p>
 <h2 id="the-tree-this-plan-assumes-after-q273">The tree this plan assumes, after Q273<a class="headerlink" href="#the-tree-this-plan-assumes-after-q273" title="Permanent link">&para;</a></h2>
-<p>Q273 is in flight as two PRs, and both land first, so the counts below assume them.
+<p>Q273 landed before either retype, so the counts below assume it.
 Its plan as relayed by the batch's orchestrator on 2026-11-02, not read from a branch:</p>
 <ul>
 <li><strong>A test port lands first.</strong> The e2e tenant fixture (<code>cmd/gmc/test/utils/fixtures.go</code>), the AGC envtests that run through the RunnerGroup reconciler, and the load harness under <code>cmd/agc/test/load</code> move onto <code>v2</code> tenants typed on <code>api/v2</code>, so neither retype redoes them.</li>
