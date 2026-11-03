@@ -74,15 +74,6 @@ func refillCPUQuota(t *testing.T, ns, name, hard, used string) {
 	require.NoError(t, k8sClient.Status().Update(ctx, &live))
 }
 
-// admissionRejections reads the current value of
-// actions_gateway_jobs_admission_rejected_total for one (namespace, group, reason)
-// series. The counters are process-wide (sharedListenerMetrics), so every assertion
-// here is a delta against a baseline read before the work starts.
-func admissionRejections(ns, group, reason string) float64 {
-	return testutil.ToFloat64(
-		sharedListenerMetrics().JobsAdmissionRejectedTotal.WithLabelValues(ns, group, reason))
-}
-
 // TestV2_RunnerSet_ScaleSet_PartialQuotaHeadroomSplitsTheCeiling is Q422 half A at the
 // scale-set tier, which the rung reached in Q443 (#868) and whose footprint arithmetic
 // Q450 (#883) corrected.
