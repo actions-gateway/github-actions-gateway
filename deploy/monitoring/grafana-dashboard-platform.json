@@ -364,6 +364,23 @@
       ]
     },
     {
+      "type": "timeseries",
+      "title": "Jobs queued at GitHub by namespace (scale-set)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 32 },
+      "id": 35,
+      "description": "The scale-set tier's stand-in for Active sessions by namespace, which a scale-set-only fleet never emits: jobs GitHub holds for a tenant's scale sets and has assigned to nobody. A namespace holding queued jobs while its assigned rate beside this panel is flat has a listener that is not taking work. Holds its last reading across an empty poll. Requires the per-tenant AGC scrapes.",
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "sum by (namespace) (actions_gateway_scaleset_jobs_available{namespace=~\"$namespace\"})",
+          "legendFormat": "{{namespace}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "type": "row",
       "title": "Build Versions",
       "collapsed": false,
