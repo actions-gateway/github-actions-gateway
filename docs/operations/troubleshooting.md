@@ -4238,9 +4238,8 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 ## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
 
 > Applies to the `v2alpha1` (`actions-gateway.com`) API.
-> `acquisitionProtocol` selects how the AGC acquires jobs for a runner set: `ScaleSet` (**the default** as of Q264 P5 — the runner-scale-set message-queue protocol, Q264 Option E) or `Classic` (**deprecated** — the per-runner broker protocol).
-> Leaving the field unset selects `ScaleSet`.
-> Both protocols match on the whole `runnerLabels` set, so a multi-label set no longer has to pin `Classic`.
+> `acquisitionProtocol` no longer changes how the AGC acquires jobs: every set acquires through a scale set, whatever the field says ([upgrade note](upgrade.md#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)).
+> `v2alpha1` still accepts and validates it, so the rejections below can still fire; the field goes with `v2alpha1` at `v2.0.0`.
 
 **Symptoms.** Creating or updating a `RunnerSet` is rejected with one of:
 
