@@ -19,6 +19,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
+  - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
@@ -268,6 +269,26 @@ For each one, confirm its first label is not the first label of another set whos
 Two such sets would register one scale set and both drive it, and admission does not re-check sets that already exist; rename one set's first label before upgrading.
 
 **Rolling back** to 1.10 returns the set to classic acquisition.
+
+### Action required if you alert on or chart the classic acquisition series: they are no longer exported
+
+**Who is affected:** anyone whose alerts, recording rules or dashboards read a series only the classic tier wrote, including copies of the reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml) and Grafana dashboards taken before `v2.0.0`.
+
+**What changed.** With the classic tier gone (Q264), the AGC no longer exports `actions_gateway_active_sessions`, `jobs_acquired_total`, `job_acquisition_errors_total`, `jobs_admission_rejected_total`, `jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`, `fanout_loser_recycle_deferred_total`, `renew_job_errors_total`, `renew_job_teardowns_total`, `agent_recycles_total`, `agent_recycle_errors_total`, `broker_token_propagation_retries_total` or `broker_session_leaks_total`.
+A rule reading one of them never fires again, and a panel reading one shows `No data`, without any error to say why.
+
+The reference rules drop the alerts and the recording rule that read them:
+
+| Removed | Use instead |
+| --- | --- |
+| `ActionsGatewayNoActiveSessions` | [`ActionsGatewayScaleSetNoSession`](runbook.md#actionsgatewayscalesetnosession), on `actions_gateway_scaleset_session_open == 0` for 10 minutes |
+| `ActionsGatewayCapacityGateRejectingJobs` | [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) |
+| `ActionsGatewayRenewJobErrors`, `ActionsGatewayAgentRecycleErrors`, `ActionsGatewayFanoutFallbackTimeout`, `ActionsGatewayAbandonedDeliveryErrors` | Nothing: the AGC no longer renews jobs, re-registers agents or receives one job more than once, so there is nothing for them to measure |
+| `actions_gateway:job_acquisition_success_rate:rate5m` | `actions_gateway:scaleset_provision_success_rate:rate5m` |
+
+The reference dashboards drop the panels that read the removed series, and chart the listener session gauge where they charted active sessions.
+
+**Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 
