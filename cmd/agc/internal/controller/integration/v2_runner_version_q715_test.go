@@ -95,9 +95,9 @@ func TestV2_ScaleSet_WorkerImageVersionUnknown_DoesNotBlockReady(t *testing.T) {
 	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
 }
 
-// TestV2_Classic_WorkerImageCurrent_DoesNotWarn pins the negative on the other tier:
-// the version GAG itself ships must not warn, or every install would.
-func TestV2_Classic_WorkerImageCurrent_DoesNotWarn(t *testing.T) {
+// TestV2_WorkerImageCurrent_DoesNotWarn pins the negative: the version GAG itself
+// ships must not warn, or every install would.
+func TestV2_WorkerImageCurrent_DoesNotWarn(t *testing.T) {
 	const ns = "v2-rs-runner-current"
 	createNSForAGC(t, ns)
 	startRunnerSetReconciler(t)

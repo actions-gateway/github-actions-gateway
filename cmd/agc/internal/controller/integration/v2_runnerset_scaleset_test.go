@@ -40,11 +40,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
-// These tests exercise the Q264 P3d wiring: a RunnerSet with
-// spec.acquisitionProtocol == ScaleSet is driven by a scale-set listener session per
-// set (session + capacity-gated poll + provision-on-JobAssigned) against the real
-// apiserver and the scalesettest fake, while a Classic set (the default) keeps using
-// the classic multiplexer path untouched — it never registers a scale set.
+// These tests exercise the scale-set wiring: each RunnerSet is driven by one
+// scale-set listener session (session + capacity-gated poll +
+// provision-on-JobAssigned) against the real apiserver and the scalesettest fake.
 
 // scaleSetTestMetrics is the shared scale-set metrics registry for the integration
 // tests. It registers into a throwaway prometheus.Registry rather than the global
