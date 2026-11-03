@@ -38,14 +38,14 @@
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "definition": "label_values({__name__=~\"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
+        "definition": "label_values({__name__=~\"actions_gateway_proxy_connections_total|actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
         "hide": 0,
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
         "name": "namespace",
         "query": {
-          "query": "label_values({__name__=~\"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
+          "query": "label_values({__name__=~\"actions_gateway_proxy_connections_total|actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
           "refId": "namespace"
         },
         "refresh": 2,

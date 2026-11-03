@@ -20,9 +20,8 @@ TENANTS = [
 ]
 NAMESPACES = ["team-a", "team-b"]
 
-# (namespace, runner_set) for the scale-set acquisition tier (Q264 default
-# protocol). Labelled by runner_set (not runner_group); a ScaleSet-protocol
-# RunnerSet emits none of the classic series above.
+# (namespace, runner_set) for the scale-set listener series, which are labelled
+# by runner_set (not runner_group).
 SCALESETS = [
     ("team-a", "gpu-a100"),
     ("team-a", "cpu-standard"),
@@ -72,18 +71,6 @@ SCALESET_CEILINGS = {
 # Baseline slots the namespace ResourceQuota rung holds back, before jitter. A set
 # absent here still publishes the rung's explicit zero.
 QUOTA_WITHHELD = {("team-a", "cpu-standard"): 9, ("team-b", "cpu-standard"): 3}
-
-# (namespace, runner_group) -> {reason: refusal rate}, the classic tier's per-job form
-# of the same ladder. ceiling and quota are on by default; capacity and scaleup are
-# per-owner opt-ins, and a counter has no explicit-zero rule, so a set that has not
-# enabled one emits no series for it at all.
-# Rates are a visible fraction of the acquired series they stack under, for the reason
-# the Q704 floor below exists: a refusal rate realistic for a healthy fleet renders as a
-# sliver on a panel whose whole subject is the refusals.
-REFUSING_TENANTS = {
-    ("team-a", "cpu-standard"): {"ceiling": 0.12, "quota": 0.06},
-    ("team-b", "cpu-standard"): {"quota": 0.08, "scaleup": 0.04},
-}
 
 # The harness renders a 10-minute window (render.sh FROM=now-10m) after WAIT=660s
 # of accumulation, so a counter's whole visible life is a few hundred seconds. A
@@ -166,33 +153,13 @@ def render():
     L = []
 
     L.append("# actions_gateway synthetic metrics")
-    for ns, rg in TENANTS:
-        sessions = max(1, int(3 + jitter(hash((ns, rg)) % 10, 1.4)))
-        L.append(f'actions_gateway_active_sessions{{namespace="{ns}",runner_group="{rg}"}} {sessions}')
-
-    for ns, rg in TENANTS:
-        rate = {"gpu-a100": 0.12, "cpu-standard": 0.7, "gpu-2x": 0.05}.get(rg, 0.2)
-        acquired = counter_total(rate, elapsed, seed=hash((ns, rg)) % 7)
-        L.append(f'actions_gateway_jobs_acquired_total{{namespace="{ns}",runner_group="{rg}"}} {acquired}')
-        # Jobs the pre-acquisition gate refused, by the rung that bound (Q443). Stacked
-        # under the acquired series on the budget dashboard, where the two together are
-        # the demand the tier saw.
-        for reason, refused_rate in REFUSING_TENANTS.get((ns, rg), {}).items():
-            L.append(f'actions_gateway_jobs_admission_rejected_total{{namespace="{ns}",runner_group="{rg}",reason="{reason}"}} '
-                     f'{counter_total(refused_rate, elapsed, seed=hash((ns, rg, reason)) % 9)}')
-
     for ns in NAMESPACES:
-        L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="already_claimed"}} {counter_total(0.05, elapsed)}')
-        L.append(f'actions_gateway_job_acquisition_errors_total{{namespace="{ns}",reason="delivery_window_expired"}} {counter_total(0.01, elapsed)}')
         # GetMessage errors by reason (excludes empty polls / session expiry). One
         # reason at the counter floor, about 9 per 15m, is all that stays under the
         # MessagePollFailing alert's 10, so the preview fleet is not failing its polls.
         L.append(f'actions_gateway_message_poll_errors_total{{namespace="{ns}",reason="timeout"}} {counter_total(MIN_COUNTER_RATE, elapsed)}')
-        # renewjob teardowns: definitive lock loss (Q254).
-        L.append(f'actions_gateway_renew_job_teardowns_total{{namespace="{ns}",reason="job_not_found"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_token_refreshes_total{{namespace="{ns}"}} {counter_total(0.02, elapsed)}')
         L.append(f'actions_gateway_token_refresh_errors_total{{namespace="{ns}"}} 0')
-        L.append(f'actions_gateway_renew_job_errors_total{{namespace="{ns}"}} 0')
         L.append(f'actions_gateway_ip_range_updates_total{{namespace="{ns}"}} 1')
         # pod creation latency: center ~ bucket index 3-4 (5-10s) -> p95<15, p99~12
         L += hist_lines("actions_gateway_pod_creation_latency_seconds", f'namespace="{ns}"', POD_BUCKETS, 1.2, 3, elapsed)
@@ -203,27 +170,13 @@ def render():
         # Disruption recoveries carry tier and cause (Q417, Q497); the tenant
         # dashboard groups on both and the security dashboard selects
         # cause="eviction", so the synthetic series carry the same four labels.
-        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="eviction"}} {counter_total(0.02, elapsed)}')
-        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="preemption"}} {counter_total(0.01, elapsed)}')
-        L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}",tier="classic",cause="eviction"}} 0')
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="scaleset",cause="eviction"}} {counter_total(0.02, elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="scaleset",cause="preemption"}} {counter_total(0.01, elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}",tier="scaleset",cause="eviction"}} 0')
         # The out-of-memory class's breaker is closed in a healthy fleet (Q1245).
         L.append(f'actions_gateway_auto_retry_paused{{namespace="{ns}",runner_group="{rg}",cause="oom"}} 0')
         L.append(f'actions_gateway_quota_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.01, elapsed)}')
         L.append(f'actions_gateway_quota_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}"}} 0')
-        # single-use JIT agent recycling: routine post-job recycles, no errors
-        L.append(f'actions_gateway_agent_recycles_total{{namespace="{ns}",runner_group="{rg}",trigger="post_job"}} {counter_total(0.15, elapsed)}')
-        L.append(f'actions_gateway_agent_recycle_errors_total{{namespace="{ns}",runner_group="{rg}"}} 0')
-        # worker-pod reaper: routine completed_ttl cleanup, occasional pending_deadline.
-        # The real counter always carries all four labels; runner_set is empty on the
-        # classic tier and non-empty only on scale-set reaps (Q514).
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="completed_ttl"}} {counter_total(0.14, elapsed)}')
-        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rg}",runner_set="",reason="pending_deadline"}} {counter_total(0.01, elapsed)}')
-        # broker OAuth token-propagation retries during recycle churn (Q267)
-        L.append(f'actions_gateway_broker_token_propagation_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.02, elapsed)}')
-        # fan-out safety trio (Q260 / Q266): benign steady rates during bursts
-        L.append(f'actions_gateway_jobs_duplicate_delivery_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.03, elapsed)}')
-        L.append(f'actions_gateway_abandoned_delivery_completions_total{{namespace="{ns}",runner_group="{rg}",outcome="completed"}} {counter_total(0.03, elapsed)}')
-        L.append(f'actions_gateway_fanout_loser_recycle_deferred_total{{namespace="{ns}",runner_group="{rg}",outcome="winner_concluded"}} {counter_total(0.03, elapsed)}')
 
     # Scale-set acquisition tier (Q264/Q311): one Listener per ScaleSet-protocol
     # RunnerSet. Assigned drives demand 1:1 (no sibling fan-out); provisioned
@@ -253,6 +206,7 @@ def render():
         # but never received its job.
         L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="completed_ttl"}} {counter_total(0.12, elapsed)}')
         L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="orphaned_running"}} {counter_total(0.012, elapsed)}')
+        L.append(f'actions_gateway_worker_pods_reaped_total{{namespace="{ns}",runner_group="{rs}",runner_set="{rs}",reason="pending_deadline"}} {counter_total(0.01, elapsed)}')
         # Opt-in capacity gate healthy: condition False with the reason that says the
         # gate evaluated and found room, not the latched AwaitingProbe (Q512/Q643).
         if (ns, rs) in GATED_SCALESETS:

@@ -38,14 +38,14 @@
       {
         "current": {},
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "definition": "label_values({__name__=~\"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
+        "definition": "label_values({__name__=~\"actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
         "hide": 0,
         "includeAll": true,
         "label": "Namespace",
         "multi": true,
         "name": "namespace",
         "query": {
-          "query": "label_values({__name__=~\"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
+          "query": "label_values({__name__=~\"actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total\"}, namespace)",
           "refId": "namespace"
         },
         "refresh": 2,
@@ -297,7 +297,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Active sessions by namespace",
+      "title": "Listener sessions open by namespace",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 25 },
       "id": 31,
@@ -306,24 +306,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace) (actions_gateway_active_sessions{namespace=~\"$namespace\"})",
-          "legendFormat": "{{namespace}}",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "type": "timeseries",
-      "title": "Jobs acquired/min by namespace",
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 25 },
-      "id": 32,
-      "description": "Requires the per-tenant AGC scrapes (mTLS).",
-      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
-      "targets": [
-        {
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace) (rate(actions_gateway_jobs_acquired_total{namespace=~\"$namespace\"}[5m])) * 60",
+          "expr": "sum by (namespace) (actions_gateway_scaleset_session_open{namespace=~\"$namespace\"})",
           "legendFormat": "{{namespace}}",
           "refId": "A"
         }
@@ -333,7 +316,7 @@
       "type": "timeseries",
       "title": "Pod creation p99 by namespace",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 25 },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 32 },
       "id": 33,
       "description": "From the actions_gateway:pod_creation_latency_seconds:p99 recording rule. Requires the per-tenant AGC scrapes.",
       "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10 } }, "overrides": [] },
@@ -348,11 +331,11 @@
     },
     {
       "type": "timeseries",
-      "title": "Jobs assigned/min by namespace (scale-set)",
+      "title": "Jobs assigned/min by namespace",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 32 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 25 },
       "id": 34,
-      "description": "The default acquisition protocol (Q264). A scale-set-only fleet emits no jobs_acquired_total, so cross-tenant throughput is only visible here. Requires the per-tenant AGC scrapes.",
+      "description": "Cross-tenant throughput: jobs GitHub assigned to each namespace's scale sets. Requires the per-tenant AGC scrapes.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
@@ -365,11 +348,11 @@
     },
     {
       "type": "timeseries",
-      "title": "Jobs queued at GitHub by namespace (scale-set)",
+      "title": "Jobs queued at GitHub by namespace",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 32 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 25 },
       "id": 35,
-      "description": "The scale-set tier's stand-in for Active sessions by namespace, which a scale-set-only fleet never emits: jobs GitHub holds for a tenant's scale sets and has assigned to nobody. A namespace holding queued jobs while its assigned rate beside this panel is flat has a listener that is not taking work. Holds its last reading across an empty poll. Requires the per-tenant AGC scrapes.",
+      "description": "Jobs GitHub holds for a tenant's scale sets and has assigned to nobody. A namespace holding queued jobs while its assigned rate beside this panel is flat has a listener that is not taking work. Holds its last reading across an empty poll. Requires the per-tenant AGC scrapes.",
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } }, "overrides": [] },
       "targets": [
         {
