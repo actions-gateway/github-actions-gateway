@@ -19,6 +19,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // resourceGuardManifestPath is the real shipped policy — loading it (rather than
@@ -161,5 +162,128 @@ func TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces(t *testing.T) 
 		// The policy matchCondition targets only the GMC SA username, so the
 		// cluster-admin client can still write into an unmarked namespace freely.
 		require.NoError(t, k8sClient.Create(ctx, newSecret(unmarkedNS, "admin-secret")))
+	})
+}
+
+// readerBindingIn is a RoleBinding named like the GMC's Secret reader binding, for
+// the guard's exception tests to vary one field of at a time.
+func readerBindingIn(ns, name string, ref rbacv1.RoleRef, subjects ...rbacv1.Subject) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
+		RoleRef:    ref,
+		Subjects:   subjects,
+	}
+}
+
+// TestGMC_TenantResourceGuard_AdmitsOnlyOwnReaderBindingDelete pins Q1271's
+// exception: outside a tenant namespace the GMC may delete its own
+// gmc-tenant-secret-reader RoleBinding and nothing else. Each denial case breaks
+// exactly one of the exception's conditions, and asserts the guard's tenant
+// message so a denial from RBAC or a CEL error cannot pass for it.
+func TestGMC_TenantResourceGuard_AdmitsOnlyOwnReaderBindingDelete(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	// The GMC holds no grant on Roles; give it delete so only the guard can refuse.
+	roleDeletes := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-gmc-role-deletes"},
+		Rules:      []rbacv1.PolicyRule{{APIGroups: []string{rbacv1.GroupName}, Resources: []string{"roles"}, Verbs: []string{"delete"}}},
+	}
+	if err := k8sClient.Create(ctx, roleDeletes); err != nil && !apierrors.IsAlreadyExists(err) {
+		require.NoError(t, err)
+	}
+	roleDeletesBinding := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "test-gmc-role-deletes"},
+		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: roleDeletes.Name},
+		Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: gmcSAName, Namespace: gmcSANamespace}},
+	}
+	if err := k8sClient.Create(ctx, roleDeletesBinding); err != nil && !apierrors.IsAlreadyExists(err) {
+		require.NoError(t, err)
+	}
+
+	const ns = "resguard-reader-cleanup"
+	createNamespace(t, ns)
+
+	const reader = "gmc-tenant-secret-reader"
+	readerRef := rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: reader}
+	gmcSubject := rbacv1.Subject{Kind: rbacv1.ServiceAccountKind, Name: gmcSAName, Namespace: gmcSANamespace}
+	const tenantDenial = "is not a managed tenant namespace"
+
+	gmc := newImpersonatedClient(t, gmcSANamespace, gmcSAName)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		return apierrors.IsForbidden(gmc.Create(ctx, newSecret(ns, "probe")))
+	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "the guard must be enforcing")
+
+	// deleteDenied creates obj as the admin, then requires the guard to deny the
+	// GMC's delete of it.
+	deleteDenied := func(t *testing.T, obj client.Object) {
+		t.Helper()
+		require.NoError(t, k8sClient.Create(ctx, obj))
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), obj) })
+		err := gmc.Delete(ctx, obj)
+		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+		require.ErrorContains(t, err, tenantDenial, "denied by the guard's tenant rule")
+	}
+
+	t.Run("own reader binding delete admitted", func(t *testing.T) {
+		rb := readerBindingIn(ns, reader, readerRef, gmcSubject)
+		require.NoError(t, k8sClient.Create(ctx, rb))
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rb) })
+		require.NoError(t, gmc.Delete(ctx, rb), "the GMC removes its own reader binding outside a tenant namespace")
+	})
+
+	t.Run("update of own reader binding denied", func(t *testing.T) {
+		rb := readerBindingIn(ns, reader, readerRef, gmcSubject)
+		require.NoError(t, k8sClient.Create(ctx, rb))
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rb) })
+		rb.Labels = map[string]string{"touched": "true"}
+		err := gmc.Update(ctx, rb)
+		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+		require.ErrorContains(t, err, tenantDenial)
+	})
+
+	t.Run("binding with another name denied", func(t *testing.T) {
+		deleteDenied(t, readerBindingIn(ns, "not-the-reader", readerRef, gmcSubject))
+	})
+
+	t.Run("binding to another ClusterRole denied", func(t *testing.T) {
+		deleteDenied(t, readerBindingIn(ns, reader, rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "view"}, gmcSubject))
+	})
+
+	t.Run("binding to a Role of the reader's name denied", func(t *testing.T) {
+		deleteDenied(t, readerBindingIn(ns, reader, rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "Role", Name: reader}, gmcSubject))
+	})
+
+	t.Run("binding with an extra subject denied", func(t *testing.T) {
+		extra := rbacv1.Subject{Kind: rbacv1.ServiceAccountKind, Name: "someone-else", Namespace: gmcSANamespace}
+		deleteDenied(t, readerBindingIn(ns, reader, readerRef, gmcSubject, extra))
+	})
+
+	t.Run("binding to another ServiceAccount denied", func(t *testing.T) {
+		other := rbacv1.Subject{Kind: rbacv1.ServiceAccountKind, Name: "someone-else", Namespace: gmcSANamespace}
+		deleteDenied(t, readerBindingIn(ns, reader, readerRef, other))
+	})
+
+	t.Run("binding to a User named like the GMC denied", func(t *testing.T) {
+		user := rbacv1.Subject{Kind: rbacv1.UserKind, APIGroup: rbacv1.GroupName, Name: gmcSAName, Namespace: gmcSANamespace}
+		deleteDenied(t, readerBindingIn(ns, reader, readerRef, user))
+	})
+
+	t.Run("Role of the reader's name denied", func(t *testing.T) {
+		deleteDenied(t, &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: reader}})
+	})
+
+	t.Run("ClusterRoleBinding of the reader's name denied", func(t *testing.T) {
+		crb := &rbacv1.ClusterRoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: reader},
+			RoleRef:    readerRef,
+			Subjects:   []rbacv1.Subject{gmcSubject},
+		}
+		require.NoError(t, k8sClient.Create(ctx, crb))
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), crb) })
+		err := gmc.Delete(ctx, crb)
+		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+		require.ErrorContains(t, err, "agc-clusterrunnertemplate-reader", "denied by the guard's ClusterRoleBinding rule")
 	})
 }

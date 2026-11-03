@@ -208,3 +208,47 @@ func TestGMC_TenantSecretAccess_ScopesReadsToTenantNamespaces(t *testing.T) {
 	require.NoError(t, gmc.Create(ctx, allowed), "the per-gateway ClusterRunnerTemplate reader binding stays writable")
 	require.NoError(t, gmc.Delete(ctx, allowed))
 }
+
+// TestGMC_TenantSecretAccess_DeletesReaderBindingOutsideTenants pins Q1271: the
+// GMC, under its shipped RBAC and the real guard, removes its reader binding from
+// a namespace that stops being a tenant. The legacy namespace stands in for the
+// v2.0.0 upgrade: a 1.x GMC bound its reader there, and only the v1 marker
+// remains.
+func TestGMC_TenantSecretAccess_DeletesReaderBindingOutsideTenants(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	const tenantNS = "reader-cleanup-tenant"
+	const legacyNS = "reader-cleanup-legacy"
+	createNamespaceWithLabels(t, tenantNS, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	createNamespaceWithLabels(t, legacyNS, map[string]string{legacyTenantMarkerLabel: "true"})
+	leftover := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Namespace: legacyNS, Name: controller.TenantSecretReaderName},
+		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: controller.TenantSecretReaderName},
+		Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: gmcSAName, Namespace: gmcSANamespace}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, leftover))
+
+	startGMCAsServiceAccount(t)
+	g := gomega.NewWithT(t)
+	bindingGone := func(ns string) func() bool {
+		return func() bool {
+			err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: controller.TenantSecretReaderName}, &rbacv1.RoleBinding{})
+			return apierrors.IsNotFound(err)
+		}
+	}
+
+	g.Eventually(bindingGone(legacyNS), 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
+		"the GMC removes a 1.x reader binding from a namespace carrying only the v1 marker")
+
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: controller.TenantSecretReaderName}, &rbacv1.RoleBinding{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	var ns corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: tenantNS}, &ns))
+	delete(ns.Labels, gmcv2.TenantNamespaceMarkerLabel)
+	require.NoError(t, k8sClient.Update(ctx, &ns))
+	g.Eventually(bindingGone(tenantNS), 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
+		"unmarking a tenant namespace removes the GMC's reader binding")
+}

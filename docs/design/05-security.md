@@ -27,9 +27,11 @@ So a compromised GMC cannot create a Deployment or RoleBinding in `kube-system`,
 
 Secret **reads** need a different mechanism, because admission never runs on `get`/`list`/`watch`.
 RBAC cannot scope a grant by namespace label either, so the reads leave the ClusterRole altogether (Q1188).
-A singleton ClusterRole, `gmc-tenant-secret-reader`, holds `get`/`list`/`watch` on Secrets, and the GMC creates a RoleBinding to it in each namespace carrying a tenant marker.
+A singleton ClusterRole, `gmc-tenant-secret-reader`, holds `get`/`list`/`watch` on Secrets, and the GMC creates a RoleBinding to it in each namespace carrying the tenant marker, and deletes that RoleBinding when the namespace loses the marker.
 The GMC holds `bind` on that one `resourceName` and nothing broader, the pattern it already uses to hand the AGC `agc-tenant-role`, so RBAC escalation prevention is satisfied without `escalate`.
 What stops the GMC binding the reader into `kube-system` is `gmc-tenant-resource-guard`, which confines its RoleBinding writes to tenant namespaces, together with `namespace-psa-guard`, which makes the tenant marker immutable to it.
+The guard admits one write outside a tenant namespace: the GMC deleting a RoleBinding named `gmc-tenant-secret-reader` whose `roleRef` is the ClusterRole of that name and whose only subject is the GMC's own ServiceAccount (Q1271).
+That delete can only remove the GMC's access, and the match leaves out updates, Roles, ClusterRoleBindings, and any binding with another subject.
 
 The ClusterRole's Secret write verbs are `create` and `update`, and never `patch`, because a `patch` is a read.
 A PATCH needs no prior `get` and its response carries the stored object, so an empty merge patch returns a Secret's `.data` to a caller holding `patch` alone (measured on kind, Kubernetes v1.36.1, 2026-10-26).
@@ -55,8 +57,6 @@ It CANNOT exec into pods, create new namespaces, write resources into unmarked n
 
 * With `admissionPolicy.enabled=false` nothing fences the `bind`, so a compromised GMC can bind the reader into any namespace, or cluster-wide through a ClusterRoleBinding, and read every Secret.
   Its `bind` on `agc-tenant-role` reaches the same reads by the same two routes.
-* A namespace that loses its marker keeps the reader RoleBinding: the guard denies the GMC's delete there, because the namespace is no longer a tenant.
-  The platform admin who removes the marker also deletes `gmc-tenant-secret-reader` in that namespace ([upgrade.md](../operations/upgrade.md)).
 * Secret `create`/`update` stay cluster-wide.
   Admission rejects an out-of-tenant write before the API server responds, so neither verb returns another namespace's Secret body.
 

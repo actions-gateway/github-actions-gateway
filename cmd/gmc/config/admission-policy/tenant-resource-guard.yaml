@@ -17,6 +17,11 @@
 # Secret reads, and a ClusterRoleBinding to one of them would grant those reads in
 # every namespace (Q1188).
 #
+# One write outside a tenant namespace is admitted: the GMC deleting its own
+# gmc-tenant-secret-reader RoleBinding, so a namespace that stops being a tenant
+# also stops granting the GMC Secret reads (Q1271). The match is narrow enough
+# that the delete can only remove the GMC's own access.
+#
 # Scope limits this policy deliberately does NOT cover:
 #   - Secret READS (get/list/watch). Admission only runs on create/update/delete, so
 #     no ValidatingAdmissionPolicy can confine a read. RBAC confines them instead: the
@@ -96,11 +101,28 @@ spec:
       expression: "request.resource.resource == 'clusterrolebindings'"
     - name: bindingRoleRef
       expression: "request.operation == 'DELETE' ? oldObject.roleRef.name : object.roleRef.name"
+    # The GMC's own reader binding, matched on the stored object a DELETE carries:
+    # a RoleBinding (never a Role or ClusterRoleBinding) named
+    # gmc-tenant-secret-reader, bound to the ClusterRole of that name, whose only
+    # subject is the requester. matchConditions has already pinned the requester to
+    # the GMC ServiceAccount, so the subject check reuses that identity.
+    # The subject's `namespace` is read unescaped although CEL reserves the word;
+    # the delete is admitted on envtest 1.30.3 and 1.35.0 (Q1271).
+    - name: isOwnReaderBindingDelete
+      expression: >-
+        request.operation == 'DELETE' &&
+        request.resource.resource == 'rolebindings' &&
+        oldObject.metadata.name == 'gmc-tenant-secret-reader' &&
+        oldObject.roleRef.kind == 'ClusterRole' &&
+        oldObject.roleRef.name == 'gmc-tenant-secret-reader' &&
+        has(oldObject.subjects) && size(oldObject.subjects) == 1 &&
+        oldObject.subjects[0].kind == 'ServiceAccount' &&
+        'system:serviceaccount:' + oldObject.subjects[0].namespace + ':' + oldObject.subjects[0].name == request.userInfo.username
   validations:
     - expression: "!variables.isClusterRoleBinding || variables.bindingRoleRef == 'agc-clusterrunnertemplate-reader'"
       messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
       reason: Forbidden
-    - expression: "variables.isClusterRoleBinding || variables.isManagedTenant"
+    - expression: "variables.isClusterRoleBinding || variables.isManagedTenant || variables.isOwnReaderBindingDelete"
       messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed; namespace ' + request.namespace + ' is not a managed tenant namespace'"
       reason: Forbidden
 ---
