@@ -215,8 +215,9 @@ type Stub struct {
 	deleteWithoutPruning bool
 
 	// adminTokens holds every admin JWT the registration hop has minted. A new mint
-	// leaves earlier ones valid, as the real backend's independent JWTs are, so
-	// clients sharing one stub do not revoke each other's connections.
+	// leaves earlier ones valid, so clients sharing one stub (one per scale set, as
+	// ARC also runs them) do not revoke each other's connections. Expiry is the
+	// client's to track; the stub never checks exp.
 	adminTokens   map[string]bool
 	adminTokenTTL time.Duration
 

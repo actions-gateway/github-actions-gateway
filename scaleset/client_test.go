@@ -303,10 +303,9 @@ func TestClient_AdminJWTRefreshedBeforeExpiry(t *testing.T) {
 	}
 }
 
-// TestClient_SecondClientKeepsFirstAdminJWTValid pins the stub to the real
-// backend's independent admin JWTs: a second client's registration must not revoke
-// the connection the first holds, which is what every e2e tenant sharing one
-// fakegithub depends on.
+// TestClient_SecondClientKeepsFirstAdminJWTValid pins that a second client's
+// registration does not revoke the admin connection the first holds, which every
+// e2e tenant sharing one fakegithub depends on.
 func TestClient_SecondClientKeepsFirstAdminJWTValid(t *testing.T) {
 	srv := scalesettest.New()
 	defer srv.Close()
