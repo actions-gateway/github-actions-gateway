@@ -150,12 +150,22 @@ func TestTenantSecretAccessReconciler(t *testing.T) {
 	assert.True(t, apierrors.IsNotFound(err), "no binding in an unmarked namespace; got %v", err)
 	assert.False(t, w.Running("other"))
 
-	// Unmarking stops the watch and leaves the binding (the guard denies its delete).
+	// Unmarking stops the watch and deletes the binding.
 	tenant.Labels = nil
 	require.NoError(t, c.Update(ctx, tenant))
 	_, err = r.Reconcile(ctx, req("tenant"))
 	require.NoError(t, err)
 	assert.False(t, w.Running("tenant"))
+	err = c.Get(ctx, types.NamespacedName{Namespace: "tenant", Name: TenantSecretReaderName}, &rbacv1.RoleBinding{})
+	assert.True(t, apierrors.IsNotFound(err), "an unmarked namespace loses the GMC's binding; got %v", err)
+
+	// A binding of that name the GMC did not write is left in place.
+	foreign := buildTenantSecretReaderRoleBinding("other", "someone-else", "gmc-system")
+	require.NoError(t, c.Create(ctx, foreign))
+	_, err = r.Reconcile(ctx, req("other"))
+	require.NoError(t, err)
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "other", Name: TenantSecretReaderName}, &rbacv1.RoleBinding{}),
+		"a binding with another subject is not the GMC's to delete")
 
 	// A namespace that is gone stops its watch.
 	require.NoError(t, w.Ensure("gone"))

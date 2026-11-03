@@ -28,9 +28,9 @@ Before beginning, confirm all of the following:
   Two admission policies key on it: `namespace-psa-guard` denies the GMC any namespace patch (the PSA-stamping step) it has *not* been marked for, and `gmc-tenant-resource-guard` denies the GMC any create/update/delete of tenant resources (Deployments, Secrets, RoleBindings, NetworkPolicies, …) outside marked namespaces.
   The GMC also reads Secrets only in marked namespaces: it binds itself a `gmc-tenant-secret-reader` RoleBinding there, and holds no Secret read anywhere else.
   So an unlabelled namespace leaves the `ActionsGateway` stuck with a `NamespaceMarkerMissing` warning event and no provisioned resources.
-  When a namespace stops being a tenant, delete its `gmc-tenant-secret-reader` RoleBinding after removing the label: the guard denies the GMC that delete outside marked namespaces.
+  When a namespace stops being a tenant, the GMC deletes its `gmc-tenant-secret-reader` RoleBinding there once the label is removed.
   Apply the label with a trusted (administrator) identity — the GMC must never set it itself.
-  Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/tenant}'` → `true`.
+  Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.com/tenant}'` → `managed`.
 - [ ] **Cluster CNI enforces egress NetworkPolicy.** The tenant isolation model (workers restricted to DNS + the per-tenant proxy; no direct GitHub or Kubernetes API egress) is implemented as NetworkPolicy egress rules, which are inert unless the cluster's Container Network Interface (CNI) plugin enforces them.
   Production clusters must run an egress-enforcing CNI such as Calico or Cilium — kind's default kindnet, for example, accepts NetworkPolicy objects without enforcing egress.
   Verify with your CNI's documentation, or run the negative probes in [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) after onboarding: the "blocked" probes must actually time out.

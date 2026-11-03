@@ -10,6 +10,7 @@ import (
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -186,12 +187,12 @@ func (s *scopedSource) String() string {
 }
 
 // TenantSecretAccessReconciler grants the GMC Secret reads in each tenant
-// namespace and runs that namespace's Secret watch. For a namespace carrying
-// either tenant marker it applies the gmc-tenant-secret-reader RoleBinding to
-// the GMC's own ServiceAccount, then ensures the namespace's Secret cache. A
-// namespace that loses its marker or is deleted has its cache stopped; its
-// RoleBinding stays, because gmc-tenant-resource-guard denies the GMC a delete in
-// a namespace that is no longer a tenant.
+// namespace and runs that namespace's Secret watch. For a namespace carrying the
+// tenant marker it applies the gmc-tenant-secret-reader RoleBinding to the GMC's
+// own ServiceAccount, then ensures the namespace's Secret cache. A namespace that
+// loses its marker has its cache stopped and that RoleBinding deleted, the one
+// delete gmc-tenant-resource-guard admits outside a tenant namespace (Q1271). A
+// deleted namespace takes its RoleBinding with it.
 type TenantSecretAccessReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -203,7 +204,8 @@ type TenantSecretAccessReconciler struct {
 }
 
 // Reconcile applies the namespace's reader RoleBinding and Secret watch, or stops
-// the watch when the namespace is gone or no longer a tenant.
+// the watch when the namespace is gone or no longer a tenant, and in the latter
+// case deletes the binding.
 func (r *TenantSecretAccessReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var ns corev1.Namespace
 	if err := r.Get(ctx, req.NamespacedName, &ns); err != nil {
@@ -212,9 +214,13 @@ func (r *TenantSecretAccessReconciler) Reconcile(ctx context.Context, req ctrl.R
 		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	if !ns.DeletionTimestamp.IsZero() || !isTenantNamespace(ns.Labels) {
+	if !ns.DeletionTimestamp.IsZero() {
 		r.Watches.Stop(ns.Name)
 		return ctrl.Result{}, nil
+	}
+	if !isTenantNamespace(ns.Labels) {
+		r.Watches.Stop(ns.Name)
+		return ctrl.Result{}, r.deleteReaderRoleBinding(ctx, ns.Name)
 	}
 	desired := buildTenantSecretReaderRoleBinding(ns.Name, r.ServiceAccountName, r.ServiceAccountNamespace)
 	obj := &rbacv1.RoleBinding{}
@@ -229,6 +235,28 @@ func (r *TenantSecretAccessReconciler) Reconcile(ctx context.Context, req ctrl.R
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
+}
+
+// deleteReaderRoleBinding deletes the namespace's gmc-tenant-secret-reader
+// RoleBinding when it is the one the GMC would write. One with another roleRef or
+// subjects is not the GMC's to remove, and gmc-tenant-resource-guard would deny
+// the delete. The UID and resourceVersion preconditions stop the delete landing on
+// a binding replaced since the read.
+func (r *TenantSecretAccessReconciler) deleteReaderRoleBinding(ctx context.Context, namespace string) error {
+	var rb rbacv1.RoleBinding
+	if err := r.Get(ctx, types.NamespacedName{Namespace: namespace, Name: TenantSecretReaderName}, &rb); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	desired := buildTenantSecretReaderRoleBinding(namespace, r.ServiceAccountName, r.ServiceAccountNamespace)
+	if !equality.Semantic.DeepEqual(rb.RoleRef, desired.RoleRef) || !equality.Semantic.DeepEqual(rb.Subjects, desired.Subjects) {
+		logf.FromContext(ctx).Info("leaving a RoleBinding the GMC did not write", "namespace", namespace, "name", TenantSecretReaderName)
+		return nil
+	}
+	err := r.Delete(ctx, &rb, client.Preconditions{UID: &rb.UID, ResourceVersion: &rb.ResourceVersion})
+	if client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("delete %s RoleBinding: %w", TenantSecretReaderName, err)
+	}
+	return nil
 }
 
 // buildTenantSecretReaderRoleBinding binds the GMC's ServiceAccount to the
