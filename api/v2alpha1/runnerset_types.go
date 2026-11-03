@@ -84,12 +84,11 @@ type RunnerSetSpec struct {
 	// +optional
 	ProxyRef *ProxyObjectRef `json:"proxyRef,omitempty"`
 
-	// MaxListeners is the maximum number of concurrent listener goroutines — a
-	// concurrency ceiling with a permanent baseline of one poller; extra pollers
-	// demand-spawn as jobs are acquired and idle-exit when the queue drains. The v2
-	// default is 10 (v1 defaulted to 1): a higher ceiling costs nothing at idle and
-	// avoids serializing job pickup, while maxWorkers and the namespace ResourceQuota
-	// remain the binding resource guards (§H.15).
+	// MaxListeners is inert: it capped the classic tier's listener goroutines, and
+	// no controller reads it since the AGC lost that tier (Q264). A scale-set
+	// listener holds one session per set, and maxWorkers and the namespace
+	// ResourceQuota bound concurrency. The field survives on v2alpha1 only so a
+	// stored object round-trips until the version is removed (Q1167).
 	//
 	// +kubebuilder:default=10
 	// +kubebuilder:validation:Minimum=1
@@ -145,29 +144,16 @@ type RunnerSetSpec struct {
 	// +kubebuilder:validation:MaxLength=255
 	RunnerGroup string `json:"runnerGroup,omitempty"`
 
-	// AcquisitionProtocol selects how the AGC acquires jobs for this runner set:
-	// "ScaleSet" (default, as of Q264 P5) is the runner-scale-set message-queue
-	// protocol (Q264 Option E) — one listener session per set, capacity-gated
-	// assignment, and a full-runner (run.sh --jitconfig) worker; it removes the
-	// classic protocol's many-acquirers fan-out race by construction. "Classic"
-	// (deprecated) is the per-runner broker protocol; select it only to retain a
-	// classic-only capability during the migration window.
+	// AcquisitionProtocol is inert: no controller reads it, and the AGC acquires
+	// every runner set's jobs through a GitHub runner scale set whatever it says
+	// (Q264). "ScaleSet" was the runner-scale-set message-queue protocol and
+	// "Classic" the per-runner broker protocol, which the AGC no longer has; a set
+	// that holds "Classic" registers a scale set named after its first runnerLabel,
+	// like every other set. The field survives on v2alpha1 only so a stored object
+	// round-trips until the version is removed (Q1167); v2beta1 and v2 do not serve
+	// it.
 	//
-	// Multi-label matching was that capability until Q726 and no longer is: a
-	// ScaleSet set registers every runnerLabel on its scale set, so a multi-label
-	// set no longer has to pin Classic. Existing sets are unaffected: the value is
-	// persisted at admission, so a set created while the default was Classic keeps
-	// Classic, and gag-migrate still emits Classic explicitly so a migrating tenant's
-	// protocol never changes underneath it.
-	//
-	// It is immutable: switching a live set's protocol is a re-registration storm, so
-	// the value is frozen (§H.15 pattern) — create a new RunnerSet to change it.
-	// Starting immutable is compatible (relaxing it later is a non-breaking change;
-	// adding immutability later would be breaking). A ScaleSet set's first runnerLabel
-	// names its scale set, and the GMC webhook holds that name unique across the sets
-	// under one gateway.
-	// This field exists only on v2alpha1 as the per-set canary/rollback lever for the
-	// Q264 P3–P4 rollout; v2beta1 is ScaleSet-only and drops it (Q264 §5a-U7).
+	// It is immutable (§H.15 pattern), as it was while it selected the protocol.
 	//
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="acquisitionProtocol is immutable; create a new RunnerSet to change the acquisition protocol"
