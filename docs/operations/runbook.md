@@ -408,7 +408,7 @@ If the AGC pod is destroyed and cannot restart (e.g. node failure without resche
    kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
    ```
 
-4. Monitor `actions_gateway_active_sessions` — it should reach 1 per RunnerGroup within a few seconds of the pod starting.
+4. Monitor `actions_gateway_scaleset_session_open` — it should read `1` for every `runner_set` within a few seconds of the pod starting.
 
 **State that persists:** All RunnerGroup CRs, Secrets, and Kubernetes resources are durable.
 The AGC reconstructs all in-memory state (session registry, per-job renewers) from scratch on restart.

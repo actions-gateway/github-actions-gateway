@@ -159,7 +159,7 @@ Expected state after a healthy deployment:
 - AGC Deployment: `READY 1/1`.
 - Proxy Deployment: `READY` count >= `minReplicas`.
 - HPA: `TARGETS` showing a CPU percentage (not `<unknown>`).
-- Each RunnerGroup has at least one listener session (`actions_gateway_active_sessions > 0`).
+- Each RunnerSet's listener holds its session (`actions_gateway_scaleset_session_open == 1`).
 
 ---
 
@@ -1187,13 +1187,12 @@ Use `CIDR`, or ask the platform operator to enable a backend.
 
 ## AGC CrashLoopBackOff or Not Acquiring Jobs
 
-**Symptoms.** The AGC pod is restarting repeatedly, or it is running but `actions_gateway_active_sessions` is zero and `actions_gateway_jobs_acquired_total` is not incrementing even when jobs are queued.
+**Symptoms.** The AGC pod is restarting repeatedly, or it is running but `actions_gateway_scaleset_session_open` is `0` and `actions_gateway_scaleset_jobs_assigned_total` is not incrementing even when jobs are queued.
 
 **Likely causes.**
 - GitHub App Secret is missing, malformed, or contains an invalid private key.
 - GitHub App `installationId` or `appId` is wrong.
 - The proxy pool is not reachable from the AGC (network policy or proxy pod not ready).
-- The AGC binary was built with an incompatible runner version (GitHub returns 400 on session creation).
 
 **Diagnostics.**
 
@@ -1550,7 +1549,7 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejecte
 
 ## Worker Pods Stuck Pending
 
-**Symptoms.** Jobs are acquired (`actions_gateway_jobs_acquired_total` increments) but worker pods remain in `Pending` state for more than 60 seconds.
+**Symptoms.** Jobs are assigned (`actions_gateway_scaleset_jobs_assigned_total` increments) but worker pods remain in `Pending` state for more than 60 seconds.
 `pod_creation_latency_seconds` p95 exceeds the 15s SLO target.
 
 **Likely causes.**

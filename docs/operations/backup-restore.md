@@ -198,7 +198,7 @@ After any restore, confirm the gateway is healthy — the same checks as [Runboo
    ```
    Expect `True`.
    If `CredentialUnavailable` or `ProxyNotFound`, the credential Secret or `EgressProxy` is still missing — recheck the relevant scenario step.
-4. Sessions are polling — `actions_gateway_active_sessions` should reach ≥ 1 per RunnerGroup within seconds.
+4. Listeners hold their sessions — `actions_gateway_scaleset_session_open` should read `1` for every `runner_set` within seconds.
    See [Observability](observability.md).
 5. Trigger a test workflow and confirm a worker pod is provisioned and the job completes.
 

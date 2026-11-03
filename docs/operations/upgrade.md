@@ -258,6 +258,10 @@ Rolling back further is not: a release that does not serve `v2` cannot read an o
 A set that asked for `Classic` registers a scale set named after its first `runnerLabels` entry and takes jobs through it, like every other set, and its `maxListeners` is ignored.
 The GMC's admission check that no two sets in one GitHub scope share a first label now applies to it too.
 
+It also leaves the set's classic agents behind.
+On 1.10, deleting a `Classic` set deregistered its agents from GitHub and deleted their Secrets; from `v2.0.0` nothing does, so the `agentpool-rs-<set>-<n>` Secrets stay in the namespace and the `rs-<set>-<n>` runners stay registered, offline, at GitHub.
+How long GitHub keeps an offline runner of this kind has not been measured here.
+
 **Before you upgrade,** list the sets that still carry the choice, which the conversion keeps in an annotation:
 
 ```bash
@@ -265,8 +269,20 @@ kubectl get runnersets.actions-gateway.com -A -o json \
   | jq -r '.items[] | select(.metadata.annotations["conversion.actions-gateway.com/acquisition-protocol"] == "Classic") | "\(.metadata.namespace)/\(.metadata.name)"'
 ```
 
-For each one, confirm its first label is not the first label of another set whose gateway names the same GitHub org, enterprise or repository.
-Two such sets would register one scale set and both drive it, and admission does not re-check sets that already exist; rename one set's first label before upgrading.
+Replace each one while still on 1.10: create a second `RunnerSet` with the same `runnerLabels` and `acquisitionProtocol: ScaleSet` (or none, at `v2beta1` or `v2`), then delete the `Classic` set once its running jobs finish.
+On 1.10 that delete deregisters the set's agents and deletes their Secrets (`runnerset_controller.go` `reconcileDelete`, at the `v1.10.0` tag), which is the cleanup nothing does after the upgrade.
+
+A `Classic` set you keep through the upgrade needs two checks.
+First, its first label must not be the first label of another set whose gateway names the same GitHub org, enterprise or repository: two such sets would register one scale set and both drive it, and admission does not re-check sets that already exist, so rename one set's first label before upgrading.
+A pair that slips through shows after the upgrade as the `ScaleSetNameCollision` condition on the gateway, and fires [`ActionsGatewayScaleSetNameCollision`](runbook.md#actionsgatewayscalesetnamecollision).
+Second, after the upgrade its classic agents need removing by hand.
+List their Secrets:
+
+```bash
+kubectl get secrets -n <namespace> -o name | grep '^secret/agentpool-rs-<set>-'
+```
+
+Delete each one it prints, and remove the offline `rs-<set>-<n>` runners in the org's or repository's runner settings.
 
 **Rolling back** to 1.10 returns the set to classic acquisition.
 
@@ -1776,11 +1792,11 @@ kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 **Step 4: Confirm session recovery**
 
 ```sh
-# sessions should return to >= 1 per RunnerGroup within a few seconds of pod startup
-# Metric: actions_gateway_active_sessions{namespace="<namespace>"}
+# every RunnerSet's listener session should be open again within a few seconds of pod startup
+# Metric: actions_gateway_scaleset_session_open{namespace="<namespace>"} == 1 per runner_set
 
-# No new renewjob errors
-# Metric: rate(actions_gateway_renew_job_errors_total{namespace="<namespace>"}[5m])
+# No new message poll errors
+# Metric: rate(actions_gateway_message_poll_errors_total{namespace="<namespace>"}[5m])
 ```
 
 **Step 5: Check for cancelled jobs**
@@ -1863,8 +1879,8 @@ kubectl get pods -n <namespace> -l app=actions-gateway-proxy -o wide
 # HPA still computing utilization (not <unknown>)
 kubectl get hpa -n <namespace>
 
-# No spike in token or renewjob errors after the rollout
-# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total
+# No spike in token or message poll errors after the rollout
+# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total
 ```
 
 ### Proxy rollback
@@ -1948,11 +1964,11 @@ After any component upgrade:
 # All ActionsGateway CRs healthy
 kubectl get actionsgateway --all-namespaces
 
-# Active sessions restored
-# Metric: actions_gateway_active_sessions per namespace
+# Listener sessions restored
+# Metric: actions_gateway_scaleset_session_open per namespace and runner_set
 
 # No spike in errors
-# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total, controller_runtime_reconcile_errors_total
+# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total, controller_runtime_reconcile_errors_total
 
 # Pod creation latency within SLO
 # Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))
