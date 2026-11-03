@@ -85,10 +85,10 @@ A pre-acquire dedup would need a stable pre-acquire key; `RunServiceURL`'s cross
 
 ## Tests (must fail against `c850764`)
 
-- **Unit** ([`multiplexer_test.go`](../../../cmd/agc/internal/listener/multiplexer_test.go)): rework `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` so each sibling gets a **distinct** `RunnerRequestID` but AcquireJob returns a **constant** `planID`.
+- **Unit** ([`multiplexer_test.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer_test.go)): rework `TestMultiplexer_DuplicateJobDeliveryProvisionsOnce` so each sibling gets a **distinct** `RunnerRequestID` but AcquireJob returns a **constant** `planID`.
   Peak concurrent provisions must be 1; N-1 deduped.
   Against `c850764` (reqID key) all N provision → peak = N.
-- **Unit** ([`goroutine_test.go`](../../../cmd/agc/internal/listener/goroutine_test.go)): `TestListener_DuplicateJobDeliverySkipsAcquire` reworked to the post-acquire semantics — the loser **does** acquire (post-acquire gate) but does **not** provision, increments the metric, and returns `acquired=true` (runner recycles).
+- **Unit** ([`goroutine_test.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine_test.go)): `TestListener_DuplicateJobDeliverySkipsAcquire` reworked to the post-acquire semantics — the loser **does** acquire (post-acquire gate) but does **not** provision, increments the metric, and returns `acquired=true` (runner recycles).
 - **Integration/envtest** ([`controller/integration`](../../../cmd/agc/internal/controller/integration)): real provisioner + real apiserver.
   Fix the AcquireJob response to a constant planID; drive the baseline session to win + hold the planID claim (blocked in `waitForCompletion`), then deliver the **same** planID job (distinct reqID) to the replacement session — assert exactly one `job-<planID>` Secret, the duplicate-delivery metric rises, and the loser is not wedged.
   Against `c850764` the loser (distinct reqID) is not deduped and hits the real `AlreadyExists`, so the metric stays flat → test fails.

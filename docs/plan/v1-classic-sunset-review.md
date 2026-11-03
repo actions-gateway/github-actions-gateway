@@ -118,7 +118,7 @@ Performance is **not** where classic is kneecapped — the kneecap is dispatch r
 **What is a structural ceiling (unfixable AGC-side):** *fan-out distinct-delivery starvation.* Mechanism, pinned to code and live logs (re-route #8):
 
 1. GitHub fans **one** logical job's planID out as ~6 sibling deliveries; the AGC correctly dedups them and releases each via Option A.
-2. The pool grows **only** on a *distinct*-planID win — `SpawnReplacement` runs only *after* a listener wins past the dedup gate ([goroutine.go:924](../../cmd/agc/internal/listener/goroutine.go); a deduped loser skips it entirely).
+2. The pool grows **only** on a *distinct*-planID win — `SpawnReplacement` runs only *after* a listener wins past the dedup gate ([goroutine.go:924](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go); a deduped loser skips it entirely).
    So **F duplicate deliveries of one job grow the pool by exactly 1**, not F.
 3. Fed duplicates of one job, the idle pool **stalls at 3 online sessions ≪ 48**, so GitHub never sees enough *distinct* idle runners to place the **5 other distinct jobs** — whose planIDs are therefore **never delivered** and wedge `in_progress` indefinitely.
 

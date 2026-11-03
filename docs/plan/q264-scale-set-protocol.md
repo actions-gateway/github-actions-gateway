@@ -1,6 +1,7 @@
 # Q264 — Remove the deprecated classic acquisition machinery
 
-**Status:** RESIDUAL ONLY, tracked by [Q1272](../queue/Q1272.md). Q264 removed classic acquisition from the AGC and the GMC; what this doc still tracks is the classic code outside those two binaries.
+**Status:** RESIDUAL ONLY, tracked by [Q1272](../queue/Q1272.md).
+Q264 removed classic acquisition from the AGC and the GMC; what this doc still tracks is the classic code outside those two binaries.
 The scale-set migration (Option E) is fully shipped — phases **P0–P5 landed**, ScaleSet is the **default** acquisition protocol since v1.1.0, and Classic is **deprecated**.
 The full P0–P5 record — protocol reverse-engineering, the Investigation E/E2 live probes, the U6–U8 decisions of record, and the P1–P5 execution narrative — lives in the archived phase narrative: [q264-scale-set-protocol-phases.md](archive/q264-scale-set-protocol-phases.md).
 

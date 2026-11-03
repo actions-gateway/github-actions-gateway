@@ -39,7 +39,7 @@ The re-run also surfaced an unrelated GMC readiness-probe bug (`/readyz` returne
 | `priorityTiers` ceiling + PriorityClass assignment | ✅ Done | Tier walk in provisioner pod builder |
 | Eviction auto-retry up to `maxEvictionRetries` | ✅ Done | `handleEviction` + `rerunFailedJobs` at [provisioner.go:210-276](../../../cmd/agc/internal/provisioner/provisioner.go) |
 | Retry budget exhausted → no rerun, exhausted metric | ✅ Done | Counter check at line 218; `actions_gateway_eviction_retries_exhausted_total` |
-| Message body decryption (AES-CBC w/ session key) | ✅ Done | `aesKey` plumbed through `handleJob` ([goroutine.go:105,177,224](../../../cmd/agc/internal/listener/goroutine.go)) |
+| Message body decryption (AES-CBC w/ session key) | ✅ Done | `aesKey` plumbed through `handleJob` ([goroutine.go:105,177,224](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)) |
 | Investigation A — Named Pipe protocol documented (§11.A) | ✅ Done | Anonymous pipes + LE int32 type + LE int32 byte-len + UTF-16LE body confirmed from runner source; implementation updated in [worker/main.go](../../../cmd/worker/main.go); findings in §11.A |
 | Investigation B — Worker image source documented (§11.B) | ⚠️ Partial | Dockerfile pins `ghcr.io/actions/actions-runner:2.327.1` (ARC-aligned base, UID 1001, Runner.Worker at `/home/runner/bin/`); §11.B still says "TBD" |
 | RBAC markers regenerated and committed | ✅ Done | Pod + Secret markers in [controller/doc.go](../../../cmd/agc/internal/controller/doc.go) |
@@ -716,9 +716,9 @@ Without them Runner.Worker fails at job start with `ArgumentNullException: confi
 
 The end-to-end plumbing is now:
 
-1. `GithubRegistrar.Register` retains the raw `encoded_jit_config` it already parsed and exposes it on `AgentCredentials` ([github_registrar.go](../../../cmd/agc/internal/agentpool/github_registrar.go)).
-2. `Pool.createAgent` writes the blob into the agent Secret under `encodedJITConfig`; `secretToAgent` restores it onto the `Agent` struct so the AGC reconciler picks it up on restart ([pool.go](../../../cmd/agc/internal/agentpool/pool.go)).
-3. The listener passes `cfg.Agent.EncodedJITConfig` into `JobHandlerFunc`, which the provisioner forwards into the worker Secret under the `jitconfig` key ([goroutine.go](../../../cmd/agc/internal/listener/goroutine.go), [provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go)).
+1. `GithubRegistrar.Register` retains the raw `encoded_jit_config` it already parsed and exposes it on `AgentCredentials` ([github_registrar.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go)).
+2. `Pool.createAgent` writes the blob into the agent Secret under `encodedJITConfig`; `secretToAgent` restores it onto the `Agent` struct so the AGC reconciler picks it up on restart ([pool.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go)).
+3. The listener passes `cfg.Agent.EncodedJITConfig` into `JobHandlerFunc`, which the provisioner forwards into the worker Secret under the `jitconfig` key ([goroutine.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go), [provisioner.go](../../../cmd/agc/internal/provisioner/provisioner.go)).
 4. The wrapper reads `<payloadDir>/jitconfig`, base64-decodes the outer blob, JSON-unmarshals the file map, base64-decodes each entry, and writes the three runner-config files into `$RUNNER_HOME_DIR` (default `/home/runner`) with mode 0600 before exec'ing Runner.Worker ([worker/main.go](../../../cmd/worker/main.go) — `materializeJITConfig`).
 
 Unit tests pin: the agent Secret round-trip (`TestPool_EnsureAgents_StoresEncodedJITConfig`), the worker Secret hand-off (`TestProvisioner_ForwardsJITConfigIntoSecret` / `TestProvisioner_OmitsJITKeyWhenEmpty`), and the wrapper-side materialization (`TestMaterializeJITConfig_*`).

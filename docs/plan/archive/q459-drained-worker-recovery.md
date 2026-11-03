@@ -180,7 +180,7 @@ The 10m02s figure is not incidental.
 The job's own step — `sleep 600`, started at 13:21:00Z — ran to completion at 13:31:04Z, ten minutes after the run was cancelled and five minutes after GitHub had already concluded it.
 The runner was never told.
 
-That is consistent with the architecture rather than a fluke: the AGC owns the broker session, a cancellation arrives on that session, and nothing in [`listener/`](../../../cmd/agc/internal/listener/) relays it to the worker pod.
+That is consistent with the architecture rather than a fluke: the AGC owns the broker session, a cancellation arrives on that session, and nothing in [`listener/`](https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/internal/listener) relays it to the worker pod.
 The 5m02s to conclusion is GitHub's own cancellation grace lapsing, not the runner acknowledging anything — the same figure, 5m01s, was measured on the first attempt at this spec.
 
 Two consequences, both real:

@@ -55,7 +55,7 @@ Everything else targets `{actionsServiceURL}/_apis/runtime/...` with `Authorizat
 | Resolve runner group | `GET /_apis/runtime/runnergroups/?groupName={name}` |
 | **Per-job JIT config** | `POST /_apis/runtime/runnerscalesets/{id}/generatejitconfig` (body `{name, workFolder}`) → `{runner{id,name}, encodedJITConfig}` |
 
-Contrast with classic: instead of pre-registering `maxListeners` agents per group (`generate-jitconfig` per agent, [`github_registrar.go:89`](../../../cmd/agc/internal/agentpool/github_registrar.go)) and recycling each single-use agent after every job (Q114), the controller registers **one scale-set object per group once**, then mints **one JIT config per acquired job** for the runner that will execute it.
+Contrast with classic: instead of pre-registering `maxListeners` agents per group (`generate-jitconfig` per agent, [`github_registrar.go:89`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go)) and recycling each single-use agent after every job (Q114), the controller registers **one scale-set object per group once**, then mints **one JIT config per acquired job** for the runner that will execute it.
 The server pre-registers the runner and returns a base64 blob bundling `.runner` + `.credentials` (+ RSA parameters); the runner consumes it with `run.sh --jitconfig <blob>`.
 The **scale set's `name` is its single `runs-on` label** — there is no free-form label list per scale set.
 
@@ -173,9 +173,9 @@ What Option E discards, reworks, carries over, and improves — against the conc
 | Today | Where | Why it goes |
 |---|---|---|
 | Classic broker client: `CreateSession`/`GetMessage`/`AcquireJob`/`RenewJob`/`CompleteJob`/`DeleteSession` | [`broker/client.go`](../../../broker/client.go) | replaced by the scale-set client — plausibly **vendored `actions/scaleset`** rather than reimplemented (§5 decision) |
-| Agent pool: N pre-registered JIT agents, per-agent Secrets, single-use recycle + heal ladder (Q114) | [`cmd/agc/internal/agentpool/`](../../../cmd/agc/internal/agentpool/pool.go) | no per-agent registration exists; one scale-set object + per-job JIT configs |
-| Multiplexer: `maxListeners` sessions, `SpawnReplacement`, poller accounting (Q152), planID `claimJob` dedup (#512) | [`multiplexer.go`](../../../cmd/agc/internal/listener/multiplexer.go) | one session per group; nothing to dedup |
-| Listener goroutine: per-delivery `handleJob`, self-heal ladder, `StartRenewLoop` (Q247), `completeAbandonedDelivery` (#513) | [`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go) | acquisition is batch-claim + message dispatch; the runner renews/completes its own job |
+| Agent pool: N pre-registered JIT agents, per-agent Secrets, single-use recycle + heal ladder (Q114) | [`cmd/agc/internal/agentpool/`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go) | no per-agent registration exists; one scale-set object + per-job JIT configs |
+| Multiplexer: `maxListeners` sessions, `SpawnReplacement`, poller accounting (Q152), planID `claimJob` dedup (#512) | [`multiplexer.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go) | one session per group; nothing to dedup |
+| Listener goroutine: per-delivery `handleJob`, self-heal ladder, `StartRenewLoop` (Q247), `completeAbandonedDelivery` (#513) | [`goroutine.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go) | acquisition is batch-claim + message dispatch; the runner renews/completes its own job |
 | M3 pipes handoff: payload Secret → wrapper → `Runner.Worker spawnclient` | [`cmd/worker/main.go`](../../../cmd/worker/main.go), provisioner payload staging | no payload at the listener; worker runs `run.sh --jitconfig` (§2.4) |
 | Q260 fan-out accounting model + tests | [`broker/brokertest/server.go`](../../../broker/brokertest/server.go) | models a race class that no longer exists; a new scale-set fake replaces it |
 
@@ -317,7 +317,7 @@ A per-set field reaches the AGC directly through its RunnerSet informer — no G
 
 ### U8 — support-matrix policy
 
-**Enterprise scope — non-regression; declare out of scope.** GAG supports org- and repo-scope registration only (URL-shape selection in [`github_registrar.go`](../../../cmd/agc/internal/agentpool/github_registrar.go); the three documented URL forms) — it has never supported enterprise-scope runners.
+**Enterprise scope — non-regression; declare out of scope.** GAG supports org- and repo-scope registration only (URL-shape selection in [`github_registrar.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go); the three documented URL forms) — it has never supported enterprise-scope runners.
 The scale-set PAT-only limitation at enterprise scope is a GitHub platform constraint that binds ARC identically ([ARC auth docs](https://docs.github.com/en/actions/tutorials/use-actions-runner-controller/authenticate-to-the-api)).
 No PAT credential mode; document enterprise scope as out of scope (it already is).
 

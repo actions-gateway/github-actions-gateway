@@ -441,7 +441,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-11. `agentpool` keeps generated RSA private keys at 2048 bits
 
-- **Location:** [cmd/agc/internal/agentpool/pool.go:149-155](../../cmd/agc/internal/agentpool/pool.go)
+- **Location:** [cmd/agc/internal/agentpool/pool.go:149-155](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go)
 - **Category:** OWASP A02:2025 — Cryptographic Failures
 - **Description:** `rsa.GenerateKey(rand.Reader, 2048)`.
   NIST SP 800-57 considers 2048-bit RSA acceptable through 2030; 3072-bit is the forward-looking default.
@@ -465,7 +465,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### M-13. Verbose error bodies in broker client
 
-- **Location:** [broker/client.go:222-226](../../broker/client.go) (`CreateSession`), [broker/client.go:341-343](../../broker/client.go) (`AcquireJob`), [broker/client.go:373-376](../../broker/client.go) (`RenewJob`), [cmd/agc/internal/agentpool/github_registrar.go:108-110](../../cmd/agc/internal/agentpool/github_registrar.go)
+- **Location:** [broker/client.go:222-226](../../broker/client.go) (`CreateSession`), [broker/client.go:341-343](../../broker/client.go) (`AcquireJob`), [broker/client.go:373-376](../../broker/client.go) (`RenewJob`), [cmd/agc/internal/agentpool/github_registrar.go:108-110](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go)
 - **Category:** OWASP A09:2025 — Logging Failures (verbose error)
 - **Description:** Errors include the full response body.
   GitHub may return request IDs and partial token echoes in error bodies — these end up in AGC logs that are aggregated cluster-wide and often retained.
@@ -584,7 +584,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### L-2. `http.DefaultClient` has no timeout
 
-- **Location:** [githubapp/auth.go:127](../../githubapp/auth.go), [broker/client.go:138-143](../../broker/client.go), [cmd/agc/internal/agentpool/github_registrar.go:57-62](../../cmd/agc/internal/agentpool/github_registrar.go), [cmd/gmc/internal/controller/ipranges.go:57-59](../../cmd/gmc/internal/controller/ipranges.go)
+- **Location:** [githubapp/auth.go:127](../../githubapp/auth.go), [broker/client.go:138-143](../../broker/client.go), [cmd/agc/internal/agentpool/github_registrar.go:57-62](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go), [cmd/gmc/internal/controller/ipranges.go:57-59](../../cmd/gmc/internal/controller/ipranges.go)
 - **Category:** OWASP A04:2025 — Insecure Design (no timeout)
 - **Description:** `http.DefaultClient` has no timeout.
   A hostile or unhealthy GitHub endpoint can hang an AGC goroutine indefinitely.
@@ -593,7 +593,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### L-3. `BackoffDelay` uses `math/rand` for jitter
 
-- **Location:** [cmd/agc/internal/listener/goroutine.go:445-450](../../cmd/agc/internal/listener/goroutine.go)
+- **Location:** [cmd/agc/internal/listener/goroutine.go:445-450](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)
 - **Category:** Informational
 - **Description:** `rand.Int63n` is non-CSPRNG, but jitter does not require unpredictability.
   Recorded for completeness — gosec will flag this.
@@ -601,7 +601,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### L-4. `isUnauthorized` / `isSessionExpired` use substring matches
 
-- **Location:** [cmd/agc/internal/listener/goroutine.go:423-441](../../cmd/agc/internal/listener/goroutine.go)
+- **Location:** [cmd/agc/internal/listener/goroutine.go:423-441](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)
 - **Category:** OWASP A04:2025 — Insecure Design
 - **Description:** Both functions look for `"401"`, `"403"`, `"404"`, `"410"` as substrings of the error message.
   Fragile — a response body containing those digits in an unrelated context can match.
@@ -610,7 +610,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 
 ### L-5. PEM key parsing accepts only PKCS#1 in `agentpool/crypto.go` (asymmetric with `githubapp/auth.go`)
 
-- **Location:** [cmd/agc/internal/agentpool/crypto.go:17-30](../../cmd/agc/internal/agentpool/crypto.go) vs [githubapp/auth.go:147-169](../../githubapp/auth.go)
+- **Location:** [cmd/agc/internal/agentpool/crypto.go:17-30](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/crypto.go) vs [githubapp/auth.go:147-169](../../githubapp/auth.go)
 - **Category:** Informational
 - **Description:** The agent-pool key parser accepts only `RSA PRIVATE KEY` blocks; the App key parser accepts both PKCS#1 and PKCS#8.
   Since the agent-pool keys are *generated* by this code (always PKCS#1), this is fine today, but a future serialization change will silently fail to parse old Secrets.

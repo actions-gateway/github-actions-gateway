@@ -6,6 +6,7 @@ The remedy (Q676) is measured and decided the same day: the listener reports **n
 The fast ending (Q683) is measured and shipped 2026-08-05: a standalone REST force-cancel concludes run and job `cancelled` in ~1 s, per [the fast-ending measurement](#q683--the-fast-ending-measurement-2026-08-05).
 The recovery arm that ending arms (Q691) shipped 2026-08-08: the cancelled run is re-run automatically once capacity returns, bounded by the shared per-run retry budget, per [the recovery re-run arm](#q691--the-recovery-re-run-arm-2026-08-08).
 The sibling `skipped` arm (Q682) was never measured; Q264 removed the classic fan-out that sent it.
+Open: what the force-cancel does to a multi-job run's healthy jobs is [Q1246](../queue/Q1246.md).
 
 Queue item: Q645 (completed; done rows are deleted).
 Origin: [release-1.3.md § The rc.5 re-run](archive/release-1.3.md#the-rc5-re-run-2026-08-02).

@@ -61,7 +61,7 @@ They are intended as starting points to be refined against real production data;
 ## Per-session memory & density (measured)
 
 The peak-burst sizing above uses a deliberately conservative ~60 KiB/session.
-To pin the AGC's *actual* per-session overhead — the figure behind the density-versus-pod-per-runner claim — `TestAGCPerSessionMemory` (`cmd/agc/test/load/mem_test.go`, `make mem-profile`) isolates it locally, with no cluster, no real broker, and **no in-process broker stub** (the stub inflated the earlier ~127 KiB figure because its server side runs in the same process).
+To pin the AGC's *actual* per-session overhead — the figure behind the density-versus-pod-per-runner claim — `TestAGCPerSessionMemory` (`mem_test.go` and the `mem-profile` make target in the [classic load harness](https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/test/load), which Q264 removed with the classic tier) isolated it locally, with no cluster, no real broker, and **no in-process broker stub** (the stub inflated the earlier ~127 KiB figure because its server side runs in the same process).
 
 **Methodology.** The probe drives the real multiplexing core (`listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client`) but replaces the broker stub with `memTransport`, an in-process `http.RoundTripper` that answers the OAuth/CreateSession/GetMessage calls with canned responses and **no server, socket, or per-session server-side state**.
 `GET …/message` parks the caller on its request context, so each of the 1,000 started listeners rests in exactly one goroutine blocked in its long-poll — the steady idle-session state.
@@ -116,7 +116,7 @@ These numbers should still be re-derived once two consecutive weeks of productio
 Treat the locally-measured figures as validated lower bounds on efficiency, not as a production-scale contract.
 
 > **Validation status.** The session-multiplexing core **has been load-tested**, and its **per-session memory is now pinned**.
-> The in-process harness (`cmd/agc/test/load/`, Q13; `make load-test-quick`) holds **~1,000 concurrent virtual sessions in a single AGC** — a representative run sustained avg 998/1,000 with **zero goroutine leak** and 1.0 re-registrations per job (the single-use model under load).
+> The in-process harness ([`cmd/agc/test/load/` at `v1.10.0`](https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/test/load), Q13; its `load-test-quick` make target) held **~1,000 concurrent virtual sessions in a single AGC** — a representative run sustained avg 998/1,000 with **zero goroutine leak** and 1.0 re-registrations per job (the single-use model under load).
 > The faithful results from that tier are the **sustained-session count, the no-leak guarantee, and the re-registration rate**; it deliberately stubs the apiserver, registrar, and broker, so it does not speak to real apiserver/GitHub latency or worker-pod scheduling.
 > The earlier ~127 KiB/session figure was an **upper bound inflated by the in-process broker stub**; the stub-free probe above (Q181) isolates the AGC's own structures at **~12.2 KiB/session**, well under the ~60 KiB conservative design bound.
 > One caveat remains: the **real-cluster, real-GitHub scale run** — worker-pod scheduling and cross-tenant network at full concurrency — is still deferred.

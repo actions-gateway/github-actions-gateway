@@ -304,9 +304,9 @@ It cannot account for 69 orphaned jobs.
 
 Two further Classic-only listener defects surfaced while measuring, both left in place because Classic is terminal (`docs/plan/v1-classic-sunset-review.md`):
 
-- [`session.go`](../../cmd/agc/internal/listener/session.go) `healSession` deletes the old broker session *before* refreshing the token, so on the `unauthorized` heal path the DELETE presents the already-expired token, returns 401, and leaks the session server-side; the follow-up `CreateSession` then collides with it (409) and the listener exits.
+- [`session.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/session.go) `healSession` deletes the old broker session *before* refreshing the token, so on the `unauthorized` heal path the DELETE presents the already-expired token, returns 401, and leaks the session server-side; the follow-up `CreateSession` then collides with it (409) and the listener exits.
   Observed at 04:12 and 05:02.
-- [`multiplexer.go`](../../cmd/agc/internal/listener/multiplexer.go) restarts only the permanent baseline goroutine, so both of those listener slots stayed dead for the rest of the session.
+- [`multiplexer.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go) restarts only the permanent baseline goroutine, so both of those listener slots stayed dead for the rest of the session.
 
 When picking this up again, note that the drift verdict is judged against the **template's** ask, not against new samples — so once a set is past 20 samples, both branches can be exercised in seconds by editing `RunnerTemplate` resources, with no further soak:
 
