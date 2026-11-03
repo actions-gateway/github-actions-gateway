@@ -34,7 +34,7 @@
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
 # platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
 # toolchain on a multi-platform build.
-FROM --platform=$BUILDPLATFORM golang:1.27@sha256:f20d83a83e18dbd2a4714b8ffd4b30b287b6243962dd75608e86abcc63ba4efc AS deps
+FROM --platform=$BUILDPLATFORM golang:1.27@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS deps
 WORKDIR /src
 
 # TARGETOS/TARGETARCH are populated by BuildKit from the requested target
@@ -144,7 +144,7 @@ RUN go build -trimpath -o /bin/fakegithub ./test/fakegithub
 ########################  gmc  ################################################
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
-FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 AS gmc
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS gmc
 # OpenContainers image labels carry provenance for SBOM scanners. REVISION and
 # VERSION arrive as build args (wired from GIT_SHA in docker-bake.hcl); the
 # defaults cover a bare `docker build` with no args. Declared in the final stage
@@ -172,7 +172,7 @@ USER 65532:65532
 ENTRYPOINT ["/manager"]
 
 ########################  agc  ################################################
-FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 AS agc
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS agc
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -187,7 +187,7 @@ USER 65532:65532
 ENTRYPOINT ["/agc"]
 
 ########################  proxy  ##############################################
-FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 AS proxy
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS proxy
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -394,7 +394,7 @@ RUN perl -e ' \
 # published. It intentionally omits the OCI provenance labels and /licenses
 # bundle that the production stages above carry — do NOT copy this as a template
 # for a shipped image.
-FROM gcr.io/distroless/static:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 AS fakegithub
+FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS fakegithub
 COPY --from=build-fakegithub /bin/fakegithub /fakegithub
 USER 65532:65532
 ENTRYPOINT ["/fakegithub"]
