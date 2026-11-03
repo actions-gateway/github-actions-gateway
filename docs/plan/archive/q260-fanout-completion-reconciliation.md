@@ -102,7 +102,7 @@ This is **distinct from and beyond** the dedup (which is correct and done) and d
 ## 3. Why envtest passed while production wedged — and the repro that fixes that
 
 The default `brokertest.Server` modeled **neither** the fan-out **nor** per-delivery completion: every `acquirejob` returned a fresh `test-plan-N`, and `completejob` was just a counter.
-The Q260 envtest ([`q260_duplicate_delivery_test.go`](../../../cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go)) forced a constant planID and asserted the **dedup** — then had the winner **block forever** in `waitForCompletion`.
+The Q260 envtest ([`q260_duplicate_delivery_test.go`](https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/integration/q260_duplicate_delivery_test.go)) forced a constant planID and asserted the **dedup** — then had the winner **block forever** in `waitForCompletion`.
 It never modeled a job *concluding*, so the accounting gap was invisible.
 That is exactly why the dedup looked green offline yet wedged live.
 

@@ -3,8 +3,8 @@
 # has marked as managed tenants (Queue Q121 / Q122).
 #
 # The GMC ClusterRole grants create/update/delete on Deployments, Services,
-# ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, PodDisruptionBudgets,
-# RunnerGroups, and create/update on Secrets — all CLUSTER-WIDE, because RBAC cannot
+# ServiceAccounts, NetworkPolicies, RoleBindings, HPAs, PodDisruptionBudgets, and
+# create/update on Secrets — all CLUSTER-WIDE, because RBAC cannot
 # express "only namespaces that carry label X". A compromised GMC could otherwise
 # create a Deployment or RoleBinding in kube-system, or write a Secret into any
 # namespace. This policy is the gate RBAC cannot be: it denies the GMC SA any
@@ -64,10 +64,6 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["clusterrolebindings"]
-      - apiGroups: ["actions-gateway.github.com"]
-        apiVersions: ["v1alpha1"]
-        operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["runnergroups"]
       - apiGroups: ["actions-gateway.com"]
         apiVersions: ["v2alpha1"]
         operations: ["CREATE", "UPDATE", "DELETE"]

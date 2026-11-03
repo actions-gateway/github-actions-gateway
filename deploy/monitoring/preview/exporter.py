@@ -100,7 +100,7 @@ JOB_BUCKETS = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048]
 PROXY_BUCKETS = [0.1, 0.5, 1, 5, 10, 60, 300, 1800, 3600, 21600]
 # (namespace, gateway-name) for the GMC-exported fleet condition gauges.
 GATEWAYS = [("team-a", "team-a"), ("team-b", "team-b")]
-CONTROLLERS = ["actionsgateway", "runnergroup", "runnerset"]
+CONTROLLERS = ["actionsgateway-v2", "runnerset"]
 
 
 def jitter(seed, amp):
@@ -223,10 +223,6 @@ def render():
         L.append(f'actions_gateway_jobs_duplicate_delivery_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.03, elapsed)}')
         L.append(f'actions_gateway_abandoned_delivery_completions_total{{namespace="{ns}",runner_group="{rg}",outcome="completed"}} {counter_total(0.03, elapsed)}')
         L.append(f'actions_gateway_fanout_loser_recycle_deferred_total{{namespace="{ns}",runner_group="{rg}",outcome="winner_concluded"}} {counter_total(0.03, elapsed)}')
-        # tenant health-condition gauges all healthy (0)
-        L.append(f'actions_gateway_worker_quota_pressure{{namespace="{ns}",runner_group="{rg}"}} 0')
-        L.append(f'actions_gateway_worker_quota_exceeded{{namespace="{ns}",runner_group="{rg}"}} 0')
-        L.append(f'actions_gateway_workers_unschedulable{{namespace="{ns}",runner_group="{rg}"}} 0')
 
     # Scale-set acquisition tier (Q264/Q311): one Listener per ScaleSet-protocol
     # RunnerSet. Assigned drives demand 1:1 (no sibling fan-out); provisioned

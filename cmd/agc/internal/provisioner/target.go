@@ -141,10 +141,9 @@ const AnnotationEvictionHandledAt = "actions-gateway.com/eviction-handled-at"
 const WorkerContainerName = "runner"
 
 // Target is the controller object a Provisioner provisions worker pods and job
-// Secrets for. The v1 RunnerGroup and the v2 RunnerSet each have an adapter that
-// satisfies it (runnerGroupTarget here, runnerSetTarget in the AGC controller
-// package), so the provisioner's pod/Secret build path is written once against
-// this seam rather than against either API type.
+// Secrets for. The v2 RunnerSet satisfies it through runnerSetTarget in the AGC
+// controller package, so the provisioner's pod/Secret build path is written against
+// this seam rather than against the API type.
 //
 // The provisioner uses the Target for the OwnerReference and identity stamped on
 // every worker pod/Secret, and calls Resolve once per acquired job to obtain the

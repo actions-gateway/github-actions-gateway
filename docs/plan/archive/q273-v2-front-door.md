@@ -1,9 +1,9 @@
 # Q273 — Make v2 the front door + exemplary v1→v2 migration (plan)
 
 **Status:** ▶ Started 2026-07-06.
-**Scope:** the *do-now* front-door / positioning / onboarding / migration slice of [Q273](../queue/Q273.md).
+**Scope:** the *do-now* front-door / positioning / onboarding / migration slice of Q273.
 Full "v2-only" (v1 removal) stays gated on v2beta1 (Q74) — **this plan removes nothing**.
-Strategy source: [v1-classic-sunset-review.md §6.2](v1-classic-sunset-review.md).
+Strategy source: [v1-classic-sunset-review.md §6.2](../v1-classic-sunset-review.md).
 
 ## Goal (one sentence)
 
@@ -11,7 +11,7 @@ Make v2 (`actions-gateway.com/v2alpha1` — `ActionsGateway` + `RunnerSet` + `Ru
 
 ## Approach
 
-Align the whole doc surface to the posture [v1alpha1-deprecation.md](../operations/v1alpha1-deprecation.md) *already states* ("new tenants onboard on v2") — today README / getting-started / roadmap still contradict it by calling v1 "the standard path."
+Align the whole doc surface to the posture [v1alpha1-deprecation.md](../../operations/v1alpha1-deprecation.md) *already states* ("new tenants onboard on v2") — today README / getting-started / roadmap still contradict it by calling v1 "the standard path."
 Route new users to v2 (the better shape), be honest it is alpha-but-recommended, mark v1 the stable-but-deprecated legacy path.
 Positioning stays true whether or not the sibling P5 ScaleSet-default flip has merged yet.
 

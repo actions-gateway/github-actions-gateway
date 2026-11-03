@@ -8,7 +8,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > **Scoped 2026-10-09**, after `v1.9.0` tagged on 2026-10-05: the [scope ledger](#scope-ledger) is the release's record.
 > Phase 3's storage advance ships first, in its own release: Q1086 landed it for [1.10](archive/release-1.10.md), `v2` storing on every kind and `gag-migrate storage-version` rewriting what is stored, decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
-> The removals follow in `v2.0.0`: [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub, [Q273](../queue/Q273.md) for `v1alpha1`, and [Q264](../queue/Q264.md) for classic; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on all four.
+> The removals follow in `v2.0.0`: Q273 removed `v1alpha1` on `main`, and [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub and [Q264](../queue/Q264.md) for classic remain; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on both.
 > The Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The phase table below is the real state.
 
@@ -19,7 +19,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
 | 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ✅ Done in Q413: `v2` is a second conversion spoke and the hub stays at `v2beta1` ([why](#the-hub-stays-at-v2beta1)) |
-| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance landed for 1.10 in Q1086, and the release gate's `storage` leg takes its dogfood reading (Q1171); the removals ([Q1167](../queue/Q1167.md), [Q273](../queue/Q273.md), [Q264](../queue/Q264.md)) are blocked behind the 1.10 tag; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
+| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance landed for 1.10 in Q1086, and the release gate's `storage` leg takes its dogfood reading (Q1171); Q273's `v1alpha1` removal is on `main`, and [Q1167](../queue/Q1167.md) and [Q264](../queue/Q264.md) remain; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
 ## Scope ledger
@@ -32,12 +32,12 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
 | [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1263; step 4 of [the split](q1167-v2-retype-split.md) |
-| [Q273](../queue/Q273.md) | Remove the `v1alpha1` group and `gag-migrate`'s fan-out (Phase 3) | `2.0-gate` | 🔲 the GMC half is on `main`; the AGC half (`RunnerGroup`) is open |
-| [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🚫 blocked on Q273; lands before Q1263 ([why](q1167-v2-retype-split.md#where-q264s-boundary-falls-before-the-agc-retype)) |
+| Q273 | Remove the `v1alpha1` group and `gag-migrate`'s fan-out (Phase 3) | `2.0-gate` | ✅ landed: no `actions-gateway.github.com` kind, controller, CRD or webhook is left, and `gag-migrate` keeps only `storage-version` |
+| [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🔲 lands before Q1263 ([why](q1167-v2-retype-split.md#where-q264s-boundary-falls-before-the-agc-retype)) |
 | Q1262 | Retype the GMC onto `api/v2` (Phase 3) | `2.0-gate` | ✅ landed, with the classic-reading trio left on `v2alpha1` for Q1167 ([why](q1167-v2-retype-split.md#what-q1262-left-on-the-older-versions)) |
 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 3 of [the split](q1167-v2-retype-split.md): after Q273 and Q264 |
-| [Q1258](../queue/Q1258.md) | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | 🚫 blocked on Q273 |
-| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q273 and Q264 |
+| [Q1258](../queue/Q1258.md) | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | 🔲 open |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167 and Q264 |
 | Q555 | Detect flaky jobs and record each failure's platform context | `2.0-gate` | ✅ landed on the scale-set tier: the failure ledger's `failures` map, the worker snapshot, the pairing and its three metrics; the dogfood readings it rests on are [Q1236](../queue/Q1236.md) |
 | Q1183 | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | ✅ landed on the scale-set tier: the out-of-memory class, its stampede breaker and the per-job memory floor, without R12's dogfood reproduction; the deferred wait landed in Q1244 and the misclassification alert in Q1245, neither gated |
 | Q1181 | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | ✅ landed on the scale-set tier: `run_cancelled` on every arm, `attempt_limit`, `run_too_old` and `superseded` before the budget is reserved; classic takes none, and Q264 removes it |
@@ -196,7 +196,7 @@ That ordering is the whole reason 1.9 exists, and it is also what makes the alia
 
 `v2.0.0` then executes all three removals announced by [release-1.3.md](archive/release-1.3.md), plus a fourth decided later:
 
-- `v1alpha1` (the `actions-gateway.github.com` group) — [Q273](../queue/Q273.md)
+- `v1alpha1` (the `actions-gateway.github.com` group) — Q273, landed
 - `v2alpha1` — this plan
 - classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — [Q264](../queue/Q264.md)
 - `v2beta1`, and with it the `CiliumFQDN`/`CalicoFQDN` aliases: decided 2026-09-08, [v2beta1-retirement.md](v2beta1-retirement.md), and announced separately because `release-1.3.md` did not carry it

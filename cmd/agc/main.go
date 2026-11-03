@@ -1,6 +1,6 @@
 // Command agc is the Actions Gateway Controller (AGC).
-// It reconciles RunnerGroup CRDs into adaptive listener goroutine pools that
-// long-poll the GitHub Actions broker for incoming workflow jobs.
+// It reconciles one gateway's RunnerSets into listeners that long-poll GitHub for
+// incoming workflow jobs.
 //
 // The gateway authenticates to GitHub by one of two credential methods, selected
 // by the GMC via the CREDENTIAL_TYPE env (see buildTokenProvider in credentials.go):
@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -35,7 +36,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
@@ -298,8 +298,8 @@ func run() error {
 	// selectable field, KEP-4358). This is the isolation boundary: N AGC Deployments
 	// in one namespace each watch and reconcile only their own gateway's RunnerSets,
 	// so they never contend over the same objects. ByObject.Namespaces is left nil so
-	// it inherits DefaultNamespaces (the tenant namespace). Empty GATEWAY_NAME leaves
-	// the informer unscoped (a single AGC reconciles every RunnerSet — pre-M3b).
+	// it inherits DefaultNamespaces (the tenant namespace). registerReconcilers refuses
+	// to start without GATEWAY_NAME.
 	gatewayName := cfg.GatewayName
 	if gatewayName != "" {
 		cacheOpts.ByObject = map[client.Object]cache.ByObject{
@@ -313,8 +313,8 @@ func run() error {
 		return fmt.Errorf("configure metrics server: %w", err)
 	}
 	// Dedupe API server warnings to one log line per unique message per process.
-	// The default handler logs every occurrence, and the v1alpha1/v2alpha1
-	// deprecation warnings repeat on every RunnerGroup and RunnerSet read/write —
+	// The default handler logs every occurrence, and the v2alpha1 deprecation
+	// warnings repeat on every RunnerSet read/write —
 	// under reconcile churn they dominate the log (Q515).
 	restCfg := ctrl.GetConfigOrDie()
 	restCfg.WarningHandlerWithContext = logf.NewKubeAPIWarningLogger(
@@ -387,7 +387,7 @@ func run() error {
 	// run() exit non-zero so the kubelet restarts the pod — the same outcome as
 	// the previous blocking wait. Running the reconciler before the token is
 	// ready is safe: token.Manager.Token blocks on the first fetch, and
-	// RunnerGroupReconciler.Reconcile requeues on a Token() error, so no
+	// RunnerSetReconciler.Reconcile requeues on a Token() error, so no
 	// reconcile acts on a missing token.
 	//
 	// Bookended by log lines so a stuck fetch is visible. 2 minutes is
@@ -494,110 +494,53 @@ type reconcilerDeps struct {
 	scaleSetStubURL string
 }
 
-// registerReconcilers registers the reconcilers this AGC's role calls for. The two
-// gates are complementary, so **each AGC process serves exactly one API**: the v1
-// singleton (no GATEWAY_NAME) reconciles RunnerGroups, and a gateway-scoped AGC
-// reconciles only its own gateway's RunnerSets. A migrated namespace therefore runs
-// the v1 RunnerGroup and the v2 RunnerSet it became in separate processes even when
-// they share a name, and neither can contend for the other's objects.
+// registerReconcilers registers the RunnerSet reconciler, scoped to the gateway named
+// by GATEWAY_NAME. Each AGC serves exactly one gateway's RunnerSets, so N AGC
+// Deployments in one namespace never contend for the same objects.
 func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
-	// Registered only on the v1 AGC — the mirror of the RunnerSet gate below (Q535).
-	// ServesRunnerGroups carries the rationale.
-	if controller.ServesRunnerGroups(deps.gatewayName) {
-		r := &controller.RunnerGroupReconciler{
-			Client:        mgr.GetClient(),
-			Log:           slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnergroup"))),
-			TokenManager:  deps.tokenMgr,
-			Registrar:     deps.registrar,
-			Metrics:       deps.metrics,
-			Provisioner:   deps.prov,
-			ImageResolver: deps.imageResolver,
-			AgentKeyType:  deps.agentKeyType,
-			Recorder:      mgr.GetEventRecorder("runnergroup-controller"),
-			BrokerConfig:  deps.brokerCfg,
-		}
-		if err := r.SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("setup reconciler: %w", err)
-		}
-	} else {
-		ctrl.Log.Info("GATEWAY_NAME set; v1alpha1 RunnerGroup reconciler disabled "+
-			"(RunnerGroups are served by the v1 AGC, which sets no GATEWAY_NAME)",
-			"gateway", deps.gatewayName)
+	// The GMC stamps GATEWAY_NAME on every AGC Deployment it provisions (§H.16 #1). An
+	// AGC without it, or without the RunnerSet CRD, has nothing to reconcile, so fail
+	// fast rather than run a pod that passes its probes and serves nothing.
+	if deps.gatewayName == "" {
+		return errors.New("GATEWAY_NAME is not set: an AGC serves only the RunnerSets of the gateway " +
+			"it was provisioned for, so it would reconcile nothing")
 	}
-
-	// v2 RunnerSet reconciler (M3a). The RunnerSet CRD (and the sibling
-	// ActionsGateway/EgressProxy/RunnerTemplate kinds this reconciler watches) ships
-	// in the opt-in actions-gateway-crds-v2 chart, so a v1-only install serves none
-	// of them. Registering the reconciler there would leave its informer cache
-	// unable to sync, and mgr.Start would exit(1) after the cache-sync deadline —
-	// crash-looping the AGC (Q261). Detect the CRD once at startup and gate
-	// registration on it, mirroring the GMC's v2 detection (Q228). On a v1-only
-	// install the v1 RunnerGroup reconciler above runs normally; installing the v2
-	// CRDs later requires an AGC restart to enable this reconciler.
+	// The RunnerSet CRD (and the sibling ActionsGateway/EgressProxy/RunnerTemplate kinds
+	// this reconciler watches) ships in the actions-gateway-crds-v2 chart. Registering
+	// the reconciler without it would leave its informer cache unable to sync, and
+	// mgr.Start would exit(1) after the cache-sync deadline (Q261).
 	v2Enabled, err := controller.RunnerSetInstalled(mgr.GetRESTMapper())
 	if err != nil {
 		return fmt.Errorf("detect actions-gateway.com/v2alpha1 RunnerSet CRD: %w", err)
 	}
-	switch {
-	case !v2Enabled && deps.gatewayName != "":
-		// This combination leaves the process with no reconciler at all. Fail fast
-		// rather than run a pod that passes its probes and reconciles nothing: the GMC
-		// stamps GATEWAY_NAME only from a v2 ActionsGateway, which needs these CRDs to
-		// exist, so this is a broken install rather than a supported mode.
+	if !v2Enabled {
 		return fmt.Errorf("GATEWAY_NAME=%s is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is "+
-			"not installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing "+
+			"not installed, so this AGC would reconcile nothing "+
 			"(install the actions-gateway-crds-v2 chart)", deps.gatewayName)
+	}
 
-	case !v2Enabled:
-		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD not installed; " +
-			"v1-only mode, v2 RunnerSet reconciler disabled " +
-			"(install the actions-gateway-crds-v2 chart and restart the AGC to enable it)")
-
-	case deps.gatewayName == "":
-		// A RunnerSet is always served by the AGC of the gateway its spec.gatewayRef
-		// names, and the GMC stamps GATEWAY_NAME on every one of those AGC Deployments
-		// (§H.16 #1). An AGC without it is the v1 singleton, and it must not reconcile
-		// RunnerSets: during a v1→v2 migration the tenant namespace holds both, so an
-		// unscoped RunnerSet reconciler here would run a second listener pool and a
-		// second set of GitHub registrations for a set the migrated gateway's own AGC
-		// is already serving — two controllers on one object, which no amount of
-		// naming can separate. It is also what drove the v1 AGC to list the
-		// cluster-scoped ClusterRunnerTemplate kind it holds no grant for, error-looping
-		// on `clusterrunnertemplates … is forbidden` for the whole coexistence window
-		// (Q466, measured live). Declining the work is the least-privilege fix: the v1
-		// AGC needs no cluster-scoped grant because it has no cluster-scoped read to do.
-		ctrl.Log.Info("no GATEWAY_NAME set; this AGC serves v1alpha1 RunnerGroups only " +
-			"(v2 RunnerSets are reconciled by their own gateway's AGC)")
-
-	default:
-		ctrl.Log.Info("actions-gateway.com/v2alpha1 RunnerSet CRD detected; enabling v2 RunnerSet reconciler")
-
-		rsr := &controller.RunnerSetReconciler{
-			Client: mgr.GetClient(),
-			// Uncached: the v1alpha1 RunnerGroup probe that gates adoption of pre-Q466
-			// agent Secrets must not establish an informer for a kind a v2-only install
-			// may not serve.
-			APIReader:       mgr.GetAPIReader(),
-			Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
-			TokenManager:    deps.tokenMgr,
-			Registrar:       deps.registrar,
-			Metrics:         deps.metrics,
-			ScaleSetMetrics: deps.scaleSet,
-			Provisioner:     deps.prov,
-			ImageResolver:   deps.imageResolver,
-			AgentKeyType:    deps.agentKeyType,
-			GatewayName:     deps.gatewayName,
-			Recorder:        mgr.GetEventRecorder("runnerset-controller"),
-			EventReader:     mgr.GetAPIReader(),
-			BrokerConfig:    deps.brokerCfg,
-			Sizing:          deps.usageSampler,
-			// Empty unless the same stub env that selected the StubRegistrar does, so
-			// production always derives the scale-set endpoints from githubURL.
-			ScaleSetStubBaseURL: deps.scaleSetStubURL,
-		}
-		if err := rsr.SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("setup runnerset reconciler: %w", err)
-		}
+	rsr := &controller.RunnerSetReconciler{
+		Client:          mgr.GetClient(),
+		APIReader:       mgr.GetAPIReader(),
+		Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
+		TokenManager:    deps.tokenMgr,
+		Registrar:       deps.registrar,
+		Metrics:         deps.metrics,
+		ScaleSetMetrics: deps.scaleSet,
+		Provisioner:     deps.prov,
+		ImageResolver:   deps.imageResolver,
+		AgentKeyType:    deps.agentKeyType,
+		GatewayName:     deps.gatewayName,
+		Recorder:        mgr.GetEventRecorder("runnerset-controller"),
+		EventReader:     mgr.GetAPIReader(),
+		BrokerConfig:    deps.brokerCfg,
+		Sizing:          deps.usageSampler,
+		// Empty unless the same stub env that selected the StubRegistrar does, so
+		// production always derives the scale-set endpoints from githubURL.
+		ScaleSetStubBaseURL: deps.scaleSetStubURL,
+	}
+	if err := rsr.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("setup runnerset reconciler: %w", err)
 	}
 	return nil
 }
@@ -823,9 +766,8 @@ func setupProxyAttribution(mgr ctrl.Manager, namespace, gateway string) error {
 }
 
 // buildScheme builds the AGC client scheme: the core Kubernetes types
-// (clientgoscheme, which already includes corev1) plus the agc-group v1alpha1
-// RunnerGroup kinds and the actions-gateway.com/v2alpha1 kinds the RunnerSet
-// reconciler consumes. Kept as a standalone, test-reachable helper so scheme
+// (clientgoscheme, which already includes corev1) plus the actions-gateway.com/v2alpha1
+// kinds the RunnerSet reconciler consumes. Kept as a standalone, test-reachable helper so scheme
 // registration is verifiable without standing up a manager.
 func buildScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
@@ -833,12 +775,6 @@ func buildScheme() (*runtime.Scheme, error) {
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
-	if err := v1alpha1.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-	// Register the v2alpha1 (actions-gateway.com) kinds so they are first-class in
-	// the AGC's client scheme alongside v1alpha1. M1 wires no reconciler for them;
-	// the RunnerSet reconciler that consumes them lands in M3a.
 	if err := agcv2alpha1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}

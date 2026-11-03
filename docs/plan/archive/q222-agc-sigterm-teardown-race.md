@@ -93,5 +93,5 @@ Defect 2 stands on its own regardless: it is a real production session leak on e
 ## Test-side consequence
 
 With the drain in place, `mgr.Start` returning means every session DELETE has already been issued and answered.
-The ceiling in [sigterm_test.go](../../../cmd/agc/internal/controller/integration/sigterm_test.go) drops from 60s to 10s and no longer scales with runner load — it now only absorbs the broker stub's own signal-delivery hop.
+The ceiling in [sigterm_test.go](https://github.com/actions-gateway/github-actions-gateway/blob/bb7ca8d70a74baf6588f6b271a272ee6f7233d96/cmd/agc/internal/controller/integration/sigterm_test.go) drops from 60s to 10s and no longer scales with runner load — it now only absorbs the broker stub's own signal-delivery hop.
 A recurrence there is a real teardown regression and must be investigated, not bumped.

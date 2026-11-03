@@ -46,7 +46,7 @@ What item 2b added is narrower and does not substitute for V2: phase 2's *input*
 
 ## 1. The gap
 
-`WorkersUnschedulable` (Q157 for v1, Q303 for v2) already reads the scheduler's verdict off worker pods: [`runnergroup_unschedulable.go`](../../cmd/agc/internal/controller/runnergroup_unschedulable.go) computes it from `PodScheduled=False`/`Reason=Unschedulable`, and [`runnerset_capacity.go`](../../cmd/agc/internal/controller/runnerset_capacity.go) publishes the v2 counterpart.
+`WorkersUnschedulable` (Q157 for v1, Q303 for v2) already reads the scheduler's verdict off worker pods: [`workers_unschedulable.go`](../../cmd/agc/internal/controller/workers_unschedulable.go) computes it from `PodScheduled=False`/`Reason=Unschedulable`, and [`runnerset_capacity.go`](../../cmd/agc/internal/controller/runnerset_capacity.go) publishes the v2 counterpart.
 It is pure observability: it reaches a condition, an Event, and a gauge, and never reaches `Provisioner.Admit`.
 The `WorkerQuota` ladder and `WorkersUnschedulable` are gauged on both owners — v1 via `actions_gateway_worker_*`, v2 via the `actions_gateway_runnerset_*` twins Q319 added; `WorkerCapacityDeclined` joined them in Q643, with a `reason` label.
 

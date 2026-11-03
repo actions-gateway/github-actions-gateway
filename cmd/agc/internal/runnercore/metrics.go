@@ -170,7 +170,7 @@ type Metrics struct {
 	// token (the burst was spent). Only non-zero when a group sets spec.scaleUp; a
 	// sustained rate shows the ramp is actively smoothing a burst.
 	ScaleUpThrottled *prometheus.CounterVec
-	// Q95: worker pod lifecycle (emitted by the RunnerGroup reconciler's reaper, and
+	// Q95: worker pod lifecycle (emitted by the RunnerSet reconciler's reaper, and
 	// by the provisioner for the job-abandoned reclaim it owns — Q501)
 	WorkerPodsReaped *prometheus.CounterVec
 	// Q114: single-use JIT agent recycling (emitted by listener goroutines and

@@ -17,7 +17,6 @@
 6 cmd/gmc/README.md
 4 deploy/athens/README.md
 23 deploy/dogfood-e2e/README.md
-8 deploy/dogfood-migrate/README.md
 7 deploy/kata-ci/README.md
 4 deploy/monitoring/README.md
 7 deploy/monitoring/preview/README.md
@@ -136,6 +135,7 @@
 92 docs/plan/archive/q260-fanout-completion-reconciliation.md
 27 docs/plan/archive/q260-planid-dedup-refix.md
 179 docs/plan/archive/q264-scale-set-protocol-phases.md
+12 docs/plan/archive/q273-v2-front-door.md
 22 docs/plan/archive/q284-podscheduling-surface.md
 12 docs/plan/archive/q291-e2e-calico-egress-github-flake.md
 7 docs/plan/archive/q311-scaleset-monitoring-surface.md
@@ -203,7 +203,6 @@
 30 docs/plan/q243-q245-q230-live-validation-campaign.md
 55 docs/plan/q245-fqdn-intent-backend-split.md
 9 docs/plan/q264-scale-set-protocol.md
-12 docs/plan/q273-v2-front-door.md
 48 docs/plan/q300-gmc-kindnet-e2e-flake.md
 49 docs/plan/q408-untrusted-pr-egress.md
 19 docs/plan/q501-cancel-relay.md

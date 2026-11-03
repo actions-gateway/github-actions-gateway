@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	agcv1alpha1 "github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
@@ -101,7 +100,6 @@ func TestMain(m *testing.M) {
 
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
-	_ = agcv1alpha1.AddToScheme(testScheme)
 	_ = v2alpha1.AddToScheme(testScheme)
 	// Register the v2beta1 hub so envtest's modifyConversionWebhooks recognizes the
 	// five v2 kinds as convertible and redirects their CRD conversion to the local
@@ -113,14 +111,11 @@ func TestMain(m *testing.M) {
 
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			// The out-of-module CRD sets are reached through testdata/ symlinks so the
-			// reads resolve inside this module root and go keeps them as test-cache
-			// inputs (Q902). The AGC set carries the RunnerGroup CRD the
-			// priorityclass-allowlist-guard policy still names.
-			"testdata/agc-crd",
-			// The v2 (actions-gateway.com) CRDs live in the neutral api module —
-			// the five tenant kinds plus the cluster-scoped PriorityClassAllowlist
-			// the priorityclass-allowlist-guard policy uses as its paramKind (Q492).
+			// The v2 (actions-gateway.com) CRDs live in the neutral api module, reached
+			// through a testdata/ symlink so the reads resolve inside this module root
+			// and go keeps them as test-cache inputs (Q902): the five tenant kinds plus
+			// the cluster-scoped PriorityClassAllowlist the
+			// priorityclass-allowlist-guard policy uses as its paramKind (Q492).
 			"testdata/crd",
 			// Stub Cilium/Calico CRDs (Q208) so the FQDN-mode unstructured apply lands
 			// against the test apiserver. Minimal preserve-unknown-fields schemas — real

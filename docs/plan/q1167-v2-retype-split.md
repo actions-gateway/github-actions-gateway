@@ -11,8 +11,8 @@ It changes no code; the background is [v2-ga.md](v2-ga.md) Phase 3.
 
 | Step | Row | Scope | Depends on | Status |
 |---|---|---|---|---|
-| 0a | Q273's test port (in flight, ID not yet allocated) | Port the e2e tenant fixtures, the RunnerGroup-driven AGC envtests and `cmd/agc/test/load` onto `v2` tenants typed on `api/v2` | none | in flight |
-| 0b | Q273 (in flight) | Remove `v1alpha1` and `gag-migrate`'s v1→v2 fan-out | 0a | in flight |
+| 0a | Q273's test port | Port the e2e tenant fixtures, the RunnerGroup-driven AGC envtests and `cmd/agc/test/load` onto `v2` tenants typed on `api/v2` | none | ✅ done |
+| 0b | Q273 | Remove `v1alpha1` and `gag-migrate`'s v1→v2 fan-out | 0a | ✅ done, in a GMC half and an AGC half |
 | 1 | Q1262 | Retype the GMC onto `api/v2` | Q273 | ✅ done; the classic-reading trio stays on `v2alpha1` ([what it left](#what-q1262-left-on-the-older-versions)) |
 | 2 | Q264 | Remove classic acquisition | Q273 | ❌ open |
 | 3 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` | Q273, Q264 | ❌ open |
@@ -130,7 +130,7 @@ Non-Go files naming `actions-gateway.com/v2alpha1` or `v2beta1` (charts, `deploy
 
 ## The tree this plan assumes, after Q273
 
-Q273 is in flight as two PRs, and both land first, so the counts below assume them.
+Q273 landed before either retype, so the counts below assume it.
 Its plan as relayed by the batch's orchestrator on 2026-11-02, not read from a branch:
 
 - **A test port lands first.** The e2e tenant fixture (`cmd/gmc/test/utils/fixtures.go`), the AGC envtests that run through the RunnerGroup reconciler, and the load harness under `cmd/agc/test/load` move onto `v2` tenants typed on `api/v2`, so neither retype redoes them.

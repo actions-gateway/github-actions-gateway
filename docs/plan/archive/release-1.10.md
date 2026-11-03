@@ -23,7 +23,7 @@ Rollback from this release reaches `v1.9.0`, which serves `v2` and so reads what
 ## What this release must NOT do
 
 **It must not stop serving any version.** `v1alpha1`, `v2alpha1` and `v2beta1` stay served, so every client and every stored object an operator has keeps working.
-Dropping one is [Q1167](../../queue/Q1167.md)'s and [Q273](../../queue/Q273.md)'s, in `v2.0.0`, after this tag.
+Dropping one is [Q1167](../../queue/Q1167.md)'s and Q273's, in `v2.0.0`, after this tag.
 
 **It must not remove classic acquisition.** That is [Q264](../../queue/Q264.md), also in `v2.0.0`.
 

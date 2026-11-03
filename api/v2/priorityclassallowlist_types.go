@@ -13,8 +13,7 @@ import (
 type PriorityClassAllowlistSpec struct {
 	// AllowedPriorityClasses is the set of cluster-scoped PriorityClass names
 	// tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName
-	// and RunnerTemplate.spec.podTemplate.spec.priorityClassName (and, while
-	// v1alpha1 is served, RunnerGroup.spec.priorityTiers[].priorityClassName).
+	// and RunnerTemplate.spec.podTemplate.spec.priorityClassName.
 	//
 	// A PriorityClass sets cluster-wide scheduling preemption order, so a tenant
 	// naming a high-priority class could evict another tenant's worker pods. The

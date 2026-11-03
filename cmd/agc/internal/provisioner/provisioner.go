@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
@@ -61,11 +60,7 @@ var tracer = otel.Tracer(tracing.InstrumentationName)
 var defaultProvisionerClient = sync.OnceValue(httpx.NewClient)
 
 const (
-	// LabelRunnerGroup is stamped on every worker pod (and job Secret) with the
-	// owning RunnerGroup's name as its value. It is the contract the RunnerGroup
-	// controller's Pod watch filters and maps on, so it is exported.
-	LabelRunnerGroup = "actions-gateway/runner-group"
-	labelPlanID      = "actions-gateway/plan-id"
+	labelPlanID = "actions-gateway/plan-id"
 
 	// workerAppName / workerComponent are the app.kubernetes.io/name and
 	// app.kubernetes.io/component values for worker pods and their job Secrets.
@@ -231,25 +226,6 @@ const (
 	DefaultMaxWorkerLifetime = 12 * time.Hour
 )
 
-// EffectiveCompletedPodTTL returns the group's terminal-pod retention,
-// applying DefaultCompletedPodTTL when the field is omitted.
-func EffectiveCompletedPodTTL(rg *v1alpha1.RunnerGroup) time.Duration {
-	return CompletedPodTTLOrDefault(rg.Spec.CompletedPodTTL)
-}
-
-// EffectivePendingPodDeadline returns the group's stuck-Pending deadline,
-// applying DefaultPendingPodDeadline when the field is omitted.
-func EffectivePendingPodDeadline(rg *v1alpha1.RunnerGroup) time.Duration {
-	return PendingPodDeadlineOrDefault(rg.Spec.PendingPodDeadline)
-}
-
-// EffectiveMaxWorkerLifetime returns the group's worker-pod lifetime cap,
-// applying DefaultMaxWorkerLifetime when the field is omitted. Zero means the
-// operator disabled the cap.
-func EffectiveMaxWorkerLifetime(rg *v1alpha1.RunnerGroup) time.Duration {
-	return MaxWorkerLifetimeOrDefault(rg.Spec.MaxWorkerLifetime)
-}
-
 // Provisioner creates and manages worker pods for acquired GitHub Actions jobs.
 type Provisioner struct {
 	Client client.Client
@@ -262,14 +238,8 @@ type Provisioner struct {
 	// a cache that has not seen the start stamps a busy worker, and its job is reaped.
 	// Every other read here is served from the shared informer cache, where a stale
 	// answer only costs a deferred action. Nil falls back to Client (tests).
-	APIReader client.Reader
-	Metrics   *runnercore.Metrics
-	// Events records owner-scoped Kubernetes Events for v1 RunnerGroup provisioning
-	// incidents (quota/eviction-retry exhaustion), routed through the runnerGroupTarget
-	// seam — the only Target the Provisioner itself constructs. The v2 RunnerSet path
-	// carries its own recorder on runnerSetTarget (built by the RunnerSet reconciler),
-	// since one Provisioner is shared across both owners. Nil disables event recording.
-	Events             runnercore.EventRecorder
+	APIReader          client.Reader
+	Metrics            *runnercore.Metrics
 	Log                *slog.Logger
 	MaxEvictionRetries int
 	EvictionRetryDelay time.Duration
@@ -491,18 +461,6 @@ func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *P
 		PollInterval:               5 * time.Second,
 		DefaultWorkerImage:         DefaultWorkerImage,
 	}
-}
-
-// HandlerFor returns a JobHandlerFunc bound to the given RunnerGroup, for the v1
-// RunnerGroup controller. It wraps the RunnerGroup in the v1 Target adapter and
-// delegates to Handle, so v1 and v2 share one provisioning path.
-//
-// The rg passed here is a snapshot captured when the listener started; the
-// adapter re-reads the current RunnerGroup on every acquired job so podTemplate
-// (and other spec) edits made after listener start take effect on the next job
-// without an AGC restart (Q117).
-func (p *Provisioner) HandlerFor(rg *v1alpha1.RunnerGroup) listener.JobHandlerFunc {
-	return p.Handle(p.runnerGroupTarget(rg))
 }
 
 // Handle returns a JobHandlerFunc bound to the given Target, injected into

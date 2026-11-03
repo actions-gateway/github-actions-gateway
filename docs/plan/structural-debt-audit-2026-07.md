@@ -157,7 +157,7 @@ Most cross-version foundation sits in files named for v1 that v2 imports:
 
 Same pattern in AGC: the `listener` package is treated as classic-only, but `provisioner`, `runnerset_target.go`, `runner_shared.go`, and `main.go` all import it for `listener.Metrics`, `JobHandlerFunc`, `AdmitFunc`, `EventRecorder` — types with nothing to do with classic acquisition.
 
-Consequence: **deleting v1 today is a multi-hundred-line refactor, not a `git rm`.** Doing the moves *now*, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked [Q273](../queue/Q273.md).
+Consequence: **deleting v1 today is a multi-hundred-line refactor, not a `git rm`.** Doing the moves *now*, while both versions are live, is mechanical and behavior-free, and directly de-risks the already-blocked Q273.
 This is why the row sorts adjacent to Q273 rather than by its own severity.
 
 **Shipped in Q365.** Re-measured at implementation time (2026-07-24, after Q360, Q364 and Q366 reshaped the GMC package), the cross-version foundation moved into eight `shared_*.go` files in `cmd/gmc/internal/controller` and the v1-only IP-range pass into `ipranges_v1.go`; `cert.go` and `metrics_cert.go` turned out to hold the same problem (the PKI primitives and mount layout) and were split the same way.

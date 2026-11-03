@@ -729,10 +729,8 @@ jobs:
         # The ONLY coverage of `helm upgrade` over a live release (Q475). Every
         # other path installs into a cluster that has never had the chart —
         # `make deploy` runs `helm upgrade --install`, but always as a first
-        # install — so nothing else proves a CRD field change still reaches an
-        # existing installation. It does only because the CRDs ship under
-        # templates/crds/ instead of the chart-root crds/ Helm never upgrades;
-        # this step fails closed if that ever regresses.
+        # install — so nothing else proves a template change rolls the manager
+        # out on an existing installation with admission still enforcing.
         #
         # Placed after the suite because it MUTATES the release (upgrade to a
         # marker-bearing chart, then back), which is only safe once no spec is
@@ -751,7 +749,7 @@ jobs:
         # outage — deleting the guard's only ValidatingAdmissionPolicyBinding
         # emptied the binding set for its ConfigMap paramKind, and the apiserver
         # tore down the shared param informer permanently, denying EVERY
-        # runnergroups/runnersets/runnertemplates write with `no params found for
+        # runnersets/runnertemplates write with `no params found for
         # policy binding`. Q492 moved the paramKind to the cluster-scoped
         # PriorityClassAllowlist CRD, which gets a fresh dynamic informer per
         # context and survives the transition; this step is what keeps that true.

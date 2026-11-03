@@ -92,7 +92,7 @@ wrapper:
 allowFloatingImageTags: false
 
 # allowedPriorityClasses is the platform allowlist of cluster-scoped PriorityClass
-# names that tenant RunnerGroups may reference in priorityTiers. It is passed to
+# names that tenant RunnerSets may reference in priorityTiers. It is passed to
 # the GMC as --allowed-priority-classes. The platform admin pre-creates these
 # PriorityClass objects (create them with preemptionPolicy: Never unless a tier is
 # genuinely meant to preempt cross-tenant — PriorityClasses are global) and lists
@@ -128,8 +128,8 @@ allowedInfraPriorityClasses: []
 #
 # Why it moved: a kube-apiserver defect (Q444) permanently kills param resolution
 # for any CORE-type paramKind once the set of bindings naming it goes empty for one
-# refresh tick — which `helm uninstall` does — leaving every runnergroups /
-# runnersets / runnertemplates write denied cluster-wide, recoverable only by an
+# refresh tick — which `helm uninstall` does — leaving every runnersets /
+# runnertemplates write denied cluster-wide, recoverable only by an
 # apiserver restart (impossible on GKE/EKS/AKS). A CRD paramKind is structurally
 # immune. See docs/operations/upgrade.md, "PriorityClass allowlist: ConfigMap to CR".
 #
@@ -270,7 +270,7 @@ certManager:
 # admissionPolicy ships three ValidatingAdmissionPolicies: namespace-psa-guard
 # and tenant-resource-guard confine the GMC's cluster-wide write grants to marked
 # tenant namespaces, and priorityclass-allowlist-guard backstops the PriorityClass
-# allowlist on direct runnergroups writes that bypass the GMC webhooks (Q289 /
+# allowlist on runnersets/runnertemplates writes that bypass the GMC webhooks (Q289 /
 # design Appendix G §G.7) — its allowlist parameter is the PriorityClassAllowlist
 # CR rendered from allowedPriorityClasses above (see priorityClassAllowlist). ON by
 # default (secure-by-default). Requires Kubernetes >= 1.30 (GA

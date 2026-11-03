@@ -35,7 +35,7 @@ func TestProvisioner_Q628_ReapedPendingWorkerReportsAbandoned(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		r, err := p.HandlerFor(rg)(ctx, "", "plan-q628", stubPayload(1), "")
+		r, err := rg.handler(p)(ctx, "", "plan-q628", stubPayload(1), "")
 		done <- result{r, err}
 	}()
 

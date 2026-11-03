@@ -78,8 +78,7 @@ func startScopedRunnerSetReconciler(t *testing.T, gatewayName string) {
 		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
 		// Parity with main.go (Q1078). No read this suite takes routes through it: the
-		// sets are classic, the proxy is colocated, and no legacy agent Secret reaches
-		// the RunnerGroup probe.
+		// sets are classic and the proxy is colocated.
 		APIReader:   mgr.GetAPIReader(),
 		GatewayName: gatewayName,
 		BrokerConfig: controller.BrokerConfig{

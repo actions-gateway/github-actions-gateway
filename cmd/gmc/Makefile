@@ -72,9 +72,8 @@ test-integration: generate $(SETUP_ENVTEST) ## Run envtest-backed integration te
 		$(REPO_ROOT)/scripts/go/go-test-integration.sh cmd/gmc $(if $(RUN),-run '$(RUN)') ./...
 
 .PHONY: manifests
-manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder markers
-	GOWORK=$(CURDIR)/go.work.gen "$(CONTROLLER_GEN)" rbac:roleName=manager-role crd webhook paths="./..." \
-		output:crd:artifacts:config=config/crd/bases \
+manifests: $(CONTROLLER_GEN) ## Regenerate RBAC/webhook manifests from kubebuilder markers
+	GOWORK=$(CURDIR)/go.work.gen "$(CONTROLLER_GEN)" rbac:roleName=manager-role webhook paths="./..." \
 		output:rbac:artifacts:config=config/rbac
 
 # `generate` is the whole-module codegen entrypoint, same as in api/ and
@@ -83,7 +82,7 @@ manifests: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests from kubebuilder m
 # the module whose CRD embeds another module's types — the Q440 miss (Q458).
 # Keep the three modules' `generate` meaning the same thing.
 .PHONY: generate
-generate: manifests deepcopy ## Regenerate CRD/RBAC manifests and DeepCopy methods
+generate: manifests deepcopy ## Regenerate RBAC/webhook manifests and DeepCopy methods
 
 .PHONY: deepcopy
 deepcopy: $(CONTROLLER_GEN) ## Regenerate DeepCopy methods from kubebuilder markers

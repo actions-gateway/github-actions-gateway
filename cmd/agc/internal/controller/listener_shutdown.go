@@ -32,7 +32,7 @@ type listenerShutdown struct {
 	// once every listener goroutine has exited.
 	stop func() <-chan struct{}
 	log  *slog.Logger
-	// owner names the reconciler in the shutdown log line ("RunnerGroup"/"RunnerSet").
+	// owner names the reconciler in the shutdown log line.
 	owner string
 }
 
@@ -59,7 +59,7 @@ func (s *listenerShutdown) NeedLeaderElection() bool { return false }
 // stopMultiplexers stops every multiplexer in muxes concurrently and returns a
 // done channel closed once all of them have exited. Concurrent rather than
 // sequential so shutdown costs the slowest multiplexer, not their sum — an AGC
-// serving many RunnerGroups would otherwise risk the manager's
+// serving many RunnerSets would otherwise risk the manager's
 // GracefulShutdownTimeout. Callers must not hold the map's mutex: the caller
 // passes a snapshot taken under it.
 func stopMultiplexers(muxes []*listener.Multiplexer) <-chan struct{} {
@@ -105,16 +105,9 @@ func snapshotMultiplexers(mu *sync.Mutex, m map[types.NamespacedName]*listener.M
 // successor AGC out; on the classic tier it leaks the broker sessions this file's own
 // shutdown log line claims are gone (Q968, and the property Q222 exists to hold).
 
-// stopListeners drains every listener goroutine this RunnerGroup reconciler owns.
-// It returns a done channel closed once they have all exited (and so have all
-// deleted their broker sessions), per the repo's async convention.
-func (r *RunnerGroupReconciler) stopListeners() <-chan struct{} {
-	r.stopped.Store(true)
-	return stopMultiplexers(snapshotMultiplexers(&r.multiplexersMu, r.multiplexers))
-}
-
 // stopListeners drains every listener goroutine this RunnerSet reconciler owns, on
-// both acquisition tiers. See RunnerGroupReconciler.stopListeners.
+// both acquisition tiers. It returns a done channel closed once they have all exited
+// (and so have all deleted their broker sessions), per the repo's async convention.
 //
 // The scale-set tier needs the barrier at least as much as the classic one: its poll
 // loop's exit defers read the conclusions the queue is still holding (Q689), delete the

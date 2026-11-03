@@ -4,9 +4,9 @@ The agc-tenant-role rules are single-sourced in files/agc-tenant-role-rules.yaml
 (installAGCTenantClusterRole in suite_integration_test.go) reads the SAME file —
 so the shipped permission set and the RBAC-scope test can never drift. Edit the
 fragment, not this block. This is NOT generated from the AGC +kubebuilder:rbac
-markers (cmd/agc/config/rbac/role.yaml): the tenant role deliberately withholds
-runnergroup create/delete and secret patch that the markers grant (least
-privilege), so the fragment is the authoritative hand-maintained source.
+markers (cmd/agc/config/rbac/role.yaml): the fragment is the authoritative
+hand-maintained source, and rbac_chart_drift_test.go holds every marker to a rule
+it ships.
 */ -}}
 # agc-tenant-role — the permission set granted to every AGC ServiceAccount.
 # A singleton ClusterRole; per-tenant isolation comes from RoleBindings (one

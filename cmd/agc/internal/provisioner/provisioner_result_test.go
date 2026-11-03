@@ -40,7 +40,7 @@ func TestProvisioner_ResultPodPhaseProxy(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				r, err := p.HandlerFor(rg)(ctx, "", "plan-result-"+tc.name, stubPayload(1), "")
+				r, err := rg.handler(p)(ctx, "", "plan-result-"+tc.name, stubPayload(1), "")
 				done <- result{r, err}
 			}()
 

@@ -36,14 +36,14 @@ Rejected for the cost above.
 ## Scope
 
 ### API / CRD (breaking, pre-1.0)
-- **Remove the dead `PreemptionPolicy` field** from `PriorityTier` ([runnergroup_types.go](../../../cmd/agc/api/v1alpha1/runnergroup_types.go)).
+- **Remove the dead `PreemptionPolicy` field** from `PriorityTier` ([runnergroup_types.go](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/agc/api/v1alpha1/runnergroup_types.go)).
   It has existed since Milestone 2 but is **never consumed** — the provisioner only sets `PriorityClassName`, never `pod.Spec.PreemptionPolicy`.
   The design doc already calls it "informational only."
   Keeping a tenant-settable preemption field is misleading *and* a latent preemption lever; preemption is governed by the platform-owned `PriorityClass` object's own `preemptionPolicy`.
   Field removal is a breaking CRD change — free pre-1.0 (no conversion webhook; same window as Q130).
   Zero behavioural change (the field never reached a pod).
 - `PriorityClassName` stays required and unchanged in shape (tenant still names a class; the webhook gates *which* names are legal).
-- Regenerate per [code-generation.md](../../development/code-generation.md): `make -C cmd/agc generate manifests` → `zz_generated.deepcopy.go`, both CRD YAML copies ([cmd/agc/.../runnergroups.yaml](../../../cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml), the GMC-bundled [cmd/gmc/.../runnergroups.yaml](../../../cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml)), and the chart CRD template.
+- Regenerate per [code-generation.md](../../development/code-generation.md): `make -C cmd/agc generate manifests` → `zz_generated.deepcopy.go`, both CRD YAML copies ([cmd/agc/.../runnergroups.yaml](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/agc/config/crd/actions-gateway.github.com_runnergroups.yaml), the GMC-bundled [cmd/gmc/.../runnergroups.yaml](https://github.com/actions-gateway/github-actions-gateway/blob/7b292627a946fc9cbcded25597fca029b6d4382f/cmd/gmc/config/crd/bases/actions-gateway.github.com_runnergroups.yaml)), and the chart CRD template.
   Keep all copies in sync (Q73).
 
 ### GMC config (allowlist source)

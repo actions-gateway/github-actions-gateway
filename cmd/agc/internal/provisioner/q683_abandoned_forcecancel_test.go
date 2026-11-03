@@ -69,7 +69,7 @@ func TestProvisioner_Q683_ReapedPendingWorkerForceCancelsRun(t *testing.T) {
 			}
 			done := make(chan result, 1)
 			go func() {
-				r, err := p.HandlerFor(rg)(ctx, "", "plan-q683", tc.payload, "")
+				r, err := rg.handler(p)(ctx, "", "plan-q683", tc.payload, "")
 				done <- result{r, err}
 			}()
 

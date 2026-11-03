@@ -198,7 +198,7 @@ Worked example: an ARC scale set named **`gpu-large`** in namespace **`team-a`**
 
 ### 0. Confirm prerequisites
 
-The GMC is installed **with the v2 CRD chart** ([Install](install.md#optional-the-v2-api-crds)), the cluster is **Kubernetes ≥ 1.31**, and its CNI enforces egress NetworkPolicy ([Egress isolation](#egress-isolation-the-big-difference)).
+The GMC is installed **with the v2 CRD chart** ([Install](install.md#the-v2-api-crds)), the cluster is **Kubernetes ≥ 1.31**, and its CNI enforces egress NetworkPolicy ([Egress isolation](#egress-isolation-the-big-difference)).
 Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned `ResourceQuota` — see the [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions).
 **Leave the ARC scale set running** throughout.
 

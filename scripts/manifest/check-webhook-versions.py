@@ -21,7 +21,6 @@ to each other:
                                           (the chart's webhook.yaml is generated
                                           from it and gated by chart-webhook-check)
   api/config/crd/*.yaml                   the actions-gateway.com CRDs
-  cmd/*/config/crd/bases/*.yaml           the actions-gateway.github.com CRDs
 
 A rule naming a group or resource no CRD here defines fails too: removing a
 whole CRD leaves its webhook in exactly the same state as removing one version.
@@ -36,7 +35,7 @@ import sys
 from pathlib import Path
 
 WEBHOOKS = Path("cmd/gmc/config/webhook/manifests.yaml")
-CRD_GLOBS = ("api/config/crd/*.yaml", "cmd/*/config/crd/bases/*.yaml")
+CRD_GLOBS = ("api/config/crd/*.yaml",)
 
 # controller-gen's CRD layout: spec keys at two spaces, a versions item's own
 # keys at four. The schema nests far deeper, so these anchors cannot match inside it.

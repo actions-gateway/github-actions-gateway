@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	"github.com/actions-gateway/github-actions-gateway/broker"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -87,10 +87,10 @@ func Run(ctx context.Context, cfg Config) error {
 	// returns a NonRetriableError, and the Multiplexer restarts a fresh goroutine that
 	// carries no in-memory flag for it. Without the baseline that Degraded=True would
 	// sit stale on the owner forever after the credentials were fixed.
-	setCondition(cfg, v1alpha1.ConditionDegraded, metav1.ConditionFalse,
-		v1alpha1.ReasonSessionAuthorized, "listener session established")
-	setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionFalse,
-		v1alpha1.ReasonPollingHealthy, "message polling healthy")
+	setCondition(cfg, apiconditions.ConditionDegraded, metav1.ConditionFalse,
+		apiconditions.ReasonSessionAuthorized, "listener session established")
+	setCondition(cfg, apiconditions.ConditionRateLimited, metav1.ConditionFalse,
+		apiconditions.ReasonPollingHealthy, "message polling healthy")
 	// RunnerVersionTooOld joins the baseline for the same reason and needs it more
 	// (Q795): agent.version is the AGC's own compile-time pin, so a session-sourced
 	// True is fixed by upgrading the gateway — which restarts this process and clears
@@ -98,8 +98,8 @@ func Run(ctx context.Context, cfg Config) error {
 	// session reaching here is GitHub having accepted that version. The reconciler
 	// drops this push when a live condition stands whose reason is not the listener's
 	// own, so the unconditional form cannot overwrite a worker-image verdict (Q715).
-	setCondition(cfg, v1alpha1.ConditionRunnerVersionTooOld, metav1.ConditionFalse,
-		v1alpha1.ReasonVersionAccepted, "GitHub accepted the runner version at session creation")
+	setCondition(cfg, apiconditions.ConditionRunnerVersionTooOld, metav1.ConditionFalse,
+		apiconditions.ReasonVersionAccepted, "GitHub accepted the runner version at session creation")
 
 	// 3. Poll loop.
 	consecutiveEmpty := 0
@@ -150,8 +150,8 @@ func Run(ctx context.Context, cfg Config) error {
 					firstRateLimitAt = cfg.Clock.Now()
 				} else if !rateLimitedActive && cfg.Clock.Now().Sub(firstRateLimitAt) >= 10*time.Minute {
 					rateLimitedActive = true
-					setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionTrue,
-						v1alpha1.ReasonSustainedRateLimit, "GetMessage returning 429 for >10 minutes")
+					setCondition(cfg, apiconditions.ConditionRateLimited, metav1.ConditionTrue,
+						apiconditions.ReasonSustainedRateLimit, "GetMessage returning 429 for >10 minutes")
 				}
 				wait := rlErr.RetryAfter
 				if wait < 0 {
@@ -232,8 +232,8 @@ func Run(ctx context.Context, cfg Config) error {
 		firstRateLimitAt = time.Time{}
 		if rateLimitedActive {
 			rateLimitedActive = false
-			setCondition(cfg, v1alpha1.ConditionRateLimited, metav1.ConditionFalse,
-				v1alpha1.ReasonPollingHealthy, "message polling recovered")
+			setCondition(cfg, apiconditions.ConditionRateLimited, metav1.ConditionFalse,
+				apiconditions.ReasonPollingHealthy, "message polling recovered")
 		}
 
 		if msg == nil {

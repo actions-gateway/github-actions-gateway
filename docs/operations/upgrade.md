@@ -1139,7 +1139,7 @@ kubectl apply --server-side -f \
 ```
 
 For a custom GMC namespace, render the chart instead.
-Either way, see [install.md § the v2 API CRDs](install.md#optional-the-v2-api-crds) for the full lifecycle (upgrade/rollback/uninstall), signature verification, and namespace/cert-manager overrides:
+Either way, see [install.md § the v2 API CRDs](install.md#the-v2-api-crds) for the full lifecycle (upgrade/rollback/uninstall), signature verification, and namespace/cert-manager overrides:
 
 ```bash
 helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
@@ -1423,9 +1423,9 @@ The following upgrade-time behaviors are specific to this chart:
   `--reset-then-reuse-values` and `--reuse-values` both carry the previously pinned digests forward; pass `--set <image>.image.digest=sha256:<new>` for each image you are moving to the new release's build.
   See the [troubleshooting runbook](troubleshooting.md#helm-render-fails-gmcimage-must-be-pinned-by-digest).
   Dev/test only: `allowFloatingImageTags=true` opts out.
-- **Most CRDs upgrade with the release; one does not, so apply the chart's CRDs every time.** The `RunnerGroup` CRD ships as a template under `templates/crds/` with `helm.sh/resource-policy: keep`, so `helm upgrade` applies its additive field changes automatically and `helm uninstall` preserves it (and every tenant's objects) rather than cascade-deleting.
-  The `PriorityClassAllowlist` CRD cannot: the same release *creates* a `PriorityClassAllowlist` object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright.
+- **Helm never upgrades this chart's one CRD, so apply the chart's CRDs every time.** The `PriorityClassAllowlist` CRD cannot ship as a template: the same release *creates* a `PriorityClassAllowlist` object, and Helm resolves REST mappings for the whole manifest before applying any of it, so a CR whose CRD is a template in the same release fails outright.
   It therefore ships in the chart-root `crds/` directory — which Helm installs on `helm install` **only, never on upgrade**.
+  The tenant CRDs are not in this chart: they ship in `actions-gateway-crds-v2`, applied with `kubectl apply --server-side`.
 
   Rather than make that a conditional "did your release predate X?" step, the upgrade command above applies the chart's CRDs unconditionally:
 
@@ -1437,7 +1437,6 @@ The following upgrade-time behaviors are specific to this chart:
 
   It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
   The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster.
-  The `RunnerGroup` CRD is sourced from the AGC authoritative copy.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade.
   With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself.
   On an in-place `helm upgrade` the chart **reuses the existing `webhook-server-cert` Secret** (it looks the Secret up), so the cert does not rotate; it only regenerates if that Secret is missing (a fresh install, or after you delete it to force rotation).

@@ -198,7 +198,7 @@ The default is `atomic`: one applier replaces the whole list, and no item within
   Every status conditions slice in this repo uses that.
 - `priorityTiers` is atomic, and its "strictly ascending threshold" ordering is a *caller contract* that neither admission nor a status condition enforces — an out-of-order tier is simply unreachable.
   If an ordering or uniqueness rule is load-bearing, either validate it or say plainly in the godoc that it is not validated.
-  It is documented in [`runnergroup_types.go`](../../cmd/agc/api/v1alpha1/runnergroup_types.go).
+  It is documented in [`runnerset_types.go`](../../api/v2/runnerset_types.go).
 
 ### Put a constraint on the narrowest field that expresses it
 

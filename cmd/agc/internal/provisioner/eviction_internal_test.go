@@ -12,13 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -64,9 +62,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 		GitHubAPIURL: srv.URL,
 		HTTPClient:   srv.Client(),
 	}
-	rg := &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "mygroup", Namespace: "ns"},
-	}
+	target := &rungTarget{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	// All goroutines target the same run_id (and therefore the same lock shard),
@@ -84,7 +80,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "12345", log, maxRetries, 0, evictionTierClassic, cause, rerunDisruption{})
+			<-p.handleEviction(context.Background(), target, "owner", "repo", "12345", log, maxRetries, 0, evictionTierClassic, cause, rerunDisruption{})
 		}()
 	}
 	wg.Wait()
@@ -101,7 +97,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	// reporting without splitting the budget.
 	var total float64
 	for _, cause := range []string{recoveryCauseEviction, recoveryCausePreemption} {
-		total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", evictionTierClassic, cause))
+		total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "s", evictionTierClassic, cause))
 	}
 	assert.Equal(t, float64(got), total)
 }
@@ -128,11 +124,11 @@ func TestHandleEviction_BudgetIsHardCap(t *testing.T) {
 		GitHubAPIURL: srv.URL,
 		HTTPClient:   srv.Client(),
 	}
-	rg := &v1alpha1.RunnerGroup{ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"}}
+	target := &rungTarget{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	for i := 0; i < evictions; i++ {
-		<-p.handleEviction(context.Background(), p.runnerGroupTarget(rg), "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
+		<-p.handleEviction(context.Background(), target, "owner", "repo", "999", log, maxRetries, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 	}
 
 	assert.Equal(t, int64(maxRetries), rerunCount.Load(),

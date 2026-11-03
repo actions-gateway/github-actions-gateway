@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 )
 
@@ -71,23 +70,6 @@ func (g *admissionGate) reservedCount(key string) int32 {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.reserved[key]
-}
-
-// WorkerCeiling returns the maximum concurrent worker pods rg may run, mirroring
-// the admission gate / ceilingCheck hold decision: the maximum priority-tier
-// threshold when tiers are set, else maxWorkers, else unbounded (bounded=false).
-// Exported so the RunnerGroup reconciler can size the worker pool's quota
-// footprint for the WorkerQuota{Pressure,Exceeded} conditions (Q82) against the
-// same ceiling the gate enforces — one source of truth. It delegates to the
-// neutral WorkerCeilingFromTiers so v1 and v2 compute the ceiling identically.
-func WorkerCeiling(rg *v1alpha1.RunnerGroup) (limit int32, bounded bool) {
-	return WorkerCeilingFromTiers(tierThresholds(rg.Spec.PriorityTiers), rg.Spec.MaxWorkers)
-}
-
-// AdmitFor returns an AdmitFunc for the v1 RunnerGroup controller, wrapping the
-// RunnerGroup in the v1 Target adapter and delegating to Admit.
-func (p *Provisioner) AdmitFor(snapshot *v1alpha1.RunnerGroup) runnercore.AdmitFunc {
-	return p.Admit(p.runnerGroupTarget(snapshot))
 }
 
 // Admit returns an AdmitFunc bound to the given Target that gates job acquisition

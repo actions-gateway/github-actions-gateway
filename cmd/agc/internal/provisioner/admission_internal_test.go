@@ -5,23 +5,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/api/v1alpha1"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-// admissionTestScheme registers the RunnerGroup API types for the fake client.
-func admissionTestScheme() *runtime.Scheme {
-	s := runtime.NewScheme()
-	_ = v1alpha1.AddToScheme(s)
-	return s
-}
 
 func TestAdmissionGate_ReserveAndRelease(t *testing.T) {
 	var g admissionGate
@@ -123,86 +112,49 @@ func TestAdmissionGate_KeysAreIndependent(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestAdmissionCeiling(t *testing.T) {
+func TestWorkerCeilingFromTiers(t *testing.T) {
 	tests := []struct {
 		name        string
-		spec        v1alpha1.RunnerGroupSpec
+		tiers       []TierThreshold
+		maxWorkers  *int32
 		wantLimit   int32
 		wantBounded bool
 	}{
 		{
 			name:        "maxWorkers",
-			spec:        v1alpha1.RunnerGroupSpec{MaxWorkers: ptr.To(int32(7))},
+			maxWorkers:  ptr.To(int32(7)),
 			wantLimit:   7,
 			wantBounded: true,
 		},
 		{
 			name: "priorityTiers uses the maximum threshold",
-			spec: v1alpha1.RunnerGroupSpec{
-				PriorityTiers: []v1alpha1.PriorityTier{
-					{Threshold: 3, PriorityClassName: "low"},
-					{Threshold: 10, PriorityClassName: "high"},
-				},
+			tiers: []TierThreshold{
+				{Threshold: 3, PriorityClassName: "low"},
+				{Threshold: 10, PriorityClassName: "high"},
 			},
 			wantLimit:   10,
 			wantBounded: true,
 		},
 		{
-			name: "priorityTiers take precedence over maxWorkers",
-			spec: v1alpha1.RunnerGroupSpec{
-				MaxWorkers:    ptr.To(int32(2)),
-				PriorityTiers: []v1alpha1.PriorityTier{{Threshold: 5, PriorityClassName: "x"}},
-			},
+			name:        "priorityTiers take precedence over maxWorkers",
+			maxWorkers:  ptr.To(int32(2)),
+			tiers:       []TierThreshold{{Threshold: 5, PriorityClassName: "x"}},
 			wantLimit:   5,
 			wantBounded: true,
 		},
 		{
 			name:        "unbounded when neither is set",
-			spec:        v1alpha1.RunnerGroupSpec{},
 			wantLimit:   0,
 			wantBounded: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rg := &v1alpha1.RunnerGroup{Spec: tt.spec}
-			limit, bounded := WorkerCeiling(rg)
+			limit, bounded := WorkerCeilingFromTiers(tt.tiers, tt.maxWorkers)
 			assert.Equal(t, tt.wantBounded, bounded)
 			assert.Equal(t, tt.wantLimit, limit)
 		})
 	}
-}
-
-// TestAdmitFor_ReadsFreshSpec verifies the AdmitFunc honours a maxWorkers edit
-// made after the listener-start snapshot was captured (Q117), reading the
-// current spec from the cached client on each call.
-func TestAdmitFor_ReadsFreshSpec(t *testing.T) {
-	rg := &v1alpha1.RunnerGroup{
-		ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
-		Spec:       v1alpha1.RunnerGroupSpec{MaxWorkers: ptr.To(int32(1))},
-	}
-	fc := fake.NewClientBuilder().WithScheme(admissionTestScheme()).WithObjects(rg).Build()
-	p := NewProvisioner(fc, nil, nil)
-
-	// Snapshot captured maxWorkers=1.
-	admit := p.AdmitFor(rg)
-	r1, ok, _ := admit(context.Background())
-	require.True(t, ok)
-	_, ok, reason := admit(context.Background())
-	require.False(t, ok, "ceiling of 1 should reject the second admit")
-	assert.Equal(t, runnercore.AdmitReasonCeiling, reason)
-
-	// Operator raises maxWorkers to 2; the gate must pick it up without a restart.
-	var current v1alpha1.RunnerGroup
-	require.NoError(t, fc.Get(context.Background(), client.ObjectKeyFromObject(rg), &current))
-	current.Spec.MaxWorkers = ptr.To(int32(2))
-	require.NoError(t, fc.Update(context.Background(), &current))
-
-	r2, ok, _ := admit(context.Background())
-	assert.True(t, ok, "raised ceiling should admit a second slot")
-
-	r1(runnercore.AdmitProvisioned)
-	r2(runnercore.AdmitProvisioned)
 }
 
 // TestAdmit_AbortedOutcomeRefundsTheScaleUpToken covers the whole ladder spend, not
@@ -211,16 +163,9 @@ func TestAdmitFor_ReadsFreshSpec(t *testing.T) {
 // provisions hands back only the reservation (Q972).
 func TestAdmit_AbortedOutcomeRefundsTheScaleUpToken(t *testing.T) {
 	newGate := func() (runnercore.AdmitFunc, *Provisioner) {
-		rg := &v1alpha1.RunnerGroup{
-			ObjectMeta: metav1.ObjectMeta{Name: "g", Namespace: "ns"},
-			Spec: v1alpha1.RunnerGroupSpec{
-				MaxWorkers: ptr.To(int32(10)),
-				ScaleUp:    &v1alpha1.ScaleUpRateLimit{MaxPerSecond: 1, Burst: ptr.To(int32(2))},
-			},
-		}
-		fc := fake.NewClientBuilder().WithScheme(admissionTestScheme()).WithObjects(rg).Build()
-		p := NewProvisioner(fc, nil, nil)
-		return p.AdmitFor(rg), p
+		target := &rungTarget{ceiling: 10, ceilingBounded: true, scaleUp: &ScaleUpConfig{MaxPerSecond: 1, Burst: 2}}
+		p := NewProvisioner(fake.NewClientBuilder().Build(), nil, nil)
+		return p.Admit(target), p
 	}
 
 	t.Run("aborted delivery returns its token", func(t *testing.T) {
@@ -244,7 +189,7 @@ func TestAdmit_AbortedOutcomeRefundsTheScaleUpToken(t *testing.T) {
 			_, ok, reason = admit(ctx)
 			assert.Truef(t, ok, "admit %d after two refunds was refused with %q", i, reason)
 		}
-		assert.Equal(t, int32(2), p.admission.reservedCount("ns/g"), "the two refunded slots should be held by the new admits")
+		assert.Equal(t, int32(2), p.admission.reservedCount("ns/s"), "the two refunded slots should be held by the new admits")
 	})
 
 	t.Run("provisioned delivery keeps its token", func(t *testing.T) {
@@ -273,7 +218,7 @@ func TestAdmit_AbortedOutcomeRefundsTheScaleUpToken(t *testing.T) {
 		r1(runnercore.AdmitAborted)
 		// A second call must add nothing: not a slot, and not a token.
 		r1(runnercore.AdmitAborted)
-		assert.Equal(t, int32(0), p.admission.reservedCount("ns/g"))
+		assert.Equal(t, int32(0), p.admission.reservedCount("ns/s"))
 
 		for i := 0; i < 2; i++ {
 			_, ok, _ = admit(ctx)
