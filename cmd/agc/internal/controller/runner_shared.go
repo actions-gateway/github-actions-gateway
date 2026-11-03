@@ -7,12 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,11 +21,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// Owner-agnostic runtime machinery shared by the v1 RunnerGroup and v2 RunnerSet
-// reconcilers. Both drive the same adaptive listener-goroutine pool and reap the
-// same kind of worker pod; only the owning CR (and, for v2, the source of the pod
-// shape and proxy) differs. Factoring the common pieces here keeps the two
-// reconcilers in lockstep instead of letting copies drift.
+// Runtime machinery the RunnerSet reconciler shares with its listener and
+// provisioner goroutines: event and condition routing, the work-queue rate limiter,
+// and the worker-pod reaper.
 
 // eventRecord is an owner-scoped Kubernetes Event pushed from a listener or
 // provisioner goroutine to its reconciler via a channel. The reconciler records it
@@ -561,60 +555,4 @@ func jobCompletedAt(pod *corev1.Pod) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return t, true
-}
-
-// assembleListenerConfig builds the listener.Config for a single goroutine bound
-// to an already-claimed pool agent. The per-API parts — the job handler and admit
-// gate (built from the v1 RunnerGroup or v2 RunnerSet provisioner Target) and the
-// group identity — are passed in; everything else (broker client, lifecycle
-// closures) is identical across both reconcilers, so it lives here.
-func assembleListenerConfig(
-	group, namespace string,
-	brokerCfg BrokerConfig,
-	condUpdater runnercore.ConditionUpdater,
-	eventRecorder runnercore.EventRecorder,
-	metrics *runnercore.Metrics,
-	agent *agentpool.Agent,
-	tokenManager *token.Manager,
-	jobHandler listener.JobHandlerFunc,
-	admit runnercore.AdmitFunc,
-	pool *agentpool.Pool,
-) listener.Config {
-	agentBrokerURL := agent.BrokerURL
-	if agentBrokerURL == "" {
-		agentBrokerURL = brokerCfg.BrokerURL
-	}
-	bc := &broker.Client{
-		BrokerURL:     agentBrokerURL,
-		RunnerVersion: brokerCfg.RunnerVersion,
-		RunnerOS:      brokerCfg.RunnerOS,
-		RunnerArch:    brokerCfg.RunnerArch,
-		UseV2Flow:     brokerCfg.UseV2Flow,
-		HTTPClient:    brokerCfg.HTTPClient,
-	}
-	return listener.Config{
-		Group:             group,
-		Namespace:         namespace,
-		Agent:             agent,
-		Broker:            bc,
-		HTTPClient:        brokerCfg.HTTPClient,
-		Conditions:        condUpdater,
-		Events:            eventRecorder,
-		Metrics:           metrics,
-		RunnerOS:          brokerCfg.RunnerOS,
-		JobHandler:        jobHandler,
-		Admit:             admit,
-		IdleThreshold:     brokerCfg.IdleThreshold,
-		RenewInterval:     brokerCfg.RenewJobInterval,
-		FanoutCompletion:  brokerCfg.FanoutCompletion,
-		ReleaseAgent:      func() { pool.ReleaseAgent(agent) },
-		MarkAgentConsumed: func() { pool.MarkConsumed(agent) },
-		RecycleAgent: func(ctx context.Context) (*agentpool.Agent, error) {
-			tok, err := tokenManager.Token(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("installation token for agent recycle: %w", err)
-			}
-			return pool.Recycle(ctx, agent, tok)
-		},
-	}
 }

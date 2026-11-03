@@ -3,7 +3,6 @@ package main
 import (
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -35,14 +34,6 @@ func TestLoadConfig(t *testing.T) {
 		"WORKER_USAGE_SAMPLE_INTERVAL": "30s",
 		"STUB_AUTH_URL":                "http://stub/auth",
 		"STUB_BROKER_URL":              "http://stub/broker",
-		"GITHUB_ORG_URL":               "https://github.com/org",
-		"GITHUB_RUNNER_GROUP_ID":       "7",
-		"GITHUB_BROKER_URL":            "https://broker.github.com",
-		"GITHUB_RUNNER_VERSION":        "2.320.0",
-		"GITHUB_RUNNER_OS":             "linux",
-		"GITHUB_RUNNER_ARCH":           "x64",
-		"GITHUB_USE_VSTS_FLOW":         "true",
-		"AGC_FANOUT_COMPLETION":        "false",
 	}
 	cfg := loadConfig(fakeGetenv(env))
 
@@ -62,14 +53,6 @@ func TestLoadConfig(t *testing.T) {
 		"WorkerUsageSampleInterval": {cfg.WorkerUsageSampleInterval, "30s"},
 		"StubAuthURL":               {cfg.StubAuthURL, "http://stub/auth"},
 		"StubBrokerURL":             {cfg.StubBrokerURL, "http://stub/broker"},
-		"GitHubOrgURL":              {cfg.GitHubOrgURL, "https://github.com/org"},
-		"GitHubRunnerGroupID":       {cfg.GitHubRunnerGroupID, "7"},
-		"GitHubBrokerURL":           {cfg.GitHubBrokerURL, "https://broker.github.com"},
-		"GitHubRunnerVersion":       {cfg.GitHubRunnerVersion, "2.320.0"},
-		"GitHubRunnerOS":            {cfg.GitHubRunnerOS, "linux"},
-		"GitHubRunnerArch":          {cfg.GitHubRunnerArch, "x64"},
-		"GitHubUseVSTSFlow":         {cfg.GitHubUseVSTSFlow, "true"},
-		"FanoutCompletion":          {cfg.FanoutCompletion, "false"},
 	}
 	for field, c := range checks {
 		if c.got != c.want {
@@ -85,128 +68,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 }
 
-// TestBuildRegistrar covers the registrar selection precedence: stub-first, then
-// GitHub, then the GITHUB_ORG_URL-required error, plus the runner-group-ID
-// fallback rules.
-func TestBuildRegistrar(t *testing.T) {
-	t.Run("stub URLs win even with GITHUB_ORG_URL set", func(t *testing.T) {
-		reg, err := buildRegistrar(agcConfig{
-			StubAuthURL:   "http://stub/auth",
-			StubBrokerURL: "http://stub/broker",
-			GitHubOrgURL:  "https://github.com/org",
-		})
-		if err != nil {
-			t.Fatalf("buildRegistrar returned error: %v", err)
-		}
-		if _, ok := reg.(*agentpool.StubRegistrar); !ok {
-			t.Errorf("expected *agentpool.StubRegistrar, got %T", reg)
-		}
-	})
-
-	t.Run("only one stub URL falls through to GitHub", func(t *testing.T) {
-		reg, err := buildRegistrar(agcConfig{
-			StubAuthURL:  "http://stub/auth", // STUB_BROKER_URL missing
-			GitHubOrgURL: "https://github.com/org",
-		})
-		if err != nil {
-			t.Fatalf("buildRegistrar returned error: %v", err)
-		}
-		gh, ok := reg.(*agentpool.GithubRegistrar)
-		if !ok {
-			t.Fatalf("expected *agentpool.GithubRegistrar, got %T", reg)
-		}
-		if gh.GroupID != 1 {
-			t.Errorf("default GroupID = %d, want 1", gh.GroupID)
-		}
-	})
-
-	t.Run("GitHub with explicit group ID", func(t *testing.T) {
-		reg, err := buildRegistrar(agcConfig{
-			GitHubOrgURL:        "https://github.com/org",
-			GitHubRunnerGroupID: "42",
-		})
-		if err != nil {
-			t.Fatalf("buildRegistrar returned error: %v", err)
-		}
-		gh := reg.(*agentpool.GithubRegistrar)
-		if gh.GroupID != 42 {
-			t.Errorf("GroupID = %d, want 42", gh.GroupID)
-		}
-		if gh.OrgURL != "https://github.com/org" {
-			t.Errorf("OrgURL = %q, want the configured org URL", gh.OrgURL)
-		}
-	})
-
-	for _, raw := range []string{"0", "-3", "not-an-int", ""} {
-		t.Run("invalid/non-positive group ID "+raw+" falls back to 1", func(t *testing.T) {
-			reg, err := buildRegistrar(agcConfig{
-				GitHubOrgURL:        "https://github.com/org",
-				GitHubRunnerGroupID: raw,
-			})
-			if err != nil {
-				t.Fatalf("buildRegistrar returned error: %v", err)
-			}
-			if gh := reg.(*agentpool.GithubRegistrar); gh.GroupID != 1 {
-				t.Errorf("GroupID = %d, want 1 (fallback)", gh.GroupID)
-			}
-		})
-	}
-
-	t.Run("neither configured is an error", func(t *testing.T) {
-		if _, err := buildRegistrar(agcConfig{}); err == nil {
-			t.Error("buildRegistrar with no registrar config must return an error")
-		}
-	})
-}
-
-// TestBuildBrokerConfig verifies the env → BrokerConfig mapping and the two
-// default-on booleans that flip only on an exact opt-out string.
-func TestBuildBrokerConfig(t *testing.T) {
-	t.Run("defaults: v2 flow and fan-out on", func(t *testing.T) {
-		bc := buildBrokerConfig(agcConfig{})
-		if !bc.UseV2Flow {
-			t.Error("UseV2Flow must default to true (only GITHUB_USE_VSTS_FLOW=true disables it)")
-		}
-		if !bc.FanoutCompletion {
-			t.Error("FanoutCompletion must default to true (only AGC_FANOUT_COMPLETION=false disables it)")
-		}
-		if bc.HTTPClient == nil {
-			t.Error("HTTPClient must be set to the broker long-poll client")
-		}
-	})
-
-	t.Run("opt-outs flip the booleans", func(t *testing.T) {
-		bc := buildBrokerConfig(agcConfig{
-			GitHubUseVSTSFlow: "true",
-			FanoutCompletion:  "false",
-		})
-		if bc.UseV2Flow {
-			t.Error("GITHUB_USE_VSTS_FLOW=true must set UseV2Flow=false")
-		}
-		if bc.FanoutCompletion {
-			t.Error("AGC_FANOUT_COMPLETION=false must set FanoutCompletion=false")
-		}
-	})
-
-	t.Run("passthrough fields", func(t *testing.T) {
-		bc := buildBrokerConfig(agcConfig{
-			GitHubBrokerURL:     "https://broker",
-			GitHubRunnerVersion: "2.320.0",
-			GitHubRunnerOS:      "linux",
-			GitHubRunnerArch:    "x64",
-		})
-		if bc.BrokerURL != "https://broker" || bc.RunnerVersion != "2.320.0" ||
-			bc.RunnerOS != "linux" || bc.RunnerArch != "x64" {
-			t.Errorf("broker passthrough mismatch: %+v", bc)
-		}
-	})
-}
-
-// TestScaleSetStubBaseURL pins the scale-set tier to the same stub signal the
-// classic tier's registrar uses. The negative cases are the load-bearing ones: a
-// production AGC carries GITHUB_ORG_URL and neither stub var, and a half-configured
-// AGC must fall through to real GitHub on BOTH tiers rather than splitting them
-// across two backends.
+// TestScaleSetStubBaseURL pins the stub selection to both stub variables. The
+// negative cases are the load-bearing ones: a production AGC carries neither stub
+// var, and a half-configured AGC must fall through to real GitHub.
 func TestScaleSetStubBaseURL(t *testing.T) {
 	cases := []struct {
 		name string
@@ -218,23 +82,22 @@ func TestScaleSetStubBaseURL(t *testing.T) {
 			cfg: agcConfig{
 				StubAuthURL:   "http://stub/token",
 				StubBrokerURL: "http://stub",
-				GitHubOrgURL:  "https://github.com/org",
 			},
 			want: "http://stub",
 		},
 		{
 			name: "only the auth URL falls through to GitHub",
-			cfg:  agcConfig{StubAuthURL: "http://stub/token", GitHubOrgURL: "https://github.com/org"},
+			cfg:  agcConfig{StubAuthURL: "http://stub/token"},
 			want: "",
 		},
 		{
 			name: "only the broker URL falls through to GitHub",
-			cfg:  agcConfig{StubBrokerURL: "http://stub", GitHubOrgURL: "https://github.com/org"},
+			cfg:  agcConfig{StubBrokerURL: "http://stub"},
 			want: "",
 		},
 		{
 			name: "production",
-			cfg:  agcConfig{GitHubOrgURL: "https://github.com/org"},
+			cfg:  agcConfig{},
 			want: "",
 		},
 	}

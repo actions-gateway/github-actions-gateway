@@ -44,7 +44,6 @@ func TestRunnerSetReconcile_ShareResolvedSetKeepsRecheckingTheGrant(t *testing.T
 	tmpl := tmplObj("tmpl", ns)
 	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer} // skip the finalizer-add requeue
-		rs.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolScaleSet
 		rs.Spec.RunnerLabels = []string{label}
 		rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: proxyName, Namespace: proxyNS}
 	})

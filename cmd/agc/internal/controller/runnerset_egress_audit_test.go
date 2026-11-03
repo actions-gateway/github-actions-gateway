@@ -40,7 +40,6 @@ func reconcileEgressAuditSets(t *testing.T, objs []client.Object, sets ...*v2alp
 	all := append([]client.Object{}, objs...)
 	for _, rs := range sets {
 		rs.Finalizers = []string{runnerSetFinalizer}
-		rs.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolScaleSet
 		rs.Spec.RunnerLabels = []string{"egress-audit-" + rs.Name}
 		all = append(all, rs)
 	}

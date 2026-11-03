@@ -18,7 +18,6 @@ package provisioner
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -26,17 +25,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
-	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -461,242 +455,6 @@ func NewProvisioner(c client.Client, m *runnercore.Metrics, log *slog.Logger) *P
 		PollInterval:               5 * time.Second,
 		DefaultWorkerImage:         DefaultWorkerImage,
 	}
-}
-
-// Handle returns a JobHandlerFunc bound to the given Target, injected into
-// listener.Config.JobHandler. On each acquired job it resolves the target's
-// current provisioning spec and provisions a worker pod; a resolution failure
-// (v2: a missing RunnerTemplate/EgressProxy) fails the job fail-closed without
-// creating a pod. v1 wires it via HandlerFor; the v2 RunnerSet controller wires
-// it directly with a RunnerSet-backed Target.
-func (p *Provisioner) Handle(target Target) listener.JobHandlerFunc {
-	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) (broker.TaskResult, error) {
-		return p.provision(ctx, target, planID, payload, jitConfig)
-	}
-}
-
-// provision stages the job wiring, creates the worker pod, and waits for it to
-// reach a terminal phase. The returned broker.TaskResult is the POD-PHASE PROXY of
-// the outcome (PodFailed→failed, a worker removed before it ran→abandoned, else
-// succeeded) that the listener reports for this job's assignments (Q260 Option A);
-// it is empty on any error path that returns before the pod reached a terminal
-// phase (the fan-out treats an empty result as succeeded).
-func (p *Provisioner) provision(ctx context.Context, target Target, planID string, payload []byte, jitConfig string) (result broker.TaskResult, err error) {
-	key := target.Key()
-	log := p.logForKey(key)
-
-	// Resolve the current provisioning spec for this job. For v1 this re-reads the
-	// fresh RunnerGroup; for v2 it re-resolves the RunnerSet's RunnerTemplate and
-	// EgressProxy. A resolution error fails the job fail-closed — no Secret, no pod
-	// — so no worker wiring is ever created while a reference is unresolved (§H.7).
-	spec, err := target.Resolve(ctx)
-	if err != nil {
-		log.Warn("provisioning spec unresolved; failing job without creating a pod", "error", err)
-		return "", fmt.Errorf("provisioner: resolve provisioning spec: %w", err)
-	}
-	start := time.Now()
-
-	secretName := "job-" + safeName(planID)
-	// workerPodName owns the 63-char DNS-label budget and the validity of the
-	// result; never truncate the assembled name here (Q467).
-	podName := workerPodName(key.Name, planID)
-	// Scope every line for this job to its worker pod (atop namespace/owner
-	// from logForKey), so a session→job→pod trail is followable (Q87, Theme F).
-	log = log.With("podName", podName)
-
-	// Root span for the whole job-provisioning path. Child spans below break out
-	// the latency of each phase (secret staging, pod-count, pod creation, and the
-	// wait for completion — usually the long pole). The deferred closure stamps
-	// the span's error status from the named return so any early exit is visible.
-	ctx, span := tracer.Start(ctx, "Provisioner.provision", trace.WithAttributes(
-		semconv.K8SNamespaceName(key.Namespace),
-		attribute.String("gateway.owner.name", key.Name),
-		attribute.String("gateway.plan.id", planID),
-		semconv.K8SPodName(podName),
-	))
-	defer func() {
-		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
-		}
-		span.End()
-	}()
-
-	// Extract owner/repo/run_id for eviction retry (best-effort; missing is fine).
-	// A malformed payload only degrades eviction-retry context, so log and
-	// continue rather than failing provisioning — a silent drop would hide
-	// genuine payload corruption.
-	var ap acquirePayload
-	if err := json.Unmarshal(payload, &ap); err != nil {
-		log.Warn("could not parse AcquireJob payload for eviction-retry context; continuing without it", "error", err)
-	}
-	owner, repo, runIDInt := ap.repoInfo()
-	runID := fmt.Sprintf("%d", runIDInt)
-	meta := jobMetaFrom(ap)
-
-	ownerLabels := target.PodOwnerLabels()
-	workerVersion := imageVersion(p.resolveWorkerImage(spec))
-
-	// 1. Stage the job Secret.
-	if err = traceStep(ctx, "stageJobSecret", func(ctx context.Context) error {
-		secret := p.buildSecret(target, secretName, planID, workerVersion, payload, jitConfig)
-		return p.Client.Create(ctx, secret)
-	}); err != nil {
-		return "", fmt.Errorf("provisioner: create Secret %s: %w", secretName, err)
-	}
-	// One of three lines per provisioned pod; Debug to keep per-job volume down
-	// at scale (Q87, Theme D).
-	log.Debug("job Secret created", "secret", secretName)
-
-	// 2. Count active pods for ceiling check.
-	var count int32
-	if err = traceStep(ctx, "countActivePods", func(ctx context.Context) error {
-		var cErr error
-		count, cErr = p.activePodCount(ctx, key.Namespace, ownerLabels)
-		return cErr
-	}); err != nil {
-		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return "", fmt.Errorf("provisioner: count active pods: %w", err)
-	}
-	span.SetAttributes(attribute.Int("gateway.active_pods", int(count)))
-
-	// 3. Ceiling enforcement.
-	priorityClass, held := ceilingCheck(spec, count)
-	span.SetAttributes(attribute.Bool("gateway.ceiling_held", held), attribute.String("gateway.priority_class", priorityClass))
-	if held {
-		log.Info("pod held by concurrency ceiling", "activePods", count)
-		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		err = fmt.Errorf("provisioner: concurrency ceiling reached (%d active pods)", count)
-		return "", err
-	}
-
-	// 4. Build and create the pod (with quota retry).
-	//
-	// No scale-up wait here (Q223, Q717): this tier charges its token BEFORE the claim,
-	// in Admit's rate rung, so a job that reaches this point already holds one. Waiting
-	// again would both double-charge the bucket and put the job back in the position
-	// the rung exists to remove — blocked with its GitHub lock held.
-	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
-		pod := p.buildPod(target, spec, podName, secretName, priorityClass, meta)
-		return p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
-	}); err != nil {
-		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return "", fmt.Errorf("provisioner: create Pod %s: %w", podName, err)
-	}
-	// Per-pod hot-path line; podName is on the logger context. Debug (Q87, Theme D).
-	log.Debug("worker pod created", "priorityClass", priorityClass)
-
-	// 5. Watch for pod completion (event-driven when a Waiter is wired; poll fallback otherwise).
-	var outcome PodOutcome
-	if err = traceStep(ctx, "waitForCompletion", func(ctx context.Context) error {
-		var wErr error
-		outcome, wErr = p.waitForCompletion(ctx, key.Namespace, podName)
-		return wErr
-	}); err != nil {
-		// Context cancelled or unrecoverable watch error. When the listener abandoned
-		// this one job, the pod is still running a job nothing will ever report, so
-		// reclaim it (Q501); a shutdown cancels every job context at once and must
-		// leave live workers alone. reclaimAbandonedWorker checks the cause.
-		p.reclaimAbandonedWorker(ctx, target, podName, log)
-		_ = p.deleteSecret(ctx, key.Namespace, secretName)
-		return "", err
-	}
-	duration := time.Since(start)
-	span.SetAttributes(
-		attribute.String("gateway.pod.phase", string(outcome.Phase)),
-		attribute.String("gateway.pod.reason", outcome.Reason),
-		attribute.Bool("gateway.pod.preempted", outcome.Preempted),
-		attribute.Bool("gateway.pod.node_shutdown", outcome.NodeShutdown),
-		attribute.Bool("gateway.pod.node_lost_before_start", outcome.NodeLostBeforeStart),
-		attribute.Bool("gateway.pod.externally_deleted", outcome.ExternallyDeleted),
-		attribute.Bool("gateway.pod.deleted_before_start", outcome.DeletedBeforeStart),
-		attribute.Float64("gateway.provision.duration_seconds", duration.Seconds()),
-	)
-	// Per-pod completion line; podName is on the logger context. Debug (Q87, Theme D).
-	log.Debug("worker pod completed",
-		"phase", outcome.Phase, "reason", outcome.Reason, "preempted", outcome.Preempted,
-		"nodeShutdown", outcome.NodeShutdown, "nodeLostBeforeStart", outcome.NodeLostBeforeStart,
-		"externallyDeleted", outcome.ExternallyDeleted,
-		"deletedBeforeStart", outcome.DeletedBeforeStart, "duration", duration)
-
-	// 6. Disruption recovery. Started here because this goroutine owns the pod and
-	// still holds the payload's identity; the scale-set tier, which has neither,
-	// recovers from the owning reconciler instead (RecoverEvictedScaleSetWorkers).
-	// The recovery itself outlives this goroutine on handleEviction's own bounded
-	// context — its re-run cannot land until GitHub concludes the original run,
-	// ~10 minutes after an ungraceful kill (Q503), and holding the TaskResult (and
-	// the fan-out completion behind it) for that long is not an option — so the
-	// done channel is deliberately not waited on.
-	//
-	// Four causes reach the same recovery. The kubelet's node-pressure eviction is the
-	// PodFailed/Evicted shape; kube-scheduler preemption deletes its victim instead, so
-	// it is recognised by the DisruptionTarget condition the outcome carried out of the
-	// wait (Q497); a node shutdown is recognised by its own DisruptionTarget reasons
-	// (Q1179); and a graceful external deletion — a drain, or a `kubectl delete pod`
-	// — is recognised by the deletion mark the outcome carried out of the wait (Q502).
-	// The deletion arm requires PodFailed: a worker whose job finished cleanly inside
-	// the termination grace period reported its own success and has nothing to re-run.
-	// The arms are ordered most-specific first — they are mutually exclusive in
-	// practice, and either way a single call spends a single slot of the run's one
-	// shared retry budget.
-	var cause string
-	switch {
-	case outcome.Phase == corev1.PodFailed && outcome.Reason == podReasonEvicted:
-		cause = recoveryCauseEviction
-	case outcome.Preempted:
-		cause = recoveryCausePreemption
-	case outcome.NodeShutdown:
-		cause = recoveryCauseNodeShutdown
-	case outcome.Phase == corev1.PodFailed && outcome.ExternallyDeleted:
-		cause = recoveryCauseDeletion
-	}
-	switch {
-	case cause == recoveryCauseEviction && outcome.OwnLimitEviction != "":
-		p.withholdOwnLimitRerun(target, runID, evictionTierClassic, log, outcome.OwnLimitEviction)
-	case cause != "":
-		_ = p.handleEviction(ctx, target, owner, repo, runID, log, spec.MaxEvictionRetries, spec.EvictionRetryDelay, evictionTierClassic, cause, rerunDisruption{})
-	}
-
-	// Pod-phase proxy of the job outcome, which the listener reports for this job's
-	// assignments (Q260 Option A). The AGC does not learn the workflow's real result —
-	// only the worker's runner binary reports it, and only for a job it actually ran —
-	// so PodFailed→failed and anything else→succeeded is the honest proxy.
-	//
-	// A worker taken away before any container started ran no step and registered no
-	// runner, so neither value describes it: succeeded concluded an assignment whose
-	// job never ran, and the listener had nothing to distinguish it from a clean run
-	// (Q628). It is reported abandoned instead, which tells the listener to report
-	// nothing for the delivery — completing it would conclude the run green
-	// (Q645/Q676) — and the run is force-cancelled here so it ends honestly in about
-	// a second rather than at GitHub's ~15-minute unstarted-job timeout (Q683).
-	//
-	// A worker whose node shut down before any container started is the same job that
-	// never ran, failed rather than deleted, so it takes this path too (Q1198); the
-	// node-shutdown arm above excludes it.
-	//
-	// Not when a recovery armed above: those causes already re-run the job, and
-	// preemption's own victim is most often a pod that never started (Q497). One
-	// recovery per disruption, not two.
-	switch {
-	case (outcome.DeletedBeforeStart || outcome.NodeLostBeforeStart) && cause == "":
-		result = broker.TaskResultAbandoned
-		log.Warn("worker pod was removed before it ran; reporting the job as abandoned and force-cancelling its run",
-			"phase", outcome.Phase, "nodeLost", outcome.NodeLostBeforeStart, "duration", duration)
-		p.forceCancelAbandonedRun(ctx, target, owner, repo, runID, evictionTierClassic, log, rerunDisruption{})
-	case outcome.Phase == corev1.PodFailed:
-		result = broker.TaskResultFailed
-	default:
-		result = broker.TaskResultSucceeded
-	}
-
-	// 7. Cleanup. The job Secret is always deleted here. The pod is deleted
-	// immediately only when the owner's completedPodTTL is zero; otherwise the
-	// owner's reconciler reaper deletes it once the TTL elapses — the reaper is
-	// also the restart-safe backstop for pods no goroutine watches.
-	if spec.CompletedPodTTL == 0 {
-		_ = p.deletePod(ctx, key.Namespace, podName)
-	}
-	_ = p.deleteSecret(ctx, key.Namespace, secretName)
-	return result, nil
 }
 
 // ScaleSetJob is one scale-set-assigned job to provision a worker for: the identity
