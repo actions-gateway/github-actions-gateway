@@ -18,6 +18,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every tenant namespace carries the actions-gateway.com labels](#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
@@ -246,6 +247,27 @@ Fix the named objects and run it again.
 
 **Rolling back** to the 1.9 release is safe, because 1.9 serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Action required before `v2.0.0`: a `Classic` RunnerSet now runs on the scale-set protocol
+
+**Who is affected:** a `RunnerSet` written at `v2alpha1` with `spec.acquisitionProtocol: Classic`.
+`v2beta1` and `v2` never served the field, so a set written at either already runs on the scale-set protocol.
+
+**What changed.** The AGC no longer has the classic acquisition tier (Q264).
+A set that asked for `Classic` registers a scale set named after its first `runnerLabels` entry and takes jobs through it, like every other set, and its `maxListeners` is ignored.
+The GMC's admission check that no two sets in one GitHub scope share a first label now applies to it too.
+
+**Before you upgrade,** list the sets that still carry the choice, which the conversion keeps in an annotation:
+
+```bash
+kubectl get runnersets.actions-gateway.com -A -o json \
+  | jq -r '.items[] | select(.metadata.annotations["conversion.actions-gateway.com/acquisition-protocol"] == "Classic") | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+For each one, confirm its first label is not the first label of another set whose gateway names the same GitHub org, enterprise or repository.
+Two such sets would register one scale set and both drive it, and admission does not re-check sets that already exist; rename one set's first label before upgrading.
+
+**Rolling back** to 1.10 returns the set to classic acquisition.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 
