@@ -282,7 +282,8 @@ Anything shorter is sent through the proxy, including `otel-collector.observabil
 `spec.tracing` has no CA field, so the AGC verifies a TLS collector only against the public roots in its image, and public CAs do not issue certificates for `.svc.cluster.local` names.
 An `https://` endpoint with a private-CA certificate therefore delivers nothing, and a proxied tenant, which must use the full name, has no TLS option.
 That is why the examples here use `http://` with `insecure: true`.
-The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, and any `resourceAttributes` you set, and no credentials.
+The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, any `resourceAttributes` you set, and the error text of a failed attempt.
+None of those attributes is a credential; the error text names the Secret or Pod and quotes the API server's message, which has not been audited for what it can echo.
 
 Add the policy in the tenant's namespace, naming your gateway and collector:
 
