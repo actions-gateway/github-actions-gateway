@@ -566,23 +566,24 @@ kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
 
 `runner version detected version=2.335.1` is the real answer for a custom image; `runner version not detected` means the image is not `actions/runner`-derived in the expected layout.
 
-**Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block.
-The AGC currently emits no spans of its own, so a collector receives nothing until Q1278 traces the provision path ([Distributed Tracing](observability-logging.md#distributed-tracing-agc)).
+**Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block; [Distributed Tracing](observability-logging.md#distributed-tracing-agc) lists the spans the AGC emits.
+On a CNI that enforces NetworkPolicy the spans reach the collector only once you add a policy allowing it, and a proxied tenant must also use the full `.svc.cluster.local` name.
+The example is plaintext because `spec.tracing` cannot supply a CA for an in-cluster collector's certificate ([Reaching the collector](observability-logging.md#reaching-the-collector)).
 Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default).
 `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
 ```yaml
 spec:
   tracing:
-    endpoint: https://otel-collector.observability:4317
+    endpoint: http://otel-collector.observability.svc.cluster.local:4317
+    insecure: true                      # plaintext; the link above says why
     sampler: parentbased_traceidratio   # optional
     samplerArg: "0.1"                    # optional — sample 10% of traces
     resourceAttributes:                  # optional
       deployment.environment: prod
-    # insecure: true   # only for a plaintext in-cluster collector; TLS is the default
 ```
 
-There is no field for OTLP auth headers: collector authentication is a network-layer concern (in-cluster collector, mutual TLS, or a service mesh), not a CR secret.
+There is no field for OTLP auth headers: collector authentication is a network-layer concern (in-cluster collector or a service mesh), not a CR secret.
 See [observability — enabling tracing on GMC-managed AGCs](observability-logging.md#enabling-tracing-on-gmc-managed-agcs).
 
 <a id="per-tenant-log-level"></a> **Optional — per-tenant log level.** `spec.logLevel` sets the log verbosity of this tenant's AGC and egress proxy: `info` (the default) or `debug`.

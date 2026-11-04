@@ -214,7 +214,7 @@ func run() error {
 	// tracing.Init installs an OTLP exporter only when an OTLP endpoint is
 	// configured (OTEL_EXPORTER_OTLP[_TRACES]_ENDPOINT) and OTEL_SDK_DISABLED is
 	// not "true"; otherwise the global no-op provider stays in place and the
-	// reconciler/provisioner spans are nearly free. Shutdown flushes buffered
+	// provisioner spans are nearly free. Shutdown flushes buffered
 	// spans on exit. Using context.Background() (not the signal context) keeps the
 	// flush working after SIGTERM cancels mgr.Start.
 	tracingShutdown, tracingEnabled, err := tracing.Init(context.Background(), version, slog.Default())

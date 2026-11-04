@@ -562,7 +562,7 @@ These are **breaking** for any dashboard, alert, recording rule, or trace query 
 All other metric names were audited and kept: every counter already ends in `_total`, every histogram already carries the `_seconds` base unit, and the gauge names are already conventional.
 (`pod_creation_latency_seconds` was considered for a `…_duration_seconds` rename but kept — `latency` is a recognised Prometheus term and the rename's blast radius across dashboards and recording-rule names outweighed the stylistic gain.)
 
-**Span attribute renames** (the span names themselves — `RunnerGroup.Reconcile`, `Provisioner.provision`, and the child spans — are unchanged):
+**Span attribute renames** (this audit kept the span names; the AGC's spans today are in [Distributed Tracing](observability-logging.md#distributed-tracing-agc)):
 
 | Old | New |
 | --- | --- |
