@@ -192,11 +192,16 @@ See [security §5 — credential handling](../design/05-security.md).
 
 ## Distributed Tracing (AGC)
 
-**The AGC currently emits no spans of its own.** Its one traced path, `Provisioner.provision` and its child spans, wrapped the classic acquisition tier, which `v2.0.0` removed; the scale-set provision path has no span yet, and [Q1278](../queue/Q1278.md) adds one.
-Configuring tracing still installs the exporter, so a collector receives nothing from the AGC until then.
+The per-tenant AGC emits **OpenTelemetry traces** for the job-to-pod path: one span per scale-set job, **`Provisioner.ProvisionScaleSetWorker`**, with child spans `stageJobSecret`, `countActivePods`, and `createPod`.
+The root span carries `k8s.namespace.name`, `gateway.owner.name`, `gateway.job.id`, `k8s.pod.name`, `gateway.active_pods`, `gateway.ceiling_held`, and `gateway.priority_class`.
+Any provisioning failure sets the root span's status to error, a job held by the concurrency ceiling included, and a failed phase also records the error on its own child span.
+Time between `countActivePods` ending and `createPod` starting is spent in the scale-up rate limit's wait, when one is configured.
+The AGC does not wait for the job to run, so the trace ends once the worker pod exists, and the job's own run time is not in it.
 
 > Span attribute names follow the [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/): Kubernetes-native attributes use the `k8s.*` keys (`k8s.namespace.name`, `k8s.pod.name`); project-specific attributes are namespaced under `gateway.`.
 > These keys were renamed in the Q205 naming audit — see [Breaking observability changes](observability-metrics.md#breaking-observability-changes-q205) for the old→new mapping.
+
+Each job is its own root trace, because nothing in the AGC ahead of the provision path starts a span or carries an inbound trace context.
 
 **Tracing is opt-in and off by default.** With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.
 

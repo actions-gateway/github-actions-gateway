@@ -566,8 +566,7 @@ kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
 
 `runner version detected version=2.335.1` is the real answer for a custom image; `runner version not detected` means the image is not `actions/runner`-derived in the expected layout.
 
-**Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block.
-The AGC currently emits no spans of its own, so a collector receives nothing until Q1278 traces the provision path ([Distributed Tracing](observability-logging.md#distributed-tracing-agc)).
+**Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block; [Distributed Tracing](observability-logging.md#distributed-tracing-agc) lists the spans the AGC emits.
 Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default).
 `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 

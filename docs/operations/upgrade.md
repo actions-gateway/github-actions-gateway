@@ -325,7 +325,7 @@ The reference rules drop the alerts and the recording rule that read them:
 | `actions_gateway:job_acquisition_success_rate:rate5m` | `actions_gateway:scaleset_provision_success_rate:rate5m` |
 
 The reference dashboards drop the panels that read the removed series, and chart the listener session gauge where they charted active sessions.
-The AGC's one OpenTelemetry span, `Provisioner.provision`, went with the classic path too, so a configured collector receives no AGC spans until [Q1278](../queue/Q1278.md) traces the scale-set path.
+The AGC's `Provisioner.provision` span went with the classic path too, and the scale-set path is traced as `Provisioner.ProvisionScaleSetWorker` instead, so a trace query or dashboard that filters on the old span name needs the new one ([Distributed Tracing](observability-logging.md#distributed-tracing-agc)).
 
 **Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
 
