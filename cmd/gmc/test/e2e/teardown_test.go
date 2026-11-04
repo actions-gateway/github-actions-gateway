@@ -30,6 +30,9 @@ var _ = Describe("E2E_GMC_Teardown", Ordered, func() {
 
 		By("waiting for provisioning to complete before testing teardown")
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
+		// The AGC is the gateway's, provisioned in a pass unordered against the
+		// proxy (Q1277); without it the removal assertions pass on an AGC that never existed.
+		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 	})
 
 	// Dump before AfterAll deletes the namespace; a managed resource that never

@@ -43,35 +43,36 @@ var _ = Describe("E2E_GMC_RBAC", Ordered, func() {
 		utils.DeleteNamespace(tenantNS)
 	})
 
+	// BeforeAll waits only for the proxy, which the EgressProxy reconciler owns;
+	// the ActionsGateway reconciler applies the AGC RoleBinding in its own pass,
+	// unordered against it (Q1277), so both AGC specs poll.
 	It("E2E_GMC_AGCServiceAccountHasRole: AGC ServiceAccount is bound to expected Role", func() {
 		By("checking RoleBinding subjects include the AGC ServiceAccount")
-		cmd := exec.Command("kubectl", "get", "rolebinding", agcName,
-			"-n", tenantNS,
-			"-o", "jsonpath={.subjects[0].name}",
-		)
-		out, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(Equal(agcName),
-			"RoleBinding subject should be the AGC service account")
+		Eventually(func(g Gomega) {
+			cmd := exec.Command("kubectl", "get", "rolebinding", agcName,
+				"-n", tenantNS,
+				"-o", "jsonpath={.subjects[0].name}",
+			)
+			out, err := utils.Run(cmd)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(out).To(Equal(agcName),
+				"RoleBinding subject should be the AGC service account")
+		}, 2*time.Minute, 2*time.Second).Should(Succeed())
 	})
 
 	It("E2E_GMC_AGCCanManagePods: AGC ServiceAccount can create and delete pods", func() {
 		By("checking that the agc role allows pod management")
-		cmd := exec.Command("kubectl", "auth", "can-i", "create", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":"+agcName,
-			"-n", tenantNS,
-		)
-		out, err := utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(ContainSubstring("yes"), "AGC SA should be able to create pods")
-
-		cmd = exec.Command("kubectl", "auth", "can-i", "delete", "pods",
-			"--as", "system:serviceaccount:"+tenantNS+":"+agcName,
-			"-n", tenantNS,
-		)
-		out, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(out).To(ContainSubstring("yes"), "AGC SA should be able to delete pods")
+		for _, verb := range []string{"create", "delete"} {
+			Eventually(func(g Gomega) {
+				cmd := exec.Command("kubectl", "auth", "can-i", verb, "pods",
+					"--as", "system:serviceaccount:"+tenantNS+":"+agcName,
+					"-n", tenantNS,
+				)
+				out, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).To(ContainSubstring("yes"), "AGC SA should be able to "+verb+" pods")
+			}, 2*time.Minute, 2*time.Second).Should(Succeed())
+		}
 	})
 
 	It("E2E_GMC_ManagerCanWriteEventsK8sIO: GMC manager SA can create events.k8s.io Events", func() {

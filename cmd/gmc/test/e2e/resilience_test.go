@@ -30,6 +30,9 @@ var _ = Describe("E2E_GMC_Resilience", Ordered, Serial, func() {
 
 		By("waiting for initial provisioning")
 		utils.WaitForDeploymentReady(tenantNS, proxyName, 4*time.Minute)
+		// The AGC is provisioned in a pass unordered against the proxy (Q1277), and
+		// GMCRestartPreservesState reads it once.
+		utils.WaitForDeploymentReady(tenantNS, agcName, 4*time.Minute)
 	})
 
 	// Dump before AfterAll deletes the namespace; a recovery that never lands
