@@ -17,3 +17,9 @@ v2,v2alpha1,v2beta1 ClusterRunnerTemplate.status
 v2,v2alpha1,v2beta1 ClusterRunnerTemplate.status.conditions
 v2,v2alpha1,v2beta1 ClusterRunnerTemplate.status.observedGeneration
 v2,v2alpha1,v2beta1 RunnerTemplate.status
+
+# The classic acquisition tier's two knobs. Q264 removed the tier, so nothing
+# reads either; v2alpha1 still serves them so a stored object round-trips, and
+# both go with the version (Q1167).
+v2alpha1 RunnerSet.spec.acquisitionProtocol
+v2alpha1 RunnerSet.spec.maxListeners

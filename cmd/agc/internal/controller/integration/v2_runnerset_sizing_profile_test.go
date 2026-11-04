@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -19,7 +20,6 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 )
 
 // TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources drives the Phase 3
@@ -53,7 +53,9 @@ func TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	r := startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	r := startRunnerSetReconcilerOn(t, srv)
 	// Seed a confident history for the measured set BEFORE creating it, so the
 	// reconciler persists status.sizingRecommendation (the store Resolve reads)
 	// ahead of the first job.
@@ -95,7 +97,7 @@ func TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources(t *testing.T) {
 	waitForSizingProfileState(t, ns, "fresh-set", v2alpha1.SizingProfileStateAwaitingSamples)
 
 	// Measured set: derived requests == limits (Guaranteed QoS), GPU untouched.
-	runner := containerNamed(t, workerPodFor(t, ns, "measured-set"), "runner")
+	runner := containerNamed(t, workerPodFor(t, srv, ns, "measured-set"), "runner")
 	for _, rl := range []corev1.ResourceList{runner.Resources.Requests, runner.Resources.Limits} {
 		assert.Equal(t, "500m", rl.Cpu().String(), "derived cpu")
 		assert.Equal(t, "2Gi", rl.Memory().String(), "derived memory")
@@ -104,7 +106,7 @@ func TestV2_RunnerSet_BinpackProfileProvisionsDerivedResources(t *testing.T) {
 	}
 
 	// Fresh set: template's static values until the history is confident.
-	runner = containerNamed(t, workerPodFor(t, ns, "fresh-set"), "runner")
+	runner = containerNamed(t, workerPodFor(t, srv, ns, "fresh-set"), "runner")
 	assert.Equal(t, "2", runner.Resources.Requests.Cpu().String(), "fresh set keeps the template cpu")
 	assert.Equal(t, "4Gi", runner.Resources.Requests.Memory().String(), "fresh set keeps the template memory")
 }
@@ -141,7 +143,9 @@ func TestV2_RunnerSet_ThroughputProfileProvisionsBurstableResources(t *testing.T
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	r := startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	r := startRunnerSetReconcilerOn(t, srv)
 	// One history, two sets: the only difference is the headroom percent, so a
 	// difference in the derived memory limit can only come from that field.
 	history := []v2alpha1.ContainerSizingRecommendation{{
@@ -181,7 +185,7 @@ func TestV2_RunnerSet_ThroughputProfileProvisionsBurstableResources(t *testing.T
 
 	// Default headroom (150%): requests from the history, memory limit is the
 	// 1536Mi observed peak x 1.5, and the CPU limit is gone so the job bursts.
-	runner := containerNamed(t, workerPodFor(t, ns, "default-headroom"), "runner")
+	runner := containerNamed(t, workerPodFor(t, srv, ns, "default-headroom"), "runner")
 	assert.Equal(t, "500m", runner.Resources.Requests.Cpu().String(), "cpu request from the history")
 	assert.Equal(t, "1Gi", runner.Resources.Requests.Memory().String(), "memory request from the history")
 	_, hasCPULimit := runner.Resources.Limits[corev1.ResourceCPU]
@@ -193,7 +197,7 @@ func TestV2_RunnerSet_ThroughputProfileProvisionsBurstableResources(t *testing.T
 	assert.Equal(t, "1", gpuLim.String(), "GPU limit must be byte-identical to the template")
 
 	// Explicit 200% headroom moves only the memory limit.
-	runner = containerNamed(t, workerPodFor(t, ns, "tuned-headroom"), "runner")
+	runner = containerNamed(t, workerPodFor(t, srv, ns, "tuned-headroom"), "runner")
 	assert.Equal(t, "500m", runner.Resources.Requests.Cpu().String(), "cpu request is unaffected by the headroom")
 	assert.Equal(t, "3Gi", runner.Resources.Limits.Memory().String(), "memory limit is the observed peak x the configured 200% headroom")
 }
@@ -244,7 +248,9 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	startRunnerSetReconcilerOn(t, srv)
 	// Deliberately NO sizing history is seeded for either set.
 	envelope := func() *v2alpha1.NodeShareSizing {
 		return &v2alpha1.NodeShareSizing{
@@ -280,7 +286,7 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "shared-node"}, &status))
 	require.Empty(t, status.Status.SizingRecommendation, "NodeShare must actuate with no recommendation at all")
 
-	pod := workerPodFor(t, ns, "shared-node")
+	pod := workerPodFor(t, srv, ns, "shared-node")
 	runner := containerNamed(t, pod, "runner")
 	// 8 cpu / 4 workers, 32Gi / 4 workers.
 	assert.Equal(t, "2", runner.Resources.Requests.Cpu().String(), "cpu request is the node share")
@@ -296,7 +302,7 @@ func TestV2_RunnerSet_NodeShareProfileDividesTheNodeEnvelope(t *testing.T) {
 
 	// maxRequests clamps the derived share, and the lift respects the clamp.
 	waitForSizingProfileState(t, ns, "clamped-node", v2alpha1.SizingProfileStateActive)
-	runner = containerNamed(t, workerPodFor(t, ns, "clamped-node"), "runner")
+	runner = containerNamed(t, workerPodFor(t, srv, ns, "clamped-node"), "runner")
 	assert.Equal(t, "1500m", runner.Resources.Requests.Cpu().String(), "maxRequests clamps the derived cpu share")
 	assert.Equal(t, "1500m", runner.Resources.Limits.Cpu().String(), "the lifted limit follows the clamped request")
 	assert.Equal(t, "8Gi", runner.Resources.Requests.Memory().String(), "memory has no clamp configured")
@@ -324,7 +330,9 @@ func TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	r := startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	r := startRunnerSetReconcilerOn(t, srv)
 	history := []v2alpha1.ContainerSizingRecommendation{{
 		Container: "runner",
 		Requests: corev1.ResourceList{
@@ -360,7 +368,7 @@ func TestV2_RunnerSet_ThroughputCPULimitInjectionIsReported(t *testing.T) {
 
 	// Run a job. The AGC builds the runner container with no CPU limit; the apiserver
 	// admits it with one.
-	pod := workerPodFor(t, ns, "capped")
+	pod := workerPodFor(t, srv, ns, "capped")
 	assert.Equal(t, v2alpha1.SizingProfileThroughput, pod.Annotations[provisioner.AnnotationSizingProfile],
 		"a profile-derived pod must be marked as such")
 	runner := containerNamed(t, pod, "runner")
@@ -398,10 +406,9 @@ func waitForSizingOverride(t *testing.T, ns, name string, wantStatus metav1.Cond
 // workerPodFor enqueues one job on the set's owner session and returns the
 // worker pod the provisioner builds for it — the only way to observe what
 // applySizingProfile actually produced, since the transform runs at pod build.
-func workerPodFor(t *testing.T, ns, set string) corev1.Pod {
+func workerPodFor(t *testing.T, srv *scalesettest.Server, ns, set string) corev1.Pod {
 	t.Helper()
-	id := enqueueJobOnSetSession(15*time.Second, set, nil, broker.RunnerJobRequestBody{})
-	require.NotEmpty(t, id, "a session for %s should register", set)
+	require.True(t, enqueueScaleSetJob(srv, set, 15*time.Second), "a session for %s should register", set)
 	var pod corev1.Pod
 	require.Eventually(t, func() bool {
 		var pods corev1.PodList

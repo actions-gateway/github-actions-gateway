@@ -41,7 +41,7 @@ Two more server facts, confirmed live in re-route #4:
 
 ### What the AGC does (our behaviour — from the code)
 
-`handleJob` ([`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)) per delivery:
+`handleJob` ([`goroutine.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)) per delivery:
 
 1. `AcquireJob(jobMessageId = RunnerRequestID)` → learns `planID` + a per-delivery job token (`AcquireJobResponse.JobAuthToken`).
 2. **Dedup gate** `ClaimJob(planID)` (post-acquire, #512): the **first** sibling to claim the `planID` **wins** and provisions; the **losers** skip provisioning and `return acquired=true` so their runner recycles.
@@ -280,8 +280,8 @@ The dominant signal was recycle churn: `recycle blocked by still-running consume
 
 1. GitHub fans one job to F ≈ 6 sibling deliveries; 1 wins and provisions a worker (job runs for **minutes**), F−1 are deduped losers.
 2. A deduped loser immediately tries to **recycle** its single-use slot, but GitHub still considers that runner **assigned to the job** (the Q259 422) until the winner completes **and** Option A fans `completejob` to release the sibling.
-3. So each loser slot is 422-blocked for the **winner's entire job runtime**, which **exceeds** the bounded recycle backoff (`registerAgentWithBusyRetry`, tens of seconds, [`pool.go:382`](../../../cmd/agc/internal/agentpool/pool.go)).
-   The backoff **exhausts**, the recycle fails, and the listener goroutine **exits** ([`pool.go:344`](../../../cmd/agc/internal/agentpool/pool.go)).
+3. So each loser slot is 422-blocked for the **winner's entire job runtime**, which **exceeds** the bounded recycle backoff (`registerAgentWithBusyRetry`, tens of seconds, [`pool.go:382`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go)).
+   The backoff **exhausts**, the recycle fails, and the listener goroutine **exits** ([`pool.go:344`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go)).
 4. Each fanned-out job thus strands and eventually loses F−1 listener slots; under sustained burst this collapses the pool faster than winners complete.
 
 This is a **classic-protocol topology cost** (single-use recycle Q114 + many-acquirers fan-out) that Option A's *accounting* fix does not touch.
@@ -316,7 +316,7 @@ The seam attributed in §7 is now fixed AGC-side (Q266), offline-tested, awaitin
 
 **The fix — defer the loser's recycle until its winner completes.** The loser's `422` cannot clear until the winner fans `completejob` out to that delivery (§5, Option A) — so recycling *before* the winner concludes is guaranteed to fail.
 Instead of recycling eagerly into that `422`, blowing the bounded backoff, and exiting the listener, a deduped loser now **holds its slot** and waits for the winner's conclusion signal, then recycles in place and resumes polling.
-The wait reuses the #512 claim registry: when a loser loses the `planID` claim to a still-running winner, `claimJob` hands back the claim's `WinnerConcluded` channel (closed exactly once when the winner's `Complete` runs), and the loser blocks on it before returning to the recycle path ([`multiplexer.go`](../../../cmd/agc/internal/listener/multiplexer.go), [`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)).
+The wait reuses the #512 claim registry: when a loser loses the `planID` claim to a still-running winner, `claimJob` hands back the claim's `WinnerConcluded` channel (closed exactly once when the winner's `Complete` runs), and the loser blocks on it before returning to the recycle path ([`multiplexer.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go), [`goroutine.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)).
 
 Key properties:
 
@@ -328,7 +328,7 @@ Key properties:
   With it off, losers fall back to the eager-recycle path (documented as the worse opt-out).
 - **Observability.** Each defer increments `actions_gateway_fanout_loser_recycle_deferred_total{outcome}` — `winner_concluded` (normal), `fallback_timeout` (alert-worthy: stuck winners), `context_cancelled` (shutdown).
 
-**Regression test.** `TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes` ([`goroutine_q266_test.go`](../../../cmd/agc/internal/listener/goroutine_q266_test.go)) drives a sustained fan-out burst through the `brokertest` fan-out model with a `RecycleAgent` that `422`s until the winner concludes (the live mechanism), and asserts the pool **holds** — no loser strands+exits while the winner runs, and each loser recycles in place on the winner's conclusion.
+**Regression test.** `TestListener_Q266_FanoutLoserDefersRecycleUntilWinnerCompletes` ([`goroutine_q266_test.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine_q266_test.go)) drives a sustained fan-out burst through the `brokertest` fan-out model with a `RecycleAgent` that `422`s until the winner concludes (the live mechanism), and asserts the pool **holds** — no loser strands+exits while the winner runs, and each loser recycles in place on the winner's conclusion.
 It FAILS against pre-Q266 behaviour (the eager losers exit) and needs no GKE turn-up.
 
 **Live re-benchmark (2026-07-05, [`gke-dogfood.md`](gke-dogfood-turnup-findings.md) re-route #7).** Q266's targeted seam is **confirmed eliminated live**: at moderate `maxListeners = 12` the fatal `deregister conflicting`/`recycle blocked` listener exits that collapsed the pool in §7 (41/38) were **0**; deduped losers **park** (busy-at-GitHub, pod-less) instead of exiting; Option A `completejob` (5) and dedup (7) fired.

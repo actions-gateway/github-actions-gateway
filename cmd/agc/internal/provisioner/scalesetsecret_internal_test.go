@@ -142,7 +142,7 @@ func TestProvisionScaleSetWorker_ReplayKeepsAnotherDeliverysSecret(t *testing.T)
 	p := NewProvisioner(fc, nil, nil)
 
 	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test", MaxWorkers: int32Ptr(1)})
-	require.NoError(t, fc.Create(ctx, p.buildSecret(target, scaleSetSecretName("job-replay"), "job-replay", "v", nil, "eyJ4IjoxfQ==")))
+	require.NoError(t, fc.Create(ctx, p.buildSecret(target, scaleSetSecretName("job-replay"), "job-replay", "v", "eyJ4IjoxfQ==")))
 
 	// The replay re-stages (AlreadyExists, tolerated) and then hits the ceiling. The
 	// Secret it found is not its to reclaim — the earlier delivery's pod mounts it.

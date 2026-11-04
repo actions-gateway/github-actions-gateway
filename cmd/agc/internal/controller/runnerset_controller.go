@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
@@ -36,45 +34,34 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-// runnerSetFinalizer is set on a RunnerSet so its in-process listener/agent state
-// and agent Secrets are cleaned up before the CR is removed. On the v2
-// actions-gateway.com domain, distinct from the v1 RunnerGroup finalizer so the
-// two controllers never contend.
+// runnerSetFinalizer is set on a RunnerSet so its in-process listener state is
+// cleaned up before the CR is removed. The name predates the scale-set tier and is
+// kept because every existing set already carries it.
 const runnerSetFinalizer = "actions-gateway.com/agentpool-cleanup"
 
 // RunnerSetReconciler reconciles v2alpha1 RunnerSet objects in the AGC. It is the
 // v2 counterpart of RunnerGroupReconciler: it resolves the RunnerSet's references
 // (gatewayRef → ActionsGateway, templateRef → RunnerTemplate/ClusterRunnerTemplate,
 // proxyRef → EgressProxy) at runtime via watch + enqueue, fails closed with a
-// NotFound condition until they resolve (§H.7), and once resolved drives the same
-// adaptive listener-goroutine pool the RunnerGroup controller does — provisioning
-// ephemeral worker pods per acquired job, owner-referenced to the real RunnerSet
-// through the provisioner Target seam.
-//
-// It keeps its own in-memory multiplexer/pool maps and condition channel, separate
-// from the RunnerGroupReconciler's, so the v1 and v2 paths never share runtime
-// state. v1 runtime semantics (job acquisition, ceilings, reaper, eviction/quota
-// tunables) are preserved exactly — only the owner object and the source of the
-// pod shape and proxy differ.
+// NotFound condition until they resolve (§H.7), and once resolved drives one
+// scale-set listener session per set — provisioning ephemeral worker pods per
+// acquired job, owner-referenced to the real RunnerSet through the provisioner
+// Target seam.
 type RunnerSetReconciler struct {
 	client.Client
 	// APIReader is the manager's uncached reader, for the reads an informer cache must
 	// not serve. Nil falls back to the cached client (tests).
 	APIReader    client.Reader
 	TokenManager *token.Manager
-	Registrar    agentpool.Registrar
-	BrokerConfig BrokerConfig
 	Metrics      *runnercore.Metrics
-	// ScaleSetMetrics holds the Prometheus counters for the ScaleSet acquisition tier
-	// (Q264 Option E). Nil disables scale-set observability (a Classic-only AGC needs
-	// none); the classic Metrics field is unaffected either way.
+	// ScaleSetMetrics holds the Prometheus counters for the scale-set listener. Nil
+	// disables them.
 	ScaleSetMetrics *scalesetlistener.Metrics
 	Log             *slog.Logger
 	Provisioner     *provisioner.Provisioner
 	// ImageResolver reads the runner version out of the worker image in its registry
 	// (Q988). Nil judges the image by its tag alone.
 	ImageResolver RunnerImageResolver
-	AgentKeyType  agentpool.KeyType
 
 	// GatewayName scopes this AGC to a single ActionsGateway under multi-gateway
 	// (§H.16 #1): it reconciles only the RunnerSets whose spec.gatewayRef.name
@@ -113,11 +100,6 @@ type RunnerSetReconciler struct {
 	// unit tests) leaves any persisted recommendation untouched.
 	Sizing SizingSource
 
-	// BaselineRecheckInterval is the cadence at which a RunnerSet is requeued while
-	// its multiplexer is below the desired listener count. Zero selects
-	// defaultBaselineRecheckInterval.
-	BaselineRecheckInterval time.Duration
-
 	// ProxyShareRecheckInterval is the cadence at which a RunnerSet whose egress
 	// wiring turns on a projected proxy share is requeued, in either direction of the
 	// grant. Zero selects defaultProxyShareRecheckInterval.
@@ -129,19 +111,12 @@ type RunnerSetReconciler struct {
 	// nothing will delete (Q968).
 	stopped atomic.Bool
 
-	multiplexersMu sync.Mutex
-	multiplexers   map[types.NamespacedName]*listener.Multiplexer
-	poolsMu        sync.Mutex
-	pools          map[types.NamespacedName]*agentpool.Pool
-
 	// scaleSetListeners holds the running scale-set acquisition listener per
-	// ScaleSet-protocol RunnerSet (Q264 P3d) — one session per scale set. Classic
-	// sets never appear here; the two acquisition tiers keep separate runtime state.
+	// RunnerSet — one session per scale set.
 	scaleSetListenersMu sync.Mutex
 	scaleSetListeners   map[types.NamespacedName]*scaleSetListenerHandle
 
-	// ScaleSetClientFactory builds the scale-set protocol client for a ScaleSet-protocol
-	// RunnerSet. Nil selects the production factory (buildScaleSetClient), which derives
+	// ScaleSetClientFactory builds the scale-set protocol client for a RunnerSet. Nil selects the production factory (buildScaleSetClient), which derives
 	// the config URL/API base from the resolved gateway's githubURL and routes through
 	// the per-tenant egress proxy. Tests inject a factory pointing at the scalesettest
 	// fake so the wiring is exercised offline.
@@ -150,9 +125,8 @@ type RunnerSetReconciler struct {
 	// ScaleSetStubBaseURL re-points the scale-set bootstrap at a fake-GitHub stub,
 	// for the deployed fake-GitHub e2e tier — the gateway's githubURL cannot name it,
 	// being pinned to https by the CRD and the webhook. Empty in production: main()
-	// sets it only from the STUB_AUTH_URL + STUB_BROKER_URL pair that also selects the
-	// classic tier's StubRegistrar, which reaches a GMC-provisioned AGC only under the
-	// testing-only --allow-agc-extra-env flag.
+	// sets it only from the STUB_AUTH_URL + STUB_BROKER_URL pair, which reaches a
+	// GMC-provisioned AGC only under the testing-only --allow-agc-extra-env flag.
 	ScaleSetStubBaseURL string
 
 	conditionCh chan conditionUpdate
@@ -278,12 +252,6 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *RunnerSetReconciler) ensureMaps() {
-	if r.multiplexers == nil {
-		r.multiplexers = make(map[types.NamespacedName]*listener.Multiplexer)
-	}
-	if r.pools == nil {
-		r.pools = make(map[types.NamespacedName]*agentpool.Pool)
-	}
 	if r.scaleSetListeners == nil {
 		r.scaleSetListeners = make(map[types.NamespacedName]*scaleSetListenerHandle)
 	}
@@ -299,7 +267,7 @@ func (r *RunnerSetReconciler) ensureMaps() {
 }
 
 // Reconcile drives a RunnerSet: resolve references, and once they resolve, ensure
-// the listener pool is running and worker pods are reaped.
+// the scale-set listener is running and worker pods are reaped.
 func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.reconcileCount.Add(1)
 	if r.Log == nil {
@@ -331,7 +299,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	r.drainEvents(&rs)
 
 	if !rs.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, log, &rs)
+		return r.reconcileDelete(ctx, &rs)
 	}
 
 	if !controllerutil.ContainsFinalizer(&rs, runnerSetFinalizer) {
@@ -359,7 +327,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// its ledger (Q1244). Ahead of reference resolution, so a set whose template or proxy
 	// is missing is still swept and its entries expire reported. Once per process per
 	// set; a failed read retries.
-	if r.Provisioner != nil && rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
+	if r.Provisioner != nil {
 		if err := r.Provisioner.AdoptPendingReruns(ctx, r.provisionerTarget(&rs)); err != nil {
 			log.Warn("could not read the failure ledger for parked re-runs", "error", err)
 		}
@@ -376,9 +344,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !res.resolved() {
 		// Stop any running listeners — a reference that vanished must not keep
 		// acquiring jobs (the per-job Resolve would fail them closed anyway, but
-		// stopping avoids the churn and reflects reality). Both tiers are stopped
-		// defensively; only the one this set actually runs is present.
-		r.stopMultiplexer(req.NamespacedName)
+		// stopping avoids the churn and reflects reality).
 		r.stopScaleSetListener(req.NamespacedName)
 		// Distinguish a referent deleted out from under a previously-resolved set
 		// (TemplateDeleted/ProxyDeleted, §H.8 degrade-not-block) from one that never
@@ -443,8 +409,8 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	r.setRunnerVersionStatus(&rs, refs.template)
 
 	// Surface the measured worker sizing recommendation and judge the template's
-	// ask against it (Q359 Phase 2). Advisory only — set before the protocol
-	// routing so both acquisition tiers persist it with their status writes.
+	// ask against it (Q359 Phase 2). Advisory only; the listener's status write
+	// persists it.
 	r.applySizingStatus(&rs, refs.template)
 
 	// Report a Throughput profile cancelled by an admission-injected CPU limit (Q489)
@@ -456,26 +422,23 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// 2. Recover evicted scale-set workers (Q417). Runs BEFORE the reaper: the
 	// evicted pod is the only record of which run to re-run, and the reaper deletes
-	// terminal pods once completedPodTTL elapses. It is a no-op for a classic set
-	// (whose pods carry no acquisition-protocol label) and for a set with nothing
-	// evicted. Deliberately not waited on — recovery waits out evictionRetryDelay
+	// terminal pods once completedPodTTL elapses. It is a no-op for a set with
+	// nothing evicted. Deliberately not waited on — recovery waits out evictionRetryDelay
 	// before calling GitHub, and a reconcile must not block on either.
-	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
-		if _, err := r.Provisioner.RecoverEvictedScaleSetWorkers(ctx, r.provisionerTarget(&rs)); err != nil {
-			// A failed scan must not stop the reconcile: the pods stay unclaimed, so
-			// the next reconcile retries them. Worth surfacing, not worth requeuing for.
-			log.Warn("scale-set eviction recovery scan failed", "error", err)
-		}
-		// 2b. Recover workers that were already gone when this process started (Q844) —
-		// the preemption and drain victims whose pod, the only record of the disruption,
-		// was deleted while no AGC was watching. Reads the in-flight set the listener
-		// persisted; runs once per process per set, and here rather than later because
-		// both the reaper below and the listener's own first poll retire the evidence it
-		// reads.
-		// Deliberately not waited on, for the same reason the scan above is not: the
-		// recovery waits out evictionRetryDelay before calling GitHub.
-		_ = r.recoverOrphanedScaleSetWorkers(ctx, log, &rs)
+	if _, err := r.Provisioner.RecoverEvictedScaleSetWorkers(ctx, r.provisionerTarget(&rs)); err != nil {
+		// A failed scan must not stop the reconcile: the pods stay unclaimed, so
+		// the next reconcile retries them. Worth surfacing, not worth requeuing for.
+		log.Warn("scale-set eviction recovery scan failed", "error", err)
 	}
+	// 2b. Recover workers that were already gone when this process started (Q844) —
+	// the preemption and drain victims whose pod, the only record of the disruption,
+	// was deleted while no AGC was watching. Reads the in-flight set the listener
+	// persisted; runs once per process per set, and here rather than later because
+	// both the reaper below and the listener's own first poll retire the evidence it
+	// reads.
+	// Deliberately not waited on, for the same reason the scan above is not: the
+	// recovery waits out evictionRetryDelay before calling GitHub.
+	_ = r.recoverOrphanedScaleSetWorkers(ctx, log, &rs)
 
 	// 3. Reap expired worker pods (terminal past completedPodTTL, Pending past
 	// pendingPodDeadline). Runs before the token fetch so cleanup keeps working
@@ -487,113 +450,14 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Route by acquisition protocol (Q264 P3d). A ScaleSet-protocol set is driven by a
-	// single scale-set listener session per set instead of the classic pool/multiplexer
-	// many-acquirers path; the field is immutable (P3a), so a set never switches tiers
-	// live. Classic (deprecated; the default is ScaleSet as of P5) and an unset field
-	// both fall through to the unchanged classic path below.
-	if rs.Spec.AcquisitionProtocol == v2alpha1.AcquisitionProtocolScaleSet {
-		res, err := r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts, observed)
-		if err != nil {
-			// controller-runtime discards a Result returned beside an error and warns
-			// that the reconciler returned both; the error path already requeues with
-			// backoff, so there is nothing to fold in.
-			return ctrl.Result{}, err
-		}
-		return r.withProxyShareRecheck(res, refs), nil
-	}
-
-	// 4. Installation token for agent management. Process-wide (one GitHub App per
-	// AGC); a failure affects every RunnerSet, so surface it and requeue.
-	instToken, err := r.TokenManager.Token(ctx)
+	result, err := r.reconcileScaleSetListener(ctx, log, &rs, refs, reapAfter, podCounts, observed)
 	if err != nil {
-		log.Error("failed to get installation token", "error", err)
-		r.recordEvent(&rs, corev1.EventTypeWarning, "TokenUnavailable", "GetToken",
-			"failed to obtain GitHub App installation token: %v", err)
-		r.setReadyCondition(&rs, false, v2alpha1.ReasonTokenUnavailable,
-			fmt.Sprintf("failed to obtain GitHub App installation token: %v", err))
-		if uerr := r.Status().Update(ctx, &rs); uerr != nil && !apierrors.IsConflict(uerr) {
-			log.Error("failed to write Ready condition", "error", uerr)
-		}
+		// controller-runtime discards a Result returned beside an error and warns
+		// that the reconciler returned both; the error path already requeues with
+		// backoff, so there is nothing to fold in.
 		return ctrl.Result{}, err
 	}
-
-	// 5. Ensure agent pool Secrets.
-	pool := r.getOrCreatePool(req.NamespacedName, &rs)
-	if err := pool.EnsureAgents(ctx, rs.Spec.MaxListeners, instToken); err != nil {
-		log.Error("EnsureAgents failed", "error", err)
-		r.recordEvent(&rs, corev1.EventTypeWarning, "AgentPoolError", "EnsureAgents",
-			"failed to provision agent Secrets: %v", err)
-		// Reflect the failure in status: no listener can run without the agent Secrets, so
-		// the set is Ready=False. Without this write the early return would leave a stale
-		// Ready=True until the next reconcile, misreporting the set as healthy (Q308).
-		r.setReadyCondition(&rs, false, v2alpha1.ReasonAgentProvisioningFailed,
-			fmt.Sprintf("failed to provision agent Secrets: %v", err))
-		if uerr := r.Status().Update(ctx, &rs); uerr != nil && !apierrors.IsConflict(uerr) {
-			log.Error("failed to write Ready condition", "error", uerr)
-		}
-		return ctrl.Result{}, err
-	}
-
-	// 6. Start or update the multiplexer.
-	mux := r.getOrCreateMultiplexer(ctx, req.NamespacedName, rs.DeepCopy(), pool)
-	mux.SetMaxListeners(rs.Spec.MaxListeners)
-	var startErr error
-	// Not measured, unlike the scale-set twin: the same missing guard, at the classic
-	// tier's own start path (Q968). A multiplexer started after the drain opens broker
-	// sessions this process will not delete.
-	if mux.ActiveCount() == 0 && rs.Spec.MaxListeners > 0 && !r.stopped.Load() {
-		if startErr = mux.Start(ctx); startErr != nil {
-			log.Warn("multiplexer restart failed", "error", startErr)
-			r.recordEvent(&rs, corev1.EventTypeWarning, "ListenerStartFailed", "StartMultiplexer",
-				"failed to restart listener goroutines: %v", startErr)
-		}
-	}
-
-	// 7. Update status.
-	active := mux.ActiveCount()
-	rs.Status.ActiveSessions = active
-	rs.Status.ActiveJobs = podCounts.active
-	rs.Status.PendingJobs = podCounts.pending
-	applyObservedRunnerVersion(&rs, observed)
-	rs.Status.ObservedGeneration = rs.Generation
-	// A listener-start failure surfaces as Ready=False/ListenerStartFailed rather than
-	// slipping through as the benign NoActiveSessions state (Q308).
-	ready, reason, msg := readyConditionForListeners(active, startErr, refs.templateSource)
-	r.setReadyCondition(&rs, ready, reason, msg)
-
-	// Worker-capacity conditions (Q303, Q906): the two-tier WorkerQuota ladder,
-	// WorkersUnschedulable, and WorkersNotStarting, so a stall shows as a condition
-	// rather than only rising pendingJobs with Ready=True. All advisory — none gates
-	// Ready. capacityRequeue folds into the requeue below and carries two deadlines:
-	// the scheduling grace, after which WorkersUnschedulable can flip, and the shorter
-	// startup re-check for a bound pod that has not yet declared itself either way.
-	capacityRequeue := r.applyWorkerCapacityConditions(ctx, &rs, refs.template, refs.gateway)
-
-	if err := r.Status().Update(ctx, &rs); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	requeueAfter := reapAfter
-	if capacityRequeue > 0 && (requeueAfter <= 0 || capacityRequeue < requeueAfter) {
-		requeueAfter = capacityRequeue
-	}
-	if rs.Spec.MaxListeners > 0 && mux.ActiveCount() < rs.Spec.MaxListeners {
-		if interval := r.baselineRecheckInterval(); requeueAfter <= 0 || interval < requeueAfter {
-			requeueAfter = interval
-		}
-	}
-	// A resolved share stays resolved only until the provider withdraws it, and the
-	// withdrawal deletes a ConfigMap nothing here watches. This poll is what bounds
-	// how long the set keeps acquiring jobs onto egress it is no longer entitled to.
-	return r.withProxyShareRecheck(ctrl.Result{RequeueAfter: requeueAfter}, refs), nil
-}
-
-func (r *RunnerSetReconciler) baselineRecheckInterval() time.Duration {
-	if r.BaselineRecheckInterval > 0 {
-		return r.BaselineRecheckInterval
-	}
-	return defaultBaselineRecheckInterval
+	return r.withProxyShareRecheck(result, refs), nil
 }
 
 // defaultProxyShareRecheckInterval is how often a RunnerSet re-reads a projected
@@ -629,25 +493,9 @@ func (r *RunnerSetReconciler) withProxyShareRecheck(res ctrl.Result, refs *resol
 	return res
 }
 
-// reconcileDelete stops goroutines, deletes agent Secrets, and removes the finalizer.
-func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (ctrl.Result, error) {
+// reconcileDelete stops the set's listener and removes the finalizer.
+func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, rs *v2alpha1.RunnerSet) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
-
-	r.stopMultiplexer(key)
-
-	pool := r.getPool(key)
-	if pool != nil {
-		instToken, err := r.TokenManager.Token(ctx)
-		if err != nil {
-			log.Warn("could not get token for pool cleanup; proceeding without deregistration", "error", err)
-			instToken = ""
-		}
-		if err := pool.DeleteAll(ctx, instToken); err != nil {
-			r.recordEvent(rs, corev1.EventTypeWarning, "AgentDeregistrationFailed", "Delete",
-				"failed to deregister/delete agent Secrets: %v", err)
-			return ctrl.Result{}, fmt.Errorf("pool.DeleteAll: %w", err)
-		}
-	}
 
 	r.cleanupLocalState(key)
 
@@ -658,25 +506,11 @@ func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, log *slog.Log
 	return ctrl.Result{}, nil
 }
 
-// stopMultiplexer stops and drops the multiplexer for key, if present. Idempotent.
-func (r *RunnerSetReconciler) stopMultiplexer(key types.NamespacedName) {
-	r.multiplexersMu.Lock()
-	if mux, ok := r.multiplexers[key]; ok {
-		mux.Stop()
-		delete(r.multiplexers, key)
-	}
-	r.multiplexersMu.Unlock()
-}
-
-// cleanupLocalState stops the multiplexer and drops the agent pool for key. Never
+// cleanupLocalState stops the listener and drops the in-memory state for key. Never
 // touches the API server, so it is safe on both the deletion and NotFound paths.
 func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
-	r.stopMultiplexer(key)
 	r.stopScaleSetListener(key)
 	r.pendingConds.forget(key)
-	r.poolsMu.Lock()
-	delete(r.pools, key)
-	r.poolsMu.Unlock()
 	// Drop the Q249 reap-blocking-sidecar gauge series so a deleted (or foreign-gateway)
 	// RunnerSet does not leave a stale value behind.
 	if r.Metrics != nil {
@@ -694,95 +528,6 @@ func (r *RunnerSetReconciler) recordEvent(rs *v2alpha1.RunnerSet, eventtype, rea
 	r.Recorder.Eventf(rs, nil, eventtype, reason, action, note, args...)
 }
 
-// getOrCreatePool returns the Pool for the given RunnerSet, creating it if needed.
-// The pool uses the RunnerSet naming scheme, which is disjoint from the RunnerGroup
-// one so a same-named v1 group and v2 set can coexist through a migration; the owner
-// reference is refreshed on every call so a set deleted and recreated under the same
-// name cannot leave the pool stamping a dead UID (Q466).
-func (r *RunnerSetReconciler) getOrCreatePool(key types.NamespacedName, rs *v2alpha1.RunnerSet) *agentpool.Pool {
-	r.poolsMu.Lock()
-	defer r.poolsMu.Unlock()
-	p, ok := r.pools[key]
-	if !ok {
-		p = agentpool.NewRunnerSetPool(r.Client, rs.Namespace, rs.Name, r.BrokerConfig.RunnerVersion,
-			rs.Spec.RunnerLabels, r.Registrar, r.AgentKeyType)
-		if r.Metrics != nil {
-			p.Metrics = r.Metrics
-		}
-		r.pools[key] = p
-	}
-	p.SetOwner(runnerSetOwnerRef(rs.Name, rs.UID))
-	return p
-}
-
-func (r *RunnerSetReconciler) getPool(key types.NamespacedName) *agentpool.Pool {
-	r.poolsMu.Lock()
-	defer r.poolsMu.Unlock()
-	return r.pools[key]
-}
-
-// getOrCreateMultiplexer returns the multiplexer for the RunnerSet, creating and
-// starting it if needed. The factory binds each listener goroutine to a
-// runnerSetTarget so the provisioner own-refs the real RunnerSet and re-resolves
-// its template/proxy per job.
-func (r *RunnerSetReconciler) getOrCreateMultiplexer(ctx context.Context, key types.NamespacedName, rs *v2alpha1.RunnerSet, pool *agentpool.Pool) *listener.Multiplexer {
-	r.multiplexersMu.Lock()
-	defer r.multiplexersMu.Unlock()
-
-	if mux, ok := r.multiplexers[key]; ok {
-		return mux
-	}
-
-	condUpdater := r.condUpdater()
-	brokerCfg := r.BrokerConfig
-	target := r.provisionerTarget(rs)
-
-	factory := func(index int) listener.Config {
-		agent := pool.ClaimAgent()
-		if agent == nil {
-			return listener.Config{Group: rs.Name, Namespace: rs.Namespace}
-		}
-		return r.newListenerConfig(rs, target, pool, brokerCfg, condUpdater, agent)
-	}
-
-	muxLog := r.Log.With("namespace", rs.Namespace, "group", rs.Name)
-	mux := listener.NewMultiplexer(factory, rs.Spec.MaxListeners, muxLog)
-	// Retain a completed job's planID claim until its terminal worker pod is reaped
-	// (completedPodTTL), so a late GitHub redelivery of the same planID is deduped
-	// rather than colliding on the lingering Completed pod (Q260 redelivery
-	// residual). Mirrors the RunnerGroup controller.
-	mux.ClaimLinger = provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL)
-	// The drain has run; starting here would open broker sessions nothing deletes
-	// (Q968). The v2 twin of the RunnerGroup guard: this function creates AND starts,
-	// and Reconcile reaches it before the restart branch's own check, so a multiplexer
-	// created fresh after the drain would start regardless of that one. Cached
-	// unstarted, so the caller's ActiveCount reads zero and it reports no listeners
-	// rather than failing.
-	if r.stopped.Load() {
-		r.multiplexers[key] = mux
-		return mux
-	}
-	if err := mux.Start(ctx); err != nil {
-		r.Log.Error("failed to start multiplexer", "error", err)
-	}
-	r.multiplexers[key] = mux
-	return mux
-}
-
-// newListenerConfig assembles the listener.Config for a single goroutine. It is
-// the v2 counterpart of RunnerGroupReconciler.newListenerConfig, wiring the
-// provisioner's owner-agnostic Handle/Admit against the RunnerSet Target and
-// delegating the rest to the shared assembleListenerConfig.
-func (r *RunnerSetReconciler) newListenerConfig(rs *v2alpha1.RunnerSet, target provisioner.Target, pool *agentpool.Pool, brokerCfg BrokerConfig, condUpdater runnercore.ConditionUpdater, agent *agentpool.Agent) listener.Config {
-	jobHandler := listener.JobHandlerFunc(nil)
-	admit := runnercore.AdmitFunc(nil)
-	if r.Provisioner != nil {
-		jobHandler = r.Provisioner.Handle(target)
-		admit = r.Provisioner.Admit(target)
-	}
-	return assembleListenerConfig(rs.Name, rs.Namespace, brokerCfg, condUpdater, r.eventRecorder(), r.Metrics, agent, r.TokenManager, jobHandler, admit, pool)
-}
-
 // drainConditions reads pending listener-pushed condition updates and merges those
 // for this RunnerSet into its status; others are re-enqueued.
 func (r *RunnerSetReconciler) drainConditions(rs *v2alpha1.RunnerSet) {
@@ -796,10 +541,6 @@ func (r *RunnerSetReconciler) drainConditions(rs *v2alpha1.RunnerSet) {
 		select {
 		case upd := <-r.conditionCh:
 			if upd.namespace == rs.Namespace && upd.name == rs.Name {
-				prev := meta.FindStatusCondition(rs.Status.Conditions, upd.condition.Type)
-				if runnercore.DropListenerCondition(prev, upd.condition) {
-					continue // refused: neither merged nor retained
-				}
 				meta.SetStatusCondition(&rs.Status.Conditions, upd.condition)
 				r.pendingConds.retain(key, upd.condition)
 			} else {
@@ -841,26 +582,6 @@ done:
 		case r.eventCh <- ev:
 		default:
 		}
-	}
-}
-
-// readyConditionForListeners computes the classic-path Ready condition from the number
-// of running listener goroutines and any error returned when (re)starting them.
-// Precedence: a running listener ⇒ Ready; otherwise a start failure ⇒
-// Ready=False/ListenerStartFailed — a distinct, actionable reason rather than the benign
-// NoActiveSessions state (Q308); otherwise Ready=False/NoActiveSessions. templateSource
-// names the resolution rung in the healthy message (auditable in status).
-func readyConditionForListeners(active int32, startErr error, templateSource string) (ready bool, reason, msg string) {
-	switch {
-	case active > 0:
-		return true, v2alpha1.ReasonListenerActive,
-			fmt.Sprintf("references resolved (template via %s); %d listener goroutine(s) running", templateSource, active)
-	case startErr != nil:
-		return false, v2alpha1.ReasonListenerStartFailed,
-			fmt.Sprintf("listener goroutines failed to start: %v", startErr)
-	default:
-		return false, v2alpha1.ReasonNoActiveSessions,
-			"references resolved; no listener goroutines are running"
 	}
 }
 
@@ -1024,9 +745,8 @@ func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSe
 
 // setRunnerVersionStatus judges the runner version this set's effective worker image
 // declares against GitHub's enforced registration minimum, and publishes the verdict
-// as RunnerVersionTooOld (Q715). It asks GitHub nothing, so it reports on the ScaleSet
-// tier too — where the acquisition protocol carries no runner version and the listener
-// therefore never sees the rejection that produces the classic tier's condition.
+// as RunnerVersionTooOld (Q715). It asks GitHub nothing: the scale-set protocol carries
+// no runner version, so the listener never sees a rejection to report.
 //
 // A nil template means the references have not resolved; the image the set would run is
 // unknown, so nothing is published rather than judging the AGC-wide default the set may
@@ -1044,17 +764,6 @@ func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, tem
 	cond := runnercore.WorkerRunnerVersionConditionWithRegistry(image, lookup, rs.Generation)
 
 	prev := conditionValue(rs.Status.Conditions, cond.Type)
-	// The two producers of this condition report different facts through one type. A
-	// session-sourced VersionTooOld is GitHub rejecting agent.version, which is the
-	// AGC's own pinned names.RunnerVersion and says nothing about the worker image; a
-	// healthy image reading therefore does not refute it, and writing over it would
-	// drop a live rejection from status. Which reasons are the listener's is asked of
-	// runnercore rather than compared here: the two consumers held the set at
-	// different widths, and a listener reason this one did not know about was wiped
-	// rather than deferred to (Q994).
-	if prev.Status == metav1.ConditionTrue && runnercore.IsSessionSourcedRunnerVersion(prev.Reason) {
-		return
-	}
 	meta.SetStatusCondition(&rs.Status.Conditions, cond)
 	// Warn once on a genuine transition into too-old so the deadline lands in the event
 	// stream while there is still time to change the image.
@@ -1139,10 +848,8 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 
 // deregisterScaleSetRunner returns the reaper's deregistration hook for this RunnerSet:
 // it removes the GitHub runner record a reaped worker pre-registered, closing the
-// registration leak at its source (Q550). It returns nil for a set with no running
-// scale-set listener — a classic set, or one whose listener has not started — because
-// the scale-set client is the listener's, and there is no record to remove on the
-// classic tier anyway.
+// registration leak at its source (Q550). It returns nil for a set whose listener has
+// not started, because the scale-set client is the listener's.
 //
 // Best-effort by construction: a record the ephemeral runner already removed is a
 // no-op, a record still running a job must be kept (RunnerBusyError), and any other
@@ -1168,8 +875,7 @@ func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2alpha1.RunnerSet, l
 // run behind a worker pod the deadline reap just removed while it was still Pending, and
 // queue it for automatic re-run once capacity returns (Q766). The recovery is deliberately
 // not waited on — the force-cancel runs bounded on its own detached context, and a
-// reconcile must not stall on GitHub — and is a no-op on a Classic-protocol set, whose
-// pods carry no acquisition-protocol label.
+// reconcile must not stall on GitHub.
 func (r *RunnerSetReconciler) recoverAbandonedRun(rs *v2alpha1.RunnerSet) func(context.Context, *corev1.Pod) {
 	if r.Provisioner == nil {
 		return nil
@@ -1285,9 +991,6 @@ func (r *RunnerSetReconciler) recoverDisruptedWorkerPod(ctx context.Context, obj
 		if err := r.Get(ctx, key, &rs); err != nil {
 			r.Log.Debug("disrupted scale-set worker's RunnerSet is not readable; leaving it to the recovery scan",
 				"namespace", key.Namespace, "name", key.Name, "podName", pod.Name, "error", err)
-			return
-		}
-		if rs.Spec.AcquisitionProtocol != v2alpha1.AcquisitionProtocolScaleSet {
 			return
 		}
 		if _, err := r.Provisioner.RecoverDisruptedScaleSetWorker(ctx, r.provisionerTarget(&rs), pod); err != nil {

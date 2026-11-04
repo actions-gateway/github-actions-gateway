@@ -159,7 +159,7 @@ Expected state after a healthy deployment:
 - AGC Deployment: `READY 1/1`.
 - Proxy Deployment: `READY` count >= `minReplicas`.
 - HPA: `TARGETS` showing a CPU percentage (not `<unknown>`).
-- Each RunnerGroup has at least one listener session (`actions_gateway_active_sessions > 0`).
+- Each RunnerSet's listener holds its session (`actions_gateway_scaleset_session_open == 1`).
 
 ---
 
@@ -556,7 +556,7 @@ The condition clears automatically on the next reconcile once a worker pod sched
 
 **Symptoms.** `kubectl get runnerset` shows a `WorkerCapacityDeclined=True` condition and a `WorkerCapacityDeclined` Warning event.
 Jobs sit **queued at GitHub** and are never picked up — no worker pods are being created, and no jobs are being cancelled either.
-On the classic tier `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` climbs; on the default `ScaleSet` tier `actions_gateway_scaleset_advertised_capacity` has dropped and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the remainder of the ceiling.
+`actions_gateway_scaleset_advertised_capacity` has dropped and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` holds the remainder of the ceiling.
 Those two count the *cost* of the refusal; the gate's own state is `actions_gateway_runnerset_worker_capacity_declined`, which reads `1` under the `reason` label below and is emitted only for a set that opted in — so `max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)` is the fleet-wide "which sets are gated, and on what evidence" query.
 
 **Cause.** This is **deliberate, and only ever happens on a set that opted in.** The runner set has `spec.capacityGate.mode: Observe` (Q405, Q406, Q470), and the signal the gate reads is currently saying the cluster cannot place another worker pod of this set's shape.
@@ -585,8 +585,8 @@ A set with no `capacityGate` (the default) never carries this condition at all �
 > A latched set is invisible to the scheduler-side signals: the pod that produced the verdict is gone, so `WorkersUnschedulable` — and its gauge — is back to `0` while intake is still throttled.
 > `worker_capacity_declined{reason="AwaitingProbe"}` is the series that stays `1`, which is why the gauge carries the reason.
 
-**What alerts on this.** Two ticket-severity rules cover the gate, one per acquisition tier: [`ActionsGatewayCapacityGateRejectingJobs`](runbook.md#actionsgatewaycapacitygaterejectingjobs) on the classic tier and [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) on the default `ScaleSet` one.
-Both watch the *cost* series above rather than `worker_capacity_declined` itself, and the scale-set rule additionally requires the set to have been assigned work in the last hour.
+**What alerts on this.** The ticket-severity rule [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) covers the gate.
+It watches the *cost* series above rather than `worker_capacity_declined` itself, and requires the set to have been assigned work in the last hour.
 That is deliberate: the gauge alone cannot tell a gate that is costing throughput from the harmless latched state this section describes, so alerting on it directly would open a ticket against an idle set doing exactly what it should.
 
 **Diagnostics.**
@@ -1187,13 +1187,12 @@ Use `CIDR`, or ask the platform operator to enable a backend.
 
 ## AGC CrashLoopBackOff or Not Acquiring Jobs
 
-**Symptoms.** The AGC pod is restarting repeatedly, or it is running but `actions_gateway_active_sessions` is zero and `actions_gateway_jobs_acquired_total` is not incrementing even when jobs are queued.
+**Symptoms.** The AGC pod is restarting repeatedly, or it is running but `actions_gateway_scaleset_session_open` is `0` and `actions_gateway_scaleset_jobs_assigned_total` is not incrementing even when jobs are queued.
 
 **Likely causes.**
 - GitHub App Secret is missing, malformed, or contains an invalid private key.
 - GitHub App `installationId` or `appId` is wrong.
 - The proxy pool is not reachable from the AGC (network policy or proxy pod not ready).
-- The AGC binary was built with an incompatible runner version (GitHub returns 400 on session creation).
 
 **Diagnostics.**
 
@@ -1550,7 +1549,7 @@ kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejecte
 
 ## Worker Pods Stuck Pending
 
-**Symptoms.** Jobs are acquired (`actions_gateway_jobs_acquired_total` increments) but worker pods remain in `Pending` state for more than 60 seconds.
+**Symptoms.** Jobs are assigned (`actions_gateway_scaleset_jobs_assigned_total` increments) but worker pods remain in `Pending` state for more than 60 seconds.
 `pod_creation_latency_seconds` p95 exceeds the 15s SLO target.
 
 **Likely causes.**
@@ -4239,9 +4238,8 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 ## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
 
 > Applies to the `v2alpha1` (`actions-gateway.com`) API.
-> `acquisitionProtocol` selects how the AGC acquires jobs for a runner set: `ScaleSet` (**the default** as of Q264 P5 — the runner-scale-set message-queue protocol, Q264 Option E) or `Classic` (**deprecated** — the per-runner broker protocol).
-> Leaving the field unset selects `ScaleSet`.
-> Both protocols match on the whole `runnerLabels` set, so a multi-label set no longer has to pin `Classic`.
+> `acquisitionProtocol` no longer changes how the AGC acquires jobs: every set acquires through a scale set, whatever the field says ([upgrade note](upgrade.md#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)).
+> `v2alpha1` still accepts and validates it, so the rejections below can still fire; the field goes with `v2alpha1` at `v2.0.0`.
 
 **Symptoms.** Creating or updating a `RunnerSet` is rejected with one of:
 

@@ -44,14 +44,10 @@ func (s deleteSite) String() string { return s.file + " " + s.fn }
 // pod-only: "not a worker pod" is a judgement the reviewer of a new delete has to
 // make, and recording it is what makes the omission of a real one visible.
 var declaredDeleteSites = map[deleteSite]string{
-	{"internal/provisioner/completion.go", "(*Provisioner).reclaimAbandonedWorker"}:            "worker pod — stamped deletion-reason=job_abandoned before the delete (Q501)",
-	{"internal/provisioner/completion.go", "(*Provisioner).deletePod"}:                         "worker pod, unstamped — the completedPodTTL=0 cleanup of a pod that has already reached its terminal phase, so the deletion request lands after the container's recorded exit and externallyDeletedBeforeTerminal rejects it",
 	{"internal/provisioner/completion.go", "(*Provisioner).deleteSecret"}:                      "job Secret, not a worker pod",
 	{"internal/provisioner/provisioner.go", "(*Provisioner).replaceStaleScaleSetSecret"}:       "job Secret of a worker already gone, not a worker pod (Q1174)",
 	{"internal/controller/runner_shared.go", "(reapTarget).delete"}:                            "worker pod — stamped with the reap reason before the delete (Q502)",
 	{"internal/controller/runnerset_controller.go", "(*RunnerSetReconciler).workerPodHandler"}: "not a delete — forwards a pod Delete watch event to the RunnerSet enqueue after the Q555 snapshot",
-	{"internal/agentpool/pool.go", "(*Pool).EnsureAgents"}:                                     "agent Secret, not a worker pod",
-	{"internal/agentpool/pool.go", "(*Pool).DeleteAll"}:                                        "agent Secret, not a worker pod",
 }
 
 // boundarySpec is a test that pins the deletion boundary, and whether it can run
@@ -140,6 +136,7 @@ var heavyTierRoots = []string{
 // count" is the judgement a sweep exists to make explicit.
 var nonBoundaryFiles = map[string]string{
 	"testdata/gmc/test/e2e/e2e_test.go":                                      "a jsonpath readiness template filters out pods that are mid-delete; no assertion about the mark",
+	"../controller/integration/v2_runnerset_capacity_gate_test.go":           "skips mid-delete worker pods when counting in-flight jobs for the advertised-capacity assertion; no assertion about the mark",
 	"testdata/gmc/internal/controller/integration/v2_teardown_test.go":       "asserts an ActionsGateway CR is mid-deletion; CR finalizers, not worker pods",
 	"testdata/gmc/internal/controller/integration/priorityclass_vap_test.go": "asserts a RunnerSet CR is held deleting by its finalizer; an admission-policy subject",
 	"testdata/gmc/internal/controller/integration/reconcile_counter_test.go": "reconcileCounter skips an EgressProxy CR that is mid-deletion; no worker pods",

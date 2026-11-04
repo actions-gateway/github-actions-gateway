@@ -31,9 +31,7 @@ import (
 // Q501) — re-running either would turn cleanup into a re-run trigger. Every AGC-issued
 // delete of a worker that has not already reached its terminal phase is therefore
 // preceded by an AnnotationDeletionReason stamp, and both tiers' detection treats a
-// stamped pod's deletion as the AGC's own. The completedPodTTL=0 cleanup in
-// provisioner.go is the one unstamped delete and needs no stamp: it follows the
-// container's recorded exit, which the ordering below already excludes.
+// stamped pod's deletion as the AGC's own.
 //
 // A deletion path added later owes that exclusion, and owes the specs too. What a
 // worker pod publishes at its terminal phase is exactly what those specs assert, so a

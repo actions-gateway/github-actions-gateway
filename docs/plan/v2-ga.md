@@ -8,7 +8,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > **Scoped 2026-10-09**, after `v1.9.0` tagged on 2026-10-05: the [scope ledger](#scope-ledger) is the release's record.
 > Phase 3's storage advance ships first, in its own release: Q1086 landed it for [1.10](archive/release-1.10.md), `v2` storing on every kind and `gag-migrate storage-version` rewriting what is stored, decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
-> The removals follow in `v2.0.0`: Q273 removed `v1alpha1` on `main`, and [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub and [Q264](../queue/Q264.md) for classic remain; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on both.
+> The removals follow in `v2.0.0`: Q273 removed `v1alpha1` and Q264 removed classic on `main`, and [Q1167](../queue/Q1167.md) for `v2alpha1`, `v2beta1` and the hub remains; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md), blocked on it.
 > The Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The phase table below is the real state.
 
@@ -19,7 +19,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | 0 | Soak criteria + Definition of Done audit recorded (this change) | S | ✅ Done — this change |
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
 | 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ✅ Done in Q413: `v2` is a second conversion spoke and the hub stays at `v2beta1` ([why](#the-hub-stays-at-v2beta1)) |
-| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance landed for 1.10 in Q1086, and the release gate's `storage` leg takes its dogfood reading (Q1171); Q273's `v1alpha1` removal is on `main`, and [Q1167](../queue/Q1167.md) and [Q264](../queue/Q264.md) remain; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
+| 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance landed for 1.10 in Q1086, and the release gate's `storage` leg takes its dogfood reading (Q1171); Q273's `v1alpha1` removal and Q264's classic removal are on `main`, and [Q1167](../queue/Q1167.md) remains; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
 | 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
 
 ## Scope ledger
@@ -34,13 +34,15 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1263; step 4 of [the split](q1167-v2-retype-split.md) |
 | Q273 | Remove the `v1alpha1` group and `gag-migrate`'s fan-out (Phase 3) | `2.0-gate` | ✅ landed: no `actions-gateway.github.com` kind, controller, CRD or webhook is left, and `gag-migrate` keeps only `storage-version` |
 | Q1275 | Give the shipped alerts and dashboards scale-set twins before Q264 | `2.0-gate` | ✅ landed: `ActionsGatewayScaleSetNoSession` pages on a listener holding no session and `ActionsGatewayMessagePollFailing` tickets an open one whose polls fail, both reading series the scale-set listener writes; the tenant and platform dashboards chart what a scale set has queued at GitHub |
-| [Q1274](../queue/Q1274.md) | Port the e2e suite from classic to the scale-set tier, so Q264 can clear the merge queue's e2e lanes | `2.0-gate` | 🔲 open |
-| [Q264](../queue/Q264.md) | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | 🔲 lands before Q1263 ([why](q1167-v2-retype-split.md#where-q264s-boundary-falls-before-the-agc-retype)) |
+| Q1274 | Port the e2e suite from classic to the scale-set tier, so Q264 can clear the merge queue's e2e lanes | `2.0-gate` | ✅ landed: every fake-GitHub spec runs on the scale-set tier, and the specs only classic could express are deleted; the live-GitHub suite's port is [Q1272](../queue/Q1272.md) |
+| Q264 | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | ✅ landed: no AGC or GMC code reads `acquisitionProtocol` or `maxListeners`, and no shipped alert or dashboard panel reads a series it removed; what operators can still see of the tier is [Q1273](../queue/Q1273.md), and the classic code nothing can reach is [Q1272](../queue/Q1272.md), not a gate |
 | Q1262 | Retype the GMC onto `api/v2` (Phase 3) | `2.0-gate` | ✅ landed, with the classic-reading trio left on `v2alpha1` for Q1167 ([why](q1167-v2-retype-split.md#what-q1262-left-on-the-older-versions)) |
-| [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 3 of [the split](q1167-v2-retype-split.md): after Q273 and Q264 |
+| [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 3 of [the split](q1167-v2-retype-split.md): Q273 and Q264 have landed |
 | Q1258 | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | ✅ landed: the admission policies and the GMC read only the `actions-gateway.com` tenant marker, privileged grant and downgrade annotation |
 | Q1271 | The GMC deletes its Secret-reader RoleBinding from ex-tenant namespaces | `2.0-gate` | ✅ landed: the GMC deletes its own binding once a namespace loses the tenant marker, through a delete-only exception in `gmc-tenant-resource-guard` |
-| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167 and Q264 |
+| [Q1273](../queue/Q1273.md) | Retire the classic tier ledgers, runbooks and unread AGC env vars | `2.0-gate` | 🔲 open |
+| [Q1278](../queue/Q1278.md) | Trace the scale-set provision path; the AGC emits no spans after Q264 | `2.0-gate` | 🔲 open |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🚫 blocked on Q1167, Q1273 and Q1278 |
 | Q555 | Detect flaky jobs and record each failure's platform context | `2.0-gate` | ✅ landed on the scale-set tier: the failure ledger's `failures` map, the worker snapshot, the pairing and its three metrics; the dogfood readings it rests on are [Q1236](../queue/Q1236.md) |
 | Q1183 | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | ✅ landed on the scale-set tier: the out-of-memory class, its stampede breaker and the per-job memory floor, without R12's dogfood reproduction; the deferred wait landed in Q1244 and the misclassification alert in Q1245, neither gated |
 | Q1181 | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | ✅ landed on the scale-set tier: `run_cancelled` on every arm, `attempt_limit`, `run_too_old` and `superseded` before the budget is reserved; classic takes none, and Q264 removes it |
@@ -57,8 +59,8 @@ The ledger takes a row for each item that merges onto the released surface befor
 Q1184, the proxy failure attribution retry reads, is not here: it gates 1.10.
 Unlike the removals, none of these waits on the 1.10 tag.
 
-One row ends with the release rather than ships in it.
-Q416, a classic-listener defect parked until classic removal slips, is retired when Q264 lands.
+One row ended with the release rather than shipping in it.
+Q416, a classic-listener defect parked until classic removal slipped, was retired when Q264 landed.
 
 ## Why this is gated on a soak, not a date
 
@@ -201,7 +203,7 @@ That ordering is the whole reason 1.9 exists, and it is also what makes the alia
 
 - `v1alpha1` (the `actions-gateway.github.com` group) — Q273, landed
 - `v2alpha1` — this plan
-- classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — [Q264](../queue/Q264.md)
+- classic acquisition machinery and the transitional `acquisitionProtocol` / `maxListeners` fields — Q264, landed; the field declarations leave with `v2alpha1`
 - `v2beta1`, and with it the `CiliumFQDN`/`CalicoFQDN` aliases: decided 2026-09-08, [v2beta1-retirement.md](v2beta1-retirement.md), and announced separately because `release-1.3.md` did not carry it
 
 `v2beta1` is the one removal Rule 4b constrains, and 1.9 is the release that satisfies it: it serves `v2beta1` and `v2` side by side without moving storage, so this tag is free to advance.
@@ -258,8 +260,8 @@ The last two joined the list from the Q776 re-walk below.
 That list is prose and this section is archived at the cut, so the machine-readable form is the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), which carries every `actions_gateway_*` series rather than only the omissions, and which `make metric-tiers-check` holds to the source.
 The two are reconciled by that gate in both directions, so a name here that the ledger does not call classic-only fails.
 
-**Alerting already has its analog:** `job_acquisition_errors_total` is classic-only, but [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` alongside the classic `job_acquisition_success_rate`, so the shipped rules do not go silent at the cut.
-`active_sessions` is likewise classic-only with `scaleset_jobs_assigned_total` as the documented substitute.
+**Alerting has its analog:** `job_acquisition_errors_total` is classic-only, and [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` in place of the classic `job_acquisition_success_rate`, which Q264 removed with the series it read.
+`active_sessions` is likewise classic-only, and `ActionsGatewayScaleSetNoSession` reads its substitute, `scaleset_session_open` (Q1275).
 
 Both were genuine gates, not nice-to-haves: eviction recovery and the pre-claim quota gate are headline capabilities in [01-executive-summary.md](../design/01-executive-summary.md), [README.md](../../README.md), and [why-gag.md](../why-gag.md), all of which describe them as properties of the system rather than of one acquisition tier.
 Removing classic before Q417 and Q443 landed would have made those claims false at the same moment the only tier that satisfied them disappeared.

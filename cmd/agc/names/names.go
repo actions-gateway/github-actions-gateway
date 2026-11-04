@@ -36,17 +36,13 @@ const WorkerSAName = "actions-gateway-worker"
 
 // RunnerVersion is the pinned actions/runner version embedded in the default
 // worker image. It is the single source of truth for the runner version:
-//   - cmd/agc/internal/provisioner derives DefaultWorkerImage from it.
-//   - cmd/gmc injects it into the AGC Deployment as GITHUB_RUNNER_VERSION, which
-//     the AGC forwards as agent.version on CreateSession. GitHub validates the
-//     runner version at session creation, so an empty or wrong value risks
-//     rejection (the runner-version contract — see Q71/Q118 in docs/STATUS.md
-//     and the milestone-4 plan note).
+//   - cmd/agc/internal/provisioner derives DefaultWorkerImage from it, and falls
+//     back to it for the version label of a worker image whose reference has no tag.
+//   - cmd/gmc injects it into the AGC Deployment as GITHUB_RUNNER_VERSION, which no
+//     AGC code reads; Q1272 removes the injection.
 //
-// It describes the AGC's own virtual runner — the listener half of the protocol,
-// which the AGC implements regardless of which image a worker pod runs. The runner
-// version a tenant's spec.workerImage ships is a separate fact, detected per
-// RunnerGroup/RunnerSet and checked against MinRunnerVersion (Q715).
+// The runner version a tenant's spec.workerImage ships is a separate fact, detected
+// per RunnerSet and checked against MinRunnerVersion (Q715).
 //
 // It MUST equal the FROM tag in the root Dockerfile's `worker` stage; the
 // lockstep test in runner_version_test.go enforces that so a future bump cannot

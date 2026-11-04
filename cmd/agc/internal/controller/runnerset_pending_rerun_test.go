@@ -27,7 +27,6 @@ func TestRunnerSetReconcile_AdoptsParkedRerunsBeforeReferencesResolve(t *testing
 	ns := "team-a"
 	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer}
-		rs.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolScaleSet
 	})
 	var ledgerReads int
 	c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).WithStatusSubresource(rs).

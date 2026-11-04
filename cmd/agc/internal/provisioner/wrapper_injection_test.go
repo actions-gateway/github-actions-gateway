@@ -3,7 +3,6 @@ package provisioner_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -53,9 +52,7 @@ func TestProvisioner_WrapperInjection_ImageVolume(t *testing.T) {
 	p.UseImageVolume = true
 
 	rg := newRG("mygroup", "team-a")
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-iv", stubPayload(1), "") }()
-	require.Eventually(t, func() bool { return findPod(ctx, t, fc, "team-a") != nil }, 2*time.Second, 5*time.Millisecond)
+	require.NoError(t, rg.provision(ctx, p, "plan-iv"))
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
 
@@ -79,9 +76,6 @@ func TestProvisioner_WrapperInjection_ImageVolume(t *testing.T) {
 		}
 	}
 	assert.True(t, mounted, "runner must mount the wrapper volume")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 func TestProvisioner_WrapperInjection_InitContainer(t *testing.T) {
@@ -93,9 +87,7 @@ func TestProvisioner_WrapperInjection_InitContainer(t *testing.T) {
 	p.UseImageVolume = false
 
 	rg := newRG("mygroup", "team-a")
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-init", stubPayload(1), "") }()
-	require.Eventually(t, func() bool { return findPod(ctx, t, fc, "team-a") != nil }, 2*time.Second, 5*time.Millisecond)
+	require.NoError(t, rg.provision(ctx, p, "plan-init"))
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
 
@@ -116,9 +108,6 @@ func TestProvisioner_WrapperInjection_InitContainer(t *testing.T) {
 
 	runner := runnerOf(t, pod)
 	assert.Equal(t, []string{wrapperPath}, runner.Command)
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 func TestProvisioner_WrapperInjection_Disabled(t *testing.T) {
@@ -129,9 +118,7 @@ func TestProvisioner_WrapperInjection_Disabled(t *testing.T) {
 	// WrapperImage intentionally empty → no injection.
 
 	rg := newRG("mygroup", "team-a")
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-off", stubPayload(1), "") }()
-	require.Eventually(t, func() bool { return findPod(ctx, t, fc, "team-a") != nil }, 2*time.Second, 5*time.Millisecond)
+	require.NoError(t, rg.provision(ctx, p, "plan-off"))
 	pod := findPod(ctx, t, fc, "team-a")
 	require.NotNil(t, pod)
 
@@ -139,7 +126,4 @@ func TestProvisioner_WrapperInjection_Disabled(t *testing.T) {
 	assert.Empty(t, pod.Spec.InitContainers)
 	runner := runnerOf(t, pod)
 	assert.Nil(t, runner.Command, "runner command must be left to the image entrypoint when injection is disabled")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }

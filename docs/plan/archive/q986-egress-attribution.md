@@ -28,7 +28,7 @@ Two records, joined by the operator's log pipeline on address plus time.
 The source address comes from the accepted connection, not from a request header, so a worker cannot forge it — the same property that makes the pool namespace trustworthy.
 
 **The AGC** gains its own `auditLogging` field, defaulting `Off`, whose `WorkerAddresses` value writes one record when a worker pod's address is first observed and one when the pod goes away.
-That record carries the consuming tenant's namespace and the job's run ID and repository, both of which the AGC already holds: the annotations are stamped on every worker pod ([payload.go](../../../cmd/agc/internal/provisioner/payload.go)), and the shared pod informer already watches every worker pod on both acquisition tiers.
+That record carries the consuming tenant's namespace and the job's run ID and repository, both of which the AGC already holds: the annotations are stamped on every worker pod ([jobmeta.go](../../../cmd/agc/internal/provisioner/jobmeta.go)), and the shared pod informer already watches every worker pod on both acquisition tiers.
 
 Neither record is a movement log by itself.
 The proxy's says where a pool went; the AGC's says which job held an address, and names no destination at all.

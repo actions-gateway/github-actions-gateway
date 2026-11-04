@@ -69,17 +69,17 @@ expect_rc "shipped tree passes with the paths named" 0 -- "$GATE" "$AGC_SRC" "$M
 
 # A metric dropped from the ledger is the case the gate exists for: the row is
 # what a tier-asymmetric series would never have gained in the first place.
-awk '!/^\| `actions_gateway_renew_job_teardowns_total` \| Classic only/' \
+awk '!/^\| `actions_gateway_scaleset_session_open` \| Scale-set only/' \
     "$METRICS_DOC" > "$TMP/no-row.md"
 expect_rc "a metric with no ledger row fails" 1 -- "$GATE" "$AGC_SRC" "$TMP/no-row.md" "$PARITY_DOC"
 expect_output "and says which tier question is unanswered" "which acquisition tier emits it" -- \
     "$GATE" "$AGC_SRC" "$TMP/no-row.md" "$PARITY_DOC"
 
-# The other direction: a ledger row the source refutes. active_sessions is written
-# from the classic listener alone, so calling it scale-set-only contradicts the
-# site the source actually has.
-awk '{ if ($0 ~ /^\| `actions_gateway_active_sessions` \| Classic only \|/) \
-         print "| `actions_gateway_active_sessions` | Scale-set only | Seeded defect. |"; \
+# The other direction: a ledger row the source refutes. scaleset_session_open is
+# written from the scale-set listener alone, so calling it classic-only contradicts
+# the site the source actually has.
+awk '{ if ($0 ~ /^\| `actions_gateway_scaleset_session_open` \| Scale-set only \|/) \
+         print "| `actions_gateway_scaleset_session_open` | Classic only | Seeded defect. |"; \
        else print }' "$METRICS_DOC" > "$TMP/contradicted.md"
 expect_output "a single-tier claim the source refutes fails" "is emitted here, and the ledger calls it" -- \
     "$GATE" "$AGC_SRC" "$TMP/contradicted.md" "$PARITY_DOC"
@@ -111,7 +111,7 @@ expect_output "a value row the source refutes fails" "is named here, and the led
 # subtree and the site half of the contradiction check sees nothing — the scale-set
 # arm is visible only as the origin of the reason values it names. Seeding it on the
 # real tree is what this suite can do that the synthetic one cannot.
-awk '{ if ($0 ~ /^\| `actions_gateway_message_poll_errors_total` \| Both \|/) \
+awk '{ if ($0 ~ /^\| `actions_gateway_message_poll_errors_total` \| Scale-set only \|/) \
          print "| `actions_gateway_message_poll_errors_total` | Classic only | Seeded defect. |"; \
        else print }' "$METRICS_DOC" > "$TMP/adapter-tier.md"
 expect_output "a single-tier claim only a value origin refutes fails" \
@@ -120,8 +120,8 @@ expect_output "a single-tier claim only a value origin refutes fails" \
 
 # A claim the file layout cannot prove rests on a guard, and the row must cite it
 # — otherwise the value table is the hand-kept list the ledger exists to replace.
-awk '{ if ($0 ~ /^\| `actions_gateway_worker_pods_reaped_total` \| `reason` \| `job_abandoned`/) \
-         print "| `actions_gateway_worker_pods_reaped_total` | `reason` | `job_abandoned` | Classic only | Seeded defect, uncited. |"; \
+awk '{ if ($0 ~ /^\| `actions_gateway_worker_pods_reaped_total` \| `reason` \| `completed_pending`/) \
+         print "| `actions_gateway_worker_pods_reaped_total` | `reason` | `completed_pending` | Scale-set only | Seeded defect, uncited. |"; \
        else print }' "$METRICS_DOC" > "$TMP/uncited-value.md"
 expect_output "an unprovable value row with no citation fails" "cite the .go file whose guard does" -- \
     "$GATE" "$AGC_SRC" "$TMP/uncited-value.md" "$PARITY_DOC"

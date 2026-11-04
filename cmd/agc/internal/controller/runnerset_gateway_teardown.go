@@ -57,7 +57,6 @@ func (r *RunnerSetReconciler) reconcileGatewayTerminating(ctx context.Context, l
 	// Capture the deregistration hook before stopping the listener: the scale-set
 	// client belongs to the listener handle, and stopScaleSetListener drops it.
 	deregister := r.deregisterScaleSetRunner(rs, log)
-	r.stopMultiplexer(key)
 	r.stopScaleSetListener(key)
 
 	reaped, err := reapAllWorkerPodsByLabel(ctx, r.Client, rs.Namespace, rs.Name,

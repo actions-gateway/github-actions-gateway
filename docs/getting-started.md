@@ -6,11 +6,11 @@
     The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
     `v2` is the General Availability (GA) version, ScaleSet-only, and the storage version from 1.10.
     `v2beta1` stays served beside it until `v2.0.0` removes it, with the same shape apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so manifests already on `v2beta1` move by re-applying at `v2`.
-    `v2alpha1` stays served as the [`gag-migrate`](operations/migration-v1-to-v2.md) on-ramp, carrying the `acquisitionProtocol` selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the versions.
+    `v2alpha1` stays served so objects stored at it still read, and the apiserver converts between the versions; its `acquisitionProtocol` and `maxListeners` fields are accepted and ignored, because every set acquires through a scale set.
     The older single-custom-resource (CR) **`v1alpha1`** API is no longer served by this GMC.
     `v1alpha1`, `v2alpha1`, `v2beta1` and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md).
     Already on v1?
-    [`gag-migrate`](operations/migration-v1-to-v2.md) moves you across without changing how your jobs are acquired.
+    Migrate with a 1.x [`gag-migrate`](operations/migration-v1-to-v2.md) before you upgrade to this release.
 
 ## Prerequisites
 

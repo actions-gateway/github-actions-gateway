@@ -42,7 +42,7 @@ Three real defects, two ambiguities, the rest legitimate.
 | 1 | [`githubapp/auth.go:56`](../../../githubapp/auth.go) `defaultAPIBaseURL`, with no GMC injection of `GITHUB_API_BASE_URL` | **Defect** | No — no config surface exists at all |
 | 2 | [`egressproxy_fqdn.go:123`](../../../cmd/gmc/internal/controller/egressproxy_fqdn.go) `githubEgressFQDNs` → FQDN policy + proxy CONNECT allowlist | **Defect** | Yes — emitted CNI policy, `PROXY_ALLOWED_HOST_SUFFIXES` |
 | 3 | [`ipranges.go:133`](../../../cmd/gmc/internal/controller/ipranges.go) `https://api.github.com/meta` → egress `ipBlock` CIDRs | **Defect** | Yes — emitted NetworkPolicy |
-| 4 | [`github_registrar.go:390`](../../../cmd/agc/internal/agentpool/github_registrar.go) `isHostedServer` substring test | Ambiguous | No |
+| 4 | [`github_registrar.go:390`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go) `isHostedServer` substring test | Ambiguous | No |
 | 5 | [`noproxy.go:19`](../../../cmd/gmc/internal/webhook/noproxy/noproxy.go) `GitHubHosts` | Not a defect | Yes — admission rejection |
 | 6 | Chart `actions-gateway.github.com` API group; `ghcr.io/actions/actions-runner`; `cmd/probe`; `test/fakegithub`; e2e specs; CRD/godoc examples; code comments | Legitimate | n/a |
 
@@ -60,7 +60,7 @@ Every token mint fails, on both acquisition tiers, before any job is acquired.
 
 Two consequences worth separating:
 
-- **The runner-registration path already gets this right and disagrees.** `GithubRegistrar.apiBase()` derives `https://<ghes-host>/api/v3` from `OrgURL` ([`github_registrar.go:383`](../../../cmd/agc/internal/agentpool/github_registrar.go)), and the scale-set tier derives the same base from `gitHubURL` ([`runnerset_scaleset.go:260`](../../../cmd/agc/internal/controller/runnerset_scaleset.go)).
+- **The runner-registration path already gets this right and disagrees.** `GithubRegistrar.apiBase()` derives `https://<ghes-host>/api/v3` from `OrgURL` ([`github_registrar.go:383`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go)), and the scale-set tier derives the same base from `gitHubURL` ([`runnerset_scaleset.go:260`](../../../cmd/agc/internal/controller/runnerset_scaleset.go)).
   Three components answer "which GitHub API?" from two different sources.
   Q504 collapsed two of them; the env-var source is still unbridged to `gitHubURL`.
 - **Shipped docs already assume the variable is set.** [upgrade.md](../../operations/upgrade.md#non-breaking-eviction-auto-retry-now-honours-github_api_base_url-it-never-did-on-ghes) scopes Q504's fix to *"any deployment that sets `GITHUB_API_BASE_URL` — that is, every GitHub Enterprise Server install"*, and [tenant-onboarding.md](../../operations/tenant-onboarding.md) lists a GHES URL as a supported `spec.gitHubURL`.
@@ -100,7 +100,7 @@ Treat #3 as a documentation-and-validation problem regardless of which path is c
 
 ### 4. Two different detectors answer "is this public GitHub?"
 
-`isHostedServer` tests `strings.Contains(githubURL, "github.com")` over the **whole URL including its path** ([`github_registrar.go:390`](../../../cmd/agc/internal/agentpool/github_registrar.go)), so a GHES org path literally named `github.com` — `https://ghes.corp/github.com` — misclassifies as public SaaS.
+`isHostedServer` tests `strings.Contains(githubURL, "github.com")` over the **whole URL including its path** ([`github_registrar.go:390`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go)), so a GHES org path literally named `github.com` — `https://ghes.corp/github.com` — misclassifies as public SaaS.
 `scaleSetAPIBase` answers the same question by parsing the URL and switching on `u.Host` ([`runnerset_scaleset.go:260`](../../../cmd/agc/internal/controller/runnerset_scaleset.go)), which has no such hole.
 
 Low severity on its own — the triggering org name is contrived.

@@ -1,8 +1,8 @@
 # Q224 — AGC-side lever spike: can we beat GitHub's fan-out distinct-delivery starvation without Option E?
 
-**Status:** spike **complete**, no code changed.
+**Status:** ⓘ spike **complete**, no code changed.
 This is the escape-hatch check the [re-route #8 conclusion](archive/gke-dogfood-turnup-findings.md) invited: #8 isolated the last Q224 blocker to **GitHub's server-side fan-out distinct-delivery starvation** on GAG's many-acquirers topology and called [Option E / Q264](q264-scale-set-protocol.md) the structural fix.
-Before the user commits to (or declines) the [Q264](../queue/Q264.md) scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.
+Before the user commits to (or declines) the Q264 scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.
 
 **Verdict up front: no AGC-side lever provides a *reliable* fix; #530/§5 stands — [Option E (Q264)](q264-scale-set-protocol.md) is the only structural fix.**
 
@@ -35,9 +35,9 @@ Outcome — **2/7 green, 5/7 wedged `in_progress` indefinitely**:
 
 Pinned to the multiplexer/listener code, not assumed:
 
-1. **Baseline is exactly one permanent poller.** `Multiplexer.Start` spawns a single permanent baseline goroutine (`m.spawn(ctx, true)`, [`multiplexer.go:152`](../../cmd/agc/internal/listener/multiplexer.go)); there is **no** `minIdleListeners` / eager-warm knob.
-   `maxListeners` is only a *ceiling* (`SpawnReplacement` no-ops at the cap, [`multiplexer.go:174`](../../cmd/agc/internal/listener/multiplexer.go)).
-2. **Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.** `SpawnReplacement` is called by a listener **after it wins a job** ([`goroutine.go:924`](../../cmd/agc/internal/listener/goroutine.go)) — *after* the `ClaimJob` dedup gate.
+1. **Baseline is exactly one permanent poller.** `Multiplexer.Start` spawns a single permanent baseline goroutine (`m.spawn(ctx, true)`, [`multiplexer.go:152`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go)); there is **no** `minIdleListeners` / eager-warm knob.
+   `maxListeners` is only a *ceiling* (`SpawnReplacement` no-ops at the cap, [`multiplexer.go:174`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go)).
+2. **Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.** `SpawnReplacement` is called by a listener **after it wins a job** ([`goroutine.go:924`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)) — *after* the `ClaimJob` dedup gate.
    A **deduped loser skips SpawnReplacement entirely** (`goroutine.go:866`: "SpawnReplacement/renew/provision are all skipped for the loser"; the loser returns at `goroutine.go:909`).
    So **F duplicate deliveries of one job grow the pool by exactly 1** (the single winner), not by F.
 3. **Therefore, from an idle start, the pool can only grow as fast as *distinct* planIDs are won.** When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48.
@@ -48,7 +48,7 @@ Whether that helps is decided entirely by §4.
 
 ## 3. H2 — unique/ephemeral runner names: NON-LEVER
 
-Today the agent name is deterministic by slot index — `fmt.Sprintf("%s-%d", groupName, index)` →`ci8-1`, `ci8-2` ([`pool.go:328`](../../cmd/agc/internal/agentpool/pool.go)) — and [Q114](../queue/README.md) single-use recycle **re-registers the same name** (same index) after each job.
+Today the agent name is deterministic by slot index — `fmt.Sprintf("%s-%d", groupName, index)` →`ci8-1`, `ci8-2` ([`pool.go:328`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go)) — and [Q114](../queue/README.md) single-use recycle **re-registers the same name** (same index) after each job.
 H2 proposes a unique/ephemeral name per registration so GitHub "distributes" rather than "piles."
 
 It fails on the mechanism:

@@ -10,7 +10,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/broker"
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -51,7 +51,9 @@ func TestV2_RunnerSet_DedicatedProxyPool(t *testing.T) {
 		_ = k8sClient.Delete(bg, heavy)
 	})
 
-	startRunnerSetReconciler(t)
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+	startRunnerSetReconcilerOn(t, srv)
 
 	for _, tc := range []struct {
 		set, pool, otherPool string
@@ -59,8 +61,7 @@ func TestV2_RunnerSet_DedicatedProxyPool(t *testing.T) {
 		{set: "dedicated-light", pool: "shared", otherPool: "heavy"},
 		{set: "dedicated-heavy", pool: "heavy", otherPool: "shared"},
 	} {
-		id := enqueueJobOnSetSession(15*time.Second, tc.set, nil, broker.RunnerJobRequestBody{})
-		require.NotEmpty(t, id, "a session for %s should register", tc.set)
+		require.True(t, enqueueScaleSetJob(srv, tc.set, 15*time.Second), "a session for %s should register", tc.set)
 
 		pod := waitForSetWorkerPod(t, ns, tc.set)
 		env := runnerEnv(t, pod)

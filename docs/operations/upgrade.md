@@ -18,6 +18,8 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Before upgrading to v2.0.0: every tenant namespace carries the actions-gateway.com labels](#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels)
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
+  - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
+  - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
@@ -246,6 +248,64 @@ Fix the named objects and run it again.
 
 **Rolling back** to the 1.9 release is safe, because 1.9 serves `v2` and so reads what this release stored.
 Rolling back further is not: a release that does not serve `v2` cannot read an object stored at it.
+
+### Action required before `v2.0.0`: a `Classic` RunnerSet now runs on the scale-set protocol
+
+**Who is affected:** a `RunnerSet` written at `v2alpha1` with `spec.acquisitionProtocol: Classic`.
+`v2beta1` and `v2` never served the field, so a set written at either already runs on the scale-set protocol.
+
+**What changed.** The AGC no longer has the classic acquisition tier (Q264).
+A set that asked for `Classic` registers a scale set named after its first `runnerLabels` entry and takes jobs through it, like every other set, and its `maxListeners` is ignored.
+The GMC's admission check that no two sets in one GitHub scope share a first label now applies to it too.
+
+It also leaves the set's classic agents behind.
+On 1.10, deleting a `Classic` set deregistered its agents from GitHub and deleted their Secrets; from `v2.0.0` nothing does, so the `agentpool-rs-<set>-<n>` Secrets stay in the namespace and the `rs-<set>-<n>` runners stay registered, offline, at GitHub.
+How long GitHub keeps an offline runner of this kind has not been measured here.
+
+**Before you upgrade,** list the sets that still carry the choice, which the conversion keeps in an annotation:
+
+```bash
+kubectl get runnersets.actions-gateway.com -A -o json \
+  | jq -r '.items[] | select(.metadata.annotations["conversion.actions-gateway.com/acquisition-protocol"] == "Classic") | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+Replace each one while still on 1.10: create a second `RunnerSet` with the same `runnerLabels` and `acquisitionProtocol: ScaleSet` (or none, at `v2beta1` or `v2`), then delete the `Classic` set once its running jobs finish.
+On 1.10 that delete deregisters the set's agents and deletes their Secrets (`runnerset_controller.go` `reconcileDelete`, at the `v1.10.0` tag), which is the cleanup nothing does after the upgrade.
+
+A `Classic` set you keep through the upgrade needs two checks.
+First, its first label must not be the first label of another set whose gateway names the same GitHub org, enterprise or repository: two such sets would register one scale set and both drive it, and admission does not re-check sets that already exist, so rename one set's first label before upgrading.
+A pair that slips through shows after the upgrade as the `ScaleSetNameCollision` condition on the gateway, and fires [`ActionsGatewayScaleSetNameCollision`](runbook.md#actionsgatewayscalesetnamecollision).
+Second, after the upgrade its classic agents need removing by hand.
+List their Secrets:
+
+```bash
+kubectl get secrets -n <namespace> -o name | grep '^secret/agentpool-rs-<set>-'
+```
+
+Delete each one it prints, and remove the offline `rs-<set>-<n>` runners in the org's or repository's runner settings.
+
+**Rolling back** to 1.10 returns the set to classic acquisition.
+
+### Action required if you alert on or chart the classic acquisition series: they are no longer exported
+
+**Who is affected:** anyone whose alerts, recording rules or dashboards read a series only the classic tier wrote, including copies of the reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml) and Grafana dashboards taken before `v2.0.0`.
+
+**What changed.** With the classic tier gone (Q264), the AGC no longer exports `actions_gateway_active_sessions`, `jobs_acquired_total`, `job_acquisition_errors_total`, `jobs_admission_rejected_total`, `jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`, `fanout_loser_recycle_deferred_total`, `renew_job_errors_total`, `renew_job_teardowns_total`, `agent_recycles_total`, `agent_recycle_errors_total`, `broker_token_propagation_retries_total` or `broker_session_leaks_total`.
+A rule reading one of them never fires again, and a panel reading one shows `No data`, without any error to say why.
+
+The reference rules drop the alerts and the recording rule that read them:
+
+| Removed | Use instead |
+| --- | --- |
+| `ActionsGatewayNoActiveSessions` | [`ActionsGatewayScaleSetNoSession`](runbook.md#actionsgatewayscalesetnosession), on `actions_gateway_scaleset_session_open == 0` for 10 minutes |
+| `ActionsGatewayCapacityGateRejectingJobs` | [`ActionsGatewayScaleSetCapacityWithheld`](runbook.md#actionsgatewayscalesetcapacitywithheld) |
+| `ActionsGatewayRenewJobErrors`, `ActionsGatewayAgentRecycleErrors`, `ActionsGatewayFanoutFallbackTimeout`, `ActionsGatewayAbandonedDeliveryErrors` | Nothing: the AGC no longer renews jobs, re-registers agents or receives one job more than once, so there is nothing for them to measure |
+| `actions_gateway:job_acquisition_success_rate:rate5m` | `actions_gateway:scaleset_provision_success_rate:rate5m` |
+
+The reference dashboards drop the panels that read the removed series, and chart the listener session gauge where they charted active sessions.
+The AGC's one OpenTelemetry span, `Provisioner.provision`, went with the classic path too, so a configured collector receives no AGC spans until [Q1278](../queue/Q1278.md) traces the scale-set path.
+
+**Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 
@@ -1732,11 +1792,11 @@ kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 **Step 4: Confirm session recovery**
 
 ```sh
-# sessions should return to >= 1 per RunnerGroup within a few seconds of pod startup
-# Metric: actions_gateway_active_sessions{namespace="<namespace>"}
+# every RunnerSet's listener session should be open again within a few seconds of pod startup
+# Metric: actions_gateway_scaleset_session_open{namespace="<namespace>"} == 1 per runner_set
 
-# No new renewjob errors
-# Metric: rate(actions_gateway_renew_job_errors_total{namespace="<namespace>"}[5m])
+# No new message poll errors
+# Metric: rate(actions_gateway_message_poll_errors_total{namespace="<namespace>"}[5m])
 ```
 
 **Step 5: Check for cancelled jobs**
@@ -1819,8 +1879,8 @@ kubectl get pods -n <namespace> -l app=actions-gateway-proxy -o wide
 # HPA still computing utilization (not <unknown>)
 kubectl get hpa -n <namespace>
 
-# No spike in token or renewjob errors after the rollout
-# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total
+# No spike in token or message poll errors after the rollout
+# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total
 ```
 
 ### Proxy rollback
@@ -1904,11 +1964,11 @@ After any component upgrade:
 # All ActionsGateway CRs healthy
 kubectl get actionsgateway --all-namespaces
 
-# Active sessions restored
-# Metric: actions_gateway_active_sessions per namespace
+# Listener sessions restored
+# Metric: actions_gateway_scaleset_session_open per namespace and runner_set
 
 # No spike in errors
-# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_renew_job_errors_total, controller_runtime_reconcile_errors_total
+# Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total, controller_runtime_reconcile_errors_total
 
 # Pod creation latency within SLO
 # Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))

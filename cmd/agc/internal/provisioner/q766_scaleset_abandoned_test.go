@@ -193,8 +193,8 @@ func TestQ766_ClassicWorkerIsNotRecoveredTwice(t *testing.T) {
 	<-f.p.RecoverAbandonedScaleSetWorker(ctx, f.target, classic)
 
 	forceCancel, _ := f.calls.snapshot()
-	assert.Empty(t, forceCancel, "a classic worker's recovery belongs to its own provision goroutine")
-	assert.Empty(t, f.p.pendingAbandonedRerunKeys(), "and so does its re-run registration")
+	assert.Empty(t, forceCancel, "a worker without the scale-set label is not this tier's to recover")
+	assert.Empty(t, f.p.pendingAbandonedRerunKeys(), "nor to register for a re-run")
 }
 
 // TestQ766_IdentityUnknownIsSurfaced covers the failure mode that makes the whole

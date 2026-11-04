@@ -66,7 +66,7 @@ The existing backstops (`pendingPodDeadline` plus the reaper, with `WorkersUnsch
 GitLab documents over-claiming as intentional (`poll_timeout`: "Use this setting for queueing more builds than the cluster can handle at a time").
 Kueue does consume `ProvisioningRequest`, but as an `AdmissionCheck` below the claim boundary, and it needs cluster-admin ([§D.5](../design/appendix-d-alternatives-considered.md#d5-kueue-and-kubernetes-job-queue--quota-managers)).
 
-**GAG is structurally positioned to do it and ARC is not.** The decision point has to exist before the claim, and in GAG it already does: the admission gate is called at [`job.go:50`](../../cmd/agc/internal/listener/job.go), before `AcquireJob`.
+**GAG is structurally positioned to do it and ARC is not.** The decision point has to exist before the claim, and in GAG it already does: the admission gate is called at [`job.go:50`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/job.go), before `AcquireJob`.
 ARC has no equivalent seam, because the runner process itself claims the job.
 This is the same shape of durable differentiator as worker right-sizing ([§D.7](../design/appendix-d-alternatives-considered.md#d7-worker-right-sizing-why-built-in-not-bolted-on)): a capability that must live inside the control plane that owns the boundary.
 
@@ -350,7 +350,7 @@ Both are corrected as of 2026-07-26; recorded here because the second was a fabr
   The lock-cancel-and-re-queue language was borrowed from the eviction path, which is itself classic-only.
   **Replaced** with what the code does.
 
-`actions_gateway_jobs_admission_rejected_total` is emitted from the same classic call site ([listener/job.go](../../cmd/agc/internal/listener/job.go)), so both its `reason="quota"` and `reason="ceiling"` series read a flat zero on the default tier — the same "healthy dashboard, lost jobs" shape Q419 found on the eviction counters.
+`actions_gateway_jobs_admission_rejected_total` is emitted from the same classic call site ([listener/job.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/job.go)), so both its `reason="quota"` and `reason="ceiling"` series read a flat zero on the default tier — the same "healthy dashboard, lost jobs" shape Q419 found on the eviction counters.
 
 ### The decision: port the rung, and treat it as a 2.0 gate (Q443)
 
@@ -544,7 +544,7 @@ The matcher never parses a body, so it classifies identically — recorded becau
 ### What the method itself got wrong
 
 §9 step 2 names `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` as the counter that should account for the drop.
-**That counter cannot fire on this tier.** It is emitted from one site, [`listener/job.go`](../../cmd/agc/internal/listener/job.go), on the classic path; [`scalesetlistener/metrics.go`](../../cmd/agc/internal/scalesetlistener/metrics.go) states it is structurally unreachable for a scale set, because a job the ladder declines is never assigned rather than claimed and rejected.
+**That counter cannot fire on this tier.** It is emitted from one site, [`listener/job.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/job.go), on the classic path; [`scalesetlistener/metrics.go`](../../cmd/agc/internal/scalesetlistener/metrics.go) states it is structurally unreachable for a scale set, because a job the ladder declines is never assigned rather than claimed and rejected.
 The scale-set counterparts are `actions_gateway_scaleset_advertised_capacity` and `actions_gateway_scaleset_capacity_withheld{reason}`, and those are what the table above reports. §9 was written before §9b's port and was never reconciled with it; read as written it would have produced a flat-zero series and the false reading that the gate never engaged.
 
 Two observability snags found on the way, since filed as their own Queue rows (Q514, Q515 — both since fixed):

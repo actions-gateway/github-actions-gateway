@@ -1,11 +1,11 @@
 # Worker Right-Sizing Profiles (Recommendations First)
 
 > **Status: ✅ Complete — Phases 1–3 shipped 2026-07-21/22 and live-validated across three dogfood sessions (two on 2026-07-25, one on 2026-07-28).
-> Residuals: [Q416](../queue/Q416.md) and, for the one profile still short of a live run, [Q448](../queue/Q448.md).** Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
+> Residual: for the one profile still short of a live run, [Q448](../queue/Q448.md).** Usage observability, the status recommendation and its derivation, restart persistence, and the below-confidence fallback were confirmed in the first dogfood session.
 > The two behaviours gated on 20 sampled jobs, the `SizingDrift` verdict and `Binpack` actuating, were confirmed in a second session after Q399 migrated the tenant off the Classic protocol (which had orphaned 81% of the jobs it acquired, capping samples at 10); [`Throughput` actuated live](#throughput-actuating-live-2026-07-28) on the same tenant three days later.
 > See [Live validation](#live-validation-2026-07-25) and [Both ≥20-sample paths confirmed](#both-20-sample-paths-confirmed-2026-07-25-second-session).
 > **`NodeShare` is the one actuating profile with no live run yet** — it carries envtest confidence only, tracked as Q448.
-> Both bugs this validation surfaced are Classic-tier defects rather than sizing gaps: [Q398](#editing-a-classic-runnerset-needed-an-explicit-version-fixed) is fixed, and Q416 waits on a Classic operator report.
+> Both bugs this validation surfaced are Classic-tier defects rather than sizing gaps: [Q398](#editing-a-classic-runnerset-needed-an-explicit-version-fixed) is fixed, and Q416 was retired when Q264 removed Classic.
 > This doc is the design sketch, the phase record, and the validation record.
 
 ## Goal
@@ -304,9 +304,9 @@ It cannot account for 69 orphaned jobs.
 
 Two further Classic-only listener defects surfaced while measuring, both left in place because Classic is terminal (`docs/plan/v1-classic-sunset-review.md`):
 
-- [`session.go`](../../cmd/agc/internal/listener/session.go) `healSession` deletes the old broker session *before* refreshing the token, so on the `unauthorized` heal path the DELETE presents the already-expired token, returns 401, and leaks the session server-side; the follow-up `CreateSession` then collides with it (409) and the listener exits.
+- [`session.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/session.go) `healSession` deletes the old broker session *before* refreshing the token, so on the `unauthorized` heal path the DELETE presents the already-expired token, returns 401, and leaks the session server-side; the follow-up `CreateSession` then collides with it (409) and the listener exits.
   Observed at 04:12 and 05:02.
-- [`multiplexer.go`](../../cmd/agc/internal/listener/multiplexer.go) restarts only the permanent baseline goroutine, so both of those listener slots stayed dead for the rest of the session.
+- [`multiplexer.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go) restarts only the permanent baseline goroutine, so both of those listener slots stayed dead for the rest of the session.
 
 When picking this up again, note that the drift verdict is judged against the **template's** ask, not against new samples — so once a set is past 20 samples, both branches can be exercised in seconds by editing `RunnerTemplate` resources, with no further soak:
 

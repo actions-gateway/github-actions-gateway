@@ -18,7 +18,7 @@ The forbid half shipped 2026-07-31; the isolation half is parked as [Q530](../qu
 ### Why the collision is silent
 
 Runner names are unique per registration scope, and the fixture repo is one scope (the live-GitHub tenant sets `GITHUB_ORG_URL` to the repo, so `agentpool` registers repo-scoped).
-A second run registering a name the first already holds therefore takes `registerAgent`'s conflict path in [`pool.go`](../../cmd/agc/internal/agentpool/pool.go): resolve the conflicting record, **delete it**, register again.
+A second run registering a name the first already holds therefore takes `registerAgent`'s conflict path in [`pool.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go): resolve the conflicting record, **delete it**, register again.
 Both runs end up holding a listener whose registration the other has removed, and each acquires jobs the other dispatched.
 
 Nothing on either side errors, because that path is the intended recovery for an AGC restart — where deleting the incumbent record *is* correct.

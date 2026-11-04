@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
@@ -525,7 +526,8 @@ func TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld(t *testin
 			HTTPClient:    holder.Client(),
 			PollClient:    holder.Client(),
 		})
-	}, func(p *provisioner.Provisioner) {
+	}, func(r *controller.RunnerSetReconciler) {
+		p := r.Provisioner
 		p.GitHubAPIURL = fakeGitHub.URL
 		p.HTTPClient = fakeGitHub.Client()
 	})

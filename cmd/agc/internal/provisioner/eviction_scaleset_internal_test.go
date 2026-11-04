@@ -287,6 +287,43 @@ func TestRecoverEvictedScaleSetWorkers_IdentityUnknownIsSurfaced(t *testing.T) {
 	assert.Contains(t, pod.Annotations, AnnotationEvictionHandledAt)
 }
 
+// TestRecoverEvictedScaleSetWorkers_RerunURLRejectsAdversarialRepository verifies that an
+// owner or repository read back off a worker pod never reaches the GitHub API unless it
+// is a valid name: the annotation is the only input the re-run URL is built from.
+func TestRecoverEvictedScaleSetWorkers_RerunURLRejectsAdversarialRepository(t *testing.T) {
+	cases := []struct {
+		name       string
+		repository string
+		reruns     int64
+	}{
+		// The control: a valid name is re-run, so a zero below is the validation.
+		{"valid owner and repo", "myorg/myrepo", 1},
+		// ".." passes a dots-allowed character class but must be rejected by the
+		// alphanumeric-first requirement to prevent path traversal.
+		{"path traversal via dot-dot owner", "../myrepo", 0},
+		{"path traversal via dot-dot repo", "myorg/..", 0},
+		{"semicolon in owner", "my;org/myrepo", 0},
+		{"space in repo name", "myorg/my repo", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			p, target, _, rerunCount, _ := recoveryFixture(t,
+				evicted(scaleSetWorkerPod("runner-gpu-adv", map[string]string{
+					AnnotationRunID:      "4242",
+					AnnotationRepository: tc.repository,
+				})))
+
+			done, err := p.RecoverEvictedScaleSetWorkers(ctx, target)
+			require.NoError(t, err)
+			<-done
+
+			assert.Equal(t, tc.reruns, rerunCount.Load(),
+				"re-run API calls for repository %q", tc.repository)
+		})
+	}
+}
+
 // TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun pins the merge (Q1182): three
 // evicted workers of one run attempt cost one re-run and one budget slot, because
 // rerun-failed-jobs re-runs every failed job of the attempt at once. Each used to

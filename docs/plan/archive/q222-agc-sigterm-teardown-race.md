@@ -51,7 +51,7 @@ Multiplexers are drained concurrently (done channel per the repo's async convent
 
 ### 2. The recycle/heal handoff dropped the DELETE outright on cancellation
 
-Reproduced at the unit tier, red → green: `TestListener_SIGTERMDuringPostJobRecycleDeletesSession` in [goroutine_q222_test.go](../../../cmd/agc/internal/listener/goroutine_q222_test.go).
+Reproduced at the unit tier, red → green: `TestListener_SIGTERMDuringPostJobRecycleDeletesSession` in [goroutine_q222_test.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine_q222_test.go).
 Against the unfixed code it recorded **zero** DELETEs.
 
 The sequence, in `Run`'s post-job recycle (and identically in the poll-loop heal):
@@ -66,7 +66,7 @@ The sequence, in `Run`'s post-job recycle (and identically in the poll-loop heal
 Nothing downstream ever deletes that session.
 It is a permanent leak, not a slow one — the shape the plan predicted for a total (not partial) teardown failure.
 
-**Fix:** `deleteSessionDetached` in [session.go](../../../cmd/agc/internal/listener/session.go) — one helper now used by the heal, the recycle, and the exit defer.
+**Fix:** `deleteSessionDetached` in [session.go](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/session.go) — one helper now used by the heal, the recycle, and the exit defer.
 It runs on a context detached from the caller's, bounded by a 10s total budget.
 
 ### 3. A single transient DELETE failure was also a permanent leak

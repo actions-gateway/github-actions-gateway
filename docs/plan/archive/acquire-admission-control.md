@@ -3,7 +3,7 @@
 Status: ✅ Implemented (in-memory reservation-counter gate).
 Tracked as [Q59](../../queue/README.md).
 
-> **What shipped.** The in-memory reservation-counter variant (the leading candidate below) is live: an `AdmitFunc` hook on `listener.Config` ([`goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)) is consulted before `AcquireJob`; the per-RunnerGroup gate lives in the provisioner ([`admission.go`](../../../cmd/agc/internal/provisioner/admission.go)) and reads the ceiling from the freshly cached RunnerGroup each call (honours spec edits, Q117).
+> **What shipped.** The in-memory reservation-counter variant (the leading candidate below) is live: an `AdmitFunc` hook on `listener.Config` ([`goroutine.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)) is consulted before `AcquireJob`; the per-RunnerGroup gate lives in the provisioner ([`admission.go`](../../../cmd/agc/internal/provisioner/admission.go)) and reads the ceiling from the freshly cached RunnerGroup each call (honours spec edits, Q117).
 > Rejections increment `actions_gateway_jobs_admission_rejected_total`.
 > The post-acquire `ceilingCheck` and quota retry are unchanged — they remain the backstop.
 > **Verified end-to-end (Q154):** the ceiling-held-→-cancelled-vs-redelivered assumption below has now been confirmed on a real cluster — see "End-to-end verification (Q154)".
@@ -14,7 +14,7 @@ The AGC claims a job from GitHub (`acquirejob`) **before** it knows whether it h
 
 ## Current behavior (verified against code)
 
-The acquire-then-place ordering lives in the listener's `handleJob` ([`cmd/agc/internal/listener/goroutine.go`](../../../cmd/agc/internal/listener/goroutine.go)):
+The acquire-then-place ordering lives in the listener's `handleJob` ([`cmd/agc/internal/listener/goroutine.go`](https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go)):
 
 1. Long-poll `GET /message` returns a job.
 2. **`AcquireJob`** is called (`goroutine.go:341`) — this claims the job from GitHub.

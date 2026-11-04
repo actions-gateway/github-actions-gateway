@@ -177,21 +177,16 @@ They are **additive metadata**: stamp them *alongside* the functional selector l
 `apilabels.Merge` preserves any existing key, so it cannot clobber a selector label.
 The canonical per-component values and operator `kubectl -l` recipes live in [observability.md](../operations/observability-metrics.md#selecting-gag-objects-with-the-recommended-labels).
 
-Controller-set annotations on worker pods (both v1 and v2, stamped by the provisioner at pod creation time — from the AcquireJob payload on the classic tier, from the assignment message's `JobMessageBase` fields on the scale-set tier):
+Controller-set annotations on worker pods, stamped by the provisioner at pod creation time from the assignment message's `JobMessageBase` fields:
 
 - `actions-gateway.com/run-id` — GitHub workflow run ID.
 - `actions-gateway.com/repository` — `owner/repo` the job belongs to.
 - `actions-gateway.com/job-name` — job name as defined in the workflow YAML.
-- `actions-gateway.com/workflow` — workflow file name.
-  Classic only; the scale-set protocol delivers no workflow name.
 
-**On the classic tier, read the identity out of the payload's serialised `github` context — never out of `variables`.** A real AcquireJob body carries `contextData.github.run_id` and `.repository` and no `system.github.run_id` at all; reading the variables instead is how these annotations came to be absent from every real worker pod, taking classic-tier eviction recovery with them (Q495).
-The ground truth is `testdata/job_payload.json`, a redacted capture of a live response, and `payload_groundtruth_test.go` asserts against it — extend that test rather than a hand-written payload when this parsing changes.
-
-These are best-effort: absent if GitHub omitted the corresponding field (`contextData.github.run_id`/`.repository`/`.workflow` on classic; `ownerName`/`repositoryName`/`workflowRunId` on scale-set).
-Never use them for security enforcement — they are informational annotations for operator visibility, **except** that on the scale-set tier `run-id` and `repository` are also load-bearing: they are the only record of which workflow run a worker was serving, so eviction recovery reads them back off the pod (Q417).
+These are best-effort: absent if GitHub omitted the corresponding field (`ownerName`/`repositoryName`/`workflowRunId`).
+Never use them for security enforcement — they are informational annotations for operator visibility, **except** that `run-id` and `repository` are also load-bearing: they are the only record of which workflow run a worker was serving, so eviction recovery reads them back off the pod (Q417).
 They are stamped from the job the pod was created for and replaced from the job its runner starts, which GitHub need not give that pod (Q1152).
-Adding a fifth key is fine; changing or removing either of those two breaks recovery on that tier.
+Adding a key is fine; changing or removing either of those two breaks recovery.
 
 One further controller-set annotation is stamped at pod build, on both tiers, only when an opt-in sizing profile actually derived the pod's ask:
 

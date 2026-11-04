@@ -13,4 +13,4 @@
 ./githubapp	85.2
 ./scaleset	86.6
 ./test/fakegithub	n/a
-./devtools	63.3
+./devtools	61.8

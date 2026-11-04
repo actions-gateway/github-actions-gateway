@@ -32,7 +32,6 @@ func TestStopListeners_ThenEnsure_DoesNotLeaveASessionBehind(t *testing.T) {
 	gw := gwObj("gw", ns, "")
 	tmpl := tmplObj("tmpl", ns)
 	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
-		rs.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolScaleSet
 		rs.Spec.RunnerLabels = []string{label}
 	})
 	c := fake.NewClientBuilder().WithScheme(scheme).

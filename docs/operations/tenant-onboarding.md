@@ -567,6 +567,7 @@ kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
 `runner version detected version=2.335.1` is the real answer for a custom image; `runner version not detected` means the image is not `actions/runner`-derived in the expected layout.
 
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block.
+The AGC currently emits no spans of its own, so a collector receives nothing until Q1278 traces the provision path ([Distributed Tracing](observability-logging.md#distributed-tracing-agc)).
 Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default).
 `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
@@ -679,11 +680,10 @@ The AGC should begin polling GitHub within seconds of starting.
 kubectl logs -n <tenant-namespace> deploy/<gateway>-agc --tail=30
 # v1 (legacy)
 kubectl logs -n <tenant-namespace> deploy/actions-gateway-controller --tail=30
-# Look for: "session registered" or "starting listener goroutine"
 
-# Check the active sessions metric
-# Metric: actions_gateway_active_sessions{namespace="<tenant-namespace>"}
-# Expected: 1 per RunnerGroup (e.g. 1 if one RunnerGroup is defined)
+# Check the listener session metric
+# Metric: actions_gateway_scaleset_session_open{namespace="<tenant-namespace>"}
+# Expected: 1 for every runner_set
 ```
 
 If sessions are not appearing:
@@ -717,8 +717,8 @@ Watch for the job to be acquired and a worker pod to appear:
 # Watch for worker pod creation
 kubectl get pods -n <tenant-namespace> -w
 
-# Check jobs acquired metric
-# Metric: actions_gateway_jobs_acquired_total{namespace="<tenant-namespace>"}
+# Check the jobs assigned metric
+# Metric: actions_gateway_scaleset_jobs_assigned_total{namespace="<tenant-namespace>"}
 # Expected: increments by 1
 
 # Check pod creation latency
@@ -734,7 +734,7 @@ Onboarding is complete when:
 
 - [ ] `ActionsGateway` has `Ready=True` condition.
 - [ ] HPA `TARGETS` shows a CPU percentage (not `<unknown>`).
-- [ ] `actions_gateway_active_sessions` is ≥ 1 per RunnerGroup.
+- [ ] `actions_gateway_scaleset_session_open` is `1` for every `runner_set`.
 - [ ] At least one test job has completed successfully in the GitHub Actions UI.
 - [ ] Worker pod was created and deleted after job completion.
 - [ ] No errors in AGC logs during the test job.
@@ -750,7 +750,7 @@ Onboarding is complete when:
 | Worker pods stuck `Pending` | `ResourceQuota` exhausted or no schedulable nodes | Check `kubectl describe resourcequota -n <namespace>` and node capacity |
 | `RunnerGroup`/`RunnerSet` condition `RunnerVersionTooOld=True`, reason `WorkerImageBelowMinimum` | The `workerImage` tag names a runner version below GitHub's enforced minimum | Update `workerImage` to a runner `2.329.0` or later |
 | `RunnerVersionTooOld=Unknown`, reason `WorkerImageVersionUnknown` | The registry read of the image is pending or failed and the reference names no runner version to fall back on, or the image is not `actions/runner`-derived | An authentication failure is about the AGC's registry read, not the pull ([details](troubleshooting.md#worker-image-runner-version)). A dial error means the AGC's egress policy does not reach the registry; otherwise tag the image with the runner version it ships, or read the worker pod's `runner version detected` log line |
-| Test job stays queued in GitHub for >2 minutes | `active_sessions = 0` — listener goroutines are not running | Check AGC logs for credential or proxy errors |
+| Test job stays queued in GitHub for >2 minutes | `scaleset_session_open = 0` — the set's listener holds no message session | Check AGC logs for credential or proxy errors |
 | HPA present but proxy doesn't scale up | `maxReplicas` too low or HPA metric is `<unknown>` | Check both the HPA spec and that `requests.cpu` is set |
 | Proxy stuck below `maxReplicas`; `FailedCreate ... exceeded quota` events | `proxy.maxReplicas` exceeds the namespace `ResourceQuota` | Check the `ProxyQuotaPressure` condition (`kubectl describe actionsgateway …`); raise the quota or lower `maxReplicas` |
 | Jobs acquired but pods not appearing | `priorityClassName` referenced in `priorityTiers` does not exist | `kubectl get priorityclass <name>` — create it if missing |
@@ -763,7 +763,7 @@ Onboarding is complete when:
 
 > **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2`** — the General Availability (GA) version, ScaleSet-only, the storage version since 1.10, and the version every **new** tenant should use.
 > It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
-> `v2alpha1` is also still served, but only as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants moving off v1: it carries the deprecated [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) selector, which a new tenant does not need.
+> `v2alpha1` is also still served so objects stored at it still read; its [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) field is accepted and ignored.
 > `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md), and so is `v2beta1`: it stays served until then with the same shape as `v2` apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so a tenant already on it moves by re-applying at `v2`.
 > Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
@@ -898,28 +898,10 @@ This is the same routing ARC scale sets use, so workflows migrating from ARC car
 
 #### Acquisition protocol: `v2alpha1` only
 
-`v2alpha1` — served as the [`gag-migrate`](migration-v1-to-v2.md) on-ramp — carries a `spec.acquisitionProtocol` selector that `v2beta1` and `v2` do not.
-It exists to let a tenant migrating off `v1alpha1` keep the classic per-runner broker protocol its groups were registered under, until it is ready to move.
-(Multi-label matching used to be the reason and no longer is: the scale-set protocol registers every `runnerLabel`.)
-
-```yaml
-apiVersion: actions-gateway.com/v2alpha1   # the field does not exist on v2beta1 or v2
-kind: RunnerSet
-metadata: { name: linux, namespace: team-a }
-spec:
-  gatewayRef:  { name: acme }
-  templateRef: { name: default }
-  acquisitionProtocol: Classic       # deprecated; the classic per-runner broker protocol
-  runnerLabels: [self-hosted, linux]
-  maxListeners: 10                   # honored under Classic; ignored under ScaleSet
-  maxWorkers: 50
-```
-
-- **A new tenant should never need this.** Author on `v2`, with as many labels per set as your workflows target.
-  `Classic` is deprecated and, together with `v2alpha1` and `v1alpha1`, [removed at `v2.0.0`](v1alpha1-deprecation.md); `spec.maxListeners` goes with it.
-- **`gag-migrate` writes `acquisitionProtocol: Classic`** onto every set it emits, so a migrated tenant's groups keep the protocol they were registered under.
-  Opting one into the scale-set protocol later means creating a fresh set, not editing the old one — the field is **immutable**, because switching a live set's protocol is a re-registration storm.
-- **Editing a Classic set works unqualified, labels included.** An unqualified `kubectl edit/patch/apply` addresses the preferred version, `v2`, which admits the same multi-label shape as `v2beta1`.
+`v2alpha1` still carries the `spec.acquisitionProtocol` and `spec.maxListeners` fields that `v2beta1` and `v2` dropped, so an object stored at `v2alpha1` still reads.
+Nothing reads either field: every set acquires through a scale set named after its first `runnerLabels` entry, whatever `acquisitionProtocol` says, and `maxListeners` is ignored.
+A set written `Classic` before this release is covered by the [upgrade note](upgrade.md#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol).
+Both fields go with `v2alpha1` at `v2.0.0` ([removal](v1alpha1-deprecation.md)), so author new sets on `v2`.
 
 ### Bind a runner set to a GitHub runner group
 

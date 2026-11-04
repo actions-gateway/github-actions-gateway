@@ -92,7 +92,6 @@ func podWatchFixture(t *testing.T, pod *corev1.Pod) (*RunnerSetReconciler, workq
 	ns := pod.Namespace
 	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
 		rs.UID = "uid-set"
-		rs.Spec.AcquisitionProtocol = v2alpha1.AcquisitionProtocolScaleSet
 	})
 	// The fake client answers a cancelled context where a real one refuses the call,
 	// so the interceptor restores that: it is what lets a test here pin that the

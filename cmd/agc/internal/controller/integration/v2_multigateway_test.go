@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,25 +71,18 @@ func startScopedRunnerSetReconciler(t *testing.T, gatewayName string) {
 	p.HTTPClient = brokerStub.HTTPClient()
 	p.TokenFunc = stubProvider{}.Token
 
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
 	r := &controller.RunnerSetReconciler{
 		Client:       mgr.GetClient(),
 		TokenManager: tm,
-		Registrar:    &brokerRegistrar{stub: brokerStub},
-		AgentKeyType: agentpool.KeyTypeEd25519,
 		Provisioner:  p,
 		// Parity with main.go (Q1078). No read this suite takes routes through it: the
-		// sets are classic and the proxy is colocated.
-		APIReader:   mgr.GetAPIReader(),
-		GatewayName: gatewayName,
-		BrokerConfig: controller.BrokerConfig{
-			BrokerURL:        brokerStub.URL,
-			RunnerVersion:    "2.335.1",
-			RunnerOS:         "linux",
-			UseV2Flow:        true,
-			HTTPClient:       brokerStub.HTTPClient(),
-			IdleThreshold:    500,
-			RenewJobInterval: 50 * time.Millisecond,
-		},
+		// proxy is colocated.
+		APIReader:             mgr.GetAPIReader(),
+		GatewayName:           gatewayName,
+		ScaleSetClientFactory: scaleSetClientsFor(srv),
 	}
 	require.NoError(t, r.SetupWithManager(mgr))
 

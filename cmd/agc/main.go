@@ -14,7 +14,6 @@
 //
 // Flags:
 //
-//	--agent-key-type  rsa (default) | ed25519 (opt-in; loses session-key encryption)
 //	--zap-devel       Opt into development-mode logging (console encoder, debug
 //	                  level). The default is production logging: structured JSON
 //	                  at info level. See zap.Options.BindFlags for the full set
@@ -36,7 +35,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/agentpool"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/proxyattribution"
@@ -126,7 +124,7 @@ const (
 )
 
 // slogDebugZapLevel is the zap core level that must be enabled for the AGC's
-// hot-path slog.Debug lines (listener/provisioner/agentpool) to surface. The
+// hot-path slog.Debug lines (listener/provisioner) to surface. The
 // process logs through log/slog bridged onto controller-runtime's logr logger
 // (slog.SetDefault(logr.ToSlogHandler(ctrl.Log)) below). go-logr maps slog.Debug
 // (slog.LevelDebug, -4) to logr V(4), and zapr inverts logr V(n) to zap level -n
@@ -171,8 +169,6 @@ func normalizeDebugLevel(lvl zapcore.LevelEnabler) zapcore.LevelEnabler {
 
 func run() error {
 	// ── 0. Parse flags ───────────────────────────────────────────────────────
-	agentKeyTypeFlag := flag.String("agent-key-type", "rsa",
-		"Key type for new agent registrations: rsa (default) or ed25519 (opt-in; loses session-key encryption)")
 	// Bind zap's logging flags (--zap-devel, --zap-encoder, --zap-log-level, …)
 	// and default to production logging: structured JSON at info level, which log
 	// aggregators can parse. The GMC stamps no logging args onto the AGC
@@ -204,8 +200,8 @@ func run() error {
 	}
 	zapOpts.Level = normalizeDebugLevel(zapOpts.Level)
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&zapOpts)))
-	// Bridge log/slog onto the same zap logger. The listener, provisioner, and
-	// agentpool packages log through log/slog; without this, slog.Default() is
+	// Bridge log/slog onto the same zap logger. The listener and provisioner
+	// packages log through log/slog; without this, slog.Default() is
 	// the stdlib TEXT handler, so a single AGC pod would emit mixed zap-JSON +
 	// stdlib-text on one stream that a log pipeline cannot parse (k8s audit F1).
 	// Routing slog through ctrl.Log gives the whole process one JSON shape and
@@ -213,13 +209,6 @@ func run() error {
 	// inherit this same sink; the bridge also catches any slog.Default() call
 	// site that is not explicitly wired.
 	slog.SetDefault(slog.New(logr.ToSlogHandler(ctrl.Log)))
-
-	agentKeyType := agentpool.KeyType(*agentKeyTypeFlag)
-	switch agentKeyType {
-	case agentpool.KeyTypeEd25519, agentpool.KeyTypeRSA:
-	default:
-		return fmt.Errorf("invalid --agent-key-type %q: must be ed25519 or rsa", agentKeyType)
-	}
 
 	// ── 0.4. Initialise OpenTelemetry tracing (opt-in, off by default) ───────
 	// tracing.Init installs an OTLP exporter only when an OTLP endpoint is
@@ -331,18 +320,11 @@ func run() error {
 		// 1. DisableFor here — all r.Get() and r.List() calls on Secrets bypass
 		//    the controller-runtime cache and hit the API server directly, so
 		//    Secret bodies never buffer in-process beyond the duration of a call.
-		//    This covers the agentpool's metadata-only PartialObjectMetadataList
-		//    too: its GVK resolves to Secret, which matches DisableFor.
 		// 2. SetupWithManager registers no Watches or WatchesMetadata for Secrets
 		//    — no Secret informer (full or metadata-only) is ever established, so
 		//    nothing caches Secret data or metadata in the background.
-		// 3. The AGC Role grants list (not watch) on Secrets — list is needed by
-		//    the agentpool to enumerate its agent Secrets; watch was removed (Q26)
-		//    because no Secret informer is established and granting it would be
-		//    dead privilege. The agentpool lists metadata only and reads bodies
-		//    per-name via Get (k8s-best-practices §B B4 / Q57), so bulk lists never
-		//    transfer credential bodies; any read still requires live API server
-		//    calls in the audit log.
+		// 3. The AGC Role grants no watch on Secrets (Q26): no Secret informer is
+		//    established, so granting it would be dead privilege.
 		Client: client.Options{
 			Cache: &client.CacheOptions{
 				DisableFor: []client.Object{&corev1.Secret{}},
@@ -432,36 +414,14 @@ func run() error {
 		return err
 	}
 
-	// Choose registrar (buildRegistrar):
-	//   STUB_AUTH_URL + STUB_BROKER_URL set → StubRegistrar with those URLs (testing)
-	//   GITHUB_ORG_URL set                  → GithubRegistrar (production)
-	//   neither                             → error: GITHUB_ORG_URL is required
-	//
-	// The stub path is checked FIRST so an explicitly-configured fakegithub stub
-	// wins even though a GMC-provisioned AGC now always carries GITHUB_ORG_URL
-	// (threaded from the required spec.gitHubURL field). STUB_AUTH_URL /
-	// STUB_BROKER_URL only reach a GMC-provisioned AGC via AGC_EXTRA_* with the
-	// testing-only --allow-agc-extra-env flag, so production AGCs never have them
-	// set and always fall through to the GithubRegistrar. To switch a stub-backed
-	// AGC to real GitHub, unset the stub env (the e2e suite does exactly this).
-	registrar, err := buildRegistrar(cfg)
-	if err != nil {
-		return err
-	}
-
 	if err := registerReconcilers(mgr, reconcilerDeps{
-		gatewayName:   gatewayName,
-		brokerCfg:     buildBrokerConfig(cfg),
-		tokenMgr:      tokenMgr,
-		registrar:     registrar,
-		metrics:       m,
-		scaleSet:      sm,
-		prov:          prov,
-		agentKeyType:  agentKeyType,
-		usageSampler:  usageSampler,
-		imageResolver: imageResolver,
-		// Keyed off exactly the pair buildRegistrar's stub case uses, so the two
-		// acquisition tiers cannot end up pointed at different backends.
+		gatewayName:     gatewayName,
+		tokenMgr:        tokenMgr,
+		metrics:         m,
+		scaleSet:        sm,
+		prov:            prov,
+		usageSampler:    usageSampler,
+		imageResolver:   imageResolver,
 		scaleSetStubURL: scaleSetStubBaseURL(cfg),
 	}); err != nil {
 		return err
@@ -472,25 +432,21 @@ func run() error {
 }
 
 // reconcilerDeps is the process-wide machinery the reconcilers share. The
-// TokenManager, Registrar, Metrics and Provisioner are single instances per
+// TokenManager, Metrics and Provisioner are single instances per
 // process (the provisioner Target seam own-refs whichever CR is being served).
 type reconcilerDeps struct {
 	gatewayName  string
-	brokerCfg    controller.BrokerConfig
 	tokenMgr     *token.Manager
-	registrar    agentpool.Registrar
 	metrics      *runnercore.Metrics
 	scaleSet     *scalesetlistener.Metrics
 	prov         *provisioner.Provisioner
-	agentKeyType agentpool.KeyType
 	usageSampler *usage.Sampler
 	// imageResolver reads the worker image's runner version from its registry (Q988).
 	imageResolver *runnerimage.Resolver
 	// scaleSetStubURL re-points the scale-set bootstrap at a fake-GitHub stub, for
 	// the deployed fake-GitHub e2e tier. Empty in production — it is set only from
-	// the same STUB_AUTH_URL + STUB_BROKER_URL pair that selects the classic tier's
-	// StubRegistrar, which reaches a GMC-provisioned AGC only under the testing-only
-	// --allow-agc-extra-env flag.
+	// the STUB_AUTH_URL + STUB_BROKER_URL pair, which reaches a GMC-provisioned AGC
+	// only under the testing-only --allow-agc-extra-env flag.
 	scaleSetStubURL string
 }
 
@@ -524,19 +480,16 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 		APIReader:       mgr.GetAPIReader(),
 		Log:             slog.New(logr.ToSlogHandler(ctrl.Log.WithName("runnerset"))),
 		TokenManager:    deps.tokenMgr,
-		Registrar:       deps.registrar,
 		Metrics:         deps.metrics,
 		ScaleSetMetrics: deps.scaleSet,
 		Provisioner:     deps.prov,
 		ImageResolver:   deps.imageResolver,
-		AgentKeyType:    deps.agentKeyType,
 		GatewayName:     deps.gatewayName,
 		Recorder:        mgr.GetEventRecorder("runnerset-controller"),
 		EventReader:     mgr.GetAPIReader(),
-		BrokerConfig:    deps.brokerCfg,
 		Sizing:          deps.usageSampler,
-		// Empty unless the same stub env that selected the StubRegistrar does, so
-		// production always derives the scale-set endpoints from githubURL.
+		// Empty unless the stub env is set, so production always derives the
+		// scale-set endpoints from githubURL.
 		ScaleSetStubBaseURL: deps.scaleSetStubURL,
 	}
 	if err := rsr.SetupWithManager(mgr); err != nil {

@@ -2,21 +2,14 @@ package provisioner_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
-	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
-	"github.com/actions-gateway/github-actions-gateway/broker"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -34,16 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
-
-// errOnly adapts a JobHandlerFunc to return only its error, dropping the Q260
-// pod-phase-proxy result these provisioning tests don't assert on (that result is
-// covered directly in provisioner_result_test.go and the listener fan-out tests).
-func errOnly(h listener.JobHandlerFunc) func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
-	return func(ctx context.Context, runServiceURL, planID string, payload []byte, jitConfig string) error {
-		_, err := h(ctx, runServiceURL, planID, payload, jitConfig)
-		return err
-	}
-}
 
 // newTestMetrics builds a Metrics with unregistered counters/histograms safe
 // for per-test use (not added to the global Prometheus registry).
@@ -175,9 +158,11 @@ type testGroupSpec struct {
 	MaxWorkerLifetime  *metav1.Duration
 }
 
-// handler returns the job handler p provisions g's workers through.
-func (g *testGroup) handler(p *provisioner.Provisioner) listener.JobHandlerFunc {
-	return p.Handle(&testGroupTarget{g: g, p: p})
+// provision provisions one worker for g the way the scale-set listener does for an
+// assigned job. It returns once the pod exists.
+func (g *testGroup) provision(ctx context.Context, p *provisioner.Provisioner, jobID string) error {
+	return p.ProvisionScaleSetWorker(ctx, &testGroupTarget{g: g, p: p},
+		provisioner.ScaleSetJob{JobID: jobID, JITConfig: "jit-" + jobID, RunID: "1"})
 }
 
 type testGroupTarget struct {
@@ -248,75 +233,6 @@ func (t *testGroupTarget) Resolve(context.Context) (*provisioner.ResolvedSpec, e
 	return spec, nil
 }
 
-func stubPayload(runID int64) []byte {
-	b, _ := json.Marshal(map[string]interface{}{"run_id": runID})
-	return b
-}
-
-// stubPayloadFull returns a payload carrying a complete run identity in the shape a
-// real AcquireJob response uses: the identity in the serialised `github` context,
-// the job name as a variable. Deliberately NOT the variables-only shape the tests
-// used to build — that shape is one GitHub never sends, and building it here is what
-// let the classic tier ship unable to read a real payload's run identity (Q495).
-// testdata/job_payload.json is the capture this mirrors.
-func stubPayloadFull(owner, repo string, runID int64) []byte {
-	b, _ := json.Marshal(map[string]interface{}{
-		"variables": map[string]interface{}{
-			"system.github.job": map[string]interface{}{"value": "build"},
-		},
-		"contextData": map[string]interface{}{
-			"github": map[string]interface{}{
-				"t": 2,
-				"d": []map[string]interface{}{
-					{"k": "run_id", "v": fmt.Sprintf("%d", runID)},
-					{"k": "repository", "v": owner + "/" + repo},
-					{"k": "workflow", "v": "CI"},
-				},
-			},
-		},
-	})
-	return b
-}
-
-// evictPod sets the pod's phase to Failed with reason "Evicted".
-func evictPod(ctx context.Context, t *testing.T, c client.Client, ns, name string) {
-	t.Helper()
-	var pod corev1.Pod
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
-	pod.Status.Phase = corev1.PodFailed
-	pod.Status.Reason = "Evicted"
-	require.NoError(t, c.Status().Update(ctx, &pod))
-}
-
-// preemptPod marks the named pod as kube-scheduler marks a preemption victim — the
-// DisruptionTarget/PreemptionByScheduler condition — and moves it to phase in the same
-// status write, which is what the classic path's single poll Get observes.
-//
-// The pod is left in the API rather than deleted because the scheduler's delete is
-// graceful: the victim stays readable for its termination grace period, and it is that
-// window the AGC observes it in.
-func preemptPod(ctx context.Context, t *testing.T, c client.Client, ns, name string, phase corev1.PodPhase) {
-	t.Helper()
-	var pod corev1.Pod
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
-	pod.Status.Phase = phase
-	pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
-		Type:   corev1.DisruptionTarget,
-		Status: corev1.ConditionTrue,
-		Reason: corev1.PodReasonPreemptionByScheduler,
-	})
-	require.NoError(t, c.Status().Update(ctx, &pod))
-}
-
-// completePod transitions the named pod in the fake client to Succeeded.
-func completePod(ctx context.Context, t *testing.T, c client.Client, ns, name string, phase corev1.PodPhase) {
-	t.Helper()
-	var pod corev1.Pod
-	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &pod))
-	pod.Status.Phase = phase
-	require.NoError(t, c.Status().Update(ctx, &pod))
-}
-
 // findPod returns the first pod in the namespace (test helper for single-pod scenarios).
 func findPod(ctx context.Context, t *testing.T, c client.Client, ns string) *corev1.Pod {
 	t.Helper()
@@ -365,26 +281,16 @@ func TestProvisioner_CreatesPodAndSecret(t *testing.T) {
 	p.Metrics = m
 
 	rg := newRG("mygroup", "team-a")
-	payload := stubPayload(42)
 
-	// Run provisioner in background; complete pod immediately.
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "http://run-svc", "plan-abc-123", payload, "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-abc-123"))
 
-	// Wait for the pod to appear, then complete it.
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	assert.Equal(t, agcnames.ControllerName, pod.Labels["app.kubernetes.io/managed-by"])
 	assert.Equal(t, "mygroup", pod.Labels[provisioner.LabelRunnerSet])
 
 	secret := findSecret(ctx, t, fc, "team-a", "job-")
 	require.NotNil(t, secret)
-	assert.Equal(t, payload, secret.Data["payload"])
 	assert.Equal(t, []byte("plan-abc-123"), secret.Data["plan-id"])
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // TestProvisioner_ForwardsJITConfigIntoSecret verifies that the agent's
@@ -400,22 +306,13 @@ func TestProvisioner_ForwardsJITConfigIntoSecret(t *testing.T) {
 	rg := newRG("mygroup", "team-a")
 	const jitBlob = "aGVsbG8tand0LWNvbmZpZw=="
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-jit", stubPayload(7), jitBlob)
-	}()
-
-	// Wait for the Pod (created strictly after the Secret) so the findSecret
-	// below is race-free. See waitForPodCreated for context.
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, &testGroupTarget{g: rg, p: p},
+		provisioner.ScaleSetJob{JobID: "plan-jit", JITConfig: jitBlob}))
 
 	secret := findSecret(ctx, t, fc, "team-a", "job-")
 	require.NotNil(t, secret)
 	assert.Equal(t, []byte(jitBlob), secret.Data["jitconfig"],
 		"worker Secret must carry the JIT blob under the 'jitconfig' key")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // fakeTarget is a minimal provisioner.Target for exercising ProvisionScaleSetWorker
@@ -526,58 +423,6 @@ func TestProvisioner_ScaleSetWorker_StampsRunnerName(t *testing.T) {
 		"a job with no runner name must stamp no annotation rather than an empty one")
 }
 
-// TestProvisioner_OmitsJITKeyWhenEmpty pins the contract that an empty
-// jitConfig string does not create a Secret entry. Stub-registrar agents
-// (used by integration tests against fakegithub) produce no JIT blob, and
-// the wrapper treats a missing key as a no-op materialization step.
-func TestProvisioner_OmitsJITKeyWhenEmpty(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-
-	rg := newRG("mygroup", "team-a")
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-nojit", stubPayload(8), "")
-	}()
-
-	// Wait for the Pod (created strictly after the Secret) so the findSecret
-	// below is race-free. See waitForPodCreated for context.
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-
-	secret := findSecret(ctx, t, fc, "team-a", "job-")
-	require.NotNil(t, secret)
-	_, present := secret.Data["jitconfig"]
-	assert.False(t, present, "jitconfig key must be absent when no blob was provided")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-}
-
-func TestProvisioner_DeletesSecretOnCompletion(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-
-	rg := newRG("mygroup", "team-a")
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-del", stubPayload(1), "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-
-	// Secret must be gone.
-	secret := findSecret(ctx, t, fc, "team-a", "job-")
-	assert.Nil(t, secret, "job Secret should be deleted after pod completion")
-}
-
 func TestProvisioner_MaxWorkersHolds(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
@@ -614,7 +459,7 @@ func TestProvisioner_MaxWorkersHolds(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := errOnly(rg.handler(p))(ctx, "", "plan-hold", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-hold")
 	assert.ErrorContains(t, err, "ceiling")
 
 	// No new pod created, but the existing 3 are still there.
@@ -664,10 +509,7 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 
 	p := newProvisioner(fc)
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-tier", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-tier"))
 
 	// Wait specifically for a pod that is NOT one of the pre-existing ones.
 	var newPod *corev1.Pod
@@ -687,9 +529,6 @@ func TestProvisioner_PriorityTiersAssignment(t *testing.T) {
 	}, 2*time.Second, 5*time.Millisecond)
 	require.NotNil(t, newPod, "a new pod should have been created")
 	assert.Equal(t, "runner-critical", newPod.Spec.PriorityClassName)
-
-	completePod(ctx, t, fc, "team-a", newPod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 func TestProvisioner_PriorityTiersCeiling(t *testing.T) {
@@ -728,7 +567,7 @@ func TestProvisioner_PriorityTiersCeiling(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := errOnly(rg.handler(p))(ctx, "", "plan-ceil", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-ceil")
 	assert.ErrorContains(t, err, "ceiling")
 
 	var list corev1.PodList
@@ -746,17 +585,11 @@ func TestProvisioner_WorkerImageFallback(t *testing.T) {
 	rg := newRG("mygroup", "team-a")
 	// WorkerImage intentionally empty.
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-img", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-img"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	runnerContainer := runnerOf(t, pod)
 	assert.Equal(t, "my-custom-image:latest", runnerContainer.Image)
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // TestProvisioner_NamedImagelessRunnerGapFilled covers Q233: a tenant podTemplate
@@ -774,17 +607,11 @@ func TestProvisioner_NamedImagelessRunnerGapFilled(t *testing.T) {
 	// PodTemplate names the runner container but leaves its image empty.
 	rg.Spec.PodTemplate.Spec.Containers = []corev1.Container{{Name: "runner"}}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-gapfill", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-gapfill"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	runner := runnerOf(t, pod)
 	assert.Equal(t, "my-custom-image:latest", runner.Image, "image-less runner must be gap-filled with the resolved worker image")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // TestProvisioner_NamedRunnerImageNotOverridden asserts the Q233 gap-fill never
@@ -800,17 +627,11 @@ func TestProvisioner_NamedRunnerImageNotOverridden(t *testing.T) {
 	// PodTemplate names the runner container with an explicit image.
 	rg.Spec.PodTemplate.Spec.Containers = []corev1.Container{{Name: "runner", Image: "tenant-image:pinned"}}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-nooverride", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-nooverride"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	runner := runnerOf(t, pod)
 	assert.Equal(t, "tenant-image:pinned", runner.Image, "an explicitly-set runner image must not be overridden")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
@@ -827,10 +648,7 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 	rg.Spec.PodTemplate.Spec.HostPID = hostTrue
 	rg.Spec.PodTemplate.Spec.HostNetwork = hostTrue
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-reserved", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-reserved"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 	assert.Equal(t, "agc-worker", pod.Spec.ServiceAccountName)
@@ -841,9 +659,6 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 	assert.NotNil(t, autoMount)
 	assert.False(t, *autoMount)
 	assert.Equal(t, corev1.RestartPolicyNever, pod.Spec.RestartPolicy)
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // failPodCreateClient wraps a client.Client and returns an error for Pod creates,
@@ -868,7 +683,7 @@ func TestProvisioner_SecretCleanupOnPodCreateFailure(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := errOnly(rg.handler(p))(ctx, "", "plan-conflict", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-conflict")
 	assert.Error(t, err)
 
 	// Secret must be cleaned up even though pod creation failed.
@@ -879,58 +694,6 @@ func TestProvisioner_SecretCleanupOnPodCreateFailure(t *testing.T) {
 	}
 }
 
-func TestProvisioner_ContextCancellation(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-
-	rg := newRG("mygroup", "team-a")
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-cancel", stubPayload(1), "")
-	}()
-
-	// Wait for pod to be created, then cancel.
-	waitForPodCreated(ctx, t, fc, "team-a")
-
-	cancel()
-
-	select {
-	case err := <-done:
-		assert.ErrorIs(t, err, context.Canceled)
-	case <-time.After(2 * time.Second):
-		t.Fatal("provisioner did not return after context cancellation")
-	}
-}
-
-func TestProvisioner_PodNameDNSSafe(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-
-	rg := newRG("My/Group", "team-a")
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "PLAN/ID:with:COLONS/and/SLASHES", stubPayload(1), "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-
-	// Pod name must be a valid DNS label: lowercase, alphanumeric+hyphens, ≤63 chars.
-	assert.LessOrEqual(t, len(pod.Name), 63)
-	for _, c := range pod.Name {
-		assert.True(t, (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-',
-			"pod name %q contains invalid char %q", pod.Name, c)
-	}
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-}
-
 func TestProvisioner_SecretMountedInPod(t *testing.T) {
 	defer goleak.VerifyNone(t)
 	ctx := context.Background()
@@ -939,10 +702,7 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-mount", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-mount"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -976,494 +736,6 @@ func TestProvisioner_SecretMountedInPod(t *testing.T) {
 		}
 	}
 	assert.True(t, hasEnv, "runner container must have PAYLOAD_SECRET_PATH env var")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-}
-
-func TestProvisioner_EvictionAutoRetry(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-	// Capture the rerun API request.
-	rerunCalled := make(chan string, 1) // receives the request URL path
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCalled <- r.URL.Path
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-	payload := stubPayloadFull("myorg", "myrepo", 99)
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-evict", payload, "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-
-	// Job annotations must be stamped on the pod from the payload.
-	assert.Equal(t, "99", pod.Annotations["actions-gateway.com/run-id"])
-	assert.Equal(t, "myorg/myrepo", pod.Annotations["actions-gateway.com/repository"])
-	assert.Equal(t, "build", pod.Annotations["actions-gateway.com/job-name"])
-	assert.Equal(t, "CI", pod.Annotations["actions-gateway.com/workflow"])
-
-	evictPod(ctx, t, fc, "team-a", pod.Name)
-
-	require.NoError(t, <-done)
-
-	select {
-	case path := <-rerunCalled:
-		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/99/rerun-failed-jobs", path)
-	case <-time.After(2 * time.Second):
-		t.Fatal("rerun API was not called within timeout")
-	}
-
-	// H1: EvictionRetries counter must be incremented once.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
-}
-
-// TestProvisioner_OwnLimitEvictionIsWithheld is the classic half of Q1177: a worker the
-// kubelet evicted for exceeding its own ephemeral-storage limit reaches the eviction
-// arm and is withheld there, with no budget slot spent and no re-run requested. The
-// message is the kubelet's own, measured on kind v1.35.5.
-func TestProvisioner_OwnLimitEvictionIsWithheld(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-	var rerunCalls atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		rerunCalls.Add(1)
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	rec := &fakeEventRecorder{}
-	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-	rg.events = rec
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-evict", stubPayloadFull("myorg", "myrepo", 99), "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	var live corev1.Pod
-	require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
-	live.Status.Phase = corev1.PodFailed
-	live.Status.Reason = "Evicted"
-	live.Status.Message = "Pod ephemeral local storage usage exceeds the total limit of containers 256Mi. "
-	require.NoError(t, fc.Status().Update(ctx, &live))
-
-	require.NoError(t, <-done)
-
-	assert.Zero(t, rerunCalls.Load(), "an own-limit eviction must not be re-run")
-	assert.Zero(t, testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")),
-		"no budget slot may be reserved for a withheld re-run")
-	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("team-a", "mygroup", "classic", "eviction", "own_limit")))
-	require.Len(t, rec.withReason("EvictionRerunWithheld"), 1)
-	assert.Contains(t, rec.withReason("EvictionRerunWithheld")[0].note, "256Mi")
-}
-
-// TestProvisioner_PreemptionAutoRetry is the classic half of Q497. A worker displaced by
-// a higher-priority priorityTiers tier is deleted by kube-scheduler, not failed by the
-// kubelet, so it never carries Evicted and reached no recovery at all before this — the
-// displaced run needed a manual re-run, which is exactly what the oversubscription claim
-// says it should not.
-//
-// The victim here lands in Succeeded deliberately. Q423 measured that the terminal phase
-// on this path is the interrupted container's own exit status, so a preempted worker can
-// look, by phase alone, like a job that finished cleanly. Asserting the re-run fires
-// anyway is asserting that the DisruptionTarget condition — not the phase — is what
-// drives the decision.
-func TestProvisioner_PreemptionAutoRetry(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-	rerunCalled := make(chan string, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCalled <- r.URL.Path
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-	payload := stubPayloadFull("myorg", "myrepo", 77)
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-preempt", payload, "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	preemptPod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-
-	require.NoError(t, <-done)
-
-	select {
-	case path := <-rerunCalled:
-		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/77/rerun-failed-jobs", path)
-	case <-time.After(2 * time.Second):
-		t.Fatal("a preempted worker's run was not re-run within timeout")
-	}
-
-	// Attributed to preemption, not to node pressure: an operator diagnosing a climbing
-	// eviction rate goes looking at node memory and disk, which would be the wrong hunt.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "preemption")))
-	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
-}
-
-// TestProvisioner_NodeShutdownAutoRetry is the classic half of Q1179 and Q1207. A worker
-// whose node shut down fails with reason Terminated and a kubelet DisruptionTarget, which
-// neither the eviction nor the preemption arm keys on, and nothing deletes it, so the
-// deletion arm never fires either. One on a dead node tainted out-of-service is failed by
-// PodGC over a runner container still recorded Running, which leaves the deletion arm no
-// termination record to order against.
-func TestProvisioner_NodeShutdownAutoRetry(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		shape func(*corev1.Pod)
-	}{
-		{name: "kubelet shutdown", shape: func(pod *corev1.Pod) {
-			pod.Status.Reason = "Terminated"
-			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
-				Type:   corev1.DisruptionTarget,
-				Status: corev1.ConditionTrue,
-				Reason: corev1.PodReasonTerminationByKubelet,
-			})
-			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
-				Name:        "runner",
-				State:       corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137}},
-				ContainerID: "containerd://runner",
-			}}
-		}},
-		{name: "out-of-service node", shape: func(pod *corev1.Pod) {
-			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
-				Type:   corev1.DisruptionTarget,
-				Status: corev1.ConditionTrue,
-				Reason: "DeletionByTaintManager",
-			})
-			pod.Status.ContainerStatuses = []corev1.ContainerStatus{{
-				Name:  "runner",
-				State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
-			}}
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) { testNodeShutdownAutoRetry(t, tc.shape) })
-	}
-}
-
-func testNodeShutdownAutoRetry(t *testing.T, shape func(*corev1.Pod)) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-	rerunCalled := make(chan string, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCalled <- r.URL.Path
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-	payload := stubPayloadFull("myorg", "myrepo", 78)
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-shutdown", payload, "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	var live corev1.Pod
-	require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
-	live.Status.Phase = corev1.PodFailed
-	shape(&live)
-	require.NoError(t, fc.Status().Update(ctx, &live))
-
-	require.NoError(t, <-done)
-
-	select {
-	case path := <-rerunCalled:
-		assert.Equal(t, "/repos/myorg/myrepo/actions/runs/78/rerun-failed-jobs", path)
-	case <-time.After(2 * time.Second):
-		t.Fatal("a node-shutdown worker's run was not re-run within timeout")
-	}
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "node_shutdown")))
-}
-
-// TestProvisioner_Q1198_NodeShutdownBeforeStartForceCancels is the classic half of
-// Q1198. The kubelet's shutdown manager fails a worker still pulling its image the same
-// way it fails a running one, but that job never ran: re-running its run is refused
-// until GitHub's unstarted-job timeout concludes it, so it takes the abandoned handling
-// instead — reported abandoned, its run force-cancelled, and no re-run fired at once.
-func TestProvisioner_Q1198_NodeShutdownBeforeStartForceCancels(t *testing.T) {
-	waiting := []corev1.ContainerStatus{{
-		Name:  "runner",
-		State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ContainerCreating"}},
-	}}
-	for _, tc := range []struct {
-		name   string
-		reason string
-	}{
-		{name: "kubelet shutdown", reason: corev1.PodReasonTerminationByKubelet},
-		{name: "PodGC orphan", reason: "DeletionByPodGC"},
-		{name: "out-of-service node", reason: "DeletionByTaintManager"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			defer goleak.VerifyNone(t)
-			ctx := context.Background()
-			fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-			var forceCancels, reruns atomic.Int64
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				switch {
-				case strings.HasSuffix(r.URL.Path, "/runs/78/force-cancel"):
-					forceCancels.Add(1)
-				case strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs"):
-					reruns.Add(1)
-				}
-				w.WriteHeader(http.StatusAccepted)
-			}))
-			defer srv.Close()
-
-			p := newProvisioner(fc)
-			p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
-			p.GitHubAPIURL = srv.URL
-			p.HTTPClient = srv.Client()
-
-			type result struct {
-				result broker.TaskResult
-				err    error
-			}
-			done := make(chan result, 1)
-			go func() {
-				r, err := newRG("mygroup", "team-a").handler(p)(ctx, "", "plan-q1198", stubPayloadFull("myorg", "myrepo", 78), "")
-				done <- result{r, err}
-			}()
-
-			pod := waitForPodCreated(ctx, t, fc, "team-a")
-			var live corev1.Pod
-			require.NoError(t, fc.Get(ctx, types.NamespacedName{Namespace: "team-a", Name: pod.Name}, &live))
-			live.Status.Phase = corev1.PodFailed
-			live.Status.Conditions = append(live.Status.Conditions, corev1.PodCondition{
-				Type: corev1.DisruptionTarget, Status: corev1.ConditionTrue, Reason: tc.reason,
-			})
-			live.Status.ContainerStatuses = waiting
-			require.NoError(t, fc.Status().Update(ctx, &live))
-
-			got := <-done
-			require.NoError(t, got.err)
-			assert.Equal(t, broker.TaskResultAbandoned, got.result)
-			assert.Equal(t, int64(1), forceCancels.Load(), "the run of a job that never ran is concluded first")
-			assert.Equal(t, int64(0), reruns.Load(), "no re-run until capacity returns (Q691)")
-		})
-	}
-}
-
-// TestProvisioner_OrdinaryCompletionIsNotRetried is the negative that bounds the change
-// above: a worker that simply finished — no disruption marker of any kind — must not be
-// re-run, whatever its phase. Without this, "recover on preemption" could silently
-// become "re-run everything that ends".
-func TestProvisioner_OrdinaryCompletionIsNotRetried(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-	var rerunCount atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		rerunCount.Add(1)
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	p := newProvisioner(fc)
-	p.TokenFunc = func(context.Context) (string, error) { return "test-token", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-
-	// A plain failure is the sharper case than a plain success: it is what a genuinely
-	// broken job produces, and it shares a phase with a kubelet eviction.
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-plain", stubPayloadFull("myorg", "myrepo", 78), "")
-	}()
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodFailed)
-	require.NoError(t, <-done)
-
-	assert.Equal(t, int64(0), rerunCount.Load(),
-		"a job that failed on its own must not be re-run; only a disruption qualifies")
-}
-
-// TestProvisioner_EvictionRetryBudgetExhausted verifies that a second eviction
-// for the same run_id on the same Provisioner instance does not trigger another
-// rerun API call once MaxEvictionRetries is reached.
-func TestProvisioner_EvictionRetryBudgetExhausted(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-
-	var rerunCount int
-	rerunCalls := make(chan struct{}, 10)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCount++
-		rerunCalls <- struct{}{}
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-
-	// MaxEvictionRetries=1: first eviction retries, second exhausts the budget.
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	rec := &fakeEventRecorder{}
-	p.MaxEvictionRetries = 1
-	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "ns")
-	rg.events = rec
-	payload := stubPayloadFull("org", "repo", 7)
-
-	// Helper: run one provision cycle with unique planID; returns after pod eviction.
-	// Uses phase-based lookup to find the current active pod (ignoring prior-cycle
-	// evicted pods that remain in the fake client with Phase=Failed).
-	runCycle := func(planID string) {
-		t.Helper()
-		done := make(chan error, 1)
-		go func() { done <- errOnly(rg.handler(p))(ctx, "", planID, payload, "") }()
-
-		var podToEvict *corev1.Pod
-		require.Eventually(t, func() bool {
-			var list corev1.PodList
-			if err := fc.List(ctx, &list, client.InNamespace("ns")); err != nil {
-				return false
-			}
-			for i := range list.Items {
-				if list.Items[i].Status.Phase != corev1.PodFailed {
-					podToEvict = &list.Items[i]
-					return true
-				}
-			}
-			return false
-		}, 2*time.Second, 5*time.Millisecond, "active pod should appear for planID %s", planID)
-		evictPod(ctx, t, fc, "ns", podToEvict.Name)
-		require.NoError(t, <-done)
-	}
-
-	// First eviction (count 0 → 1): rerun API must be called.
-	runCycle("plan-evict-1")
-	select {
-	case <-rerunCalls:
-	case <-time.After(2 * time.Second):
-		t.Fatal("expected rerun API call on first eviction")
-	}
-
-	// Second eviction (count 1 >= MaxEvictionRetries=1): budget exhausted, no API call.
-	// H5: the budget check runs synchronously inside provision (only the GitHub calls
-	// are detached — Q503), so these assertions are race-free — no sleep needed.
-	runCycle("plan-evict-2")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic", "eviction")))
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "mygroup", "classic", "eviction")))
-	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
-
-	// Budget exhaustion records a Warning Event on the owner so the operator sees a
-	// manual re-run is required, not just the metric (Q170).
-	evs := rec.withReason("EvictionRetriesExhausted")
-	require.Len(t, evs, 1)
-	assert.Equal(t, corev1.EventTypeWarning, evs[0].eventtype)
-	assert.Equal(t, "ns", evs[0].namespace)
-	assert.Equal(t, "mygroup", evs[0].name)
-	assert.Contains(t, evs[0].note, "manual re-run")
-}
-
-// TestProvisioner_EvictionRerunAPI5xx verifies that a 5xx response from the
-// rerun API is non-fatal: provision still returns nil and the EvictionRetries
-// counter is incremented.
-func TestProvisioner_EvictionRerunAPI5xx(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-
-	rerunPaths := make(chan string, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunPaths <- r.URL.Path
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer srv.Close()
-
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	p.TokenFunc = func(context.Context) (string, error) { return "tok-5xx", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-	payload := stubPayloadFull("org5xx", "repo5xx", 55)
-
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-5xx", payload, "") }()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	evictPod(ctx, t, fc, "team-a", pod.Name)
-
-	// H2: 5xx response is non-fatal — provision must return nil.
-	require.NoError(t, <-done)
-
-	// Rerun was attempted.
-	select {
-	case path := <-rerunPaths:
-		assert.Equal(t, "/repos/org5xx/repo5xx/actions/runs/55/rerun-failed-jobs", path)
-	case <-time.After(2 * time.Second):
-		t.Fatal("rerun API was not called within timeout")
-	}
-
-	// EvictionRetries counter incremented even when the API returns 5xx.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
-
-	// The re-run never landed, so the failure counter must say so (Q503). Eventually:
-	// the GitHub calls run detached from provision, so the failure is recorded a
-	// moment after the stub's response is read.
-	assert.Eventually(t, func() bool {
-		return testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("team-a", "mygroup", "classic", "eviction", "api_error")) == 1
-	}, 2*time.Second, 5*time.Millisecond, "a 5xx re-run must be surfaced as api_error")
 }
 
 // TestProvisioner_PriorityTiersSecondTier verifies that the second priority tier
@@ -1505,8 +777,7 @@ func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
 
 	p := newProvisioner(fc)
 
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-tier2", stubPayload(1), "") }()
+	require.NoError(t, rg.provision(ctx, p, "plan-tier2"))
 
 	require.Eventually(t, func() bool {
 		var list corev1.PodList
@@ -1530,9 +801,6 @@ func TestProvisioner_PriorityTiersSecondTier(t *testing.T) {
 	require.NotNil(t, newPod, "a new pod should have been created")
 	// H4: 6 active pods is above threshold 5, so second tier "runner-standard" applies.
 	assert.Equal(t, "runner-standard", newPod.Spec.PriorityClassName)
-
-	completePod(ctx, t, fc, "team-a", newPod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // TestProvisioner_PriorityTiersBoundary pins the comparison semantics: exactly
@@ -1574,8 +842,7 @@ func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
 
 	p := newProvisioner(fc)
 
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-boundary", stubPayload(1), "") }()
+	require.NoError(t, rg.provision(ctx, p, "plan-boundary"))
 
 	require.Eventually(t, func() bool {
 		var list corev1.PodList
@@ -1596,9 +863,6 @@ func TestProvisioner_PriorityTiersBoundary(t *testing.T) {
 	require.NotNil(t, newPod, "a new pod should have been created at boundary")
 	// H4: activePods == threshold (5 == 5) uses strict <, so it falls to second tier.
 	assert.Equal(t, "runner-standard", newPod.Spec.PriorityClassName)
-
-	completePod(ctx, t, fc, "team-a", newPod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // TestProvisioner_PendingPodsCountTowardCeiling verifies that Pending pods are
@@ -1651,72 +915,13 @@ func TestProvisioner_PendingPodsCountTowardCeiling(t *testing.T) {
 	}
 
 	p := newProvisioner(fc)
-	err := errOnly(rg.handler(p))(ctx, "", "plan-pending-ceil", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-pending-ceil")
 	// M3: ceiling is enforced because Pending pods count as active.
 	assert.ErrorContains(t, err, "ceiling")
 
 	var podList corev1.PodList
 	require.NoError(t, fc.List(ctx, &podList, client.InNamespace("team-a")))
 	assert.Len(t, podList.Items, 3, "no new pod should be created when Pending pods fill the ceiling")
-}
-
-// TestProvisioner_PodDeletedExternallySucceeds verifies that an operator
-// manually deleting the pod is not read as an eviction: provision returns nil
-// and the rerun API is not called. The pod here never ran a container, so the
-// deletion is a removed-before-start shape: the job is abandoned and its run
-// force-cancelled — the honest fast ending (Q683) — not re-run.
-func TestProvisioner_PodDeletedExternallySucceeds(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-
-	// Stub server recording every REST call so rerun and force-cancel are
-	// distinguishable.
-	apiCalls := make(chan string, 5)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiCalls <- r.URL.Path
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-	p.TokenFunc = func(context.Context) (string, error) { return "tok-del", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	rg := newRG("mygroup", "team-a")
-	// Use a payload with run_id so eviction handling would fire if triggered.
-	payload := stubPayloadFull("org-del", "repo-del", 77)
-
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-extdel", payload, "") }()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-
-	// Simulate operator deleting the pod externally.
-	require.NoError(t, fc.Delete(ctx, pod))
-
-	// M4: provision must return nil (external deletion is treated as success).
-	require.NoError(t, <-done)
-
-	// The rerun API must not be called (not-found is not an eviction); the one
-	// REST call is the abandoned run's force-cancel (Q683).
-	select {
-	case path := <-apiCalls:
-		assert.Equal(t, "/repos/org-del/repo-del/actions/runs/77/force-cancel", path,
-			"the only REST call for a worker deleted before it ran is the run's force-cancel")
-	default:
-		t.Fatal("the abandoned run must be force-cancelled (Q683)")
-	}
-	select {
-	case path := <-apiCalls:
-		t.Fatalf("unexpected extra REST call %s: rerun must not fire for an external delete", path)
-	default:
-	}
-
-	// Secret must be cleaned up.
-	secret := findSecret(ctx, t, fc, "team-a", "job-")
-	assert.Nil(t, secret, "job Secret should be deleted after external pod deletion")
 }
 
 func TestBuildPod_InjectsProxyEnv(t *testing.T) {
@@ -1730,10 +935,7 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-proxy", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-proxy"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -1744,9 +946,6 @@ func TestBuildPod_InjectsProxyEnv(t *testing.T) {
 	assert.Equal(t, "http://proxy.example.com:8080", envMap["HTTP_PROXY"])
 	assert.Equal(t, "http://proxy.example.com:8080", envMap["HTTPS_PROXY"])
 	assert.Equal(t, "localhost,127.0.0.1", envMap["NO_PROXY"])
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // proxyCA* mirror the unexported provisioner constants. Kept in sync via the
@@ -1776,10 +975,7 @@ func TestBuildPod_MountsProxyCASecret(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-proxy-ca", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-proxy-ca"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -1818,9 +1014,6 @@ func TestBuildPod_MountsProxyCASecret(t *testing.T) {
 	}
 	assert.Equal(t, testProxyCAMountPath+"/"+testProxyCAFileName, envMap["PROXY_CA_CERT_PATH"],
 		"PROXY_CA_CERT_PATH must point at the mounted cert so the worker wrapper can read it")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
 }
 
 // TestBuildPod_NoProxyCAWhenSecretNameEmpty verifies that the proxy-CA mount
@@ -1836,10 +1029,7 @@ func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-no-proxy-ca", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-no-proxy-ca"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -1859,65 +1049,6 @@ func TestBuildPod_NoProxyCAWhenSecretNameEmpty(t *testing.T) {
 			}
 		}
 	}
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-}
-
-// TestProvisioner_RerunURLRejectsAdversarialRepository verifies that adversarial
-// repository values from the payload do not reach the GitHub API. The rerun path
-// is exercised end-to-end via pod eviction so the full owner/repo extraction and
-// validation chain is covered.
-func TestProvisioner_RerunURLRejectsAdversarialRepository(t *testing.T) {
-	cases := []struct {
-		name  string
-		owner string
-		repo  string
-	}{
-		// ".." passes the old regex (dots are allowed) but must be rejected by
-		// the alphanumeric-first requirement to prevent path traversal.
-		{"path traversal via dot-dot owner", "..", "myrepo"},
-		{"path traversal via dot-dot repo", "myorg", ".."},
-		{"semicolon in owner", "my;org", "myrepo"},
-		{"space in repo name", "myorg", "my repo"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			defer goleak.VerifyNone(t)
-			ctx := context.Background()
-
-			rerunCalled := make(chan struct{}, 1)
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				rerunCalled <- struct{}{}
-				w.WriteHeader(http.StatusCreated)
-			}))
-			defer srv.Close()
-
-			fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-			p := newProvisioner(fc)
-			p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
-			p.GitHubAPIURL = srv.URL
-			p.HTTPClient = srv.Client()
-
-			rg := newRG("mygroup", "team-a")
-			payload := stubPayloadFull(tc.owner, tc.repo, 42)
-
-			done := make(chan error, 1)
-			go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-adv-repo", payload, "") }()
-
-			pod := waitForPodCreated(ctx, t, fc, "team-a")
-			evictPod(ctx, t, fc, "team-a", pod.Name)
-			require.NoError(t, <-done) // eviction is non-fatal
-
-			// Rerun API must not be called for adversarial owner/repo values.
-			select {
-			case <-rerunCalled:
-				t.Errorf("rerun API must not be called for adversarial owner=%q repo=%q", tc.owner, tc.repo)
-			default:
-			}
-		})
-	}
 }
 
 func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
@@ -1934,10 +1065,7 @@ func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 		Env:  []corev1.EnvVar{{Name: "HTTP_PROXY", Value: "http://bad-proxy.example.com"}},
 	}}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-overwrite", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-overwrite"))
 
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
 
@@ -1946,162 +1074,6 @@ func TestBuildPod_OverwritesTenantProxyEnv(t *testing.T) {
 		envMap[e.Name] = e.Value
 	}
 	assert.Equal(t, "http://real-proxy.example.com:8080", envMap["HTTP_PROXY"], "tenant HTTP_PROXY must be overwritten")
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-}
-
-// TestProvisioner_RGMaxEvictionRetriesZero verifies that setting maxEvictionRetries:0
-// on the RunnerGroup suppresses auto-retry: no rerun API call, exhausted metric incremented.
-func TestProvisioner_RGMaxEvictionRetriesZero(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-
-	rerunCalled := make(chan struct{}, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCalled <- struct{}{}
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	zero := int32(0)
-	rg := newRG("mygroup", "team-a")
-	rg.Spec.MaxEvictionRetries = &zero
-	payload := stubPayloadFull("org", "repo", 42)
-
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-zero-retry", payload, "") }()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	evictPod(ctx, t, fc, "team-a", pod.Name)
-	require.NoError(t, <-done)
-
-	// Rerun API must NOT be called.
-	select {
-	case <-rerunCalled:
-		t.Fatal("rerun API should not be called when maxEvictionRetries=0")
-	default:
-	}
-
-	// Exhausted counter must increment immediately.
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
-	assert.Equal(t, float64(0), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "mygroup", "classic", "eviction")))
-}
-
-// TestProvisioner_RGMaxEvictionRetriesOne verifies that maxEvictionRetries:1 on the
-// RunnerGroup overrides the provisioner default: one retry fires, then budget exhausts.
-func TestProvisioner_RGMaxEvictionRetriesOne(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-
-	var rerunCount int
-	rerunCalls := make(chan struct{}, 10)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunCount++
-		rerunCalls <- struct{}{}
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	// Provisioner default is 2; RG overrides to 1.
-	p := newProvisioner(fc)
-	m := newTestMetrics()
-	p.Metrics = m
-	p.MaxEvictionRetries = 2
-	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	one := int32(1)
-	rg := newRG("mygroup", "ns")
-	rg.Spec.MaxEvictionRetries = &one
-	payload := stubPayloadFull("org", "repo", 77)
-
-	runCycle := func(planID string) {
-		t.Helper()
-		done := make(chan error, 1)
-		go func() { done <- errOnly(rg.handler(p))(ctx, "", planID, payload, "") }()
-		var podToEvict *corev1.Pod
-		require.Eventually(t, func() bool {
-			var list corev1.PodList
-			if err := fc.List(ctx, &list, client.InNamespace("ns")); err != nil {
-				return false
-			}
-			for i := range list.Items {
-				if list.Items[i].Status.Phase != corev1.PodFailed {
-					podToEvict = &list.Items[i]
-					return true
-				}
-			}
-			return false
-		}, 2*time.Second, 5*time.Millisecond)
-		evictPod(ctx, t, fc, "ns", podToEvict.Name)
-		require.NoError(t, <-done)
-	}
-
-	// First eviction: retry fires (count 0 < 1).
-	runCycle("plan-rg-retry-1")
-	select {
-	case <-rerunCalls:
-	case <-time.After(2 * time.Second):
-		t.Fatal("expected rerun API call on first eviction")
-	}
-
-	// Second eviction: budget exhausted (count 1 >= 1), no retry.
-	runCycle("plan-rg-retry-2")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("ns", "mygroup", "classic", "eviction")))
-	assert.Equal(t, 1, rerunCount, "rerun API should be called exactly once")
-}
-
-// TestProvisioner_RGEvictionRetryDelay verifies that evictionRetryDelay on the
-// RunnerGroup overrides the provisioner-level delay.
-func TestProvisioner_RGEvictionRetryDelay(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-
-	rerunAt := make(chan time.Time, 1)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rerunAt <- time.Now()
-		w.WriteHeader(http.StatusCreated)
-	}))
-	defer srv.Close()
-
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-	p.EvictionRetryDelay = 0 // provisioner default is effectively zero in tests
-	p.TokenFunc = func(context.Context) (string, error) { return "tok", nil }
-	p.GitHubAPIURL = srv.URL
-	p.HTTPClient = srv.Client()
-
-	delay := metav1.Duration{Duration: 50 * time.Millisecond}
-	rg := newRG("mygroup", "team-a")
-	rg.Spec.EvictionRetryDelay = &delay
-	payload := stubPayloadFull("org", "repo", 11)
-
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-delay", payload, "") }()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	evictAt := time.Now()
-	evictPod(ctx, t, fc, "team-a", pod.Name)
-	require.NoError(t, <-done)
-
-	select {
-	case ts := <-rerunAt:
-		assert.GreaterOrEqual(t, ts.Sub(evictAt), 40*time.Millisecond,
-			"rerun should not fire before evictionRetryDelay elapses")
-	case <-time.After(2 * time.Second):
-		t.Fatal("rerun API was not called within timeout")
-	}
 }
 
 // TestProvisioner_QuotaRetrySucceeds verifies that a single quota rejection at pod
@@ -2120,15 +1092,11 @@ func TestProvisioner_QuotaRetrySucceeds(t *testing.T) {
 	p.QuotaRetryDelay = 1 * time.Millisecond
 
 	rg := newRG("mygroup", "team-a")
-	payload := stubPayload(1)
 
-	done := make(chan error, 1)
-	go func() { done <- errOnly(rg.handler(p))(ctx, "", "plan-quota-ok", payload, "") }()
+	require.NoError(t, rg.provision(ctx, p, "plan-quota-ok"))
 
 	// Pod appears after the first (failed) attempt retries.
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
+	waitForPodCreated(ctx, t, fc, "team-a")
 
 	// One quota retry recorded; none exhausted.
 	assert.Equal(t, float64(1), testutil.ToFloat64(m.QuotaRetries.WithLabelValues("team-a", "mygroup")))
@@ -2155,7 +1123,7 @@ func TestProvisioner_QuotaRetryExhausted(t *testing.T) {
 	rg := newRG("mygroup", "team-a")
 	rg.events = rec
 
-	err := errOnly(rg.handler(p))(ctx, "", "plan-quota-exhaust", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-quota-exhaust")
 	assert.Error(t, err)
 
 	// No pod created; Secret cleaned up.
@@ -2195,7 +1163,7 @@ func TestProvisioner_QuotaRetryDisabled(t *testing.T) {
 	rg.events = rec
 	rg.Spec.MaxQuotaRetries = &zero
 
-	err := errOnly(rg.handler(p))(ctx, "", "plan-quota-disabled", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-quota-disabled")
 	assert.Error(t, err)
 
 	// No pod; no retry counters incremented.
@@ -2221,7 +1189,7 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 
 	rg := newRG("mygroup", "team-a")
 
-	err := errOnly(rg.handler(p))(ctx, "", "plan-nonquota", stubPayload(1), "")
+	err := rg.provision(ctx, p, "plan-nonquota")
 	assert.Error(t, err)
 
 	// No quota retries attempted.
@@ -2229,19 +1197,12 @@ func TestProvisioner_NonQuotaCreateFailureNoRetry(t *testing.T) {
 	assert.Equal(t, float64(0), testutil.ToFloat64(m.QuotaRetriesExhausted.WithLabelValues("team-a", "mygroup")))
 }
 
-// runAndGetPod fires the provisioner's job handler for rg in a goroutine,
-// waits for the worker pod to be created, then completes it so the handler
-// returns cleanly (keeping goleak happy). It returns the created pod.
+// runAndGetPod provisions one worker for rg the way the scale-set listener does and
+// returns the created pod.
 func runAndGetPod(ctx context.Context, t *testing.T, p *provisioner.Provisioner, fc client.Client, rg *testGroup, planID, ns string) *corev1.Pod {
 	t.Helper()
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", planID, stubPayload(1), "")
-	}()
-	pod := waitForPodCreated(ctx, t, fc, ns)
-	completePod(ctx, t, fc, ns, pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-	return pod
+	require.NoError(t, rg.provision(ctx, p, planID))
+	return waitForPodCreated(ctx, t, fc, ns)
 }
 
 // TestBuildPod_BaselineSecurityDefaults verifies that under the default
@@ -2480,18 +1441,14 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 	rg := newRG("mygroup", "team-a")
 	rg.UID = types.UID("rg-uid-123")
 
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-ownerref", stubPayload(1), "")
-	}()
+	require.NoError(t, rg.provision(ctx, p, "plan-ownerref"))
 
+	// The worker Secret is handed to its pod once the pod exists (Q1154), so only
+	// the pod carries the RunnerSet reference.
 	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	secret := findSecret(ctx, t, fc, "team-a", "job-")
-	require.NotNil(t, secret)
 
 	for name, refs := range map[string][]metav1.OwnerReference{
-		"pod":    pod.OwnerReferences,
-		"secret": secret.OwnerReferences,
+		"pod": pod.OwnerReferences,
 	} {
 		require.Len(t, refs, 1, "%s must have exactly one ownerReference", name)
 		ref := refs[0]
@@ -2504,63 +1461,6 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 		assert.Nil(t, ref.BlockOwnerDeletion,
 			"%s must not set blockOwnerDeletion (needs finalizer perms under OwnerReferencesPermissionEnforcement)", name)
 	}
-
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-}
-
-// TestProvisioner_DeletesPodOnCompletionWhenTTLZero pins the completedPodTTL=0s
-// fast path: the provision goroutine deletes the worker pod itself in its
-// cleanup step, without waiting for the reconciler's reaper (Q95).
-func TestProvisioner_DeletesPodOnCompletionWhenTTLZero(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-
-	rg := newRG("mygroup", "team-a")
-	rg.Spec.CompletedPodTTL = &metav1.Duration{Duration: 0}
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-ttl0", stubPayload(1), "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-
-	assert.Nil(t, findPod(ctx, t, fc, "team-a"),
-		"worker pod must be deleted on completion when completedPodTTL is 0s")
-	assert.Nil(t, findSecret(ctx, t, fc, "team-a", "job-"),
-		"job Secret must be deleted on completion")
-}
-
-// TestProvisioner_RetainsPodOnCompletionByDefault pins the default retention
-// contract: with completedPodTTL omitted the goroutine leaves the terminal pod
-// in place (the reconciler's reaper deletes it after DefaultCompletedPodTTL),
-// giving operators a window to inspect a failed pod (Q95).
-func TestProvisioner_RetainsPodOnCompletionByDefault(t *testing.T) {
-	defer goleak.VerifyNone(t)
-	ctx := context.Background()
-	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
-	p := newProvisioner(fc)
-
-	rg := newRG("mygroup", "team-a")
-
-	done := make(chan error, 1)
-	go func() {
-		done <- errOnly(rg.handler(p))(ctx, "", "plan-retain", stubPayload(1), "")
-	}()
-
-	pod := waitForPodCreated(ctx, t, fc, "team-a")
-	completePod(ctx, t, fc, "team-a", pod.Name, corev1.PodSucceeded)
-	require.NoError(t, <-done)
-
-	assert.NotNil(t, findPod(ctx, t, fc, "team-a"),
-		"terminal worker pod must be retained for the reaper when completedPodTTL is unset")
-	assert.Nil(t, findSecret(ctx, t, fc, "team-a", "job-"),
-		"job Secret must still be deleted on completion")
 }
 
 // testGitHubCA* mirror the unexported provisioner constants for the GHES appliance's

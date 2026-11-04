@@ -48,9 +48,8 @@ var disruptionSafetyDefaults = map[string]string{
 // no replacement. Stamping these markers makes the pod "production-relyable" on
 // the clusters operators actually run (Karpenter, cluster-autoscaler,
 // descheduler) without per-tenant configuration. The markers ride on the worker
-// pod itself, so they vanish the moment the pod is torn down on job completion
-// (immediately when completedPodTTL is 0, otherwise by the reaper) — they can
-// never pin a dead pod.
+// pod itself, so they vanish the moment the reaper tears the pod down after job
+// completion — they can never pin a dead pod.
 //
 // Overridable: a tenant who manages disruption another way (a PodDisruptionBudget,
 // or a job they know is safe to interrupt) can set any of these keys to a

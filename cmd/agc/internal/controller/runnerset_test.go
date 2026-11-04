@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -41,7 +40,6 @@ func rsObj(name, ns string, mut func(*v2alpha1.RunnerSet)) *v2alpha1.RunnerSet {
 		Spec: v2alpha1.RunnerSetSpec{
 			GatewayRef:   v2alpha1.ObjectRef{Name: "gw"},
 			TemplateRef:  &v2alpha1.ObjectRef{Name: "tmpl"},
-			MaxListeners: 1,
 			RunnerLabels: []string{"self-hosted"},
 		},
 	}
@@ -618,65 +616,4 @@ func TestRunnerSetDrainEvents_RecordsOwnSkipsOthers(t *testing.T) {
 	}
 	// The other set's event is re-enqueued, not recorded here.
 	assert.Len(t, r.eventCh, 1)
-}
-
-func TestRunnerSetLocalState_PoolLifecycle(t *testing.T) {
-	scheme := runnerSetTestScheme(t)
-	c := fake.NewClientBuilder().WithScheme(scheme).Build()
-	r := &RunnerSetReconciler{Client: c, Log: slog.Default()}
-	r.ensureMaps()
-	key := types.NamespacedName{Namespace: "team-a", Name: "set"}
-
-	rs := &v2alpha1.RunnerSet{
-		ObjectMeta: metav1.ObjectMeta{Namespace: key.Namespace, Name: key.Name, UID: "set-uid"},
-		Spec:       v2alpha1.RunnerSetSpec{RunnerLabels: []string{"self-hosted"}},
-	}
-	pool := r.getOrCreatePool(key, rs)
-	require.NotNil(t, pool)
-	assert.Same(t, pool, r.getOrCreatePool(key, rs), "pool is cached")
-	assert.Same(t, pool, r.getPool(key))
-
-	// cleanupLocalState drops it (and is a no-op on the absent multiplexer / a re-call).
-	r.cleanupLocalState(key)
-	assert.Nil(t, r.getPool(key))
-	r.cleanupLocalState(key) // idempotent
-}
-
-// TestReadyConditionForListeners covers the classic-path Ready decision (Q308): a start
-// failure must surface as Ready=False/ListenerStartFailed, distinct from the benign
-// NoActiveSessions state, while a running listener still wins over any stale start error.
-func TestReadyConditionForListeners(t *testing.T) {
-	t.Run("running listener ⇒ Ready/ListenerActive", func(t *testing.T) {
-		ready, reason, msg := readyConditionForListeners(2, nil, v2alpha1.TemplateSourceRef)
-		assert.True(t, ready)
-		assert.Equal(t, v2alpha1.ReasonListenerActive, reason)
-		assert.Contains(t, msg, "TemplateRef")
-		assert.Contains(t, msg, "2 listener")
-	})
-
-	t.Run("start error, no listeners ⇒ Ready=False/ListenerStartFailed", func(t *testing.T) {
-		ready, reason, msg := readyConditionForListeners(0, errors.New("boom"), v2alpha1.TemplateSourceRef)
-		assert.False(t, ready)
-		assert.Equal(t, v2alpha1.ReasonListenerStartFailed, reason)
-		assert.Contains(t, msg, "boom")
-	})
-
-	t.Run("a running listener wins over a stale start error", func(t *testing.T) {
-		ready, reason, _ := readyConditionForListeners(1, errors.New("boom"), v2alpha1.TemplateSourceRef)
-		assert.True(t, ready)
-		assert.Equal(t, v2alpha1.ReasonListenerActive, reason)
-	})
-
-	t.Run("no listeners, no error ⇒ Ready=False/NoActiveSessions", func(t *testing.T) {
-		ready, reason, _ := readyConditionForListeners(0, nil, v2alpha1.TemplateSourceRef)
-		assert.False(t, ready)
-		assert.Equal(t, v2alpha1.ReasonNoActiveSessions, reason)
-	})
-}
-
-func TestRunnerSetBaselineRecheckInterval(t *testing.T) {
-	r := &RunnerSetReconciler{}
-	assert.Equal(t, defaultBaselineRecheckInterval, r.baselineRecheckInterval())
-	r.BaselineRecheckInterval = 3
-	assert.Equal(t, 3, int(r.baselineRecheckInterval()))
 }

@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/actions-gateway/github-actions-gateway/agc/internal/listener"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/types"
@@ -80,11 +79,11 @@ func TestListenerShutdown_RunsOnEveryReplica(t *testing.T) {
 	assert.False(t, (&listenerShutdown{}).NeedLeaderElection())
 }
 
-// TestStopListeners_WaitsForTheScaleSetTierToo is the Q689 half of the Q222 barrier.
-// Scale-set listeners live in their own map and were never in the drain, so SIGTERM
-// cancelled them and the process exited without waiting — taking the exit read of
-// outstanding conclusions, the delete half of the ack, and the session DELETE with it.
-func TestStopListeners_WaitsForTheScaleSetTierToo(t *testing.T) {
+// TestStopListeners_WaitsForTheScaleSetTeardown is the Q689 half of the Q222 barrier:
+// without the wait, SIGTERM cancels the poll loop and the process exits before its
+// exit read of outstanding conclusions, the delete half of the ack, and the session
+// DELETE.
+func TestStopListeners_WaitsForTheScaleSetTeardown(t *testing.T) {
 	exited := make(chan struct{})
 	var teardownRan atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
@@ -113,19 +112,21 @@ func TestStopListeners_WaitsForTheScaleSetTierToo(t *testing.T) {
 	assert.Empty(t, r.scaleSetListeners, "the drained listener must be dropped from the map")
 }
 
-// TestSnapshotMultiplexers_ClearsMapSoAReconcileCannotResurrect verifies the
+// TestSnapshotScaleSetListeners_ClearsMapSoAReconcileCannotResurrect verifies the
 // snapshot empties the map under the mutex: a reconcile racing the drain must not
-// find — and keep feeding — a multiplexer that is already being stopped.
-func TestSnapshotMultiplexers_ClearsMapSoAReconcileCannotResurrect(t *testing.T) {
+// find — and keep feeding — a listener that is already being stopped.
+func TestSnapshotScaleSetListeners_ClearsMapSoAReconcileCannotResurrect(t *testing.T) {
+	done := make(chan struct{})
+	close(done)
 	r := &RunnerSetReconciler{
-		multiplexers: map[types.NamespacedName]*listener.Multiplexer{
-			{Namespace: "ns", Name: "a"}: listener.NewMultiplexer(nil, 1, slog.Default()),
-			{Namespace: "ns", Name: "b"}: listener.NewMultiplexer(nil, 1, slog.Default()),
+		scaleSetListeners: map[types.NamespacedName]*scaleSetListenerHandle{
+			{Namespace: "ns", Name: "a"}: {cancel: func() {}, done: done},
+			{Namespace: "ns", Name: "b"}: {cancel: func() {}, done: done},
 		},
 	}
-	muxes := snapshotMultiplexers(&r.multiplexersMu, r.multiplexers)
-	assert.Len(t, muxes, 2)
-	assert.Empty(t, r.multiplexers)
+	handles := snapshotScaleSetListeners(&r.scaleSetListenersMu, r.scaleSetListeners)
+	assert.Len(t, handles, 2)
+	assert.Empty(t, r.scaleSetListeners)
 
 	// Draining an already-empty reconciler is a no-op that still closes its done
 	// channel, so the Runnable never hangs on a reconciler that never spawned.

@@ -28,11 +28,9 @@ import (
 // RunnerSetCustomValidator enforces the RunnerSet invariants a spec-scoped CRD CEL
 // rule cannot express:
 //
-//   - No two ScaleSet-protocol RunnerSets under one gateway may claim the same single
-//     runnerLabel (Q264 §5a-U7). The scale set's name IS that label, so two such sets
-//     would register the same scale-set name at GitHub and collide. Everything else
-//     about acquisitionProtocol — the enum, the default, the immutability, and the
-//     ScaleSet⇒exactly-one-label rule — is enforced by CRD CEL on the RunnerSet type.
+//   - No two RunnerSets in one GitHub scope may claim the same first runnerLabel
+//     (Q264 §5a-U7). The scale set's name IS that label, so two such sets would
+//     register the same scale-set name at GitHub and collide.
 //   - Every priorityTiers[].priorityClassName must be on the platform PriorityClass
 //     allowlist (Q132/Q289): the allowlist is dynamic platform config CEL cannot read.
 //   - No two RunnerSets may derive the same agent-identity stem (Q1011). The stem
@@ -84,10 +82,9 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 }
 
 // ValidateUpdate applies the same checks on update: an existing RunnerSet cannot be
-// edited to smuggle in an off-allowlist PriorityClass, and — acquisitionProtocol
-// itself being immutable (CRD CEL) — runnerLabels, gatewayRef, and proxyRef can
-// still change, so an update can still move a ScaleSet set onto a colliding label
-// or bind the gateway's GitHub host to a proxy that excludes it. The agent-identity
+// edited to smuggle in an off-allowlist PriorityClass, and runnerLabels, gatewayRef,
+// and proxyRef can still change, so an update can still move a set onto a colliding
+// label or bind the gateway's GitHub host to a proxy that excludes it. The agent-identity
 // stem comes from the CR name and so cannot move, but the gatewayRef can, which
 // changes the GitHub scope the stem is compared in. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
@@ -141,12 +138,10 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.Ru
 	return nil, nil
 }
 
-// validateScaleSetLabelUniqueness rejects a ScaleSet-protocol RunnerSet whose FIRST
-// runnerLabel is already claimed by another ScaleSet-protocol RunnerSet in the same
-// GitHub scope — the org, enterprise, or repo its gateway's githubURL names. The first
-// label is the scale set's name at GitHub, so two sets sharing it are two controllers
-// driving one scale-set object. It is a no-op for Classic sets, which have no
-// scale-set object.
+// validateScaleSetLabelUniqueness rejects a RunnerSet whose FIRST runnerLabel is
+// already claimed by another RunnerSet in the same GitHub scope — the org, enterprise,
+// or repo its gateway's githubURL names. The first label is the scale set's name at
+// GitHub, so two sets sharing it are two controllers driving one scale-set object.
 //
 // The scope, NOT the namespace, is the uniqueness boundary (Q791): the AGC adopts a
 // scale set by name against the Actions service the gateway's githubURL reaches, so
@@ -161,16 +156,10 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.Ru
 // collision (Q726). For a single-label set this is the same comparison it has
 // always been.
 //
-// v2 has no acquisitionProtocol field, so a Classic set is recognised by the annotation
-// its v2alpha1 write carries through the conversion (acquisitionProtocolOf).
-//
 // The inventory comes from the request's shared read (runnerSetRead). The check is
 // fail-closed: if a List errors, the request is rejected rather than admitted on
 // faith — admitting a possible collision is the failure mode this guards against.
 func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, read *runnerSetRead, rs *agcv2.RunnerSet) error {
-	if acquisitionProtocolOf(rs) != acquisitionProtocolScaleSet {
-		return nil
-	}
 	if len(rs.Spec.RunnerLabels) == 0 {
 		// MinItems=1 rejects this before the webhook runs; nothing to compare.
 		return nil

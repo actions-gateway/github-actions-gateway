@@ -525,7 +525,7 @@ A genuinely wedged test blocks forever and trips any finite value; what a larger
 ### The race-detector unit gate
 
 The CI `unit-test` job runs the workspace unit tests under Go's race detector (`go test -race`), not plain `go test`.
-The multiplexing core — agentpool, listener/mux, broker, token — is where data races hide, and plain `go test` never flags them; `-race` is pass/fail (a detected race fails the job).
+The concurrency core — the scale-set listener, the provisioner, and the token package — is where data races hide, and plain `go test` never flags them; `-race` is pass/fail (a detected race fails the job).
 This is the only `unit-test.yml` step `make check` does not mirror, because `-race` instruments every memory access and roughly doubles unit runtime.
 
 Reproduce the CI race gate locally with:
@@ -1153,7 +1153,7 @@ So a refactor could leave an unused import or a stale call signature in an envte
 
 It runs one workspace-wide `go vet -tags integration,e2e,load,autoscaler,karpenter` over every `go.work` module.
 `go vet` typechecks what it analyses, so a compile break fails the gate, and it needs no envtest assets, no cluster, and runs no tests.
-Actually *running* the tagged suites remains the job of [`make test-integration`](#integration-tests), the [e2e tiers](#end-to-end-tests), and [`make load-test-quick`](#load-tests).
+Actually *running* the tagged suites remains the job of [`make test-integration`](#integration-tests), the [e2e tiers](#end-to-end-tests), and [`make scaleset-mem-profile`](#load-tests).
 
 Enabling every tag at once is sound because each one only ever *adds* files to a build: no first-party file is constrained on the negation of another's tag, so no combination conflicts.
 Most select whole package trees of their own, and `autoscaler` and `karpenter` instead add live tests to a package the default build already compiles, which is fine for the same reason, since they only have to not collide with the identifiers already there.
@@ -3220,7 +3220,7 @@ A test that waits for burst goroutines to drain has to size N against its own `E
 
 ### The broker doubles share one protocol core
 
-Three broker doubles implement the GitHub Actions broker wire protocol: [`broker/brokertest`](../../broker/brokertest/) (the in-process integration stub), [`test/fakegithub`](../../test/fakegithub/) (the deployed fake-GitHub e2e image), and the [load harness stub](../../cmd/agc/test/load/broker_stub.go).
+Two broker doubles implement the GitHub Actions broker wire protocol: [`broker/brokertest`](../../broker/brokertest/) (the in-process integration stub) and [`test/fakegithub`](../../test/fakegithub/) (the deployed fake-GitHub e2e image).
 They diverge in what a job delivery and an AcquireJob *mean* — fan-out accounting (Q260), single-use JIT consumption (Q114), saturated auto-delivery — but the session and credential *mechanics* are identical: minting `session-<n>` IDs, resolving a DELETE by its `sessionId` query param or bearer token, owner-scoped session listing, and the connection-reuse-safe JSON framing.
 Those live once in [`broker/brokerstub`](../../broker/brokerstub/) (Q368); each double layers its own delivery/acquire policy on top.
 `broker/brokerstub` is deliberately **standard-library-only** so the fakegithub distroless image links no third-party code — do not import the `broker` client (or anything else) into it.
@@ -3252,19 +3252,17 @@ It runs in `make check`; a stray import of a broker double into a shipped binary
 
 ## Load tests
 
-The load harness (Q13) pins the design's headline capacity claim — thousands of virtual runner sessions multiplexed per AGC, each costing one re-registration per job (the single-use JIT lifecycle, Q114).
-It is gated by the `//go:build load` tag and lives under [`cmd/agc/test/load/`](../../cmd/agc/test/load/); its [README](../../cmd/agc/test/load/README.md) documents every knob and how to read the output, and [milestone-5.md §2](../plan/milestone-5.md) the design rationale.
+The memory probe (Q722) measures what one live scale-set session costs the AGC, which is the figure behind the claim that its resident memory scales with the RunnerSet count rather than with concurrent jobs.
+It is gated by the `//go:build load` tag and lives under [`cmd/agc/test/load/`](../../cmd/agc/test/load/); its [README](../../cmd/agc/test/load/README.md) documents the knobs and the measurement's boundary.
 
-It needs **no cluster and no GitHub credentials**: it drives the real `listener.Multiplexer` + `agentpool.Pool` + per-goroutine `broker.Client` wiring against an in-process broker stub (single-use JIT + long-poll), a controller-runtime fake client for agent Secrets, and an in-memory registrar.
+It needs **no cluster and no GitHub credentials**: it parks real scale-set `Listener`s against an in-process transport with no server behind it.
 
 ```bash
-make load-test-quick   # 10 tenants × 100 listeners = 1,000 sessions, short window (~1 min)
-make load-test-full    # same scale, realistic job hold; writes results/latest.md (~3-5 min)
+make scaleset-mem-profile   # 200 parked scale-set sessions; prints bytes/set
 ```
 
-Both run under the same desktop-safety throttle as the rest of the suite (a no-op on CI).
-The Service Level Objectives (SLOs) it asserts — sustained concurrent sessions, ≈1 re-registration per job, no goroutine leak — are the faithful results; absolute throughput and recycle latency are bounded by the in-process control-plane stand-ins and are reported for trend, not as production figures (see the README's fidelity boundaries).
-It is **not** wired into `make check` or per-PR CI — run it when changing the concurrency core (listener/multiplexer/agentpool) or validating a capacity claim.
+It runs under the same desktop-safety throttle as the rest of the suite (a no-op on CI).
+It is **not** wired into `make check` or per-PR CI — run it when changing the scale-set listener or validating a capacity claim.
 
 ## The live-autoscaler drift gate
 

@@ -26,7 +26,7 @@ The **security** dashboard splits the same way and reads all three scrapes, beca
 
 ## Tenant dashboard
 
-![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, scale-set-acquisition-tier, tenant-health-conditions, egress-proxy, and kube-state-metrics proxy/quota rows.](../assets/grafana-dashboard-tenant.png)
+![The per-tenant Grafana dashboard rendered against a live Prometheus: gateway-health, pod-creation-latency SLO, job-throughput, job-acquisition, tenant-health-conditions, egress-proxy, kube-state-metrics proxy/quota, and reliability-signal rows.](../assets/grafana-dashboard-tenant.png)
 
 Filtered by the `$namespace`, `$runner_group`, and `$runner_set` template variables.
 Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as data sources where applicable.
@@ -35,10 +35,8 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Active sessions | `actions_gateway_active_sessions` | Stat / Time series |
-| Jobs acquired/min | `rate(actions_gateway_jobs_acquired_total[5m]) * 60` | Time series |
+| Listener session open | `actions_gateway_scaleset_session_open` | Stat (0 = red): `0` means the set's listener holds no message session, so GitHub delivers it nothing (Q1275) |
 | Token refresh errors | `rate(actions_gateway_token_refresh_errors_total[5m])` | Stat (threshold: >0 = red) |
-| RenewJob errors | `rate(actions_gateway_renew_job_errors_total[5m])` | Stat (threshold: >0 = yellow) |
 
 **Row 2 — Pod Creation Latency SLO**
 
@@ -52,19 +50,16 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Jobs acquired total | `increase(actions_gateway_jobs_acquired_total[1h])` | Bar chart by runner_group |
-| Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series, both acquisition tiers. Worker pod lifetime, so it excludes the pre-creation staging a slow `acquirejob` or a `spec.scaleUp` throttle adds |
+| Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series. Worker pod lifetime, so it excludes the pre-creation staging a `spec.scaleUp` throttle adds |
 | AGC / proxy version | `actions_gateway_build_info{component=~"agc\|proxy"}` | Stat showing the series name, not its value (the value is always `1`). Sits under the job-duration panel because it says which span that panel is measuring: the classic tier's was longer before v1.5.0 and nothing was renamed ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)). The metric carries no `namespace` label, so `$namespace` does not filter it |
-| Disruption retries | `sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by acquisition tier (`classic`, `scaleset`) and cause (`eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `node_shutdown` rising means Spot or preemptible nodes are being reclaimed under running jobs, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
+| Disruption retries | `sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by cause (`eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `node_shutdown` rising means Spot or preemptible nodes are being reclaimed under running jobs, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
 | Abandoned runs awaiting capacity | `sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart, split by acquisition tier since Q766 ported the recovery to `scaleset`. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
 | Disruption budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 | Quota retries | `increase(actions_gateway_quota_retries_total[1h])` | Bar chart |
 | Quota retry budget exhausted | `increase(actions_gateway_quota_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 
-**Row 4 — Scale-set Acquisition Tier (per runner_set)**
+**Row 4 — Job Acquisition (per runner_set)**
 
-The default acquisition protocol (Q264).
-These panels are the scale-set analog of the classic Gateway-Health and Job-Throughput rows above: a ScaleSet-protocol RunnerSet never emits `actions_gateway_active_sessions` or `jobs_acquired_total`, so its throughput and health are only visible here.
 Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable does not filter these; the `$runner_set` variable does.
 
 | Panel | Query | Visualization |
@@ -73,12 +68,12 @@ Labelled by `runner_set` (not `runner_group`), so the `$runner_group` variable d
 | Provision success rate | `actions_gateway:scaleset_provision_success_rate:rate5m` | Gauge (green >0.99, yellow <0.99, red <0.9) |
 | Provision errors/s | `sum by (namespace, runner_set) (rate(actions_gateway_scaleset_provision_errors_total[5m]))` | Stat (threshold: >0 = yellow) |
 | Jobs completed by result (1h) | `sum by (result) (increase(actions_gateway_scaleset_jobs_completed_total[1h]))` | Bar chart by result |
-| Worker pods reaped/s (by reason) | `sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))` | Time series — the reaper counter's per-`RunnerSet` series (Q514), joinable with the capacity gauges above on `(namespace, runner_set)`. The label keys on the owning kind, so a Classic-protocol `RunnerSet` appears here too |
-| Queued at GitHub vs advertised capacity | `sum by (namespace, runner_set) (actions_gateway_scaleset_jobs_available)` and `…_advertised_capacity` | Time series, the stand-in for *Active sessions*: queued jobs holding beside advertised capacity while the assigned rate is flat means the listener is not taking work. The queued gauge holds its last reading across an empty poll, so read it as a level |
+| Worker pods reaped/s (by reason) | `sum by (namespace, runner_set, reason) (rate(actions_gateway_worker_pods_reaped_total{runner_set!=""}[5m]))` | Time series — the reaper counter's per-`RunnerSet` series (Q514), joinable with the capacity gauges above on `(namespace, runner_set)`. |
+| Queued at GitHub vs advertised capacity | `sum by (namespace, runner_set) (actions_gateway_scaleset_jobs_available)` and `…_advertised_capacity` | Time series: queued jobs holding beside advertised capacity while the assigned rate is flat means the listener is not taking work. The queued gauge holds its last reading across an empty poll, so read it as a level |
 
 **Row 5 — Tenant Health Conditions**
 
-Panel titles here drop the `Worker`/`Workers` prefix the row header already supplies: six panels share the 24-column row, and a 4-wide panel ellipsis-truncates anything longer in the rendered screenshot.
+Panel titles here drop the `Worker`/`Workers` prefix the row header already supplies: five panels share the 24-column row, and a 4-wide panel ellipsis-truncates anything longer in the rendered screenshot.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -87,7 +82,6 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 | Not starting | `max(actions_gateway_runnerset_workers_not_starting)` | Stat (1 = red) |
 | Quota pressure | `max(actions_gateway_runnerset_worker_quota_pressure)` | Stat (1 = yellow) |
 | Capacity declined | `max by (reason) (actions_gateway_runnerset_worker_capacity_declined)` | Stat (1 = orange), reason shown beside the value |
-| Recycle errors | `rate(actions_gateway_agent_recycle_errors_total[5m])` | Time series |
 
 > To break a panel out per set, replace `max(...)` with `max by (namespace, runner_set) (...)`.
 
@@ -119,19 +113,8 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Job acquisition errors/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_job_acquisition_errors_total[5m]))` | Time series |
 | Message poll errors/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_message_poll_errors_total[5m]))` | Time series |
-| RenewJob teardowns/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_renew_job_teardowns_total[5m]))` | Time series |
 | Worker pods reaped/s (by reason) | `sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
-| Broker token propagation retries/s | `sum by (runner_group) (rate(actions_gateway_broker_token_propagation_retries_total[5m]))` | Time series |
-
-**Row 9 — Fan-out Safety (Q260 / Q266)**
-
-| Panel | Query | Visualization |
-|-------|-------|---------------|
-| Duplicate job deliveries/s | `sum by (runner_group) (rate(actions_gateway_jobs_duplicate_delivery_total[5m]))` | Time series |
-| Abandoned-delivery completions/s (by outcome) | `sum by (runner_group, outcome) (rate(actions_gateway_abandoned_delivery_completions_total[5m]))` | Time series |
-| Fan-out loser recycle deferred/s (by outcome) | `sum by (runner_group, outcome) (rate(actions_gateway_fanout_loser_recycle_deferred_total[5m]))` | Time series |
 
 ## Platform dashboard
 
@@ -166,11 +149,10 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Active sessions by namespace | `sum by (namespace) (actions_gateway_active_sessions)` | Time series |
-| Jobs acquired/min by namespace (classic) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 60` | Time series |
-| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series, both acquisition tiers |
-| Jobs assigned/min by namespace (scale-set) | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
-| Jobs queued at GitHub by namespace (scale-set) | `sum by (namespace) (actions_gateway_scaleset_jobs_available)` | Time series: the stand-in for *Active sessions by namespace* on a scale-set fleet |
+| Listener sessions open by namespace | `sum by (namespace) (actions_gateway_scaleset_session_open)` | Time series |
+| Jobs assigned/min by namespace | `sum by (namespace) (rate(actions_gateway_scaleset_jobs_assigned_total[5m])) * 60` | Time series |
+| Jobs queued at GitHub by namespace | `sum by (namespace) (actions_gateway_scaleset_jobs_available)` | Time series |
+| Pod creation p99 by namespace | `actions_gateway:pod_creation_latency_seconds:p99` | Time series |
 
 **Row 5 — Build Versions**
 
@@ -227,8 +209,7 @@ Every panel here uses `$__range`, so the time picker *is* the billing window: sw
 
 **Row 3 — Spend by Runner Shape**
 
-Split by `runner_group`, which on the scale-set tier carries the **`RunnerSet`** name rather than a `RunnerGroup` one: the pod-side reading takes whichever owner label the pod carries, so one label key covers both tiers (Q713).
-A shape here is therefore whatever provisioned the worker, on either protocol.
+Split by `runner_group`, which carries the **`RunnerSet`** name: the pod-side reading takes the owner label the pod carries (Q713).
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
@@ -251,15 +232,11 @@ The row that answers "what am I paying for when nobody is running CI?".
 Rows 1 to 4 answer what was spent.
 This one answers what was not: intake an admission rung refused, which shows up nowhere in `job_duration_seconds` because a job that never ran has no duration to bill.
 
-**It is two panels rather than one because the two acquisition tiers state the same ladder in different units.** The scale-set tier declares a capacity integer per long poll, so its rungs are gauges of worker slots; the classic tier decides per delivered job, so its rungs are counters of jobs.
-Both panels are stacked, and in both the stack total is the demand that tier saw, which is the reading they share.
-Their magnitudes are not comparable and neither panel is a total of the other.
-A deploy running one tier sees the other panel empty; that is the panel saying "no sets on this protocol", not a gap.
+The rungs are gauges of worker slots, because the set declares its capacity to GitHub as an integer per long poll.
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Withheld capacity by rung (scale-set sets) | `sum by (namespace) (actions_gateway_scaleset_advertised_capacity)` stacked under `sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)` | Time series, stacked. The stack total is the set's declared worker ceiling, because [every evaluated rung publishes a value each poll including an explicit `0`](observability-metrics.md#scale-set-acquisition-tier-q264) and the entries sum to `ceiling − advertised`. `quota` is namespace-`ResourceQuota` headroom, `capacity` the opt-in placeability gate, `scaleup` the opt-in creation-rate limit; grouping by `reason` rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on `runner_set`, so a `$runner_group` holding a `RunnerGroup` name empties it |
-| Intake refused by rung (classic sets) | `sum by (namespace) (rate(actions_gateway_jobs_acquired_total[5m])) * 3600` stacked under the `actions_gateway_jobs_admission_rejected_total` counterpart, `sum by (namespace, reason)` | Time series, stacked, jobs/hour. The stack is what GitHub delivered, less the deliveries lost to an acquire error (`actions_gateway_job_acquisition_errors_total`) or a duplicate-delivery dedup, which increment neither series. `ceiling` and `quota` are on by default; `capacity` and `scaleup` emit nothing until their owner opts in, so an absent band is a rung nobody enabled rather than a rung holding nothing back |
+| Withheld capacity by rung | `sum by (namespace) (actions_gateway_scaleset_advertised_capacity)` stacked under `sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)` | Time series, stacked. The stack total is the set's declared worker ceiling, because [every evaluated rung publishes a value each poll including an explicit `0`](observability-metrics.md#scale-set-acquisition-tier-q264) and the entries sum to `ceiling − advertised`. `quota` is namespace-`ResourceQuota` headroom, `capacity` the opt-in placeability gate, `scaleup` the opt-in creation-rate limit; grouping by `reason` rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on `runner_set`, so a `$runner_group` holding a `RunnerGroup` name empties it |
 
 **Withheld capacity is not the same thing as suppressed spend, which is why no panel here prices it with `$rate`.** A slot a rung held back is money you did not spend only if GitHub had a job queued to fill it; on an idle set the same band is a ceiling nobody was reaching for.
 The demand signal that settles it is [`actions_gateway_scaleset_jobs_available`](observability-metrics.md#scale-set-acquisition-tier-q264), which no dashboard plots today.
@@ -333,26 +310,25 @@ One panel per rule in the [security alert group](security-operations.md#promethe
 
 The dashboards ship with these template variables already wired:
 
-- `$namespace` (`label_values({__name__=~"actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)`) filters to a single tenant, on the tenant and platform dashboards.
-  The union of the classic and scale-set series is deliberate: a scale-set-only deploy emits no `active_sessions`, so keying the variable on that alone would leave the dashboard blank.
-- `$runner_group` (`label_values(actions_gateway_active_sessions{namespace="$namespace"}, runner_group)`) filters to a specific RunnerGroup on the classic-tier panels of the tenant dashboard.
+- `$namespace` (`label_values({__name__=~"actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total"}, namespace)`) filters to a single tenant, on the tenant and platform dashboards.
+  The session gauge lists a tenant whose listener is up but has been assigned nothing yet, which the assignment counter alone would miss.
+- `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) filters the `runner_group`-labelled panels of the tenant dashboard, which on the scale-set tier carry the `RunnerSet` name.
   The `runner_set`-labelled panels are not filtered by it; `$runner_set` is their variable.
 - `$runner_set` (`label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)`) filters to a specific `RunnerSet` on the scale-set and v2 capacity panels of the tenant dashboard.
-  It reads its label values from the Q319 capacity gauges rather than the `scaleset_*` series on purpose: those gauges are emitted for **every** `RunnerSet`, while `scaleset_*` exists only for `ScaleSet`-protocol sets, so keying on the latter would hide a `Classic` set from the dropdown entirely.
+  It reads its label values from the Q319 capacity gauges, which are emitted for every `RunnerSet`.
 
 The budget dashboard declares its own set, because its spend panels all read one metric and its dropdowns have to match that metric exactly:
 
 - `$namespace` (`label_values(actions_gateway_job_duration_seconds_count, namespace)`) is keyed on the series the panels actually read, so the dropdown cannot offer a tenant with no cost data or hide one that has some.
-  It needs no classic/scale-set union: the duration series is emitted from the pod informer and covers both tiers already.
-- `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) is the runner shape, listing `RunnerGroup` and `RunnerSet` names together for the reason the Row 3 note gives.
-  Row 5's scale-set panel applies it to `runner_set`, which holds the same names on that tier, so selecting a `RunnerGroup` empties that panel and selecting a `RunnerSet` empties the classic one beside it.
+- `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) is the runner shape, the `RunnerSet` name per the Row 3 note.
+  Row 5's panel applies it to `runner_set`, which holds the same names.
 - **Both dropdowns set `allValue` to `.*`**, which is what makes Row 5 legible on the tenant it exists for.
   Grafana expands a bare `All` to the values the dropdown holds, and both are keyed on the duration series, so a tenant whose intake a rung is holding at zero has completed no job, is in neither list, and would be excluded by `All` itself.
   The wildcard costs the spend panels nothing: a tenant with no duration data contributes no series to them either way.
 - `$rate` is a **textbox**, not a query: the effective hourly cost of one worker slot, which is a fact about your contract and not something the cluster knows.
   Only the currency panels read it, so leaving the default in place still leaves every pod-hour and job count correct.
 
-The security dashboard declares only `$namespace` (`label_values({__name__=~"actions_gateway_proxy_connections_total|actions_gateway_active_sessions|actions_gateway_scaleset_jobs_assigned_total"}, namespace)`), unioned across the proxy and both acquisition tiers so a namespace holding only a pool, or only a scale-set deploy, still appears.
+The security dashboard declares only `$namespace` (`label_values({__name__=~"actions_gateway_proxy_connections_total|actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total"}, namespace)`), unioned across the proxy and the listener series so a namespace holding only a pool still appears.
 On the proxy panels the value it filters is the pool's namespace, per the note at the top of that section.
 
 > **A textbox variable in a panel query needs the PromQL gate to know about it.** `make promql-check` parses every panel expression, and a Grafana variable in syntactic position (`[$__range]`, `* $rate`) is not valid PromQL.

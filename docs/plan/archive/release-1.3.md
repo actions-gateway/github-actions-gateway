@@ -77,7 +77,7 @@ The prose below carries the *why* of each; this table is the state.
 | Q603 | An AGC stopped between abandoning a job and its next delete cycle re-provisions it on restart | rides | 🔲 filed — the residual Q583 narrows but does not close |
 | Q604 | `stallJob` installs its runner-name conflict after the job is already pollable | gates | ✅ shipped 2026-08-02 — same reason: it reddened `main` |
 | Q406 | Capacity gate `AutoscalerVerdict` mode | rides | ⤴ punted — [Explicitly out of scope](#explicitly-out-of-scope) |
-| Q273, [Q264](../../queue/Q264.md) | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
+| Q273, Q264 | `v1alpha1` + `v2alpha1` + classic **removal** | rides | ⤴ punted to `v2.0.0` — [Explicitly out of scope](#explicitly-out-of-scope) |
 | — | RC validated on dogfood ([§ A](#a-headline-feature-complete-satisfied)) | gates | ✅ **PASSED on `v1.3.0-rc.5`, 2026-08-03** ([verdict](#the-rc5-validation-verdict-2026-08-03)) — derived sizing confirmed at pod level, which rc.4's pass could not do |
 | <a id="Q627"></a>Q627 | The dogfood `e2e` pool has one node of C2 headroom | rides | ✅ closed 2026-08-02 — pool re-created on `n2-standard-8`, verified Ready with the kata label at `N2_CPUS` 8/200 |
 
@@ -479,7 +479,7 @@ Wire-identical either way, so it is a Go-API break for `api` module consumers on
 | Deferred | Was | Why out of 1.3 |
 |---|---|---|
 | Capacity gate `AutoscalerVerdict` mode | Q406 | The quota pre-claim rung and `SchedulerVerdict` (Q405) shipped; `AutoscalerVerdict` was M-sized and unstarted at the cut. Describe what shipped as exactly that rather than implying the full ladder. (It shipped after 1.3, on 2026-07-27.) |
-| `v1alpha1` + `v2alpha1` + classic **removal** | Q273, [Q264](../../queue/Q264.md) | 1.3 is the *notice*. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at `v2.0.0`. |
+| `v1alpha1` + `v2alpha1` + classic **removal** | Q273, Q264 | 1.3 is the *notice*. Executing the removal in the same release it is announced would violate the one-release-ahead policy. These land at `v2.0.0`. |
 | `v2` GA API version | [v2-ga.md](../v2-ga.md) | Gated on a beta soak that has not started. Deliberately slow: GA signs a permanent backward-compatibility contract. |
 
 ## Critical path & ordering

@@ -148,8 +148,7 @@ func FromLists(gateways []agcv2alpha1.ActionsGateway, sets []agcv2alpha1.RunnerS
 	inv := Inventory{Scopes: scopes}
 	for i := range sets {
 		rs := &sets[i]
-		// Classic sets register no scale-set object, so they claim no name (Q726).
-		if rs.Spec.AcquisitionProtocol != agcv2alpha1.AcquisitionProtocolScaleSet || len(rs.Spec.RunnerLabels) == 0 {
+		if len(rs.Spec.RunnerLabels) == 0 {
 			continue
 		}
 		inv.Claims = append(inv.Claims, Claim{

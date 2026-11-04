@@ -192,18 +192,11 @@ See [security §5 — credential handling](../design/05-security.md).
 
 ## Distributed Tracing (AGC)
 
-The per-tenant AGC emits **OpenTelemetry traces** for its two hottest operational paths:
-
-- **`RunnerGroup.Reconcile`** — one span per reconcile, attributed with `k8s.namespace.name` / `gateway.runnergroup.name`.
-  Errors set the span status.
-- **`Provisioner.provision`** — one span per acquired job (the job-to-pod path), with child spans `stageJobSecret`, `countActivePods`, `createPod`, and `waitForCompletion`.
-  The root span carries `k8s.namespace.name`, `gateway.owner.name`, `gateway.plan.id`, `k8s.pod.name`, `gateway.active_pods`, `gateway.ceiling_held`, `gateway.priority_class`, and the final `gateway.pod.phase` / `gateway.pod.reason` / `gateway.provision.duration_seconds`.
-  `waitForCompletion` is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.
+**The AGC currently emits no spans of its own.** Its one traced path, `Provisioner.provision` and its child spans, wrapped the classic acquisition tier, which `v2.0.0` removed; the scale-set provision path has no span yet, and [Q1278](../queue/Q1278.md) adds one.
+Configuring tracing still installs the exporter, so a collector receives nothing from the AGC until then.
 
 > Span attribute names follow the [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/): Kubernetes-native attributes use the `k8s.*` keys (`k8s.namespace.name`, `k8s.pod.name`); project-specific attributes are namespaced under `gateway.`.
 > These keys were renamed in the Q205 naming audit — see [Breaking observability changes](observability-metrics.md#breaking-observability-changes-q205) for the old→new mapping.
-
-Each reconcile and each job provision is its own root trace — there is no inbound trace context to continue, and the per-job spans run on the listener goroutines independently of the reconcile that started the pool.
 
 **Tracing is opt-in and off by default.** With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.
 
