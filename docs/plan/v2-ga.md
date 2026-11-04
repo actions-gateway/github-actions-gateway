@@ -31,13 +31,13 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 
 | Q-ID | Item | Gates? | Status |
 |---|---|---|---|
-| [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🚫 blocked on Q1263; step 4 of [the split](q1167-v2-retype-split.md) |
+| [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1` and the conversion hub once both controllers are on `v2` (Phase 3) | `2.0-gate` | 🔲 step 4 of [the split](q1167-v2-retype-split.md): Q1262 and Q1263 have landed |
 | Q273 | Remove the `v1alpha1` group and `gag-migrate`'s fan-out (Phase 3) | `2.0-gate` | ✅ landed: no `actions-gateway.github.com` kind, controller, CRD or webhook is left, and `gag-migrate` keeps only `storage-version` |
 | Q1275 | Give the shipped alerts and dashboards scale-set twins before Q264 | `2.0-gate` | ✅ landed: `ActionsGatewayScaleSetNoSession` pages on a listener holding no session and `ActionsGatewayMessagePollFailing` tickets an open one whose polls fail, both reading series the scale-set listener writes; the tenant and platform dashboards chart what a scale set has queued at GitHub |
 | Q1274 | Port the e2e suite from classic to the scale-set tier, so Q264 can clear the merge queue's e2e lanes | `2.0-gate` | ✅ landed: every fake-GitHub spec runs on the scale-set tier, and the specs only classic could express are deleted; the live-GitHub suite's port is [Q1272](../queue/Q1272.md) |
 | Q264 | Remove the classic acquisition machinery (Phase 3) | `2.0-gate` | ✅ landed: no AGC or GMC code reads `acquisitionProtocol` or `maxListeners`, and no shipped alert or dashboard panel reads a series it removed; what operators can still see of the tier is [Q1273](../queue/Q1273.md), and the classic code nothing can reach is [Q1272](../queue/Q1272.md), not a gate |
 | Q1262 | Retype the GMC onto `api/v2` (Phase 3) | `2.0-gate` | ✅ landed, with the classic-reading trio left on `v2alpha1` for Q1167 ([why](q1167-v2-retype-split.md#what-q1262-left-on-the-older-versions)) |
-| [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | 🔲 step 3 of [the split](q1167-v2-retype-split.md): Q273 and Q264 have landed |
+| Q1263 | Retype the AGC onto `api/v2` (Phase 3) | `2.0-gate` | ✅ landed: no AGC code imports `v2alpha1` or `v2beta1` outside the two conversion tests Q1167 deletes and the integration suite scheme they need, and the `RunnerSet` selectable field is declared at `v2`, the version the AGC watches |
 | Q1258 | Strip the Q147 legacy tenant-label dual-read (Phase 3's last step, below) | `2.0-gate` | ✅ landed: the admission policies and the GMC read only the `actions-gateway.com` tenant marker, privileged grant and downgrade annotation |
 | Q1271 | The GMC deletes its Secret-reader RoleBinding from ex-tenant namespaces | `2.0-gate` | ✅ landed: the GMC deletes its own binding once a namespace loses the tenant marker, through a delete-only exception in `gmc-tenant-resource-guard` |
 | [Q1273](../queue/Q1273.md) | Retire the classic tier ledgers, runbooks and unread AGC env vars | `2.0-gate` | 🔲 open |

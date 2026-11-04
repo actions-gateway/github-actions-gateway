@@ -1,7 +1,7 @@
 # Q1167: how the `v2` retype and the `v2alpha1`/`v2beta1` drop split into PRs
 
 Three PRs, and the classic removal moves ahead of the second one.
-Q1262 retypes the Gateway Manager Controller (GMC) onto `api/v2`, [Q1263](../queue/Q1263.md) retypes the Actions Gateway Controller (AGC), and [Q1167](../queue/Q1167.md) then deletes `api/v2alpha1`, `api/v2beta1` and the conversion machinery in one PR.
+Q1262 retypes the Gateway Manager Controller (GMC) onto `api/v2`, Q1263 retypes the Actions Gateway Controller (AGC), and [Q1167](../queue/Q1167.md) then deletes `api/v2alpha1`, `api/v2beta1` and the conversion machinery in one PR.
 The AGC retype waits for Q264's classic removal rather than preceding it, because the AGC reads two fields `v2` does not have, and nothing else forces an order between the two.
 
 This is the scoping answer [Q1167](../queue/Q1167.md) asked for ("how the retype splits into PRs is the first thing to decide").
@@ -14,8 +14,8 @@ It changes no code; the background is [v2-ga.md](v2-ga.md) Phase 3.
 | 0a | Q273's test port | Port the e2e tenant fixtures, the RunnerGroup-driven AGC envtests and `cmd/agc/test/load` onto `v2` tenants typed on `api/v2` | none | ✅ done |
 | 0b | Q273 | Remove `v1alpha1` and `gag-migrate`'s v1→v2 fan-out | 0a | ✅ done, in a GMC half and an AGC half |
 | 1 | Q1262 | Retype the GMC onto `api/v2` | Q273 | ✅ done; the classic-reading trio stays on `v2alpha1` ([what it left](#what-q1262-left-on-the-older-versions)) |
-| 2 | Q264 | Remove classic acquisition | Q273 | ❌ open |
-| 3 | [Q1263](../queue/Q1263.md) | Retype the AGC onto `api/v2` | Q273, Q264 | ❌ open |
+| 2 | Q264 | Remove classic acquisition | Q273 | ✅ done |
+| 3 | Q1263 | Retype the AGC onto `api/v2` | Q273, Q264 | ✅ done; the `RunnerSet` selectable field moved to `v2` with it ([why](#each-step-leaves-main-building)) |
 | 4 | [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1`, the hub and the conversion webhook | Q1262, Q1263 | ❌ open |
 
 Steps 1 and 2 can run in parallel; step 3 waits for step 2, and step 4 waits for steps 1 and 3.
@@ -78,8 +78,12 @@ Two files in the GMC read the classic field, `scalesetscope.go:152` and through 
 If Q264 has merged when Q1262 is cut, they retype with the rest; if not, they stay on `v2alpha1` and Q1167 retypes them.
 The closed set is three files, not two: `runnerset_read.go` also hands its `v2alpha1` lists to `agentidentity.FromLists`, the only production caller of `cmd/gmc/internal/agentidentity`, so that package stays with them (measured by compiling the retype, 2026-11-02).
 
-**Step 3, Q1263 (AGC).** After Q264 the AGC's `v2alpha1` use is the shared surface only, so the swap is mechanical.
+**Step 3, Q1263 (AGC).** After Q264 the AGC's `v2alpha1` use is the shared surface only, so the Go swap is mechanical.
 `cmd/agc/internal/controller/v2_detect.go` asks the REST mapper whether `RunnerSet` is served at `v2alpha1`; retyped, it asks about `v2`, which every release since 1.9 serves.
+
+One thing the import graph does not show: the AGC scopes its `RunnerSet` watch with a `spec.gatewayRef.name` field selector, the CRD declared that selectable field on `v2alpha1` alone, and a field selector is evaluated at the version the request names.
+Retyped with the CRD unchanged, `TestV2_MultiGateway_AGCScopedToItsGateway` failed with `set-a` never reaching `Ready` (measured 2026-11-03); with the marker moved to `v2beta1` and `v2`, it and `TestV2_RunnerSet_GatewayRefSelectableField` pass, and envtest installs the CRD.
+`v2alpha1` loses the field, since declaring it identically on all three versions is what made the CRD uninstallable; only a 1.10 AGC lists at `v2alpha1`, and `v2.0.0` serves no `v2alpha1` for one to list.
 
 **Step 4, Q1167 (the drop).** Once steps 1 and 3 have landed, the remaining importers of `api/v2alpha1` and `api/v2beta1` are the conversion code itself, the GMC's scheme and cache setup, and tests of conversion.
 `api/v2` depends on `api/v2beta1` only through `api/v2/conversion.go`, so deleting that file makes `api/v2` standalone and both older packages deletable in the same PR.
@@ -191,7 +195,7 @@ After Q273's two PRs as assumed above, the files each retype edits:
 | Step | Non-test | Test | Note |
 |---|---|---|---|
 | Q1262 (GMC) | 32 | 77 | the non-test count includes `storageversion.go`, which goes to Q1167 instead; the test count includes conversion tests (`v2_conversion_test.go`, `v2_ga_conversion_test.go` and others), which Q1167 deletes rather than Q1262 retyping them |
-| Q1263 (AGC) | 20 | 67 | the test count includes `integration/conversion_webhook_test.go` and `v2alpha1_crd_test.go`, which go to Q1167 likewise |
+| Q1263 (AGC) | 20 | 67 | the test count includes `integration/conversion_webhook_test.go` and `v2alpha1_crd_test.go`, which go to Q1167 likewise; Q1263 edited 20 and 73 |
 | Q1167 (drop) | `api/` 2, plus what the retypes left | `api/` 5, plus conversion tests | most of the diff is deleted packages and generated CRDs |
 
 These count files that name a version, not every reader of the change: generated CRDs, chart templates and the admission policies above read the served set without importing Go.
