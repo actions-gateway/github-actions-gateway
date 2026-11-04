@@ -3112,7 +3112,7 @@ The schemas below remain authoritative for the running <code>v1alpha1</code> API
 <a id="__codelineno-0-226" name="__codelineno-0-226" href="#__codelineno-0-226"></a><span class="w">    </span><span class="c1">// There is deliberately no field for OTEL_EXPORTER_OTLP_HEADERS: those</span>
 <a id="__codelineno-0-227" name="__codelineno-0-227" href="#__codelineno-0-227"></a><span class="w">    </span><span class="c1">// can carry bearer tokens, and the project keeps secrets out of</span>
 <a id="__codelineno-0-228" name="__codelineno-0-228" href="#__codelineno-0-228"></a><span class="w">    </span><span class="c1">// environment variables. Authenticate the collector at the network layer</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229" href="#__codelineno-0-229"></a><span class="w">    </span><span class="c1">// (in-cluster collector, mutual TLS, or a service mesh) instead.</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229" href="#__codelineno-0-229"></a><span class="w">    </span><span class="c1">// (in-cluster collector or a service mesh) instead.</span>
 <a id="__codelineno-0-230" name="__codelineno-0-230" href="#__codelineno-0-230"></a><span class="w">    </span><span class="c1">// +optional</span>
 <a id="__codelineno-0-231" name="__codelineno-0-231" href="#__codelineno-0-231"></a><span class="w">    </span><span class="nx">Tracing</span><span class="w"> </span><span class="nx">TracingConfig</span><span class="w"> </span><span class="s">`json:"tracing,omitempty"`</span>
 <a id="__codelineno-0-232" name="__codelineno-0-232" href="#__codelineno-0-232"></a><span class="p">}</span>
@@ -3120,7 +3120,7 @@ The schemas below remain authoritative for the running <code>v1alpha1</code> API
 <a id="__codelineno-0-234" name="__codelineno-0-234" href="#__codelineno-0-234"></a><span class="c1">// TracingConfig maps to the AGC's OpenTelemetry OTEL_* environment variables.</span>
 <a id="__codelineno-0-235" name="__codelineno-0-235" href="#__codelineno-0-235"></a><span class="kd">type</span><span class="w"> </span><span class="nx">TracingConfig</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
 <a id="__codelineno-0-236" name="__codelineno-0-236" href="#__codelineno-0-236"></a><span class="w">    </span><span class="c1">// Endpoint is the OTLP/gRPC collector address (e.g.</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237" href="#__codelineno-0-237"></a><span class="w">    </span><span class="c1">// "https://otel-collector.observability:4317"). Setting it enables</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237" href="#__codelineno-0-237"></a><span class="w">    </span><span class="c1">// "http://otel-collector.observability.svc.cluster.local:4317"). Setting it enables</span>
 <a id="__codelineno-0-238" name="__codelineno-0-238" href="#__codelineno-0-238"></a><span class="w">    </span><span class="c1">// tracing; an empty Endpoint emits no OTEL_* env. Maps to</span>
 <a id="__codelineno-0-239" name="__codelineno-0-239" href="#__codelineno-0-239"></a><span class="w">    </span><span class="c1">// OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.</span>
 <a id="__codelineno-0-240" name="__codelineno-0-240" href="#__codelineno-0-240"></a><span class="w">    </span><span class="c1">// +optional</span>

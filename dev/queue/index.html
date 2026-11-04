@@ -3562,12 +3562,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q264 removed classic acquisition, its alerts, recording rule and dashboard panels, and left four things an operator can still see or hit …</td>
 </tr>
 <tr>
-<td><a href="Q1278/">Q1278</a></td>
-<td>Trace the scale-set provision path; the AGC emits no spans after Q264</td>
-<td><code>bug</code> <code>2.0-gate</code></td>
+<td><a href="Q1281/">Q1281</a></td>
+<td>spec.tracing needs an operator-named collector peer and a CA path</td>
+<td><code>feature</code> <code>security</code> <code>2.0-gate</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>The AGC's only span was <code>Provisioner.provision</code>, with children <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code> and <code>waitForCompletion</code> …</td>
+<td>L</td>
+<td>An <code>ActionsGateway</code> with <code>spec.tracing</code> set delivers no spans on a CNI that enforces NetworkPolicy until an operator adds a policy by hand …</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>

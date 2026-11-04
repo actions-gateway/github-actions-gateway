@@ -2979,8 +2979,14 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>🔲 open</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1278/">Q1278</a></td>
+<td>Q1278</td>
 <td>Trace the scale-set provision path; the AGC emits no spans after Q264</td>
+<td><code>2.0-gate</code></td>
+<td>✅ landed: each scale-set job is a <code>Provisioner.ProvisionScaleSetWorker</code> span with <code>stageJobSecret</code>, <code>countActivePods</code> and <code>createPod</code> children; reaching a collector takes an operator-added NetworkPolicy until <a href="../../queue/Q1281/">Q1281</a></td>
+</tr>
+<tr>
+<td><a href="../../queue/Q1281/">Q1281</a></td>
+<td>An operator-named <code>spec.tracing</code> peer the GMC turns into an AGC-only egress rule, and a collector CA path so a proxied tenant can export over TLS</td>
 <td><code>2.0-gate</code></td>
 <td>🔲 open</td>
 </tr>
@@ -2988,7 +2994,7 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td><a href="../../queue/Q1107/">Q1107</a></td>
 <td>Operator docs, migration guide, and the cut (Phase 4)</td>
 <td><code>2.0-gate</code></td>
-<td>🚫 blocked on Q1167, Q1273 and Q1278</td>
+<td>🚫 blocked on Q1167, Q1273 and Q1281</td>
 </tr>
 <tr>
 <td>Q555</td>

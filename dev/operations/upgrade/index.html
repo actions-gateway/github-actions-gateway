@@ -5013,7 +5013,7 @@ A rule reading one of them never fires again, and a panel reading one shows <cod
 </tbody>
 </table>
 <p>The reference dashboards drop the panels that read the removed series, and chart the listener session gauge where they charted active sessions.
-The AGC's one OpenTelemetry span, <code>Provisioner.provision</code>, went with the classic path too, so a configured collector receives no AGC spans until <a href="../../queue/Q1278/">Q1278</a> traces the scale-set path.</p>
+The AGC's <code>Provisioner.provision</code> span went with the classic path too, and the scale-set path is traced as <code>Provisioner.ProvisionScaleSetWorker</code> instead, so a trace query or dashboard that filters on the old span name needs the new one (<a href="../observability-logging/#distributed-tracing-agc">Distributed Tracing</a>).</p>
 <p><strong>Before you upgrade,</strong> search your own rules and dashboards for the names above, and re-apply the reference <code>PrometheusRule</code> and re-import the dashboards if you run copies of them.</p>
 <h3 id="action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: <code>deploy/templates/</code> is written at <code>v2</code><a class="headerlink" href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> operators who apply a <a href="../runner-template-library/">runner template library</a> entry through their own kustomize overlay with a JSON 6902 patch.</p>

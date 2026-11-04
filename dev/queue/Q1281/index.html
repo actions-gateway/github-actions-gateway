@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1278/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1281/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Trace the scale-set provision path; the AGC emits no spans after Q264 - GitHub Actions Gateway</title>
+        <title>spec.tracing needs an operator-named collector peer and a CA path - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#trace-the-scale-set-provision-path-the-agc-emits-no-spans-after-q264" class="md-skip">
+        <a href="#spectracing-needs-an-operator-named-collector-peer-and-a-ca-path" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Trace the scale-set provision path; the AGC emits no spans after Q264
+              spec.tracing needs an operator-named collector peer and a CA path
             
           </span>
         </div>
@@ -2657,17 +2657,104 @@
   
 
 
-<h1 id="trace-the-scale-set-provision-path-the-agc-emits-no-spans-after-q264">Trace the scale-set provision path; the AGC emits no spans after Q264<a class="headerlink" href="#trace-the-scale-set-provision-path-the-agc-emits-no-spans-after-q264" title="Permanent link">&para;</a></h1>
-<p>The AGC's only span was <code>Provisioner.provision</code>, with children <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code> and <code>waitForCompletion</code>, and it wrapped the classic provision path alone (<code>git grep -n 'tracer.Start' origin/main -- cmd/agc</code> finds it at <code>provisioner.go:511</code> and nowhere else, 2026-11-03).
-Q264 removed that path, and the scale-set path <code>ProvisionScaleSetWorker</code> never opened a span, so after Q264 the AGC creates none.
-<code>make lint</code> then flagged the tracer and <code>traceStep</code> helper as unused, and Q264 deleted them.</p>
-<p><strong>What an operator sees:</strong> <code>spec.tracing</code> on an <code>ActionsGateway</code> still sets the AGC's <code>OTEL_*</code> variables and the AGC still installs the exporter (<code>cmd/agc/internal/tracing</code>), so tracing reads as on and the collector receives nothing.
-<a href="../../operations/observability-logging/#distributed-tracing-agc">observability-logging.md § Distributed Tracing</a> says so since Q264, and that this row restores it.
-That knob producing nothing is why this gates <code>v2.0.0</code>; dropping <code>spec.tracing</code> instead would be the other way to close it, and is a breaking API change of its own.</p>
-<p><strong>The work:</strong> open a root span per job in <code>ProvisionScaleSetWorker</code>, with child spans for staging the JIT-config Secret, the ceiling count and the pod create; the scale-set path does not wait for completion, so there is no <code>waitForCompletion</code> child.
-The old root span's attributes (<code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>) are the starting set; <code>gateway.plan.id</code> has no scale-set equivalent, and the job id does.
-A test needs an in-memory span exporter (<code>go.opentelemetry.io/otel/sdk/trace/tracetest</code>) and must fail with the span removed.</p>
-<p><strong>Done when</strong> the scale-set provision path emits the span tree above under a test that fails without it, and the docs that describe the AGC's spans describe those: the caveats Q264 added to <a href="../../operations/observability-logging/#distributed-tracing-agc">observability-logging.md § Distributed Tracing</a> and <a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a> come out, and <a href="../../design/02-architecture/#distributed-tracing">02-architecture.md § Distributed tracing</a>, which still names <code>RunnerGroup.Reconcile</code> and <code>Provisioner.provision</code>, names the new spans.</p>
+<h1 id="spectracing-needs-an-operator-named-collector-peer-and-a-ca-path">spec.tracing needs an operator-named collector peer and a CA path<a class="headerlink" href="#spectracing-needs-an-operator-named-collector-peer-and-a-ca-path" title="Permanent link">&para;</a></h1>
+<p>An <code>ActionsGateway</code> with <code>spec.tracing</code> set delivers no spans on a CNI that enforces NetworkPolicy until an operator adds a policy by hand, and a proxied tenant must also spell the endpoint as the full <code>.svc.cluster.local</code> name.
+Q1278 documented that in <a href="../../operations/observability-logging/#reaching-the-collector">Reaching the collector</a> rather than changing it, because opening the path widens a default-deny egress policy, which needs sign-off under the secure-by-default principle.</p>
+<p><strong>Karl made two separate decisions on 2026-11-03, and each gates <code>v2.0.0</code>.</strong></p>
+<ol>
+<li><strong>"Karl gates v2.0.0 on a peer field".</strong> An operator-named <code>spec.tracing</code> peer, which the GMC turns into an AGC-only egress rule.
+   The GMC does not open the path by deriving a peer from the endpoint's host, so egress stays closed until an operator names one, and a tenant with <code>spec.tracing</code> unset keeps the policy it has today.</li>
+<li><strong>"Karl gates v2.0.0 on a CA path"</strong>, asked in a later prompt after the plaintext finding below.
+   A CA reference alongside the peer field, so a proxied tenant can use TLS at 2.0 and the plaintext gap closes before the tag.</li>
+</ol>
+<p>Measured on 2026-11-03 against 5c46c1b with a real <code>otel/opentelemetry-collector:0.120.0</code> over plaintext gRPC, on a two-node kind cluster with Calico and one job per setup:</p>
+<table>
+<thead>
+<tr>
+<th>Tenant</th>
+<th><code>endpoint</code> host</th>
+<th>Operator policy, AGC to collector</th>
+<th>Root spans received</th>
+<th>AGC log</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proxied</td>
+<td><code>otel-collector.observability:4317</code></td>
+<td>No</td>
+<td>0</td>
+<td><code>traces export: ... reading server HTTP response: unexpected EOF</code></td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td><code>otel-collector.observability.svc:4317</code></td>
+<td>No</td>
+<td>0</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td><code>otel-collector.observability.svc.cluster.local:4317</code></td>
+<td>No</td>
+<td>0</td>
+<td><code>traces export: ... DeadlineExceeded</code></td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td><code>otel-collector.observability.svc.cluster.local:4317</code></td>
+<td>Yes</td>
+<td>1</td>
+<td>no new line</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td><code>otel-collector.observability:4317</code></td>
+<td>Yes</td>
+<td>0</td>
+<td><code>unexpected EOF</code></td>
+</tr>
+<tr>
+<td>Direct</td>
+<td><code>otel-collector.observability:4317</code></td>
+<td>No</td>
+<td>0</td>
+<td><code>DeadlineExceeded</code></td>
+</tr>
+<tr>
+<td>Direct</td>
+<td><code>otel-collector.observability:4317</code></td>
+<td>Yes</td>
+<td>1</td>
+<td>no new line</td>
+</tr>
+<tr>
+<td>Direct</td>
+<td><code>otel-collector.observability.svc.cluster.local:4317</code></td>
+<td>Yes</td>
+<td>4, from one enqueued job after the AGC restarted</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p>Each provisioning attempt opens a root span, so replays after that restart may be the extra three; that was not checked.
+Every row is plaintext.
+The AGC's <code>traces export:</code> line at <code>info</code> is the only signal: the shutdown flush returns nil, and no metric or status condition reports a failed export.
+The measurement was a throwaway Ginkgo spec and is not committed, so nothing in CI covers delivery on a real cluster; an in-process test does cover <code>tracing.Init</code> to an OTLP server.</p>
+<p>The precedent is the Vault signer.
+<code>signer.vault.networkPolicy</code> has the operator name a peer, and <code>vaultEgressRule</code> turns it into a scoped AGC-only egress rule, so a <code>spec.tracing</code> peer could reuse <code>egressPeerTo</code>, whose comment already names telemetry as a future consumer.
+That covers the direct dial and leaves the proxied short-name case to the docs, or to validating the endpoint's host against <code>NO_PROXY</code> at admission.</p>
+<p>The plaintext finding: <code>spec.tracing</code> has no CA field and <code>configureTrustPool</code> patches only <code>http.DefaultTransport</code>, so the gRPC exporter verifies against the AGC image's public roots, which cannot validate a <code>.svc.cluster.local</code> name.
+A proxied tenant must use that name, so its export can only be plaintext.
+Measured in-process on 2026-11-03: <code>https://</code> to a self-signed server gives 0 spans and <code>x509: certificate signed by unknown authority</code>, and delivers once <code>OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE</code> names the CA, an SDK variable <code>spec.tracing</code> cannot set and that has no volume mounted behind it.
+The SDK reads that file once, when the exporter is built, and on a read failure logs the error and falls back to the system roots (<code>WithCertPool</code>, read and not run), so rotation and a missing file both need an answer.
+The precedent for the reference is <code>githubCABundleRef</code>, a ConfigMap the GMC mounts and reports as <code>CABundleNotFound</code> or <code>CABundleInvalid</code>.
+Q536 built that in #1137 at 29 files and +1347/-216 outside docs, which is why this row is <code>L</code> with the peer field and the e2e beside it, though the size is an estimate rather than a measurement.
+Read how <code>signer.vault</code> handles its own CA, and <code>api-review.md</code> on whose fact the CA is, before choosing the shape.
+The doc examples stay <code>http://</code> with <code>insecure: true</code> until this ships, and move to TLS in the same change.</p>
+<p>Done when both fields ship, an e2e spec on the Calico lane proves a tenant's spans reach a collector and that a worker pod still cannot, and a real run shows a proxied tenant exporting over TLS to a collector with a private CA.</p>
+<p>Neither decision covers the proxied short-name case or the two gaps below, so they do not gate <code>v2.0.0</code> unless one blocks that Done when.
+<code>spec.tracing.endpoint</code> has no admission check, so a bare IP is admitted and silently exports to <code>127.0.0.1:4317</code>, and routing the export through an <code>EgressProxy</code> with <code>destinationFQDNs</code> is unmeasured, including what it costs in worker egress.</p>
 
 
 

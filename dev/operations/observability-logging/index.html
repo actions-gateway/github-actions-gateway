@@ -2341,6 +2341,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reaching-the-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaching the collector
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2903,6 +2914,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reaching-the-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaching the collector
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3156,12 +3178,17 @@ It replaces:</p>
 See <a href="../../design/05-security/">security §5 — credential handling</a>.</p>
 <hr />
 <h2 id="distributed-tracing-agc">Distributed Tracing (AGC)<a class="headerlink" href="#distributed-tracing-agc" title="Permanent link">&para;</a></h2>
-<p><strong>The AGC currently emits no spans of its own.</strong> Its one traced path, <code>Provisioner.provision</code> and its child spans, wrapped the classic acquisition tier, which <code>v2.0.0</code> removed; the scale-set provision path has no span yet, and <a href="../../queue/Q1278/">Q1278</a> adds one.
-Configuring tracing still installs the exporter, so a collector receives nothing from the AGC until then.</p>
+<p>The per-tenant AGC emits <strong>OpenTelemetry traces</strong> for the job-to-pod path: one root span per provisioning attempt, <strong><code>Provisioner.ProvisionScaleSetWorker</code></strong>, with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, and <code>createPod</code>.
+The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code> (the RunnerSet), <code>gateway.job.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, and <code>gateway.priority_class</code>.
+Any failing exit after the span opens sets the root span's status to error, and a failed phase also records the error on its own child span.
+The listener's capacity check normally stops a job the concurrency ceiling would hold before provisioning starts, so that job has no trace; only one that loses the race reaches this span, with <code>gateway.ceiling_held</code> true.
+Time between <code>countActivePods</code> ending and <code>createPod</code> starting is spent in the scale-up rate limit's wait, when one is configured.
+The AGC does not wait for the job to run, so the trace ends once the worker pod exists, and the job's own run time is not in it.</p>
 <blockquote>
 <p>Span attribute names follow the <a href="https://opentelemetry.io/docs/specs/semconv/">OpenTelemetry semantic conventions</a>: Kubernetes-native attributes use the <code>k8s.*</code> keys (<code>k8s.namespace.name</code>, <code>k8s.pod.name</code>); project-specific attributes are namespaced under <code>gateway.</code>.
 These keys were renamed in the Q205 naming audit — see <a href="../observability-metrics/#breaking-observability-changes-q205">Breaking observability changes</a> for the old→new mapping.</p>
 </blockquote>
+<p>Each attempt is its own root trace, because nothing in the AGC ahead of the provision path starts a span or carries an inbound trace context, so a replayed job has more than one.</p>
 <p><strong>Tracing is opt-in and off by default.</strong> With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.</p>
 <h3 id="enabling-tracing">Enabling tracing<a class="headerlink" href="#enabling-tracing" title="Permanent link">&para;</a></h3>
 <p>The AGC reads the <strong>standard OpenTelemetry SDK environment variables</strong> — there is no bespoke flag.
@@ -3176,7 +3203,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <tbody>
 <tr>
 <td><code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code> or <code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td>
-<td>OTLP/gRPC collector address (e.g. <code>otel-collector.observability:4317</code>). Setting either one enables tracing.</td>
+<td>OTLP/gRPC collector address, with its scheme (e.g. <code>http://otel-collector.observability.svc.cluster.local:4317</code>). Setting either one enables tracing.</td>
 </tr>
 <tr>
 <td><code>OTEL_SDK_DISABLED=true</code></td>
@@ -3195,22 +3222,24 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <p>On shutdown the AGC flushes buffered spans (5 s budget) before exiting.</p>
 <h3 id="enabling-tracing-on-gmc-managed-agcs">Enabling tracing on GMC-managed AGCs<a class="headerlink" href="#enabling-tracing-on-gmc-managed-agcs" title="Permanent link">&para;</a></h3>
 <p>The GMC builds the AGC Deployment, so for a GMC-provisioned tenant you do <strong>not</strong> set these env vars by hand — you declare tracing on the <code>ActionsGateway</code> CR and the GMC translates <code>spec.tracing</code> into the standard <code>OTEL_*</code> env on the AGC Deployment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GitHubApp</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="nt">githubApp</span><span class="p">:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http://otel-collector.observability.svc.cluster.local:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">insecure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                       </span><span class="c1"># plaintext; see Reaching the collector</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
 </code></pre></div>
 <table>
 <thead>
@@ -3229,7 +3258,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <tr>
 <td><code>insecure</code></td>
 <td><code>OTEL_EXPORTER_OTLP_TRACES_INSECURE</code></td>
-<td>Defaults to <code>false</code> (TLS). Set <code>true</code> only for a plaintext in-cluster collector.</td>
+<td>Defaults to <code>false</code> (TLS). Set <code>true</code> only for a plaintext collector; it wins over an <code>https://</code> scheme.</td>
 </tr>
 <tr>
 <td><code>sampler</code></td>
@@ -3250,11 +3279,124 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 </table>
 <blockquote>
 <p><strong>No auth headers via env.</strong> <code>spec.tracing</code> deliberately has no field for <code>OTEL_EXPORTER_OTLP_HEADERS</code>: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes).
-Authenticate the collector at the <strong>network layer</strong> instead — an in-cluster collector reached over the tenant's egress path, mutual TLS, or a service mesh.</p>
+Authenticate the collector at the <strong>network layer</strong> instead: an in-cluster collector <a href="#reaching-the-collector">the AGC is allowed to reach</a>, or a service mesh.</p>
 <p><strong>Testing-only passthrough.</strong> The <code>AGC_EXTRA_*</code> mechanism (<code>--allow-agc-extra-env</code> on the GMC, then <code>AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…</code> in the GMC pod env) still exists but is gated for tests only and not for production use.
 When both are present, <code>AGC_EXTRA_*</code> wins (it is appended last).
 Prefer <code>spec.tracing</code>.</p>
 </blockquote>
+<h3 id="reaching-the-collector">Reaching the collector<a class="headerlink" href="#reaching-the-collector" title="Permanent link">&para;</a></h3>
+<p><strong>Setting <code>spec.tracing</code> does not open a network path to the collector.</strong> The GMC's default-deny egress policy has no rule for it, so on a CNI that enforces NetworkPolicy the AGC's spans go nowhere until you add one.
+The name you give the collector matters as much: its <strong>full name</strong> is <code>otel-collector.observability.svc.cluster.local:4317</code>, and its <strong>short name</strong> is <code>otel-collector.observability:4317</code>.
+Measured with a real collector over plaintext gRPC on kind with Calico, at one job per setup:</p>
+<table>
+<thead>
+<tr>
+<th>Tenant</th>
+<th>Name</th>
+<th>NetworkPolicy below</th>
+<th>Spans at the collector</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proxied</td>
+<td>Full</td>
+<td>Yes</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td>Full</td>
+<td>No</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td>Short</td>
+<td>Yes</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td>Short</td>
+<td>No</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Direct</td>
+<td>Either</td>
+<td>Yes</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Direct</td>
+<td>Short</td>
+<td>No</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>A proxied tenant needs both: the full <code>.svc.cluster.local</code> name, which is what <code>NO_PROXY</code> exempts from the egress proxy, and a policy allowing the AGC to reach the collector directly.
+Anything shorter is sent through the proxy, including <code>otel-collector.observability.svc:4317</code>, and the proxy's own NetworkPolicy blocks it, so no policy on the AGC changes that.</p>
+<p><strong>An in-cluster collector has to be plaintext</strong>, and every delivered row above is.
+<code>spec.tracing</code> has no CA field, so the AGC verifies a TLS collector only against the public roots in its image, and public CAs do not issue certificates for <code>.svc.cluster.local</code> names.
+An <code>https://</code> endpoint with a private-CA certificate therefore delivers nothing, and a proxied tenant, which must use the full name, has no TLS option.
+That is why the examples here use <code>http://</code> with <code>insecure: true</code>.
+The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, any <code>resourceAttributes</code> you set, and the error text of a failed attempt.
+None of those attributes is a credential; the error text names the Secret or Pod and quotes the API server's message, which has not been audited for what it can echo.</p>
+<p>Add the policy in the tenant's namespace, naming your gateway and collector:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NetworkPolicy</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-agc-to-collector</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-agc</span><span class="w">   </span><span class="c1"># &lt;gateway&gt;-agc, so it opens nothing for worker pods</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span><span class="nt">policyTypes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Egress</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span><span class="nt">egress</span><span class="p">:</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">namespaceSelector</span><span class="p">:</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">          </span><span class="nt">kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">observability</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">      </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">        </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">          </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">otel-collector</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">    </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4317</span>
+<a id="__codelineno-5-21" name="__codelineno-5-21" href="#__codelineno-5-21"></a><span class="w">      </span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">TCP</span>
+</code></pre></div>
+<p><strong>An export that fails is reported only in the AGC's log</strong>, as a <code>traces export:</code> line at <code>info</code>, with no metric or status condition.
+Check for it after a job has run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/team-a-agc<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'traces export'</span>
+</code></pre></div>
+<p><code>reading server HTTP response: unexpected EOF</code> means the export went through the egress proxy, so the name is too short; a pool with a destination allowlist refuses it with <code>failed to do connect handshake</code> instead.
+<code>DeadlineExceeded</code> means the direct connection never opened, so the NetworkPolicy is missing or wrong.</p>
+<p>Three more come from the TLS settings, measured against an in-process OTLP server:</p>
+<table>
+<thead>
+<tr>
+<th>Log text</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>x509: certificate signed by unknown authority</code></td>
+<td><code>https://</code> to a collector whose certificate the AGC does not trust</td>
+</tr>
+<tr>
+<td><code>first record does not look like a TLS handshake</code></td>
+<td><code>https://</code> to a plaintext collector, without <code>insecure: true</code></td>
+</tr>
+<tr>
+<td><code>error reading server preface: EOF</code></td>
+<td>Plaintext to a collector serving TLS</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Always include the scheme in <code>endpoint</code>.</strong> Admission does not check the value, and a bare IP such as <code>10.0.0.5:4317</code> fails the SDK's URL parse, so the AGC exports to <code>127.0.0.1:4317</code> instead.</p>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>
 
