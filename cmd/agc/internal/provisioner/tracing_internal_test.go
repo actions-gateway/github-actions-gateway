@@ -3,14 +3,21 @@ package provisioner
 import (
 	"context"
 	"errors"
+	"net"
+	"sort"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	coltrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	"google.golang.org/grpc"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -159,4 +166,65 @@ func TestProvisionScaleSetWorker_ReplayAdoptionIsNotASpanError(t *testing.T) {
 	spans := spansByName(t, sr)
 	assert.Equal(t, codes.Unset, requireSpan(t, spans, "createPod").Status().Code)
 	assert.Equal(t, codes.Unset, requireSpan(t, spans, rootSpanName).Status().Code)
+}
+
+// otlpSink is an OTLP/gRPC trace receiver that records the span names it is sent.
+type otlpSink struct {
+	coltrace.UnimplementedTraceServiceServer
+	mu    sync.Mutex
+	names []string
+}
+
+func (s *otlpSink) Export(_ context.Context, req *coltrace.ExportTraceServiceRequest) (*coltrace.ExportTraceServiceResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, rs := range req.GetResourceSpans() {
+		for _, ss := range rs.GetScopeSpans() {
+			for _, span := range ss.GetSpans() {
+				s.names = append(s.names, span.GetName())
+			}
+		}
+	}
+	return &coltrace.ExportTraceServiceResponse{}, nil
+}
+
+// The recorder tests above replace the tracer, so they cannot see a break between
+// tracing.Init and spans leaving the process. This one runs that path to a real OTLP/gRPC
+// server. It re-reads the tracer from the global because the package tracer delegates only
+// to the first provider ever set, which would fail under -count=2.
+func TestProvisionScaleSetWorker_DeliversSpansOverOTLP(t *testing.T) {
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	sink := &otlpSink{}
+	srv := grpc.NewServer()
+	coltrace.RegisterTraceServiceServer(srv, sink)
+	go func() { _ = srv.Serve(lis) }()
+	t.Cleanup(srv.Stop)
+
+	// A bare host:port would fail the SDK's URL parse and silently dial localhost:4317.
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://"+lis.Addr().String())
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_INSECURE", "true")
+
+	ctx := context.Background()
+	shutdown, enabled, err := tracing.Init(ctx, "test", nil)
+	require.NoError(t, err)
+	require.True(t, enabled, "an endpoint in the environment must enable tracing")
+	prev := tracer
+	tracer = otel.Tracer(tracing.InstrumentationName)
+	t.Cleanup(func() { tracer = prev })
+
+	fc := fake.NewClientBuilder().WithScheme(clientgoscheme.Scheme).Build()
+	p := NewProvisioner(fc, nil, nil)
+	target := scaleSetSecretTestTarget(&ResolvedSpec{WorkerImage: "runner:test"})
+	require.NoError(t, p.ProvisionScaleSetWorker(ctx, target, ScaleSetJob{JobID: "job-otlp", JITConfig: "eyJ4IjoxfQ=="}))
+
+	flushCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	require.NoError(t, shutdown(flushCtx))
+
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	sort.Strings(sink.names)
+	assert.Equal(t, []string{rootSpanName, "countActivePods", "createPod", "stageJobSecret"}, sink.names,
+		"the collector must receive the job's whole span tree")
 }

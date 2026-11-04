@@ -5,8 +5,8 @@
 // variables (OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT),
 // and never when OTEL_SDK_DISABLED=true. When tracing is disabled the global
 // OpenTelemetry provider stays the no-op default, so the otel.Tracer(...).Start
-// calls sprinkled through the provisioner and reconciler are nearly free and the
-// AGC ships with tracing off unless an operator points it at a collector.
+// calls in the provisioner are nearly free and the AGC ships with tracing off
+// unless an operator points it at a collector.
 //
 // All exporter knobs (endpoint, headers, TLS, timeout, sampling, resource
 // attributes) are read from the OpenTelemetry environment variables the SDK
