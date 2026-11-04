@@ -515,14 +515,14 @@ func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns
 	return cm.Data[shareCACertKey] != "", nil
 }
 
-// checkCABundle resolves one CA bundle ref. It returns a Degraded reason and message
+// checkCABundle resolves one CA bundle ref. It returns a condition reason and message
 // when the reference does not resolve, ("", "", nil) when it resolves or is unset, and
 // an error only for an apiserver failure.
 //
 // The read is uncached: the GMC's ConfigMap informer is pinned to a single object in
 // its own namespace, so it cannot serve a tenant ConfigMap.
 //
-// Parsing here rather than letting the AGC fail at startup is deliberate — a Degraded
+// Parsing here rather than letting the AGC fail at startup is deliberate — a
 // condition naming the ConfigMap is a better operator signal than a CrashLoopBackOff.
 func (r *ActionsGatewayV2Reconciler) checkCABundle(ctx context.Context, namespace, field string, ref *gmcv2.LocalConfigMapReference) (string, string, error) {
 	if ref == nil {

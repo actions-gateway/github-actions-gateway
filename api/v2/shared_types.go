@@ -252,9 +252,10 @@ type TracingConfig struct {
 	// A value the exporter cannot parse as a URL is rejected, because the exporter ignores
 	// it and sends spans to 127.0.0.1:4317 with no error (otlptracegrpc v1.47.0). A bare IP
 	// with a port is the common case, so write https://10.0.0.5:4317. A name with a port
-	// parses and needs no scheme, and the exporter trims surrounding whitespace.
+	// parses and needs no scheme, and the exporter trims surrounding whitespace. A value
+	// already stored is not re-checked until it changes.
 	//
-	// +kubebuilder:validation:XValidation:rule="self.trim().size() == 0 ? self.size() == 0 : (self.trim().contains(':') ? isURL(self.trim()) : !self.trim().matches('[[:cntrl:]%]'))",message="endpoint does not parse as a URL, so the exporter would ignore it and send spans to 127.0.0.1:4317; a bare IP needs a scheme, as in https://10.0.0.5:4317"
+	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || (self.trim().size() == 0 ? self.size() == 0 : (self.trim().startsWith('//') ? isURL('http:' + self.trim()) : (self.trim().contains(':') ? isURL(self.trim()) : !self.trim().matches('[[:cntrl:]%]'))))",optionalOldSelf=true,message="endpoint does not parse as a URL, so the exporter would ignore it and send spans to 127.0.0.1:4317; a bare IP needs a scheme, as in https://10.0.0.5:4317"
 	// +optional
 	Endpoint string `json:"endpoint,omitempty"`
 

@@ -295,14 +295,15 @@ const (
 	// spec.sharing.allowedNamespaces. Distinct from ProxyNotFound so the operator sees
 	// a proxy that exists but is not shared, rather than hunting a missing object.
 	ReasonProxyShareNotGranted = "ProxyShareNotGranted"
-	// ReasonCABundleNotFound — the ConfigMap named by githubCABundleRef does not exist,
-	// so the AGC cannot be provisioned with the trust it was asked to use (Degraded,
-	// fail closed: an appliance behind a private CA is unreachable without it).
+	// ReasonCABundleNotFound — the ConfigMap named by a CA bundle ref does not exist. For
+	// githubCABundleRef the AGC cannot be provisioned with the trust it was asked to use
+	// (Degraded, fail closed: an appliance behind a private CA is unreachable without it).
+	// For tracing.caBundleRef it sets the advisory TracingCABundleUnresolved instead.
 	ReasonCABundleNotFound = "CABundleNotFound"
 
 	// ReasonTracingCABundleResolved reports spec.tracing.caBundleRef unset or resolving.
 	ReasonTracingCABundleResolved = "TracingCABundleResolved"
-	// ReasonCABundleInvalid — the githubCABundleRef ConfigMap exists but carries no
+	// ReasonCABundleInvalid — a CA bundle ref's ConfigMap exists but carries no
 	// ca.crt key, or that key holds no parseable certificate. Distinct from
 	// CABundleNotFound so the operator sees a content problem, not a missing object.
 	ReasonCABundleInvalid = "CABundleInvalid"

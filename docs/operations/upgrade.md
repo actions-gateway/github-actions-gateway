@@ -23,7 +23,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
   - [Action required after v2.0.0: delete what an owner deleted during the upgrade left behind](#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
-  - [Action required if spec.tracing.endpoint has no scheme: a value the exporter cannot parse is now rejected](#action-required-if-spectracingendpoint-has-no-scheme-a-value-the-exporter-cannot-parse-is-now-rejected)
+  - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
@@ -456,11 +456,11 @@ A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and `s
 
 **Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
 
-### Action required if `spec.tracing.endpoint` has no scheme: a value the exporter cannot parse is now rejected
+### Action required if `spec.tracing.endpoint` does not parse as a URL: the value is now rejected
 
 **Who is affected:** operators whose `spec.tracing.endpoint` is a bare IP with a port, such as `10.0.0.5:4317`, or another value in [Tracing Endpoint Rejected by Admission](troubleshooting.md#tracing-endpoint-rejected-by-admission).
 
-**What changed.** The exporter ignores such a value and sends spans to `127.0.0.1:4317` with no error, so the gateway has been exporting nothing, and the schema now refuses the value.
+**What changed.** The exporter ignores such a value and sends spans to `127.0.0.1:4317` with no error, so no spans arrive unless a collector listens on the AGC pod's own loopback, and the schema now refuses the value.
 The upgrade itself changes nothing: a gateway already stored with one keeps running, and an edit that leaves the field alone is still accepted.
 A delete and re-create is rejected, which includes a restore from backup.
 

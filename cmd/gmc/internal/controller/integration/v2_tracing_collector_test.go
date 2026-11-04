@@ -104,6 +104,8 @@ func TestV2_Tracing_EndpointAdmission(t *testing.T) {
 		"10.0.0.5",
 		"https://10.0.0.5:4317",
 		"https://_collector:4317",
+		"http://127.0.0.1:4317",
+		"otel-collector:4317#frag",
 		"http://[::1]:4317",
 		"http://[fe80::1%25eth0]:4317",
 		"//otel-collector:4317",
@@ -150,13 +152,35 @@ func TestV2_Tracing_EndpointAdmission(t *testing.T) {
 		"a%zz",
 		"_collector:4317",
 		"my-collector_1.ns:4317",
-		"otel-collector/v1:4317", // Over-rejected: the exporter dials it and delivers nowhere.
+		"//otel-collector:notaport",
+		"//local host:4317",
+		"//[::1",
+		"//local host",
+		// Over-rejected, because isURL does not split a fragment and CEL has no url.Parse: the
+		// exporter delivers these. Nothing but a typo writes them.
+		"http://otel-collector:4317#frag",
+		"http://otel-collector:4317#",
+		"HTTP://otel-collector:4317#f",
+		"https://otel-collector:4317#frag",
+		"//otel-collector:4317#frag",
+		// Over-rejected and harmless: the exporter dials these and delivers nowhere.
+		"otel-collector/v1:4317",
+		"otel-collector/:4317",
+		"coll?x=a:b",
+		"%41",
+		"a%20b",
+		// Delivered to a collector on the AGC pod's own loopback, by the misread alone.
+		// http://127.0.0.1:4317 says so on purpose, and is accepted.
+		"127.0.0.1:4317",
 		"3collector:4317",
 	} {
 		t.Run("rejects "+endpoint, func(t *testing.T) {
 			ag := newV2GatewayWired("endpoint-bad", ns, "github-app", "")
 			ag.Spec.Tracing = v2.TracingConfig{Endpoint: endpoint}
 			err := k8sClient.Create(ctx, ag)
+			if err == nil {
+				t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+			}
 			require.Error(t, err)
 			assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
 			assert.Contains(t, err.Error(), "endpoint does not parse as a URL")
@@ -164,12 +188,17 @@ func TestV2_Tracing_EndpointAdmission(t *testing.T) {
 	}
 }
 
-// TestV2_Tracing_StoredBadEndpointSurvivesRatcheting: a gateway stored before the rule keeps
-// working. The rule sits on the field so CRD validation ratcheting suppresses it while the
-// value is unchanged, which only a stored object can show, so the CRD is edited to admit one.
-func TestV2_Tracing_StoredBadEndpointSurvivesRatcheting(t *testing.T) {
+// TestV2_Tracing_StoredBadEndpointKeepsWorking: a gateway stored before the rule keeps working,
+// which only a stored object can show, so the CRD is edited to admit one. The rule passes an
+// unchanged value itself, because ratcheting misses the status subresource on Kubernetes 1.31
+// and 1.32, where a stored value froze the gateway's status (measured on 1.31.0 and 1.32.0;
+// 1.33.0 ratchets it). This suite runs 1.35, so only the optionalOldSelf pin below can fail here.
+func TestV2_Tracing_StoredBadEndpointKeepsWorking(t *testing.T) {
 	const ns = "v2-tracing-ratchet"
-	createNamespace(t, ns)
+	createNamespaceWithLabels(t, ns, map[string]string{
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
+	})
+	createGitHubAppSecret(t, ns, "github-app")
 
 	crd := &unstructured.Unstructured{}
 	crd.SetGroupVersionKind(schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"})
@@ -217,7 +246,8 @@ func TestV2_Tracing_StoredBadEndpointSurvivesRatcheting(t *testing.T) {
 	require.NoError(t, k8sClient.Get(ctx, crdKey, crd))
 	versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
 	_, original := endpointRules(versions)
-	require.NotEmpty(t, original, "the rule this test ratchets must exist")
+	require.Len(t, original, 1, "the rule this test exercises must exist")
+	require.Equal(t, true, original[0].(map[string]any)["optionalOldSelf"], "an unchanged value must pass on the status path too")
 	t.Cleanup(func() { setRules(original) })
 
 	const bad = "10.0.0.5:4317"
@@ -232,6 +262,9 @@ func TestV2_Tracing_StoredBadEndpointSurvivesRatcheting(t *testing.T) {
 	require.Eventually(t, func() bool { return k8sClient.Create(ctx, stored) == nil },
 		15*time.Second, 200*time.Millisecond, "the CRD with no rule must admit the value")
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), stored) })
+	reconciled := newGateway("reconciled")
+	require.NoError(t, k8sClient.Create(ctx, reconciled))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), reconciled) })
 
 	setRules(original)
 	require.Eventually(t, func() bool {
@@ -269,6 +302,12 @@ func TestV2_Tracing_StoredBadEndpointSurvivesRatcheting(t *testing.T) {
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
 	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Endpoint = "https://10.0.0.5:4317" }),
 		"fixing it must succeed")
+
+	startActionsGatewayV2Reconciler(t)
+	require.Eventually(t, func() bool {
+		var got v2.ActionsGateway
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "reconciled"}, &got) == nil && len(got.Status.Conditions) > 0
+	}, 30*time.Second, 200*time.Millisecond, "the GMC must be able to write status on a stored value")
 }
 
 // TestV2_Tracing_MissingBundleIsAdvisory: a ref naming no ConfigMap sets the advisory

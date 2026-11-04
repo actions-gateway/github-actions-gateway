@@ -4799,8 +4799,10 @@ and send spans to 127.0.0.1:4317; a bare IP needs a scheme, as in https://10.0.0
 **Likely cause.** The exporter ignores a value it cannot parse as a URL and sends spans to `127.0.0.1:4317` with no error, so the schema refuses it.
 The usual case is a host with a port and no scheme that starts with a digit or a bracket, or holds an underscore: `10.0.0.5:4317`, `[fd00::5]:4317`, `3collector:4317`, `my_collector:4317`.
 A non-numeric port, a bad percent escape and a value of only whitespace are rejected too.
+The check is close to the exporter's parser rather than identical, so a URL with a `#fragment` is rejected although it would deliver; drop the fragment.
 
 **Resolution.** Add the scheme, as in `https://10.0.0.5:4317`, or `http://` for a plaintext collector with `insecure: true`.
+That includes a collector on the AGC pod's own loopback: `127.0.0.1:4317` is rejected, and `http://127.0.0.1:4317` is accepted.
 To turn tracing off, remove the field.
 
 A gateway stored before this check keeps working: an edit that leaves `endpoint` alone is accepted, and it goes on exporting to `127.0.0.1:4317` until the value is corrected.
