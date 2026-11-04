@@ -127,9 +127,9 @@ func (t *runnerSetTarget) OwnerRef() metav1.OwnerReference {
 }
 
 // runnerSetOwnerRef returns the controller OwnerReference to a RunnerSet that every
-// object the AGC derives from it carries — worker pods and job Secrets via the Target
-// above, agent-pool Secrets via the RunnerSet reconciler — so the two paths cannot
-// drift into two spellings of the same reference.
+// object the AGC derives from it carries — worker pods, job Secrets and the
+// provisioner's ConfigMaps via the Target above, the guard ConfigMap via the RunnerSet
+// reconciler — so the two paths cannot drift into two spellings of the same reference.
 func runnerSetOwnerRef(name string, uid types.UID) metav1.OwnerReference {
 	return metav1.OwnerReference{
 		APIVersion: v2.GroupVersion.String(),

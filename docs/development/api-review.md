@@ -210,7 +210,7 @@ Moving the rule onto `spec.runnerLabels` kept the constraint exactly where it ma
 
 Related: pick the right enforcement point at all.
 CEL `XValidation` is cheap and always on; a webhook can read `metadata` and name the offending component in the message (which is why `gitHubURL` structure and `securityProfile` downgrades are webhook-enforced).
-The CEL marker gotchas — gofmt corrupting `''`, and `selectableFields` on one version only — are in [code-generation.md](code-generation.md#crd-marker-and-api-file-gotchas).
+The CEL marker gotchas — gofmt corrupting `''`, and `selectableFields` declared identically on every version — are in [code-generation.md](code-generation.md#crd-marker-and-api-file-gotchas).
 
 ### Derived names are part of the contract
 

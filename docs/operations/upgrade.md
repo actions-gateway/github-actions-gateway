@@ -19,6 +19,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
+  - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
@@ -285,6 +286,27 @@ kubectl get secrets -n <namespace> -o name | grep '^secret/agentpool-rs-<set>-'
 Delete each one it prints, and remove the offline `rs-<set>-<n>` runners in the org's or repository's runner settings.
 
 **Rolling back** to 1.10 returns the set to classic acquisition.
+
+### Action required at `v2.0.0`: apply the CRDs with the upgrade, because the AGC's watch depends on them
+
+**Who is affected:** every gateway.
+
+**What changed.** Each Actions Gateway Controller (AGC) watches only its own gateway's `RunnerSet`s, through a server-side field selector on `spec.gatewayRef.name`, and the apiserver evaluates that selector at the API version the request names.
+A `v1.10.0` AGC lists at `v2alpha1` and its CRD declares the field there alone; a `v2.0.0` AGC lists at `v2`, and its CRD declares the field there.
+So neither AGC can list its `RunnerSet`s against the other release's CRDs.
+
+**What you see.** The `RunnerSet` list fails with this error, and an AGC that hits it at startup does not become ready:
+
+```text
+field label not supported: spec.gatewayRef.name
+```
+
+The GMC's startup schema check does not catch this, because it probes fields rather than selectable fields.
+
+**What to do.** Apply the `v2.0.0` CRDs and upgrade the chart as one step, and do not leave a gap between them.
+During a gap, an AGC that restarts cannot start.
+One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
+A rollback crosses the same gap in reverse.
 
 ### Action required if you alert on or chart the classic acquisition series: they are no longer exported
 
@@ -1245,6 +1267,7 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
 **Skipping the re-apply is the one v2 upgrade mistake that is not self-announcing, so the GMC refuses to start on it.** A structural schema prunes an undeclared field on write with no error, so a cluster left on the previous release's CRD accepts a manifest setting a newer field and stores nothing.
 For [`spec.runnerGroup`](../design/05-security.md#unbounded-job-intake-via-the-installations-default-runner-group) that is a tenant boundary silently going away, not a feature going missing, so the GMC probes the installed schema at startup and exits with the field, the version, and this command rather than provisioning against a boundary that is not there.
 Runbook: [troubleshooting.md](troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc).
+From `v2.0.0` a skipped re-apply also [stops every AGC](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them), which the GMC's check does not catch.
 
 The v2 controllers now reconcile these kinds, so a v2 object set provisions a working tenant.
 Both groups are served side by side, so you can stay on the `v1alpha1` (`actions-gateway.github.com`) API until the **`v2.0.0`** release removes it, or migrate a tenant to v2 now with the one-shot fan-out tool: see [migration-v1-to-v2.md](migration-v1-to-v2.md) and the [deprecation and removal notice](v1alpha1-deprecation.md), which lists everything `v2.0.0` removes (`v1alpha1`, `v2alpha1`, and the Classic acquisition protocol) and the pre-upgrade checklist for it.
