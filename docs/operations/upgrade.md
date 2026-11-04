@@ -451,6 +451,7 @@ The reference rules drop the alerts and the recording rule that read them:
 
 The reference dashboards drop the panels that read the removed series, and chart the listener session gauge where they charted active sessions.
 The AGC's `Provisioner.provision` span went with the classic path too, and the scale-set path is traced as `Provisioner.ProvisionScaleSetWorker` instead, so a trace query or dashboard that filters on the old span name needs the new one ([Distributed Tracing](observability-logging.md#distributed-tracing-agc)).
+A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and `spec.tracing.networkPolicy` can now replace it ([Reaching the collector](observability-logging.md#reaching-the-collector)).
 
 **Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
 

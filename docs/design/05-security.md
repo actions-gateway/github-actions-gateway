@@ -966,8 +966,13 @@ The live no-PEM round-trip is covered by an in-cluster (dev-mode) Vault kind e2e
 > Leave `networkPolicy` unset on a non-enforcing CNI (kindnet) or to manage the rule out of band — the egress posture is unchanged in that case.
 > As with every egress negative this is enforced only by a policy-aware CNI.
 >
-> `signer.vault.networkPolicy` is a shared `EgressPeer` (selector | CIDR + optional explicit `port`) — the one descriptor future tenant-delegated egress holes (cloud KMS signers, telemetry endpoints) reuse so the v2 API freezes one consistent shape (Q204).
+> `signer.vault.networkPolicy` is a shared `EgressPeer` (selector | CIDR + optional explicit `port`) — the one descriptor tenant-delegated egress holes reuse, so the v2 API freezes one consistent shape (Q204).
 > For Vault the `port` is left unset and derived from `address`; the secure default is unchanged — still a single scoped peer, never a broaden-to-all-egress.
+>
+> **NetworkPolicy egress to a trace collector.** `spec.tracing.networkPolicy` is the second consumer: one peer the operator names, on the port parsed from `endpoint`, on the AGC-only policy.
+> The GMC never derives a peer from `endpoint`, so a gateway with tracing on and no peer stays default-deny, and worker pods never gain the rule.
+> `spec.tracing.caBundleRef` is scoped the same way: the bundle replaces the system roots for the export connection only, joins neither the trust the AGC uses for GitHub nor any worker pod's, and fails the gateway closed when it does not resolve.
+> A tenant can only ever point its own AGC's spans at a peer it names, which is why this is tenant-delegated rather than admin-governed.
 > See [appendix-g §G.9](appendix-g-future-enhancements.md#g9-networkpolicy-egress-extensibility-signers-telemetry-job-dependencies).
 
 ---

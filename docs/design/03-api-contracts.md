@@ -264,7 +264,7 @@ type ActionsGatewaySpec struct {
 // TracingConfig maps to the AGC's OpenTelemetry OTEL_* environment variables.
 type TracingConfig struct {
     // Endpoint is the OTLP/gRPC collector address (e.g.
-    // "http://otel-collector.observability.svc.cluster.local:4317"). Setting it enables
+    // "https://otel-collector.observability.svc.cluster.local:4317"). Setting it enables
     // tracing; an empty Endpoint emits no OTEL_* env. Maps to
     // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
     // +optional
@@ -274,6 +274,20 @@ type TracingConfig struct {
     // (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.
     // +optional
     Insecure *bool `json:"insecure,omitempty"`
+
+    // CABundleRef names a ConfigMap in this namespace holding, under "ca.crt", the
+    // PEM bundle the AGC verifies the collector against, replacing the system roots
+    // for this connection alone. Needs an https:// Endpoint with Insecure unset or
+    // false. Fails the gateway closed when it does not resolve. Maps to
+    // OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.
+    // +optional
+    CABundleRef *LocalConfigMapReference `json:"caBundleRef,omitempty"`
+
+    // NetworkPolicy names the collector as an egress peer. The GMC emits one
+    // AGC-only rule on the port parsed from Endpoint, and never derives a peer from
+    // Endpoint itself, so egress stays closed until this is set. Needs an Endpoint.
+    // +optional
+    NetworkPolicy *EgressPeer `json:"networkPolicy,omitempty"`
 
     // Sampler selects the trace sampler. Maps to OTEL_TRACES_SAMPLER.
     // +optional

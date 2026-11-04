@@ -224,7 +224,7 @@ The entries below are the other egress holes we can foresee wanting, the governa
 | Use case | Who needs egress | Governance | Notes |
 |---|---|---|---|
 | **Cloud KMS signers** (AWS/GCP/Azure KMS as additive `signer.provider` members) | AGC | Tenant-delegated for the signer endpoint (tenant names its own KMS); **admin-governed** for any cloud-metadata leg | The metadata/credential path varies by provider: **GKE Workload Identity** and **EC2 IMDS / EKS Pod Identity** reach a link-local address (`169.254.169.254` / `169.254.170.23`) on :80 — a *new* hole distinct from the existing :53-only `169.254/16` rule; **AWS IRSA** and **Azure Workload Identity** instead call a *public* STS/AAD host (the same opaque-URL problem the Vault rule already solves). |
-| **AGC telemetry** (`spec.tracing.endpoint`, and any future metrics/log push) | AGC | Tenant-delegated, AGC-only | A scoped rule is derivable from the *already-existing* `tracing.endpoint`; today that endpoint is not auto-permitted on a policy-enforcing CNI. |
+| **AGC telemetry push beyond traces** (any future metrics or log push) | AGC | Tenant-delegated, AGC-only | Traces shipped this way as `spec.tracing.networkPolicy`: an operator-named `EgressPeer`, deliberately not derived from `tracing.endpoint`, so egress stays closed until a peer is named. |
 | **Worker job dependencies** (container/package registries, build caches, internal services the CI job legitimately calls) | Worker | **Through the proxy → tenant-delegated** (attribution preserved); **direct → admin-governed** | The single most common operator ask. The attribution-preserving answer is the proxy destination allowlist ([G.1](#g1-proxy-enforced-destination-allowlist)); a *direct* worker egress hole forfeits per-tenant IP attribution and the DNS-exfil containment, so it must stay an explicit admin opt-in, never tenant-openable by default. |
 | **Cloud metadata for worker OIDC** (`configure-aws-credentials` etc.) | Worker | **Admin-governed, default-deny** | Metadata-server reach from untrusted job code is a classic credential-theft / SSRF vector; the common OIDC path uses GitHub's token → public STS, which needs no metadata at all. |
 
@@ -236,7 +236,7 @@ The Vault `signer.vault.networkPolicy` is the canonical tenant-delegated case (A
 **Pre-v2 API-compatibility analysis (no breaking change required).** Every hole above is reachable additively under the frozen v2 shape:
 
 - Cloud KMS signers join as **new `signer.provider` union members**, each carrying its *own* optional peer descriptor — exactly the additive contract the union was built for; existing members are untouched.
-- AGC telemetry and worker-direct egress would be **new optional fields** on existing structs (`ActionsGateway` / `RunnerSet` / `RunnerTemplate`) or new GMC flags.
+- Further AGC telemetry and worker-direct egress would be **new optional fields** on existing structs (`ActionsGateway` / `RunnerSet` / `RunnerTemplate`) or new GMC flags.
   Optional CRD fields don't prune and old clients ignore them, so adding them later is non-breaking.
 - The worker-through-proxy case extends the proxy allowlist ([G.1](#g1-proxy-enforced-destination-allowlist)), not the CRD egress shape.
 
@@ -245,7 +245,7 @@ If KMS, telemetry, and worker-egress had each grown their own near-duplicate des
 **Resolved (Q204):** the descriptor is now the shared [`EgressPeer`](../../api/v2/actionsgateway_types.go) type (selector | CIDR
 + an optional explicit port), and `signer.vault.networkPolicy` references it.
   The extraction is serialization-compatible — the field keys (`podSelector`, `namespaceSelector`, `cidr`) are unchanged, so the shape already shipped is preserved; only the additive optional `port` is new, with the Vault builder still deriving the port from the address when `port` is unset.
-  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2 graduation ([Q74](../queue/README.md)) than after.
+  Later consumers (`spec.tracing.networkPolicy`, then KMS) reference the same type instead of forking it — the shape that is far cheaper to settle before the v2 graduation ([Q74](../queue/README.md)) than after.
 
 **What would trigger building any of it.** A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.
 
