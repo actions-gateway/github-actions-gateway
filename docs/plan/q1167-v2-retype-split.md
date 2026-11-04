@@ -109,7 +109,7 @@ After Q1167 nothing reads one, so they are inert; removing them is not needed fo
 
 ## What compiles and still breaks
 
-Six things a green build does not catch, each owed by the step that would trip it.
+Seven things a green build does not catch, each owed by the step that would trip it.
 
 1. **The GMC's CRD schema check names versions as strings.** `cmd/gmc/internal/controller/crd_schema.go:50:	{crd: "runnersets.actions-gateway.com", version: "v2beta1", path: []string{"spec", "runnerGroup"}},` and three sibling entries check a field at `v2beta1` and `v2alpha1`.
    After the drop those versions are absent from the CRD; `VerifyCRDSchemas` runs at startup, so Q1167 repoints the entries at `v2`.
@@ -128,6 +128,14 @@ Six things a green build does not catch, each owed by the step that would trip i
    The sweep lists `EgressProxy` at `v2beta1` to look for aliases (`cmd/gmc/internal/migrate/storageversion.go:215:func aliasEgressProxies(`) before it reaches the per-kind "`storedVersions` already `[v2]`; nothing to do" short-circuit, and a `v2.0.0` CRD set serves no `v2beta1`.
    Read from the code; the list error itself is inferred, not measured.
    Q1167 skips the alias check when every kind already stores `[v2]`, since an alias cannot be stored at `v2`, or treats a no-match error from the list as no aliases, and tests the sweep against a `v2`-only CRD set.
+
+7. **Owner references naming a version `v2.0.0` does not serve.** A `v1.10.0` AGC stamps `actions-gateway.com/v2alpha1` on what it creates, and Q1263's AGC stamps `v2` only on what it creates next.
+   The three long-lived objects are per-`RunnerSet` ConfigMaps: the scale-set guard (`cmd/agc/internal/controller/scaleset_guards.go:107:				OwnerReferences: []metav1.OwnerReference{s.owner},`), the recovery claims and the failure ledger (`recovery_claims.go`, `rerun_ledger.go`), each stamped only on the create path, so no later write updates the reference.
+   Reading Kubernetes v1.35.0, the garbage collector requeues an owner whose version it cannot map rather than deleting the dependent, so deleting a pre-upgrade `RunnerSet` would leave all three behind; that is read, not measured.
+   Their lookups go by name with no UID check, so a same-named recreate would inherit their state; that is inferred from the code.
+   Re-stamping only on write would miss an idle set.
+   Q1167 measures this on a real controller-manager, because envtest runs no garbage collector, and fixes what the measurement finds.
+   The GMC's own owner references were not swept for this.
 
 Beyond the Go: `scripts/go/check-v2-api-sync.sh` fails on any stale exemption entry, so Q1167 deletes the script, its `v2-api-sync-check` target and its `unit-test.yml` step together with the packages.
 Non-Go files naming `actions-gateway.com/v2alpha1` or `v2beta1` (charts, `deploy/`, `scripts/`, operator docs and examples) move to `v2` in Q1167, since they stop applying the moment the CRDs stop serving those versions.
