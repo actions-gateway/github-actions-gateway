@@ -11182,7 +11182,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: k8s.io/api (v0.37.1)
+Module: k8s.io/api (v0.37.2)
 License file: k8s.io/api/LICENSE
 ================================================================================
 
@@ -11598,7 +11598,7 @@ License file: k8s.io/apiextensions-apiserver/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/apimachinery (v0.37.1)
+Module: k8s.io/apimachinery (v0.37.2)
 License file: k8s.io/apimachinery/LICENSE
 ================================================================================
 
@@ -11806,7 +11806,7 @@ License file: k8s.io/apimachinery/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/apimachinery (v0.37.1)
+Module: k8s.io/apimachinery (v0.37.2)
 License file: k8s.io/apimachinery/third_party/forked/golang/LICENSE
 ================================================================================
 
@@ -13787,7 +13787,7 @@ License file: k8s.io/metrics/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: k8s.io/streaming (v0.37.1)
+Module: k8s.io/streaming (v0.37.2)
 License file: k8s.io/streaming/LICENSE
 ================================================================================
 
