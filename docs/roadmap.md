@@ -31,6 +31,9 @@ No pill means no release is decided for that item yet.
 - **[Retiring `v1alpha1`, `v2alpha1`, `v2beta1`, and the classic acquisition protocol](operations/v1alpha1-deprecation.md)** <!-- q:Q1167 --> **`v2.0.0`** removes all four, plus the deprecated `CiliumFQDN`/`CalicoFQDN` egress aliases, on clusters whose stored objects have already moved to `v2`.
   `v1.3.0` announced the first three; `v2beta1` was added 2026-09-08, superseded by GA `v2`.
 
+- **[Name the trace collector in `spec.tracing`](operations/observability-logging.md#reaching-the-collector)** <!-- q:Q1281 --> The AGC's default-deny egress has no path to a collector, so today an operator adds a NetworkPolicy by hand.
+  Naming the collector will have the GMC add a rule for the AGC alone, leaving worker pods closed.
+
 ## Exploring / longer-term
 
 Directions we expect to pursue as demand and validated evidence accumulate.
