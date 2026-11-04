@@ -2658,7 +2658,8 @@
 
 
 <h1 id="drop-v2alpha1-v2beta1-and-the-conversion-hub-after-the-v2-retype">Drop v2alpha1, v2beta1 and the conversion hub after the v2 retype<a class="headerlink" href="#drop-v2alpha1-v2beta1-and-the-conversion-hub-after-the-v2-retype" title="Permanent link">&para;</a></h1>
-<p>Blocked by <a href="../Q1263/">Q1263</a>: this is the last of three PRs, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which compile only once nothing outside them imports either.
+<p>This is the last of three PRs, after Q1262 and Q1263 retyped the GMC and the AGC, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which compile only once nothing outside them imports either.
+In the AGC that is <code>integration/conversion_webhook_test.go</code>, <code>v2alpha1_crd_test.go</code> and the suite's scheme registration, which Q1263 left for this PR.
 <a href="../../plan/q1167-v2-retype-split/">q1167-v2-retype-split.md</a> is the split and the import-graph evidence that each step leaves <code>main</code> building.</p>
 <p>The PR deletes both packages, <code>api/v2/conversion.go</code>, the conversion webhook (<code>cmd/gmc/internal/webhook/v2beta1/</code>) and its readers, and the <code>conversion:</code> stanza of every CRD in <code>charts/actions-gateway-crds-v2/</code>, which then serve <code>v2</code> alone.
 It also retypes the GMC's classic-reading trio, <code>scalesetscope.go</code>, <code>webhook/v2/runnerset_read.go</code> and <code>agentidentity.go</code>, which Q1262 left on <code>v2alpha1</code> because Q264 had not landed, and drops the test helpers that store each fixture at both versions for them (<a href="../../plan/q1167-v2-retype-split/#what-q1262-left-on-the-older-versions">what Q1262 left</a>).
@@ -2667,11 +2668,16 @@ That was read from controller-runtime's GVK-keyed informer map and not measured;
 The hub is deleted rather than moved to <code>v2</code>: with one served version there is nothing to convert (<a href="../../plan/q1167-v2-retype-split/#the-hub-delete-the-conversion-dont-move-it">why</a>).
 <code>gag-migrate storage-version</code> survives <code>v2.0.0</code> and reads <code>EgressProxy</code> at <code>v2beta1</code> against a 1.10 cluster on purpose, so <code>cmd/gmc/internal/migrate/storageversion.go</code> swaps its import of the deleted package for the version string and the two alias values held locally rather than retyping.
 It also has to run against a <code>v2</code>-only cluster, which today it cannot: it lists <code>EgressProxy</code> at <code>v2beta1</code> before its "already <code>[v2]</code>" short-circuit, and the candidate gate's default <code>storage</code> leg runs the candidate's own sweep after applying its CRDs (<a href="../../plan/q1167-v2-retype-split/#what-compiles-and-still-breaks">item 6</a>); skip the alias check when every kind stores <code>[v2]</code>, or read a no-match as no aliases, and test it against a <code>v2</code>-only CRD set.
+<code>RunnerSet</code>'s godoc in <code>api/v2</code> explains declaring its selectable field on two of three versions, which stops applying once <code>v2</code> is the only one.
+<code>TestV2_RunnerSet_GatewayRefSelectableField</code> lives in <code>v2alpha1_crd_test.go</code>, which this PR deletes, so move it first: it pins the selectable field the AGC's watch needs.
 <code>scripts/go/check-v2-api-sync.sh</code>, its Makefile target and its <code>unit-test.yml</code> step go with the packages, since a stale exemption entry fails it.</p>
-<p>Six things the build does not catch are this PR's (<a href="../../plan/q1167-v2-retype-split/#what-compiles-and-still-breaks">list</a>), and two are silent:</p>
+<p>Seven things the build does not catch are this PR's (<a href="../../plan/q1167-v2-retype-split/#what-compiles-and-still-breaks">list</a>), and three are silent:</p>
 <ul>
 <li><code>charts/actions-gateway/templates/tenant-resource-guard.yaml</code> matches <code>runnersets</code> at <code>v2alpha1</code> alone and stops confining the GMC's writes once that version is not served; <code>make webhook-versions-check</code> reads only the controller-gen webhook manifest, so this PR retargets the rule and widens the gate to the chart's admission policies.</li>
 <li><code>cmd/gmc/internal/controller/crd_schema.go</code> checks fields at <code>v2beta1</code> and <code>v2alpha1</code> by name at GMC startup and has to move to <code>v2</code>.</li>
+<li>Objects a <code>v1.10.0</code> AGC created keep an owner reference naming <code>actions-gateway.com/v2alpha1</code>, which <code>v2.0.0</code> no longer serves (<a href="../../plan/q1167-v2-retype-split/#what-compiles-and-still-breaks">item 7</a>).
+  Worker pods are short-lived, but three ConfigMaps per <code>RunnerSet</code> are not: the scale-set guard, the recovery claims and the failure ledger take the reference at create, and later writes change only <code>Data</code>.
+  Measure what the garbage collector does on a real controller-manager, since envtest runs none, and fix what the measurement finds.</li>
 </ul>
 <p><code>make chart-released-upgrade-check</code> is expected to pass, because a fresh 1.10 install stores at <code>v2</code> only, but the e2e lanes that run it are merge-group-only: take <code>make e2e</code> before enqueueing.
 Draft PR #2084 (Q1066) edits all three <code>v2</code> API packages; whichever lands second rebases.</p>

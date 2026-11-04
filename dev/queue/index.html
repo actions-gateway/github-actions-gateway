@@ -3538,20 +3538,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>actions/scaleset</code> reaches GA/v1.0 or the auto-assign contract (<code>actions/scaleset#107</code>) is documented.</td>
 </tr>
 <tr>
-<td><a href="Q1263/">Q1263</a></td>
-<td><a href="../plan/q1167-v2-retype-split/">Retype the AGC onto api/v2 once classic acquisition is gone</a></td>
-<td><code>debt</code> <code>2.0-gate</code></td>
-<td>🚫</td>
-<td>M</td>
-<td>Blocked on Q264 (the classic removal): <code>runnerset_controller.go</code> reads <code>spec.acquisitionProtocol</code> and <code>spec.maxListeners</code> at nine sites …</td>
-</tr>
-<tr>
 <td><a href="Q1167/">Q1167</a></td>
 <td><a href="../plan/q1167-v2-retype-split/">Drop v2alpha1, v2beta1 and the conversion hub after the v2 retype</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>M</td>
-<td>Blocked by <a href="Q1263/">Q1263</a>: this is the last of three PRs, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which compile only once …</td>
+<td>This is the last of three PRs, after Q1262 and Q1263 retyped the GMC and the AGC, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which …</td>
 </tr>
 <tr>
 <td><a href="Q1259/">Q1259</a></td>

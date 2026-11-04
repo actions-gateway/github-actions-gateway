@@ -2788,7 +2788,7 @@
 
 <h1 id="q1167-how-the-v2-retype-and-the-v2alpha1v2beta1-drop-split-into-prs">Q1167: how the <code>v2</code> retype and the <code>v2alpha1</code>/<code>v2beta1</code> drop split into PRs<a class="headerlink" href="#q1167-how-the-v2-retype-and-the-v2alpha1v2beta1-drop-split-into-prs" title="Permanent link">&para;</a></h1>
 <p>Three PRs, and the classic removal moves ahead of the second one.
-Q1262 retypes the Gateway Manager Controller (GMC) onto <code>api/v2</code>, <a href="../../queue/Q1263/">Q1263</a> retypes the Actions Gateway Controller (AGC), and <a href="../../queue/Q1167/">Q1167</a> then deletes <code>api/v2alpha1</code>, <code>api/v2beta1</code> and the conversion machinery in one PR.
+Q1262 retypes the Gateway Manager Controller (GMC) onto <code>api/v2</code>, Q1263 retypes the Actions Gateway Controller (AGC), and <a href="../../queue/Q1167/">Q1167</a> then deletes <code>api/v2alpha1</code>, <code>api/v2beta1</code> and the conversion machinery in one PR.
 The AGC retype waits for Q264's classic removal rather than preceding it, because the AGC reads two fields <code>v2</code> does not have, and nothing else forces an order between the two.</p>
 <p>This is the scoping answer <a href="../../queue/Q1167/">Q1167</a> asked for ("how the retype splits into PRs is the first thing to decide").
 It changes no code; the background is <a href="../v2-ga/">v2-ga.md</a> Phase 3.</p>
@@ -2830,14 +2830,14 @@ It changes no code; the background is <a href="../v2-ga/">v2-ga.md</a> Phase 3.<
 <td>Q264</td>
 <td>Remove classic acquisition</td>
 <td>Q273</td>
-<td>❌ open</td>
+<td>✅ done</td>
 </tr>
 <tr>
 <td>3</td>
-<td><a href="../../queue/Q1263/">Q1263</a></td>
+<td>Q1263</td>
 <td>Retype the AGC onto <code>api/v2</code></td>
 <td>Q273, Q264</td>
-<td>❌ open</td>
+<td>✅ done; the <code>RunnerSet</code> selectable field moved to <code>v2</code> with it (<a href="#each-step-leaves-main-building">why</a>)</td>
 </tr>
 <tr>
 <td>4</td>
@@ -2893,8 +2893,11 @@ Within the GMC, a function's signature and every caller change together, which i
 <p>Two files in the GMC read the classic field, <code>scalesetscope.go:152</code> and through it <code>runnerset_read.go</code>.
 If Q264 has merged when Q1262 is cut, they retype with the rest; if not, they stay on <code>v2alpha1</code> and Q1167 retypes them.
 The closed set is three files, not two: <code>runnerset_read.go</code> also hands its <code>v2alpha1</code> lists to <code>agentidentity.FromLists</code>, the only production caller of <code>cmd/gmc/internal/agentidentity</code>, so that package stays with them (measured by compiling the retype, 2026-11-02).</p>
-<p><strong>Step 3, Q1263 (AGC).</strong> After Q264 the AGC's <code>v2alpha1</code> use is the shared surface only, so the swap is mechanical.
+<p><strong>Step 3, Q1263 (AGC).</strong> After Q264 the AGC's <code>v2alpha1</code> use is the shared surface only, so the Go swap is mechanical.
 <code>cmd/agc/internal/controller/v2_detect.go</code> asks the REST mapper whether <code>RunnerSet</code> is served at <code>v2alpha1</code>; retyped, it asks about <code>v2</code>, which every release since 1.9 serves.</p>
+<p>One thing the import graph does not show: the AGC scopes its <code>RunnerSet</code> watch with a <code>spec.gatewayRef.name</code> field selector, the CRD declared that selectable field on <code>v2alpha1</code> alone, and a field selector is evaluated at the version the request names.
+Retyped with the CRD unchanged, <code>TestV2_MultiGateway_AGCScopedToItsGateway</code> failed with <code>set-a</code> never reaching <code>Ready</code> (measured 2026-11-03); with the marker moved to <code>v2beta1</code> and <code>v2</code>, it and <code>TestV2_RunnerSet_GatewayRefSelectableField</code> pass, and envtest installs the CRD.
+<code>v2alpha1</code> loses the field, since declaring it identically on all three versions is what made the CRD uninstallable; only a 1.10 AGC lists at <code>v2alpha1</code>, and <code>v2.0.0</code> serves no <code>v2alpha1</code> for one to list.</p>
 <p><strong>Step 4, Q1167 (the drop).</strong> Once steps 1 and 3 have landed, the remaining importers of <code>api/v2alpha1</code> and <code>api/v2beta1</code> are the conversion code itself, the GMC's scheme and cache setup, and tests of conversion.
 <code>api/v2</code> depends on <code>api/v2beta1</code> only through <code>api/v2/conversion.go</code>, so deleting that file makes <code>api/v2</code> standalone and both older packages deletable in the same PR.</p>
 <p>The drop is one PR rather than two (<code>v2alpha1</code> first, then <code>v2beta1</code>).
@@ -2913,7 +2916,7 @@ A future <code>v3</code> re-adds <code>Hub()</code> to whichever version stores,
 <p>Objects stored before the upgrade keep any <code>conversion.actions-gateway.com/*</code> annotation they carried.
 After Q1167 nothing reads one, so they are inert; removing them is not needed for correctness.</p>
 <h2 id="what-compiles-and-still-breaks">What compiles and still breaks<a class="headerlink" href="#what-compiles-and-still-breaks" title="Permanent link">&para;</a></h2>
-<p>Six things a green build does not catch, each owed by the step that would trip it.</p>
+<p>Seven things a green build does not catch, each owed by the step that would trip it.</p>
 <ol>
 <li><strong>The GMC's CRD schema check names versions as strings.</strong> <code>cmd/gmc/internal/controller/crd_schema.go:50: {crd: "runnersets.actions-gateway.com", version: "v2beta1", path: []string{"spec", "runnerGroup"}},</code> and three sibling entries check a field at <code>v2beta1</code> and <code>v2alpha1</code>.
    After the drop those versions are absent from the CRD; <code>VerifyCRDSchemas</code> runs at startup, so Q1167 repoints the entries at <code>v2</code>.</li>
@@ -2928,10 +2931,21 @@ After Q1167 nothing reads one, so they are inert; removing them is not needed fo
    The check runs in the e2e lanes, which are merge-group-only, so Q1167 gets an earlier verdict from <code>make e2e</code> before it is enqueued.</li>
 <li><strong>Dogfood's storage leg.</strong> A <code>v2.0.0</code> candidate can only be applied to a cluster the 1.10 sweep has pruned to <code>["v2"]</code>; <code>scripts/dogfood/validate-release.sh</code> reads it.
    This binds the release candidate, not the merge.</li>
-<li><strong>The <code>v2.0.0</code> sweep would fail on the cluster it was built for.</strong> <code>gag-migrate storage-version</code> survives <code>v2.0.0</code>, and the candidate gate's <code>storage</code> leg, one of its default legs (<code>GATE_LEGS_ALL</code> in <code>scripts/dogfood/lib/gate-legs.sh</code>), applies the candidate's own CRDs and then runs the candidate's own sweep.
+<li>
+<p><strong>The <code>v2.0.0</code> sweep would fail on the cluster it was built for.</strong> <code>gag-migrate storage-version</code> survives <code>v2.0.0</code>, and the candidate gate's <code>storage</code> leg, one of its default legs (<code>GATE_LEGS_ALL</code> in <code>scripts/dogfood/lib/gate-legs.sh</code>), applies the candidate's own CRDs and then runs the candidate's own sweep.
    The sweep lists <code>EgressProxy</code> at <code>v2beta1</code> to look for aliases (<code>cmd/gmc/internal/migrate/storageversion.go:215:func aliasEgressProxies(</code>) before it reaches the per-kind "<code>storedVersions</code> already <code>[v2]</code>; nothing to do" short-circuit, and a <code>v2.0.0</code> CRD set serves no <code>v2beta1</code>.
    Read from the code; the list error itself is inferred, not measured.
-   Q1167 skips the alias check when every kind already stores <code>[v2]</code>, since an alias cannot be stored at <code>v2</code>, or treats a no-match error from the list as no aliases, and tests the sweep against a <code>v2</code>-only CRD set.</li>
+   Q1167 skips the alias check when every kind already stores <code>[v2]</code>, since an alias cannot be stored at <code>v2</code>, or treats a no-match error from the list as no aliases, and tests the sweep against a <code>v2</code>-only CRD set.</p>
+</li>
+<li>
+<p><strong>Owner references naming a version <code>v2.0.0</code> does not serve.</strong> A <code>v1.10.0</code> AGC stamps <code>actions-gateway.com/v2alpha1</code> on what it creates, and Q1263's AGC stamps <code>v2</code> only on what it creates next.
+   The three long-lived objects are per-<code>RunnerSet</code> ConfigMaps: the scale-set guard (<code>cmd/agc/internal/controller/scaleset_guards.go:107:               OwnerReferences: []metav1.OwnerReference{s.owner},</code>), the recovery claims and the failure ledger (<code>recovery_claims.go</code>, <code>rerun_ledger.go</code>), each stamped only on the create path, so no later write updates the reference.
+   Reading Kubernetes v1.35.0, the garbage collector requeues an owner whose version it cannot map rather than deleting the dependent, so deleting a pre-upgrade <code>RunnerSet</code> would leave all three behind; that is read, not measured.
+   Their lookups go by name with no UID check, so a same-named recreate would inherit their state; that is inferred from the code.
+   Re-stamping only on write would miss an idle set.
+   Q1167 measures this on a real controller-manager, because envtest runs no garbage collector, and fixes what the measurement finds.
+   The GMC's own owner references were not swept for this.</p>
+</li>
 </ol>
 <p>Beyond the Go: <code>scripts/go/check-v2-api-sync.sh</code> fails on any stale exemption entry, so Q1167 deletes the script, its <code>v2-api-sync-check</code> target and its <code>unit-test.yml</code> step together with the packages.
 Non-Go files naming <code>actions-gateway.com/v2alpha1</code> or <code>v2beta1</code> (charts, <code>deploy/</code>, <code>scripts/</code>, operator docs and examples) move to <code>v2</code> in Q1167, since they stop applying the moment the CRDs stop serving those versions.</p>
@@ -3026,7 +3040,7 @@ The batch's own count of 37 files importing both <code>v1alpha1</code> and an ol
 <td>Q1263 (AGC)</td>
 <td>20</td>
 <td>67</td>
-<td>the test count includes <code>integration/conversion_webhook_test.go</code> and <code>v2alpha1_crd_test.go</code>, which go to Q1167 likewise</td>
+<td>the test count includes <code>integration/conversion_webhook_test.go</code> and <code>v2alpha1_crd_test.go</code>, which go to Q1167 likewise; Q1263 edited 20 and 73</td>
 </tr>
 <tr>
 <td>Q1167 (drop)</td>

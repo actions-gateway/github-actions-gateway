@@ -3314,7 +3314,7 @@ A rule on the spec therefore re-fires on every write to any field.</p>
 Moving the rule onto <code>spec.runnerLabels</code> kept the constraint exactly where it matters and let ratcheting suppress it everywhere else.</p>
 <p>Related: pick the right enforcement point at all.
 CEL <code>XValidation</code> is cheap and always on; a webhook can read <code>metadata</code> and name the offending component in the message (which is why <code>gitHubURL</code> structure and <code>securityProfile</code> downgrades are webhook-enforced).
-The CEL marker gotchas — gofmt corrupting <code>''</code>, and <code>selectableFields</code> on one version only — are in <a href="../code-generation/#crd-marker-and-api-file-gotchas">code-generation.md</a>.</p>
+The CEL marker gotchas — gofmt corrupting <code>''</code>, and <code>selectableFields</code> declared identically on every version — are in <a href="../code-generation/#crd-marker-and-api-file-gotchas">code-generation.md</a>.</p>
 <h3 id="derived-names-are-part-of-the-contract">Derived names are part of the contract<a class="headerlink" href="#derived-names-are-part-of-the-contract" title="Permanent link">&para;</a></h3>
 <p>Names the controllers build from a CR's name are pod names, Secret names, and label values on running clusters.
 Changing how one is derived orphans live objects, which is worse than a field rename because nothing warns.</p>
