@@ -24,14 +24,25 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
+	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
+	"go.opentelemetry.io/otel/trace"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// tracer is the OpenTelemetry tracer for the provisioner. It resolves to the
+// global provider, which is the no-op provider unless main.go's tracing.Init
+// installed an exporter, so these spans cost almost nothing when tracing is off.
+var tracer = otel.Tracer(tracing.InstrumentationName)
 
 // defaultProvisionerClient is the bounded fallback used when Provisioner.HTTPClient
 // is nil. Shared so the nil path does not allocate a connection pool per call.
@@ -510,13 +521,31 @@ func (j ScaleSetJob) jobMeta() jobMeta {
 // with the pod however the pod goes; the pod carries the RunnerSet OwnerRef, so both
 // cascade-GC when the set is deleted. The reconciler's reaper deletes the terminal pod
 // per spec.completedPodTTL.
-func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, job ScaleSetJob) error {
+func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target, job ScaleSetJob) (err error) {
 	jobID, jitConfig := job.JobID, job.JITConfig
 	if jitConfig == "" {
 		return fmt.Errorf("provisioner: scale-set worker for job %q has no JIT config", jobID)
 	}
 	key := target.Key()
 	log := p.logForKey(key)
+	secretName := scaleSetSecretName(jobID)
+	podName := scaleSetPodName(key.Name, jobID)
+
+	// Root span for one job's provisioning, with child spans for the Secret staging,
+	// the ceiling count and the pod create. The deferred closure stamps the span's error
+	// status from the named return so any early exit is visible.
+	ctx, span := tracer.Start(ctx, "Provisioner.ProvisionScaleSetWorker", trace.WithAttributes(
+		semconv.K8SNamespaceName(key.Namespace),
+		attribute.String("gateway.owner.name", key.Name),
+		attribute.String("gateway.job.id", jobID),
+		semconv.K8SPodName(podName),
+	))
+	defer func() {
+		if err != nil {
+			span.SetStatus(codes.Error, err.Error())
+		}
+		span.End()
+	}()
 
 	spec, err := target.Resolve(ctx)
 	if err != nil {
@@ -526,8 +555,6 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	spec = p.applyMemoryFloor(ctx, target, spec, job, log)
 	spec = p.applyRerunCause(target, spec, job)
 
-	secretName := scaleSetSecretName(jobID)
-	podName := scaleSetPodName(key.Name, jobID)
 	// runID pairs with jobID because one run has many jobs: without it two provisioning
 	// lines cannot say whether they are sibling jobs or one job redelivered (Q661). The
 	// pod annotation carries the same pairing only once the pod exists.
@@ -546,15 +573,19 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	staged := false
 	secret := p.buildSecret(target, secretName, jobID, workerVersion, jitConfig)
 	fresh := secret.DeepCopy()
-	if err := p.Client.Create(ctx, secret); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
-			return fmt.Errorf("provisioner: create scale-set Secret %s: %w", secretName, err)
+	if err = traceStep(ctx, "stageJobSecret", func(ctx context.Context) error {
+		cErr := p.Client.Create(ctx, secret)
+		if cErr == nil {
+			staged = true
+			return nil
 		}
-		if staged, err = p.replaceStaleScaleSetSecret(ctx, fresh, log); err != nil {
-			return err
+		if !apierrors.IsAlreadyExists(cErr) {
+			return fmt.Errorf("provisioner: create scale-set Secret %s: %w", secretName, cErr)
 		}
-	} else {
-		staged = true
+		staged, cErr = p.replaceStaleScaleSetSecret(ctx, fresh, log)
+		return cErr
+	}); err != nil {
+		return err
 	}
 	// unstage deletes the Secret on a failure exit that leaves no pod behind to mount it.
 	// One of those exits is a ctx cancellation (AGC shutdown mid-throttle), on which a
@@ -574,12 +605,21 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	}
 
 	// 2. Priority-tier selection (capacity is gated upstream; a held result is a race).
-	count, err := p.activePodCount(ctx, key.Namespace, target.PodOwnerLabels())
-	if err != nil {
+	var count int32
+	if err = traceStep(ctx, "countActivePods", func(ctx context.Context) error {
+		var cErr error
+		count, cErr = p.activePodCount(ctx, key.Namespace, target.PodOwnerLabels())
+		return cErr
+	}); err != nil {
 		unstage()
 		return fmt.Errorf("provisioner: count active pods: %w", err)
 	}
 	priorityClass, held := ceilingCheck(spec, count)
+	span.SetAttributes(
+		attribute.Int("gateway.active_pods", int(count)),
+		attribute.Bool("gateway.ceiling_held", held),
+		attribute.String("gateway.priority_class", priorityClass),
+	)
 	if held {
 		unstage()
 		// Typed, so the listener re-offers the job on a backoff instead of holding the
@@ -625,12 +665,22 @@ func (p *Provisioner) ProvisionScaleSetWorker(ctx context.Context, target Target
 	}
 	setScaleSetWorkerMode(pod)
 
-	if err := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log); err != nil {
-		if apierrors.IsAlreadyExists(err) {
-			return p.adoptExistingScaleSetPod(ctx, key.Namespace, podName, secretName, unstage, log)
+	// An AlreadyExists is a replayed job meeting its own pod, which is adopted below
+	// rather than recorded on the span as a failed create.
+	exists := false
+	if err = traceStep(ctx, "createPod", func(ctx context.Context) error {
+		cErr := p.createPodWithQuotaRetry(ctx, target, pod, spec.MaxQuotaRetries, spec.QuotaRetryDelay, log)
+		if apierrors.IsAlreadyExists(cErr) {
+			exists = true
+			return nil
 		}
+		return cErr
+	}); err != nil {
 		unstage()
 		return fmt.Errorf("provisioner: create scale-set Pod %s: %w", podName, err)
+	}
+	if exists {
+		return p.adoptExistingScaleSetPod(ctx, key.Namespace, podName, secretName, unstage, log)
 	}
 	log.Debug("scale-set worker pod created", "priorityClass", priorityClass)
 	p.handScaleSetSecretToPod(ctx, key.Namespace, podName, pod.UID, secretName, log)
@@ -1178,6 +1228,22 @@ func (p *Provisioner) markJobCompleted(ctx context.Context, pod *corev1.Pod, job
 		return fmt.Errorf("provisioner: stamp job completion on worker pod %s: %w", pod.Name, err)
 	}
 	p.logFor().Debug("stamped job completion on worker pod", "pod", pod.Name, "jobID", jobID)
+	return nil
+}
+
+// traceStep runs fn inside a child span named name (parented to the span carried
+// by ctx), recording and stamping any error fn returns and always ending the
+// span. It centralises the start/record/end boilerplate for the provision
+// phases. When tracing is disabled the span is a no-op, so the only overhead is
+// the closure call.
+func traceStep(ctx context.Context, name string, fn func(context.Context) error) error {
+	ctx, span := tracer.Start(ctx, name)
+	defer span.End()
+	if err := fn(ctx); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 	return nil
 }
 
