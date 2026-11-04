@@ -1068,6 +1068,16 @@ func (in *TracingConfig) DeepCopyInto(out *TracingConfig) {
 		*out = new(bool)
 		**out = **in
 	}
+	if in.CABundleRef != nil {
+		in, out := &in.CABundleRef, &out.CABundleRef
+		*out = new(LocalConfigMapReference)
+		**out = **in
+	}
+	if in.NetworkPolicy != nil {
+		in, out := &in.NetworkPolicy, &out.NetworkPolicy
+		*out = new(EgressPeer)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.ResourceAttributes != nil {
 		in, out := &in.ResourceAttributes, &out.ResourceAttributes
 		*out = make(map[string]string, len(*in))

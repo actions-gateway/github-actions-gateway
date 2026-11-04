@@ -530,9 +530,9 @@ type VaultSigner struct {
 //
 // This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
 // reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
-// (Q204). Today the Vault signer (VaultSigner.NetworkPolicy) is its only consumer; foreseen
-// future consumers — cloud KMS signers, AGC telemetry endpoints — reuse it additively. See
-// docs/design/appendix-g-future-enhancements.md §G.9.
+// (Q204). Today the Vault signer (VaultSigner.NetworkPolicy) and the trace collector
+// (TracingConfig.NetworkPolicy) consume it; foreseen future consumers such as cloud KMS
+// signers reuse it additively. See docs/design/appendix-g-future-enhancements.md §G.9.
 //
 // +kubebuilder:validation:XValidation:rule="(has(self.cidr) && size(self.cidr) > 0) != (has(self.podSelector) || has(self.namespaceSelector))",message="exactly one of cidr or a pod/namespace selector must be set"
 type EgressPeer struct {

@@ -185,9 +185,9 @@ func TestHasGitHubCIDREgressRule_IgnoresVaultLookalike(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, 443, vault.Ports[0].Port.IntValue(), "precondition: the lookalike is on 443")
 
-	assert.False(t, hasGitHubCIDREgressRule([]networkingv1.NetworkPolicyEgressRule{vault}, vault, true))
+	assert.False(t, hasGitHubCIDREgressRule([]networkingv1.NetworkPolicyEgressRule{vault}, []networkingv1.NetworkPolicyEgressRule{vault}))
 	gh, _ := githubCIDREgressRule([]net.IPNet{{IP: net.IPv4(140, 82, 112, 0), Mask: net.CIDRMask(20, 32)}})
-	assert.True(t, hasGitHubCIDREgressRule([]networkingv1.NetworkPolicyEgressRule{vault, gh}, vault, true))
+	assert.True(t, hasGitHubCIDREgressRule([]networkingv1.NetworkPolicyEgressRule{vault, gh}, []networkingv1.NetworkPolicyEgressRule{vault}))
 	apiserver := agcAPIServerEgressRule([]string{"10.1.0.1/32"})
-	assert.False(t, hasGitHubCIDREgressRule([]networkingv1.NetworkPolicyEgressRule{apiserver}, vault, true))
+	assert.False(t, hasGitHubCIDREgressRule([]networkingv1.NetworkPolicyEgressRule{apiserver}, []networkingv1.NetworkPolicyEgressRule{vault}))
 }
