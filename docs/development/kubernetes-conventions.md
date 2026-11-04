@@ -40,7 +40,7 @@ metadata:
 
 on the namespace, and the GMC `NamespacePSAReconciler` stamps the `pod-security.kubernetes.io/*` labels from it.
 The value follows the enum-keyword convention above (not a boolean), and the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a `privileged` selection without the `actions-gateway.com/privileged-profile=allowed` eligibility label.
-See `SecurityProfileLabel` in [`api/v2alpha1/shared_types.go`](../../api/v2alpha1/shared_types.go).
+See `SecurityProfileLabel` in [`api/v2/shared_types.go`](../../api/v2/shared_types.go).
 
 ### The `"true"` values v1 shipped were retired by a migration
 
@@ -56,7 +56,7 @@ Nothing reads an `actions-gateway.github.com` namespace key now.
 Use the `actions-gateway.github.com/<name>` prefix for every label and annotation key the project defines, matching the API group.
 Define the key (and its sentinel value, if any) as an exported `const` in the relevant `api/v1alpha1` package with godoc, and reference that const from controllers, webhooks, and tests — never re-type the literal string, so a rename can't drift between the producer and the consumers.
 
-**v2 (`actions-gateway.com`) keys use the owned domain from birth** — the v2 kinds and their controllers prefix labels/annotations with `actions-gateway.com/` (the group the project owns), defined as exported consts in the neutral `api/v2alpha1` package.
+**v2 (`actions-gateway.com`) keys use the owned domain from birth** — the v2 kinds and their controllers prefix labels/annotations with `actions-gateway.com/` (the group the project owns), defined as exported consts in the neutral `api/v2` package.
 Controller-set v2 labels:
 
 - `actions-gateway.com/gateway: <name>` — stamped by the v2 `ActionsGateway` reconciler on every AGC control-plane child (Deployment/SA/RoleBinding/Service/ NetworkPolicy/Secret), so M3b's per-gateway naming has an identity to key on and operators can `kubectl get -l actions-gateway.com/gateway=<name>` a gateway's resources.
@@ -282,7 +282,7 @@ Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernete
 **Corollaries for a new policy:**
 
 - Give the policy a small, purpose-built cluster-scoped CRD for its params.
-  `PriorityClassAllowlist` (`api/v2beta1`) is the worked example.
+  `PriorityClassAllowlist` (`api/v2`) is the worked example.
 - Keep `parameterNotFoundAction: Deny`.
   It is the fail-closed default and the reason a broken `paramKind` is so loud; the fix is the CRD, not weakening this.
 - Do **not** try to fix it by retaining the binding across uninstall (`helm.sh/resource-policy: keep`).

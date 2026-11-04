@@ -244,19 +244,14 @@ For day-2 operations (`helm upgrade` and rollback, per-component upgrades, runbo
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GMC deployment, GitHub App Secret, and your first tenant.
 
 **New tenants should onboard on `actions-gateway.com/v2`**, the GA, ScaleSet-only version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
-It is the storage version from 1.10, and the version `v2.0.0` keeps when it removes the others.
+It is the only version `v2.0.0` serves.
 
 | API version | Status |
 | --- | --- |
-| `v2` | **Start here.** The GA version, served since 1.9 and the storage version since 1.10 |
-| `v2beta1` | Served until [`v2.0.0` removes it](docs/operations/v1alpha1-deprecation.md). Same shape as `v2` apart from two deprecated `EgressProxy` aliases, so moving is a re-apply |
-| `v2alpha1` | Deprecated, apiserver warns on every apply. Stays served as the `gag-migrate` on-ramp. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
-| `v1alpha1` | Deprecated single-CR API, still served. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
-| Classic protocol | Deprecated. [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
+| `v2` | **Start here.** The GA version, and the only one served since [`v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
+| `v2beta1`, `v2alpha1`, `v1alpha1`, Classic protocol | [Removed at `v2.0.0`](docs/operations/v1alpha1-deprecation.md) |
 
-Removals are announced one release ahead, per the project's removal policy.
-
-**Already on v1?** [`gag-migrate`](docs/operations/migration-v1-to-v2.md) moves a tenant to v2 without changing how jobs are acquired.
+**Already on v1?** Migrate with a 1.x [`gag-migrate`](docs/operations/migration-v1-to-v2.md) before you upgrade to `v2.0.0`.
 
 **Coming from Actions Runner Controller (ARC)?** The [Migrating from ARC guide](docs/operations/migration-from-arc.md) maps ARC scale-set concepts onto v2 and walks one scale set across with zero downtime, on the same single-name `runs-on` routing, so your workflows need no edit.
 

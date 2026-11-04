@@ -1,11 +1,11 @@
 # Q1167: how the `v2` retype and the `v2alpha1`/`v2beta1` drop split into PRs
 
 Three PRs, and the classic removal moves ahead of the second one.
-Q1262 retypes the Gateway Manager Controller (GMC) onto `api/v2`, Q1263 retypes the Actions Gateway Controller (AGC), and [Q1167](../queue/Q1167.md) then deletes `api/v2alpha1`, `api/v2beta1` and the conversion machinery in one PR.
+Q1262 retypes the Gateway Manager Controller (GMC) onto `api/v2`, Q1263 retypes the Actions Gateway Controller (AGC), and Q1167 then deletes `api/v2alpha1`, `api/v2beta1` and the conversion machinery in one PR.
 The AGC retype waits for Q264's classic removal rather than preceding it, because the AGC reads two fields `v2` does not have, and nothing else forces an order between the two.
 
-This is the scoping answer [Q1167](../queue/Q1167.md) asked for ("how the retype splits into PRs is the first thing to decide").
-It changes no code; the background is [v2-ga.md](v2-ga.md) Phase 3.
+This is the scoping answer Q1167 asked for ("how the retype splits into PRs is the first thing to decide").
+It changes no code; the background is [v2-ga.md](../v2-ga.md) Phase 3.
 
 ## Status at a glance
 
@@ -16,7 +16,7 @@ It changes no code; the background is [v2-ga.md](v2-ga.md) Phase 3.
 | 1 | Q1262 | Retype the GMC onto `api/v2` | Q273 | ✅ done; the classic-reading trio stays on `v2alpha1` ([what it left](#what-q1262-left-on-the-older-versions)) |
 | 2 | Q264 | Remove classic acquisition | Q273 | ✅ done |
 | 3 | Q1263 | Retype the AGC onto `api/v2` | Q273, Q264 | ✅ done; the `RunnerSet` selectable field moved to `v2` with it ([why](#each-step-leaves-main-building)) |
-| 4 | [Q1167](../queue/Q1167.md) | Drop `v2alpha1`, `v2beta1`, the hub and the conversion webhook | Q1262, Q1263 | ❌ open |
+| 4 | Q1167 | Drop `v2alpha1`, `v2beta1`, the hub and the conversion webhook | Q1262, Q1263 | ✅ done |
 
 Steps 1 and 2 can run in parallel; step 3 waits for step 2, and step 4 waits for steps 1 and 3.
 The critical path is Q273 → Q264 → Q1263 → Q1167 → Q1107 (Phase 4's docs and tag), the same depth as the order the rows carried before this plan, because Q264 sat between the removals either way.
@@ -62,7 +62,7 @@ Candidates are cut from `main`, so what keeps one out of the window is the proce
 No gate under `scripts/release/` refuses a candidate while a ledger row is open (searched 2026-11-02), so this holds only as long as nobody cuts one early.
 Inside the window a `Classic` set also skips the scale-set label-uniqueness check (`cmd/gmc/internal/webhook/v2/runnerset_webhook.go:178:	if acquisitionProtocolOf(rs) != acquisitionProtocolScaleSet {`) while running as ScaleSet once Q264 lands.
 
-Q264's row and the [v2-ga.md scope ledger](v2-ga.md#scope-ledger) carry this order, and both retype rows gate `v2.0.0` beside Q1167, since the tag waits on them as much as on the drop.
+Q264's row and the [v2-ga.md scope ledger](../v2-ga.md#scope-ledger) carry this order, and both retype rows gate `v2.0.0` beside Q1167, since the tag waits on them as much as on the drop.
 
 ## Each step leaves `main` building
 
@@ -94,7 +94,7 @@ Two would build, since `v2alpha1` imports the hub and not the reverse, but the s
 ## The hub: delete the conversion, don't move it
 
 **Once `v2` is the only served version, Q1167 deletes the hub and the conversion webhook instead of rebuilding them around `v2`.** With one version there is nothing to convert, so each of the five converting CRDs' `spec.conversion` becomes `strategy: None` and the webhook stanza leaves the chart.
-[v2-ga.md § The hub stays at v2beta1](v2-ga.md#the-hub-stays-at-v2beta1) already reasoned that a hub moved to `v2` "would be torn down one release later"; this is that teardown.
+[v2-ga.md § The hub stays at v2beta1](../v2-ga.md#the-hub-stays-at-v2beta1) already reasoned that a hub moved to `v2` "would be torn down one release later"; this is that teardown.
 A future `v3` re-adds `Hub()` to whichever version stores, as each previous hop did.
 
 What goes:
@@ -109,7 +109,7 @@ After Q1167 nothing reads one, so they are inert; removing them is not needed fo
 
 ## What compiles and still breaks
 
-Seven things a green build does not catch, each owed by the step that would trip it.
+Eight things a green build does not catch, each owed by the step that would trip it.
 
 1. **The GMC's CRD schema check names versions as strings.** `cmd/gmc/internal/controller/crd_schema.go:50:	{crd: "runnersets.actions-gateway.com", version: "v2beta1", path: []string{"spec", "runnerGroup"}},` and three sibling entries check a field at `v2beta1` and `v2alpha1`.
    After the drop those versions are absent from the CRD; `VerifyCRDSchemas` runs at startup, so Q1167 repoints the entries at `v2`.
@@ -135,7 +135,21 @@ Seven things a green build does not catch, each owed by the step that would trip
    Their lookups go by name with no UID check, so a same-named recreate would inherit their state; that is inferred from the code.
    Re-stamping only on write would miss an idle set.
    Q1167 measures this on a real controller-manager, because envtest runs no garbage collector, and fixes what the measurement finds.
-   The GMC's own owner references were not swept for this.
+   **Measured 2026-11-03 on a private kind cluster, `kube-controller-manager` 1.36.1, with the CRD replaced by a `v2`-only one and discovery confirming `["v2"]`.** With every version served, a ConfigMap naming `v2alpha1` was collected on owner delete, the positive control.
+   After the drop, one naming `v2` was gone within 30 seconds of its owner's delete, and one naming `v2alpha1` was still present 12 minutes later, across a controller-manager restart.
+   That restart did not delete dependents of live owners.
+   Re-stamping a live owner's dependent to `v2` made it collectable, within 30 seconds of the owner's delete.
+   Re-stamping after the owner was gone did not: still present three minutes later.
+   So Q1167 re-stamps the three ConfigMaps once per process per set from the reconcile, before a terminating set's finalizer comes off, and matches on the owner's UID so a same-named recreate does not adopt an earlier set's state.
+   What it cannot reach, a set deleted before its `v2.0.0` AGC starts, is an operator query in [upgrade.md](../../operations/upgrade.md#action-required-after-v200-delete-what-a-set-deleted-during-the-upgrade-left-behind).
+   The GMC's children re-stamp on every `CreateOrUpdate`, because `SetControllerReference` matches an existing reference by group, kind and name (`controllerutil.go`); that is read, not measured.
+8. **Found while measuring item 7: the documented CRD apply is refused on a cert-manager install.** Nothing in the plan predicted this.
+   On `v1.10.0` CRDs whose `caBundle` the cert-manager v1.20.2 CA injector set, `kubectl apply --server-side` of the `v2.0.0` CRDs fails for all five, with `spec.conversion.strategy: Required value, spec.conversion.webhookClientConfig: Forbidden: should not be set when strategy is not set to Webhook`, with or without `--force-conflicts`.
+   A first run with an invalid PEM passed, because the patch setting the `caBundle` had been refused, so no other manager held the field; a `caBundle` the applying manager owns goes away cleanly.
+   Adding `strategy: None` to the CRDs, with or without `webhook: null`, did not help, forced or not, because apply cannot remove a field another manager owns.
+   Stripping cert-manager's annotation first did not either.
+   A `kubectl patch` setting `{"strategy":"None","webhook":null}` before the apply did, and the CA injector left it alone through a 60-second pause.
+   So the fix is an operator step in [upgrade.md](../../operations/upgrade.md#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), and `scripts/dogfood/setup.sh` takes the same step, since dogfood's `caBundle` is held by `kubectl patch`.
 
 Beyond the Go: `scripts/go/check-v2-api-sync.sh` fails on any stale exemption entry, so Q1167 deletes the script, its `v2-api-sync-check` target and its `unit-test.yml` step together with the packages.
 Non-Go files naming `actions-gateway.com/v2alpha1` or `v2beta1` (charts, `deploy/`, `scripts/`, operator docs and examples) move to `v2` in Q1167, since they stop applying the moment the CRDs stop serving those versions.

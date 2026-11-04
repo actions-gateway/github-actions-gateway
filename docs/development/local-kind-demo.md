@@ -7,7 +7,7 @@ It uses the repo's `make` targets and a local image registry, so run it from a c
 
 Two things this flow does that a released install would not, both flagged as backlog items:
 
-- Installs the **v2alpha1 CRDs** alongside the v1 platform.
+- Installs the **v2 CRDs** alongside the v1 platform.
   A v1-only install currently crash-loops the AGC (its v2 `RunnerSet` reconciler is registered unconditionally and its informer cache never syncs) — see `Q261` in [docs/STATUS.md](../queue/README.md).
 - Adds a **`LimitRange`** so the requests-less AGC pod is admitted under the namespace `ResourceQuota` — see `Q262`.
 
@@ -48,7 +48,7 @@ TAG="e2e-$(git rev-parse --short HEAD)"
     GMC_IMG="127.0.0.1:5000/gmc:$TAG"    AGC_IMG="127.0.0.1:5000/agc:$TAG" \
     PROXY_IMG="127.0.0.1:5000/proxy:$TAG" WRAPPER_IMG="127.0.0.1:5000/wrapper:$TAG" )
 
-# Install the v2alpha1 CRDs too, so the controller's v2 reconciler has its types.
+# Install the v2 CRDs too, so the controller's v2 reconciler has its types.
 kubectl apply --server-side --force-conflicts -f api/config/crd
 
 kubectl -n gmc-system rollout status deploy/gmc-controller-manager

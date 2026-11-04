@@ -50,11 +50,11 @@ Deleting the `ActionsGateway` reclaims every resource provisioned above through 
 - **The cleanup finalizer is the primary path.** It is ordered and fail-closed (Q125): the GMC deletes the `RunnerGroup`s first and waits for them to be gone — so listeners and worker pods drain before the AGC `Deployment` and its credentials are removed — then deletes the remaining children, and only removes the finalizer once *every* delete is confirmed.
   A delete that keeps failing retains the finalizer and requeues rather than abandoning a live, credentialed AGC.
   It also reaches objects the current reconciler no longer applies (the pre-v0.X per-tenant `Role`, the legacy `actions-gateway` `NetworkPolicy`), which nothing else would reclaim.
-- **Owner-reference cascade garbage collection is the backstop.** Every namespaced child the GMC applies carries a controller `OwnerReference` to its `ActionsGateway` — in both `v1alpha1` and `v2alpha1` (Q394).
-  Because a `ResourceQuota`-style platform-owned object is never a GMC child, and because both API versions place their children in the CR's own namespace, the reference is always valid.
+- **Owner-reference cascade garbage collection is the backstop.** Every namespaced child the GMC applies carries a controller `OwnerReference` to its `ActionsGateway` (Q394).
+  Because a `ResourceQuota`-style platform-owned object is never a GMC child, and because the GMC places the children in the CR's own namespace, the reference is always valid.
   It costs nothing in the normal path (the CR is not removed from etcd until the finalizer clears, so the ordered drain always runs first) and it is what makes an operator force-removing the finalizer a recoverable mistake rather than a leak of credentialed `ServiceAccount`s, the AGC `RoleBinding`, the egress `NetworkPolicy`s, and the proxy `HPA`/`PDB`/`Service` into a namespace the tenant still controls.
 
-The one intentional exception is a **cluster-scoped** child: a namespaced `ActionsGateway` cannot own one (the apiserver rejects the cross-scope reference and never collects it), so `v2alpha1`'s per-gateway `ClusterRoleBinding` is un-owned and reclaimed by the finalizer alone.
+The one intentional exception is a **cluster-scoped** child: a namespaced `ActionsGateway` cannot own one (the apiserver rejects the cross-scope reference and never collects it), so the per-gateway `ClusterRoleBinding` is un-owned and reclaimed by the finalizer alone.
 Any new cluster-scoped child inherits that constraint and must be deleted explicitly in `reconcileDelete`.
 
 **v2 needs a third mechanism for the tenant's worker pods** (Q547).
@@ -76,7 +76,7 @@ The trigger is a *terminating* gateway, never a missing one: a gateway that is g
 
 This flow runs per-job inside the tenant namespace, entirely managed by the AGC.
 
-> **This is the classic acquisition flow.** A `RunnerSet` with `spec.acquisitionProtocol: ScaleSet` — the default, and `v2beta1`'s only option — does not run steps 2a–5 as written: the runner pulls and completes its own job through its own session, and the AGC advertises a single capacity integer (`X-ScaleSetMaxCapacity`) instead of deciding per delivered job.
+> **This is the classic acquisition flow.** A `RunnerSet`, which always acquires through a scale set, does not run steps 2a–5 as written: the runner pulls and completes its own job through its own session, and the AGC advertises a single capacity integer (`X-ScaleSetMaxCapacity`) instead of deciding per delivered job.
 > Two consequences are called out where they arise.
 > Eviction auto-retry is ported to this tier (Q417, [below](#on-the-scale-set-tier-q417)), as is the admission ladder of step 2a (Q443, [below](#the-ladder-as-an-integer-scale-set-tier-q443)) and the abandoned-run force-cancel with its capacity-gated re-run (Q766, [below](#on-the-scale-set-tier-q766)).
 > All three were classic-only, which the `v2.0.0` removal of classic acquisition would have turned into a silent capability deletion.
@@ -318,7 +318,7 @@ See [Troubleshooting — Sessions stuck in 401/EOF GetMessage loops](../operatio
 
 > **Both acquisition tiers, by two different routes.** The flow below is the classic `provision()` path, which blocks on the worker pod's terminal phase.
 > `ProvisionScaleSetWorker` is fire-and-forget by design — the runner pulls and completes its own job — so it observes nothing, and until Q417 an evicted `ScaleSet` worker got no rerun at all.
-> That mattered because `ScaleSet` is the default protocol (Q264 P5) and the only one `v2beta1` offers, so the capability covered only the *deprecated* tier.
+> That mattered because `ScaleSet` is the default protocol (Q264 P5) and the only one `v2` offers, so the capability covered only the *deprecated* tier.
 > The port relocates both of the classic path's inputs onto the worker pod; see [On the scale-set tier](#on-the-scale-set-tier-q417) below.
 
 ```mermaid

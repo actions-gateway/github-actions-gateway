@@ -888,7 +888,7 @@ The gate runs in three places off one parser, `scripts/docs/doc-blocks.sh`, so t
 | `TestGettingStarted_Executable` | the blocks are **executed** against a real apiserver | the GMC envtest integration suite |
 | `TestGettingStarted_SkipBlockNames` | a `mode=skip` block still names the AGC Deployment the tree owns | the GMC envtest integration suite |
 
-The venue is the existing GMC envtest suite rather than a kind cluster of its own, because that suite already stands up every CRD, the validating webhooks, the v2 conversion webhook and the CEL guardrails, so the walk costs **about a second on a job that is already running** against a median 14 min for the e2e lane (n=11 runs that actually ran, 2.9-23.8 min), which is merge-group-only anyway (Q675).
+The venue is the existing GMC envtest suite rather than a kind cluster of its own, because that suite already stands up every CRD, the validating webhooks and the CEL guardrails, so the walk costs **about a second on a job that is already running** against a median 14 min for the e2e lane (n=11 runs that actually ran, 2.9-23.8 min), which is merge-group-only anyway (Q675).
 Teardown is free there: the objects land in the tenant namespace the doc's own first step creates, one `t.Cleanup` retires them, and the apiserver is destroyed at suite end, so the walk is safe to run twice by construction.
 The test reads the doc and the parser through committed `testdata/` symlinks, because [a cached test's reads outside its module root are invisible to the test cache](#the-out-of-module-test-read-gate) and a subprocess's reads never reach the testlog at all.
 
@@ -1126,25 +1126,6 @@ When resolving conflicts by hand, `git diff --check` gives the same signal per-f
 That signal is narrow: it proves the resolution is well-formed, not that it kept everything both sides had.
 For a file merged by key, [reconcile the record set too](maintaining-backlog.md#a-hand-resolved-conflict-drops-rows-the-markers-never-named).
 
-### The v2 API sync gate
-
-`make v2-api-sync-check` ([`scripts/go/check-v2-api-sync.sh`](../../scripts/go/check-v2-api-sync.sh)) holds `api/v2alpha1` and `api/v2beta1` identical wherever they share a file.
-Two served versions of one API must duplicate their *versioned types* — Kubernetes requires it — but the shared spec fragments beside them are identical by contract, and a one-sided edit breaks the storage/hub conversion with nothing to catch it.
-
-The gate's default is inverted from the Q345 original, which named two paths (`conditions.go`) and so covered 332 of ~2,550 identical lines.
-Now **every** `.go` file present in both packages must match, and a file added to both is covered the day it lands with no edit to the script.
-Two differences are normalised away before the diff — the `package` clause and a `+kubebuilder:storageversion` marker (only one version ever carries it).
-Files that genuinely differ per version are named in the script's `EXEMPT` list with the reason; a stale entry (naming a file no longer paired) fails, so the list cannot rot into a silent hole.
-A file present in one version only is reported but never fails — adding a test to one package is normal.
-
-A file the gate cannot **read** is reported as trouble, not drift: `could not read FILE in both versions`, alongside the reader's own error.
-The two are worth distinguishing because they look identical otherwise — the normaliser used to run inside a process substitution, where its exit status is unobservable, so a failed read left that side empty and the diff blamed every line on an edit nobody made (Q596).
-A "divergence" you cannot find in `git diff` is this, not drift.
-
-Wired into `make check` and CI's `lint` job.
-Its behaviour — including that a body divergence in a previously-unguarded file actually fails, and that an unreadable file reads as trouble — is asserted by `scripts/go/check-v2-api-sync-test.sh` under `make scripts-test`.
-That suite's `tree-in-sync` assertion is the one that runs the gate against the live tree; it prints the gate's exit code and full output on failure, so an occurrence is diagnosable from the CI log alone.
-
 ### The build-tag gate
 
 `make build-tags-check` ([`scripts/go/go-vet-tags.sh`](../../scripts/go/go-vet-tags.sh)) compiles and vets the Go files that no other fast gate builds: everything behind `//go:build integration`, `e2e`, `load`, `autoscaler`, or `karpenter`.
@@ -1178,7 +1159,7 @@ The API server stores such a field whether or not anything acts on it, so an ope
 The checking is [`devtools/ci/apifields`](../../devtools/ci/apifields/main.go), whose package comment carries the rules.
 It type-checks every workspace module, walks each root kind's fields, and classifies every use of each field as a read, a write, or both.
 Uses in `zz_generated.*` and `conversion.go` do not count, because those files touch every field by construction.
-The versions of one API group are judged together: conversion is a JSON round-trip, so a v2beta1 field is consumed when the controllers read its v2alpha1 counterpart, which is what they reconcile.
+The versions of one API group are judged together, so a field counts as consumed when the controllers read it at any served version.
 
 It is a lower bound on neglect, not a proof of enforcement.
 Four things satisfy it without the field doing anything: a webhook that only checks a field's format, code in the API package itself whether or not anything calls it, and a status field's address passed to a function that only reads it, which includes a read-only method with a pointer receiver such as `metav1.Time.IsZero` or `resource.Quantity.Cmp`.
@@ -1396,7 +1377,7 @@ That holds for a *changed* type and is false for an *added* one: `ClusterCapacit
 Nothing failed to compile and nothing failed CI; it was found incidentally, by someone running `make generate` for an unrelated change ([Q477](../queue/README.md)).
 
 **The DeepCopy half regenerates into a copy of the working tree**, not into a redirected output dir like the manifests half.
-The `object` generator writes `zz_generated.deepcopy.go` beside its source, and controller-gen's output rule for it joins every package onto one path — `api/v2alpha1` and `api/v2beta1` would both land on the same file and the second would win.
+The `object` generator writes `zz_generated.deepcopy.go` beside its source, and controller-gen's output rule for it joins every package onto one path, so two API version packages in one module would land on the same file and the second would win.
 So the gate copies the tree (skipping `.git`, `.build`, `.claude`, `tmp/`, and the two vendored trees, which no module's DeepCopy run reads: each module's `go.work.gen` is a single-module workspace, so the repo-root workspace `vendor/` never applies) and regenerates there.
 It has to be the whole tree, not one module: `cmd/agc` and `cmd/gmc` reach their first-party dependencies through relative `replace … => ../../api` directives.
 Inside the copy each module's committed DeepCopy is deleted before its own run, so a file that survives is one controller-gen no longer produces — and `DEEPCOPY_MODULES` is therefore in dependency order, `api` first.
@@ -1773,9 +1754,6 @@ Prefer the narrowest tier that can actually *observe* the bug class — but no n
   For the AGC, a claim that a controller write works *under the shipped role* still needs the kind e2e tier, where the AGC runs under the chart's real `agc-tenant-role` — `E2E_AGC_ScaleSetRecovery` is the Q519 gate for the scale-set disruption-recovery writes, and `E2E_AGC_ScaleSetAcquisition` the Q528 gate for the tier's acquisition half.
   Both `cmd/agc` and `cmd/gmc` already have envtest suites at `internal/controller/integration/` (build tag `integration`, see [Integration tests](#integration-tests)) — add to them rather than concluding none exists; confirm with a directory listing before deciding a tier is missing.
   Example: PR #143 (Q65) migrated the GMC `apply*` helpers to `CreateOrPatch`; a fake-client test could verify field-level behavior, but only `apply_nochurn_test.go` (envtest, asserting `resourceVersion` stability across periodic reconciles) could prove the whole-`Spec` helpers don't churn.
-  A test that needs its own `envtest.Environment`, because it mutates something the shared suite depends on (as `crd_schema_stale_test.go` does), **must write v2 objects at `v2`**.
-  The v2 CRDs declare a conversion webhook, and envtest rewrites its `clientConfig` to the environment's own serving host and port, which in a standalone environment nothing is listening on: a create at `v2alpha1` dies on `conversion webhook … dial tcp … connect: connection refused`, naming a port that is not the shared suite's.
-  `v2` is the storage version from 1.10, so no conversion is invoked and the write lands; before it, `v2beta1` was.
 - **cluster-only kind e2e** — behaviors that emerge from real Container Network Interface (CNI), kube-proxy Destination NAT (DNAT), kubelet image-pull policy, or TLS-over-tunnel.
   When a feature crosses one of those boundaries, the cluster-only test (see [design §7.3](../design/07-test-plan.md#73-end-to-end-tests) and [End-to-end tests](#end-to-end-tests)) is the only thing that proves it works.
   Example: PR #59 fixed 5 bugs that all unit tests passed for — a single planned-but-unimplemented cluster-only test (`E2E_GMC_TenantProvisioning_ProxyConnectWorks`) would have caught 4 of them locally.
@@ -2258,7 +2236,7 @@ Both remedies are in the record.
 `ubuntu-latest` preinstalls one; the dogfood runner image omits it by design.
 The dependency was never written down or checked, so every `target_gag=true` dispatch reported a red that was not a failure.
 The fix added the same pinned `setup-go` step its six sibling jobs already had.
-**Q596** is the probe case: `check-v2-api-sync-test`'s `unreadable-file` assertion `chmod 000`s a fixture and requires the gate to call it trouble, gated on whether `cat` actually fails — not on `$EUID`, precisely because uid does not settle whether the mode bits bite on this runner.
+**Q596** is the probe case: `check-v2-api-sync-test`'s `unreadable-file` assertion (the gate and its suite are deleted) `chmod 000`'d a fixture and requires the gate to call it trouble, gated on whether `cat` actually fails — not on `$EUID`, precisely because uid does not settle whether the mode bits bite on this runner.
 
 Q482 established this for the Go toolchain only.
 It covers both languages and every tier those nine jobs carry: Go unit tests, the `scripts/` shell suites under `make scripts-test`, integration, and e2e.
@@ -2854,7 +2832,7 @@ Measured 2026-08-05 on an 18-core machine: 240 suite runs under concurrent full 
 A clock that runs ahead of the timer reproduces the reported failure verbatim, down to the assertion name and the `EVENT: timeout` payload.
 So Q642 above and Q690 are one class (an assertion bounded by real seconds around a subprocess) reached by two different triggers: scheduler delay there, clock discontinuity here.
 Q596's `tree-in-sync` is *not* a third instance of it, whatever the symptom line suggests.
-Its measured mechanism was a subprocess whose exit status was unobservable through a process substitution, which left one side of a diff empty and read as drift ([the v2 API sync gate](#the-v2-api-sync-gate)).
+Its measured mechanism was a subprocess whose exit status was unobservable through a process substitution, which left one side of a diff empty and read as drift.
 An unchecked status, not a clock.
 Q703 joins Q596 in that class rather than this one: `release-delta-test` built its fixture as `repo="$(build_repo)"`, where `set -e` does not reach, so the builder ran on past a broken repository and the suite reported the subject under test as the thing that failed ([`set -e` stops at a command substitution](bash-style.md#set--e-stops-at-a-command-substitution)).
 Process substitution hid the status there, command substitution here.

@@ -1,7 +1,7 @@
 # actions-gateway-crds-v2
 
 Opt-in CustomResourceDefinitions for the v2 (`actions-gateway.com`) API.
-Each kind is served at three versions: **`v2beta1`** (the graduated, ScaleSet-only hub version, removed at `v2.0.0`), **`v2`** (the GA version and, from 1.10, the storage version), and **`v2alpha1`** (still served for coexistence and the `gag-migrate` on-ramp).
+Each kind is served at **`v2`**, the General Availability (GA) version, alone.
 
 | Kind | Scope | Short |
 |---|---|---|
@@ -13,11 +13,11 @@ Each kind is served at three versions: **`v2beta1`** (the graduated, ScaleSet-on
 
 ## Why a separate chart
 
-The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec` once per served version (`v2alpha1`, `v2beta1` and `v2`), and are ~1.9 MB of YAML apiece.
+The v2 `RunnerTemplate` / `ClusterRunnerTemplate` CRDs each embed a full `PodTemplateSpec`, which makes them the largest objects in the API.
 Helm stores a chart's entire release (rendered manifest **plus** a copy of the chart source) gzipped in a single Secret with a hard **1 MiB** limit; adding these to the main `actions-gateway` chart pushed it over.
 Shipping the v2 CRDs as their own chart makes v2 **opt-in** and keeps the main release small.
 
-The rendered chart (~4.7 MB) is itself over the 1 MiB Secret limit, so this chart is **applied from its render, not `helm install`ed**.
+The rendered chart is itself over the 1 MiB Secret limit, so this chart is **applied from its render, not `helm install`ed**.
 This is the supported, deliberate install *and* upgrade path, not a stopgap:
 
 ```sh
@@ -29,30 +29,16 @@ helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system 
 Re-run the same command to carry CRD field changes on upgrade.
 (The templates carry `helm.sh/resource-policy: keep` for operators who front this chart with a GitOps tool that manages a real Helm release; the `kubectl apply` path above does not create one.)
 
-## Conversion webhook
-
-Because each kind is multi-version (`v2beta1` the hub, `v2alpha1` and `v2` spokes, `v2` the storage version), every CRD carries a `spec.conversion` that routes the apiserver to a **conversion webhook hosted by the GMC** (`/convert` on the main chart's `webhook-service`).
-This chart therefore depends on the main `actions-gateway` chart and, by default, cert-manager:
-
-| Value | Default | Purpose |
-|---|---|---|
-| `conversion.webhook.service.namespace` | `""` (→ release namespace) | Namespace of the GMC `webhook-service`. Install this chart into the GMC's namespace, or set this. |
-| `conversion.webhook.service.name` | `webhook-service` | GMC webhook Service name. |
-| `conversion.webhook.service.port` | `443` | GMC webhook Service port. |
-| `conversion.certManager.enabled` | `true` | cert-manager's ca-injector supplies the webhook CA (`cert-manager.io/inject-ca-from`). |
-| `conversion.certManager.certificateName` | `serving-cert` | GMC webhook serving Certificate. |
-| `conversion.caBundle` | `""` | Base64 CA bundle when `certManager.enabled=false`. |
-
 ## Install
 
-**No helm, default `gmc-system` namespace.** Every release attaches a pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`; apply it straight from the release URL:
+**No helm.** Every release attaches a pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`; apply it straight from the release URL:
 
 ```bash
 kubectl apply --server-side -f \
   https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 ```
 
-**Custom GMC namespace (or a GitOps render).** The release asset bakes in `gmc-system` for the conversion `clientConfig`; if the GMC runs elsewhere, render for its namespace (so the `clientConfig` resolves) and apply server-side — see [Why a separate chart](#why-a-separate-chart) for why not `helm install`:
+**A GitOps render.** Render the chart and apply it server-side; see [Why a separate chart](#why-a-separate-chart) for why not `helm install`:
 
 ```bash
 helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
@@ -61,8 +47,10 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
 ```
 
 The CRDs install and validate on Kubernetes ≥ 1.30.
-The `RunnerSet` `spec.gatewayRef.name` selectable field (KEP-4358) is declared on **`v2`** (the version the AGC field-selects) and `v2beta1`, not on `v2alpha1`, and is queryable only on ≥ 1.31; the declaration is inert on 1.30.
+The `RunnerSet` `spec.gatewayRef.name` selectable field (KEP-4358) is queryable only on ≥ 1.31; the declaration is inert on 1.30.
 
-> **Requires the GMC.** A `v2`, `v2beta1` or `v2alpha1` create or read is converted through the GMC's `/convert` webhook, so apply v2 objects only once the GMC is `Ready`.
+**Upgrading from 1.x.** The apply is refused while a CRD still carries its 1.x conversion webhook, so [remove the webhook first](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/operations/upgrade.md#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them).
+
+> **Requires the GMC.** A create or update of any kind passes through the GMC's validating webhooks, so apply v2 objects only once the GMC is `Ready`.
 > Once `v1alpha1` is removed, the v2 CRDs are expected to fold back into the main chart.
 > Generated by `scripts/manifest/sync-chart-crds.sh` — do not hand-edit the templates.

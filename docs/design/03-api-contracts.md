@@ -22,15 +22,10 @@ Two Custom Resource Definitions are introduced.
 Both live in the tenant's namespace.
 The GMC creates `RunnerGroup` resources as part of AGC bootstrapping.
 
-> **v2 API (`v2beta1`, group `actions-gateway.com`).** A decomposed v2 API is served side by side with this `v1alpha1` (`actions-gateway.github.com`) surface during the coexistence window.
-> It is **fully shipped** (milestones M1–M5): the five kinds and their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built. v2 has since graduated: **`v2beta1`** is the hub version and the shape new tenants onboard on, while `v2alpha1` stays served as the migration on-ramp.
-> The GA **`v2`** is served beside both as a second conversion spoke, and the storage version from 1.10 ([v2-ga.md](../plan/v2-ga.md#phase-3--the-storage-advance-and-the-coupled-removals)).
-> Every `v2alpha1` kind carries `+kubebuilder:deprecatedversion`, so the apiserver warns on any `v2alpha1` read or write; the version stays served either way, and the conversion webhook still round-trips it.
-> Both `v1alpha1` kinds carry the same marker (Q633), naming the v2 kind that replaces each and `gag-migrate` as the move — the v1 monolith fans out, so the replacement is a different kind rather than the same kind at a newer version.
-> Tenants migrate on their own schedule via the migration tool, and nothing in the `v1alpha1` surface below changes until it is removed.
-> This `v1alpha1` surface, `v2alpha1`, and the classic acquisition machinery are all **deprecated and removed at `v2.0.0`**, announced one release ahead in `v1.3.0`; see the [deprecation and removal notice](../operations/v1alpha1-deprecation.md). v2 splits the `ActionsGateway` + `RunnerGroup` monolith into five kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`), renames the group to the project-owned domain, and freezes the field-naming/immutability decisions.
+> **v2 API (`v2`, group `actions-gateway.com`).** `v2.0.0` serves the decomposed v2 API alone: the five kinds (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) and their GMC/AGC reconcilers, multiple gateways per namespace, and the namespace-scoped security profile.
+> This `v1alpha1` surface (`actions-gateway.github.com`), `v2alpha1`, `v2beta1` and the classic acquisition machinery were **removed at `v2.0.0`**, announced one release ahead in `v1.3.0`; see the [removal notice](../operations/v1alpha1-deprecation.md). v2 splits the `ActionsGateway` + `RunnerGroup` monolith into five kinds, renames the group to the project-owned domain, and freezes the field-naming/immutability decisions.
 > The full v2 shape and rationale are the design source of truth in [Appendix H — v2 API Decomposition](appendix-h-v2-api-decomposition.md); the milestone sequencing is in the [v2 API plan](../plan/v2-api.md).
-> The schemas below remain authoritative for the running `v1alpha1` API.
+> The schemas below describe the 1.x `v1alpha1` API as it was served before that removal.
 
 ```go
 // SecretReference is a pointer to a Kubernetes Secret, with an optional
@@ -217,7 +212,7 @@ type ActionsGatewaySpec struct {
     // mutable so credential rotation by Secret name keeps working — see the
     // Secret-rotation note later in this document.
     //
-    // v2 note: the v2alpha1 (actions-gateway.com) API REMOVES this field. There,
+    // v2 note: the v2 (actions-gateway.com) API REMOVES this field. There,
     // the Pod Security level is selected by the namespace label
     // actions-gateway.com/security-profile (GMC-guarded), because PSA is
     // namespace-scoped and co-located v2 gateways share one posture. This v1
@@ -782,7 +777,7 @@ type RunnerGroupStatus struct {
 
     // ActiveJobs is the number of worker pods currently in the Running phase
     // (a job is actively executing). Derived from the worker pod phase count
-    // during each reconcile; updated on pod phase-change events. The v2alpha1
+    // during each reconcile; updated on pod phase-change events. The v2
     // RunnerSet carries the same field. See also PendingJobs.
     // +optional
     ActiveJobs int32 `json:"activeJobs,omitempty"`
@@ -792,7 +787,7 @@ type RunnerGroupStatus struct {
     // running). A sustained non-zero count signals scheduling pressure —
     // check WorkersUnschedulable, events, and node/image constraints. Pods
     // that remain Pending past pendingPodDeadline are reaped by the
-    // controller. The v2alpha1 RunnerSet carries the same field.
+    // controller. The v2 RunnerSet carries the same field.
     // +optional
     PendingJobs int32 `json:"pendingJobs,omitempty"`
 

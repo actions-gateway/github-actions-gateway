@@ -45,7 +45,7 @@ On the scale-set tier those lines also carry `jobID` and `runID`: one workflow r
 
 Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
 
-**API server warnings** (e.g. the [`v1alpha1`](upgrade.md#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns) and [`v2alpha1`](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns) deprecation warnings) are logged at info, **deduplicated to one line per unique message per process** in both controllers.
+**API server warnings** (for example, the deprecation warning the apiserver attaches to a deprecated API version) are logged at info, **deduplicated to one line per unique message per process** in both controllers.
 The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.
 
 ### Proxy egress audit record

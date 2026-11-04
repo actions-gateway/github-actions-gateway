@@ -19,7 +19,9 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
+  - [Action required at v2.0.0: remove the CRDs' conversion webhook before applying them](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them)
   - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
+  - [Action required after v2.0.0: delete what a set deleted during the upgrade left behind](#action-required-after-v200-delete-what-a-set-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
@@ -287,26 +289,83 @@ Delete each one it prints, and remove the offline `rs-<set>-<n>` runners in the 
 
 **Rolling back** to 1.10 returns the set to classic acquisition.
 
+### Action required at `v2.0.0`: remove the CRDs' conversion webhook before applying them
+
+**Who is affected:** every cluster on the 1.x CRD chart whose conversion `caBundle` was set by cert-manager, which is the default, or by a `kubectl patch`.
+
+**What changed.** The `v2.0.0` CRDs serve `v2` alone and carry no `spec.conversion`.
+Server-side apply removes only the fields its own field manager owns, and the `caBundle` belongs to whichever manager set it, so the apply leaves it behind, and the apiserver refuses a `caBundle` on a CRD with no webhook strategy.
+
+**What you see.** `kubectl apply --server-side` refuses all five CRDs, with or without `--force-conflicts`, and the refused CRDs stay as they were:
+
+```text
+CustomResourceDefinition.apiextensions.k8s.io "runnersets.actions-gateway.com" is invalid: [spec.conversion.strategy: Required value, spec.conversion.webhookClientConfig: Forbidden: should not be set when strategy is not set to Webhook]
+```
+
+**What to do.** Remove the webhook from each CRD, then apply the release straight away, in the same shell:
+
+```sh
+for crd in actionsgateways clusterrunnertemplates egressproxies runnersets runnertemplates; do
+  kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
+    -p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}'
+done
+kubectl apply --server-side -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+```
+
+Between the two commands `v2alpha1` and `v2beta1` are still served with nothing converting them, so a read at either returns the stored `v2` object relabelled, without converting it.
+Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2: the CA injector did not restore the webhook during a 60-second pause, the apply then succeeded, and the CRDs served `v2` alone.
+
 ### Action required at `v2.0.0`: apply the CRDs with the upgrade, because the AGC's watch depends on them
 
 **Who is affected:** every gateway.
 
 **What changed.** Each Actions Gateway Controller (AGC) watches only its own gateway's `RunnerSet`s, through a server-side field selector on `spec.gatewayRef.name`, and the apiserver evaluates that selector at the API version the request names.
-A `v1.10.0` AGC lists at `v2alpha1` and its CRD declares the field there alone; a `v2.0.0` AGC lists at `v2`, and its CRD declares the field there.
+A `v1.10.0` AGC lists at `v2alpha1`, and the `v1.10.0` CRD declares the field there alone; a `v2.0.0` AGC lists at `v2`, and `v2` is the only version the `v2.0.0` CRD serves.
 So neither AGC can list its `RunnerSet`s against the other release's CRDs.
 
-**What you see.** The `RunnerSet` list fails with this error, and an AGC that hits it at startup does not become ready:
+**What you see.** A `v2.0.0` AGC on the `v1.10.0` CRDs fails its `RunnerSet` list with this error and does not become ready:
 
 ```text
 field label not supported: spec.gatewayRef.name
 ```
 
-The GMC's startup schema check does not catch this, because it probes fields rather than selectable fields.
+A `v1.10.0` AGC that restarts on the `v2.0.0` CRDs exits at startup, because the version it looks for is gone (read from the `v1.10.0` source, not run):
+
+```text
+GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing (install the actions-gateway-crds-v2 chart)
+```
+
+The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.
 
 **What to do.** Apply the `v2.0.0` CRDs and upgrade the chart as one step, and do not leave a gap between them.
 During a gap, an AGC that restarts cannot start.
 One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
 A rollback crosses the same gap in reverse.
+
+### Action required after `v2.0.0`: delete what a set deleted during the upgrade left behind
+
+**Who is affected:** a cluster where a `RunnerSet` was deleted between the CRD apply and its `v2.0.0` AGC starting.
+
+**What changed.** A `v1.10.0` AGC writes an owner reference naming `actions-gateway.com/v2alpha1` on each set's three long-lived ConfigMaps, the scale-set guard, the recovery claims and the failure ledger, and on its worker pods.
+The garbage collector cannot map a version the cluster no longer serves, so it leaves the object in place when the owner goes away.
+Measured on kind with `kube-controller-manager` 1.36.1: such a ConfigMap was still present 12 minutes after its owner was deleted, across a controller-manager restart, while one naming `v2` was collected within 30 seconds.
+
+A `v2.0.0` AGC rewrites the three ConfigMaps' references to `v2` the first time it reconciles each set, including a set already being deleted, so nothing is needed for any set it sees.
+It does not rewrite worker pods, which end with their job.
+
+**What to do.** After the upgrade, list what still names the old version:
+
+```sh
+kubectl get configmaps,pods -A -o json | jq -r '.items[]
+  | select(any(.metadata.ownerReferences[]?; .apiVersion == "actions-gateway.com/v2alpha1"))
+  | "\(.kind) \(.metadata.namespace)/\(.metadata.name)"'
+```
+
+Delete an object from this list whose `RunnerSet` is gone.
+Rewriting its reference does not help: measured the same way, a ConfigMap repointed to `v2` after its owner was gone was still present three minutes later.
+A ConfigMap left in place also matters if you recreate a set of the same name, because the AGC finds these ConfigMaps by name (read from the code, not measured).
+An object whose `RunnerSet` still exists needs nothing.
 
 ### Action required if you alert on or chart the classic acquisition series: they are no longer exported
 
@@ -1238,7 +1297,7 @@ The AGC and GMC receive the same warning through their Kubernetes clients but lo
 
 **What to do about it.** Onboard new tenants on `v2beta1` (see [tenant onboarding](tenant-onboarding.md)), and move existing `v2alpha1` objects to `v2beta1` at your convenience by re-applying the same object with the `apiVersion` changed, since the two versions convert both ways.
 `v2alpha1` remains the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants coming off `v1alpha1`, so a freshly migrated tenant emits these warnings until it is moved onto `v2beta1`.
-Note that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic` must adopt the runner-scale-set protocol as part of that move (see ["`RunnerSet` Rejected: `acquisitionProtocol`"](troubleshooting.md#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)).
+Note that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic` must adopt the runner-scale-set protocol as part of that move (see ["`RunnerSet` Rejected: `acquisitionProtocol`"](troubleshooting.md#runnerset-rejected-duplicate-first-runnerlabel)).
 `v2alpha1` is one of three things `v2.0.0` removes; the standing notice for all three, with a pre-upgrade checklist, is the [deprecation and removal notice](v1alpha1-deprecation.md).
 
 ### Non-breaking: `v2alpha1` CRDs ship in a separate, opt-in chart

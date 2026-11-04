@@ -283,4 +283,4 @@ nav:
       - "Kata-on-GKE spike runbook": operations/kata-ci-spike-runbook.md
   - Reference:
       - Overview: reference/README.md
-      - "API reference (v2beta1)": reference/api.md
+      - "API reference (v2)": reference/api.md
