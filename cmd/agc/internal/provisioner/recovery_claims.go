@@ -83,6 +83,12 @@ func scaleSetRecoveryClaimsConfigMapName(ownerName string) string {
 	return apinames.Join(apinames.MaxObjectName, "scaleset-recovery-claims", ownerName)
 }
 
+// OwnedConfigMapNames names the ConfigMaps the provisioner keeps per owner: the recovery
+// claims and the failure ledger.
+func OwnedConfigMapNames(ownerName string) []string {
+	return []string{scaleSetRecoveryClaimsConfigMapName(ownerName), scaleSetRerunLedgerConfigMapName(ownerName)}
+}
+
 // claimDisruptionRecovery enters podName in target's recovery-claim ledger under an
 // optimistic lock, so exactly one caller ever proceeds to re-run the run behind that
 // pod. It returns errRecoveryClaimHeld when the claim is already there, and any other

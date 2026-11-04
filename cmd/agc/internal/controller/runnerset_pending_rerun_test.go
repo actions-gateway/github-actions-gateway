@@ -41,6 +41,8 @@ func TestRunnerSetReconcile_AdoptsParkedRerunsBeforeReferencesResolve(t *testing
 
 	r := &RunnerSetReconciler{Client: c, Log: slog.Default(), Provisioner: provisioner.NewProvisioner(c, nil, nil)}
 	r.ensureMaps()
+	// The owner-reference re-stamp reads the ledger too; only the adoption read counts here.
+	r.ownerRefsRestamped.Store(types.NamespacedName{Namespace: ns, Name: "set"}, rs.UID)
 	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: "set"}})
 	require.NoError(t, err)
 

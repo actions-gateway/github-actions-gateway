@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -117,6 +118,52 @@ func (s *scaleSetGuardStore) Save(ctx context.Context, state scalesetlistener.Gu
 	}
 	cm.Data[scaleSetGuardDataKey] = string(data)
 	return s.writer.Update(ctx, &cm)
+}
+
+// restampConfigMapOwners moves the RunnerSet owner reference on rs's long-lived
+// ConfigMaps to the version this AGC stamps, once per process per set. Each takes the
+// reference only on create, so one a v1.10.0 AGC created still names v2alpha1. The
+// garbage collector retries a reference whose version it cannot map instead of acting
+// on it, which leaves the ConfigMap behind once the set is deleted (measured on
+// kube-controller-manager 1.36.1, Q1167).
+//
+// A reference to an earlier set of the same name is left alone: that owner is gone, so
+// repointing the ConfigMap would adopt its state into this set. A failed write warns
+// and retries on the next reconcile, never holding up the set or its deletion.
+func (r *RunnerSetReconciler) restampConfigMapOwners(ctx context.Context, log *slog.Logger, rs *v2.RunnerSet) {
+	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
+	if uid, done := r.ownerRefsRestamped.Load(key); done && uid == rs.UID {
+		return
+	}
+	reader := r.APIReader
+	if reader == nil {
+		reader = r.Client
+	}
+	want := runnerSetOwnerRef(rs.Name, rs.UID)
+	for _, name := range append(provisioner.OwnedConfigMapNames(rs.Name), scaleSetGuardConfigMapName(rs.Name)) {
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			var cm corev1.ConfigMap
+			if err := reader.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: name}, &cm); err != nil {
+				return client.IgnoreNotFound(err)
+			}
+			changed := false
+			for i := range cm.OwnerReferences {
+				if ref := &cm.OwnerReferences[i]; ref.UID == rs.UID && ref.APIVersion != want.APIVersion {
+					ref.APIVersion = want.APIVersion
+					changed = true
+				}
+			}
+			if !changed {
+				return nil
+			}
+			return r.Update(ctx, &cm)
+		})
+		if err != nil {
+			log.Warn("could not update a ConfigMap's owner reference; it would outlive this RunnerSet", "configMap", name, "error", err)
+			return
+		}
+	}
+	r.ownerRefsRestamped.Store(key, rs.UID)
 }
 
 // recoverOrphanedScaleSetWorkers re-runs the workflow runs whose worker pods were

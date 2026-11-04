@@ -111,6 +111,10 @@ type RunnerSetReconciler struct {
 	// nothing will delete (Q968).
 	stopped atomic.Bool
 
+	// ownerRefsRestamped records, per RunnerSet, the UID restampConfigMapOwners last
+	// finished for, so the read happens once per process.
+	ownerRefsRestamped sync.Map
+
 	// scaleSetListeners holds the running scale-set acquisition listener per
 	// RunnerSet — one session per scale set.
 	scaleSetListenersMu sync.Mutex
@@ -297,6 +301,11 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	r.drainConditions(&rs)
 	r.drainEvents(&rs)
+
+	// Ahead of the deletion check: removing the finalizer is what releases the set to the
+	// garbage collector, and a set deleted across an upgrade reaches this AGC already
+	// terminating.
+	r.restampConfigMapOwners(ctx, log, &rs)
 
 	if !rs.DeletionTimestamp.IsZero() {
 		return r.reconcileDelete(ctx, &rs)
@@ -511,6 +520,7 @@ func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, rs *v2.Runner
 func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.stopScaleSetListener(key)
 	r.pendingConds.forget(key)
+	r.ownerRefsRestamped.Delete(key)
 	// Drop the Q249 reap-blocking-sidecar gauge series so a deleted (or foreign-gateway)
 	// RunnerSet does not leave a stale value behind.
 	if r.Metrics != nil {
