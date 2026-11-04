@@ -948,7 +948,7 @@ In-flight jobs are unaffected — worker pods are separate.
 | `CABundleNotFound` | No ConfigMap of that name in the gateway's namespace | Create it, or fix the name. The gateway recovers on its own within about a minute — no edit needed |
 | `CABundleInvalid` | The ConfigMap exists but has no `ca.crt` key, or that key holds no PEM certificate | Re-create it with `--from-file=ca.crt=...` and a PEM-encoded (not DER) certificate |
 
-`spec.tracing.caBundleRef` degrades with the same two reasons, and the condition's message names which field failed.
+`spec.tracing.caBundleRef` reports the same two reasons on the advisory `TracingCABundleUnresolved` condition instead, and the gateway stays `Ready`: see [Reaching the collector](observability-logging.md#reaching-the-collector).
 
 ```bash
 kubectl -n team-a get actionsgateway my-gateway \

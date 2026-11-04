@@ -60,6 +60,29 @@ var _ = Describe("E2E_Tracing_CollectorOverTLS", Ordered, func() {
 	rootSpans := func() int {
 		return strings.Count(logsOf(collectorNS, "otel-collector"), "Name           : "+rootSpan)
 	}
+	// liveAGCLogs reads by pod, not deploy/: an earlier arm's AGC can still be terminating,
+	// and its log holds the certificate failures that arm expects.
+	liveAGCLogs := func() string {
+		GinkgoHelper()
+		out, err := exec.Command("kubectl", "get", "pods", "-n", tenantNS, "-l", "app="+agcDeploy, "-o",
+			`go-template={{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}} {{end}}{{end}}`).Output()
+		Expect(err).NotTo(HaveOccurred())
+		pods := strings.Fields(string(out))
+		Expect(pods).NotTo(BeEmpty())
+		var all strings.Builder
+		for _, pod := range pods {
+			logs, err := exec.Command("kubectl", "logs", "--tail=-1", "-n", tenantNS, pod, "-c", "agc").CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), "read %s: %s", pod, logs)
+			Expect(string(logs)).To(ContainSubstring("OpenTelemetry tracing enabled"), "the read must be able to see this AGC's log")
+			all.Write(logs)
+		}
+		return all.String()
+	}
+	gatewayCondition := func(condition string) string {
+		out, _ := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.com", gwName, "-n", tenantNS, "-o",
+			fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].status}`, condition)).Output()
+		return string(out)
+	}
 	// queueJobsUntil re-queues because a job taken by a pod a rollout is terminating dies
 	// with it, and the root span only exists once a worker is provisioned.
 	queueJobsUntil := func(done func() bool, description string) {
@@ -178,19 +201,7 @@ spec:
 		queueJobsUntil(func() bool { return rootSpans() > 0 }, "the provision path's root span must reach the collector")
 
 		Expect(agcEnvValue(tenantNS, agcDeploy, "HTTPS_PROXY")).NotTo(BeEmpty(), "the tenant must still be proxied")
-		// By pod, not deploy/: the first arm's AGC can still be terminating here, and its log
-		// holds the certificate failures that arm expects.
-		out, err := exec.Command("kubectl", "get", "pods", "-n", tenantNS, "-l", "app="+agcDeploy, "-o",
-			`go-template={{range .items}}{{if not .metadata.deletionTimestamp}}{{.metadata.name}} {{end}}{{end}}`).Output()
-		Expect(err).NotTo(HaveOccurred())
-		current := strings.Fields(string(out))
-		Expect(current).NotTo(BeEmpty())
-		for _, pod := range current {
-			logs, err := exec.Command("kubectl", "logs", "--tail=-1", "-n", tenantNS, pod, "-c", "agc").CombinedOutput()
-			Expect(err).NotTo(HaveOccurred(), "read %s: %s", pod, logs)
-			Expect(string(logs)).To(ContainSubstring("OpenTelemetry tracing enabled"), "the read must be able to see this AGC's log")
-			Expect(string(logs)).NotTo(ContainSubstring("traces export"), "the rolled AGC must export without a failed attempt")
-		}
+		Expect(liveAGCLogs()).NotTo(ContainSubstring("traces export"), "the rolled AGC must export without a failed attempt")
 	})
 
 	It("E2E_Tracing_WorkerPodCannotReachCollector: the peer opens the AGC's policy and not the worker's", func() {
@@ -211,6 +222,25 @@ spec:
 			"the probe pod could not reach its own proxy, so its endpoint was never programmed and the drop below says nothing (Q1015); logs:\n%s", logs)
 		Expect(logs).To(MatchRegexp(`CURL_RC=(7|28)(\s|$)`),
 			"a worker pod reached the trace collector: spec.tracing.networkPolicy leaked past the AGC's own policy; logs:\n%s", logs)
+	})
+
+	It("E2E_Tracing_LostBundleDoesNotStopTheGateway: a replacement AGC starts without the ConfigMap and the gateway stays Ready", func() {
+		_, err := utils.Run(exec.Command("kubectl", "delete", "configmap", "collector-ca", "-n", tenantNS))
+		Expect(err).NotTo(HaveOccurred())
+		_, err = utils.Run(exec.Command("kubectl", "rollout", "restart", "deploy/"+agcDeploy, "-n", tenantNS))
+		Expect(err).NotTo(HaveOccurred())
+		_, err = utils.Run(exec.Command("kubectl", "rollout", "status", "deploy/"+agcDeploy, "-n", tenantNS, "--timeout=4m"))
+		Expect(err).NotTo(HaveOccurred(), "a required mount would hold the replacement at ContainerCreating")
+
+		Eventually(func() string { return gatewayCondition("TracingCABundleUnresolved") }, 3*time.Minute, 2*time.Second).
+			Should(Equal("True"), "the lost bundle must report")
+		Eventually(func() string { return gatewayCondition("Ready") }, 2*time.Minute, 2*time.Second).Should(Equal("True"))
+
+		before := rootSpans()
+		queueJobsUntil(func() bool {
+			return strings.Contains(liveAGCLogs(), "certificate signed by unknown authority")
+		}, "with no bundle the exporter must keep verifying, against the system roots")
+		Expect(rootSpans()).To(Equal(before), "no span may cross a connection the AGC could not verify")
 	})
 })
 

@@ -268,10 +268,13 @@ type TracingConfig struct {
 	// not added to the trust the AGC uses for GitHub. Certificates are public material, which
 	// is why the carrier is a ConfigMap rather than a Secret.
 	//
-	// Resolved at runtime, not at admission (§H.7): a ref naming a ConfigMap that is missing,
-	// or whose ca.crt holds no parseable certificate, fails the gateway closed (Degraded,
-	// reason CABundleNotFound / CABundleInvalid) until it resolves. The AGC reads the file
-	// once at startup, so a rotated bundle takes effect when the AGC restarts.
+	// Resolved at runtime, not at admission (§H.7), and advisory, because traces are
+	// telemetry and a lost bundle must not stop CI: a ref naming a ConfigMap that is missing,
+	// or whose ca.crt holds no parseable certificate, sets the TracingCABundleUnresolved
+	// condition (reason CABundleNotFound / CABundleInvalid) and the gateway keeps
+	// reconciling. The exporter then verifies against the system roots, so a private-CA
+	// collector receives nothing rather than an unverified connection. The AGC reads the
+	// file once at startup, so a new or rotated bundle takes effect when the AGC restarts.
 	//
 	// Unset (the default) verifies the collector against the system roots.
 	//

@@ -306,10 +306,11 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		proxy = &p
 	}
 
-	// GHES and collector private-CA trust (Q536, Q1281): provisioning an AGC with a mount
-	// it cannot read wedges the pod at ContainerCreating with no explanation, so an
-	// unresolvable bundle ref fails closed here instead.
-	if caReason, caMsg, caErr := r.checkCABundles(ctx, &ag); caErr != nil {
+	// GHES private-CA trust (Q536): provisioning an AGC with a mount it cannot read wedges
+	// the pod at ContainerCreating with no explanation, so an unresolvable
+	// githubCABundleRef fails closed here instead. spec.tracing.caBundleRef does not: its
+	// mount is optional and updateStatus reports it, because traces are telemetry.
+	if caReason, caMsg, caErr := r.checkCABundle(ctx, ag.Namespace, "githubCABundleRef", ag.Spec.GitHubCABundleRef); caErr != nil {
 		return ctrl.Result{}, caErr
 	} else if caReason != "" {
 		res, err := r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, caReason, caMsg)
@@ -364,6 +365,11 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 	if d := r.directEgressRecheckRequeue(proxy); d > 0 && (res.RequeueAfter == 0 || d < res.RequeueAfter) {
 		res.RequeueAfter = d
+	}
+	// Polled for the reason the GitHub bundle is: nothing watches tenant ConfigMaps.
+	if meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2.ConditionTracingCABundleUnresolved) &&
+		(res.RequeueAfter == 0 || caBundleReprobeInterval < res.RequeueAfter) {
+		res.RequeueAfter = caBundleReprobeInterval
 	}
 	return res, nil
 }
@@ -507,16 +513,6 @@ func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns
 		return false, err
 	}
 	return cm.Data[shareCACertKey] != "", nil
-}
-
-// checkCABundles resolves each CA bundle ref the gateway sets, returning the first
-// that does not resolve.
-func (r *ActionsGatewayV2Reconciler) checkCABundles(ctx context.Context, ag *gmcv2.ActionsGateway) (string, string, error) {
-	reason, msg, err := r.checkCABundle(ctx, ag.Namespace, "githubCABundleRef", ag.Spec.GitHubCABundleRef)
-	if err != nil || reason != "" {
-		return reason, msg, err
-	}
-	return r.checkCABundle(ctx, ag.Namespace, "tracing.caBundleRef", ag.Spec.Tracing.CABundleRef)
 }
 
 // checkCABundle resolves one CA bundle ref. It returns a Degraded reason and message
@@ -826,6 +822,19 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	auditReason, auditMsg := egressAuditAttribution(ag, proxy)
 	set(gmcv2.ConditionEgressAuditUnattributed, auditReason != gmcv2.ReasonEgressAuditJoined,
 		auditReason, auditMsg)
+
+	// The collector's CA bundle (Q1281), advisory: it does not gate Ready, since the AGC
+	// runs without it and only its traces stop.
+	tracingCAReason, tracingCAMsg, err := r.checkCABundle(ctx, ag.Namespace, "tracing.caBundleRef", ag.Spec.Tracing.CABundleRef)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if tracingCAReason == "" {
+		set(gmcv2.ConditionTracingCABundleUnresolved, false, gmcv2.ReasonTracingCABundleResolved,
+			"spec.tracing.caBundleRef is unset or resolves")
+	} else {
+		set(gmcv2.ConditionTracingCABundleUnresolved, true, tracingCAReason, tracingCAMsg)
+	}
 
 	// EgressRulesStale (Q1249), advisory: it does not gate Ready.
 	es := r.evalDirectEgressRulesStale(ctx, ag, proxy, now.Time)

@@ -301,15 +301,21 @@ kubectl -n team-a create configmap otel-collector-ca --from-file=ca.crt=/path/to
 The GMC mounts the ConfigMap on the AGC and points the exporter at it.
 The bundle replaces the system roots for the export connection and touches nothing else, so it is not added to the trust the AGC uses for GitHub, and it never reaches a worker pod.
 Measured with a real collector over TLS on kind with Calico, on a proxied tenant: without `caBundleRef` the AGC logs `x509: certificate signed by unknown authority` and the collector receives nothing, and naming the bundle delivers the spans.
-A ConfigMap that is missing, or whose `ca.crt` holds no PEM certificate, leaves the gateway `Degraded` with reason `CABundleNotFound` or `CABundleInvalid` and provisions no AGC until it resolves.
-
-**A rotated bundle takes effect when the AGC restarts**, because the exporter reads the file once, when it starts:
+**A bundle that does not resolve stops the traces and nothing else**, because a lost telemetry bundle should not stop CI.
+A ConfigMap that is missing, or whose `ca.crt` holds no PEM certificate, sets the advisory `TracingCABundleUnresolved` condition with reason `CABundleNotFound` or `CABundleInvalid`, and the gateway stays `Ready` and keeps reconciling.
+The AGC starts without the file and its exporter verifies against the system roots, so a private-CA collector receives nothing and the AGC logs `x509: certificate signed by unknown authority`; no span crosses an unverified connection.
+Fix the ConfigMap and restart the AGC, because the condition clears within about a minute but the exporter only reads the file when it starts:
 
 ```bash
 kubectl -n team-a rollout restart deploy/team-a-agc
 ```
 
-Publish the new CA alongside the old one in `ca.crt` before the collector's certificate changes, so spans keep flowing across the swap.
+**To rotate the collector's CA, restart the AGC at both ends of the overlap**, so it trusts both CAs before the certificate changes:
+
+1. Publish the new CA beside the old one in `ca.crt`.
+2. Restart the AGC with the command above, so it reads both.
+3. Swap the collector's certificate.
+4. Remove the old CA from `ca.crt` and restart the AGC again.
 
 Plaintext still works, with `http://` and `insecure: true`, for a collector that does not serve TLS.
 The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, any `resourceAttributes` you set, and the error text of a failed attempt.

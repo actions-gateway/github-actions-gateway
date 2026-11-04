@@ -278,8 +278,8 @@ type TracingConfig struct {
     // CABundleRef names a ConfigMap in this namespace holding, under "ca.crt", the
     // PEM bundle the AGC verifies the collector against, replacing the system roots
     // for this connection alone. Needs an https:// Endpoint with Insecure unset or
-    // false. Fails the gateway closed when it does not resolve. Maps to
-    // OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.
+    // false. An unresolved ref sets the advisory TracingCABundleUnresolved condition
+    // and blocks nothing. Maps to OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.
     // +optional
     CABundleRef *LocalConfigMapReference `json:"caBundleRef,omitempty"`
 

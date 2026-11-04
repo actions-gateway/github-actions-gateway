@@ -425,7 +425,9 @@ func tracingEgressPort(endpoint string) int32 {
 		target = u.Host
 	}
 	if _, p, err := net.SplitHostPort(target); err == nil {
-		if n, convErr := strconv.Atoi(p); convErr == nil {
+		// An out-of-range port is unusable either way, and the apiserver would reject a rule
+		// naming it, failing the whole reconcile over telemetry.
+		if n, convErr := strconv.Atoi(p); convErr == nil && n >= 1 && n <= 65535 {
 			return int32(n)
 		}
 	}
@@ -623,8 +625,8 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 	// GHES private-CA trust (Q536), applied here for the same reason as scheduling:
 	// spec.githubCABundleRef is v2-only, and the mount composes with nothing the
 	// shared builder already stamps.
-	applyCABundleV2(&dep.Spec.Template.Spec, githubCAVolumeName, githubCAMountPath, ag.Spec.GitHubCABundleRef)
-	applyCABundleV2(&dep.Spec.Template.Spec, tracingCAVolumeName, tracingCAMountPath, ag.Spec.Tracing.CABundleRef)
+	applyCABundleV2(&dep.Spec.Template.Spec, githubCAVolumeName, githubCAMountPath, ag.Spec.GitHubCABundleRef, false)
+	applyCABundleV2(&dep.Spec.Template.Spec, tracingCAVolumeName, tracingCAMountPath, ag.Spec.Tracing.CABundleRef, true)
 	return dep
 }
 
@@ -637,20 +639,28 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 // before extraEnv: GITHUB_CA_CONFIGMAP_NAME adds the GitHub bundle to the system roots
 // for githubURL, and OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE makes the tracing bundle the
 // exporter's only roots.
-func applyCABundleV2(pod *corev1.PodSpec, volumeName, mountPath string, ref *gmcv2.LocalConfigMapReference) {
+//
+// optional lets the pod start without the ConfigMap. The tracing bundle sets it, since a
+// replacement AGC wedged at ContainerCreating over a telemetry bundle would stop CI. With
+// no file the exporter keeps the system roots and still verifies (cmd/agc/internal/tracing,
+// TestInit_UnusableCertificateFileKeepsVerifying). The GitHub bundle does not: the AGC cannot
+// reach the appliance without it, so that ref fails closed in the reconcile instead.
+func applyCABundleV2(pod *corev1.PodSpec, volumeName, mountPath string, ref *gmcv2.LocalConfigMapReference, optional bool) {
 	if ref == nil {
 		return
 	}
 	caMode := int32(0o444)
+	source := &corev1.ConfigMapVolumeSource{
+		LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
+		Items:                []corev1.KeyToPath{{Key: caBundleKey, Path: caBundleKey}},
+		DefaultMode:          &caMode,
+	}
+	if optional {
+		source.Optional = &optional
+	}
 	pod.Volumes = append(pod.Volumes, corev1.Volume{
-		Name: volumeName,
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
-				Items:                []corev1.KeyToPath{{Key: caBundleKey, Path: caBundleKey}},
-				DefaultMode:          &caMode,
-			},
-		},
+		Name:         volumeName,
+		VolumeSource: corev1.VolumeSource{ConfigMap: source},
 	})
 	for i := range pod.Containers {
 		pod.Containers[i].VolumeMounts = append(pod.Containers[i].VolumeMounts, corev1.VolumeMount{

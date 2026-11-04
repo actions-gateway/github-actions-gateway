@@ -85,6 +85,54 @@ func TestV2_Tracing_Admission(t *testing.T) {
 	}
 }
 
+// TestV2_Tracing_MissingBundleIsAdvisory: a ref naming no ConfigMap sets the advisory
+// condition and still provisions the AGC, and applying the ConfigMap clears it with no edit
+// to the gateway.
+func TestV2_Tracing_MissingBundleIsAdvisory(t *testing.T) {
+	const ns = "v2-tracing-missing-ca"
+	createNamespaceWithLabels(t, ns, map[string]string{
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
+	})
+	createGitHubAppSecret(t, ns, "github-app")
+
+	ag := newV2GatewayWired("otel", ns, "github-app", "")
+	ag.Spec.Tracing = v2.TracingConfig{
+		Endpoint:    "https://collector.observability.svc.cluster.local:4317",
+		CABundleRef: &v2.LocalConfigMapReference{Name: "collector-ca"},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+
+	startActionsGatewayV2Reconciler(t)
+
+	unresolved := func() *metav1.Condition {
+		var got v2.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "otel"}, &got); err != nil {
+			return nil
+		}
+		return findCondition(got.Status.Conditions, v2.ConditionTracingCABundleUnresolved)
+	}
+	require.Eventually(t, func() bool {
+		c := unresolved()
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2.ReasonCABundleNotFound
+	}, 15*time.Second, 100*time.Millisecond, "a missing bundle must report")
+
+	var dep appsv1.Deployment
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "otel-agc"}, &dep),
+		"the AGC must be provisioned without the bundle")
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: "collector-ca", Namespace: ns},
+		Data:       map[string]string{"ca.crt": testCABundle(t)},
+	}
+	require.NoError(t, k8sClient.Create(ctx, cm))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), cm) })
+	require.Eventually(t, func() bool {
+		c := unresolved()
+		return c != nil && c.Status == metav1.ConditionFalse
+	}, 30*time.Second, 200*time.Millisecond, "applying the ConfigMap must clear the condition")
+}
+
 // TestV2_Tracing_PeerAndBundleReachTheAGC: the two fields arrive on the AGC's pod and
 // policy through the real apiserver, and the rule lands on the AGC's policy alone, so a
 // worker pod's untrusted job code still has no route to the collector.

@@ -69,6 +69,14 @@ const (
 	// holder goes to the GMC log, the same non-enumeration rule the admission error
 	// follows.
 	ConditionScaleSetNameCollision = "ScaleSetNameCollision"
+	// ConditionTracingCABundleUnresolved is an advisory condition (abnormal-is-True) set
+	// True on an ActionsGateway whose spec.tracing.caBundleRef names a ConfigMap that is
+	// missing or holds no parseable certificate. The AGC still runs, and its exporter
+	// keeps verifying against the system roots, so a private-CA collector receives
+	// nothing until the ref resolves and the AGC restarts. It never gates Ready, because
+	// traces are telemetry and a lost bundle must not stop CI.
+	ConditionTracingCABundleUnresolved = "TracingCABundleUnresolved"
+
 	// ConditionEgressAuditUnattributed is an advisory condition (abnormal-is-True) set
 	// True on an ActionsGateway or a RunnerSet when either half of the Q986
 	// egress-attribution pair is off, so nothing joins an egress audit record to a tenant
@@ -291,6 +299,9 @@ const (
 	// so the AGC cannot be provisioned with the trust it was asked to use (Degraded,
 	// fail closed: an appliance behind a private CA is unreachable without it).
 	ReasonCABundleNotFound = "CABundleNotFound"
+
+	// ReasonTracingCABundleResolved reports spec.tracing.caBundleRef unset or resolving.
+	ReasonTracingCABundleResolved = "TracingCABundleResolved"
 	// ReasonCABundleInvalid — the githubCABundleRef ConfigMap exists but carries no
 	// ca.crt key, or that key holds no parseable certificate. Distinct from
 	// CABundleNotFound so the operator sees a content problem, not a missing object.

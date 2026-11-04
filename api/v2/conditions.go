@@ -20,6 +20,7 @@ const (
 	ConditionAGCAutoscalingUnavailable   = apiconditions.ConditionAGCAutoscalingUnavailable
 	ConditionScaleSetNameCollision       = apiconditions.ConditionScaleSetNameCollision
 	ConditionEgressAuditUnattributed     = apiconditions.ConditionEgressAuditUnattributed
+	ConditionTracingCABundleUnresolved   = apiconditions.ConditionTracingCABundleUnresolved
 	ConditionPossibleReapBlockingSidecar = apiconditions.ConditionPossibleReapBlockingSidecar
 	ConditionWorkerQuotaPressure         = apiconditions.ConditionWorkerQuotaPressure
 	ConditionWorkerQuotaExceeded         = apiconditions.ConditionWorkerQuotaExceeded
@@ -70,6 +71,7 @@ const (
 	ReasonProxyDeleted             = apiconditions.ReasonProxyDeleted
 	ReasonProxyShareNotGranted     = apiconditions.ReasonProxyShareNotGranted
 	ReasonCABundleNotFound         = apiconditions.ReasonCABundleNotFound
+	ReasonTracingCABundleResolved  = apiconditions.ReasonTracingCABundleResolved
 	ReasonCABundleInvalid          = apiconditions.ReasonCABundleInvalid
 	ReasonNoActiveSessions         = apiconditions.ReasonNoActiveSessions
 	ReasonRunnerGroupNotFound      = apiconditions.ReasonRunnerGroupNotFound
