@@ -284,11 +284,18 @@ func setupGMC() {
 // release-Secret limit and `helm install` cannot store it. Server-side apply sidesteps
 // that and the 256 KB client-side apply ceiling.
 //
+// A cluster reused from a 1.x suite still holds the conversion webhook, and a caBundle
+// another manager set refuses the apply even when forced (Q1167), so the patch runs first.
+//
 // Installed before the GMC so its v2 informers sync on first start.
 func setupV2CRDs() {
 	By("installing the v2 (actions-gateway.com) CRDs from the actions-gateway-crds-v2 chart render")
-	render := fmt.Sprintf(
-		"set -o pipefail; helm template actions-gateway-crds-v2 %q --namespace %s | kubectl apply --server-side --force-conflicts -f -",
+	render := fmt.Sprintf(`set -o pipefail
+for crd in actionsgateways clusterrunnertemplates egressproxies runnersets runnertemplates; do
+  kubectl get crd "$crd.actions-gateway.com" >/dev/null 2>&1 || continue
+  kubectl patch crd "$crd.actions-gateway.com" --type=merge -p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}'
+done
+helm template actions-gateway-crds-v2 %q --namespace %s | kubectl apply --server-side --force-conflicts -f -`,
 		v2CRDChartDir(), gmcNamespace)
 	// G204: this one really does invoke a shell, so it is not covered by the
 	// constant-binary gosec exclusion in .golangci.yml and is accepted by hand.

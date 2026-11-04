@@ -254,9 +254,16 @@ preflight() {
 # no server-side apply removes, even forced, and the apiserver refuses v2's strategy
 # None beside it (measured on 1.36.1, Q1167). A no-op on a CRD with none.
 drop_crd_conversion_webhook() {
-	local crd
+	local crd stored present=()
 	for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
-		kubectl get crd "${crd}.actions-gateway.com" >/dev/null 2>&1 || continue
+		stored="$(kubectl get crd "${crd}.actions-gateway.com" -o jsonpath='{.status.storedVersions}' 2>/dev/null)" || continue
+		if [[ "${stored}" != '["v2"]' ]]; then
+			echo "ERROR: ${crd}.actions-gateway.com stores ${stored}. The apiserver refuses the v2 CRDs until it stores only v2, so nothing was changed: run the storage sweep in docs/operations/upgrade.md first." >&2
+			return 1
+		fi
+		present+=("${crd}")
+	done
+	for crd in "${present[@]}"; do
 		kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
 			-p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}'
 	done
@@ -280,11 +287,11 @@ install_crds() {
 	# it cannot depend on the release-only `v*` asset. --force-conflicts takes field
 	# ownership from any pre-Q277 helm-installed release of this chart so re-runs stay
 	# idempotent.
-	drop_crd_conversion_webhook
 	helm template actions-gateway-crds-v2 \
 		"${crd_src}/charts/actions-gateway-crds-v2" \
-		--namespace gmc-system \
-		| kubectl apply --server-side --force-conflicts -f -
+		--namespace gmc-system >"${crd_src}/crds.yaml"
+	drop_crd_conversion_webhook
+	kubectl apply --server-side --force-conflicts -f "${crd_src}/crds.yaml"
 	rm -rf "${crd_src}"
 	trap - EXIT
 }

@@ -79,6 +79,7 @@ POOLS_EXIST=1
 CONTEXT=""
 KEY_HEX="deadbeef"
 EXISTING_RUNNER_IMAGE=""
+CRD_STORED='["v2"]'
 GMC_IS_READY=0
 PREFLIGHT_RC=0
 export PREFLIGHT_RC
@@ -119,6 +120,7 @@ kubectl() {
 		esac
 		;;
 	*get\ runnertemplate*) echo "${EXISTING_RUNNER_IMAGE}" ;;
+	get\ crd*) printf '%s' "${CRD_STORED}" ;;
 	# The applies read a manifest on stdin; drain it so the writer never sees a
 	# closed pipe, and keep it so the rendered objects can be asserted on. Every
 	# apply looks alike in argv, so log a marker for the tenant CR — the ordering
@@ -183,6 +185,7 @@ reset_stubs() {
 	CONTEXT="gke_${PROJECT}_${ZONE}_${CLUSTER}"
 	KEY_HEX="deadbeef"
 	EXISTING_RUNNER_IMAGE=""
+	CRD_STORED='["v2"]'
 	GMC_IS_READY=0
 	PREFLIGHT_RC=0
 	DOGFOOD_RUNNER_IMAGE=""
@@ -394,6 +397,9 @@ check_before "installs the v2 CRDs before the GMC that serves them" \
 # A 1.x CRD's conversion webhook refuses the v2 apply until it is gone (Q1167).
 check_before "drops a 1.x conversion webhook before applying the v2 CRDs" \
 	"patch crd actionsgateways.actions-gateway.com" "apply --server-side --force-conflicts"
+# A failed render must not leave the webhook gone with no apply to follow it.
+check_before "renders the v2 CRDs before dropping the webhook" \
+	"helm template actions-gateway-crds-v2" "patch crd actionsgateways.actions-gateway.com"
 check_before "verifies the cluster context before installing anything" \
 	"config current-context" "upgrade --install gag"
 check_before "verifies the cluster context before creating the App Secret" \
@@ -406,6 +412,19 @@ run_main
 check "a failed preflight fails the bootstrap" 1 "${MAIN_RC}"
 check_not_contains "never installs onto a cluster that failed preflight" \
 	"upgrade --install gag" "$(cat "${CALL_LOG}")"
+
+# A CRD still storing an old version refuses the apply, and the webhook must still be
+# there when it does (Q1167).
+reset_stubs
+CRD_STORED='["v2beta1","v2"]'
+run_main
+check "a CRD storing an old version fails the bootstrap" 1 "${MAIN_RC}"
+check_contains "names the CRD and what it stores" \
+	'stores ["v2beta1","v2"]' "${MAIN_OUT}"
+check_not_contains "leaves the webhook in place when it refuses" \
+	"patch crd" "$(cat "${CALL_LOG}")"
+check_not_contains "never applies the CRDs when it refuses" \
+	"apply --server-side --force-conflicts" "$(cat "${CALL_LOG}")"
 
 # --- the GMC rollout ---------------------------------------------------------
 
