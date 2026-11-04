@@ -678,21 +678,21 @@ type ContainerSizingRecommendation struct {
 // v1alpha1. Worker pods are provisioned per acquired job and released on completion.
 //
 // The .spec.gatewayRef.name selectable field (KEP-4358, used by the AGC to scope its
-// RunnerSet watch server-side) is deliberately declared ONLY on v2alpha1, NOT here.
-// The apiserver hoists per-version selectableFields to spec level when they are
-// identical across all served versions, but leaves the schema per-version when the
-// versions' schemas differ (v2beta1 drops acquisitionProtocol/maxListeners). A
+// RunnerSet watch server-side) is declared on v2beta1 and v2, and deliberately NOT on
+// v2alpha1. A field selector is evaluated at the version a request names, so the
+// field must be declared on the version the AGC watches, which is v2 (Q1263). The
+// apiserver hoists per-version selectableFields to spec level when they are
+// identical across all versions, but leaves the schema per-version when the
+// versions' schemas differ (v2alpha1 keeps acquisitionProtocol/maxListeners). A
 // spec-level selectableFields with a nil spec-level schema is rejected
 // ("selectableFields may only be set when validations.schema is included"), so
-// declaring the field on both versions makes the RunnerSet CRD un-installable. The
-// AGC operates on v2alpha1 during coexistence, so v2alpha1 is the version that needs
-// the field selector; when v2beta1 becomes the sole served version (the v2alpha1
-// removal at the ScaleSet-only cut) the marker moves here and v2alpha1's is dropped —
-// so the two are never declared simultaneously. See Q74.
+// declaring the field on all three versions makes the RunnerSet CRD
+// un-installable. See Q74.
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rs,categories=actions-gateway
+// +kubebuilder:selectablefield:JSONPath=`.spec.gatewayRef.name`
 // +kubebuilder:printcolumn:name="Gateway",type=string,JSONPath=`.spec.gatewayRef.name`
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=`.status.activeSessions`
 // +kubebuilder:printcolumn:name="ActiveJobs",type=integer,JSONPath=`.status.activeJobs`

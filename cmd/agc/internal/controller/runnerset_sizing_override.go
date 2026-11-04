@@ -10,7 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // The Throughput sizing profile's mechanism is the ABSENCE of a runner-container
@@ -48,9 +48,9 @@ import (
 //
 // A pod list failure leaves the condition untouched rather than writing a verdict
 // from evidence it does not have; the next reconcile retries.
-func (r *RunnerSetReconciler) applySizingProfileOverride(ctx context.Context, rs *v2alpha1.RunnerSet, template *v2alpha1.RunnerTemplateSpec) {
-	if rs.Spec.Sizing == nil || rs.Spec.Sizing.Profile != v2alpha1.SizingProfileThroughput {
-		meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionSizingProfileOverridden)
+func (r *RunnerSetReconciler) applySizingProfileOverride(ctx context.Context, rs *v2.RunnerSet, template *v2.RunnerTemplateSpec) {
+	if rs.Spec.Sizing == nil || rs.Spec.Sizing.Profile != v2.SizingProfileThroughput {
+		meta.RemoveStatusCondition(&rs.Status.Conditions, v2.ConditionSizingProfileOverridden)
 		return
 	}
 
@@ -65,23 +65,23 @@ func (r *RunnerSetReconciler) applySizingProfileOverride(ctx context.Context, rs
 	observed, injected := scanForInjectedCPULimit(pods.Items, template)
 
 	cond := metav1.Condition{
-		Type:               v2alpha1.ConditionSizingProfileOverridden,
+		Type:               v2.ConditionSizingProfileOverridden,
 		Status:             metav1.ConditionFalse,
-		Reason:             v2alpha1.ReasonAwaitingWorkerPods,
+		Reason:             v2.ReasonAwaitingWorkerPods,
 		Message:            "the Throughput profile has built no worker pod yet; nothing to compare against what the apiserver admits",
 		ObservedGeneration: rs.Generation,
 	}
 	switch {
 	case injected != nil:
 		cond.Status = metav1.ConditionTrue
-		cond.Reason = v2alpha1.ReasonCPULimitInjected
+		cond.Reason = v2.ReasonCPULimitInjected
 		cond.Message = fmt.Sprintf(
 			"worker pod %s was built with no CPU limit on container %s and admitted with one (%s), so jobs are capped and the Throughput profile has no effect. "+
 				"Something mutates the pod at admission — most often a namespace LimitRange with a Container-type cpu default, otherwise a mutating webhook or policy engine. "+
 				"Check `kubectl get limitrange -n %s -o yaml` first; then drop the cpu default, or select Binpack (which sets its own limit)",
 			injected.pod, injected.container, injected.cpu, rs.Namespace)
 	case observed > 0:
-		cond.Reason = v2alpha1.ReasonNoCPULimitInjected
+		cond.Reason = v2.ReasonNoCPULimitInjected
 		cond.Message = fmt.Sprintf(
 			"%d profile-built worker pod(s) reached the kubelet as built, with no CPU limit on the profile's containers; jobs burst as Throughput intends", observed)
 	}
@@ -104,7 +104,7 @@ type injectedCPULimit struct {
 // the limit is not the profile's business and must not trip the condition. Pods being
 // deleted are skipped: a pod on its way out cannot mislead an operator about what runs
 // now, and its spec is frozen evidence of an older state.
-func scanForInjectedCPULimit(pods []corev1.Pod, template *v2alpha1.RunnerTemplateSpec) (observed int, found *injectedCPULimit) {
+func scanForInjectedCPULimit(pods []corev1.Pod, template *v2.RunnerTemplateSpec) (observed int, found *injectedCPULimit) {
 	if template == nil {
 		return 0, nil
 	}
@@ -118,7 +118,7 @@ func scanForInjectedCPULimit(pods []corev1.Pod, template *v2alpha1.RunnerTemplat
 		if !pod.DeletionTimestamp.IsZero() {
 			continue
 		}
-		if pod.Annotations[provisioner.AnnotationSizingProfile] != v2alpha1.SizingProfileThroughput {
+		if pod.Annotations[provisioner.AnnotationSizingProfile] != v2.SizingProfileThroughput {
 			continue
 		}
 		observed++

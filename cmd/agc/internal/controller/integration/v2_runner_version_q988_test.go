@@ -11,7 +11,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage/runnerimagetest"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -60,16 +60,16 @@ func setupRegistrySet(t *testing.T, ns, image string, pullSecret string, tweak f
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 }
 
 func runnerVersionMessage(t *testing.T, ns, name string) string {
 	t.Helper()
-	var rs v2alpha1.RunnerSet
+	var rs v2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs))
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerVersionTooOld)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerVersionTooOld)
 	require.NotNil(t, c)
 	return c.Message
 }
@@ -90,18 +90,18 @@ func TestV2_RegistryRead_DigestOnlyImageGetsVerdict(t *testing.T) {
 	createNSForAGC(t, ns)
 	setupRegistrySet(t, ns, reg.Image("acme/runner", "@"+digest), "", withRegistry(reg, ns))
 
-	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionUnknown, v2alpha1.ReasonWorkerImageVersionUnknown)
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionUnknown, v2.ReasonWorkerImageVersionUnknown)
 	assert.Contains(t, runnerVersionMessage(t, ns, "set"), "in progress")
 	time.Sleep(3 * time.Second) // let the echo reconciles settle while the layer is held
 
 	close(reg.HoldBlobs)
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "set"}, &rs); err != nil {
 			return false
 		}
-		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerVersionTooOld)
-		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2alpha1.ReasonWorkerImageBelowMinimum
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerVersionTooOld)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2.ReasonWorkerImageBelowMinimum
 	}, 3*time.Second, 50*time.Millisecond, "the reading must reach status through the wake, not a later resync")
 	msg := runnerVersionMessage(t, ns, "set")
 	assert.Contains(t, msg, "read from the registry at "+digest)
@@ -125,7 +125,7 @@ func TestV2_RegistryRead_PullSecretFromTemplate(t *testing.T) {
 	}))
 	setupRegistrySet(t, ns, reg.Image("acme/runner", ":v3-cuda"), "regcred", withRegistry(reg, ns))
 
-	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonWorkerImageCurrent)
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2.ReasonWorkerImageCurrent)
 	assert.Contains(t, runnerVersionMessage(t, ns, "set"), "read from the registry")
 }
 
@@ -143,13 +143,13 @@ func TestV2_RegistryRead_UnreachableKeepsTagVerdict(t *testing.T) {
 		r.ImageResolver = &runnerimage.Resolver{HTTP: hc}
 	})
 
-	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonWorkerImageCurrent)
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2.ReasonWorkerImageCurrent)
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, client.ObjectKey{Namespace: ns, Name: "set"}, &rs); err != nil {
 			return false
 		}
-		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerVersionTooOld)
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerVersionTooOld)
 		return c != nil && c.Status == metav1.ConditionFalse &&
 			strings.Contains(c.Message, "registry read of the image failed")
 	}, 20*time.Second, 100*time.Millisecond, "the failed read is reported on the standing tag verdict")

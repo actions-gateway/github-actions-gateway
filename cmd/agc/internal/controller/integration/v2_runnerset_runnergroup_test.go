@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +42,7 @@ func TestV2_RunnerSet_ScaleSet_GatewayDefaultRunnerGroupReachesGitHub(t *testing
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), gw)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns},
 		})
 	})
@@ -56,7 +56,7 @@ func TestV2_RunnerSet_ScaleSet_GatewayDefaultRunnerGroupReachesGitHub(t *testing
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register the scale set")
 
-	waitForSetReadyReason(t, ns, "ss-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	group, ok := srv.ScaleSetGroupID(ssID)
 	require.True(t, ok)
@@ -85,14 +85,14 @@ func TestV2_RunnerSet_ScaleSet_UnknownRunnerGroupFailsClosed(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), gw)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns},
 		})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
 
-	waitForSetReadyReason(t, ns, "ss-set", metav1.ConditionFalse, v2alpha1.ReasonRunnerGroupNotFound)
+	waitForSetReadyReason(t, ns, "ss-set", metav1.ConditionFalse, v2.ReasonRunnerGroupNotFound)
 
 	_, registered := srv.ScaleSetIDByName(label)
 	assert.False(t, registered,

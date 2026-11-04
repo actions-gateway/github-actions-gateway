@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // errRESTMapper is a meta.RESTMapper whose RESTMapping always returns a
@@ -38,8 +38,8 @@ func TestRunnerSetInstalled_Absent(t *testing.T) {
 }
 
 func TestRunnerSetInstalled_Present(t *testing.T) {
-	mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{agcv2alpha1.GroupVersion})
-	mapper.Add(agcv2alpha1.GroupVersion.WithKind("RunnerSet"), meta.RESTScopeNamespace)
+	mapper := meta.NewDefaultRESTMapper([]schema.GroupVersion{agcv2.GroupVersion})
+	mapper.Add(agcv2.GroupVersion.WithKind("RunnerSet"), meta.RESTScopeNamespace)
 
 	installed, err := RunnerSetInstalled(mapper)
 	if err != nil {

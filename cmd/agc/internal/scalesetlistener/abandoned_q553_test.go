@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -167,13 +167,13 @@ func TestListener_AbandonedAssignmentClearsTheStall(t *testing.T) {
 
 	jobID := stallJob(t, srv, ssID, m, 1)
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue, v2alpha1.ReasonRunnerNameConflict)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionTrue, v2.ReasonRunnerNameConflict)
 	}, 5*time.Second, 10*time.Millisecond, "the held job must be reported as a stall")
 
 	require.True(t, srv.DropAssignedJob(ssID, jobID))
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse, v2alpha1.ReasonJobsProvisioning)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionFalse, v2.ReasonJobsProvisioning)
 	}, 5*time.Second, 10*time.Millisecond,
 		"abandoning the last held assignment must clear the stall condition")
 	assert.Equal(t, 1, sink.eventCount("AssignmentAbandoned"),

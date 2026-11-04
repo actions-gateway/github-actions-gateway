@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 func overrideScheme(t *testing.T) *runtime.Scheme {
@@ -25,7 +25,7 @@ func overrideScheme(t *testing.T) *runtime.Scheme {
 	if err := corev1.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
-	if err := v2alpha1.AddToScheme(s); err != nil {
+	if err := v2.AddToScheme(s); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -54,9 +54,9 @@ func sizedWorkerPod(name, profile string, limits corev1.ResourceList, extra ...c
 	return p
 }
 
-func throughputSet() *v2alpha1.RunnerSet {
+func throughputSet() *v2.RunnerSet {
 	rs := sizingTestSet()
-	rs.Spec.Sizing = &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput}
+	rs.Spec.Sizing = &v2.WorkerSizing{Profile: v2.SizingProfileThroughput}
 	return rs
 }
 
@@ -67,26 +67,26 @@ func overrideReconciler(t *testing.T, objs ...client.Object) *RunnerSetReconcile
 	}
 }
 
-func findOverride(rs *v2alpha1.RunnerSet) *metav1.Condition {
-	return meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionSizingProfileOverridden)
+func findOverride(rs *v2.RunnerSet) *metav1.Condition {
+	return meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionSizingProfileOverridden)
 }
 
 // runnerTemplate is the one-container template the pods above are built from.
-func runnerTemplate() *v2alpha1.RunnerTemplateSpec {
+func runnerTemplate() *v2.RunnerTemplateSpec {
 	return templateWithRunnerResources(corev1.ResourceRequirements{})
 }
 
 // TestSizingOverrideCPULimitInjected is the silent cancellation Q489 exists for: a
 // pod the profile built with no CPU limit is running with one.
 func TestSizingOverrideCPULimitInjected(t *testing.T) {
-	r := overrideReconciler(t, sizedWorkerPod("runner-abc", v2alpha1.SizingProfileThroughput,
+	r := overrideReconciler(t, sizedWorkerPod("runner-abc", v2.SizingProfileThroughput,
 		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")}))
 	rs := throughputSet()
 
 	r.applySizingProfileOverride(context.Background(), rs, runnerTemplate())
 
 	cond := findOverride(rs)
-	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != v2alpha1.ReasonCPULimitInjected {
+	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != v2.ReasonCPULimitInjected {
 		t.Fatalf("SizingProfileOverridden = %+v, want True/CPULimitInjected", cond)
 	}
 	if cond.ObservedGeneration != 3 {
@@ -102,8 +102,8 @@ func TestSizingOverrideCPULimitInjected(t *testing.T) {
 // TestSizingOverrideCleanPods: profile-built pods admitted as built.
 func TestSizingOverrideCleanPods(t *testing.T) {
 	r := overrideReconciler(t,
-		sizedWorkerPod("runner-a", v2alpha1.SizingProfileThroughput, nil),
-		sizedWorkerPod("runner-b", v2alpha1.SizingProfileThroughput,
+		sizedWorkerPod("runner-a", v2.SizingProfileThroughput, nil),
+		sizedWorkerPod("runner-b", v2.SizingProfileThroughput,
 			corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")}), // memory limit is the profile's own
 	)
 	rs := throughputSet()
@@ -111,7 +111,7 @@ func TestSizingOverrideCleanPods(t *testing.T) {
 	r.applySizingProfileOverride(context.Background(), rs, runnerTemplate())
 
 	cond := findOverride(rs)
-	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2alpha1.ReasonNoCPULimitInjected {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2.ReasonNoCPULimitInjected {
 		t.Fatalf("SizingProfileOverridden = %+v, want False/NoCPULimitInjected", cond)
 	}
 	if !strings.Contains(cond.Message, "2 profile-built") {
@@ -125,7 +125,7 @@ func TestSizingOverrideCleanPods(t *testing.T) {
 func TestSizingOverrideIgnoresPodsTheProfileDidNotBuild(t *testing.T) {
 	r := overrideReconciler(t,
 		sizedWorkerPod("runner-old", "", corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4")}),
-		sizedWorkerPod("runner-binpack", v2alpha1.SizingProfileBinpack,
+		sizedWorkerPod("runner-binpack", v2.SizingProfileBinpack,
 			corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("4")}),
 	)
 	rs := throughputSet()
@@ -133,7 +133,7 @@ func TestSizingOverrideIgnoresPodsTheProfileDidNotBuild(t *testing.T) {
 	r.applySizingProfileOverride(context.Background(), rs, runnerTemplate())
 
 	cond := findOverride(rs)
-	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2alpha1.ReasonAwaitingWorkerPods {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2.ReasonAwaitingWorkerPods {
 		t.Fatalf("SizingProfileOverridden = %+v, want False/AwaitingWorkerPods", cond)
 	}
 }
@@ -145,13 +145,13 @@ func TestSizingOverrideIgnoresInjectedSidecars(t *testing.T) {
 		Name:      "istio-proxy",
 		Resources: corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("1")}},
 	}
-	r := overrideReconciler(t, sizedWorkerPod("runner-mesh", v2alpha1.SizingProfileThroughput, nil, sidecar))
+	r := overrideReconciler(t, sizedWorkerPod("runner-mesh", v2.SizingProfileThroughput, nil, sidecar))
 	rs := throughputSet()
 
 	r.applySizingProfileOverride(context.Background(), rs, runnerTemplate())
 
 	cond := findOverride(rs)
-	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2alpha1.ReasonNoCPULimitInjected {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2.ReasonNoCPULimitInjected {
 		t.Fatalf("SizingProfileOverridden = %+v, want False/NoCPULimitInjected", cond)
 	}
 }
@@ -159,7 +159,7 @@ func TestSizingOverrideIgnoresInjectedSidecars(t *testing.T) {
 // TestSizingOverrideIgnoresDeletingPods: a pod on its way out is frozen evidence of
 // an older state and cannot describe what runs now.
 func TestSizingOverrideIgnoresDeletingPods(t *testing.T) {
-	dying := sizedWorkerPod("runner-dying", v2alpha1.SizingProfileThroughput,
+	dying := sizedWorkerPod("runner-dying", v2.SizingProfileThroughput,
 		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")})
 	now := metav1.Now()
 	dying.DeletionTimestamp = &now
@@ -170,7 +170,7 @@ func TestSizingOverrideIgnoresDeletingPods(t *testing.T) {
 	r.applySizingProfileOverride(context.Background(), rs, runnerTemplate())
 
 	cond := findOverride(rs)
-	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2alpha1.ReasonAwaitingWorkerPods {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2.ReasonAwaitingWorkerPods {
 		t.Fatalf("SizingProfileOverridden = %+v, want False/AwaitingWorkerPods", cond)
 	}
 }
@@ -178,16 +178,16 @@ func TestSizingOverrideIgnoresDeletingPods(t *testing.T) {
 // TestSizingOverrideOtherProfilesRemoveIt: Throughput-only, and switching away drops
 // a previously-True alarm rather than stranding it.
 func TestSizingOverrideOtherProfilesRemoveIt(t *testing.T) {
-	r := overrideReconciler(t, sizedWorkerPod("runner-abc", v2alpha1.SizingProfileThroughput,
+	r := overrideReconciler(t, sizedWorkerPod("runner-abc", v2.SizingProfileThroughput,
 		corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")}))
 
 	for _, tc := range []struct {
 		name   string
-		sizing *v2alpha1.WorkerSizing
+		sizing *v2.WorkerSizing
 	}{
-		{"binpack", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack}},
-		{"static", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileStatic}},
-		{"nodeshare", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileNodeShare}},
+		{"binpack", &v2.WorkerSizing{Profile: v2.SizingProfileBinpack}},
+		{"static", &v2.WorkerSizing{Profile: v2.SizingProfileStatic}},
+		{"nodeshare", &v2.WorkerSizing{Profile: v2.SizingProfileNodeShare}},
 		{"unset", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -222,16 +222,16 @@ func TestSizingOverrideListErrorWritesNoVerdict(t *testing.T) {
 	}
 	rs := throughputSet()
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:    v2alpha1.ConditionSizingProfileOverridden,
+		Type:    v2.ConditionSizingProfileOverridden,
 		Status:  metav1.ConditionTrue,
-		Reason:  v2alpha1.ReasonCPULimitInjected,
+		Reason:  v2.ReasonCPULimitInjected,
 		Message: "from an earlier reconcile",
 	})
 
 	r.applySizingProfileOverride(context.Background(), rs, runnerTemplate())
 
 	cond := findOverride(rs)
-	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != v2alpha1.ReasonCPULimitInjected {
+	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != v2.ReasonCPULimitInjected {
 		t.Fatalf("SizingProfileOverridden = %+v, want the prior verdict left untouched", cond)
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
@@ -42,10 +42,10 @@ func TestRunnerSetReconcile_ShareResolvedSetKeepsRecheckingTheGrant(t *testing.T
 	scheme := runnerSetTestScheme(t)
 	gw := gwObj("gw", ns, "")
 	tmpl := tmplObj("tmpl", ns)
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer} // skip the finalizer-add requeue
 		rs.Spec.RunnerLabels = []string{label}
-		rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: proxyName, Namespace: proxyNS}
+		rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: proxyName, Namespace: proxyNS}
 	})
 	// What the GMC projects into a granted consumer namespace; its presence is the grant.
 	share := &corev1.ConfigMap{
@@ -69,7 +69,7 @@ func TestRunnerSetReconcile_ShareResolvedSetKeepsRecheckingTheGrant(t *testing.T
 		Client:      c,
 		Log:         slog.Default(),
 		Provisioner: p,
-		ScaleSetClientFactory: func(*v2alpha1.RunnerSet, *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+		ScaleSetClientFactory: func(*v2.RunnerSet, *v2.ActionsGateway) (*scaleset.Client, error) {
 			return newReapScaleSetClient(t, srv), nil
 		},
 		ProxyShareRecheckInterval: recheck,
@@ -81,10 +81,10 @@ func TestRunnerSetReconcile_ShareResolvedSetKeepsRecheckingTheGrant(t *testing.T
 		ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: "set"}})
 	require.NoError(t, err)
 
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(context.Background(),
 		types.NamespacedName{Namespace: ns, Name: "set"}, &got))
-	require.Equal(t, v2alpha1.ProxyModeProxied, got.Status.ProxyMode,
+	require.Equal(t, v2.ProxyModeProxied, got.Status.ProxyMode,
 		"the set must have resolved through the projection, or this asserts nothing")
 
 	assert.Equal(t, recheck, res.RequeueAfter,

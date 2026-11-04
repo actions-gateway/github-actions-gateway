@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
@@ -104,9 +105,10 @@ func TestV2_RunnerSet_GatewayRefSelectableField(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, b))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, a); _ = k8sClient.Delete(ctx, b) })
 
-	// The CRD declares spec.gatewayRef.name a selectable field (KEP-4358), so the
-	// apiserver filters server-side — the mechanism M3b's AGC watch-scoping relies on.
-	var list agcv2alpha1.RunnerSetList
+	// The CRD declares spec.gatewayRef.name a selectable field (KEP-4358) at v2, the
+	// version the AGC watches, so the apiserver filters server-side — the mechanism
+	// M3b's AGC watch-scoping relies on. v2alpha1 does not declare it (RunnerSet's godoc).
+	var list agcv2.RunnerSetList
 	require.NoError(t, k8sClient.List(ctx, &list,
 		client.InNamespace(ns),
 		client.MatchingFields{"spec.gatewayRef.name": "gw-a"}))

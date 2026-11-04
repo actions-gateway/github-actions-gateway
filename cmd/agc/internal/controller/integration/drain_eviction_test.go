@@ -15,7 +15,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
@@ -191,8 +191,8 @@ func TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv, func(p *provisioner.Provisioner) {
@@ -206,7 +206,7 @@ func TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover(t *testing.T) {
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, "ss-drain", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-drain", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	srv.EnqueueJob(ssID)
 
@@ -274,8 +274,8 @@ func TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv, func(p *provisioner.Provisioner) {
@@ -289,7 +289,7 @@ func TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers(t *testing.T) {
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, "ss-drain-mark", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-drain-mark", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	srv.EnqueueJob(ssID)
 
@@ -370,8 +370,8 @@ func TestAGC_Preemption_ScaleSetWorker_IsRecovered(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv, func(p *provisioner.Provisioner) {
@@ -385,7 +385,7 @@ func TestAGC_Preemption_ScaleSetWorker_IsRecovered(t *testing.T) {
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, "ss-preempt", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-preempt", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	srv.EnqueueJob(ssID)
 
@@ -510,12 +510,12 @@ func TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld(t *testin
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	shared := scaleSetClientsFor(srv)
-	r, _ := startRunnerSetReconcilerWithScaleSetClients(t, func(set *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+	r, _ := startRunnerSetReconcilerWithScaleSetClients(t, func(set *v2.RunnerSet, gw *v2.ActionsGateway) (*scaleset.Client, error) {
 		if set.Name != holdingSet {
 			return shared(set, gw)
 		}
@@ -538,7 +538,7 @@ func TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld(t *testin
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, "ss-drain-held", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-drain-held", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	srv.EnqueueJob(ssID)
 

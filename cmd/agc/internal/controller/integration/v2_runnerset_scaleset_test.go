@@ -20,7 +20,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/prometheus/client_golang/prometheus"
@@ -75,12 +75,12 @@ func startRunnerSetReconcilerWithScaleSet(t *testing.T, srv *scalesettest.Server
 }
 
 // scaleSetClientFactory is the RunnerSetReconciler.ScaleSetClientFactory signature.
-type scaleSetClientFactory = func(*v2alpha1.RunnerSet, *v2alpha1.ActionsGateway) (*scaleset.Client, error)
+type scaleSetClientFactory = func(*v2.RunnerSet, *v2.ActionsGateway) (*scaleset.Client, error)
 
 // scaleSetClientsFor is the factory that points every set's protocol client at one
 // fake.
 func scaleSetClientsFor(srv *scalesettest.Server) scaleSetClientFactory {
-	return func(_ *v2alpha1.RunnerSet, _ *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+	return func(_ *v2.RunnerSet, _ *v2.ActionsGateway) (*scaleset.Client, error) {
 		return scaleset.New(scaleset.Config{
 			TokenProvider: stubProvider{},
 			ConfigURL:     "https://github.com/acme",
@@ -162,17 +162,16 @@ func startRunnerSetReconcilerWithScaleSetClients(t *testing.T, clients scaleSetC
 	return r, stop
 }
 
-// newScaleSetRunnerSet builds a ScaleSet-protocol RunnerSet whose single runnerLabel
+// newScaleSetRunnerSet builds a RunnerSet whose single runnerLabel
 // (its scale set's name) is label, with maxWorkers as the advertised capacity ceiling.
-func newScaleSetRunnerSet(name, ns, gateway, label string, maxWorkers int32) *v2alpha1.RunnerSet {
-	return &v2alpha1.RunnerSet{
+func newScaleSetRunnerSet(name, ns, gateway, label string, maxWorkers int32) *v2.RunnerSet {
+	return &v2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:          v2alpha1.ObjectRef{Name: gateway},
-			TemplateRef:         &v2alpha1.ObjectRef{Name: "tmpl"},
-			RunnerLabels:        []string{label},
-			AcquisitionProtocol: v2alpha1.AcquisitionProtocolScaleSet,
-			MaxWorkers:          ptr.To(maxWorkers),
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:   v2.ObjectRef{Name: gateway},
+			TemplateRef:  &v2.ObjectRef{Name: "tmpl"},
+			RunnerLabels: []string{label},
+			MaxWorkers:   ptr.To(maxWorkers),
 		},
 	}
 }
@@ -196,8 +195,8 @@ func TestV2_RunnerSet_ScaleSet_ProvisionsWorkerOnJobAssigned(t *testing.T) {
 	rs := newScaleSetRunnerSet("ss-set", ns, "gw", label, 3)
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -212,7 +211,7 @@ func TestV2_RunnerSet_ScaleSet_ProvisionsWorkerOnJobAssigned(t *testing.T) {
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register one scale set named %q", label)
 
 	// The set reports Ready=True/ListenerActive with one session (one per scale set).
-	waitForSetReadyReason(t, ns, "ss-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 	require.True(t, srv.HasActiveSession(ssID), "the listener must hold one active session")
 
 	// 2. A JobAssigned from the fake provisions exactly one worker pod carrying the
@@ -307,7 +306,7 @@ func TestV2_RunnerSet_ScaleSet_ProvisionsWorkerOnJobAssigned(t *testing.T) {
 
 	// The RunnerSet object is fully gone (finalizer removed).
 	require.Eventually(t, func() bool {
-		var got v2alpha1.RunnerSet
+		var got v2.RunnerSet
 		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "ss-set"}, &got)
 		return apierrors.IsNotFound(err)
 	}, 20*time.Second, 100*time.Millisecond, "the RunnerSet finalizer must be removed after teardown")
@@ -334,8 +333,8 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -346,13 +345,13 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register the scale set")
-	waitForSetReadyReason(t, ns, "cond-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "cond-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	key := types.NamespacedName{Namespace: ns, Name: "cond-set"}
 	// pokeSet touches an annotation so the reconciler runs and drains the condition
 	// channel (conditions are recorded on the next reconcile).
 	pokeSet := func() {
-		var got v2alpha1.RunnerSet
+		var got v2.RunnerSet
 		if err := k8sClient.Get(ctx, key, &got); err != nil {
 			return
 		}
@@ -363,7 +362,7 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 		_ = k8sClient.Update(ctx, &got)
 	}
 	setCondition := func(condType string) *metav1.Condition {
-		var got v2alpha1.RunnerSet
+		var got v2.RunnerSet
 		if err := k8sClient.Get(ctx, key, &got); err != nil {
 			return nil
 		}
@@ -373,8 +372,8 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 	// 1. Healthy baseline: the started listener publishes Degraded=False/SessionAuthorized.
 	require.Eventually(t, func() bool {
 		pokeSet()
-		c := setCondition(v2alpha1.ConditionDegraded)
-		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2alpha1.ReasonSessionAuthorized
+		c := setCondition(v2.ConditionDegraded)
+		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2.ReasonSessionAuthorized
 	}, 20*time.Second, 200*time.Millisecond, "a healthy ScaleSet set must report Degraded=False/SessionAuthorized")
 
 	// 2. Revoke the credentials: the cached queue token 401s the poll and the refresh
@@ -384,8 +383,8 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 	srv.ExpireQueueToken(ssID)
 	require.Eventually(t, func() bool {
 		pokeSet()
-		c := setCondition(v2alpha1.ConditionDegraded)
-		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2alpha1.ReasonSessionUnauthorized
+		c := setCondition(v2.ConditionDegraded)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2.ReasonSessionUnauthorized
 	}, 20*time.Second, 200*time.Millisecond, "an unauthorized session refresh must surface Degraded=True on status")
 
 	// 3. Restore the credentials: the next refresh succeeds and the listener clears
@@ -393,8 +392,8 @@ func TestV2_RunnerSet_ScaleSet_SessionFailureConditionsReachStatus(t *testing.T)
 	srv.FailSessionRefresh(false)
 	require.Eventually(t, func() bool {
 		pokeSet()
-		c := setCondition(v2alpha1.ConditionDegraded)
-		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2alpha1.ReasonSessionAuthorized
+		c := setCondition(v2.ConditionDegraded)
+		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == v2.ReasonSessionAuthorized
 	}, 20*time.Second, 200*time.Millisecond, "recovery must clear Degraded back to False/SessionAuthorized")
 }
 
@@ -450,8 +449,8 @@ func TestV2_RunnerSet_ScaleSet_EvictedWorkerTriggersRerun(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv, func(p *provisioner.Provisioner) {
@@ -465,7 +464,7 @@ func TestV2_RunnerSet_ScaleSet_EvictedWorkerTriggersRerun(t *testing.T) {
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, "ss-evict", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-evict", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	srv.EnqueueJob(ssID)
 
@@ -552,8 +551,8 @@ func TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -564,7 +563,7 @@ func TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion(t *testing.T) {
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, "ss-reclaim", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-reclaim", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	_, jobID := srv.EnqueueJob(ssID)
 
@@ -612,7 +611,7 @@ func TestV2_RunnerSet_ScaleSet_ReclaimsJobSecretOnCompletion(t *testing.T) {
 	}, 20*time.Second, 50*time.Millisecond,
 		"a completed job's JIT-config Secret must be reclaimed, not left for the RunnerSet's cascade-GC")
 
-	var stillThere v2alpha1.RunnerSet
+	var stillThere v2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "ss-reclaim"}, &stillThere),
 		"the RunnerSet must still exist — the reclaim is steady-state, not teardown")
 }
@@ -652,7 +651,7 @@ func TestV2_RunnerSet_ScaleSet_QuotaHeadroomBoundsAdvertisedCapacity(t *testing.
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -663,7 +662,7 @@ func TestV2_RunnerSet_ScaleSet_QuotaHeadroomBoundsAdvertisedCapacity(t *testing.
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register one scale set named %q", label)
-	waitForSetReadyReason(t, ns, "ss-quota", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "ss-quota", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// The advertised capacity reaches zero, and the withheld gauge names the rung that
 	// took it — this tier's answer to "why did assignments stop", since the classic
@@ -731,9 +730,9 @@ func TestV2_RunnerSet_ScaleSet_ReapDeregistersRunnerRecord(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		bg := context.Background()
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "ss-set", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "ss-set", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)

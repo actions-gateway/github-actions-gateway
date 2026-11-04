@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -107,9 +107,9 @@ func TestRunnerSetTarget_QuotaExhausted_HonoursSizingProfile(t *testing.T) {
 	tmpl.Spec.PodTemplate.Spec.Containers[0].Resources = corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")},
 	}
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
-		rs.Spec.Sizing = &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack}
-		rs.Status.SizingRecommendation = []v2alpha1.ContainerSizingRecommendation{{
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
+		rs.Spec.Sizing = &v2.WorkerSizing{Profile: v2.SizingProfileBinpack}
+		rs.Status.SizingRecommendation = []v2.ContainerSizingRecommendation{{
 			Container:    "runner",
 			Requests:     corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("250m"), corev1.ResourceMemory: resource.MustParse("1Gi")},
 			Limits:       corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")},
@@ -126,7 +126,7 @@ func TestRunnerSetTarget_QuotaExhausted_HonoursSizingProfile(t *testing.T) {
 	assert.False(t, exhausted, "the gate must charge the sizing-adjusted request, not the template's: %s", detail)
 
 	// Sanity: the same shape drives the advisory condition.
-	var live v2alpha1.RunnerSet
+	var live v2.RunnerSet
 	require.NoError(t, target.client.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "set"}, &live))
 	podSpec := runnerSetWorkerPodSpec(&live, &tmpl.Spec)
 	cpu := podSpec.Containers[0].Resources.Requests[corev1.ResourceCPU]

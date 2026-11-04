@@ -778,6 +778,7 @@ What that changes when onboarding a v2 tenant:
 - **Kubernetes ≥ 1.31 required.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, via a server-side CRD field selector (KEP-4358) that is alpha-off on 1.30.
   On a 1.30 cluster a v2 AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the pod never becomes ready.
   Confirm the cluster is ≥ 1.31 before onboarding any v2 gateway.
+  The same error on ≥ 1.31 means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
 - **Co-located gateways share one namespace security profile.** In v2 the Pod Security level is a property of the **namespace**, not the gateway (see the v2 callout in [Pre-Conditions](#pre-conditions)) — so all gateways in a namespace run under the same `actions-gateway.com/security-profile` label.
   Tenants needing different postures (e.g.
   `baseline` vs `privileged`) still use separate namespaces, exactly as in v1.

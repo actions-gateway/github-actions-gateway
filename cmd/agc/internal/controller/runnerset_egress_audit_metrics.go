@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,7 +50,7 @@ func (c *runnerSetEgressAuditCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var list v2alpha1.RunnerSetList
+	var list v2.RunnerSetList
 	if err := c.reader.List(ctx, &list); err != nil {
 		return
 	}
@@ -59,12 +59,12 @@ func (c *runnerSetEgressAuditCollector) Collect(ch chan<- prometheus.Metric) {
 		if !rs.DeletionTimestamp.IsZero() {
 			continue
 		}
-		cond := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionEgressAuditUnattributed)
+		cond := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionEgressAuditUnattributed)
 		if cond == nil {
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(c.unattributed, prometheus.GaugeValue,
-			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionEgressAuditUnattributed),
+			conditionGaugeValue(rs.Status.Conditions, v2.ConditionEgressAuditUnattributed),
 			rs.Namespace, rs.Name, cond.Reason)
 	}
 }

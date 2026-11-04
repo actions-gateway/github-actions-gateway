@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,17 +46,17 @@ import (
 // changes only and both signals move without one: a Pending pod crossing its
 // scheduling grace (Q157), and a bound pod that has yet to declare a startup verdict
 // either way (Q714, published unconditionally since Q906).
-func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context, rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec, gw *v2alpha1.ActionsGateway) time.Duration {
+func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context, rs *v2.RunnerSet, tmpl *v2.RunnerTemplateSpec, gw *v2.ActionsGateway) time.Duration {
 	wq := r.evalRunnerSetWorkerQuota(ctx, rs, tmpl)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionWorkerQuotaPressure,
+		Type:               v2.ConditionWorkerQuotaPressure,
 		Status:             boolConditionStatus(wq.pressure),
 		Reason:             wq.pressureReason,
 		Message:            wq.pressureMessage,
 		ObservedGeneration: rs.Generation,
 	})
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionWorkerQuotaExceeded,
+		Type:               v2.ConditionWorkerQuotaExceeded,
 		Status:             boolConditionStatus(wq.exceeded),
 		Reason:             wq.exceededReason,
 		Message:            wq.exceededMessage,
@@ -64,9 +64,9 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 	})
 
 	unsched := r.evalRunnerSetWorkersUnschedulable(ctx, rs)
-	wasUnsched := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+	wasUnsched := meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkersUnschedulable)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionWorkersUnschedulable,
+		Type:               v2.ConditionWorkersUnschedulable,
 		Status:             boolConditionStatus(unsched.unschedulable),
 		Reason:             unsched.reason,
 		Message:            unsched.message,
@@ -82,10 +82,9 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 	// startupRecheck is folded in HERE rather than only inside the gate (Q906). A bound
 	// worker pod that has not resolved either way changes no phase, and the Pod watch
 	// drops phase-less updates, so on an ungated set — the default — this is what comes
-	// back to publish or clear WorkersNotStarting. The classic path also has a baseline
-	// re-check, but only while its listener pool is short of MaxListeners, and the
-	// scale-set path has none at all; neither is a substitute. The gate adds the same
-	// re-check on its own path; soonest makes the overlap free.
+	// back to publish or clear WorkersNotStarting. The scale-set path has no baseline
+	// re-check of its own. The gate adds the same re-check on its own path; soonest
+	// makes the overlap free.
 	return soonest(soonest(unsched.requeueAfter, startupRecheck(unsched)), gateRecheck)
 }
 
@@ -103,17 +102,17 @@ func (r *RunnerSetReconciler) applyWorkerCapacityConditions(ctx context.Context,
 // Set False rather than removed when clear, mirroring WorkersUnschedulable and NOT
 // WorkerCapacityDeclined: absence is meaningful for the gate (it says "this set has no
 // gate") and meaningless here, where every set is evaluated.
-func (r *RunnerSetReconciler) applyWorkersNotStartingCondition(rs *v2alpha1.RunnerSet, unsched workersUnschedulable) {
+func (r *RunnerSetReconciler) applyWorkersNotStartingCondition(rs *v2.RunnerSet, unsched workersUnschedulable) {
 	notStarting := len(unsched.notStartingPods) > 0
-	reason := v2alpha1.ReasonWorkersStarting
+	reason := v2.ReasonWorkersStarting
 	message := "no worker pod is bound to a node and failing to start"
 	if notStarting {
-		reason = v2alpha1.ReasonPodsNotStarting
+		reason = v2.ReasonPodsNotStarting
 		message = notStartingObservation(unsched.notStartingPods)
 	}
-	was := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	was := meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkersNotStarting)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionWorkersNotStarting,
+		Type:               v2.ConditionWorkersNotStarting,
 		Status:             boolConditionStatus(notStarting),
 		Reason:             reason,
 		Message:            message,
@@ -150,10 +149,10 @@ func soonest(a, b time.Duration) time.Duration {
 // than published False. Absence is what the default costs — no cost, no stale alarm
 // after opting out, and the condition's presence is itself the "this set has a
 // capacity gate" signal.
-func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs *v2alpha1.RunnerSet, unsched workersUnschedulable, gw *v2alpha1.ActionsGateway) time.Duration {
+func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs *v2.RunnerSet, unsched workersUnschedulable, gw *v2.ActionsGateway) time.Duration {
 	mode := runnerSetCapacityGateMode(rs)
-	if mode == v2alpha1.CapacityGateModeOff {
-		meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	if mode == v2.CapacityGateModeOff {
+		meta.RemoveStatusCondition(&rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 		return 0
 	}
 
@@ -166,10 +165,10 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 	// so a burst of N wasted claims stayed N. The latched reason is what the two
 	// rung forms read to admit exactly one probe job; the pod that job produces is
 	// the evidence that resolves the latch, in whichever direction it lands.
-	prev := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	prev := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	if !declined && capacityGateLatchHolds(prev, reason, unsched) {
 		declined = true
-		reason = v2alpha1.ReasonAwaitingProbe
+		reason = v2.ReasonAwaitingProbe
 		message = latchedCapacityMessage(prev)
 		// Nothing re-triggers a reconcile when a probe pod binds but stays Pending
 		// (image pull) — the Pod watch fires on phase changes only — so the latched
@@ -180,7 +179,7 @@ func (r *RunnerSetReconciler) applyCapacityGateCondition(ctx context.Context, rs
 
 	wasDeclined := prev != nil && prev.Status == metav1.ConditionTrue
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionWorkerCapacityDeclined,
+		Type:               v2.ConditionWorkerCapacityDeclined,
 		Status:             boolConditionStatus(declined),
 		Reason:             reason,
 		Message:            message,
@@ -229,7 +228,7 @@ func capacityGateLatchHolds(prev *metav1.Condition, freshReason string, unsched 
 	if prev == nil || prev.Status != metav1.ConditionTrue {
 		return false
 	}
-	if freshReason != v2alpha1.ReasonCapacityAvailable {
+	if freshReason != v2.ReasonCapacityAvailable {
 		return false
 	}
 	if len(unsched.stuckPods) > 0 {
@@ -242,7 +241,7 @@ func capacityGateLatchHolds(prev *metav1.Condition, freshReason string, unsched 
 // the operator still sees WHICH signal declined after its pod is gone. A latch
 // re-published over itself keeps its message rather than re-wrapping it.
 func latchedCapacityMessage(prev *metav1.Condition) string {
-	if prev.Reason == v2alpha1.ReasonAwaitingProbe {
+	if prev.Reason == v2.ReasonAwaitingProbe {
 		return prev.Message
 	}
 	return fmt.Sprintf("job intake is limited to one probe job per pending-pod deadline window: "+
@@ -265,10 +264,10 @@ func latchedCapacityMessage(prev *metav1.Condition) string {
 // The CRDs ship as their own chart and can be upgraded ahead of the AGC, so a mode a
 // newer CRD accepts can reach an older AGC; treating it as "some gate, near enough"
 // would apply semantics the operator did not ask for.
-func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable, gw *v2alpha1.ActionsGateway) (declined bool, reason, message string, recheck time.Duration) {
-	if mode != v2alpha1.CapacityGateModeObserve {
+func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string, unsched workersUnschedulable, gw *v2.ActionsGateway) (declined bool, reason, message string, recheck time.Duration) {
+	if mode != v2.CapacityGateModeObserve {
 		// Nothing is evaluated, so nothing is worth coming back for either.
-		return false, v2alpha1.ReasonGateModeUnsupported, fmt.Sprintf(
+		return false, v2.ReasonGateModeUnsupported, fmt.Sprintf(
 			"capacity gate mode %q is not implemented by this AGC; job intake is not gated", mode), 0
 	}
 	// A bound worker pod that has not yet resolved either way is invisible to the Pod
@@ -280,15 +279,15 @@ func (r *RunnerSetReconciler) evalCapacityGate(ctx context.Context, mode string,
 	// pods are already placed, so nothing about a new node changes whether their image
 	// resolves. Gating on it is sound on an elastic cluster and a fixed one alike.
 	if len(unsched.notStartingPods) > 0 {
-		return true, v2alpha1.ReasonPodsNotStarting, notStartingMessage(unsched.notStartingPods), 0
+		return true, v2.ReasonPodsNotStarting, notStartingMessage(unsched.notStartingPods), 0
 	}
-	if gatewayNodeAutoscaling(gw) == v2alpha1.NodeAutoscalingAbsent {
+	if gatewayNodeAutoscaling(gw) == v2.NodeAutoscalingAbsent {
 		// The operator asserts nothing will add a node, so the scheduler's verdict is
 		// final and a stuck pod is pure waste.
 		if unsched.unschedulable {
-			return true, v2alpha1.ReasonPodsUnschedulable, "job intake is gated: " + unsched.message, 0
+			return true, v2.ReasonPodsUnschedulable, "job intake is gated: " + unsched.message, 0
 		}
-		return false, v2alpha1.ReasonCapacityAvailable,
+		return false, v2.ReasonCapacityAvailable,
 			"the cluster can place this runner set's worker pods; job intake is not gated", 0
 	}
 	// A node may still arrive, so only the autoscaler's own declination proves one is
@@ -358,9 +357,9 @@ func notStartingMessage(pods []notStartingPod) string {
 // value can only under-gate — which is today's behavior — whereas defaulting to
 // Absent would gate on the scheduler's verdict alone and refuse jobs on any elastic
 // cluster that had not set the field.
-func gatewayNodeAutoscaling(gw *v2alpha1.ActionsGateway) string {
+func gatewayNodeAutoscaling(gw *v2.ActionsGateway) string {
 	if gw == nil || gw.Spec.ClusterCapacity == nil || gw.Spec.ClusterCapacity.NodeAutoscaling == "" {
-		return v2alpha1.NodeAutoscalingPresent
+		return v2.NodeAutoscalingPresent
 	}
 	return gw.Spec.ClusterCapacity.NodeAutoscaling
 }
@@ -399,11 +398,11 @@ const maxAutoscalerVerdictPodReads = 8
 // operator sees "the gate could not evaluate" rather than a bare "capacity available".
 func (r *RunnerSetReconciler) evalAutoscalerVerdictGate(ctx context.Context, unsched workersUnschedulable) (bool, string, string, time.Duration) {
 	if len(unsched.stuckPods) == 0 {
-		return false, v2alpha1.ReasonCapacityAvailable,
+		return false, v2.ReasonCapacityAvailable,
 			"no worker pod is waiting on the cluster autoscaler; job intake is not gated", 0
 	}
 	if r.EventReader == nil {
-		return false, v2alpha1.ReasonCapacityAvailable,
+		return false, v2.ReasonCapacityAvailable,
 			"cannot read worker pod Events (no direct API reader is wired); job intake is not gated",
 			autoscalerVerdictRecheck
 	}
@@ -425,14 +424,14 @@ func (r *RunnerSetReconciler) evalAutoscalerVerdictGate(ctx context.Context, uns
 			continue
 		}
 		if declined, detail := autoscalerDeclination(pod, evts); declined {
-			return true, v2alpha1.ReasonScaleUpDeclined, fmt.Sprintf(
+			return true, v2.ReasonScaleUpDeclined, fmt.Sprintf(
 				"job intake is gated: the cluster autoscaler declined to add a node for worker pod %s: %s",
 				pod.Name, detail), autoscalerVerdictRecheck
 		}
 	}
 
 	if readErr != nil {
-		return false, v2alpha1.ReasonCapacityAvailable, fmt.Sprintf(
+		return false, v2.ReasonCapacityAvailable, fmt.Sprintf(
 			"could not read worker pod Events (%v); job intake is not gated", readErr), autoscalerVerdictRecheck
 	}
 	msg := fmt.Sprintf("%d worker pod(s) are unschedulable, but no cluster autoscaler has declined to add a node "+
@@ -440,7 +439,7 @@ func (r *RunnerSetReconciler) evalAutoscalerVerdictGate(ctx context.Context, uns
 	if truncated > 0 {
 		msg += fmt.Sprintf(" (Events checked for the %d oldest; %d not checked this pass)", len(pods), truncated)
 	}
-	return false, v2alpha1.ReasonCapacityAvailable, msg, autoscalerVerdictRecheck
+	return false, v2.ReasonCapacityAvailable, msg, autoscalerVerdictRecheck
 }
 
 // podEvents lists the Events recorded against one pod, field-selected server-side to
@@ -470,16 +469,16 @@ func (r *RunnerSetReconciler) podEvents(ctx context.Context, pod *corev1.Pod) ([
 // worker pods are provisioned, so a previously-True capacity condition must not linger
 // as a stale alarm behind the dominant Ready=False/<Ref>NotFound signal. Mirrors
 // setReapBlockingSidecarStatus(nil)'s clear-on-unresolved behavior.
-func (r *RunnerSetReconciler) clearWorkerCapacityConditions(rs *v2alpha1.RunnerSet) {
+func (r *RunnerSetReconciler) clearWorkerCapacityConditions(rs *v2.RunnerSet) {
 	const unresolvedMsg = "references unresolved; no worker pods are provisioned"
 	for _, c := range []struct {
 		condType string
 		reason   string
 	}{
-		{v2alpha1.ConditionWorkerQuotaPressure, "QuotaHeadroomSufficient"},
-		{v2alpha1.ConditionWorkerQuotaExceeded, "NoRejection"},
-		{v2alpha1.ConditionWorkersUnschedulable, v2alpha1.ReasonWorkersSchedulable},
-		{v2alpha1.ConditionWorkersNotStarting, v2alpha1.ReasonWorkersStarting},
+		{v2.ConditionWorkerQuotaPressure, "QuotaHeadroomSufficient"},
+		{v2.ConditionWorkerQuotaExceeded, "NoRejection"},
+		{v2.ConditionWorkersUnschedulable, v2.ReasonWorkersSchedulable},
+		{v2.ConditionWorkersNotStarting, v2.ReasonWorkersStarting},
 	} {
 		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
 			Type:               c.condType,
@@ -493,14 +492,14 @@ func (r *RunnerSetReconciler) clearWorkerCapacityConditions(rs *v2alpha1.RunnerS
 	// a set that is provisioning nothing anyway. Remove it rather than set it False,
 	// matching applyCapacityGateCondition's contract that the condition is present only
 	// while a gate is actually being evaluated.
-	meta.RemoveStatusCondition(&rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	meta.RemoveStatusCondition(&rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 }
 
 // evalRunnerSetWorkerQuota computes the worker namespace-quota conditions for a
 // RunnerSet: the footprint comes from the resolved RunnerTemplate's PodTemplate (the
 // v2 source of the v1 spec.podTemplate) with the sizing profile applied, and the
 // ceiling from the set's priorityTiers/maxWorkers. See evalWorkerQuotaFor.
-func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec) workerQuotaConditions {
+func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *v2.RunnerSet, tmpl *v2.RunnerTemplateSpec) workerQuotaConditions {
 	ceiling, bounded := provisioner.WorkerCeilingFromTiers(runnerSetTierThresholds(rs.Spec.PriorityTiers), rs.Spec.MaxWorkers)
 	return evalWorkerQuotaFor(ctx, r.Client, workerQuotaPool{
 		namespace: rs.Namespace,
@@ -523,7 +522,7 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkerQuota(ctx context.Context, rs *
 // The whole spec, not just its containers: a worker's quota charge includes its
 // native sidecars and its RuntimeClass overhead, and the DinD/Kata shapes this set
 // most often carries declare the expensive half as a native sidecar (Q450).
-func runnerSetWorkerPodSpec(rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplateSpec) *corev1.PodSpec {
+func runnerSetWorkerPodSpec(rs *v2.RunnerSet, tmpl *v2.RunnerTemplateSpec) *corev1.PodSpec {
 	if tmpl == nil {
 		return nil
 	}
@@ -537,7 +536,7 @@ func runnerSetWorkerPodSpec(rs *v2alpha1.RunnerSet, tmpl *v2alpha1.RunnerTemplat
 // list is already gatewayRef-scoped on a GMC-provisioned AGC, and the Reconcile
 // scoping guard drops any foreign set as defense-in-depth.
 func (r *RunnerSetReconciler) quotaToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(*v2alpha1.RunnerSet) bool { return true })
+	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(*v2.RunnerSet) bool { return true })
 }
 
 // evalRunnerSetWorkersUnschedulable computes the WorkersUnschedulable condition for a
@@ -546,19 +545,19 @@ func (r *RunnerSetReconciler) quotaToRunnerSets(ctx context.Context, obj client.
 // could not place it (PodScheduled=False/Unschedulable). A list failure yields a
 // schedulable (False) result — the absence of evidence is not an alarm and the next
 // reconcile retries.
-func (r *RunnerSetReconciler) evalRunnerSetWorkersUnschedulable(ctx context.Context, rs *v2alpha1.RunnerSet) workersUnschedulable {
+func (r *RunnerSetReconciler) evalRunnerSetWorkersUnschedulable(ctx context.Context, rs *v2.RunnerSet) workersUnschedulable {
 	var pods corev1.PodList
 	if err := r.List(ctx, &pods,
 		client.InNamespace(rs.Namespace),
 		client.MatchingLabels{provisioner.LabelRunnerSet: rs.Name},
 	); err != nil {
 		return workersUnschedulable{
-			reason:  v2alpha1.ReasonWorkersSchedulable,
+			reason:  v2.ReasonWorkersSchedulable,
 			message: fmt.Sprintf("could not list worker pods: %v", err),
 		}
 	}
 	return evalWorkersUnschedulableForPods(pods.Items, r.nowFunc()(), runnerSetUnschedulableGrace(rs),
-		v2alpha1.ReasonWorkersSchedulable, v2alpha1.ReasonPodsUnschedulable)
+		v2.ReasonWorkersSchedulable, v2.ReasonPodsUnschedulable)
 }
 
 // runnerSetUnschedulableGrace is how long a worker pod must sit Pending+Unschedulable
@@ -568,7 +567,7 @@ func (r *RunnerSetReconciler) evalRunnerSetWorkersUnschedulable(ctx context.Cont
 // set in the same pass the pod is reaped and clear on the next reconcile — flapping.
 // The factor of one-half gives the operator a visible early-warning window while the
 // unschedulable pod still exists.
-func runnerSetUnschedulableGrace(rs *v2alpha1.RunnerSet) time.Duration {
+func runnerSetUnschedulableGrace(rs *v2.RunnerSet) time.Duration {
 	d := provisioner.PendingPodDeadlineOrDefault(rs.Spec.PendingPodDeadline) / 2
 	if d <= 0 {
 		d = time.Second

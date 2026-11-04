@@ -13,7 +13,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,8 +77,8 @@ func newOrphanFixture(t *testing.T, ns, setName, label string) *orphanFixture {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	return &orphanFixture{ns: ns, setName: setName, label: label, srv: srv, gitHub: gitHub, reruns: reruns}
@@ -98,7 +98,7 @@ func (f *orphanFixture) startAGC(t *testing.T) func() {
 		f.ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, f.ns, f.setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, f.ns, f.setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 	return stop
 }
 

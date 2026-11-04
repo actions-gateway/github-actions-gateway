@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -25,7 +25,7 @@ import (
 // unreported (Q1244).
 func TestRunnerSetReconcile_AdoptsParkedRerunsBeforeReferencesResolve(t *testing.T) {
 	ns := "team-a"
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer}
 	})
 	var ledgerReads int
@@ -44,10 +44,10 @@ func TestRunnerSetReconcile_AdoptsParkedRerunsBeforeReferencesResolve(t *testing
 	_, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: "set"}})
 	require.NoError(t, err)
 
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "set"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionReady)
 	require.NotNil(t, ready)
-	require.Equal(t, v2alpha1.ReasonGatewayNotFound, ready.Reason, "the reconcile must have taken the unresolved-references return")
+	require.Equal(t, v2.ReasonGatewayNotFound, ready.Reason, "the reconcile must have taken the unresolved-references return")
 	assert.Equal(t, 1, ledgerReads, "the ledger is read once, ahead of the early return")
 }

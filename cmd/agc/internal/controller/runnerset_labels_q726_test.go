@@ -3,7 +3,7 @@ package controller
 import (
 	"testing"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -16,8 +16,8 @@ import (
 // listener start, because a label appended to a live set diverges long after the scale
 // set was registered and the listener does not restart for a spec change.
 
-func labelSet(labels ...string) func(*v2alpha1.RunnerSet) {
-	return func(rs *v2alpha1.RunnerSet) { rs.Spec.RunnerLabels = labels }
+func labelSet(labels ...string) func(*v2.RunnerSet) {
+	return func(rs *v2.RunnerSet) { rs.Spec.RunnerLabels = labels }
 }
 
 func TestRunnerLabels_AllRegisteredReportsFalse(t *testing.T) {
@@ -26,10 +26,10 @@ func TestRunnerLabels_AllRegisteredReportsFalse(t *testing.T) {
 
 	r.applyRunnerLabelsCondition(rs, []string{"linux", "gpu"})
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionFalse, c.Status)
-	assert.Equal(t, v2alpha1.ReasonLabelsRegistered, c.Reason)
+	assert.Equal(t, v2.ReasonLabelsRegistered, c.Reason)
 }
 
 // A scale set may carry labels the runner set does not declare — a leftover from an
@@ -41,7 +41,7 @@ func TestRunnerLabels_ExtraServerLabelIsNotAShortfall(t *testing.T) {
 
 	r.applyRunnerLabelsCondition(rs, []string{"linux", "retired-label"})
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionFalse, c.Status,
 		"the comparison is one-directional: declared ⊆ registered, not equality")
@@ -54,10 +54,10 @@ func TestRunnerLabels_MissingLabelReportsTrueAndEvents(t *testing.T) {
 
 	r.applyRunnerLabelsCondition(rs, []string{"linux"})
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonLabelsNotRegistered, c.Reason)
+	assert.Equal(t, v2.ReasonLabelsNotRegistered, c.Reason)
 	assert.Contains(t, c.Message, "gpu")
 	assert.Contains(t, c.Message, "private-network")
 	assert.Contains(t, c.Message, "stay queued at GitHub",
@@ -102,13 +102,13 @@ func TestRunnerLabels_AppendedLabelSurfacesOnTheNextReconcile(t *testing.T) {
 
 	r.applyRunnerLabelsCondition(rs, registered)
 	require.Equal(t, metav1.ConditionFalse,
-		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete).Status)
+		meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete).Status)
 
 	// The operator appends a label. The scale set is untouched.
 	rs.Spec.RunnerLabels = []string{"linux", "gpu"}
 	r.applyRunnerLabelsCondition(rs, registered)
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status,
 		"appending a label to a live set must surface on the very next reconcile")
@@ -124,7 +124,7 @@ func TestRunnerLabels_NoObservationPublishesNothing(t *testing.T) {
 
 	r.applyRunnerLabelsCondition(rs, nil)
 
-	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete),
+	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete),
 		"no observation must publish no condition at all")
 }
 
@@ -132,8 +132,8 @@ func TestRunnerLabels_NoObservationPublishesNothing(t *testing.T) {
 // would page for a configuration mismatch on a set that is still serving every job
 // targeting the labels that did register.
 func TestRunnerLabels_ConditionIsNotImpairing(t *testing.T) {
-	for _, ct := range v2alpha1.ImpairingConditionTypes() {
-		assert.NotEqual(t, v2alpha1.ConditionRunnerLabelsIncomplete, ct,
+	for _, ct := range v2.ImpairingConditionTypes() {
+		assert.NotEqual(t, v2.ConditionRunnerLabelsIncomplete, ct,
 			"RunnerLabelsIncomplete must stay out of the impairing rollup")
 	}
 }

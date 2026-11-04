@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apisidecar"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -125,7 +125,7 @@ func TestObservedRunnerIgnoresUnreported(t *testing.T) {
 // all, and the answer is a property of the image the set runs rather than of which
 // pods happen to be retained.
 func TestApplyObservedRunnerVersionIsSticky(t *testing.T) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	rs.Status.ObservedRunnerVersion = "2.335.1"
 
 	applyObservedRunnerVersion(rs, observedRunner{})
@@ -136,7 +136,7 @@ func TestApplyObservedRunnerVersionIsSticky(t *testing.T) {
 
 // TestApplyObservedRunnerVersionPublishes is the ordinary path.
 func TestApplyObservedRunnerVersionPublishes(t *testing.T) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 
 	applyObservedRunnerVersion(rs, observedRunner{version: "2.335.1", at: time.Now()})
 

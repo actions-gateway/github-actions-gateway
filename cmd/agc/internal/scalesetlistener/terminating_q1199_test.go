@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,19 +105,19 @@ func TestListener_TerminatingWorkerStallReportsItsOwnConditionAndEvent(t *testin
 	srv.EnqueueJob(ssID)
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
-			v2alpha1.ReasonWorkerTerminating)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionTrue,
+			v2.ReasonWorkerTerminating)
 	}, 5*time.Second, 10*time.Millisecond,
 		"a stall on a terminating worker must report its own reason")
-	cond, _ := sink.last(v2alpha1.ConditionJobProvisionStalled)
+	cond, _ := sink.last(v2.ConditionJobProvisionStalled)
 	assert.Contains(t, cond.Message, "previous worker pod to finish terminating")
 	assert.Equal(t, 1, sink.eventCount("WorkerTerminating"), "one event per episode")
 	assert.Zero(t, sink.eventCount("JobProvisionStalled"), "an ordinary grace period is not a Warning")
 
 	pod.finish()
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
-			v2alpha1.ReasonJobsProvisioning)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionFalse,
+			v2.ReasonJobsProvisioning)
 	}, 5*time.Second, 10*time.Millisecond, "the stall clears once the job provisions")
 }
 

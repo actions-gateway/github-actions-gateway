@@ -1295,9 +1295,8 @@ Upgrade past the fix, which makes the drain one-way so a reconciler that has dra
 **Symptoms.** A per-gateway AGC (`<gateway>-agc`) never becomes Ready, and its logs end at:
 
 ```
-GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not
-installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing
-(install the actions-gateway-crds-v2 chart)
+GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2 RunnerSet CRD is not
+installed, so this AGC would reconcile nothing (install the actions-gateway-crds-v2 chart)
 ```
 
 **Cause.** Each AGC serves exactly one API: the v1 singleton (no `GATEWAY_NAME`) reconciles `RunnerGroup`s, and a gateway-scoped AGC reconciles only its own gateway's `RunnerSet`s.
@@ -3093,7 +3092,7 @@ kubectl describe networkpolicy -n <namespace>
 The log shows a Kubernetes API call — not a GitHub call — failing at the proxy, addressed to an **IP**, not a hostname:
 
 ```
-detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
+detect actions-gateway.com/v2 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
 proxyconnect tcp: tls: failed to verify certificate:
 x509: certificate signed by unknown authority
 ```
@@ -4710,6 +4709,7 @@ A few operator-visible facts and failure modes:
 - **Per-gateway scoping needs Kubernetes ≥ 1.31.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, using a server-side CRD field selector (KEP-4358).
   That selector is **alpha-off in Kubernetes 1.30**: on a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the AGC pod will not become ready.
   If a v2 AGC `CrashLoopBackOff`s with a `RunnerSet` list/watch error, check the cluster is ≥ 1.31.
+  On a cluster at ≥ 1.31, `field label not supported: spec.gatewayRef.name` means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
   (Single-gateway-per-namespace v2 still requires ≥ 1.31 once more than one gateway exists; for one gateway the scoping is a no-op but the selector is still applied.)
 - **Per-gateway garbage collection.** Deleting one gateway removes only its own children (owner-referenced, per-gateway-named); a neighbor's gateway, AGC, and `RunnerSet`s are untouched.
   The one cluster-scoped child — the `agc-clusterrunnertemplate-reader.<ns>.<gateway>` `ClusterRoleBinding` — cannot carry a namespaced owner reference, so the gateway controller deletes it explicitly during teardown.

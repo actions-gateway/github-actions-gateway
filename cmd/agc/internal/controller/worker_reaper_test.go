@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,7 +50,7 @@ func workerPod(ns, setName, name string, phase corev1.PodPhase, created, finishe
 // duration is the time until the earliest retained pod becomes due.
 func TestReaper_ReapsExpiredWorkerPods(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("reap-rs", "default", func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("reap-rs", "default", func(rs *v2.RunnerSet) {
 		rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Minute}
 		rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 5 * time.Minute}
 	})
@@ -137,7 +137,7 @@ func TestReaper_ReapsExpiredWorkerPods(t *testing.T) {
 // delete, the way recovery would observe it.
 func TestReaper_StampsDeletionReason(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("stamp-rs", "default", func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("stamp-rs", "default", func(rs *v2.RunnerSet) {
 		rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Minute}
 	})
 

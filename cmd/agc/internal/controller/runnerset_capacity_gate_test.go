@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -24,30 +24,30 @@ import (
 // is that a set cannot pick a signal — it can only ask to be gated.
 
 // gateOn returns a RunnerSet mutator that opts the set into the capacity gate.
-func gateOn(mode string) func(*v2alpha1.RunnerSet) {
-	return func(r *v2alpha1.RunnerSet) {
-		r.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: mode}
+func gateOn(mode string) func(*v2.RunnerSet) {
+	return func(r *v2.RunnerSet) {
+		r.Spec.CapacityGate = &v2.CapacityGate{Mode: mode}
 		r.Spec.PendingPodDeadline = &metav1.Duration{Duration: 10 * time.Minute}
 	}
 }
 
 // gwAutoscaling builds the resolved ActionsGateway the reconciler passes down, carrying
 // the platform operator's assertion about whether anything can add a node.
-func gwAutoscaling(nodeAutoscaling string) *v2alpha1.ActionsGateway {
-	return &v2alpha1.ActionsGateway{
+func gwAutoscaling(nodeAutoscaling string) *v2.ActionsGateway {
+	return &v2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: "ns"},
-		Spec: v2alpha1.ActionsGatewaySpec{
-			ClusterCapacity: &v2alpha1.ClusterCapacity{NodeAutoscaling: nodeAutoscaling},
+		Spec: v2.ActionsGatewaySpec{
+			ClusterCapacity: &v2.ClusterCapacity{NodeAutoscaling: nodeAutoscaling},
 		},
 	}
 }
 
 // gwFixed is a cluster the operator has asserted cannot grow — the only configuration
 // in which the scheduler's verdict alone may gate intake.
-func gwFixed() *v2alpha1.ActionsGateway { return gwAutoscaling(v2alpha1.NodeAutoscalingAbsent) }
+func gwFixed() *v2.ActionsGateway { return gwAutoscaling(v2.NodeAutoscalingAbsent) }
 
 // gwElastic is a cluster that can grow, which is also the default for an unset field.
-func gwElastic() *v2alpha1.ActionsGateway { return gwAutoscaling(v2alpha1.NodeAutoscalingPresent) }
+func gwElastic() *v2.ActionsGateway { return gwAutoscaling(v2.NodeAutoscalingPresent) }
 
 // TestCapacityGate_ModeOffCarriesNoCondition is the no-cost-for-the-default assertion.
 // The default must not merely report False — it must publish nothing at all, so an
@@ -59,12 +59,12 @@ func TestCapacityGate_ModeOffCarriesNoCondition(t *testing.T) {
 
 	for _, tt := range []struct {
 		name string
-		mut  func(*v2alpha1.RunnerSet)
+		mut  func(*v2.RunnerSet)
 	}{
-		{"capacityGate unset entirely", func(r *v2alpha1.RunnerSet) {
+		{"capacityGate unset entirely", func(r *v2.RunnerSet) {
 			r.Spec.PendingPodDeadline = &metav1.Duration{Duration: 10 * time.Minute}
 		}},
-		{"capacityGate present with mode Off", gateOn(v2alpha1.CapacityGateModeOff)},
+		{"capacityGate present with mode Off", gateOn(v2.CapacityGateModeOff)},
 		{"capacityGate present with an empty mode", gateOn("")},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,10 +75,10 @@ func TestCapacityGate_ModeOffCarriesNoCondition(t *testing.T) {
 
 			// The sibling condition still fires — the pod really is unschedulable. Only
 			// the intake decision is absent, which is what "the gate is off" means.
-			unsched := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+			unsched := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkersUnschedulable)
 			require.NotNil(t, unsched)
 			assert.Equal(t, metav1.ConditionTrue, unsched.Status)
-			assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined),
+			assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined),
 				"a set with no capacity gate must carry no WorkerCapacityDeclined condition")
 		})
 	}
@@ -90,7 +90,7 @@ func TestCapacityGate_ModeOffCarriesNoCondition(t *testing.T) {
 // that pod and it is pure waste.
 func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	rec := events.NewFakeRecorder(16)
@@ -99,10 +99,10 @@ func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonPodsUnschedulable, c.Reason,
+	assert.Equal(t, v2.ReasonPodsUnschedulable, c.Reason,
 		"the reason must name the SIGNAL, so an operator can tell which rung stopped their jobs")
 	assert.Contains(t, c.Message, "job intake is gated",
 		"the message must state the consequence, not merely restate the stuck pod")
@@ -127,26 +127,26 @@ func TestCapacityGate_FixedClusterDeclinesOnAnUnschedulablePod(t *testing.T) {
 // rung forms read to admit exactly one probe job.
 func TestCapacityGate_LatchesWhenThePodIsReaped(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 
 	r := capReconciler(t, now, pod)
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 
 	// The reaper deletes the stuck pod; nothing has shown that capacity returned.
 	require.NoError(t, r.Delete(context.Background(), pod))
 	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status,
 		"reaping the gate's own evidence must not restore the full advertisement")
-	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Equal(t, v2.ReasonAwaitingProbe, c.Reason)
 	assert.Contains(t, c.Message, "one probe job",
 		"the message must say intake is limited, not closed")
-	assert.Contains(t, c.Message, v2alpha1.ReasonPodsUnschedulable,
+	assert.Contains(t, c.Message, v2.ReasonPodsUnschedulable,
 		"the reaped verdict must survive into the latched message")
 	assert.Contains(t, c.Message, "untolerated taint",
 		"the scheduler's own text must survive the reap — the pod that carried it is gone")
@@ -156,7 +156,7 @@ func TestCapacityGate_LatchesWhenThePodIsReaped(t *testing.T) {
 	// Re-publishing the latch over itself must keep its message, not re-wrap it.
 	msg := c.Message
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	c = meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c = meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, msg, c.Message)
 }
@@ -170,7 +170,7 @@ func TestCapacityGate_LatchesWhenThePodIsReaped(t *testing.T) {
 // the cluster can start a worker while the phase still says Pending.
 func TestCapacityGate_LatchClearsWhenAProbeStarts(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 
@@ -178,7 +178,7 @@ func TestCapacityGate_LatchClearsWhenAProbeStarts(t *testing.T) {
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 
 	probe := capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now, corev1.ConditionTrue, "", "")
 	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(now.Add(time.Minute))
@@ -186,10 +186,10 @@ func TestCapacityGate_LatchClearsWhenAProbeStarts(t *testing.T) {
 	require.NoError(t, r.Create(context.Background(), probe))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionFalse, c.Status, "a started probe is capacity returning")
-	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+	assert.Equal(t, v2.ReasonCapacityAvailable, c.Reason)
 }
 
 // TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound is Q714's negative control on
@@ -204,7 +204,7 @@ func TestCapacityGate_LatchClearsWhenAProbeStarts(t *testing.T) {
 // a test rather than an argument.
 func TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 
@@ -212,7 +212,7 @@ func TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound(t *testing.T) {
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 
 	// Bound after the decline, no container has run yet: the kubelet has not said
 	// anything either way, so nothing has shown that capacity returned.
@@ -221,11 +221,11 @@ func TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound(t *testing.T) {
 	require.NoError(t, r.Create(context.Background(), probe))
 	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status,
 		"a probe that has only bound is not yet evidence that a worker can run here")
-	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Equal(t, v2.ReasonAwaitingProbe, c.Reason)
 	assert.Equal(t, startupVerdictRecheck, requeue,
 		"an undecided bound probe fires no phase-change watch event, so the gate must poll for its verdict")
 }
@@ -237,7 +237,7 @@ func TestCapacityGate_LatchHoldsWhileTheProbeHasOnlyBound(t *testing.T) {
 // defeat it the moment a set had any pre-decline pod at all.
 func TestCapacityGate_LatchIgnoresPreDeclineSchedulingEvidence(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	old := capWorkerPod("ns", "set", "worker-old", corev1.PodRunning, now.Add(-time.Hour), corev1.ConditionTrue, "", "")
@@ -245,15 +245,15 @@ func TestCapacityGate_LatchIgnoresPreDeclineSchedulingEvidence(t *testing.T) {
 
 	r := capReconciler(t, now, pod, old)
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
+	assert.Equal(t, v2.ReasonAwaitingProbe, c.Reason)
 }
 
 // TestCapacityGate_LatchReturnsToTheLiveVerdictWhenTheProbeSticks closes the cycle:
@@ -261,7 +261,7 @@ func TestCapacityGate_LatchIgnoresPreDeclineSchedulingEvidence(t *testing.T) {
 // next reap latches again — one wasted claim per deadline window, §5's trickle rate.
 func TestCapacityGate_LatchReturnsToTheLiveVerdictWhenTheProbeSticks(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 
@@ -269,8 +269,8 @@ func TestCapacityGate_LatchReturnsToTheLiveVerdictWhenTheProbeSticks(t *testing.
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	require.Equal(t, v2alpha1.ReasonAwaitingProbe,
-		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined).Reason)
+	require.Equal(t, v2.ReasonAwaitingProbe,
+		meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined).Reason)
 
 	// The probe pod sticks past the scheduling grace in its turn.
 	probe := capWorkerPod("ns", "set", "worker-probe", corev1.PodPending, now.Add(-6*time.Minute),
@@ -278,10 +278,10 @@ func TestCapacityGate_LatchReturnsToTheLiveVerdictWhenTheProbeSticks(t *testing.
 	require.NoError(t, r.Create(context.Background(), probe))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonPodsUnschedulable, c.Reason, "fresh evidence must displace the latch")
+	assert.Equal(t, v2.ReasonPodsUnschedulable, c.Reason, "fresh evidence must displace the latch")
 	assert.Contains(t, c.Message, "still no room")
 }
 
@@ -292,17 +292,17 @@ func TestCapacityGate_LatchDoesNotSurviveAnUnsupportedMode(t *testing.T) {
 	now := time.Now()
 	rs := rsObj("set", "ns", gateOn("Probe"))
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
-		Reason: v2alpha1.ReasonAwaitingProbe, Message: "latched",
+		Type: v2.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+		Reason: v2.ReasonAwaitingProbe, Message: "latched",
 	})
 	r := capReconciler(t, now)
 
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionFalse, c.Status)
-	assert.Equal(t, v2alpha1.ReasonGateModeUnsupported, c.Reason)
+	assert.Equal(t, v2.ReasonGateModeUnsupported, c.Reason)
 }
 
 // TestCapacityGate_OptingOutRetractsTheCondition: a set that turns the gate off while
@@ -310,18 +310,18 @@ func TestCapacityGate_LatchDoesNotSurviveAnUnsupportedMode(t *testing.T) {
 // condition, so a stale True would keep intake gated forever.
 func TestCapacityGate_OptingOutRetractsTheCondition(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capWorkerPod("ns", "set", "worker-stuck", corev1.PodPending, now.Add(-6*time.Minute),
 		corev1.ConditionFalse, corev1.PodReasonUnschedulable, "untolerated taint")
 	r := capReconciler(t, now, pod)
 
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
-	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 
-	rs.Spec.CapacityGate.Mode = v2alpha1.CapacityGateModeOff
+	rs.Spec.CapacityGate.Mode = v2.CapacityGateModeOff
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined),
+	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined),
 		"opting out must retract the condition, not leave a stale True gating intake")
 }
 
@@ -329,16 +329,16 @@ func TestCapacityGate_OptingOutRetractsTheCondition(t *testing.T) {
 // worker pods being provisioned, a lingering True would gate a set that is already
 // stopped for a louder reason.
 func TestCapacityGate_ClearedWhenReferencesDoNotResolve(t *testing.T) {
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
-		Reason: v2alpha1.ReasonPodsUnschedulable, Message: "stale",
+		Type: v2.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+		Reason: v2.ReasonPodsUnschedulable, Message: "stale",
 	})
 	r := capReconciler(t, time.Now())
 
 	r.clearWorkerCapacityConditions(rs)
 
-	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 }
 
 // --- an elastic cluster: the autoscaler's own declination (Q406) --------------
@@ -386,9 +386,9 @@ func (s *eventReaderStub) List(_ context.Context, list client.ObjectList, opts .
 // autoscalerGate runs one reconcile's worth of capacity-condition evaluation for a
 // gate-enabled set on an ELASTIC cluster against the given pods and Event stub,
 // returning the published condition and the re-check the gate asked for.
-func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*corev1.Pod) (*v2alpha1.RunnerSet, *metav1.Condition, time.Duration) {
+func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*corev1.Pod) (*v2.RunnerSet, *metav1.Condition, time.Duration) {
 	t.Helper()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	objs := make([]client.Object, 0, len(pods))
 	for _, p := range pods {
 		objs = append(objs, p)
@@ -397,7 +397,7 @@ func autoscalerGate(t *testing.T, now time.Time, reader client.Reader, pods ...*
 	r.EventReader = reader
 
 	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
-	return rs, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined), requeue
+	return rs, meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined), requeue
 }
 
 // stuckPod is a worker pod the scheduler has given up on, aged past the scheduling
@@ -421,7 +421,7 @@ func TestCapacityGate_ElasticClusterGatesOnADeclination(t *testing.T) {
 
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonScaleUpDeclined, c.Reason,
+	assert.Equal(t, v2.ReasonScaleUpDeclined, c.Reason,
 		"the reason must name the autoscaler's declination, not the scheduler's verdict")
 	assert.Contains(t, c.Message, "job intake is gated")
 	assert.Contains(t, c.Message, "worker-stuck")
@@ -441,22 +441,22 @@ func TestCapacityGate_ElasticClusterLatchesAfterTheReap(t *testing.T) {
 	reader := &eventReaderStub{byPod: map[string][]corev1.Event{
 		"worker-stuck": {legacyEvent(reasonNotTriggerScaleUp, "cluster-autoscaler", caDeclineMsg, now.Add(-time.Minute))},
 	}}
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	r := capReconciler(t, now, pod)
 	r.EventReader = reader
 
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
-	require.Equal(t, v2alpha1.ReasonScaleUpDeclined,
-		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined).Reason)
+	require.Equal(t, v2.ReasonScaleUpDeclined,
+		meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined).Reason)
 
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
-	assert.Contains(t, c.Message, v2alpha1.ReasonScaleUpDeclined)
+	assert.Equal(t, v2.ReasonAwaitingProbe, c.Reason)
+	assert.Contains(t, c.Message, v2.ReasonScaleUpDeclined)
 	assert.Contains(t, c.Message, "max node group size reached",
 		"the autoscaler's per-node-group text must survive the reap")
 }
@@ -479,13 +479,13 @@ func TestCapacityGate_ElasticClusterIgnoresATransientSchedulerFailure(t *testing
 	assert.Equal(t, metav1.ConditionFalse, c.Status,
 		"an ordinary scheduling failure is not an autoscaler declination; gating on it would "+
 			"starve a tenant whose cluster was about to grow")
-	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+	assert.Equal(t, v2.ReasonCapacityAvailable, c.Reason)
 
 	// The two conditions genuinely disagree on the same reconcile, and that disagreement
 	// IS the point: the pod really is unschedulable — the same set on a cluster reporting
 	// nodeAutoscaling: Absent would have gated on exactly this — and here the gate
 	// declines to draw the same conclusion because no autoscaler has said no.
-	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable),
+	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkersUnschedulable),
 		"the sibling condition must still report the stuck pod")
 }
 
@@ -627,11 +627,11 @@ func TestCapacityGate_UnrecognizedModeFailsOpen(t *testing.T) {
 
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwFixed())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c, "the condition is still published: the set asked for a gate, and its absence "+
 		"would read as 'no gate configured'")
 	assert.Equal(t, metav1.ConditionFalse, c.Status)
-	assert.Equal(t, v2alpha1.ReasonGateModeUnsupported, c.Reason)
+	assert.Equal(t, v2.ReasonGateModeUnsupported, c.Reason)
 	assert.Contains(t, c.Message, `"Provision"`)
 }
 
@@ -653,31 +653,31 @@ func TestCapacityGate_TheDangerousCombinationIsUnrepresentable(t *testing.T) {
 
 	for _, tt := range []struct {
 		name string
-		gw   *v2alpha1.ActionsGateway
+		gw   *v2.ActionsGateway
 	}{
 		{"the operator declared the cluster elastic", gwElastic()},
 		// The safe direction has to be the DEFAULT, not merely available: an operator who
 		// has never heard of this field must not get scheduler-verdict gating by omission.
-		{"clusterCapacity is unset", &v2alpha1.ActionsGateway{}},
+		{"clusterCapacity is unset", &v2.ActionsGateway{}},
 		{"nodeAutoscaling is empty", gwAutoscaling("")},
 		// An unresolvable gateway is the same question in its most degraded form.
 		{"the gateway could not be resolved at all", nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+			rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 			r := capReconciler(t, now, pod)
 			// A reader that returns no events: no autoscaler has recorded anything.
 			r.EventReader = &eventReaderStub{}
 
 			r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), tt.gw)
 
-			require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable),
+			require.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkersUnschedulable),
 				"precondition: the pod really is stuck, so scheduler-verdict gating WOULD fire here")
-			c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+			c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 			require.NotNil(t, c)
 			assert.Equal(t, metav1.ConditionFalse, c.Status,
 				"a set must not be able to gate on the scheduler's verdict where a node may still arrive")
-			assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+			assert.Equal(t, v2.ReasonCapacityAvailable, c.Reason)
 		})
 	}
 }
@@ -688,7 +688,7 @@ func TestCapacityGate_TheDangerousCombinationIsUnrepresentable(t *testing.T) {
 // Event read asking — and must not requeue waiting for an answer that will never come.
 func TestCapacityGate_FixedClusterReadsNoEvents(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	reader := &eventReaderStub{}
 	r := capReconciler(t, now, stuckPod("worker-stuck", now))
 	r.EventReader = reader
@@ -697,7 +697,7 @@ func TestCapacityGate_FixedClusterReadsNoEvents(t *testing.T) {
 
 	assert.Empty(t, reader.calls, "a cluster that cannot grow has no autoscaler verdict to read")
 	assert.Zero(t, requeue, "and no Event to wait for, so no re-check is owed")
-	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	assert.True(t, meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 }
 
 // --- the Target adapter -----------------------------------------------------
@@ -706,36 +706,36 @@ func TestCapacityGate_FixedClusterReadsNoEvents(t *testing.T) {
 // every delivered job, including every fail-open path. Over-gating starves a tenant, so
 // each of these must resolve to "not declined" rather than to an alarm.
 func TestRunnerSetTarget_CapacityDeclined(t *testing.T) {
-	declining := func(mode string) func(*v2alpha1.RunnerSet) {
-		return func(r *v2alpha1.RunnerSet) {
+	declining := func(mode string) func(*v2.RunnerSet) {
+		return func(r *v2.RunnerSet) {
 			gateOn(mode)(r)
 			meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
-				Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
-				Reason: v2alpha1.ReasonPodsUnschedulable, Message: "job intake is gated: no node fits",
+				Type: v2.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+				Reason: v2.ReasonPodsUnschedulable, Message: "job intake is gated: no node fits",
 			})
 		}
 	}
 
 	tests := []struct {
 		name         string
-		mut          func(*v2alpha1.RunnerSet)
+		mut          func(*v2.RunnerSet)
 		wantDeclined bool
 	}{
-		{"a declining gate", declining(v2alpha1.CapacityGateModeObserve), true},
-		{"gate on, condition False", func(r *v2alpha1.RunnerSet) {
-			gateOn(v2alpha1.CapacityGateModeObserve)(r)
+		{"a declining gate", declining(v2.CapacityGateModeObserve), true},
+		{"gate on, condition False", func(r *v2.RunnerSet) {
+			gateOn(v2.CapacityGateModeObserve)(r)
 			meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
-				Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionFalse,
-				Reason: v2alpha1.ReasonCapacityAvailable, Message: "fine",
+				Type: v2.ConditionWorkerCapacityDeclined, Status: metav1.ConditionFalse,
+				Reason: v2.ReasonCapacityAvailable, Message: "fine",
 			})
 		}, false},
-		{"gate on, condition not computed yet", gateOn(v2alpha1.CapacityGateModeObserve), false},
+		{"gate on, condition not computed yet", gateOn(v2.CapacityGateModeObserve), false},
 		// The load-bearing one: a set whose mode flipped to Off must stop gating on the
 		// very next delivered job, without waiting for a reconcile to retract a
 		// condition it is still carrying.
-		{"mode Off with a stale True condition", func(r *v2alpha1.RunnerSet) {
-			declining(v2alpha1.CapacityGateModeObserve)(r)
-			r.Spec.CapacityGate.Mode = v2alpha1.CapacityGateModeOff
+		{"mode Off with a stale True condition", func(r *v2.RunnerSet) {
+			declining(v2.CapacityGateModeObserve)(r)
+			r.Spec.CapacityGate.Mode = v2.CapacityGateModeOff
 		}, false},
 		{"no capacity gate at all", nil, false},
 	}
@@ -773,11 +773,11 @@ func TestRunnerSetTarget_CapacityDeclined(t *testing.T) {
 // pods, so GitHub keeps what it has assigned and is offered nothing more.
 func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 	ctx := context.Background()
-	declining := func(r *v2alpha1.RunnerSet) {
-		gateOn(v2alpha1.CapacityGateModeObserve)(r)
+	declining := func(r *v2.RunnerSet) {
+		gateOn(v2.CapacityGateModeObserve)(r)
 		meta.SetStatusCondition(&r.Status.Conditions, metav1.Condition{
-			Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
-			Reason: v2alpha1.ReasonPodsUnschedulable, Message: "gated",
+			Type: v2.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+			Reason: v2.ReasonPodsUnschedulable, Message: "gated",
 		})
 	}
 
@@ -823,7 +823,7 @@ func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 	})
 
 	t.Run("a gate that is not declining imposes no bound", func(t *testing.T) {
-		rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+		rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 		c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(rs).Build()
 		target := &runnerSetTarget{client: c, key: keyOf(rs)}
 
@@ -835,12 +835,12 @@ func TestRunnerSetTarget_DeclinedCapacity(t *testing.T) {
 
 // latchedSet returns a RunnerSet mutator seeding the latched condition (Q512) with a
 // controlled transition time, so a test can place pods before or after the decline.
-func latchedSet(declinedSince time.Time) func(*v2alpha1.RunnerSet) {
-	return func(r *v2alpha1.RunnerSet) {
-		gateOn(v2alpha1.CapacityGateModeObserve)(r)
+func latchedSet(declinedSince time.Time) func(*v2.RunnerSet) {
+	return func(r *v2.RunnerSet) {
+		gateOn(v2.CapacityGateModeObserve)(r)
 		r.Status.Conditions = append(r.Status.Conditions, metav1.Condition{
-			Type: v2alpha1.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
-			Reason: v2alpha1.ReasonAwaitingProbe, Message: "job intake is limited to one probe job",
+			Type: v2.ConditionWorkerCapacityDeclined, Status: metav1.ConditionTrue,
+			Reason: v2.ReasonAwaitingProbe, Message: "job intake is limited to one probe job",
 			LastTransitionTime: metav1.NewTime(declinedSince),
 		})
 	}
@@ -961,7 +961,7 @@ func TestRunnerSetTarget_LatchedCapacityDeclined(t *testing.T) {
 }
 
 // keyOf is the object's namespace/name as the Target adapter stores it.
-func keyOf(rs *v2alpha1.RunnerSet) client.ObjectKey {
+func keyOf(rs *v2.RunnerSet) client.ObjectKey {
 	return client.ObjectKey{Namespace: rs.Namespace, Name: rs.Name}
 }
 
@@ -983,7 +983,7 @@ func TestCapacityGate_DeclinesOnAWorkerThatBoundAndCouldNotStart(t *testing.T) {
 
 	for _, tt := range []struct {
 		name string
-		gw   *v2alpha1.ActionsGateway
+		gw   *v2.ActionsGateway
 	}{
 		{"fixed-size cluster", gwFixed()},
 		{"elastic cluster", gwElastic()},
@@ -992,15 +992,15 @@ func TestCapacityGate_DeclinesOnAWorkerThatBoundAndCouldNotStart(t *testing.T) {
 			now := time.Now()
 			pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
 				now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", image)
-			rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+			rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 			r := capReconciler(t, now, pod)
 
 			r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), tt.gw)
 
-			c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+			c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 			require.NotNil(t, c)
 			assert.Equal(t, metav1.ConditionTrue, c.Status)
-			assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+			assert.Equal(t, v2.ReasonPodsNotStarting, c.Reason)
 			assert.Contains(t, c.Message, "worker-backoff")
 			assert.Contains(t, c.Message, "example.invalid",
 				"the kubelet's own message names the image, which is the operator's whole remedy")
@@ -1008,10 +1008,10 @@ func TestCapacityGate_DeclinesOnAWorkerThatBoundAndCouldNotStart(t *testing.T) {
 			// The sibling condition must stay silent: this pod is not a scheduling
 			// problem, and reporting it there would send an operator after a node, a
 			// taint, or a quota when the fix is an image.
-			unsched := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+			unsched := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkersUnschedulable)
 			require.NotNil(t, unsched)
 			assert.Equal(t, metav1.ConditionFalse, unsched.Status)
-			assert.Equal(t, v2alpha1.ReasonWorkersSchedulable, unsched.Reason)
+			assert.Equal(t, v2.ReasonWorkersSchedulable, unsched.Reason)
 		})
 	}
 }
@@ -1032,14 +1032,14 @@ func TestCapacityGate_StartupVerdictNeedsNoSchedulingGrace(t *testing.T) {
 	// five-minute grace an unschedulable pod would have to sit out.
 	pod := capBackingOff(capWorkerPod("ns", "set", "worker-fresh", corev1.PodPending,
 		now.Add(-time.Second), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	r := capReconciler(t, now, pod)
 
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
-	assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+	assert.Equal(t, v2.ReasonPodsNotStarting, c.Reason)
 }
 
 // TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure: ErrImagePull is one failed
@@ -1051,15 +1051,15 @@ func TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure(t *testing.T) {
 	now := time.Now()
 	pod := capBackingOff(capWorkerPod("ns", "set", "worker-firsttry", corev1.PodPending,
 		now.Add(-time.Second), corev1.ConditionTrue, "", ""), "ErrImagePull", "failed to pull image")
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	r := capReconciler(t, now, pod)
 
 	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
 
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionFalse, c.Status, "one failed pull is not the kubelet's verdict")
-	assert.Equal(t, v2alpha1.ReasonCapacityAvailable, c.Reason)
+	assert.Equal(t, v2.ReasonCapacityAvailable, c.Reason)
 	assert.Equal(t, startupVerdictRecheck, requeue,
 		"the pod is bound and undecided, so the gate must come back for the verdict")
 }
@@ -1070,7 +1070,7 @@ func TestCapacityGate_StartupVerdictIgnoresAPreBackoffFailure(t *testing.T) {
 // the pod ten minutes later — the deadline this rung exists to stop jobs waiting out.
 func TestCapacityGate_StartupVerdictSchedulesItsOwnRecheck(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 
 	// Bound, Pending, no verdict either way: the window the watch cannot see through.
 	starting := capWorkerPod("ns", "set", "worker-starting", corev1.PodPending, now, corev1.ConditionTrue, "", "")
@@ -1082,7 +1082,7 @@ func TestCapacityGate_StartupVerdictSchedulesItsOwnRecheck(t *testing.T) {
 	// Running is an event the watch does deliver.
 	started := capStarted(capWorkerPod("ns", "set", "worker-started", corev1.PodPending, now,
 		corev1.ConditionTrue, "", ""), now)
-	rs2 := rsObj("set2", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs2 := rsObj("set2", "ns", gateOn(v2.CapacityGateModeObserve))
 	r2 := capReconciler(t, now, started)
 	assert.Zero(t, r2.applyWorkerCapacityConditions(context.Background(), rs2, capTemplate(""), gwFixed()))
 }
@@ -1095,14 +1095,14 @@ func TestCapacityGate_StartupVerdictIsOffByDefault(t *testing.T) {
 	now := time.Now()
 	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
 		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
-	rs := rsObj("set", "ns", func(r *v2alpha1.RunnerSet) {
+	rs := rsObj("set", "ns", func(r *v2.RunnerSet) {
 		r.Spec.PendingPodDeadline = &metav1.Duration{Duration: 10 * time.Minute}
 	})
 	r := capReconciler(t, now, pod)
 
 	requeue := r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
 
-	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined))
+	assert.Nil(t, meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined))
 	assert.Zero(t, requeue, "an ungated set must not pay a re-check for a signal it never asked for")
 }
 
@@ -1113,23 +1113,23 @@ func TestCapacityGate_StartupVerdictIsOffByDefault(t *testing.T) {
 // burst of N wasted claims would stay N.
 func TestCapacityGate_StartupVerdictLatchesAndTrickles(t *testing.T) {
 	now := time.Now()
-	rs := rsObj("set", "ns", gateOn(v2alpha1.CapacityGateModeObserve))
+	rs := rsObj("set", "ns", gateOn(v2.CapacityGateModeObserve))
 	pod := capBackingOff(capWorkerPod("ns", "set", "worker-backoff", corev1.PodPending,
 		now.Add(-time.Minute), corev1.ConditionTrue, "", ""), "ImagePullBackOff", "Back-off pulling image")
 
 	r := capReconciler(t, now, pod)
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
-	require.Equal(t, v2alpha1.ReasonPodsNotStarting,
-		meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined).Reason)
+	require.Equal(t, v2.ReasonPodsNotStarting,
+		meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined).Reason)
 
 	// The reaper deletes the gate's own evidence at pendingPodDeadline.
 	require.NoError(t, r.Delete(context.Background(), pod))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
 	assert.Equal(t, metav1.ConditionTrue, c.Status)
-	assert.Equal(t, v2alpha1.ReasonAwaitingProbe, c.Reason)
-	assert.Contains(t, c.Message, v2alpha1.ReasonPodsNotStarting,
+	assert.Equal(t, v2.ReasonAwaitingProbe, c.Reason)
+	assert.Contains(t, c.Message, v2.ReasonPodsNotStarting,
 		"the reaped verdict must survive into the latched message, or the operator loses the image")
 
 	// The probe job's pod carries the same unreplaced image and sticks the same way.
@@ -1138,8 +1138,8 @@ func TestCapacityGate_StartupVerdictLatchesAndTrickles(t *testing.T) {
 	probe.Status.Conditions[0].LastTransitionTime = metav1.NewTime(now.Add(time.Minute))
 	require.NoError(t, r.Create(context.Background(), probe))
 	r.applyWorkerCapacityConditions(context.Background(), rs, capTemplate(""), gwElastic())
-	c = meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c = meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, c)
-	assert.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason,
+	assert.Equal(t, v2.ReasonPodsNotStarting, c.Reason,
 		"a probe that sticks must return the live verdict, not sit latched")
 }

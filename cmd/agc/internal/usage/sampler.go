@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // DefaultSampleInterval matches the metrics-server default resolution (its
@@ -148,7 +148,7 @@ func (s *Sampler) NeedLeaderElection() bool { return false }
 // and finalize pods that reached a terminal phase or disappeared. The API reads
 // happen before the state lock is taken (see the mu comment).
 func (s *Sampler) tick(ctx context.Context) {
-	var sets agcv2alpha1.RunnerSetList
+	var sets agcv2.RunnerSetList
 	if err := s.Client.List(ctx, &sets, client.InNamespace(s.Namespace)); err != nil {
 		s.Log.Error("list RunnerSets", "error", err)
 		return
@@ -250,7 +250,7 @@ func (s *Sampler) tick(ctx context.Context) {
 // convention of scalesetlistener.Metrics.RecorderFor). The RunnerSet reconciler
 // assigns the result to status.sizingRecommendation, which doubles as the
 // aggregate persistence the sampler re-seeds from after a restart.
-func (s *Sampler) SizingStatus(key types.NamespacedName) []agcv2alpha1.ContainerSizingRecommendation {
+func (s *Sampler) SizingStatus(key types.NamespacedName) []agcv2.ContainerSizingRecommendation {
 	if s == nil {
 		return nil
 	}

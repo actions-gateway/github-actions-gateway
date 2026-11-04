@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 func TestHistogramQuantileInterpolates(t *testing.T) {
@@ -106,7 +106,7 @@ func TestSetAggRecommendations(t *testing.T) {
 func TestSeedFromStatusRoundTrip(t *testing.T) {
 	now := time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC)
 	windowStart := metav1.NewTime(now.Add(-time.Hour))
-	persisted := []agcv2alpha1.ContainerSizingRecommendation{{
+	persisted := []agcv2.ContainerSizingRecommendation{{
 		Container:       "runner",
 		ObservedP95:     rl("1500m", "1536Mi"),
 		ObservedPeak:    rl("2", "3Gi"),

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,7 +86,7 @@ func (c *runnerSetCapacityCollector) Collect(ch chan<- prometheus.Metric) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	var list v2alpha1.RunnerSetList
+	var list v2.RunnerSetList
 	if err := c.reader.List(ctx, &list); err != nil {
 		return
 	}
@@ -96,16 +96,16 @@ func (c *runnerSetCapacityCollector) Collect(ch chan<- prometheus.Metric) {
 			continue
 		}
 		ch <- prometheus.MustNewConstMetric(c.pressure, prometheus.GaugeValue,
-			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerQuotaPressure), rs.Namespace, rs.Name)
+			conditionGaugeValue(rs.Status.Conditions, v2.ConditionWorkerQuotaPressure), rs.Namespace, rs.Name)
 		ch <- prometheus.MustNewConstMetric(c.exceeded, prometheus.GaugeValue,
-			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerQuotaExceeded), rs.Namespace, rs.Name)
+			conditionGaugeValue(rs.Status.Conditions, v2.ConditionWorkerQuotaExceeded), rs.Namespace, rs.Name)
 		ch <- prometheus.MustNewConstMetric(c.unschedulable, prometheus.GaugeValue,
-			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable), rs.Namespace, rs.Name)
+			conditionGaugeValue(rs.Status.Conditions, v2.ConditionWorkersUnschedulable), rs.Namespace, rs.Name)
 		ch <- prometheus.MustNewConstMetric(c.notStarting, prometheus.GaugeValue,
-			conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkersNotStarting), rs.Namespace, rs.Name)
-		if gate := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined); gate != nil {
+			conditionGaugeValue(rs.Status.Conditions, v2.ConditionWorkersNotStarting), rs.Namespace, rs.Name)
+		if gate := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined); gate != nil {
 			ch <- prometheus.MustNewConstMetric(c.declined, prometheus.GaugeValue,
-				conditionGaugeValue(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined),
+				conditionGaugeValue(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined),
 				rs.Namespace, rs.Name, gate.Reason)
 		}
 	}

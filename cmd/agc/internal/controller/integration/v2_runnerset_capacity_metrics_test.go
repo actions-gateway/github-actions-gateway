@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -148,11 +148,11 @@ func TestV2_RunnerSet_CapacityGauges_QuotaExceeded(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	reg := newCapacityGaugeRegistry(t)
 	require.Eventually(t, func() bool {
@@ -186,11 +186,11 @@ func TestV2_RunnerSet_CapacityGauges_WorkersUnschedulable(t *testing.T) {
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	reg := newCapacityGaugeRegistry(t)
 	require.Eventually(t, func() bool {
@@ -242,7 +242,7 @@ func TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason(t *testing.T) {
 
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
+	rs.Spec.CapacityGate = &v2.CapacityGate{Mode: v2.CapacityGateModeObserve}
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
 	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
 	require.NoError(t, k8sClient.Create(ctx, rs))
@@ -257,12 +257,12 @@ func TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), ungated)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
-	waitForSetReadyReason(t, ns, ungatedName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, ungatedName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	reg := newCapacityGaugeRegistry(t)
 
@@ -270,10 +270,10 @@ func TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason(t *testing.T) {
 	// tell "evaluated and not gating" from "no gate here".
 	require.Eventually(t, func() bool {
 		reason, v, ok := declinedGauge(t, reg, ns, setName)
-		return ok && v == 0 && reason == v2alpha1.ReasonCapacityAvailable
+		return ok && v == 0 && reason == v2.ReasonCapacityAvailable
 	}, 20*time.Second, 200*time.Millisecond,
 		"an opted-in set with no stuck pod must read 0 on %s under reason=%s",
-		familyDeclined, v2alpha1.ReasonCapacityAvailable)
+		familyDeclined, v2.ReasonCapacityAvailable)
 
 	_, _, ok := declinedGauge(t, reg, ns, ungatedName)
 	require.False(t, ok, "a set with no spec.capacityGate must emit no %s series at all", familyDeclined)
@@ -285,19 +285,19 @@ func TestV2_RunnerSet_CapacityGauges_DeclinedCarriesReason(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		reason, v, ok := declinedGauge(t, reg, ns, setName)
-		return ok && v == 1 && reason == v2alpha1.ReasonPodsUnschedulable
+		return ok && v == 1 && reason == v2.ReasonPodsUnschedulable
 	}, 25*time.Second, 100*time.Millisecond,
 		"a pod the scheduler cannot place must read 1 on %s under reason=%s",
-		familyDeclined, v2alpha1.ReasonPodsUnschedulable)
+		familyDeclined, v2.ReasonPodsUnschedulable)
 	requireCapacityGauge(t, reg, familyUnschedulable, ns, setName, 1)
 
 	// --- the latch, once the reaper deletes the gate's own evidence -----------
 	require.Eventually(t, func() bool {
 		reason, v, ok := declinedGauge(t, reg, ns, setName)
-		return ok && v == 1 && reason == v2alpha1.ReasonAwaitingProbe
+		return ok && v == 1 && reason == v2.ReasonAwaitingProbe
 	}, 30*time.Second, 100*time.Millisecond,
 		"reaping the declined worker pod must latch %s at 1 under reason=%s, not clear it",
-		familyDeclined, v2alpha1.ReasonAwaitingProbe)
+		familyDeclined, v2.ReasonAwaitingProbe)
 
 	// The sibling gauge has already recovered — which is exactly what the reason label
 	// buys: without it, this state is indistinguishable from a live decline, and the
@@ -335,11 +335,11 @@ func TestV2_RunnerSet_CapacityGauges_WorkersNotStarting(t *testing.T) {
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	reg := newCapacityGaugeRegistry(t)
 	require.Eventually(t, func() bool {
@@ -370,12 +370,12 @@ func TestV2_RunnerSet_CapacityGauges_WorkersNotStarting(t *testing.T) {
 
 	// The condition the gauge mirrors carries the kubelet's own text, which names the
 	// image — the operator's whole remedy.
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: setName}, &got))
-	c := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionWorkersNotStarting)
+	c := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionWorkersNotStarting)
 	require.NotNil(t, c)
 	require.Equal(t, metav1.ConditionTrue, c.Status)
-	require.Equal(t, v2alpha1.ReasonPodsNotStarting, c.Reason)
+	require.Equal(t, v2.ReasonPodsNotStarting, c.Reason)
 	require.Contains(t, c.Message, image)
 	require.NotContains(t, c.Message, "job intake is gated",
 		"this condition reports and decides nothing; this set's intake is not gated")

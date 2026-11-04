@@ -10,20 +10,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // stubSizing is a fixed-map SizingSource.
 type stubSizing struct {
-	recs map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation
+	recs map[types.NamespacedName][]v2.ContainerSizingRecommendation
 }
 
-func (s *stubSizing) SizingStatus(key types.NamespacedName) []v2alpha1.ContainerSizingRecommendation {
+func (s *stubSizing) SizingStatus(key types.NamespacedName) []v2.ContainerSizingRecommendation {
 	return s.recs[key]
 }
 
-func sizingRec(samples int64) v2alpha1.ContainerSizingRecommendation {
-	return v2alpha1.ContainerSizingRecommendation{
+func sizingRec(samples int64) v2.ContainerSizingRecommendation {
+	return v2.ContainerSizingRecommendation{
 		Container: "runner",
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -44,8 +44,8 @@ func sizingRec(samples int64) v2alpha1.ContainerSizingRecommendation {
 	}
 }
 
-func templateWithRunnerResources(res corev1.ResourceRequirements) *v2alpha1.RunnerTemplateSpec {
-	return &v2alpha1.RunnerTemplateSpec{
+func templateWithRunnerResources(res corev1.ResourceRequirements) *v2.RunnerTemplateSpec {
+	return &v2.RunnerTemplateSpec{
 		PodTemplate: corev1.PodTemplateSpec{
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: "runner", Resources: res}},
@@ -54,20 +54,20 @@ func templateWithRunnerResources(res corev1.ResourceRequirements) *v2alpha1.Runn
 	}
 }
 
-func sizingTestSet() *v2alpha1.RunnerSet {
-	return &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: "t1", Name: "rs1", Generation: 3}}
+func sizingTestSet() *v2.RunnerSet {
+	return &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: "t1", Name: "rs1", Generation: 3}}
 }
 
-func findSizingDrift(t *testing.T, rs *v2alpha1.RunnerSet) *metav1.Condition {
+func findSizingDrift(t *testing.T, rs *v2.RunnerSet) *metav1.Condition {
 	t.Helper()
-	return meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionSizingDrift)
+	return meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionSizingDrift)
 }
 
 // TestApplySizingStatusDriftDetected covers both drift directions at once: an
 // oversized CPU/memory request (waste) and a memory limit below the observed
 // per-job peak (OOM risk).
 func TestApplySizingStatusDriftDetected(t *testing.T) {
-	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation{
+	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2.ContainerSizingRecommendation{
 		{Namespace: "t1", Name: "rs1"}: {sizingRec(25)},
 	}}}
 	rs := sizingTestSet()
@@ -87,7 +87,7 @@ func TestApplySizingStatusDriftDetected(t *testing.T) {
 		t.Fatalf("status.sizingRecommendation = %+v, want the stub's entry", rs.Status.SizingRecommendation)
 	}
 	cond := findSizingDrift(t, rs)
-	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != v2alpha1.ReasonSizingDriftDetected {
+	if cond == nil || cond.Status != metav1.ConditionTrue || cond.Reason != v2.ReasonSizingDriftDetected {
 		t.Fatalf("SizingDrift = %+v, want True/SizingDriftDetected", cond)
 	}
 	if cond.ObservedGeneration != 3 {
@@ -101,7 +101,7 @@ func TestApplySizingStatusDriftDetected(t *testing.T) {
 }
 
 func TestApplySizingStatusWithinRange(t *testing.T) {
-	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation{
+	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2.ContainerSizingRecommendation{
 		{Namespace: "t1", Name: "rs1"}: {sizingRec(25)},
 	}}}
 	rs := sizingTestSet()
@@ -118,7 +118,7 @@ func TestApplySizingStatusWithinRange(t *testing.T) {
 	r.applySizingStatus(rs, template)
 
 	cond := findSizingDrift(t, rs)
-	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2alpha1.ReasonSizingWithinRange {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2.ReasonSizingWithinRange {
 		t.Fatalf("SizingDrift = %+v, want False/SizingWithinRange", cond)
 	}
 }
@@ -137,7 +137,7 @@ func TestApplySizingStatusGapFilledDefaults(t *testing.T) {
 		corev1.ResourceCPU:    resource.MustParse("150m"),
 		corev1.ResourceMemory: resource.MustParse("2Gi"), // above the 1Gi default limit → OOM risk too
 	}
-	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation{
+	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2.ContainerSizingRecommendation{
 		{Namespace: "t1", Name: "rs1"}: {rec},
 	}}}
 	rs := sizingTestSet()
@@ -151,7 +151,7 @@ func TestApplySizingStatusGapFilledDefaults(t *testing.T) {
 }
 
 func TestApplySizingStatusInsufficientSamples(t *testing.T) {
-	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation{
+	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2.ContainerSizingRecommendation{
 		{Namespace: "t1", Name: "rs1"}: {sizingRec(7)}, // above the recommendation floor, below the drift floor
 	}}}
 	rs := sizingTestSet()
@@ -162,7 +162,7 @@ func TestApplySizingStatusInsufficientSamples(t *testing.T) {
 		t.Fatalf("low-confidence recommendation must still surface, got %+v", rs.Status.SizingRecommendation)
 	}
 	cond := findSizingDrift(t, rs)
-	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2alpha1.ReasonInsufficientSamples {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != v2.ReasonInsufficientSamples {
 		t.Fatalf("SizingDrift = %+v, want False/InsufficientSamples", cond)
 	}
 }
@@ -171,9 +171,9 @@ func TestApplySizingStatusInsufficientSamples(t *testing.T) {
 // semantics: an empty snapshot (sampler warming up after a restart) must not
 // wipe the persisted recommendation, and drift keeps being judged from it.
 func TestApplySizingStatusPersistedSurvivesEmptySnapshot(t *testing.T) {
-	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation{}}}
+	r := &RunnerSetReconciler{Sizing: &stubSizing{recs: map[types.NamespacedName][]v2.ContainerSizingRecommendation{}}}
 	rs := sizingTestSet()
-	rs.Status.SizingRecommendation = []v2alpha1.ContainerSizingRecommendation{sizingRec(25)}
+	rs.Status.SizingRecommendation = []v2.ContainerSizingRecommendation{sizingRec(25)}
 	template := templateWithRunnerResources(corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("2")},
 	})

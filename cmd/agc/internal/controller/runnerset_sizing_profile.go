@@ -6,7 +6,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/usage"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // defaultThroughputHeadroomPercent is the Throughput profile's memory-limit
@@ -32,14 +32,14 @@ const defaultThroughputHeadroomPercent = 150
 // given the persisted recommendation — the single predicate shared by the
 // pod-build transform and the status.sizingProfileState reporting, so the two
 // can never disagree.
-func sizingProfileApplies(sizing *v2alpha1.WorkerSizing, template *v2alpha1.RunnerTemplateSpec, recs []v2alpha1.ContainerSizingRecommendation) bool {
+func sizingProfileApplies(sizing *v2.WorkerSizing, template *v2.RunnerTemplateSpec, recs []v2.ContainerSizingRecommendation) bool {
 	if sizing == nil || template == nil {
 		return false
 	}
 	switch sizing.Profile {
-	case v2alpha1.SizingProfileNodeShare:
+	case v2.SizingProfileNodeShare:
 		return sizing.NodeShare != nil
-	case v2alpha1.SizingProfileBinpack, v2alpha1.SizingProfileThroughput:
+	case v2.SizingProfileBinpack, v2.SizingProfileThroughput:
 		for i := range template.PodTemplate.Spec.Containers {
 			if rec := recommendationFor(recs, template.PodTemplate.Spec.Containers[i].Name); rec == nil ||
 				rec.SampleCount < usage.MinSamplesForDrift {
@@ -55,7 +55,7 @@ func sizingProfileApplies(sizing *v2alpha1.WorkerSizing, template *v2alpha1.Runn
 // applySizingProfile returns the pod template to provision with: the input
 // template untouched when the profile does not actuate, or a deep-copied
 // template with the derived cpu/memory values applied.
-func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2alpha1.WorkerSizing, tmplSpec *v2alpha1.RunnerTemplateSpec, recs []v2alpha1.ContainerSizingRecommendation) corev1.PodTemplateSpec {
+func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2.WorkerSizing, tmplSpec *v2.RunnerTemplateSpec, recs []v2.ContainerSizingRecommendation) corev1.PodTemplateSpec {
 	if !sizingProfileApplies(sizing, tmplSpec, recs) {
 		return template
 	}
@@ -69,9 +69,9 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2alpha1.Worker
 	}
 	out.Annotations[provisioner.AnnotationSizingProfile] = sizing.Profile
 	switch sizing.Profile {
-	case v2alpha1.SizingProfileNodeShare:
+	case v2.SizingProfileNodeShare:
 		applyNodeShare(&out.Spec, sizing)
-	case v2alpha1.SizingProfileBinpack:
+	case v2.SizingProfileBinpack:
 		for i := range out.Spec.Containers {
 			c := &out.Spec.Containers[i]
 			rec := recommendationFor(recs, c.Name)
@@ -81,7 +81,7 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2alpha1.Worker
 			setResource(&c.Resources, corev1.ResourceCPU, cpu, cpu)
 			setResource(&c.Resources, corev1.ResourceMemory, mem, mem)
 		}
-	case v2alpha1.SizingProfileThroughput:
+	case v2.SizingProfileThroughput:
 		headroom := int64(defaultThroughputHeadroomPercent)
 		if sizing.LimitHeadroomPercent != nil {
 			headroom = int64(*sizing.LimitHeadroomPercent)
@@ -112,16 +112,16 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2alpha1.Worker
 // not clamped by maxRequests; the bump is, so a retry never buys memory the profile's
 // clamp would refuse. Nil for every other profile, whose next pod gets the limit that
 // killed the job.
-func memoryRetryPolicy(sizing *v2alpha1.WorkerSizing) *provisioner.MemoryRetryPolicy {
+func memoryRetryPolicy(sizing *v2.WorkerSizing) *provisioner.MemoryRetryPolicy {
 	if sizing == nil {
 		return nil
 	}
 	policy := &provisioner.MemoryRetryPolicy{Ceiling: sizing.MaxRequests[corev1.ResourceMemory]}
 	switch sizing.Profile {
-	case v2alpha1.SizingProfileBinpack:
+	case v2.SizingProfileBinpack:
 		policy.HeadroomPercent = int64(usage.MemLimitHeadroom * 100)
 		policy.RequestsFollow = true
-	case v2alpha1.SizingProfileThroughput:
+	case v2.SizingProfileThroughput:
 		policy.HeadroomPercent = defaultThroughputHeadroomPercent
 		if sizing.LimitHeadroomPercent != nil {
 			policy.HeadroomPercent = int64(*sizing.LimitHeadroomPercent)
@@ -136,7 +136,7 @@ func memoryRetryPolicy(sizing *v2alpha1.WorkerSizing) *provisioner.MemoryRetryPo
 // envelope divided by workersPerNode. Only the runner container: sidecars keep
 // their template ask, and the operator accounts for them when choosing
 // workersPerNode. Limits keep the template's values.
-func applyNodeShare(spec *corev1.PodSpec, sizing *v2alpha1.WorkerSizing) {
+func applyNodeShare(spec *corev1.PodSpec, sizing *v2.WorkerSizing) {
 	share := sizing.NodeShare
 	for i := range spec.Containers {
 		c := &spec.Containers[i]
@@ -165,7 +165,7 @@ func applyNodeShare(spec *corev1.PodSpec, sizing *v2alpha1.WorkerSizing) {
 }
 
 // recommendationFor returns the recommendation entry for a container, or nil.
-func recommendationFor(recs []v2alpha1.ContainerSizingRecommendation, name string) *v2alpha1.ContainerSizingRecommendation {
+func recommendationFor(recs []v2.ContainerSizingRecommendation, name string) *v2.ContainerSizingRecommendation {
 	for i := range recs {
 		if recs[i].Container == name {
 			return &recs[i]
@@ -193,7 +193,7 @@ func setResource(res *corev1.ResourceRequirements, name corev1.ResourceName, req
 
 // clampQuantity bounds a derived value within the profile's optional
 // minRequests/maxRequests clamps.
-func clampQuantity(q resource.Quantity, sizing *v2alpha1.WorkerSizing, name corev1.ResourceName) resource.Quantity {
+func clampQuantity(q resource.Quantity, sizing *v2.WorkerSizing, name corev1.ResourceName) resource.Quantity {
 	if min, ok := sizing.MinRequests[name]; ok && q.Cmp(min) < 0 {
 		return min
 	}

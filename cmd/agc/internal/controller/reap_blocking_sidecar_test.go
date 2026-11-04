@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -26,8 +26,8 @@ func newSidecarMetrics() *runnercore.Metrics {
 	}
 }
 
-func sidecarTemplate(annotations map[string]string, containers ...corev1.Container) *v2alpha1.RunnerTemplateSpec {
-	return &v2alpha1.RunnerTemplateSpec{
+func sidecarTemplate(annotations map[string]string, containers ...corev1.Container) *v2.RunnerTemplateSpec {
+	return &v2.RunnerTemplateSpec{
 		PodTemplate: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{Annotations: annotations},
 			Spec:       corev1.PodSpec{Containers: containers},
@@ -42,14 +42,14 @@ func TestSetReapBlockingSidecarStatus(t *testing.T) {
 	t.Run("regular sidecar sets condition True and gauge to the count", func(t *testing.T) {
 		m := newSidecarMetrics()
 		r := &RunnerSetReconciler{Metrics: m}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
 		r.setReapBlockingSidecarStatus(rs, sidecarTemplate(nil, runner, dind), nil)
 
-		cond := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+		cond := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionPossibleReapBlockingSidecar)
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionTrue, cond.Status)
-		assert.Equal(t, v2alpha1.ReasonReapBlockingSidecar, cond.Reason)
+		assert.Equal(t, v2.ReasonReapBlockingSidecar, cond.Reason)
 		assert.Contains(t, cond.Message, "dind")
 		assert.Equal(t, 1.0, testutil.ToFloat64(m.ReapBlockingSidecarTemplates.WithLabelValues("ns", "set")))
 	})
@@ -57,26 +57,26 @@ func TestSetReapBlockingSidecarStatus(t *testing.T) {
 	t.Run("no sidecar sets condition False and gauge to zero", func(t *testing.T) {
 		m := newSidecarMetrics()
 		r := &RunnerSetReconciler{Metrics: m}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
 		r.setReapBlockingSidecarStatus(rs, sidecarTemplate(nil, runner), nil)
 
-		cond := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+		cond := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionPossibleReapBlockingSidecar)
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionFalse, cond.Status)
-		assert.Equal(t, v2alpha1.ReasonNoReapBlockingSidecar, cond.Reason)
+		assert.Equal(t, v2.ReasonNoReapBlockingSidecar, cond.Reason)
 		assert.Equal(t, 0.0, testutil.ToFloat64(m.ReapBlockingSidecarTemplates.WithLabelValues("ns", "set")))
 	})
 
 	t.Run("opt-out annotation clears the condition and gauge", func(t *testing.T) {
 		m := newSidecarMetrics()
 		r := &RunnerSetReconciler{Metrics: m}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
-		acked := map[string]string{v2alpha1.SelfExitingSidecarsAnnotation: "dind"}
+		acked := map[string]string{v2.SelfExitingSidecarsAnnotation: "dind"}
 		r.setReapBlockingSidecarStatus(rs, sidecarTemplate(acked, runner, dind), acked)
 
-		cond := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+		cond := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionPossibleReapBlockingSidecar)
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionFalse, cond.Status)
 		assert.Equal(t, 0.0, testutil.ToFloat64(m.ReapBlockingSidecarTemplates.WithLabelValues("ns", "set")))
@@ -85,7 +85,7 @@ func TestSetReapBlockingSidecarStatus(t *testing.T) {
 	t.Run("nil template (unresolved) clears a previously-set condition and gauge", func(t *testing.T) {
 		m := newSidecarMetrics()
 		r := &RunnerSetReconciler{Metrics: m}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
 		// First a reap-blocking sidecar is present…
 		r.setReapBlockingSidecarStatus(rs, sidecarTemplate(nil, runner, dind), nil)
@@ -93,7 +93,7 @@ func TestSetReapBlockingSidecarStatus(t *testing.T) {
 
 		// …then the template stops resolving: both outlets clear.
 		r.setReapBlockingSidecarStatus(rs, nil, nil)
-		cond := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+		cond := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionPossibleReapBlockingSidecar)
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionFalse, cond.Status)
 		assert.Equal(t, 0.0, testutil.ToFloat64(m.ReapBlockingSidecarTemplates.WithLabelValues("ns", "set")))
@@ -101,7 +101,7 @@ func TestSetReapBlockingSidecarStatus(t *testing.T) {
 
 	t.Run("nil Metrics does not panic", func(t *testing.T) {
 		r := &RunnerSetReconciler{}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 		require.NotPanics(t, func() {
 			r.setReapBlockingSidecarStatus(rs, sidecarTemplate(nil, runner, dind), nil)
 		})

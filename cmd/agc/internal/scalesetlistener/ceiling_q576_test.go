@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -183,12 +183,12 @@ func TestListener_CeilingStallReportsItsOwnConditionAndEvent(t *testing.T) {
 	srv.EnqueueJob(ssID)
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
-			v2alpha1.ReasonWorkerCeilingReached)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionTrue,
+			v2.ReasonWorkerCeilingReached)
 	}, 5*time.Second, 10*time.Millisecond,
 		"a capacity stall must report its own reason, not a runner-name conflict")
 
-	cond, _ := sink.last(v2alpha1.ConditionJobProvisionStalled)
+	cond, _ := sink.last(v2.ConditionJobProvisionStalled)
 	assert.Contains(t, cond.Message, "waiting for worker capacity",
 		"the message must say what the jobs are waiting on")
 	assert.Equal(t, 1, sink.eventCount("WorkerCeilingReached"), "one event per episode")
@@ -203,8 +203,8 @@ func TestListener_CeilingStallReportsItsOwnConditionAndEvent(t *testing.T) {
 	gate.setFull(false)
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
-			v2alpha1.ReasonRunnerNameConflict)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionTrue,
+			v2.ReasonRunnerNameConflict)
 	}, 5*time.Second, 10*time.Millisecond,
 		"a runner-name conflict must outrank a ceiling hold in the reported reason")
 	assert.Positive(t, sink.eventCount("JobProvisionStalled"),

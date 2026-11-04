@@ -16,27 +16,27 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // sizingStub is the suite's mutable SizingSource (Q359 Phase 2): tests seed
 // per-RunnerSet recommendations with Set while the manager is running.
 type sizingStub struct {
 	mu   sync.Mutex
-	recs map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation
+	recs map[types.NamespacedName][]v2.ContainerSizingRecommendation
 }
 
-func (s *sizingStub) SizingStatus(key types.NamespacedName) []v2alpha1.ContainerSizingRecommendation {
+func (s *sizingStub) SizingStatus(key types.NamespacedName) []v2.ContainerSizingRecommendation {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.recs[key]
 }
 
-func (s *sizingStub) Set(key types.NamespacedName, recs []v2alpha1.ContainerSizingRecommendation) {
+func (s *sizingStub) Set(key types.NamespacedName, recs []v2.ContainerSizingRecommendation) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.recs == nil {
-		s.recs = make(map[types.NamespacedName][]v2alpha1.ContainerSizingRecommendation)
+		s.recs = make(map[types.NamespacedName][]v2.ContainerSizingRecommendation)
 	}
 	s.recs[key] = recs
 }
@@ -68,12 +68,12 @@ func TestV2_RunnerSet_SizingRecommendationAndDrift(t *testing.T) {
 	rs := newRunnerSet("set", ns, "gw")
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// Seed a confident measured recommendation: 500m/1Gi against the 2-CPU/4Gi ask.
 	key := types.NamespacedName{Namespace: ns, Name: "set"}
 	windowStart := metav1.NewTime(time.Now().Add(-time.Hour).Truncate(time.Second))
-	r.Sizing.(*sizingStub).Set(key, []v2alpha1.ContainerSizingRecommendation{{
+	r.Sizing.(*sizingStub).Set(key, []v2.ContainerSizingRecommendation{{
 		Container: "runner",
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -112,15 +112,15 @@ func TestV2_RunnerSet_SizingRecommendationAndDrift(t *testing.T) {
 		return k8sClient.Update(ctx, rs)
 	}))
 
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.Eventually(t, func() bool {
 		if err := k8sClient.Get(ctx, key, &got); err != nil {
 			return false
 		}
-		cond := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionSizingDrift)
+		cond := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionSizingDrift)
 		return len(got.Status.SizingRecommendation) == 1 &&
 			cond != nil && cond.Status == metav1.ConditionTrue &&
-			cond.Reason == v2alpha1.ReasonSizingDriftDetected
+			cond.Reason == v2.ReasonSizingDriftDetected
 	}, 20*time.Second, 100*time.Millisecond,
 		"RunnerSet should surface the sizing recommendation and SizingDrift=True")
 

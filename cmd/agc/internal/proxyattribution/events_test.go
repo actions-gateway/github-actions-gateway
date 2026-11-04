@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -74,7 +74,7 @@ func TestPoller_ReportsAnAttributedDenialOnce(t *testing.T) {
 	assert.Equal(t, "EgressDestinationDenied", ev.reason)
 	assert.Equal(t, "AttributeProxyFailure", ev.action)
 	assert.Equal(t, "EgressProxy provider/shared refused worker pod own-1 a CONNECT to evil.example:443: the destination is not on the pool's allowlist, so a retry is refused the same way", ev.note)
-	require.IsType(t, &v2alpha1.RunnerSet{}, ev.regarding)
+	require.IsType(t, &v2.RunnerSet{}, ev.regarding)
 	assert.Equal(t, "own", ev.regarding.GetName())
 	require.IsType(t, &corev1.Pod{}, ev.related)
 	assert.Equal(t, "own-1", ev.related.GetName())
@@ -118,10 +118,10 @@ func TestPoller_ReportsOnThePodWhenItsRunnerSetIsGone(t *testing.T) {
 	h := newHarness(t, p, addr)
 	ctx := context.Background()
 	h.p.onPod(ctx, workerPod("own-1", "u1", "own", "10.1.0.5", t0))
-	keep := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "keep", Namespace: ns}}
+	keep := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "keep", Namespace: ns}}
 	keep.Spec.GatewayRef.Name = "gw"
 	require.NoError(t, h.c.Create(ctx, keep), "a second set keeps the pool in use")
-	require.NoError(t, h.c.Delete(ctx, &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "own", Namespace: ns}}))
+	require.NoError(t, h.c.Delete(ctx, &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "own", Namespace: ns}}))
 
 	require.NoError(t, h.p.poll(ctx))
 	got := h.rec.recorded()

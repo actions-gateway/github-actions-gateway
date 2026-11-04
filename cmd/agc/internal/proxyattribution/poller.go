@@ -20,7 +20,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -193,7 +193,7 @@ func (p *Poller) ownPod(ctx context.Context, pod *corev1.Pod) bool {
 	if name == "" {
 		return false
 	}
-	var rs v2alpha1.RunnerSet
+	var rs v2.RunnerSet
 	if err := p.Client.Get(ctx, types.NamespacedName{Namespace: pod.Namespace, Name: name}, &rs); err != nil {
 		return false
 	}
@@ -206,7 +206,7 @@ func (p *Poller) poll(ctx context.Context) error {
 	// running when it opts in can be joined; they are swept either way.
 	now := p.clock()
 	p.windows.sweep(now)
-	var gw v2alpha1.ActionsGateway
+	var gw v2.ActionsGateway
 	if err := p.Client.Get(ctx, types.NamespacedName{Namespace: p.Namespace, Name: p.Gateway}, &gw); err != nil {
 		if apierrors.IsNotFound(err) {
 			p.reset()
@@ -248,8 +248,8 @@ func (p *Poller) reset() {
 
 // pools resolves each of this gateway's RunnerSets to its pool, as the worker's
 // port is resolved: the set's proxyRef, else the gateway's defaultProxyRef.
-func (p *Poller) pools(ctx context.Context, gw *v2alpha1.ActionsGateway) ([]pool, error) {
-	var sets v2alpha1.RunnerSetList
+func (p *Poller) pools(ctx context.Context, gw *v2.ActionsGateway) ([]pool, error) {
+	var sets v2.RunnerSetList
 	if err := p.Client.List(ctx, &sets, client.InNamespace(p.Namespace)); err != nil {
 		return nil, fmt.Errorf("list RunnerSets: %w", err)
 	}

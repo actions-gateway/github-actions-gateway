@@ -7,14 +7,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 const testGPU = corev1.ResourceName("nvidia.com/gpu")
 
 // profileTemplate returns a template spec with a runner container carrying a
 // static ask plus one GPU, and an optional dind sidecar.
-func profileTemplate(withSidecar bool) *v2alpha1.RunnerTemplateSpec {
+func profileTemplate(withSidecar bool) *v2.RunnerTemplateSpec {
 	runner := corev1.Container{
 		Name: "runner",
 		Resources: corev1.ResourceRequirements{
@@ -34,13 +34,13 @@ func profileTemplate(withSidecar bool) *v2alpha1.RunnerTemplateSpec {
 	if withSidecar {
 		containers = append(containers, corev1.Container{Name: "dind"})
 	}
-	return &v2alpha1.RunnerTemplateSpec{
+	return &v2.RunnerTemplateSpec{
 		PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: containers}},
 	}
 }
 
-func confidentRec(container string) v2alpha1.ContainerSizingRecommendation {
-	return v2alpha1.ContainerSizingRecommendation{
+func confidentRec(container string) v2.ContainerSizingRecommendation {
+	return v2.ContainerSizingRecommendation{
 		Container: container,
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -59,8 +59,8 @@ func confidentRec(container string) v2alpha1.ContainerSizingRecommendation {
 
 func TestApplySizingProfileStaticIsUntouched(t *testing.T) {
 	tmpl := profileTemplate(false)
-	for _, sizing := range []*v2alpha1.WorkerSizing{nil, {Profile: v2alpha1.SizingProfileStatic}} {
-		out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")})
+	for _, sizing := range []*v2.WorkerSizing{nil, {Profile: v2.SizingProfileStatic}} {
+		out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner")})
 		cpu := out.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU]
 		if cpu.String() != "2" {
 			t.Fatalf("static profile changed the template: cpu request %s", cpu.String())
@@ -70,8 +70,8 @@ func TestApplySizingProfileStaticIsUntouched(t *testing.T) {
 
 func TestApplySizingProfileBinpack(t *testing.T) {
 	tmpl := profileTemplate(false)
-	out := applySizingProfile(tmpl.PodTemplate, &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack},
-		tmpl, []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")})
+	out := applySizingProfile(tmpl.PodTemplate, &v2.WorkerSizing{Profile: v2.SizingProfileBinpack},
+		tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner")})
 
 	res := out.Spec.Containers[0].Resources
 	// Guaranteed QoS: requests == limits, from the recommendation (cpu p95,
@@ -97,8 +97,8 @@ func TestApplySizingProfileBinpack(t *testing.T) {
 
 func TestApplySizingProfileBinpackAllOrNothing(t *testing.T) {
 	tmpl := profileTemplate(true) // runner + dind, but only runner has history
-	sizing := &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack}
-	recs := []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")}
+	sizing := &v2.WorkerSizing{Profile: v2.SizingProfileBinpack}
+	recs := []v2.ContainerSizingRecommendation{confidentRec("runner")}
 
 	if sizingProfileApplies(sizing, tmpl, recs) {
 		t.Fatal("profile must not apply while a template container lacks a confident recommendation")
@@ -116,15 +116,15 @@ func TestApplySizingProfileBinpackAllOrNothing(t *testing.T) {
 		t.Fatal("profile must not apply below the confidence minimum")
 	}
 	// Confident on both: applies.
-	if !sizingProfileApplies(sizing, tmpl, []v2alpha1.ContainerSizingRecommendation{confidentRec("runner"), confidentRec("dind")}) {
+	if !sizingProfileApplies(sizing, tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner"), confidentRec("dind")}) {
 		t.Fatal("profile should apply once every container is confident")
 	}
 }
 
 func TestApplySizingProfileThroughput(t *testing.T) {
 	tmpl := profileTemplate(false)
-	out := applySizingProfile(tmpl.PodTemplate, &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput},
-		tmpl, []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")})
+	out := applySizingProfile(tmpl.PodTemplate, &v2.WorkerSizing{Profile: v2.SizingProfileThroughput},
+		tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner")})
 
 	res := out.Spec.Containers[0].Resources
 	if q := res.Requests[corev1.ResourceCPU]; q.String() != "500m" {
@@ -143,8 +143,8 @@ func TestApplySizingProfileThroughput(t *testing.T) {
 
 	// Custom headroom.
 	out = applySizingProfile(tmpl.PodTemplate,
-		&v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput, LimitHeadroomPercent: ptr.To(int32(200))},
-		tmpl, []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")})
+		&v2.WorkerSizing{Profile: v2.SizingProfileThroughput, LimitHeadroomPercent: ptr.To(int32(200))},
+		tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner")})
 	if q := out.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory]; q.String() != "3Gi" {
 		t.Fatalf("throughput 200%% memory limit = %s, want 3Gi", q.String())
 	}
@@ -152,9 +152,9 @@ func TestApplySizingProfileThroughput(t *testing.T) {
 
 func TestApplySizingProfileNodeShare(t *testing.T) {
 	tmpl := profileTemplate(true)
-	sizing := &v2alpha1.WorkerSizing{
-		Profile: v2alpha1.SizingProfileNodeShare,
-		NodeShare: &v2alpha1.NodeShareSizing{
+	sizing := &v2.WorkerSizing{
+		Profile: v2.SizingProfileNodeShare,
+		NodeShare: &v2.NodeShareSizing{
 			Allocatable: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("15"),
 				corev1.ResourceMemory: resource.MustParse("60Gi"),
@@ -201,9 +201,9 @@ func TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed(t *testing.T) {
 		corev1.ResourceMemory: resource.MustParse("2Gi"),
 		testGPU:               resource.MustParse("1"),
 	}
-	sizing := &v2alpha1.WorkerSizing{
-		Profile: v2alpha1.SizingProfileNodeShare,
-		NodeShare: &v2alpha1.NodeShareSizing{
+	sizing := &v2.WorkerSizing{
+		Profile: v2.SizingProfileNodeShare,
+		NodeShare: &v2.NodeShareSizing{
 			Allocatable: corev1.ResourceList{
 				corev1.ResourceCPU:    resource.MustParse("15"),
 				corev1.ResourceMemory: resource.MustParse("60Gi"),
@@ -231,8 +231,8 @@ func TestApplySizingProfileNodeShareLiftedLimitsReachGuaranteed(t *testing.T) {
 
 func TestApplySizingProfileClamps(t *testing.T) {
 	tmpl := profileTemplate(false)
-	sizing := &v2alpha1.WorkerSizing{
-		Profile: v2alpha1.SizingProfileBinpack,
+	sizing := &v2.WorkerSizing{
+		Profile: v2.SizingProfileBinpack,
 		MinRequests: corev1.ResourceList{
 			corev1.ResourceCPU: resource.MustParse("1"),
 		},
@@ -240,7 +240,7 @@ func TestApplySizingProfileClamps(t *testing.T) {
 			corev1.ResourceMemory: resource.MustParse("1536Mi"),
 		},
 	}
-	out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")})
+	out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner")})
 
 	res := out.Spec.Containers[0].Resources
 	if q := res.Requests[corev1.ResourceCPU]; q.String() != "1" {
@@ -257,34 +257,34 @@ func TestApplySizingProfileClamps(t *testing.T) {
 func TestApplySizingStatusProfileActiveSupersedesDrift(t *testing.T) {
 	r := &RunnerSetReconciler{}
 	rs := sizingTestSet()
-	rs.Spec.Sizing = &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack}
-	rs.Status.SizingRecommendation = []v2alpha1.ContainerSizingRecommendation{confidentRec("runner")}
+	rs.Spec.Sizing = &v2.WorkerSizing{Profile: v2.SizingProfileBinpack}
+	rs.Status.SizingRecommendation = []v2.ContainerSizingRecommendation{confidentRec("runner")}
 	tmpl := profileTemplate(false) // oversized ask that would otherwise drift
 
 	r.applySizingStatus(rs, tmpl)
 
-	if rs.Status.SizingProfileState != v2alpha1.SizingProfileStateActive {
+	if rs.Status.SizingProfileState != v2.SizingProfileStateActive {
 		t.Fatalf("SizingProfileState = %q, want Active", rs.Status.SizingProfileState)
 	}
 	cond := findSizingDrift(t, rs)
-	if cond == nil || cond.Status != "False" || cond.Reason != v2alpha1.ReasonSizingProfileActive {
+	if cond == nil || cond.Status != "False" || cond.Reason != v2.ReasonSizingProfileActive {
 		t.Fatalf("SizingDrift = %+v, want False/SizingProfileActive", cond)
 	}
 
 	// Not enough history: state reports AwaitingSamples and drift is judged
 	// normally against the template (which is oversized → True).
 	rs2 := sizingTestSet()
-	rs2.Spec.Sizing = &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack}
+	rs2.Spec.Sizing = &v2.WorkerSizing{Profile: v2.SizingProfileBinpack}
 	low := confidentRec("runner")
 	low.SampleCount = 25 // confident for drift…
-	rs2.Status.SizingRecommendation = []v2alpha1.ContainerSizingRecommendation{low}
+	rs2.Status.SizingRecommendation = []v2.ContainerSizingRecommendation{low}
 	tmplTwo := profileTemplate(true) // …but the dind container has no history
 	r.applySizingStatus(rs2, tmplTwo)
-	if rs2.Status.SizingProfileState != v2alpha1.SizingProfileStateAwaitingSamples {
+	if rs2.Status.SizingProfileState != v2.SizingProfileStateAwaitingSamples {
 		t.Fatalf("SizingProfileState = %q, want AwaitingSamples", rs2.Status.SizingProfileState)
 	}
 	cond = findSizingDrift(t, rs2)
-	if cond == nil || cond.Reason == v2alpha1.ReasonSizingProfileActive {
+	if cond == nil || cond.Reason == v2.ReasonSizingProfileActive {
 		t.Fatalf("SizingDrift = %+v, want the normal drift judgment while awaiting samples", cond)
 	}
 }
@@ -296,15 +296,15 @@ func TestMemoryRetryPolicy(t *testing.T) {
 	ceiling := resource.MustParse("16Gi")
 	cases := []struct {
 		name     string
-		sizing   *v2alpha1.WorkerSizing
+		sizing   *v2.WorkerSizing
 		headroom int64
 		follow   bool
 	}{
-		{"Binpack", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileBinpack,
+		{"Binpack", &v2.WorkerSizing{Profile: v2.SizingProfileBinpack,
 			MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}, 140, true},
-		{"Throughput default", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput,
+		{"Throughput default", &v2.WorkerSizing{Profile: v2.SizingProfileThroughput,
 			MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}, defaultThroughputHeadroomPercent, false},
-		{"Throughput headroom", &v2alpha1.WorkerSizing{Profile: v2alpha1.SizingProfileThroughput,
+		{"Throughput headroom", &v2.WorkerSizing{Profile: v2.SizingProfileThroughput,
 			LimitHeadroomPercent: ptr.To(int32(200)), MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}, 200, false},
 	}
 	for _, tc := range cases {
@@ -318,10 +318,10 @@ func TestMemoryRetryPolicy(t *testing.T) {
 			}
 		})
 	}
-	for _, sizing := range []*v2alpha1.WorkerSizing{
+	for _, sizing := range []*v2.WorkerSizing{
 		nil,
-		{Profile: v2alpha1.SizingProfileStatic},
-		{Profile: v2alpha1.SizingProfileNodeShare},
+		{Profile: v2.SizingProfileStatic},
+		{Profile: v2.SizingProfileNodeShare},
 	} {
 		if got := memoryRetryPolicy(sizing); got != nil {
 			t.Errorf("memoryRetryPolicy(%+v) = %+v, want nil", sizing, got)

@@ -6,7 +6,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/apisidecar"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -78,7 +78,7 @@ func workerReportVersion(pod *corev1.Pod) (string, bool) {
 // keeps its last observation rather than reverting to empty, because the answer is a
 // property of the image the set runs and not of which pods happen to be retained.
 // Reverting would make the field flap on the reap cycle.
-func applyObservedRunnerVersion(rs *v2alpha1.RunnerSet, observed observedRunner) {
+func applyObservedRunnerVersion(rs *v2.RunnerSet, observed observedRunner) {
 	if observed.version == "" {
 		return
 	}

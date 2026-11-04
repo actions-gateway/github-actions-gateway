@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,11 +69,11 @@ func TestV2_RunnerSet_UngrantedCrossNamespaceProxy_FailsClosed(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet("set", ns, "gw")
-	rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "shared", Namespace: sharedProxyNS}
+	rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "shared", Namespace: sharedProxyNS}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonProxyShareNotGranted)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonProxyShareNotGranted)
 }
 
 // With the projection in place the same reference resolves, and withdrawing it puts
@@ -96,15 +96,15 @@ func TestV2_RunnerSet_GrantedCrossNamespaceProxy_ResolvesAndRevokes(t *testing.T
 	require.NoError(t, k8sClient.Create(ctx, share))
 
 	rs := newRunnerSet("set", ns, "gw")
-	rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "shared", Namespace: sharedProxyNS}
+	rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "shared", Namespace: sharedProxyNS}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// Revoke: the GMC deletes the projection when the grant is withdrawn.
 	require.NoError(t, k8sClient.Delete(ctx, share))
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonProxyShareNotGranted)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonProxyShareNotGranted)
 }
 
 // A grant that arrives after the reference does must resolve it. This is the same
@@ -126,13 +126,13 @@ func TestV2_RunnerSet_CrossNamespaceProxy_GrantArrivingLaterResolves(t *testing.
 	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "")))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet("set", ns, "gw")
-	rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "shared", Namespace: sharedProxyNS}
+	rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "shared", Namespace: sharedProxyNS}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonProxyShareNotGranted)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonProxyShareNotGranted)
 
 	// The GMC projects the share once the provider consents.
 	require.NoError(t, k8sClient.Create(ctx, newProjectedShare(ns, sharedProxyNS, "shared")))
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }

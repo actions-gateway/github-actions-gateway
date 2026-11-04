@@ -9,7 +9,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
@@ -106,7 +106,7 @@ func TestV2_RunnerSet_ScaleSet_PartialQuotaHeadroomSplitsTheCeiling(t *testing.T
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	// 4 CPU granted, 3 already consumed: 1 CPU free admits exactly two more 500m
@@ -119,7 +119,7 @@ func TestV2_RunnerSet_ScaleSet_PartialQuotaHeadroomSplitsTheCeiling(t *testing.T
 		_, ok := srv.ScaleSetIDByName(label)
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register one scale set named %q", label)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// Partial headroom lowers the advertisement to what fits and attributes the
 	// remainder to the quota rung — the two summing to the untouched declared ceiling.

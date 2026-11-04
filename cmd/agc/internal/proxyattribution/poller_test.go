@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -256,7 +256,7 @@ func testScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
 	require.NoError(t, corev1.AddToScheme(s))
-	require.NoError(t, v2alpha1.AddToScheme(s))
+	require.NoError(t, v2.AddToScheme(s))
 	return s
 }
 
@@ -265,18 +265,18 @@ type harness struct {
 	p   *Poller
 	c   client.Client
 	reg *prometheus.Registry
-	gw  *v2alpha1.ActionsGateway
+	gw  *v2.ActionsGateway
 	rec *captureRecorder
 }
 
 func newHarness(t *testing.T, p pki, replicaAddr string) *harness {
 	t.Helper()
-	gw := &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}}
-	gw.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "shared", Namespace: "provider"}
+	gw := &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}}
+	gw.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "shared", Namespace: "provider"}
 	gw.Spec.ProxyFailureAttribution = optInPerJob
-	own := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "own", Namespace: ns}}
+	own := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "own", Namespace: ns}}
 	own.Spec.GatewayRef.Name = "gw"
-	sibling := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "sibling", Namespace: ns}}
+	sibling := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "sibling", Namespace: ns}}
 	sibling.Spec.GatewayRef.Name = "other-gw"
 	name := "proxy-attribution-provider-shared"
 	cm := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: map[string]string{

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +31,7 @@ func TestStopListeners_ThenEnsure_DoesNotLeaveASessionBehind(t *testing.T) {
 	scheme := runnerSetTestScheme(t)
 	gw := gwObj("gw", ns, "")
 	tmpl := tmplObj("tmpl", ns)
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Spec.RunnerLabels = []string{label}
 	})
 	c := fake.NewClientBuilder().WithScheme(scheme).
@@ -41,7 +41,7 @@ func TestStopListeners_ThenEnsure_DoesNotLeaveASessionBehind(t *testing.T) {
 		Client:      c,
 		Log:         slog.Default(),
 		Provisioner: provisioner.NewProvisioner(c, nil, slog.Default()),
-		ScaleSetClientFactory: func(*v2alpha1.RunnerSet, *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+		ScaleSetClientFactory: func(*v2.RunnerSet, *v2.ActionsGateway) (*scaleset.Client, error) {
 			return newReapScaleSetClient(t, srv), nil
 		},
 	}

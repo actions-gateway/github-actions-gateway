@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -29,7 +29,7 @@ import (
 // setCondition fetches a single status condition from the named RunnerSet.
 func setCondition(t *testing.T, ns, name, condType string) *metav1.Condition {
 	t.Helper()
-	var rs v2alpha1.RunnerSet
+	var rs v2.RunnerSet
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 		return nil
 	}
@@ -58,7 +58,7 @@ func createV2WorkerPod(t *testing.T, ns, setName, name string) *corev1.Pod {
 // newRunnerTemplateWithCPURequest is newRunnerTemplate with a per-worker CPU request,
 // so the worker-quota footprint has a non-zero requests.cpu to compare against a
 // namespace ResourceQuota.
-func newRunnerTemplateWithCPURequest(name, ns, cpu string) *v2alpha1.RunnerTemplate {
+func newRunnerTemplateWithCPURequest(name, ns, cpu string) *v2.RunnerTemplate {
 	tmpl := newRunnerTemplate(name, ns)
 	tmpl.Spec.PodTemplate.Spec.Containers[0].Resources = corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(cpu)},
@@ -86,32 +86,32 @@ func TestV2_RunnerSet_WorkersUnschedulable_Tripped(t *testing.T) {
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
 	// Wait until references resolve and a listener is active, so the capacity-condition
 	// code path is reached each reconcile.
-	waitForSetReadyReason(t, ns, "unsched-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "unsched-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	pod := createV2WorkerPod(t, ns, "unsched-set", "worker-unsched")
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
 
 	// Within the grace the condition must be False (or not yet set).
-	if c := setCondition(t, ns, "unsched-set", v2alpha1.ConditionWorkersUnschedulable); c != nil {
+	if c := setCondition(t, ns, "unsched-set", v2.ConditionWorkersUnschedulable); c != nil {
 		require.Equal(t, metav1.ConditionFalse, c.Status, "must not trip before the grace elapses")
 	}
 
 	// After the grace the reconciler (driven by its own RequeueAfter) must flip the
 	// condition True and name the stuck pod, before the reaper removes it at 12s.
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "unsched-set", v2alpha1.ConditionWorkersUnschedulable)
-		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2alpha1.ReasonPodsUnschedulable
+		c := setCondition(t, ns, "unsched-set", v2.ConditionWorkersUnschedulable)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2.ReasonPodsUnschedulable
 	}, 11*time.Second, 100*time.Millisecond,
 		"a scheduler-unschedulable worker pod must trip WorkersUnschedulable on the RunnerSet")
 
-	c := setCondition(t, ns, "unsched-set", v2alpha1.ConditionWorkersUnschedulable)
+	c := setCondition(t, ns, "unsched-set", v2.ConditionWorkersUnschedulable)
 	require.Contains(t, c.Message, "worker-unsched")
 	require.Contains(t, c.Message, "untolerated taint")
 }
@@ -140,21 +140,21 @@ func TestV2_RunnerSet_WorkerQuotaExceeded_Tripped(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
-	waitForSetReadyReason(t, ns, "quota-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "quota-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "quota-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "quota-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
 	}, 20*time.Second, 100*time.Millisecond,
 		"an exhausted namespace ResourceQuota must trip WorkerQuotaExceeded on the RunnerSet")
 
 	// Ready must remain True — the quota condition is advisory, not a Ready gate.
-	ready := setCondition(t, ns, "quota-set", v2alpha1.ConditionReady)
+	ready := setCondition(t, ns, "quota-set", v2.ConditionReady)
 	require.NotNil(t, ready)
 	require.Equal(t, metav1.ConditionTrue, ready.Status, "WorkerQuotaExceeded must not gate Ready")
 }
@@ -182,16 +182,16 @@ func TestV2_RunnerSet_WorkerQuotaPressure_Tripped(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
-	waitForSetReadyReason(t, ns, "pressure-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "pressure-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool {
-		p := setCondition(t, ns, "pressure-set", v2alpha1.ConditionWorkerQuotaPressure)
-		e := setCondition(t, ns, "pressure-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		p := setCondition(t, ns, "pressure-set", v2.ConditionWorkerQuotaPressure)
+		e := setCondition(t, ns, "pressure-set", v2.ConditionWorkerQuotaExceeded)
 		return p != nil && p.Status == metav1.ConditionTrue && p.Reason == "InsufficientQuotaHeadroom" &&
 			e != nil && e.Status == metav1.ConditionFalse
 	}, 20*time.Second, 100*time.Millisecond,
@@ -214,16 +214,16 @@ func TestV2_RunnerSet_QuotaEditRetriggersReconcile(t *testing.T) {
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
 	// ListenerActive means active listeners reached maxListeners: the baseline
 	// recheck timer no longer arms, so the set goes dormant between watch events.
-	waitForSetReadyReason(t, ns, "watch-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "watch-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "watch-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "watch-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionFalse
 	}, 20*time.Second, 100*time.Millisecond, "steady state before the quota exists: Exceeded=False")
 
@@ -237,7 +237,7 @@ func TestV2_RunnerSet_QuotaEditRetriggersReconcile(t *testing.T) {
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), quota) })
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "watch-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "watch-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
 	}, 10*time.Second, 100*time.Millisecond,
 		"creating a tight ResourceQuota must promptly trip WorkerQuotaExceeded via the quota watch (Q326)")
@@ -248,7 +248,7 @@ func TestV2_RunnerSet_QuotaEditRetriggersReconcile(t *testing.T) {
 	require.NoError(t, k8sClient.Update(ctx, quota))
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "watch-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "watch-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionFalse && c.Reason == "NoRejection"
 	}, 10*time.Second, 100*time.Millisecond,
 		"raising the quota's .spec.hard must promptly clear WorkerQuotaExceeded via the watch predicate (Q326)")
@@ -274,16 +274,16 @@ func TestV2_RunnerSet_WorkersUnschedulable_NotTrippedForPlainPending(t *testing.
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, "plain-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "plain-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	createV2WorkerPod(t, ns, "plain-set", "worker-plain")
 
 	require.Never(t, func() bool {
-		c := setCondition(t, ns, "plain-set", v2alpha1.ConditionWorkersUnschedulable)
+		c := setCondition(t, ns, "plain-set", v2.ConditionWorkersUnschedulable)
 		return c != nil && c.Status == metav1.ConditionTrue
 	}, 9*time.Second, 200*time.Millisecond,
 		"a plain-Pending worker pod (no Unschedulable verdict) must not trip the condition")

@@ -5,7 +5,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +22,7 @@ import (
 // and writing 0 there would read as "intake fully withheld", which is the opposite
 // claim.
 func TestApplyAdvertisedCapacity_BeforeFirstPoll(t *testing.T) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 
 	applyAdvertisedCapacity(rs, &capacityRecord{})
 
@@ -35,7 +35,7 @@ func TestApplyAdvertisedCapacity_BeforeFirstPoll(t *testing.T) {
 // explicit zeros, which are what let a reader tell "this rung is not withholding" from
 // "this rung was never evaluated".
 func TestApplyAdvertisedCapacity_PublishesTheAccounting(t *testing.T) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	rec := &capacityRecord{}
 	rec.record(provisioner.CapacityAdvertisement{
 		Total:   3,
@@ -50,7 +50,7 @@ func TestApplyAdvertisedCapacity_PublishesTheAccounting(t *testing.T) {
 
 	require.NotNil(t, rs.Status.AdvertisedCapacity)
 	assert.Equal(t, int32(3), *rs.Status.AdvertisedCapacity)
-	assert.Equal(t, []v2alpha1.WithheldCapacity{
+	assert.Equal(t, []v2.WithheldCapacity{
 		{Reason: runnercore.AdmitReasonQuota, Slots: 5},
 		{Reason: runnercore.AdmitReasonScaleUp, Slots: 0},
 	}, rs.Status.WithheldCapacity)
@@ -60,7 +60,7 @@ func TestApplyAdvertisedCapacity_PublishesTheAccounting(t *testing.T) {
 // a set withholding everything advertises 0, and that has to survive as a published
 // value rather than reading as "nothing published yet".
 func TestApplyAdvertisedCapacity_ZeroIsAnAdvertisement(t *testing.T) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	rec := &capacityRecord{}
 	rec.record(provisioner.CapacityAdvertisement{
 		Total:    0,
@@ -90,9 +90,9 @@ func TestApplyAdvertisedCapacity_OrderIsStable(t *testing.T) {
 		},
 	}
 
-	var first []v2alpha1.WithheldCapacity
+	var first []v2.WithheldCapacity
 	for i := range 50 {
-		rs := &v2alpha1.RunnerSet{}
+		rs := &v2.RunnerSet{}
 		rec := &capacityRecord{}
 		rec.record(adv)
 		applyAdvertisedCapacity(rs, rec)
@@ -115,9 +115,9 @@ func TestApplyAdvertisedCapacity_OrderIsStable(t *testing.T) {
 // activeSessions on those paths.
 func TestClearAdvertisedCapacity(t *testing.T) {
 	total := int32(4)
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	rs.Status.AdvertisedCapacity = &total
-	rs.Status.WithheldCapacity = []v2alpha1.WithheldCapacity{{Reason: runnercore.AdmitReasonQuota, Slots: 4}}
+	rs.Status.WithheldCapacity = []v2.WithheldCapacity{{Reason: runnercore.AdmitReasonQuota, Slots: 4}}
 
 	clearAdvertisedCapacity(rs)
 

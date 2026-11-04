@@ -6,7 +6,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -25,19 +25,19 @@ import (
 func guardScheme() *runtime.Scheme {
 	s := runtime.NewScheme()
 	_ = corev1.AddToScheme(s)
-	_ = v2alpha1.AddToScheme(s)
+	_ = v2.AddToScheme(s)
 	return s
 }
 
-func guardStoreFor(t *testing.T, rs *v2alpha1.RunnerSet) *scaleSetGuardStore {
+func guardStoreFor(t *testing.T, rs *v2.RunnerSet) *scaleSetGuardStore {
 	t.Helper()
 	c := fake.NewClientBuilder().WithScheme(guardScheme()).Build()
 	r := &RunnerSetReconciler{Client: c}
 	return r.scaleSetGuardStore(rs)
 }
 
-func testRunnerSet() *v2alpha1.RunnerSet {
-	return &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{
+func testRunnerSet() *v2.RunnerSet {
+	return &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{
 		Namespace: "tenant-a", Name: "linux-large", UID: types.UID("uid-1"),
 	}}
 }
