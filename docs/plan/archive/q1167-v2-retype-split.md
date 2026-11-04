@@ -140,9 +140,11 @@ Eight things a green build does not catch, each owed by the step that would trip
    That restart did not delete dependents of live owners.
    Re-stamping a live owner's dependent to `v2` made it collectable, within 30 seconds of the owner's delete.
    Re-stamping after the owner was gone did not: still present three minutes later.
-   So Q1167 re-stamps the three ConfigMaps once per process per set from the reconcile, before a terminating set's finalizer comes off, and matches on the owner's UID so a same-named recreate does not adopt an earlier set's state.
-   What it cannot reach, a set deleted before its `v2.0.0` AGC starts, is an operator query in [upgrade.md](../../operations/upgrade.md#action-required-after-v200-delete-what-a-set-deleted-during-the-upgrade-left-behind).
+   So Q1167 re-stamps the three ConfigMaps once per process per set from the reconcile, before a terminating set's finalizer comes off, and matches on the owner's UID so a same-named recreate does not take ownership of an earlier set's ConfigMaps; it still reads them, because the stores read by name (Q1107 carries that).
+   What it cannot reach, an owner gone before its `v2.0.0` controller reconciles it, is an operator query in [upgrade.md](../../operations/upgrade.md#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind).
    The GMC's children re-stamp on every `CreateOrUpdate`, because `SetControllerReference` matches an existing reference by group, kind and name (`controllerutil.go`); that is read, not measured.
+   The #2261 review found the case that does not reach: an `EgressProxy` has no finalizer, so one deleted in the gap never reconciles again.
+   Measured the same way with six child kinds: all six naming `v2alpha1` were still present 10 minutes after the owner's delete, and the same six naming `v2` were gone within 45 seconds, so the query now covers those kinds.
 8. **Found while measuring item 7: the documented CRD apply is refused on a cert-manager install.** Nothing in the plan predicted this.
    On `v1.10.0` CRDs whose `caBundle` the cert-manager v1.20.2 CA injector set, `kubectl apply --server-side` of the `v2.0.0` CRDs fails for all five, with `spec.conversion.strategy: Required value, spec.conversion.webhookClientConfig: Forbidden: should not be set when strategy is not set to Webhook`, with or without `--force-conflicts`.
    A first run with an invalid PEM passed, because the patch setting the `caBundle` had been refused, so no other manager held the field; a `caBundle` the applying manager owns goes away cleanly.
@@ -150,6 +152,8 @@ Eight things a green build does not catch, each owed by the step that would trip
    Stripping cert-manager's annotation first did not either.
    A `kubectl patch` setting `{"strategy":"None","webhook":null}` before the apply did, and the CA injector left it alone through a 60-second pause.
    So the fix is an operator step in [upgrade.md](../../operations/upgrade.md#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), and `scripts/dogfood/setup.sh` takes the same step, since dogfood's `caBundle` is held by `kubectl patch`.
+   The #2261 review found the step's cost: an apply refused after the patch leaves a half-done upgrade, measured with `status.storedVersions` reading `["v2beta1","v2"]` on `runnersets`, where four CRDs served `v2` alone and `runnersets` kept all three versions on strategy `None`.
+   So the page and `setup.sh` check `storedVersions` first and take a release file already on disk, and the page states the way back, measured: a forced apply of the 1.x CRDs, after which the CA injector restores each `caBundle`.
 
 Beyond the Go: `scripts/go/check-v2-api-sync.sh` fails on any stale exemption entry, so Q1167 deletes the script, its `v2-api-sync-check` target and its `unit-test.yml` step together with the packages.
 Non-Go files naming `actions-gateway.com/v2alpha1` or `v2beta1` (charts, `deploy/`, `scripts/`, operator docs and examples) move to `v2` in Q1167, since they stop applying the moment the CRDs stop serving those versions.
