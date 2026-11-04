@@ -2658,7 +2658,9 @@
 
 
 <h1 id="e2e_gmc_rbac-reads-the-agc-rolebinding-once-racing-the-gmc">E2E_GMC_RBAC reads the AGC RoleBinding once, racing the GMC<a class="headerlink" href="#e2e_gmc_rbac-reads-the-agc-rolebinding-once-racing-the-gmc" title="Permanent link">&para;</a></h1>
-<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p><strong>Event:</strong> <code>E2E_GMC_AGCServiceAccountHasRole</code> or <code>E2E_GMC_AGCCanManagePods</code> fails on <code>main</code> with the AGC RoleBinding not found, or <code>kubectl auth can-i</code> answering <code>no</code>, after the poll's 2-minute window. → top of Queue, escalated.</p>
+<p>Both specs poll the RoleBinding read and the <code>can-i</code> checks with <code>Eventually</code> for 2 minutes, and the <code>teardown</code> and <code>resilience</code> suites wait for the AGC Deployment in <code>BeforeAll</code> as well as the proxy.
+A forced race, a GMC patched to sleep 90 s before applying the AGC RoleBinding in <code>tenant-rbac</code>, fails the single-read spec with the merge-group signature and passes the polling one.</p>
 <p><code>E2E_GMC_AGCServiceAccountHasRole</code> failed the merge group of PR #2250 (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41670008248/job/126035688552">job 126035688552</a>), the queue's only failing spec, with <code>rolebindings.rbac.authorization.k8s.io "test-ag-agc" not found</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/0a2f4276342af7d11167abc5f271e01edd66f74f/cmd/gmc/test/e2e/rbac_e2e_test.go#L53"><code>rbac_e2e_test.go</code></a> line 53.
 The merge group of #2249, the commit #2250's group was based on, passed the same suite minutes earlier.</p>
 <p>The spec's <code>BeforeAll</code> waits for the egress proxy Deployment to be ready and nothing else, then the spec reads the AGC RoleBinding with one <code>kubectl get</code> and no retry.
@@ -2666,8 +2668,8 @@ The GMC does not order those two: the EgressProxy reconciler provisions the prox
 In the failing run the namespace events put the AGC pod's scheduling about 5 s after the proxy pod's, the read failed at 16:09:04Z, and the ActionsGateway's conditions first read <code>ReconcileSucceeded</code> at 16:09:05Z.</p>
 <p>PR #2250 then passed the merge queue at the same head with no code change and merged as <code>dabb2565f</code>, so the failure is a flake rather than a defect in #2250's change.
 The GMC log tail in the failing dump holds no line for <code>tenant-rbac</code>, so nothing shows why the gateway's pass came when it did; the race only needs it to come after the proxy is ready, which nothing orders against.</p>
-<p>The fix waits for the AGC RoleBinding with <code>Eventually</code> before asserting its subject.
-Sweep the idiom with it: <code>E2E_GMC_AGCCanManagePods</code> in the same file runs <code>kubectl auth can-i</code> as the AGC ServiceAccount once, which answers <code>no</code> until that RoleBinding exists, and any other e2e spec that reads a gateway child once after waiting only on the proxy has the same race.</p>
+<p>The idiom sweep covered every e2e suite that waits in <code>BeforeAll</code> for the proxy alone: <code>rbac</code>, <code>teardown</code>, <code>resilience</code> and <code>hpa_pdb</code>.
+<code>hpa_pdb</code> reads only the proxy's HPA, which the EgressProxy reconciler applies in the same pass as the proxy Deployment, so it carries no race.</p>
 
 
 
