@@ -266,7 +266,8 @@ type TracingConfig struct {
     // Endpoint is the OTLP/gRPC collector address (e.g.
     // "https://otel-collector.observability.svc.cluster.local:4317"). Setting it enables
     // tracing; an empty Endpoint emits no OTEL_* env. Maps to
-    // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
+    // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT. A value the exporter cannot parse as a URL is
+    // rejected on the field, so ratcheting keeps an already-stored one re-applying.
     // +optional
     Endpoint string `json:"endpoint,omitempty"`
 

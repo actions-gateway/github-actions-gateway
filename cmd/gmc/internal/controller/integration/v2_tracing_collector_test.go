@@ -15,6 +15,8 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -83,6 +85,173 @@ func TestV2_Tracing_Admission(t *testing.T) {
 			assert.Contains(t, err.Error(), tc.reject)
 		})
 	}
+}
+
+// TestV2_Tracing_EndpointAdmission runs each spelling through the real apiserver. The rejected
+// ones are those the exporter sends to 127.0.0.1:4317 (otlptracegrpc v1.47.0, the table in
+// Q1281's PR), and the accepted ones are what must not be refused: a scheme-less name dials
+// that name, and the exporter trims surrounding whitespace.
+func TestV2_Tracing_EndpointAdmission(t *testing.T) {
+	const ns = "v2-tracing-endpoint"
+	createNamespace(t, ns)
+
+	for _, endpoint := range []string{
+		"https://otel-collector.observability.svc.cluster.local:4317",
+		"http://otel-collector.observability.svc.cluster.local:4317",
+		"otel-collector.observability.svc.cluster.local:4317",
+		"otel-collector.observability:4317",
+		"otel-collector",
+		"10.0.0.5",
+		"https://10.0.0.5:4317",
+		"https://_collector:4317",
+		"http://[::1]:4317",
+		"http://[fe80::1%25eth0]:4317",
+		"//otel-collector:4317",
+		"dns:///otel-collector:4317",
+		" http://otel-collector:4317",
+		"http://otel-collector:4317\n",
+		"otel-collector:4317 ",
+	} {
+		t.Run("accepts "+endpoint, func(t *testing.T) {
+			ag := newV2GatewayWired("endpoint-ok", ns, "github-app", "")
+			ag.Spec.Tracing = v2.TracingConfig{Endpoint: endpoint}
+			require.NoError(t, k8sClient.Create(ctx, ag))
+			require.NoError(t, k8sClient.Delete(context.Background(), ag))
+			require.Eventually(t, func() bool {
+				return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: ag.Name}, &v2.ActionsGateway{}))
+			}, 15*time.Second, 100*time.Millisecond)
+		})
+	}
+	for _, endpoint := range []string{
+		"10.0.0.5:4317",
+		"[::1]:4317",
+		":4317",
+		" ",
+		"\n",
+		"http://local host:4317",
+		"http://otel-collector:notaport",
+		"http://otel-collector:4317/%zz",
+		"a%zz",
+		"_collector:4317",
+		"my-collector_1.ns:4317",
+		"3collector:4317",
+	} {
+		t.Run("rejects "+endpoint, func(t *testing.T) {
+			ag := newV2GatewayWired("endpoint-bad", ns, "github-app", "")
+			ag.Spec.Tracing = v2.TracingConfig{Endpoint: endpoint}
+			err := k8sClient.Create(ctx, ag)
+			require.Error(t, err)
+			assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
+			assert.Contains(t, err.Error(), "endpoint does not parse as a URL")
+		})
+	}
+}
+
+// TestV2_Tracing_StoredBadEndpointSurvivesRatcheting: a gateway stored before the rule keeps
+// working. The rule sits on the field so CRD validation ratcheting suppresses it while the
+// value is unchanged, which only a stored object can show, so the CRD is edited to admit one.
+func TestV2_Tracing_StoredBadEndpointSurvivesRatcheting(t *testing.T) {
+	const ns = "v2-tracing-ratchet"
+	createNamespace(t, ns)
+
+	crd := &unstructured.Unstructured{}
+	crd.SetGroupVersionKind(schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"})
+	crdKey := types.NamespacedName{Name: "actionsgateways.actions-gateway.com"}
+	endpointRules := func(versions []any) (map[string]any, []any) {
+		for _, v := range versions {
+			version := v.(map[string]any)
+			if version["name"] != "v2" {
+				continue
+			}
+			field, found, err := unstructured.NestedMap(version, "schema", "openAPIV3Schema", "properties", "spec", "properties", "tracing", "properties", "endpoint")
+			require.NoError(t, err)
+			require.True(t, found)
+			rules, _, _ := unstructured.NestedSlice(field, "x-kubernetes-validations")
+			return version, rules
+		}
+		t.Fatal("no v2 version in the CRD")
+		return nil, nil
+	}
+	setRules := func(rules []any) {
+		require.Eventually(t, func() bool {
+			if err := k8sClient.Get(ctx, crdKey, crd); err != nil {
+				return false
+			}
+			versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+			for i, v := range versions {
+				version := v.(map[string]any)
+				if version["name"] != "v2" {
+					continue
+				}
+				path := []string{"schema", "openAPIV3Schema", "properties", "spec", "properties", "tracing", "properties", "endpoint", "x-kubernetes-validations"}
+				if len(rules) == 0 {
+					unstructured.RemoveNestedField(version, path...)
+				} else if err := unstructured.SetNestedSlice(version, rules, path...); err != nil {
+					return false
+				}
+				versions[i] = version
+			}
+			if err := unstructured.SetNestedSlice(crd.Object, versions, "spec", "versions"); err != nil {
+				return false
+			}
+			return k8sClient.Update(ctx, crd) == nil
+		}, 15*time.Second, 200*time.Millisecond, "update the CRD")
+	}
+	require.NoError(t, k8sClient.Get(ctx, crdKey, crd))
+	versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+	_, original := endpointRules(versions)
+	require.NotEmpty(t, original, "the rule this test ratchets must exist")
+	t.Cleanup(func() { setRules(original) })
+
+	const bad = "10.0.0.5:4317"
+	newGateway := func(name string) *v2.ActionsGateway {
+		ag := newV2GatewayWired(name, ns, "github-app", "")
+		ag.Spec.Tracing = v2.TracingConfig{Endpoint: bad}
+		return ag
+	}
+
+	setRules(nil)
+	stored := newGateway("stored")
+	require.Eventually(t, func() bool { return k8sClient.Create(ctx, stored) == nil },
+		15*time.Second, 200*time.Millisecond, "the CRD with no rule must admit the value")
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), stored) })
+
+	setRules(original)
+	require.Eventually(t, func() bool {
+		probe := newGateway("probe")
+		err := k8sClient.Create(ctx, probe)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, probe)
+		}
+		return apierrors.IsInvalid(err)
+	}, 15*time.Second, 200*time.Millisecond, "the restored rule must reject a new object")
+
+	update := func(edit func(*v2.ActionsGateway)) error {
+		var got v2.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "stored"}, &got); err != nil {
+			return err
+		}
+		edit(&got)
+		return k8sClient.Update(ctx, &got)
+	}
+	require.NoError(t, update(func(*v2.ActionsGateway) {}), "re-applying it unchanged must succeed")
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.LogLevel = "debug" }),
+		"editing another field must succeed")
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Sampler = "always_on" }),
+		"editing a sibling tracing field must succeed")
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Finalizers = append(ag.Finalizers, "example.com/hold") }),
+		"a metadata write, as the GMC makes, must succeed")
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Finalizers = nil }))
+	var got v2.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "stored"}, &got))
+	got.Status.Conditions = []metav1.Condition{{Type: "Probe", Status: metav1.ConditionTrue, Reason: "Probe", LastTransitionTime: metav1.Now()}}
+	require.NoError(t, k8sClient.Status().Update(ctx, &got), "a status write, as the GMC makes, must succeed")
+
+	err := update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Endpoint = "10.0.0.6:4317" })
+	require.Error(t, err, "changing it to another misread value must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Endpoint = "https://10.0.0.5:4317" }),
+		"fixing it must succeed")
 }
 
 // TestV2_Tracing_MissingBundleIsAdvisory: a ref naming no ConfigMap sets the advisory

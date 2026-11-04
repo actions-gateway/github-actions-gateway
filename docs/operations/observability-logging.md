@@ -339,7 +339,8 @@ Three more come from the TLS settings, measured against an in-process OTLP serve
 | `first record does not look like a TLS handshake` | `https://` to a plaintext collector, without `insecure: true` |
 | `error reading server preface: EOF` | Plaintext to a collector serving TLS |
 
-**Always include the scheme in `endpoint`.** Admission does not check the value, and a bare IP such as `10.0.0.5:4317` fails the SDK's URL parse, so the AGC exports to `127.0.0.1:4317` instead.
+**Include the scheme in `endpoint`.** A bare IP needs one: admission rejects `10.0.0.5:4317` because it does not parse as a URL, and the exporter would send spans to `127.0.0.1:4317` with no error ([Tracing Endpoint Rejected by Admission](troubleshooting.md#tracing-endpoint-rejected-by-admission)).
+Admission accepts a name without a scheme, since `otel-collector.observability:4317` parses and dials that name.
 
 ---
 

@@ -249,6 +249,12 @@ type TracingConfig struct {
 	// Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the
 	// AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
 	//
+	// A value the exporter cannot parse as a URL is rejected, because the exporter ignores
+	// it and sends spans to 127.0.0.1:4317 with no error (otlptracegrpc v1.47.0). A bare IP
+	// with a port is the common case, so write https://10.0.0.5:4317. A name with a port
+	// parses and needs no scheme, and the exporter trims surrounding whitespace.
+	//
+	// +kubebuilder:validation:XValidation:rule="self.trim().size() == 0 ? self.size() == 0 : (self.trim().contains(':') ? isURL(self.trim()) : !self.trim().matches('[[:cntrl:]%]'))",message="endpoint does not parse as a URL, so the exporter would ignore it and send spans to 127.0.0.1:4317; a bare IP needs a scheme, as in https://10.0.0.5:4317"
 	// +optional
 	Endpoint string `json:"endpoint,omitempty"`
 
