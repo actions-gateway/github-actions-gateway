@@ -2810,9 +2810,9 @@
 
 
 <h1 id="q224--agc-side-lever-spike-can-we-beat-githubs-fan-out-distinct-delivery-starvation-without-option-e">Q224 — AGC-side lever spike: can we beat GitHub's fan-out distinct-delivery starvation without Option E?<a class="headerlink" href="#q224--agc-side-lever-spike-can-we-beat-githubs-fan-out-distinct-delivery-starvation-without-option-e" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> spike <strong>complete</strong>, no code changed.
+<p><strong>Status:</strong> ⓘ spike <strong>complete</strong>, no code changed.
 This is the escape-hatch check the <a href="../archive/gke-dogfood-turnup-findings/">re-route #8 conclusion</a> invited: #8 isolated the last Q224 blocker to <strong>GitHub's server-side fan-out distinct-delivery starvation</strong> on GAG's many-acquirers topology and called <a href="../q264-scale-set-protocol/">Option E / Q264</a> the structural fix.
-Before the user commits to (or declines) the <a href="../../queue/Q264/">Q264</a> scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.</p>
+Before the user commits to (or declines) the Q264 scale-set rewrite, this spike tests two proposed AGC-side levers against the mechanism and the existing live evidence.</p>
 <p><strong>Verdict up front: no AGC-side lever provides a <em>reliable</em> fix; #530/§5 stands — <a href="../q264-scale-set-protocol/">Option E (Q264)</a> is the only structural fix.</strong></p>
 <ul>
 <li><strong>H2 (unique/ephemeral runner names): NON-LEVER (reasoned, high confidence).</strong> Renaming the same reactively-grown slots adds <strong>zero</strong> distinct idle runners — the actual binding constraint — while defeating the <a href="../../queue/">Q114</a> recycle optimization and worsening the stale-runner-record clutter that already confounds re-routes.
@@ -2839,9 +2839,9 @@ Outcome — <strong>2/7 green, 5/7 wedged <code>in_progress</code> indefinitely<
 <h2 id="2-why-only-3-of-48-listeners-were-online-idle-at-burst-agc-side-from-code">2. Why only 3 of 48 listeners were online-idle at burst (AGC-side, from code)<a class="headerlink" href="#2-why-only-3-of-48-listeners-were-online-idle-at-burst-agc-side-from-code" title="Permanent link">&para;</a></h2>
 <p>Pinned to the multiplexer/listener code, not assumed:</p>
 <ol>
-<li><strong>Baseline is exactly one permanent poller.</strong> <code>Multiplexer.Start</code> spawns a single permanent baseline goroutine (<code>m.spawn(ctx, true)</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:152</code></a>); there is <strong>no</strong> <code>minIdleListeners</code> / eager-warm knob.
-   <code>maxListeners</code> is only a <em>ceiling</em> (<code>SpawnReplacement</code> no-ops at the cap, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:174</code></a>).</li>
-<li><strong>Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.</strong> <code>SpawnReplacement</code> is called by a listener <strong>after it wins a job</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go:924</code></a>) — <em>after</em> the <code>ClaimJob</code> dedup gate.
+<li><strong>Baseline is exactly one permanent poller.</strong> <code>Multiplexer.Start</code> spawns a single permanent baseline goroutine (<code>m.spawn(ctx, true)</code>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:152</code></a>); there is <strong>no</strong> <code>minIdleListeners</code> / eager-warm knob.
+   <code>maxListeners</code> is only a <em>ceiling</em> (<code>SpawnReplacement</code> no-ops at the cap, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go:174</code></a>).</li>
+<li><strong>Growth is reactive and 1:1, triggered only by a distinct-planID acquisition.</strong> <code>SpawnReplacement</code> is called by a listener <strong>after it wins a job</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go:924</code></a>) — <em>after</em> the <code>ClaimJob</code> dedup gate.
    A <strong>deduped loser skips SpawnReplacement entirely</strong> (<code>goroutine.go:866</code>: "SpawnReplacement/renew/provision are all skipped for the loser"; the loser returns at <code>goroutine.go:909</code>).
    So <strong>F duplicate deliveries of one job grow the pool by exactly 1</strong> (the single winner), not by F.</li>
 <li><strong>Therefore, from an idle start, the pool can only grow as fast as <em>distinct</em> planIDs are won.</strong> When GitHub feeds the small idle pool duplicates of one job (§1), each duplicate is a loser → no growth → the pool never climbs toward 48.
@@ -2850,7 +2850,7 @@ Outcome — <strong>2/7 green, 5/7 wedged <code>in_progress</code> indefinitely<
 <p>This is genuinely AGC-side and changeable — an eager warm baseline of idle listeners <em>would</em> present more distinct idle runners at t=0 (that is H1).
 Whether that helps is decided entirely by §4.</p>
 <h2 id="3-h2--uniqueephemeral-runner-names-non-lever">3. H2 — unique/ephemeral runner names: NON-LEVER<a class="headerlink" href="#3-h2--uniqueephemeral-runner-names-non-lever" title="Permanent link">&para;</a></h2>
-<p>Today the agent name is deterministic by slot index — <code>fmt.Sprintf("%s-%d", groupName, index)</code> →<code>ci8-1</code>, <code>ci8-2</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go:328</code></a>) — and <a href="../../queue/">Q114</a> single-use recycle <strong>re-registers the same name</strong> (same index) after each job.
+<p>Today the agent name is deterministic by slot index — <code>fmt.Sprintf("%s-%d", groupName, index)</code> →<code>ci8-1</code>, <code>ci8-2</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go"><code>pool.go:328</code></a>) — and <a href="../../queue/">Q114</a> single-use recycle <strong>re-registers the same name</strong> (same index) after each job.
 H2 proposes a unique/ephemeral name per registration so GitHub "distributes" rather than "piles."</p>
 <p>It fails on the mechanism:</p>
 <ul>

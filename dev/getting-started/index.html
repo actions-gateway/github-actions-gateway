@@ -2859,11 +2859,11 @@
 <p>The recommended shape for a new tenant is the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
 <code>v2</code> is the General Availability (GA) version, ScaleSet-only, and the storage version from 1.10.
 <code>v2beta1</code> stays served beside it until <code>v2.0.0</code> removes it, with the same shape apart from the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> <code>EgressProxy</code> aliases, so manifests already on <code>v2beta1</code> move by re-applying at <code>v2</code>.
-<code>v2alpha1</code> stays served as the <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp, carrying the <code>acquisitionProtocol</code> selector a migrating v1 tenant needs and a new tenant does not, and the apiserver converts between the versions.
+<code>v2alpha1</code> stays served so objects stored at it still read, and the apiserver converts between the versions; its <code>acquisitionProtocol</code> and <code>maxListeners</code> fields are accepted and ignored, because every set acquires through a scale set.
 The older single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API is no longer served by this GMC.
 <code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code> and the classic acquisition protocol are all <a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>.
 Already on v1?
-<a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across without changing how your jobs are acquired.</p>
+Migrate with a 1.x <a href="../operations/migration-v1-to-v2/"><code>gag-migrate</code></a> before you upgrade to this release.</p>
 </div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>

@@ -3004,7 +3004,7 @@ Performance is <strong>not</strong> where classic is kneecapped — the kneecap 
 <p><strong>What is a structural ceiling (unfixable AGC-side):</strong> <em>fan-out distinct-delivery starvation.</em> Mechanism, pinned to code and live logs (re-route #8):</p>
 <ol>
 <li>GitHub fans <strong>one</strong> logical job's planID out as ~6 sibling deliveries; the AGC correctly dedups them and releases each via Option A.</li>
-<li>The pool grows <strong>only</strong> on a <em>distinct</em>-planID win — <code>SpawnReplacement</code> runs only <em>after</em> a listener wins past the dedup gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go:924</a>; a deduped loser skips it entirely).
+<li>The pool grows <strong>only</strong> on a <em>distinct</em>-planID win — <code>SpawnReplacement</code> runs only <em>after</em> a listener wins past the dedup gate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go">goroutine.go:924</a>; a deduped loser skips it entirely).
    So <strong>F duplicate deliveries of one job grow the pool by exactly 1</strong>, not F.</li>
 <li>Fed duplicates of one job, the idle pool <strong>stalls at 3 online sessions ≪ 48</strong>, so GitHub never sees enough <em>distinct</em> idle runners to place the <strong>5 other distinct jobs</strong> — whose planIDs are therefore <strong>never delivered</strong> and wedge <code>in_progress</code> indefinitely.</li>
 </ol>

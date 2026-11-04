@@ -2971,7 +2971,7 @@ That is comfortably wide for eviction recovery, which fires seconds after the di
 <p>Worker pods provisioned for <strong>real</strong> GitHub jobs on the classic tier carry <strong>no</strong> <code>actions-gateway.com/run-id</code> annotation.
 Observed 2026-07-28 while scoping the spec's worker lookup to its own run; the jsonpath was verified against a control pod carrying a known annotation, so the empty value is the pod's, not the query's.</p>
 <p>That matters well beyond this plan.
-<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/payload.go"><code>repoInfo()</code></a> — which supplies the <code>runID</code> that eviction recovery re-runs — and <code>jobMetaFrom()</code> — which supplies the annotation — read the <em>same two sources</em>: <code>Variables["system.github.run_id"]</code>, falling back to <code>ap.RunID</code>.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.3.0/cmd/agc/internal/provisioner/payload.go"><code>repoInfo()</code></a> — which supplies the <code>runID</code> that eviction recovery re-runs — and <code>jobMetaFrom()</code> — which supplies the annotation — read the <em>same two sources</em>: <code>Variables["system.github.run_id"]</code>, falling back to <code>ap.RunID</code>.
 An absent annotation therefore means both were empty, so <code>runID</code> is <code>"0"</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/eviction.go"><code>handleEviction</code></a> opens with <code>if runID == "0" || runID == ""</code> → log and return.</p>
 <p><strong>Inference, not yet a direct observation:</strong> classic-tier eviction recovery cannot name the run to re-run against real GitHub, so it cannot fire.
 Every test that exercises it uses a fakegithub payload carrying the identity explicitly — Q421's own fake-GitHub drain spec had to <em>inject</em> it, recording that "the default fakegithub response carries no run identity, and handleEviction returns early without one".
@@ -3067,7 +3067,7 @@ Nothing does.</p>
 <p>The 10m02s figure is not incidental.
 The job's own step — <code>sleep 600</code>, started at 13:21:00Z — ran to completion at 13:31:04Z, ten minutes after the run was cancelled and five minutes after GitHub had already concluded it.
 The runner was never told.</p>
-<p>That is consistent with the architecture rather than a fluke: the AGC owns the broker session, a cancellation arrives on that session, and nothing in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/agc/internal/listener"><code>listener/</code></a> relays it to the worker pod.
+<p>That is consistent with the architecture rather than a fluke: the AGC owns the broker session, a cancellation arrives on that session, and nothing in <a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/internal/listener"><code>listener/</code></a> relays it to the worker pod.
 The 5m02s to conclusion is GitHub's own cancellation grace lapsing, not the runner acknowledging anything — the same figure, 5m01s, was measured on the first attempt at this spec.</p>
 <p>Two consequences, both real:</p>
 <ul>

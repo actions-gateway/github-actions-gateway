@@ -2904,7 +2904,7 @@ Moved out of this closed audit so it survives archival; the finding row above re
 <td>B4</td>
 <td>✅</td>
 <td>~~AGC <code>secrets:list</code> returns full Secret bodies (including agent credential material) on every list.~~ Fixed (Q57): <code>agentpool.Pool</code> now enumerates its agent Secrets with a metadata-only <code>PartialObjectMetadataList</code> — bulk lists, run on every reconcile, return only names/labels. The bodies (agent private key, JIT config) are fetched per-name via <code>Get</code> only on the paths that need them (<code>reload</code>, deregistration on scale-down/delete). The metadata list carries a Secret GVK that matches <code>Cache.DisableFor[*corev1.Secret]</code>, so it bypasses the cache and starts no Secret informer (preserves W3/H-2). The RBAC <code>list</code> verb is retained (RBAC has no glob <code>resourceNames</code> and agent Secret names are dynamic); the application-level bulk-body exposure is closed and the residual RBAC <code>list</code> capability is the accepted <a href="../../security/#h-2-agc-namespaced-role-grants-broad-secret-readlistwatch--createdelete">H-2 residual</a>. Covered by <code>TestPool_EnumeratesSecretsAsMetadataOnly</code>.</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">pool.go (<code>listSecretMeta</code>/<code>getSecret</code>)</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go">pool.go (<code>listSecretMeta</code>/<code>getSecret</code>)</a></td>
 <td>—</td>
 </tr>
 </tbody>

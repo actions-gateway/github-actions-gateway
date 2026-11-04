@@ -2763,7 +2763,7 @@ One capability drop survives it:</p>
 <li><strong>Multi-label runner sets</strong> (Q726). ✅ Closed 2026-08-11.
   <code>v1alpha1</code> set <code>MinItems=1</code> with no ceiling; <code>v2beta1</code> CEL-enforced <code>size(self) == 1</code> because the single label doubled as the scale-set name.
   The rule is gone: every label is registered on the scale set and the <em>first</em> one names it.
-  Deliberate, and the field's godoc offers a migration path (stay on a <code>v2alpha1</code> Classic RunnerSet), but that path expires with <code>v2alpha1</code> at <code>v2.0.0</code> (<a href="../../queue/Q264/">Q264</a>), which is what makes it permanent.</li>
+  Deliberate, and the field's godoc offers a migration path (stay on a <code>v2alpha1</code> Classic RunnerSet), but that path expires with <code>v2alpha1</code> at <code>v2.0.0</code> (Q264), which is what makes it permanent.</li>
 </ul>
 <p>A second one opened and closed inside the same release.
 Q683 and Q691 shipped in August wired only into the classic <code>provision()</code> path, and <code>v2beta1</code> is ScaleSet-only, so for a few days <code>v2</code> tenants had neither; Q766 ported both and 1.4 ships them on both tiers.

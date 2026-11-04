@@ -2762,6 +2762,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1277/">Q1277</a></td>
+<td>E2E_GMC_RBAC reads the AGC RoleBinding once, racing the GMC</td>
+<td><code>flake</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> <code>E2E_GMC_AGCServiceAccountHasRole</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1280/">Q1280</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml">Full-history checkout outlasts the 5-minute timeout on docs jobs</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Twice on 2026-11-03 an …</td>
+</tr>
+<tr>
 <td><a href="Q1270/">Q1270</a></td>
 <td>EgressProxy envtests wait on a NetworkPolicy no longer applied last</td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3194,14 +3210,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>scripts/dogfood/e2e-mirror-validate.sh</code> proves each mirror instance by fetching one manifest by tag, and a tag lookup takes the Dragonfly …</td>
 </tr>
 <tr>
-<td><a href="Q682/">Q682</a></td>
-<td><a href="../plan/q645-abandoned-completion/#the-remedy">Measure sibling <code>skipped</code> completion semantics live (Q260 fan-out)</a></td>
-<td><code>tests</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Inv.</td>
-</tr>
-<tr>
 <td><a href="Q707/">Q707</a></td>
 <td><a href="../development/testing/#stopping-a-run-name-the-target-never-the-program">Ownership lease for local singleton tiers (e2e/kind slots)</a></td>
 <td><code>debt</code> <code>tests</code></td>
@@ -3378,14 +3386,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> dogfood carries a workload steady enough for a fixed-window comparison to mean anything.</td>
 </tr>
 <tr>
-<td><a href="Q416/">Q416</a></td>
-<td><a href="../plan/runner-sizing-profiles/#the-20-sample-paths-reached-2026-07-25-second-session">Classic listener: session heal leaks then self-collides</a></td>
-<td><code>bug</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Demand:</strong> a Classic operator reports listener slots going quiet, OR Classic removal slips.</td>
-</tr>
-<tr>
 <td><a href="Q354/">Q354</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/e2e-reusable.yml">Raise e2e/tested K8s floor 1.35 → 1.36</a></td>
 <td><code>ci</code> <code>tests</code></td>
@@ -3538,14 +3538,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> <code>actions/scaleset</code> reaches GA/v1.0 or the auto-assign contract (<code>actions/scaleset#107</code>) is documented.</td>
 </tr>
 <tr>
-<td><a href="Q1274/">Q1274</a></td>
-<td>Port the e2e suite from classic to the scale-set tier</td>
-<td><code>tests</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><a href="Q264/">Q264</a> removes classic acquisition, and the fake-GitHub e2e suite runs on it: its fixture pins <code>acquisitionProtocol: Classic</code> and …</td>
-</tr>
-<tr>
 <td><a href="Q1263/">Q1263</a></td>
 <td><a href="../plan/q1167-v2-retype-split/">Retype the AGC onto api/v2 once classic acquisition is gone</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
@@ -3562,14 +3554,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Blocked by <a href="Q1263/">Q1263</a>: this is the last of three PRs, and it deletes <code>api/v2alpha1</code> and <code>api/v2beta1</code>, which compile only once …</td>
 </tr>
 <tr>
-<td><a href="Q264/">Q264</a></td>
-<td><a href="../plan/q264-scale-set-protocol/">Remove deprecated classic acquisition machinery</a></td>
-<td><code>debt</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>It follows the <code>v1alpha1</code> removal (Q273), since classic was <code>v1alpha1</code>'s only acquisition path.</td>
-</tr>
-<tr>
 <td><a href="Q1259/">Q1259</a></td>
 <td>v2 envtest twins for behaviours only the deleted v1 suites covered</td>
 <td><code>tests</code> <code>security</code></td>
@@ -3578,12 +3562,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
+<td><a href="Q1273/">Q1273</a></td>
+<td>Retire the classic tier ledgers, runbooks and unread AGC env vars</td>
+<td><code>debt</code> <code>docs</code> <code>2.0-gate</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q264 removed classic acquisition, its alerts, recording rule and dashboard panels, and left four things an operator can still see or hit …</td>
+</tr>
+<tr>
+<td><a href="Q1278/">Q1278</a></td>
+<td>Trace the scale-set provision path; the AGC emits no spans after Q264</td>
+<td><code>bug</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The AGC's only span was <code>Provisioner.provision</code>, with children <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code> and <code>waitForCompletion</code> …</td>
+</tr>
+<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>S</td>
-<td>Blocked by <a href="Q1167/">Q1167</a>, <a href="Q264/">Q264</a>: the coupled removals land first, after Q1086's storage migration in 1.10, so the surface the …</td>
+<td>Blocked by <a href="Q1167/">Q1167</a>: the coupled removals land first, after Q1086's storage migration in 1.10, so the surface the docs describe is …</td>
 </tr>
 <tr>
 <td><a href="Q1260/">Q1260</a></td>
@@ -3594,12 +3594,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>The design docs.</strong> <a href="../design/03-api-contracts/#31-kubernetes-crd-schemas">03-api-contracts.md § 3.1</a> is roughly 790 lines of …</td>
 </tr>
 <tr>
+<td><a href="Q1279/">Q1279</a></td>
+<td>Load-test the scale-set tier for concurrency and goroutine leaks</td>
+<td><code>tests</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The only measurement of the shipped acquisition tier is <code>TestScaleSetPerListenerMemory</code> (<code>make scaleset-mem-profile</code>): 200 parked scale-set …</td>
+</tr>
+<tr>
 <td><a href="Q275/">Q275</a></td>
 <td><a href="../design/appendix-a-capacity-slos/">Reconcile AGC capacity/density docs with the ScaleSet default</a></td>
 <td><code>docs</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked by <a href="Q264/">Q264</a>: reconcile alongside the classic removal, which the 2.0 scope committed to <code>v2.0.0</code> on 2026-10-09, so the …</td>
+<td>Q264 removed classic acquisition, so the decision this row was parked on is taken and the density claims now describe a tier that no longer …</td>
+</tr>
+<tr>
+<td><a href="Q1272/">Q1272</a></td>
+<td><a href="../plan/q264-scale-set-protocol/#what-the-removal-deletes-and-what-is-left">Remove the classic code nothing can reach</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q264 removed classic acquisition from the AGC and the GMC, and left code only classic called.</td>
 </tr>
 <tr>
 <td><a href="Q310/">Q310</a></td>

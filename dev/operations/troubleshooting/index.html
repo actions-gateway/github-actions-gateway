@@ -5491,7 +5491,7 @@ The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gatew
 <li>AGC Deployment: <code>READY 1/1</code>.</li>
 <li>Proxy Deployment: <code>READY</code> count &gt;= <code>minReplicas</code>.</li>
 <li>HPA: <code>TARGETS</code> showing a CPU percentage (not <code>&lt;unknown&gt;</code>).</li>
-<li>Each RunnerGroup has at least one listener session (<code>actions_gateway_active_sessions &gt; 0</code>).</li>
+<li>Each RunnerSet's listener holds its session (<code>actions_gateway_scaleset_session_open == 1</code>).</li>
 </ul>
 <hr />
 <h2 id="helm-render-fails-gmcimage-must-be-pinned-by-digest">Helm Render Fails: <code>gmc.image</code> Must Be Pinned by Digest<a class="headerlink" href="#helm-render-fails-gmcimage-must-be-pinned-by-digest" title="Permanent link">&para;</a></h2>
@@ -5778,7 +5778,7 @@ The two never both fire for the same cause.</p>
 <h2 id="runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">RunnerSet Reports WorkerCapacityDeclined (the Gateway Stopped Claiming Jobs)<a class="headerlink" href="#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> <code>kubectl get runnerset</code> shows a <code>WorkerCapacityDeclined=True</code> condition and a <code>WorkerCapacityDeclined</code> Warning event.
 Jobs sit <strong>queued at GitHub</strong> and are never picked up — no worker pods are being created, and no jobs are being cancelled either.
-On the classic tier <code>actions_gateway_jobs_admission_rejected_total{reason="capacity"}</code> climbs; on the default <code>ScaleSet</code> tier <code>actions_gateway_scaleset_advertised_capacity</code> has dropped and <code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code> holds the remainder of the ceiling.
+<code>actions_gateway_scaleset_advertised_capacity</code> has dropped and <code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code> holds the remainder of the ceiling.
 Those two count the <em>cost</em> of the refusal; the gate's own state is <code>actions_gateway_runnerset_worker_capacity_declined</code>, which reads <code>1</code> under the <code>reason</code> label below and is emitted only for a set that opted in — so <code>max by (namespace, runner_set, reason) (actions_gateway_runnerset_worker_capacity_declined == 1)</code> is the fleet-wide "which sets are gated, and on what evidence" query.</p>
 <p><strong>Cause.</strong> This is <strong>deliberate, and only ever happens on a set that opted in.</strong> The runner set has <code>spec.capacityGate.mode: Observe</code> (Q405, Q406, Q470), and the signal the gate reads is currently saying the cluster cannot place another worker pod of this set's shape.
 The gateway is refusing to claim work it cannot run, because each such claim spends a single-use JIT runner record, holds a GitHub job lock until <code>pendingPodDeadline</code>, and ends in a <strong>cancelled</strong> workflow run rather than a redelivered one.</p>
@@ -5835,8 +5835,8 @@ On an idle gated set whose shape stays unplaceable, <code>AwaitingProbe</code> c
 <p>A latched set is invisible to the scheduler-side signals: the pod that produced the verdict is gone, so <code>WorkersUnschedulable</code> — and its gauge — is back to <code>0</code> while intake is still throttled.
 <code>worker_capacity_declined{reason="AwaitingProbe"}</code> is the series that stays <code>1</code>, which is why the gauge carries the reason.</p>
 </blockquote>
-<p><strong>What alerts on this.</strong> Two ticket-severity rules cover the gate, one per acquisition tier: <a href="../runbook/#actionsgatewaycapacitygaterejectingjobs"><code>ActionsGatewayCapacityGateRejectingJobs</code></a> on the classic tier and <a href="../runbook/#actionsgatewayscalesetcapacitywithheld"><code>ActionsGatewayScaleSetCapacityWithheld</code></a> on the default <code>ScaleSet</code> one.
-Both watch the <em>cost</em> series above rather than <code>worker_capacity_declined</code> itself, and the scale-set rule additionally requires the set to have been assigned work in the last hour.
+<p><strong>What alerts on this.</strong> The ticket-severity rule <a href="../runbook/#actionsgatewayscalesetcapacitywithheld"><code>ActionsGatewayScaleSetCapacityWithheld</code></a> covers the gate.
+It watches the <em>cost</em> series above rather than <code>worker_capacity_declined</code> itself, and requires the set to have been assigned work in the last hour.
 That is deliberate: the gauge alone cannot tell a gate that is costing throughput from the harmless latched state this section describes, so alerting on it directly would open a ticket against an idle set doing exactly what it should.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Is the gate on, and is it currently closed?</span>
@@ -6338,12 +6338,11 @@ Use <code>CIDR</code>, or ask the platform operator to enable a backend.</p>
 <p><strong>Finding every pool that still needs this</strong> before an upgrade: <a href="../upgrade/#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias">the pre-upgrade alias check</a>.</p>
 <hr />
 <h2 id="agc-crashloopbackoff-or-not-acquiring-jobs">AGC CrashLoopBackOff or Not Acquiring Jobs<a class="headerlink" href="#agc-crashloopbackoff-or-not-acquiring-jobs" title="Permanent link">&para;</a></h2>
-<p><strong>Symptoms.</strong> The AGC pod is restarting repeatedly, or it is running but <code>actions_gateway_active_sessions</code> is zero and <code>actions_gateway_jobs_acquired_total</code> is not incrementing even when jobs are queued.</p>
+<p><strong>Symptoms.</strong> The AGC pod is restarting repeatedly, or it is running but <code>actions_gateway_scaleset_session_open</code> is <code>0</code> and <code>actions_gateway_scaleset_jobs_assigned_total</code> is not incrementing even when jobs are queued.</p>
 <p><strong>Likely causes.</strong>
 - GitHub App Secret is missing, malformed, or contains an invalid private key.
 - GitHub App <code>installationId</code> or <code>appId</code> is wrong.
-- The proxy pool is not reachable from the AGC (network policy or proxy pod not ready).
-- The AGC binary was built with an incompatible runner version (GitHub returns 400 on session creation).</p>
+- The proxy pool is not reachable from the AGC (network policy or proxy pod not ready).</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># Check pod status and restarts</span>
 <a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-gateway-controller
@@ -6599,7 +6598,7 @@ Both are fixed; both are worth recognising if you are running an older release, 
 - Re-run the workflow once the rejection is resolved; nothing is retried automatically, because the job's GitHub-side lock has already lapsed.</p>
 <hr />
 <h2 id="worker-pods-stuck-pending">Worker Pods Stuck Pending<a class="headerlink" href="#worker-pods-stuck-pending" title="Permanent link">&para;</a></h2>
-<p><strong>Symptoms.</strong> Jobs are acquired (<code>actions_gateway_jobs_acquired_total</code> increments) but worker pods remain in <code>Pending</code> state for more than 60 seconds.
+<p><strong>Symptoms.</strong> Jobs are assigned (<code>actions_gateway_scaleset_jobs_assigned_total</code> increments) but worker pods remain in <code>Pending</code> state for more than 60 seconds.
 <code>pod_creation_latency_seconds</code> p95 exceeds the 15s SLO target.</p>
 <p><strong>Likely causes.</strong>
 - Namespace <code>ResourceQuota</code> is exhausted — no pod slot, CPU request, or memory request available.
@@ -9050,9 +9049,8 @@ In <code>v1alpha1</code> the AGC silently overwrote these fields when it built t
 <h2 id="runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter"><code>RunnerSet</code> Rejected: <code>acquisitionProtocol</code> (<code>v2alpha1</code>, early-adopter)<a class="headerlink" href="#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter" title="Permanent link">&para;</a></h2>
 <blockquote>
 <p>Applies to the <code>v2alpha1</code> (<code>actions-gateway.com</code>) API.
-<code>acquisitionProtocol</code> selects how the AGC acquires jobs for a runner set: <code>ScaleSet</code> (<strong>the default</strong> as of Q264 P5 — the runner-scale-set message-queue protocol, Q264 Option E) or <code>Classic</code> (<strong>deprecated</strong> — the per-runner broker protocol).
-Leaving the field unset selects <code>ScaleSet</code>.
-Both protocols match on the whole <code>runnerLabels</code> set, so a multi-label set no longer has to pin <code>Classic</code>.</p>
+<code>acquisitionProtocol</code> no longer changes how the AGC acquires jobs: every set acquires through a scale set, whatever the field says (<a href="../upgrade/#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol">upgrade note</a>).
+<code>v2alpha1</code> still accepts and validates it, so the rejections below can still fire; the field goes with <code>v2alpha1</code> at <code>v2.0.0</code>.</p>
 </blockquote>
 <p><strong>Symptoms.</strong> Creating or updating a <code>RunnerSet</code> is rejected with one of:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-165-1" name="__codelineno-165-1" href="#__codelineno-165-1"></a>The RunnerSet "linux" is invalid: spec.acquisitionProtocol: Invalid value: "string":

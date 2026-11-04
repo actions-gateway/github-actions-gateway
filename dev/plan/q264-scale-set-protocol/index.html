@@ -2646,21 +2646,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#the-gate-both-must-hold" class="md-nav__link">
+  <a href="#what-the-removal-deletes-and-what-is-left" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The gate (both must hold)
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#what-the-removal-pr-deletes" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What the removal PR deletes
+        What the removal deletes, and what is left
       
     </span>
   </a>
@@ -2699,54 +2688,53 @@
 
 
 <h1 id="q264--remove-the-deprecated-classic-acquisition-machinery">Q264 — Remove the deprecated classic acquisition machinery<a class="headerlink" href="#q264--remove-the-deprecated-classic-acquisition-machinery" title="Permanent link">&para;</a></h1>
-<p><strong>Status:</strong> RESIDUAL ONLY, tracked by <a href="../../queue/Q264/">Q264</a>.
+<p><strong>Status:</strong> RESIDUAL ONLY, tracked by <a href="../../queue/Q1272/">Q1272</a>.
+Q264 removed classic acquisition from the AGC and the GMC; what this doc still tracks is the classic code outside those two binaries.
 The scale-set migration (Option E) is fully shipped — phases <strong>P0–P5 landed</strong>, ScaleSet is the <strong>default</strong> acquisition protocol since v1.1.0, and Classic is <strong>deprecated</strong>.
 The full P0–P5 record — protocol reverse-engineering, the Investigation E/E2 live probes, the U6–U8 decisions of record, and the P1–P5 execution narrative — lives in the archived phase narrative: <a href="../archive/q264-scale-set-protocol-phases/">q264-scale-set-protocol-phases.md</a>.</p>
-<p>This doc now tracks only the <strong>open residual</strong> (<a href="../../queue/Q264/">Q264</a>): the terminal PR that removes the classic acquisition machinery and the transitional API fields.
-It is the last step of Option E's retirement ladder — one isolated PR, gated on two independent conditions.</p>
-<h2 id="the-gate-both-must-hold">The gate (both must hold)<a class="headerlink" href="#the-gate-both-must-hold" title="Permanent link">&para;</a></h2>
-<ol>
-<li><strong>The one-minor classic deprecation window from v1.1.0 elapses</strong> (i.e. v1.2.0 ships).
-   ScaleSet became the default and Classic was deprecated in v1.1.0's release notes, which starts the window.</li>
-<li><strong>v1alpha1 tenants have migrated off</strong> via <code>gag-migrate</code> (Q273).
-   Classic is v1alpha1's <em>only</em> acquisition path, so removing it necessarily ends v1alpha1's ability to acquire jobs — the classic deprecation window <strong>is</strong> the v1alpha1 migration window.</li>
-</ol>
-<p>The removal was originally expected to ride the Q74 v2beta1 graduation hop (that hop is where the transitional fields were to be stripped). v2beta1 has since graduated <strong>without</strong> carrying the removal, so it is no longer bundled — it is now the terminal step, gated on the two conditions above.
-When both hold, one isolated PR does the removal.
-Sequence it <strong>after</strong> v1alpha1 is itself deprecated (tenants moved via <code>gag-migrate</code>); announcing the two deprecations together turns the fan-out-free model into the concrete incentive to complete the v1→v2 migration.</p>
-<h2 id="what-the-removal-pr-deletes">What the removal PR deletes<a class="headerlink" href="#what-the-removal-pr-deletes" title="Permanent link">&para;</a></h2>
+<p>Q264 removed the classic tier from the two binaries that ran it: the AGC's agent pool, multiplexer and listener, its classic provisioning path, and every AGC and GMC read of <code>acquisitionProtocol</code> and <code>maxListeners</code>.
+A <code>v2alpha1</code> set written <code>Classic</code> now runs as ScaleSet, and is checked by the scale-set label guard like any other; the field declarations leave with the <code>v2alpha1</code> package in Q1167.
+The gate this doc used to describe, the deprecation window and the <code>v1alpha1</code> migration, both held: Q273 removed <code>v1alpha1</code> first.</p>
+<h2 id="what-the-removal-deletes-and-what-is-left">What the removal deletes, and what is left<a class="headerlink" href="#what-the-removal-deletes-and-what-is-left" title="Permanent link">&para;</a></h2>
 <p>The classic-protocol acquisition tier (full "Discarded" delta, with the <em>why</em> per component, is in <a href="../archive/q264-scale-set-protocol-phases/#discarded-the-classic-protocol-acquisition-tier">archive §3</a>):</p>
 <table>
 <thead>
 <tr>
 <th>Machinery</th>
 <th>Where</th>
+<th>Status</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Classic broker client (<code>CreateSession</code>/<code>GetMessage</code>/<code>AcquireJob</code>/<code>RenewJob</code>/<code>CompleteJob</code>/<code>DeleteSession</code>)</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go</a></td>
+<td><a href="../../queue/Q1272/">Q1272</a></td>
 </tr>
 <tr>
 <td>Agent pool: N pre-registered JIT agents, per-agent Secrets, single-use recycle + heal ladder (Q114)</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">cmd/agc/internal/agentpool/</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/abb6fcd7f/cmd/agc/internal/agentpool/pool.go">cmd/agc/internal/agentpool/</a></td>
+<td>removed by Q264</td>
 </tr>
 <tr>
 <td>Multiplexer: <code>maxListeners</code> sessions, <code>SpawnReplacement</code>, poller accounting (Q152), planID <code>claimJob</code> dedup</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go">multiplexer.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/abb6fcd7f/cmd/agc/internal/listener/multiplexer.go">multiplexer.go</a></td>
+<td>removed by Q264</td>
 </tr>
 <tr>
 <td>Listener goroutine: per-delivery <code>handleJob</code>, <code>StartRenewLoop</code> (Q247), <code>completeAbandonedDelivery</code></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/abb6fcd7f/cmd/agc/internal/listener/goroutine.go">goroutine.go</a></td>
+<td>removed by Q264</td>
 </tr>
 <tr>
 <td>M3 pipes handoff: payload Secret → wrapper → <code>Runner.Worker spawnclient</code></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>, provisioner payload staging</td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">cmd/worker/main.go</a>; the provisioner's payload staging</td>
+<td>staging removed by Q264; the worker half is <a href="../../queue/Q1272/">Q1272</a></td>
 </tr>
 <tr>
 <td>Q260 fan-out accounting model + tests</td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/brokertest/server.go">broker/brokertest/server.go</a></td>
+<td><a href="../../queue/Q1272/">Q1272</a></td>
 </tr>
 </tbody>
 </table>

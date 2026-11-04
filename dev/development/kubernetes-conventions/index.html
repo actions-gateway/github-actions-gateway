@@ -3068,20 +3068,16 @@ Adding a key here is a decision to give up reconciliation of that key — take i
 They are <strong>additive metadata</strong>: stamp them <em>alongside</em> the functional selector labels above, never in place of them, and never build a controller's pod/Service selector on them (an operator may relabel them).
 <code>apilabels.Merge</code> preserves any existing key, so it cannot clobber a selector label.
 The canonical per-component values and operator <code>kubectl -l</code> recipes live in <a href="../../operations/observability-metrics/#selecting-gag-objects-with-the-recommended-labels">observability.md</a>.</p>
-<p>Controller-set annotations on worker pods (both v1 and v2, stamped by the provisioner at pod creation time — from the AcquireJob payload on the classic tier, from the assignment message's <code>JobMessageBase</code> fields on the scale-set tier):</p>
+<p>Controller-set annotations on worker pods, stamped by the provisioner at pod creation time from the assignment message's <code>JobMessageBase</code> fields:</p>
 <ul>
 <li><code>actions-gateway.com/run-id</code> — GitHub workflow run ID.</li>
 <li><code>actions-gateway.com/repository</code> — <code>owner/repo</code> the job belongs to.</li>
 <li><code>actions-gateway.com/job-name</code> — job name as defined in the workflow YAML.</li>
-<li><code>actions-gateway.com/workflow</code> — workflow file name.
-  Classic only; the scale-set protocol delivers no workflow name.</li>
 </ul>
-<p><strong>On the classic tier, read the identity out of the payload's serialised <code>github</code> context — never out of <code>variables</code>.</strong> A real AcquireJob body carries <code>contextData.github.run_id</code> and <code>.repository</code> and no <code>system.github.run_id</code> at all; reading the variables instead is how these annotations came to be absent from every real worker pod, taking classic-tier eviction recovery with them (Q495).
-The ground truth is <code>testdata/job_payload.json</code>, a redacted capture of a live response, and <code>payload_groundtruth_test.go</code> asserts against it — extend that test rather than a hand-written payload when this parsing changes.</p>
-<p>These are best-effort: absent if GitHub omitted the corresponding field (<code>contextData.github.run_id</code>/<code>.repository</code>/<code>.workflow</code> on classic; <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code> on scale-set).
-Never use them for security enforcement — they are informational annotations for operator visibility, <strong>except</strong> that on the scale-set tier <code>run-id</code> and <code>repository</code> are also load-bearing: they are the only record of which workflow run a worker was serving, so eviction recovery reads them back off the pod (Q417).
+<p>These are best-effort: absent if GitHub omitted the corresponding field (<code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>).
+Never use them for security enforcement — they are informational annotations for operator visibility, <strong>except</strong> that <code>run-id</code> and <code>repository</code> are also load-bearing: they are the only record of which workflow run a worker was serving, so eviction recovery reads them back off the pod (Q417).
 They are stamped from the job the pod was created for and replaced from the job its runner starts, which GitHub need not give that pod (Q1152).
-Adding a fifth key is fine; changing or removing either of those two breaks recovery on that tier.</p>
+Adding a key is fine; changing or removing either of those two breaks recovery.</p>
 <p>One further controller-set annotation is stamped at pod build, on both tiers, only when an opt-in sizing profile actually derived the pod's ask:</p>
 <ul>
 <li><code>actions-gateway.com/sizing-profile: &lt;Binpack|Throughput|NodeShare&gt;</code> (<code>provisioner.AnnotationSizingProfile</code>) — the profile that produced this pod's cpu/memory values.

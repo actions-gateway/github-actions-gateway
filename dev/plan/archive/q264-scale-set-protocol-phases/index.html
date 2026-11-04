@@ -3002,7 +3002,7 @@ Source-level confidence is high; wire-level details still need a live probe (§5
 </tr>
 </tbody>
 </table>
-<p>Contrast with classic: instead of pre-registering <code>maxListeners</code> agents per group (<code>generate-jitconfig</code> per agent, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:89</code></a>) and recycling each single-use agent after every job (Q114), the controller registers <strong>one scale-set object per group once</strong>, then mints <strong>one JIT config per acquired job</strong> for the runner that will execute it.
+<p>Contrast with classic: instead of pre-registering <code>maxListeners</code> agents per group (<code>generate-jitconfig</code> per agent, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go:89</code></a>) and recycling each single-use agent after every job (Q114), the controller registers <strong>one scale-set object per group once</strong>, then mints <strong>one JIT config per acquired job</strong> for the runner that will execute it.
 The server pre-registers the runner and returns a base64 blob bundling <code>.runner</code> + <code>.credentials</code> (+ RSA parameters); the runner consumes it with <code>run.sh --jitconfig &lt;blob&gt;</code>.
 The <strong>scale set's <code>name</code> is its single <code>runs-on</code> label</strong> — there is no free-form label list per scale set.</p>
 <h3 id="22-session--message-queue-one-authoritative-stream-per-scale-set">2.2 Session + message queue: one authoritative stream per scale set<a class="headerlink" href="#22-session--message-queue-one-authoritative-stream-per-scale-set" title="Permanent link">&para;</a></h3>
@@ -3156,17 +3156,17 @@ The capacity-header admission model (1) plus queue replay (3) simplify the targe
 </tr>
 <tr>
 <td>Agent pool: N pre-registered JIT agents, per-agent Secrets, single-use recycle + heal ladder (Q114)</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>cmd/agc/internal/agentpool/</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go"><code>cmd/agc/internal/agentpool/</code></a></td>
 <td>no per-agent registration exists; one scale-set object + per-job JIT configs</td>
 </tr>
 <tr>
 <td>Multiplexer: <code>maxListeners</code> sessions, <code>SpawnReplacement</code>, poller accounting (Q152), planID <code>claimJob</code> dedup (#512)</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/multiplexer.go"><code>multiplexer.go</code></a></td>
 <td>one session per group; nothing to dedup</td>
 </tr>
 <tr>
 <td>Listener goroutine: per-delivery <code>handleJob</code>, self-heal ladder, <code>StartRenewLoop</code> (Q247), <code>completeAbandonedDelivery</code> (#513)</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go"><code>goroutine.go</code></a></td>
 <td>acquisition is batch-claim + message dispatch; the runner renews/completes its own job</td>
 </tr>
 <tr>
@@ -3397,7 +3397,7 @@ A per-set field reaches the AGC directly through its RunnerSet informer — no G
   End state: the protocol is an API-version property — v1 = classic (deprecated), v2 = scale-set — with no enum surviving.</li>
 </ul>
 <h3 id="u8--support-matrix-policy">U8 — support-matrix policy<a class="headerlink" href="#u8--support-matrix-policy" title="Permanent link">&para;</a></h3>
-<p><strong>Enterprise scope — non-regression; declare out of scope.</strong> GAG supports org- and repo-scope registration only (URL-shape selection in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go</code></a>; the three documented URL forms) — it has never supported enterprise-scope runners.
+<p><strong>Enterprise scope — non-regression; declare out of scope.</strong> GAG supports org- and repo-scope registration only (URL-shape selection in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go"><code>github_registrar.go</code></a>; the three documented URL forms) — it has never supported enterprise-scope runners.
 The scale-set PAT-only limitation at enterprise scope is a GitHub platform constraint that binds ARC identically (<a href="https://docs.github.com/en/actions/tutorials/use-actions-runner-controller/authenticate-to-the-api">ARC auth docs</a>).
 No PAT credential mode; document enterprise scope as out of scope (it already is).</p>
 <p><strong>GHES — the ≥3.9 floor excludes nothing; but GHES keeps the acquire flow.</strong> As of 2026-07 the supported GHES window is ~3.17–3.20 (<a href="https://docs.github.com/en/enterprise-server@3.17/admin/all-releases">release lifecycle</a>); GHES 3.9 has been EOL for years, so the floor costs zero vendor-supported deployments.

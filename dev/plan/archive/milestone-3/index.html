@@ -3242,7 +3242,7 @@ The re-run also surfaced an unrelated GMC readiness-probe bug (<code>/readyz</co
 <tr>
 <td>Message body decryption (AES-CBC w/ session key)</td>
 <td>✅ Done</td>
-<td><code>aesKey</code> plumbed through <code>handleJob</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go:105,177,224</a>)</td>
+<td><code>aesKey</code> plumbed through <code>handleJob</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go">goroutine.go:105,177,224</a>)</td>
 </tr>
 <tr>
 <td>Investigation A — Named Pipe protocol documented (§11.A)</td>
@@ -3993,9 +3993,9 @@ The wrapper passes "3" and "4" (Go's <code>cmd.ExtraFiles[0]</code> maps to fd 3
 Without them Runner.Worker fails at job start with <code>ArgumentNullException: configuredSettings</code>.</p>
 <p>The end-to-end plumbing is now:</p>
 <ol>
-<li><code>GithubRegistrar.Register</code> retains the raw <code>encoded_jit_config</code> it already parsed and exposes it on <code>AgentCredentials</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go">github_registrar.go</a>).</li>
-<li><code>Pool.createAgent</code> writes the blob into the agent Secret under <code>encodedJITConfig</code>; <code>secretToAgent</code> restores it onto the <code>Agent</code> struct so the AGC reconciler picks it up on restart (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">pool.go</a>).</li>
-<li>The listener passes <code>cfg.Agent.EncodedJITConfig</code> into <code>JobHandlerFunc</code>, which the provisioner forwards into the worker Secret under the <code>jitconfig</code> key (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">goroutine.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>).</li>
+<li><code>GithubRegistrar.Register</code> retains the raw <code>encoded_jit_config</code> it already parsed and exposes it on <code>AgentCredentials</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go">github_registrar.go</a>).</li>
+<li><code>Pool.createAgent</code> writes the blob into the agent Secret under <code>encodedJITConfig</code>; <code>secretToAgent</code> restores it onto the <code>Agent</code> struct so the AGC reconciler picks it up on restart (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go">pool.go</a>).</li>
+<li>The listener passes <code>cfg.Agent.EncodedJITConfig</code> into <code>JobHandlerFunc</code>, which the provisioner forwards into the worker Secret under the <code>jitconfig</code> key (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go">goroutine.go</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go">provisioner.go</a>).</li>
 <li>The wrapper reads <code>&lt;payloadDir&gt;/jitconfig</code>, base64-decodes the outer blob, JSON-unmarshals the file map, base64-decodes each entry, and writes the three runner-config files into <code>$RUNNER_HOME_DIR</code> (default <code>/home/runner</code>) with mode 0600 before exec'ing Runner.Worker (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/worker/main.go">worker/main.go</a> — <code>materializeJITConfig</code>).</li>
 </ol>
 <p>Unit tests pin: the agent Secret round-trip (<code>TestPool_EnsureAgents_StoresEncodedJITConfig</code>), the worker Secret hand-off (<code>TestProvisioner_ForwardsJITConfigIntoSecret</code> / <code>TestProvisioner_OmitsJITKeyWhenEmpty</code>), and the wrapper-side materialization (<code>TestMaterializeJITConfig_*</code>).

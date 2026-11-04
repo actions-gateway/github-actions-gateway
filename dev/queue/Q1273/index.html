@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q264/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1273/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Remove deprecated classic acquisition machinery - GitHub Actions Gateway</title>
+        <title>Retire the classic tier ledgers, runbooks and unread AGC env vars - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#remove-deprecated-classic-acquisition-machinery" class="md-skip">
+        <a href="#retire-the-classic-tier-ledgers-runbooks-and-unread-agc-env-vars" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Remove deprecated classic acquisition machinery
+              Retire the classic tier ledgers, runbooks and unread AGC env vars
             
           </span>
         </div>
@@ -2657,13 +2657,31 @@
   
 
 
-<h1 id="remove-deprecated-classic-acquisition-machinery">Remove deprecated classic acquisition machinery<a class="headerlink" href="#remove-deprecated-classic-acquisition-machinery" title="Permanent link">&para;</a></h1>
-<p>It follows the <code>v1alpha1</code> removal (Q273), since classic was <code>v1alpha1</code>'s only acquisition path.
-It no longer waits for the <code>v2alpha1</code> drop: removing classic while <code>v2alpha1</code> still serves a <code>Classic</code> set would run that set as ScaleSet, and would skip scale-set label uniqueness, but only a <code>v2.0.0</code> candidate cut early could ship that state, and the cut waits on every removal.
-It lands before <a href="../Q1263/">Q1263</a>, the AGC retype onto <code>v2</code>, which cannot compile while the AGC reads <code>acquisitionProtocol</code> and <code>maxListeners</code>; the completing change deletes those reads, and the field declarations leave with the <code>v2alpha1</code> package in <a href="../Q1167/">Q1167</a> (<a href="../../plan/q1167-v2-retype-split/#where-q264s-boundary-falls-before-the-agc-retype">the split</a>).
-<code>v2beta1</code> is ScaleSet-only, so classic serves only v1alpha1/v2alpha1 objects and comes out in the same <code>v2.0.0</code> bundle, not separately.
-Strips every read of <code>acquisitionProtocol</code>/<code>maxListeners</code>, including the conversion-annotation reads the GMC makes in <code>cmd/gmc/internal/webhook/v2/runnerset_webhook.go</code> (<code>acquisitionProtocolOf</code>, the label-uniqueness skip) and <code>cmd/gmc/internal/scalesetscope/scalesetscope.go</code>.
-Removing classic also retires <a href="../Q416/">Q416</a>, a classic-listener defect parked until classic removal slips, so the completing change deletes that row too.</p>
+<h1 id="retire-the-classic-tier-ledgers-runbooks-and-unread-agc-env-vars">Retire the classic tier ledgers, runbooks and unread AGC env vars<a class="headerlink" href="#retire-the-classic-tier-ledgers-runbooks-and-unread-agc-env-vars" title="Permanent link">&para;</a></h1>
+<p>Q264 removed classic acquisition, its alerts, recording rule and dashboard panels, and left four things an operator can still see or hit that describe or carry the removed tier.
+They have to be gone before <code>v2.0.0</code> ships, which is why this ranks ahead of <a href="../Q1107/">Q1107</a>.
+The classic code nothing can reach is <a href="../Q1272/">Q1272</a>, not this row.</p>
+<p><strong>The tier ledgers.</strong> <a href="../../operations/observability-metrics/#acquisition-tier-reach">observability-metrics.md § Acquisition-tier reach</a> and § Condition and Event tier reach classify every series and reason as Classic only, Scale-set only or Both, and <code>make metric-tiers-check</code> and <code>make reason-tiers-check</code> (<code>devtools/docs/metrictiers</code>, <code>devtools/docs/reasontiers</code>) reconcile them against the source by package.
+Q264 deleted the rows for what no longer exists; the rest still argue against a tier that is gone, and the tier label on the eviction metrics is now one-valued.
+The metrics reference rows say the same in places: <code>actions_gateway_message_poll_errors_total</code> calls itself "Both acquisition tiers", and <code>actions_gateway_scaleset_session_open</code> "the tier's analogue of the classic <code>actions_gateway_active_sessions</code>".
+Whether the ledgers and their gates collapse to a single tier or retire is an implementation choice with no security or operator cost either way, so the session working this row makes it and states the reason in its PR.</p>
+<p><strong>Operator docs that still describe the classic tier.</strong> Q264 fixed the validation steps and symptom lines the review named, and the <code>acquisitionProtocol</code> rejection section's description of the field; these sections still describe classic behaviour, measured 2026-11-03 on the Q264 branch by mapping every troubleshooting.md line matching <code>Classic</code>, <code>active_sessions</code>, <code>jobs_acquired_total</code>, <code>jobs_admission_rejected</code>, <code>renew_job</code>, <code>maxListeners</code>, <code>agent_recycle</code> or <code>jobs_duplicate_delivery</code> to its <code>##</code> section:</p>
+<ul>
+<li><a href="../../operations/troubleshooting/">troubleshooting.md</a>, whole sections: <em>AGC CrashLoopBackOff or Not Acquiring Jobs</em> (its RunnerGroup diagnostics block and the Events it lists: <code>TokenUnavailable</code>, <code>AgentPoolError</code>, <code>ListenerStartFailed</code>, <code>AgentDeregistrationFailed</code>, <code>JobAcquisitionFailed</code>, <code>RunnerVersionTooOld</code> and <code>VersionTooOld</code>), <em>RunnerGroup ActiveSessions Exceeds maxListeners</em>, <em>RenewJob Failures Rising</em>, <em>Sessions Stuck in 401/EOF GetMessage Loops</em>, both <em>Concurrent Job Burst Serializes to ~1 Worker</em> sections, and <em>Jobs Not Being Acquired Despite Queued Work (Capacity Gate Saturated)</em>, whose Symptoms and Diagnostics read <code>jobs_admission_rejected_total</code> and <code>jobs_acquired_total</code>.</li>
+<li>troubleshooting.md, classic rows or paragraphs inside sections that otherwise hold: <em>RateLimited Condition on ActionsGateway</em> (its <code>active_sessions</code> and <code>maxListeners</code> budget), <em>Worker Pod Reaped While Running</em> and <em>Worker Pods Stuck Running After the Job Finished</em> (their Classic-protocol contrasts), <em>Cancelling a Run Does Not Stop Its Worker Pod</em> (its Classic-tier lead), <em>Jobs Failing Due to Namespace ResourceQuota Exhaustion</em> (the <code>Classic</code> table row, the <code>Classic</code> bullet and the Classic-tier query), <em><code>RunnerSet</code> Rejected: <code>acquisitionProtocol</code></em> (the <code>Classic</code> immutability and multi-label history, below the corrected lead), <em><code>RunnerSet</code> Stuck <code>Ready=False</code> With a <code>NotFound</code> Reason</em> (the Classic-protocol conditions and the <code>VersionTooOld</code> row), the <code>maxListeners: 0</code> step in <em>Worker Pod Crashes With <code>configuredSettings</code> ArgumentNullException</em>, and the table-of-contents entry for the maxListeners section.</li>
+<li><a href="../../operations/runbook/">runbook.md</a> <em>Scaling maxListeners</em>, which tells operators to tune a field no code reads.</li>
+<li><a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a>: the <code>maxListeners</code> example and minimum (around lines 375 and 521), the memory budget <code>sum(maxListeners) × 60 KiB</code> (around 1022), and the handoff line naming <code>maxListeners</code> tuning (around 1288).</li>
+<li><a href="../../design/02-architecture/">02-architecture.md</a>'s metrics table, which lists the removed classic series as current, and <a href="../../design/appendix-e-capacity-planning/#e4-sizing-maxlisteners">appendix-e § E.4. Sizing <code>maxListeners</code></a>.</li>
+</ul>
+<p><strong>The GMC's unread AGC env vars.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a> injects <code>GITHUB_ORG_URL</code> and <code>GITHUB_RUNNER_VERSION</code> into every AGC Deployment, and no AGC code reads either after Q264 (<code>git grep</code> finds them in <code>cmd/agc</code> only in comments, 2026-11-03).
+An operator reading the pod spec sees them, and <code>docs/operations/upgrade.md</code>'s env table lists <code>GITHUB_RUNNER_VERSION</code>.
+Dropping them changes the AGC pod template, which costs nothing extra at <code>v2.0.0</code> because the new AGC image rolls every AGC anyway.
+The tests pinning them are in <code>shared_agc_deployment_test.go</code> and the envtest <code>v2_actionsgateway_test.go</code>; <code>cmd/agc/names/names.go</code>, <code>runner_version_test.go</code>, the <code>Dockerfile</code> header and <code>docs/development/building.md</code> describe <code>GITHUB_RUNNER_VERSION</code> as the <code>agent.version</code> GitHub validates, and <code>cmd/probe</code> reads both names for its own, separate configuration.</p>
+<p><strong>The agent-identity admission guard (Q1011), which needs sign-off to remove.</strong> The GMC's RunnerSet webhook rejects a set whose name another RunnerSet already holds in the same namespace or under the same GitHub scope (<code>cmd/gmc/internal/webhook/v2/agent_identity.go</code>), because the classic agent pool derived its agent Secret and runner names from the CR name.
+After Q264 no AGC code derives that stem (<code>git grep RunnerSetAgentStem -- cmd/agc</code> is empty, 2026-11-03), and a scale-set runner is named <code>&lt;scale set&gt;-&lt;job id&gt;</code> (<code>scalesetlistener/listener.go</code>, <code>runnerName</code>), which the Q791 first-label guard already keeps unique per scope.
+So the guard now refuses one configuration nothing would break: two RunnerSets with the same name in different namespaces whose gateways bind one GitHub org.
+It is an admission check, and the security principles want a removal raised rather than made silently, so the session working this row puts it to the maintainer with <code>AskUserQuestion</code> before writing the removal, and keeps the guard if the answer is no; <code>TestAgentStemNonInjective</code> in <code>api/apinames</code> and the <code>RunnerGroupAgentStem</code> it pins go with it.</p>
+<p><strong>Done when</strong> <code>make metric-tiers-check</code> and <code>make reason-tiers-check</code> either reconcile a one-tier ledger or no longer exist, no doc listed above describes <code>maxListeners</code>, <code>active_sessions</code>, the renew loop or the classic Events as current, the GMC no longer injects <code>GITHUB_ORG_URL</code> or <code>GITHUB_RUNNER_VERSION</code>, and the Q1011 guard is either removed on a recorded yes or kept with its godoc saying what it now protects.</p>
 
 
 

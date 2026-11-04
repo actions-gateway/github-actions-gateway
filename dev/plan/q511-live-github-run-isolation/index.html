@@ -2785,7 +2785,7 @@ The forbid half shipped 2026-07-31; the isolation half is parked as <a href="../
 </table>
 <h3 id="why-the-collision-is-silent">Why the collision is silent<a class="headerlink" href="#why-the-collision-is-silent" title="Permanent link">&para;</a></h3>
 <p>Runner names are unique per registration scope, and the fixture repo is one scope (the live-GitHub tenant sets <code>GITHUB_ORG_URL</code> to the repo, so <code>agentpool</code> registers repo-scoped).
-A second run registering a name the first already holds therefore takes <code>registerAgent</code>'s conflict path in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go"><code>pool.go</code></a>: resolve the conflicting record, <strong>delete it</strong>, register again.
+A second run registering a name the first already holds therefore takes <code>registerAgent</code>'s conflict path in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go"><code>pool.go</code></a>: resolve the conflicting record, <strong>delete it</strong>, register again.
 Both runs end up holding a listener whose registration the other has removed, and each acquires jobs the other dispatched.</p>
 <p>Nothing on either side errors, because that path is the intended recovery for an AGC restart — where deleting the incumbent record <em>is</em> correct.
 Concurrency turns a correct repair into mutual sabotage, and the only observable is a job that never gets a worker.</p>

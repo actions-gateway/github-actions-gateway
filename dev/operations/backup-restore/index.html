@@ -3292,7 +3292,7 @@ The finalizer exists precisely to avoid orphaning the cluster-scoped <code>Clust
 </code></pre></div>
    Expect <code>True</code>.
    If <code>CredentialUnavailable</code> or <code>ProxyNotFound</code>, the credential Secret or <code>EgressProxy</code> is still missing — recheck the relevant scenario step.</li>
-<li>Sessions are polling — <code>actions_gateway_active_sessions</code> should reach ≥ 1 per RunnerGroup within seconds.
+<li>Listeners hold their sessions — <code>actions_gateway_scaleset_session_open</code> should read <code>1</code> for every <code>runner_set</code> within seconds.
    See <a href="../observability/">Observability</a>.</li>
 <li>Trigger a test workflow and confirm a worker pod is provisioned and the job completes.</li>
 </ol>

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q416/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1278/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Classic listener: session heal leaks then self-collides - GitHub Actions Gateway</title>
+        <title>Trace the scale-set provision path; the AGC emits no spans after Q264 - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#classic-listener-session-heal-leaks-then-self-collides" class="md-skip">
+        <a href="#trace-the-scale-set-provision-path-the-agc-emits-no-spans-after-q264" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Classic listener: session heal leaks then self-collides
+              Trace the scale-set provision path; the AGC emits no spans after Q264
             
           </span>
         </div>
@@ -2657,9 +2657,17 @@
   
 
 
-<h1 id="classic-listener-session-heal-leaks-then-self-collides">Classic listener: session heal leaks then self-collides<a class="headerlink" href="#classic-listener-session-heal-leaks-then-self-collides" title="Permanent link">&para;</a></h1>
-<p><strong>Demand:</strong> a Classic operator reports listener slots going quiet, OR Classic removal slips.
-<code>healSession</code> DELETEs before refreshing the token → 401 → leak → <code>CreateSession</code> 409 → goroutine exits; only the baseline restarts.</p>
+<h1 id="trace-the-scale-set-provision-path-the-agc-emits-no-spans-after-q264">Trace the scale-set provision path; the AGC emits no spans after Q264<a class="headerlink" href="#trace-the-scale-set-provision-path-the-agc-emits-no-spans-after-q264" title="Permanent link">&para;</a></h1>
+<p>The AGC's only span was <code>Provisioner.provision</code>, with children <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code> and <code>waitForCompletion</code>, and it wrapped the classic provision path alone (<code>git grep -n 'tracer.Start' origin/main -- cmd/agc</code> finds it at <code>provisioner.go:511</code> and nowhere else, 2026-11-03).
+Q264 removed that path, and the scale-set path <code>ProvisionScaleSetWorker</code> never opened a span, so after Q264 the AGC creates none.
+<code>make lint</code> then flagged the tracer and <code>traceStep</code> helper as unused, and Q264 deleted them.</p>
+<p><strong>What an operator sees:</strong> <code>spec.tracing</code> on an <code>ActionsGateway</code> still sets the AGC's <code>OTEL_*</code> variables and the AGC still installs the exporter (<code>cmd/agc/internal/tracing</code>), so tracing reads as on and the collector receives nothing.
+<a href="../../operations/observability-logging/#distributed-tracing-agc">observability-logging.md § Distributed Tracing</a> says so since Q264, and that this row restores it.
+That knob producing nothing is why this gates <code>v2.0.0</code>; dropping <code>spec.tracing</code> instead would be the other way to close it, and is a breaking API change of its own.</p>
+<p><strong>The work:</strong> open a root span per job in <code>ProvisionScaleSetWorker</code>, with child spans for staging the JIT-config Secret, the ceiling count and the pod create; the scale-set path does not wait for completion, so there is no <code>waitForCompletion</code> child.
+The old root span's attributes (<code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>) are the starting set; <code>gateway.plan.id</code> has no scale-set equivalent, and the job id does.
+A test needs an in-memory span exporter (<code>go.opentelemetry.io/otel/sdk/trace/tracetest</code>) and must fail with the span removed.</p>
+<p><strong>Done when</strong> the scale-set provision path emits the span tree above under a test that fails without it, and the docs that describe the AGC's spans describe those: the caveats Q264 added to <a href="../../operations/observability-logging/#distributed-tracing-agc">observability-logging.md § Distributed Tracing</a> and <a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a> come out, and <a href="../../design/02-architecture/#distributed-tracing">02-architecture.md § Distributed tracing</a>, which still names <code>RunnerGroup.Reconcile</code> and <code>Provisioner.provision</code>, names the new spans.</p>
 
 
 

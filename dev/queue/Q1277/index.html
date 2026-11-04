@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1274/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1277/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Port the e2e suite from classic to the scale-set tier - GitHub Actions Gateway</title>
+        <title>E2E_GMC_RBAC reads the AGC RoleBinding once, racing the GMC - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#port-the-e2e-suite-from-classic-to-the-scale-set-tier" class="md-skip">
+        <a href="#e2e_gmc_rbac-reads-the-agc-rolebinding-once-racing-the-gmc" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Port the e2e suite from classic to the scale-set tier
+              E2E_GMC_RBAC reads the AGC RoleBinding once, racing the GMC
             
           </span>
         </div>
@@ -2657,20 +2657,17 @@
   
 
 
-<h1 id="port-the-e2e-suite-from-classic-to-the-scale-set-tier">Port the e2e suite from classic to the scale-set tier<a class="headerlink" href="#port-the-e2e-suite-from-classic-to-the-scale-set-tier" title="Permanent link">&para;</a></h1>
-<p><a href="../Q264/">Q264</a> removes classic acquisition, and the fake-GitHub e2e suite runs on it: its fixture pins <code>acquisitionProtocol: Classic</code> and its specs enqueue through fakegithub's classic broker sessions.
-The e2e lanes run only in the merge queue (Q675), so Q264 cannot clear the queue until the suite runs on the scale-set tier, and this lands first, on a <code>main</code> that still has both tiers.</p>
-<p><strong>What the port needs, measured 2026-11-02 on <code>main</code> at <code>abb6fcd</code>:</strong></p>
-<ul>
-<li><strong>A fakegithub <code>githubURL</code>.</strong> The AGC points a scale-set listener at the stub only when the gateway's <code>githubURL</code> host already is fakegithub's (<code>cmd/agc/internal/controller/runnerset_scaleset.go:573</code>), and every fixture tenant carried <code>https://github.com/e2e-org</code>.</li>
-<li><strong>A per-set first label.</strong> fakegithub runs one <code>scalesetstub.Stub</code>, which keys scale sets by id and looks them up by name alone (<code>ScaleSetIDByName</code>, <code>handleGetScaleSetByName</code>), so names are global across specs and orgs; the fixture names each set's scale set after the RunnerSet.</li>
-<li><strong>Admin JWTs that survive the next mint.</strong> The stub held one admin token and replaced it on every runner registration, so with every tenant on one stub each registration revoked the others' connections; the client re-mints only near expiry, so a revoked tenant 401s on <code>generatejitconfig</code> for the token's hour (measured 2026-11-03 in <code>E2E_AGC_WorkerPodLifecycle</code>).
-  The stub now keeps every minted token valid, so clients sharing it stop revoking each other.</li>
-<li><strong>The specs that only classic can express go:</strong> <code>acquire_admission_test.go</code> (the pre-acquisition gate's per-delivery refusal), <code>singleuse_selfheal_test.go</code> (agent recycling), and <code>job_lifecycle_test.go</code>'s session and delivery specs.</li>
-</ul>
-<p><strong>Not in this row:</strong> the live-GitHub suite, <code>github_e2e_test.go</code>.
-It also builds tenants with <code>RunnerTenant</code>, so the port changes it, and it needs App credentials to verify; no workflow sets <code>GITHUB_E2E_*</code>, so CI skips it.
-Its port goes in the residue row Q264 files (Q1272), not here.</p>
+<h1 id="e2e_gmc_rbac-reads-the-agc-rolebinding-once-racing-the-gmc">E2E_GMC_RBAC reads the AGC RoleBinding once, racing the GMC<a class="headerlink" href="#e2e_gmc_rbac-reads-the-agc-rolebinding-once-racing-the-gmc" title="Permanent link">&para;</a></h1>
+<p><strong>Top of queue per <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong></p>
+<p><code>E2E_GMC_AGCServiceAccountHasRole</code> failed the merge group of PR #2250 (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/41670008248/job/126035688552">job 126035688552</a>), the queue's only failing spec, with <code>rolebindings.rbac.authorization.k8s.io "test-ag-agc" not found</code> at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/0a2f4276342af7d11167abc5f271e01edd66f74f/cmd/gmc/test/e2e/rbac_e2e_test.go#L53"><code>rbac_e2e_test.go</code></a> line 53.
+The merge group of #2249, the commit #2250's group was based on, passed the same suite minutes earlier.</p>
+<p>The spec's <code>BeforeAll</code> waits for the egress proxy Deployment to be ready and nothing else, then the spec reads the AGC RoleBinding with one <code>kubectl get</code> and no retry.
+The GMC does not order those two: the EgressProxy reconciler provisions the proxy, and <code>ActionsGatewayV2Reconciler.reconcileResources</code> applies the AGC ServiceAccounts, RoleBinding and Deployment in its own pass, needing only the EgressProxy object to exist.
+In the failing run the namespace events put the AGC pod's scheduling about 5 s after the proxy pod's, the read failed at 16:09:04Z, and the ActionsGateway's conditions first read <code>ReconcileSucceeded</code> at 16:09:05Z.</p>
+<p>PR #2250 then passed the merge queue at the same head with no code change and merged as <code>dabb2565f</code>, so the failure is a flake rather than a defect in #2250's change.
+The GMC log tail in the failing dump holds no line for <code>tenant-rbac</code>, so nothing shows why the gateway's pass came when it did; the race only needs it to come after the proxy is ready, which nothing orders against.</p>
+<p>The fix waits for the AGC RoleBinding with <code>Eventually</code> before asserting its subject.
+Sweep the idiom with it: <code>E2E_GMC_AGCCanManagePods</code> in the same file runs <code>kubectl auth can-i</code> as the AGC ServiceAccount once, which answers <code>no</code> until that RoleBinding exists, and any other e2e spec that reads a gateway child once after waiting only on the proxy has the same race.</p>
 
 
 

@@ -4090,7 +4090,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-11-agentpool-keeps-generated-rsa-private-keys-at-2048-bits">M-11. <code>agentpool</code> keeps generated RSA private keys at 2048 bits<a class="headerlink" href="#m-11-agentpool-keeps-generated-rsa-private-keys-at-2048-bits" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/pool.go">cmd/agc/internal/agentpool/pool.go:149-155</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/pool.go">cmd/agc/internal/agentpool/pool.go:149-155</a></li>
 <li><strong>Category:</strong> OWASP A02:2025 — Cryptographic Failures</li>
 <li><strong>Description:</strong> <code>rsa.GenerateKey(rand.Reader, 2048)</code>.
   NIST SP 800-57 considers 2048-bit RSA acceptable through 2030; 3072-bit is the forward-looking default.
@@ -4114,7 +4114,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="m-13-verbose-error-bodies-in-broker-client">M-13. Verbose error bodies in broker client<a class="headerlink" href="#m-13-verbose-error-bodies-in-broker-client" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:222-226</a> (<code>CreateSession</code>), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:341-343</a> (<code>AcquireJob</code>), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:373-376</a> (<code>RenewJob</code>), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go">cmd/agc/internal/agentpool/github_registrar.go:108-110</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:222-226</a> (<code>CreateSession</code>), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:341-343</a> (<code>AcquireJob</code>), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:373-376</a> (<code>RenewJob</code>), <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go">cmd/agc/internal/agentpool/github_registrar.go:108-110</a></li>
 <li><strong>Category:</strong> OWASP A09:2025 — Logging Failures (verbose error)</li>
 <li><strong>Description:</strong> Errors include the full response body.
   GitHub may return request IDs and partial token echoes in error bodies — these end up in AGC logs that are aggregated cluster-wide and often retained.</li>
@@ -4227,7 +4227,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="l-2-httpdefaultclient-has-no-timeout">L-2. <code>http.DefaultClient</code> has no timeout<a class="headerlink" href="#l-2-httpdefaultclient-has-no-timeout" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go">githubapp/auth.go:127</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:138-143</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/github_registrar.go">cmd/agc/internal/agentpool/github_registrar.go:57-62</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">cmd/gmc/internal/controller/ipranges.go:57-59</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go">githubapp/auth.go:127</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go">broker/client.go:138-143</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/github_registrar.go">cmd/agc/internal/agentpool/github_registrar.go:57-62</a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/ipranges.go">cmd/gmc/internal/controller/ipranges.go:57-59</a></li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design (no timeout)</li>
 <li><strong>Description:</strong> <code>http.DefaultClient</code> has no timeout.
   A hostile or unhealthy GitHub endpoint can hang an AGC goroutine indefinitely.
@@ -4236,7 +4236,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="l-3-backoffdelay-uses-mathrand-for-jitter">L-3. <code>BackoffDelay</code> uses <code>math/rand</code> for jitter<a class="headerlink" href="#l-3-backoffdelay-uses-mathrand-for-jitter" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">cmd/agc/internal/listener/goroutine.go:445-450</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go">cmd/agc/internal/listener/goroutine.go:445-450</a></li>
 <li><strong>Category:</strong> Informational</li>
 <li><strong>Description:</strong> <code>rand.Int63n</code> is non-CSPRNG, but jitter does not require unpredictability.
   Recorded for completeness — gosec will flag this.</li>
@@ -4244,7 +4244,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="l-4-isunauthorized--issessionexpired-use-substring-matches">L-4. <code>isUnauthorized</code> / <code>isSessionExpired</code> use substring matches<a class="headerlink" href="#l-4-isunauthorized--issessionexpired-use-substring-matches" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/listener/goroutine.go">cmd/agc/internal/listener/goroutine.go:423-441</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/listener/goroutine.go">cmd/agc/internal/listener/goroutine.go:423-441</a></li>
 <li><strong>Category:</strong> OWASP A04:2025 — Insecure Design</li>
 <li><strong>Description:</strong> Both functions look for <code>"401"</code>, <code>"403"</code>, <code>"404"</code>, <code>"410"</code> as substrings of the error message.
   Fragile — a response body containing those digits in an unrelated context can match.</li>
@@ -4253,7 +4253,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 </ul>
 <h3 id="l-5-pem-key-parsing-accepts-only-pkcs1-in-agentpoolcryptogo-asymmetric-with-githubappauthgo">L-5. PEM key parsing accepts only PKCS#1 in <code>agentpool/crypto.go</code> (asymmetric with <code>githubapp/auth.go</code>)<a class="headerlink" href="#l-5-pem-key-parsing-accepts-only-pkcs1-in-agentpoolcryptogo-asymmetric-with-githubappauthgo" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/agentpool/crypto.go">cmd/agc/internal/agentpool/crypto.go:17-30</a> vs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go">githubapp/auth.go:147-169</a></li>
+<li><strong>Location:</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v1.10.0/cmd/agc/internal/agentpool/crypto.go">cmd/agc/internal/agentpool/crypto.go:17-30</a> vs <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go">githubapp/auth.go:147-169</a></li>
 <li><strong>Category:</strong> Informational</li>
 <li><strong>Description:</strong> The agent-pool key parser accepts only <code>RSA PRIVATE KEY</code> blocks; the App key parser accepts both PKCS#1 and PKCS#8.
   Since the agent-pool keys are <em>generated</em> by this code (always PKCS#1), this is fine today, but a future serialization change will silently fail to parse old Secrets.</li>

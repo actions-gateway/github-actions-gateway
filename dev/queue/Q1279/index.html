@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q682/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1279/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Measure sibling skipped completion semantics live (Q260 fan-out) - GitHub Actions Gateway</title>
+        <title>Load-test the scale-set tier for concurrency and goroutine leaks - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#measure-sibling-skipped-completion-semantics-live-q260-fan-out" class="md-skip">
+        <a href="#load-test-the-scale-set-tier-for-concurrency-and-goroutine-leaks" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Measure sibling skipped completion semantics live (Q260 fan-out)
+              Load-test the scale-set tier for concurrency and goroutine leaks
             
           </span>
         </div>
@@ -2657,11 +2657,16 @@
   
 
 
-<h1 id="measure-sibling-skipped-completion-semantics-live-q260-fan-out">Measure sibling <code>skipped</code> completion semantics live (Q260 fan-out)<a class="headerlink" href="#measure-sibling-skipped-completion-semantics-live-q260-fan-out" title="Permanent link">&para;</a></h1>
-<p>Inv.
-H covered only the winner's own delivery.
-The default-on sibling fan-out sends <code>skipped</code> mid-run; whether it concludes anything is unmeasured (brokertest assumes not).
-Needs a two-delivery probe arm.</p>
+<h1 id="load-test-the-scale-set-tier-for-concurrency-and-goroutine-leaks">Load-test the scale-set tier for concurrency and goroutine leaks<a class="headerlink" href="#load-test-the-scale-set-tier-for-concurrency-and-goroutine-leaks" title="Permanent link">&para;</a></h1>
+<p>The only measurement of the shipped acquisition tier is <code>TestScaleSetPerListenerMemory</code> (<code>make scaleset-mem-profile</code>): 200 parked scale-set sessions in one AGC, memory only.
+It runs no jobs through them, so it says nothing about throughput with many jobs in flight or about goroutines leaking across session re-creates and job completions.</p>
+<p>The classic tier had that evidence: the in-process harness Q13 built (<a href="https://github.com/actions-gateway/github-actions-gateway/tree/v1.10.0/cmd/agc/test/load"><code>cmd/agc/test/load/</code> at <code>v1.10.0</code></a>, <code>load-test-quick</code>) held ~1,000 concurrent sessions with zero goroutine leak.
+It drove the classic multiplexer, which Q264 removed with the harness, so none of it describes the scale-set path.
+Q1274 ported the e2e suite to the scale-set tier, which checks that jobs run correctly one or a few at a time; it applies no sustained load and asserts nothing about goroutine counts, so it does not cover this.
+<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/README.md">README.md</a> and <a href="../../design/appendix-a-capacity-slos/">appendix-a</a> say so since Q264, and point here.</p>
+<p><strong>The work:</strong> drive many RunnerSets' listeners against <code>scalesettest</code> with jobs assigned and completed at a sustained rate, and assert the AGC's goroutine count returns to its baseline once they drain, and after forced session expiry.
+<code>scalesettest</code>'s per-session server goroutines run in the same process, so count against a baseline taken with the server up, or the figure measures the fake.</p>
+<p><strong>Done when</strong> a make target runs it, its leak assertion fails with a listener goroutine deliberately leaked, and the README and appendix-a cite its result in place of the "not yet load-tested" caveat.</p>
 
 
 

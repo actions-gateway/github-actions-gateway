@@ -3156,19 +3156,12 @@ It replaces:</p>
 See <a href="../../design/05-security/">security §5 — credential handling</a>.</p>
 <hr />
 <h2 id="distributed-tracing-agc">Distributed Tracing (AGC)<a class="headerlink" href="#distributed-tracing-agc" title="Permanent link">&para;</a></h2>
-<p>The per-tenant AGC emits <strong>OpenTelemetry traces</strong> for its two hottest operational paths:</p>
-<ul>
-<li><strong><code>RunnerGroup.Reconcile</code></strong> — one span per reconcile, attributed with <code>k8s.namespace.name</code> / <code>gateway.runnergroup.name</code>.
-  Errors set the span status.</li>
-<li><strong><code>Provisioner.provision</code></strong> — one span per acquired job (the job-to-pod path), with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code>, and <code>waitForCompletion</code>.
-  The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>gateway.plan.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>, and the final <code>gateway.pod.phase</code> / <code>gateway.pod.reason</code> / <code>gateway.provision.duration_seconds</code>.
-  <code>waitForCompletion</code> is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.</li>
-</ul>
+<p><strong>The AGC currently emits no spans of its own.</strong> Its one traced path, <code>Provisioner.provision</code> and its child spans, wrapped the classic acquisition tier, which <code>v2.0.0</code> removed; the scale-set provision path has no span yet, and <a href="../../queue/Q1278/">Q1278</a> adds one.
+Configuring tracing still installs the exporter, so a collector receives nothing from the AGC until then.</p>
 <blockquote>
 <p>Span attribute names follow the <a href="https://opentelemetry.io/docs/specs/semconv/">OpenTelemetry semantic conventions</a>: Kubernetes-native attributes use the <code>k8s.*</code> keys (<code>k8s.namespace.name</code>, <code>k8s.pod.name</code>); project-specific attributes are namespaced under <code>gateway.</code>.
 These keys were renamed in the Q205 naming audit — see <a href="../observability-metrics/#breaking-observability-changes-q205">Breaking observability changes</a> for the old→new mapping.</p>
 </blockquote>
-<p>Each reconcile and each job provision is its own root trace — there is no inbound trace context to continue, and the per-job spans run on the listener goroutines independently of the reconcile that started the pool.</p>
 <p><strong>Tracing is opt-in and off by default.</strong> With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.</p>
 <h3 id="enabling-tracing">Enabling tracing<a class="headerlink" href="#enabling-tracing" title="Permanent link">&para;</a></h3>
 <p>The AGC reads the <strong>standard OpenTelemetry SDK environment variables</strong> — there is no bespoke flag.
