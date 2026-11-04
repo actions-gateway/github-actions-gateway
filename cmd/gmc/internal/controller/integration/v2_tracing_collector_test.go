@@ -111,6 +111,22 @@ func TestV2_Tracing_EndpointAdmission(t *testing.T) {
 		" http://otel-collector:4317",
 		"http://otel-collector:4317\n",
 		"otel-collector:4317 ",
+		" otel-collector:4317",
+		"otel-collector:4317\n",
+		"http://otel-collector:4317 ",
+		"http://otel-collector:4317/",
+		"HTTP://otel-collector:4317",
+		"http://user:pw@otel-collector:4317",
+		// These parse and fail in the AGC's log rather than being misread.
+		"https://c:70000",
+		"c:70000",
+		"unix:///var/run/otel.sock",
+		"otel-collector:4317/v1/traces",
+		"otel-collector:notaport",
+		"grpc://otel-collector:4317",
+		"ftp://otel-collector:4317",
+		"coll ector",
+		"otel-collector/v1",
 	} {
 		t.Run("accepts "+endpoint, func(t *testing.T) {
 			ag := newV2GatewayWired("endpoint-ok", ns, "github-app", "")
@@ -134,6 +150,7 @@ func TestV2_Tracing_EndpointAdmission(t *testing.T) {
 		"a%zz",
 		"_collector:4317",
 		"my-collector_1.ns:4317",
+		"otel-collector/v1:4317", // Over-rejected: the exporter dials it and delivers nowhere.
 		"3collector:4317",
 	} {
 		t.Run("rejects "+endpoint, func(t *testing.T) {
