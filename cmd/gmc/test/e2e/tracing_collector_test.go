@@ -49,9 +49,13 @@ var _ = Describe("E2E_Tracing_CollectorOverTLS", Ordered, func() {
 		collectorHost = "otel-collector." + collectorNS + ".svc.cluster.local"
 		endpoint      = "https://" + collectorHost + ":4317"
 		rootSpan      = "Provisioner.ProvisionScaleSetWorker"
+		refused       = "certificate signed by unknown authority"
 	)
 
-	var pf *exec.Cmd
+	var (
+		pf    *exec.Cmd
+		caPEM string
+	)
 
 	logsOf := func(ns, deploy string) string {
 		out, _ := exec.Command("kubectl", "logs", "--tail=-1", "-n", ns, "deploy/"+deploy).CombinedOutput()
@@ -78,6 +82,20 @@ var _ = Describe("E2E_Tracing_CollectorOverTLS", Ordered, func() {
 		}
 		return all.String()
 	}
+	workerPods := func() int {
+		out, _ := exec.Command("kubectl", "get", "pods", "-n", tenantNS, "-l", "actions-gateway.com/runner-set="+setName, "-o", "name").Output()
+		return len(strings.Fields(string(out)))
+	}
+	collectorCAManifest := func() string {
+		return fmt.Sprintf(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collector-ca
+  namespace: %s
+data:
+  ca.crt: |
+%s`, tenantNS, indent(caPEM, "    "))
+	}
 	gatewayCondition := func(condition string) string {
 		out, _ := exec.Command("kubectl", "get", "actionsgateways.actions-gateway.com", gwName, "-n", tenantNS, "-o",
 			fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].status}`, condition)).Output()
@@ -98,7 +116,8 @@ var _ = Describe("E2E_Tracing_CollectorOverTLS", Ordered, func() {
 	}
 
 	BeforeAll(func() {
-		caPEM, certPEM, keyPEM := collectorCertificates(collectorHost)
+		var certPEM, keyPEM string
+		caPEM, certPEM, keyPEM = collectorCertificates(collectorHost)
 
 		utils.CreateNamespace(collectorNS, nil)
 		Expect(utils.ApplyManifest(tlsCollectorManifest(collectorNS,
@@ -108,14 +127,7 @@ var _ = Describe("E2E_Tracing_CollectorOverTLS", Ordered, func() {
 		utils.CreateNamespace(tenantNS, map[string]string{"actions-gateway.com/tenant": "managed"})
 		utils.CreateGitHubAppSecret(tenantNS, secretName, 12345, 67890, testRSAKeyPEM)
 		utils.ApplyFakegithubEgressNetworkPolicy(tenantNS)
-		Expect(utils.ApplyManifest(fmt.Sprintf(`apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: collector-ca
-  namespace: %s
-data:
-  ca.crt: |
-%s`, tenantNS, indent(caPEM, "    ")))).To(Succeed())
+		Expect(utils.ApplyManifest(collectorCAManifest())).To(Succeed())
 
 		By("applying a proxied gateway that names the collector peer but no CA bundle")
 		Expect(utils.ApplyManifestWithWebhookRetry(fmt.Sprintf(`apiVersion: actions-gateway.com/v2
@@ -182,7 +194,7 @@ spec:
 		Expect(agcEnvValue(tenantNS, agcDeploy, "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE")).To(BeEmpty())
 
 		queueJobsUntil(func() bool {
-			return strings.Contains(logsOf(tenantNS, agcDeploy), "certificate signed by unknown authority")
+			return strings.Contains(logsOf(tenantNS, agcDeploy), refused)
 		}, "the AGC must reach the collector and refuse its certificate")
 		Expect(rootSpans()).To(BeZero(), "a span arrived over a connection the AGC should not have trusted")
 	})
@@ -236,11 +248,28 @@ spec:
 			Should(Equal("True"), "the lost bundle must report")
 		Eventually(func() string { return gatewayCondition("Ready") }, 2*time.Minute, 2*time.Second).Should(Equal("True"))
 
-		before := rootSpans()
+		before, workers := rootSpans(), workerPods()
 		queueJobsUntil(func() bool {
-			return strings.Contains(liveAGCLogs(), "certificate signed by unknown authority")
-		}, "with no bundle the exporter must keep verifying, against the system roots")
+			return workerPods() > workers && strings.Contains(liveAGCLogs(), refused)
+		}, "jobs must still run, and with no bundle the exporter must keep verifying against the system roots")
 		Expect(rootSpans()).To(Equal(before), "no span may cross a connection the AGC could not verify")
+
+		By("adding the ConfigMap back clears the condition, and only a restart makes the exporter read it")
+		Expect(utils.ApplyManifest(collectorCAManifest())).To(Succeed())
+		Eventually(func() string { return gatewayCondition("TracingCABundleUnresolved") }, 3*time.Minute, 2*time.Second).
+			Should(Equal("False"), "the re-read must notice the ConfigMap")
+		time.Sleep(90 * time.Second) // Past the kubelet's ConfigMap volume sync, so the file is there to be ignored.
+		workers = workerPods()
+		queueJobsUntil(func() bool { return workerPods() > workers }, "a job must run with the file back")
+		// The batch processor exports every 5s with a 10s timeout, so this outlasts several.
+		Consistently(rootSpans, 30*time.Second, 5*time.Second).Should(Equal(before),
+			"the exporter read the file at startup, so the running AGC must not have picked it up")
+
+		_, err = utils.Run(exec.Command("kubectl", "rollout", "restart", "deploy/"+agcDeploy, "-n", tenantNS))
+		Expect(err).NotTo(HaveOccurred())
+		_, err = utils.Run(exec.Command("kubectl", "rollout", "status", "deploy/"+agcDeploy, "-n", tenantNS, "--timeout=4m"))
+		Expect(err).NotTo(HaveOccurred())
+		queueJobsUntil(func() bool { return rootSpans() > before }, "the restarted AGC must deliver")
 	})
 })
 

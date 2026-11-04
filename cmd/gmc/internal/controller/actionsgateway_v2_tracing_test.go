@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"testing"
-	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -173,9 +172,7 @@ func TestActionsGatewayV2Reconcile_TracingCABundleIsAdvisory(t *testing.T) {
 			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(ag).Build()
 			r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 
-			res := reconcileV2Gateway(t, r, "team-a", "gw")
-			assert.Greater(t, res.RequeueAfter, time.Duration(0), "nothing watches tenant ConfigMaps, so it must be re-read")
-			assert.LessOrEqual(t, res.RequeueAfter, caBundleReprobeInterval)
+			reconcileV2Gateway(t, r, "team-a", "gw")
 
 			conds := gatewayConditions(t, c, ag)
 			unresolved := meta.FindStatusCondition(conds, gmcv2.ConditionTracingCABundleUnresolved)
@@ -196,6 +193,12 @@ func TestActionsGatewayV2Reconcile_TracingCABundleIsAdvisory(t *testing.T) {
 			require.NotNil(t, vol)
 			require.NotNil(t, vol.ConfigMap.Optional)
 			assert.True(t, *vol.ConfigMap.Optional, "a required mount would wedge a replacement pod at ContainerCreating")
+
+			// Ready, so nothing else requeues: what remains is this ref's own re-read.
+			dep.Status.ReadyReplicas = 1
+			require.NoError(t, c.Status().Update(context.Background(), &dep))
+			res := reconcileV2Gateway(t, r, "team-a", "gw")
+			assert.Equal(t, caBundleReprobeInterval, res.RequeueAfter, "nothing watches tenant ConfigMaps, so it must be re-read")
 		})
 	}
 }
