@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -31,10 +31,10 @@ import (
 
 // sharedStorageRunnerTemplate builds a template mounting a pre-existing RWX claim
 // into the runner container, with the fsGroup that makes it writable.
-func sharedStorageRunnerTemplate(name, ns string) *v2alpha1.RunnerTemplate {
-	return &v2alpha1.RunnerTemplate{
+func sharedStorageRunnerTemplate(name, ns string) *v2.RunnerTemplate {
+	return &v2.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.RunnerTemplateSpec{
+		Spec: v2.RunnerTemplateSpec{
 			WorkerImage: "runner:test",
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -76,11 +76,11 @@ func TestV2_RunnerTemplate_SharedRWXClaimRoundTrips(t *testing.T) {
 	tmpl := sharedStorageRunnerTemplate("tmpl", ns)
 	require.NoError(t, k8sClient.Create(ctx, tmpl))
 	t.Cleanup(func() {
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	var got v2alpha1.RunnerTemplate
+	var got v2.RunnerTemplate
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "tmpl"}, &got))
 
 	spec := got.Spec.PodTemplate.Spec
@@ -121,11 +121,11 @@ func TestV2_RunnerSet_SharedRWXClaimReachesReady(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{
 			ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }

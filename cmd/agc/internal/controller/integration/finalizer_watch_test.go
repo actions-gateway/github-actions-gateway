@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -27,5 +27,5 @@ func TestV2_RunnerSet_FinalizerUpdateDrivesNextReconcile(t *testing.T) {
 	rs := newRunnerSet("set", ns, "gw")
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonGatewayNotFound)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonGatewayNotFound)
 }

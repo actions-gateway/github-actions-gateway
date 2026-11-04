@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // Confidence minimums for the status-surfaced sizing data (Q359 Phase 2).
@@ -172,7 +172,7 @@ func (a *setAgg) observePeaks(containers map[string]containerPeak, now time.Time
 // status.sizingRecommendation — the restart merge-back path (status is the
 // store). Entries already present in memory are never overwritten: live
 // observation beats a stale persisted copy.
-func (a *setAgg) seedFromStatus(recs []agcv2alpha1.ContainerSizingRecommendation, now time.Time) {
+func (a *setAgg) seedFromStatus(recs []agcv2.ContainerSizingRecommendation, now time.Time) {
 	for _, rec := range recs {
 		if rec.SampleCount <= 0 || a.containers[rec.Container] != nil {
 			continue
@@ -193,15 +193,15 @@ func (a *setAgg) seedFromStatus(recs []agcv2alpha1.ContainerSizingRecommendation
 // recommendations renders the aggregate as the status-shaped recommendation
 // list: one entry per container with at least MinSamplesForRecommendation
 // samples, sorted by container name for deterministic status writes.
-func (a *setAgg) recommendations() []agcv2alpha1.ContainerSizingRecommendation {
-	var recs []agcv2alpha1.ContainerSizingRecommendation
+func (a *setAgg) recommendations() []agcv2.ContainerSizingRecommendation {
+	var recs []agcv2.ContainerSizingRecommendation
 	for name, c := range a.containers {
 		if c.cpu.total < MinSamplesForRecommendation {
 			continue
 		}
 		cpuP95 := c.cpu.quantile(cpuBucketEdges, 0.95)
 		memP95 := c.mem.quantile(memBucketEdges, 0.95)
-		recs = append(recs, agcv2alpha1.ContainerSizingRecommendation{
+		recs = append(recs, agcv2.ContainerSizingRecommendation{
 			Container: name,
 			Requests: corev1.ResourceList{
 				corev1.ResourceCPU:    roundUpCores(cpuP95, cpuRequestStepMilli),

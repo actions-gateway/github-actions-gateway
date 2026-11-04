@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	apiv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
+	apiv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,7 +51,7 @@ func TestTemplateLibrary_Admitted(t *testing.T) {
 			raw, err := os.ReadFile(path)
 			require.NoError(t, err)
 
-			var crt apiv2beta1.ClusterRunnerTemplate
+			var crt apiv2.ClusterRunnerTemplate
 			require.NoError(t, yaml.NewYAMLOrJSONDecoder(strings.NewReader(string(raw)), 4096).Decode(&crt))
 			require.Equal(t, "ClusterRunnerTemplate", crt.Kind)
 			require.Equal(t, entry, crt.Name, "the directory name is what templateRef points at")
@@ -63,7 +63,7 @@ func TestTemplateLibrary_Admitted(t *testing.T) {
 
 			// Round-trip it back: a create the apiserver accepted but pruned
 			// fields out of would still pass the line above.
-			var got apiv2beta1.ClusterRunnerTemplate
+			var got apiv2.ClusterRunnerTemplate
 			require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(&crt), &got))
 			require.Len(t, got.Spec.PodTemplate.Spec.Containers, len(crt.Spec.PodTemplate.Spec.Containers))
 			require.Len(t, got.Spec.PodTemplate.Spec.InitContainers, len(crt.Spec.PodTemplate.Spec.InitContainers))

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,8 +17,8 @@ import (
 
 // unschedRG builds a RunnerSet with the given pendingPodDeadline (controls the
 // scheduling grace, which is half the deadline).
-func unschedRG(ns, name string, deadline time.Duration) *v2alpha1.RunnerSet {
-	return rsObj(name, ns, func(rs *v2alpha1.RunnerSet) {
+func unschedRG(ns, name string, deadline time.Duration) *v2.RunnerSet {
+	return rsObj(name, ns, func(rs *v2.RunnerSet) {
 		rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: deadline}
 	})
 }
@@ -61,7 +61,7 @@ func TestEvalUnschedulable_NoPods(t *testing.T) {
 	r := unschedReconciler(t, now)
 	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.False(t, st.unschedulable)
-	assert.Equal(t, v2alpha1.ReasonWorkersSchedulable, st.reason)
+	assert.Equal(t, v2.ReasonWorkersSchedulable, st.reason)
 }
 
 // TestEvalUnschedulable_PastGrace: a Pending+Unschedulable pod older than the
@@ -75,7 +75,7 @@ func TestEvalUnschedulable_PastGrace(t *testing.T) {
 
 	st := r.evalRunnerSetWorkersUnschedulable(context.Background(), rg)
 	assert.True(t, st.unschedulable)
-	assert.Equal(t, v2alpha1.ReasonPodsUnschedulable, st.reason)
+	assert.Equal(t, v2.ReasonPodsUnschedulable, st.reason)
 	assert.Contains(t, st.message, "worker-stuck")
 	assert.Contains(t, st.message, "untolerated taint")
 }

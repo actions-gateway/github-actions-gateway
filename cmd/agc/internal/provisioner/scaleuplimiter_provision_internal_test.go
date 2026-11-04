@@ -48,7 +48,7 @@ type stubTarget struct {
 
 func (s *stubTarget) Key() client.ObjectKey { return s.key }
 func (s *stubTarget) OwnerRef() metav1.OwnerReference {
-	return metav1.OwnerReference{APIVersion: "actions-gateway.com/v2alpha1", Kind: "RunnerSet", Name: s.key.Name, UID: types.UID("uid-" + s.key.Name)}
+	return metav1.OwnerReference{APIVersion: "actions-gateway.com/v2", Kind: "RunnerSet", Name: s.key.Name, UID: types.UID("uid-" + s.key.Name)}
 }
 func (s *stubTarget) PodOwnerLabels() map[string]string {
 	return map[string]string{LabelRunnerSet: s.key.Name}

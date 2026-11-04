@@ -9,7 +9,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +49,7 @@ type scaleSetGuardStore struct {
 
 // scaleSetGuardStore builds the store for one RunnerSet. Falls back to the cached
 // client when no APIReader is wired (tests).
-func (r *RunnerSetReconciler) scaleSetGuardStore(rs *v2alpha1.RunnerSet) *scaleSetGuardStore {
+func (r *RunnerSetReconciler) scaleSetGuardStore(rs *v2.RunnerSet) *scaleSetGuardStore {
 	reader := r.APIReader
 	if reader == nil {
 		reader = r.Client
@@ -136,7 +136,7 @@ func (s *scaleSetGuardStore) Save(ctx context.Context, state scalesetlistener.Gu
 //
 // The returned channel closes once every recovery this call started has finished. The
 // reconcile ignores it, because it must not stall on GitHub; tests block on it.
-func (r *RunnerSetReconciler) recoverOrphanedScaleSetWorkers(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) <-chan struct{} {
+func (r *RunnerSetReconciler) recoverOrphanedScaleSetWorkers(ctx context.Context, log *slog.Logger, rs *v2.RunnerSet) <-chan struct{} {
 	state, err := r.scaleSetGuardStore(rs).Load(ctx)
 	if err != nil {
 		log.Warn("could not read persisted in-flight jobs; workers lost while this AGC was down will not be recovered", "error", err)

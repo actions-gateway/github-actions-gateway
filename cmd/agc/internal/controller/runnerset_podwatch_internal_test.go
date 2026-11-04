@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -90,7 +90,7 @@ func fakeRerunAPI(t *testing.T) (*httptest.Server, *atomic.Int64) {
 func podWatchFixture(t *testing.T, pod *corev1.Pod) (*RunnerSetReconciler, workqueue.TypedRateLimitingInterface[reconcile.Request], *atomic.Int64) {
 	t.Helper()
 	ns := pod.Namespace
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.UID = "uid-set"
 	})
 	// The fake client answers a cancelled context where a real one refuses the call,

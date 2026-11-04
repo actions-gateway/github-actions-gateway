@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 )
 
@@ -141,11 +141,11 @@ func TestResolveRunnerGroupName(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			rs := &v2alpha1.RunnerSet{Spec: v2alpha1.RunnerSetSpec{RunnerGroup: tc.set}}
-			var gw *v2alpha1.ActionsGateway
+			rs := &v2.RunnerSet{Spec: v2.RunnerSetSpec{RunnerGroup: tc.set}}
+			var gw *v2.ActionsGateway
 			if !tc.nilGateway {
-				gw = &v2alpha1.ActionsGateway{
-					Spec: v2alpha1.ActionsGatewaySpec{DefaultRunnerGroup: tc.gateway},
+				gw = &v2.ActionsGateway{
+					Spec: v2.ActionsGatewaySpec{DefaultRunnerGroup: tc.gateway},
 				}
 			}
 			if got := resolveRunnerGroupName(rs, gw); got != tc.want {

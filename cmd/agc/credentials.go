@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/vaultsigner"
 	"github.com/go-logr/logr"
@@ -34,7 +34,7 @@ func buildTokenProvider(log logr.Logger) (githubapp.ExpiringTokenProvider, error
 		log.Info("dev/test mode: allowing non-HTTPS GitHub API base URL and Vault address (STUB_AUTH_URL set)")
 	}
 
-	if os.Getenv("CREDENTIAL_TYPE") == string(agcv2alpha1.CredentialTypeWorkloadIdentity) {
+	if os.Getenv("CREDENTIAL_TYPE") == string(agcv2.CredentialTypeWorkloadIdentity) {
 		log.Info("credential method: workload identity (no in-cluster App key; signing delegated to Vault transit)")
 		return buildWorkloadIdentityProvider(allowInsecure)
 	}

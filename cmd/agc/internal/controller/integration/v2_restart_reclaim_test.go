@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,7 +113,7 @@ func TestV2_RunnerSet_RestartReclaimsOrphanedWorkers(t *testing.T) {
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{
 			ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns},
 		})
 	})
@@ -146,7 +146,7 @@ func TestV2_RunnerSet_RestartReclaimsOrphanedWorkers(t *testing.T) {
 	// --- The restart: a brand-new manager meets pods it never provisioned.
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, "restart-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "restart-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	for _, name := range []string{"orphan-terminal", "orphan-pending", "orphan-running-stamped"} {
 		require.Eventually(t, func() bool { return podGone(ns, name) },
@@ -203,8 +203,8 @@ func TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown(t *testing
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	// --- The AGC process that provisions the worker and then dies.
@@ -217,7 +217,7 @@ func TestV2_RunnerSet_ScaleSet_RestartReclaimsWorkerOrphanedWhileDown(t *testing
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	_, jobID := srv.EnqueueJob(ssID)
 

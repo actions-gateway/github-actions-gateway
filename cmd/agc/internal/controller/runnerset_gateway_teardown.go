@@ -6,7 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -24,8 +24,8 @@ import (
 // a real teardown. A deletion timestamp is unambiguous, and it is set before the GMC
 // deletes anything — which is the only window in which the AGC still holds the RBAC
 // to reap (Q547).
-func gatewayTerminating(ctx context.Context, c client.Client, rs *v2alpha1.RunnerSet) (bool, error) {
-	var gw v2alpha1.ActionsGateway
+func gatewayTerminating(ctx context.Context, c client.Client, rs *v2.RunnerSet) (bool, error) {
+	var gw v2.ActionsGateway
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}
 	if err := c.Get(ctx, key, &gw); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -51,7 +51,7 @@ func gatewayTerminating(ctx context.Context, c client.Client, rs *v2alpha1.Runne
 // still has to reap. Deletes are issued, not awaited — once a pod carries a deletion
 // timestamp the kubelet finishes it with no controller involved, which is exactly the
 // property being restored here.
-func (r *RunnerSetReconciler) reconcileGatewayTerminating(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet) (ctrl.Result, error) {
+func (r *RunnerSetReconciler) reconcileGatewayTerminating(ctx context.Context, log *slog.Logger, rs *v2.RunnerSet) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 
 	// Capture the deregistration hook before stopping the listener: the scale-set
@@ -74,7 +74,7 @@ func (r *RunnerSetReconciler) reconcileGatewayTerminating(ctx context.Context, l
 			rs.Spec.GatewayRef.Name, reaped)
 	}
 
-	r.setReadyCondition(rs, false, v2alpha1.ReasonGatewayTerminating,
+	r.setReadyCondition(rs, false, v2.ReasonGatewayTerminating,
 		fmt.Sprintf("ActionsGateway %q is being deleted; acquisition stopped and worker pods reaped", rs.Spec.GatewayRef.Name))
 	// No listeners running and no worker pods left, so every capacity/sidecar alarm
 	// describes a state that no longer exists — the same clearing the unresolved-

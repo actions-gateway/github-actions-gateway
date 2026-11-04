@@ -10,7 +10,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,30 +51,30 @@ func startRunnerSetReconcilerOn(t *testing.T, srv *scalesettest.Server, tweaks .
 
 // newRunnerSet builds a RunnerSet whose single runnerLabel, and so its scale set's
 // name, is the set's own name, so sets sharing a gateway never collide.
-func newRunnerSet(name, ns, gateway string) *v2alpha1.RunnerSet {
-	return &v2alpha1.RunnerSet{
+func newRunnerSet(name, ns, gateway string) *v2.RunnerSet {
+	return &v2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:   v2alpha1.ObjectRef{Name: gateway},
-			TemplateRef:  &v2alpha1.ObjectRef{Name: "tmpl"},
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:   v2.ObjectRef{Name: gateway},
+			TemplateRef:  &v2.ObjectRef{Name: "tmpl"},
 			RunnerLabels: []string{name},
 		},
 	}
 }
 
-func newGatewayForSet(name, ns, proxyRef string) *v2alpha1.ActionsGateway {
-	ag := &v2alpha1.ActionsGateway{
+func newGatewayForSet(name, ns, proxyRef string) *v2.ActionsGateway {
+	ag := &v2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.ActionsGatewaySpec{
-			Credentials: v2alpha1.GitHubCredentials{
-				Type:      v2alpha1.CredentialTypeGitHubApp,
-				GitHubApp: &v2alpha1.LocalSecretReference{Name: "github-app"},
+		Spec: v2.ActionsGatewaySpec{
+			Credentials: v2.GitHubCredentials{
+				Type:      v2.CredentialTypeGitHubApp,
+				GitHubApp: &v2.LocalSecretReference{Name: "github-app"},
 			},
 			GitHubURL: "https://github.com/example-org",
 		},
 	}
 	if proxyRef != "" {
-		ag.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: proxyRef}
+		ag.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: proxyRef}
 	}
 	return ag
 }
@@ -83,18 +83,18 @@ func newGatewayForSet(name, ns, proxyRef string) *v2alpha1.ActionsGateway {
 // that nothing in this cluster will add a node (Q470). That fact — not anything on the
 // RunnerSet — is what makes the scheduler's Unschedulable verdict a sound intake signal,
 // so a capacity-gate test that expects scheduler-verdict gating must use this gateway.
-func newFixedSizeGatewayForSet(name, ns string) *v2alpha1.ActionsGateway {
+func newFixedSizeGatewayForSet(name, ns string) *v2.ActionsGateway {
 	ag := newGatewayForSet(name, ns, "")
-	ag.Spec.ClusterCapacity = &v2alpha1.ClusterCapacity{
-		NodeAutoscaling: v2alpha1.NodeAutoscalingAbsent,
+	ag.Spec.ClusterCapacity = &v2.ClusterCapacity{
+		NodeAutoscaling: v2.NodeAutoscalingAbsent,
 	}
 	return ag
 }
 
-func newRunnerTemplate(name, ns string) *v2alpha1.RunnerTemplate {
-	return &v2alpha1.RunnerTemplate{
+func newRunnerTemplate(name, ns string) *v2.RunnerTemplate {
+	return &v2.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.RunnerTemplateSpec{
+		Spec: v2.RunnerTemplateSpec{
 			WorkerImage: "runner:test",
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -107,11 +107,11 @@ func newRunnerTemplate(name, ns string) *v2alpha1.RunnerTemplate {
 
 func readySetCondition(t *testing.T, ns, name string) *metav1.Condition {
 	t.Helper()
-	var rs v2alpha1.RunnerSet
+	var rs v2.RunnerSet
 	if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 		return nil
 	}
-	return meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionReady)
+	return meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionReady)
 }
 
 func waitForSetReadyReason(t *testing.T, ns, name string, wantStatus metav1.ConditionStatus, wantReason string) {
@@ -131,28 +131,28 @@ func TestV2_RunnerSet_FailsClosedUntilRefsResolve(t *testing.T) {
 	rs := newRunnerSet("set", ns, "gw")
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonGatewayNotFound)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonGatewayNotFound)
 
 	// 2. Add the gateway (defaultProxyRef → "shared") → TemplateNotFound.
 	gw := newGatewayForSet("gw", ns, "shared")
 	require.NoError(t, k8sClient.Create(ctx, gw))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), gw) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonTemplateNotFound)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonTemplateNotFound)
 
 	// 3. Add the template → ProxyNotFound (proxy required, §H.10).
 	tmpl := newRunnerTemplate("tmpl", ns)
 	require.NoError(t, k8sClient.Create(ctx, tmpl))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), tmpl) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonProxyNotFound)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonProxyNotFound)
 
 	// 4. Add the EgressProxy → all references resolve; a listener comes up and the
 	//    set flips Ready=True/ListenerActive. This proves the watch-driven
 	//    re-reconcile (§H.7): each NotFound condition cleared the moment its
 	//    referent synced, with no re-apply of the RunnerSet.
-	ep := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
+	ep := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }
 
 // TestV2_RunnerSet_TemplateDeleted_DegradesNotBlocks: deleting a previously-resolved
@@ -174,17 +174,17 @@ func TestV2_RunnerSet_TemplateDeleted_DegradesNotBlocks(t *testing.T) {
 	rs := newRunnerSet("set", ns, "gw")
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// Delete the resolved template: the referent watch re-reconciles the set, which
 	// degrades with the deletion-specific reason (its status.templateSource is the
 	// evidence of the prior resolution).
 	require.NoError(t, k8sClient.Delete(ctx, tmpl))
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonTemplateDeleted)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonTemplateDeleted)
 
 	// Restore the template: the set self-heals to Ready the moment it syncs.
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }
 
 // TestV2_RunnerSet_ProxyDeleted_DegradesNotBlocks: deleting a previously-resolved
@@ -202,18 +202,18 @@ func TestV2_RunnerSet_ProxyDeleted_DegradesNotBlocks(t *testing.T) {
 	tmpl := newRunnerTemplate("tmpl", ns)
 	require.NoError(t, k8sClient.Create(ctx, tmpl))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), tmpl) })
-	ep := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
+	ep := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
 	require.NoError(t, k8sClient.Create(ctx, ep))
 	rs := newRunnerSet("set", ns, "gw")
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.NoError(t, k8sClient.Delete(ctx, ep))
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonProxyDeleted)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonProxyDeleted)
 
-	require.NoError(t, k8sClient.Create(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	require.NoError(t, k8sClient.Create(ctx, &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }
 
 // TestV2_RunnerSet_DirectEgress_ReadyAndUnattributed: a RunnerSet under a gateway
@@ -232,22 +232,22 @@ func TestV2_RunnerSet_DirectEgress_ReadyAndUnattributed(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	// No proxy needed: the set goes Ready/ListenerActive directly.
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// proxyMode Direct + EgressUnattributed=True/DirectEgress.
 	require.Eventually(t, func() bool {
-		var got v2alpha1.RunnerSet
+		var got v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "set"}, &got); err != nil {
 			return false
 		}
-		unattr := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionEgressUnattributed)
-		return got.Status.ProxyMode == v2alpha1.ProxyModeDirect &&
-			unattr != nil && unattr.Status == metav1.ConditionTrue && unattr.Reason == v2alpha1.ReasonDirectEgress
+		unattr := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionEgressUnattributed)
+		return got.Status.ProxyMode == v2.ProxyModeDirect &&
+			unattr != nil && unattr.Status == metav1.ConditionTrue && unattr.Reason == v2.ReasonDirectEgress
 	}, 20*time.Second, 100*time.Millisecond, "direct RunnerSet should report proxyMode Direct + EgressUnattributed=True")
 }
 
@@ -265,8 +265,8 @@ func TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	srv := scalesettest.New()
@@ -316,7 +316,7 @@ func TestV2_RunnerSet_DirectEgress_WorkerHasNoProxy(t *testing.T) {
 func waitForSetTemplateSource(t *testing.T, ns, name, want string) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 			return false
 		}
@@ -334,7 +334,7 @@ func TestV2_RunnerSet_ResolvesViaGatewayDefaultTemplate(t *testing.T) {
 
 	// Gateway names a defaultTemplateRef; the RunnerSet sets no templateRef.
 	gw := newGatewayForSet("gw", ns, "")
-	gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "gw-default-tmpl"}
+	gw.Spec.DefaultTemplateRef = &v2.ObjectRef{Name: "gw-default-tmpl"}
 	require.NoError(t, k8sClient.Create(ctx, gw))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("gw-default-tmpl", ns)))
 	rs := newRunnerSet("set", ns, "gw")
@@ -343,11 +343,11 @@ func TestV2_RunnerSet_ResolvesViaGatewayDefaultTemplate(t *testing.T) {
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), gw)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "gw-default-tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "gw-default-tmpl", Namespace: ns}})
 	})
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
-	waitForSetTemplateSource(t, ns, "set", v2alpha1.TemplateSourceGatewayDefault)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
+	waitForSetTemplateSource(t, ns, "set", v2.TemplateSourceGatewayDefault)
 }
 
 // TestV2_RunnerSet_NoTemplateFailsClosed: a RunnerSet with no templateRef whose gateway
@@ -360,7 +360,7 @@ func TestV2_RunnerSet_NoTemplateFailsClosed(t *testing.T) {
 	startRunnerSetReconciler(t)
 
 	gw := newGatewayForSet("gw", ns, "")
-	gw.Spec.DefaultTemplateRef = &v2alpha1.ObjectRef{Name: "absent-tmpl"}
+	gw.Spec.DefaultTemplateRef = &v2.ObjectRef{Name: "absent-tmpl"}
 	require.NoError(t, k8sClient.Create(ctx, gw))
 	rs := newRunnerSet("set", ns, "gw")
 	rs.Spec.TemplateRef = nil
@@ -370,7 +370,7 @@ func TestV2_RunnerSet_NoTemplateFailsClosed(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), gw)
 	})
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonTemplateNotFound)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonTemplateNotFound)
 }
 
 func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
@@ -380,14 +380,14 @@ func TestV2_RunnerSet_ProvisionsWorkerPod(t *testing.T) {
 	// Apply the full object set up front (apply order must not matter, §H.7).
 	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "shared")))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	require.NoError(t, k8sClient.Create(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
+	require.NoError(t, k8sClient.Create(ctx, &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
 	rs := newRunnerSet("worker-set", ns, "gw")
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}})
 	})
 
 	srv := scalesettest.New()

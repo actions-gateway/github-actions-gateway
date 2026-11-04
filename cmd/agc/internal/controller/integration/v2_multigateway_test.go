@@ -12,7 +12,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
 	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -49,7 +49,7 @@ func startScopedRunnerSetReconciler(t *testing.T, gatewayName string) {
 		Controller:             config.Controller{SkipNameValidation: &skipNameValidation},
 		Cache: cache.Options{
 			ByObject: map[client.Object]cache.ByObject{
-				&v2alpha1.RunnerSet{}: {
+				&v2.RunnerSet{}: {
 					Field: fields.OneTermEqualSelector("spec.gatewayRef.name", gatewayName),
 				},
 			},
@@ -104,12 +104,12 @@ func TestV2_MultiGateway_AGCScopedToItsGateway(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw-a", ns, "shared")))
 	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw-b", ns, "shared")))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	require.NoError(t, k8sClient.Create(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
+	require.NoError(t, k8sClient.Create(ctx, &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerSet("set-a", ns, "gw-a")))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerSet("set-b", ns, "gw-b")))
 	t.Cleanup(func() {
 		for _, n := range []string{"set-a", "set-b"} {
-			_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: n, Namespace: ns}})
+			_ = k8sClient.Delete(context.Background(), &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: n, Namespace: ns}})
 		}
 	})
 
@@ -117,14 +117,14 @@ func TestV2_MultiGateway_AGCScopedToItsGateway(t *testing.T) {
 	startScopedRunnerSetReconciler(t, "gw-a")
 
 	// gw-a's AGC drives its own set to Ready (references resolve, a listener starts).
-	waitForSetReadyReason(t, ns, "set-a", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set-a", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// Isolation: gw-a's AGC must NEVER touch gw-b's RunnerSet — its informer is
 	// field-scoped to gw-a, so set-b is invisible. No finalizer, no status condition
 	// is ever written. This is the boundary this milestone establishes: one
 	// gateway's AGC cannot act on another gateway's RunnerSets.
 	require.Never(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "set-b"}, &rs); err != nil {
 			return false
 		}
@@ -134,7 +134,7 @@ func TestV2_MultiGateway_AGCScopedToItsGateway(t *testing.T) {
 	// Bringing up gw-b's AGC concurrently drives set-b to Ready — proving two
 	// gateways run concurrently in one namespace, each scoped to its own sets.
 	startScopedRunnerSetReconciler(t, "gw-b")
-	waitForSetReadyReason(t, ns, "set-b", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "set-b", metav1.ConditionTrue, v2.ReasonListenerActive)
 }
 
 func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
@@ -152,9 +152,9 @@ func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
 	// now holds the cluster-scoped read (per-gateway ClusterRoleBinding) and watches
 	// the kind, so a set referencing it resolves (the M3a deferral, closed in M3b).
 	const crtName = "v2-rs-crt-golden"
-	crt := &v2alpha1.ClusterRunnerTemplate{
+	crt := &v2.ClusterRunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: crtName},
-		Spec: v2alpha1.RunnerTemplateSpec{
+		Spec: v2.RunnerTemplateSpec{
 			WorkerImage: "runner:test",
 			PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}},
@@ -162,10 +162,10 @@ func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, newGatewayForSet("gw", ns, "shared")))
-	require.NoError(t, k8sClient.Create(ctx, &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
+	require.NoError(t, k8sClient.Create(ctx, &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}))
 	require.NoError(t, k8sClient.Create(ctx, crt))
 	rs := newRunnerSet("crt-set", ns, "gw")
-	rs.Spec.TemplateRef = &v2alpha1.ObjectRef{Name: crtName, Kind: "ClusterRunnerTemplate"}
+	rs.Spec.TemplateRef = &v2.ObjectRef{Name: crtName, Kind: "ClusterRunnerTemplate"}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
@@ -175,17 +175,17 @@ func TestV2_RunnerSet_ResolvesClusterRunnerTemplate(t *testing.T) {
 	startScopedRunnerSetReconciler(t, "gw")
 
 	// References (gateway + cluster template + proxy) all resolve → Ready/ListenerActive.
-	waitForSetReadyReason(t, ns, "crt-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "crt-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }
 
 // defaultCRT builds a cluster-default-marked ClusterRunnerTemplate (Q172).
-func defaultCRT(name string) *v2alpha1.ClusterRunnerTemplate {
-	return &v2alpha1.ClusterRunnerTemplate{
+func defaultCRT(name string) *v2.ClusterRunnerTemplate {
+	return &v2.ClusterRunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
-			Annotations: map[string]string{v2alpha1.IsDefaultTemplateAnnotation: v2alpha1.IsDefaultTemplateValue},
+			Annotations: map[string]string{v2.IsDefaultTemplateAnnotation: v2.IsDefaultTemplateValue},
 		},
-		Spec: v2alpha1.RunnerTemplateSpec{
+		Spec: v2.RunnerTemplateSpec{
 			WorkerImage: "runner:test",
 			PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}},
@@ -212,14 +212,14 @@ func TestV2_RunnerSet_ResolvesViaClusterDefaultTemplate(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
 		_ = k8sClient.Delete(context.Background(), crt)
 	})
 
 	startScopedRunnerSetReconciler(t, "gw")
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
-	waitForSetTemplateSource(t, ns, "set", v2alpha1.TemplateSourceClusterDefault)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
+	waitForSetTemplateSource(t, ns, "set", v2.TemplateSourceClusterDefault)
 }
 
 // TestV2_RunnerSet_AmbiguousClusterDefaultFailsClosed: when two ClusterRunnerTemplates
@@ -244,7 +244,7 @@ func TestV2_RunnerSet_AmbiguousClusterDefaultFailsClosed(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
 		_ = k8sClient.Delete(context.Background(), crtA)
 		_ = k8sClient.Delete(context.Background(), crtB)
 	})
@@ -252,7 +252,7 @@ func TestV2_RunnerSet_AmbiguousClusterDefaultFailsClosed(t *testing.T) {
 	startScopedRunnerSetReconciler(t, "gw")
 
 	// Two defaults → fail closed, no silent pick.
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonAmbiguousDefault)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionFalse, v2.ReasonAmbiguousDefault)
 
 	// Demote one (drop the marker): exactly one default remains → it resolves. The CRT
 	// watch re-enqueues the set on the update.
@@ -260,6 +260,6 @@ func TestV2_RunnerSet_AmbiguousClusterDefaultFailsClosed(t *testing.T) {
 	crtB.Annotations = nil
 	require.NoError(t, k8sClient.Update(ctx, crtB))
 
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
-	waitForSetTemplateSource(t, ns, "set", v2alpha1.TemplateSourceClusterDefault)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
+	waitForSetTemplateSource(t, ns, "set", v2.TemplateSourceClusterDefault)
 }

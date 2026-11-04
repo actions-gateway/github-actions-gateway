@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -27,10 +27,10 @@ import (
 
 // templateWithWorkerImage builds a direct-egress-ready RunnerTemplate pinned to a
 // specific worker image, which is the whole input to the version verdict.
-func templateWithWorkerImage(name, ns, image string) *v2alpha1.RunnerTemplate {
-	return &v2alpha1.RunnerTemplate{
+func templateWithWorkerImage(name, ns, image string) *v2.RunnerTemplate {
+	return &v2.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: v2alpha1.RunnerTemplateSpec{
+		Spec: v2.RunnerTemplateSpec{
 			WorkerImage: image,
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: image}}},
@@ -42,11 +42,11 @@ func templateWithWorkerImage(name, ns, image string) *v2alpha1.RunnerTemplate {
 func waitForRunnerVersionCondition(t *testing.T, ns, name string, wantStatus metav1.ConditionStatus, wantReason string) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 			return false
 		}
-		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionRunnerVersionTooOld)
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionRunnerVersionTooOld)
 		return c != nil && c.Status == wantStatus && c.Reason == wantReason
 	}, 20*time.Second, 100*time.Millisecond,
 		"RunnerSet %s should report RunnerVersionTooOld=%s/%s", name, wantStatus, wantReason)
@@ -66,8 +66,8 @@ func setupScaleSetVersionSet(t *testing.T, ns, image string) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -81,7 +81,7 @@ func TestV2_ScaleSet_WorkerImageBelowMinimum_Warns(t *testing.T) {
 	const ns = "v2-ss-runner-stale"
 	setupScaleSetVersionSet(t, ns, "ghcr.io/actions/actions-runner:2.320.0")
 
-	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonWorkerImageBelowMinimum)
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionTrue, v2.ReasonWorkerImageBelowMinimum)
 }
 
 // TestV2_ScaleSet_WorkerImageVersionUnknown_DoesNotBlockReady covers the custom-image
@@ -91,8 +91,8 @@ func TestV2_ScaleSet_WorkerImageVersionUnknown_DoesNotBlockReady(t *testing.T) {
 	const ns = "v2-ss-runner-unknown"
 	setupScaleSetVersionSet(t, ns, "acme.io/runner:v3-cuda")
 
-	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionUnknown, v2alpha1.ReasonWorkerImageVersionUnknown)
-	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionUnknown, v2.ReasonWorkerImageVersionUnknown)
+	waitForSetReadyReason(t, ns, "set", metav1.ConditionTrue, v2.ReasonListenerActive)
 }
 
 // TestV2_WorkerImageCurrent_DoesNotWarn pins the negative: the version GAG itself
@@ -108,9 +108,9 @@ func TestV2_WorkerImageCurrent_DoesNotWarn(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
-	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2alpha1.ReasonWorkerImageCurrent)
+	waitForRunnerVersionCondition(t, ns, "set", metav1.ConditionFalse, v2.ReasonWorkerImageCurrent)
 }

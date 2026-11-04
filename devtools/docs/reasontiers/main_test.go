@@ -216,6 +216,30 @@ func (r *R) degraded(rs *RS) {
 	}
 }
 
+// The AGC imports the vocabulary from api/v2 (Q1263), whose last path segment is
+// v2, so that package must be one reasonPkgs names or every AGC reason goes
+// unplaced.
+func TestReasonReachedThroughTheV2PackageResolves(t *testing.T) {
+	const v2src = `package controller
+
+import (
+	corev1 "k8s.io/api/core/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
+)
+
+func (r *R) degraded(rs *RS) {
+	reason := v2.ReasonWorkerCeilingReached
+	r.recordEvent(rs, corev1.EventTypeWarning, reason, "Reconcile", "n")
+	r.recordEvent(rs, corev1.EventTypeWarning, v2.ReasonListenerActive, "Reconcile", "n")
+}
+`
+	src := srcTree(t, map[string]string{"internal/controller/v2.go": v2src})
+	if findings := runCase(t, src, goodLedger, goodRunbook); len(findings) != 0 {
+		t.Fatalf("reasons read through api/v2 should place as condition reasons; got %v", findings)
+	}
+}
+
 // The complement: an identifier the file does not import is not a package, so a
 // value reached through one is not the vocabulary's. QuotaExhausted is emitted
 // nowhere and has no ledger row, so reading the qualifier as a package reports

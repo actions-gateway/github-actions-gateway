@@ -6,7 +6,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnerimage"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -32,7 +32,7 @@ const digestOnlyImage = "ghcr.io/acme/runner@sha256:f2387135856decdecbf780a2bfbc
 // changes.
 func TestRunnerSetRunnerVersionStatusFromRegistry(t *testing.T) {
 	prov := &provisioner.Provisioner{}
-	template := &v2alpha1.RunnerTemplateSpec{
+	template := &v2.RunnerTemplateSpec{
 		WorkerImage: digestOnlyImage,
 		PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 			ImagePullSecrets: []corev1.LocalObjectReference{{Name: "regcred"}, {Name: ""}},
@@ -43,7 +43,7 @@ func TestRunnerSetRunnerVersionStatusFromRegistry(t *testing.T) {
 		resolver := &fakeImageResolver{lookup: runnerimage.Lookup{State: runnerimage.Pending}}
 		r := &RunnerSetReconciler{Provisioner: prov, ImageResolver: resolver}
 		r.ensureMaps()
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
 		r.setRunnerVersionStatus(rs, template)
 
@@ -72,7 +72,7 @@ func TestRunnerSetRunnerVersionStatusFromRegistry(t *testing.T) {
 			Digest: "sha256:f2387135856decdecbf780a2bfbc9debe9c2dffd742f150302444b3775474681", Version: "2.320.0", Found: true}}}
 		rec := events.NewFakeRecorder(16)
 		r := &RunnerSetReconciler{Provisioner: prov, ImageResolver: resolver, Recorder: rec}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns", Generation: 2}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns", Generation: 2}}
 
 		r.setRunnerVersionStatus(rs, template)
 		r.setRunnerVersionStatus(rs, template)
@@ -80,14 +80,14 @@ func TestRunnerSetRunnerVersionStatusFromRegistry(t *testing.T) {
 		cond := versionCondition(rs.Status.Conditions)
 		require.NotNil(t, cond)
 		assert.Equal(t, metav1.ConditionTrue, cond.Status)
-		assert.Equal(t, v2alpha1.ReasonWorkerImageBelowMinimum, cond.Reason)
+		assert.Equal(t, v2.ReasonWorkerImageBelowMinimum, cond.Reason)
 		assert.Contains(t, cond.Message, "read from the registry")
 		assert.Len(t, rec.Events, 1)
 	})
 
 	t.Run("no resolver is the tag verdict", func(t *testing.T) {
 		r := &RunnerSetReconciler{Provisioner: prov}
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 		r.setRunnerVersionStatus(rs, template)
 		cond := versionCondition(rs.Status.Conditions)
 		require.NotNil(t, cond)

@@ -13,7 +13,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/token"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -39,7 +39,7 @@ import (
 // kept because every existing set already carries it.
 const runnerSetFinalizer = "actions-gateway.com/agentpool-cleanup"
 
-// RunnerSetReconciler reconciles v2alpha1 RunnerSet objects in the AGC. It is the
+// RunnerSetReconciler reconciles v2 RunnerSet objects in the AGC. It is the
 // v2 counterpart of RunnerGroupReconciler: it resolves the RunnerSet's references
 // (gatewayRef → ActionsGateway, templateRef → RunnerTemplate/ClusterRunnerTemplate,
 // proxyRef → EgressProxy) at runtime via watch + enqueue, fails closed with a
@@ -120,7 +120,7 @@ type RunnerSetReconciler struct {
 	// the config URL/API base from the resolved gateway's githubURL and routes through
 	// the per-tenant egress proxy. Tests inject a factory pointing at the scalesettest
 	// fake so the wiring is exercised offline.
-	ScaleSetClientFactory func(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*scaleset.Client, error)
+	ScaleSetClientFactory func(rs *v2.RunnerSet, gw *v2.ActionsGateway) (*scaleset.Client, error)
 
 	// ScaleSetStubBaseURL re-points the scale-set bootstrap at a fake-GitHub stub,
 	// for the deployed fake-GitHub e2e tier — the gateway's githubURL cannot name it,
@@ -190,7 +190,7 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// Bounded retry backoff so a reconcile error cannot strand the worker-pod
 		// reaper's deadline (retryBackoffCap).
 		WithOptions(controller.Options{RateLimiter: reconcileRateLimiter()}).
-		For(&v2alpha1.RunnerSet{}).
+		For(&v2.RunnerSet{}).
 		// Worker pods carry LabelRunnerSet; re-reconcile on their lifecycle events
 		// so status.activeSessions and the reaper track pod phase transitions, and
 		// recover a disrupted scale-set worker off the event itself (Q1029).
@@ -202,15 +202,15 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// Referent watches: a RunnerSet sitting Ready=False/<Ref>NotFound flips the
 		// moment its missing referent appears.
 		Watches(
-			&v2alpha1.ActionsGateway{},
+			&v2.ActionsGateway{},
 			handler.EnqueueRequestsFromMapFunc(r.gatewayToRunnerSets),
 		).
 		Watches(
-			&v2alpha1.EgressProxy{},
+			&v2.EgressProxy{},
 			handler.EnqueueRequestsFromMapFunc(r.proxyToRunnerSets),
 		).
 		Watches(
-			&v2alpha1.RunnerTemplate{},
+			&v2.RunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.templateToRunnerSets),
 		).
 		// Reconcile when an admin changes a namespace ResourceQuota's .spec.hard so
@@ -243,7 +243,7 @@ func (r *RunnerSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// stays so an unscoped harness never establishes the cluster-scoped informer.
 	if r.GatewayName != "" {
 		b = b.Watches(
-			&v2alpha1.ClusterRunnerTemplate{},
+			&v2.ClusterRunnerTemplate{},
 			handler.EnqueueRequestsFromMapFunc(r.clusterTemplateToRunnerSets),
 		)
 	}
@@ -276,7 +276,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	r.ensureMaps()
 	log := r.Log.With("namespace", req.Namespace, "name", req.Name)
 
-	var rs v2alpha1.RunnerSet
+	var rs v2.RunnerSet
 	if err := r.Get(ctx, req.NamespacedName, &rs); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.cleanupLocalState(req.NamespacedName)
@@ -375,7 +375,7 @@ func (r *RunnerSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// reference produces no event and the set would sit here until the informer
 		// resync. Poll it instead — the alternative is list/watch over every ConfigMap
 		// in the tenant namespace, which RBAC cannot narrow to the labelled ones.
-		if reason == v2alpha1.ReasonProxyShareNotGranted {
+		if reason == v2.ReasonProxyShareNotGranted {
 			return ctrl.Result{RequeueAfter: r.proxyShareRecheckInterval()}, nil
 		}
 		return ctrl.Result{}, nil
@@ -494,7 +494,7 @@ func (r *RunnerSetReconciler) withProxyShareRecheck(res ctrl.Result, refs *resol
 }
 
 // reconcileDelete stops the set's listener and removes the finalizer.
-func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, rs *v2alpha1.RunnerSet) (ctrl.Result, error) {
+func (r *RunnerSetReconciler) reconcileDelete(ctx context.Context, rs *v2.RunnerSet) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 
 	r.cleanupLocalState(key)
@@ -521,7 +521,7 @@ func (r *RunnerSetReconciler) cleanupLocalState(key types.NamespacedName) {
 	r.ScaleSetMetrics.DeleteRunnerSet(key.Namespace, key.Name)
 }
 
-func (r *RunnerSetReconciler) recordEvent(rs *v2alpha1.RunnerSet, eventtype, reason, action, note string, args ...any) {
+func (r *RunnerSetReconciler) recordEvent(rs *v2.RunnerSet, eventtype, reason, action, note string, args ...any) {
 	if r.Recorder == nil {
 		return
 	}
@@ -530,7 +530,7 @@ func (r *RunnerSetReconciler) recordEvent(rs *v2alpha1.RunnerSet, eventtype, rea
 
 // drainConditions reads pending listener-pushed condition updates and merges those
 // for this RunnerSet into its status; others are re-enqueued.
-func (r *RunnerSetReconciler) drainConditions(rs *v2alpha1.RunnerSet) {
+func (r *RunnerSetReconciler) drainConditions(rs *v2.RunnerSet) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 	// Re-apply any conditions a prior reconcile drained but did not persist (dropping
 	// those the live status now reflects), then drain fresh pushes over the top so the
@@ -562,7 +562,7 @@ done:
 // drainEvents records pending owner-scoped Events on this RunnerSet; events for
 // other RunnerSets are re-enqueued (mirroring drainConditions). Each event is
 // consumed once, so it is never re-emitted on subsequent reconciles.
-func (r *RunnerSetReconciler) drainEvents(rs *v2alpha1.RunnerSet) {
+func (r *RunnerSetReconciler) drainEvents(rs *v2.RunnerSet) {
 	var skipped []eventRecord
 	for {
 		select {
@@ -587,14 +587,14 @@ done:
 
 // setReadyCondition upserts the Ready condition and emits an Event on a genuine
 // transition.
-func (r *RunnerSetReconciler) setReadyCondition(rs *v2alpha1.RunnerSet, ready bool, reason, msg string) {
+func (r *RunnerSetReconciler) setReadyCondition(rs *v2.RunnerSet, ready bool, reason, msg string) {
 	status := metav1.ConditionFalse
 	if ready {
 		status = metav1.ConditionTrue
 	}
-	prev := conditionValue(rs.Status.Conditions, v2alpha1.ConditionReady)
+	prev := conditionValue(rs.Status.Conditions, v2.ConditionReady)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionReady,
+		Type:               v2.ConditionReady,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -615,20 +615,20 @@ func (r *RunnerSetReconciler) setReadyCondition(rs *v2alpha1.RunnerSet, ready bo
 // (it surfaces the per-tenant-IP-attribution trade an operator opted out of by not
 // attaching a proxy) and does not gate Ready — direct egress is a supported,
 // NetworkPolicy-restricted mode.
-func (r *RunnerSetReconciler) setEgressMode(rs *v2alpha1.RunnerSet, proxied bool) {
+func (r *RunnerSetReconciler) setEgressMode(rs *v2.RunnerSet, proxied bool) {
 	status := metav1.ConditionTrue
-	mode := v2alpha1.ProxyModeDirect
-	reason := v2alpha1.ReasonDirectEgress
+	mode := v2.ProxyModeDirect
+	reason := v2.ReasonDirectEgress
 	msg := "no proxyRef/defaultProxyRef: worker egress is direct (restricted to DNS + GitHub) and has no per-tenant egress IP identity"
 	if proxied {
 		status = metav1.ConditionFalse
-		mode = v2alpha1.ProxyModeProxied
-		reason = v2alpha1.ReasonProxiedEgress
+		mode = v2.ProxyModeProxied
+		reason = v2.ReasonProxiedEgress
 		msg = "worker egress is attributed to the resolved EgressProxy's per-tenant IPs"
 	}
 	rs.Status.ProxyMode = mode
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionEgressUnattributed,
+		Type:               v2.ConditionEgressUnattributed,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -646,14 +646,14 @@ const proxyAuditConnectionsWithSource = "ConnectionsWithSource"
 // proxyRef before the gateway's defaultProxyRef — rather than the gateway's default.
 // The worker half is the gateway's spec.auditLogging, the source half the resolved
 // pool's. Advisory and abnormal-is-True like the gateway's; it never gates Ready.
-func (r *RunnerSetReconciler) setEgressAuditStatus(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) {
+func (r *RunnerSetReconciler) setEgressAuditStatus(rs *v2.RunnerSet, gw *v2.ActionsGateway, proxy *resolvedProxy) {
 	reason, msg := runnerSetEgressAudit(gw, proxy)
 	status := metav1.ConditionTrue
-	if reason == v2alpha1.ReasonEgressAuditJoined {
+	if reason == v2.ReasonEgressAuditJoined {
 		status = metav1.ConditionFalse
 	}
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionEgressAuditUnattributed,
+		Type:               v2.ConditionEgressAuditUnattributed,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -665,15 +665,15 @@ func (r *RunnerSetReconciler) setEgressAuditStatus(rs *v2alpha1.RunnerSet, gw *v
 // set's gateway and resolved pool (nil for direct egress). Every reason but
 // ReasonEgressAuditJoined names the half to turn on, and a direct-egress set splits on
 // the gateway half so the reason alone says whether the tenant opted in.
-func runnerSetEgressAudit(gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) (reason, message string) {
+func runnerSetEgressAudit(gw *v2.ActionsGateway, proxy *resolvedProxy) (reason, message string) {
 	workerHalf := gw.Spec.AuditLogging == string(provisioner.WorkerAuditAddresses)
 	if proxy == nil {
 		if workerHalf {
-			return v2alpha1.ReasonWorkerAuditWithoutProxy,
+			return v2.ReasonWorkerAuditWithoutProxy,
 				fmt.Sprintf("ActionsGateway %q logs %s but this set has no proxyRef/defaultProxyRef: worker egress is direct, so no per-connection record exists to join the addresses to. Attach an EgressProxy that logs %s",
 					gw.Name, provisioner.WorkerAuditAddresses, proxyAuditConnectionsWithSource)
 		}
-		return v2alpha1.ReasonDirectEgress,
+		return v2.ReasonDirectEgress,
 			"no proxyRef/defaultProxyRef: worker egress is direct, so no per-connection record attributes it"
 	}
 	// An empty value is the CRD default, so report it as Off rather than as "".
@@ -686,19 +686,19 @@ func runnerSetEgressAudit(gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) (re
 	proxyHalf := proxy.auditLogging == proxyAuditConnectionsWithSource
 	switch {
 	case workerHalf && proxyHalf:
-		return v2alpha1.ReasonEgressAuditJoined,
+		return v2.ReasonEgressAuditJoined,
 			fmt.Sprintf("ActionsGateway %q logs %s and EgressProxy %q logs %s: an egress audit record from this set's workers joins to this tenant and the job that held the address",
 				gw.Name, provisioner.WorkerAuditAddresses, proxy.name, proxyAuditConnectionsWithSource)
 	case proxyHalf:
-		return v2alpha1.ReasonWorkerAuditDisabled,
+		return v2.ReasonWorkerAuditDisabled,
 			fmt.Sprintf("EgressProxy %q logs %s but ActionsGateway %q's spec.auditLogging is %q: the source addresses it records name no tenant or job. Set spec.auditLogging: %s on the gateway",
 				proxy.name, proxyAuditConnectionsWithSource, gw.Name, effective(gw.Spec.AuditLogging), provisioner.WorkerAuditAddresses)
 	case workerHalf:
-		return v2alpha1.ReasonProxySourceAuditDisabled,
+		return v2.ReasonProxySourceAuditDisabled,
 			fmt.Sprintf("ActionsGateway %q logs %s but EgressProxy %q, which this set's workers egress through, logs %q: no egress record carries a source address to join on. Set that proxy's spec.auditLogging: %s",
 				gw.Name, provisioner.WorkerAuditAddresses, proxy.name, effective(proxy.auditLogging), proxyAuditConnectionsWithSource)
 	default:
-		return v2alpha1.ReasonEgressAuditDisabled,
+		return v2.ReasonEgressAuditDisabled,
 			fmt.Sprintf("neither ActionsGateway %q's spec.auditLogging nor EgressProxy %q's is on, so this set's worker egress is not attributable to a tenant or a job", gw.Name, proxy.name)
 	}
 }
@@ -712,25 +712,25 @@ func runnerSetEgressAudit(gw *v2alpha1.ActionsGateway, proxy *resolvedProxy) (re
 // acknowledged sidecar fires none of them. A nil template (references unresolved)
 // clears both. It is a warning, not enforcement: the fix is native sidecars, which the
 // message and the admission warning steer operators toward.
-func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSet, template *v2alpha1.RunnerTemplateSpec, annotations map[string]string) {
-	names := v2alpha1.ReapBlockingSidecars(template, annotations)
+func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2.RunnerSet, template *v2.RunnerTemplateSpec, annotations map[string]string) {
+	names := v2.ReapBlockingSidecars(template, annotations)
 
 	if r.Metrics != nil {
 		r.Metrics.ReapBlockingSidecarTemplates.WithLabelValues(rs.Namespace, rs.Name).Set(float64(len(names)))
 	}
 
 	status := metav1.ConditionFalse
-	reason := v2alpha1.ReasonNoReapBlockingSidecar
+	reason := v2.ReasonNoReapBlockingSidecar
 	msg := "no regular reap-blocking sidecar in the resolved worker template"
 	if len(names) > 0 {
 		status = metav1.ConditionTrue
-		reason = v2alpha1.ReasonReapBlockingSidecar
+		reason = v2.ReasonReapBlockingSidecar
 		msg = fmt.Sprintf("worker pod sidecar container(s) %s are regular containers that may keep the pod from reaping after the runner exits, stranding the runner slot; declare them as native sidecars (restartPolicy: Always init containers, Kubernetes >= 1.29) or acknowledge them in the %s annotation",
-			strings.Join(names, ", "), v2alpha1.SelfExitingSidecarsAnnotation)
+			strings.Join(names, ", "), v2.SelfExitingSidecarsAnnotation)
 	}
-	prev := conditionValue(rs.Status.Conditions, v2alpha1.ConditionPossibleReapBlockingSidecar)
+	prev := conditionValue(rs.Status.Conditions, v2.ConditionPossibleReapBlockingSidecar)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionPossibleReapBlockingSidecar,
+		Type:               v2.ConditionPossibleReapBlockingSidecar,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -751,7 +751,7 @@ func (r *RunnerSetReconciler) setReapBlockingSidecarStatus(rs *v2alpha1.RunnerSe
 // A nil template means the references have not resolved; the image the set would run is
 // unknown, so nothing is published rather than judging the AGC-wide default the set may
 // never use.
-func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2alpha1.RunnerSet, template *v2alpha1.RunnerTemplateSpec) {
+func (r *RunnerSetReconciler) setRunnerVersionStatus(rs *v2.RunnerSet, template *v2.RunnerTemplateSpec) {
 	if template == nil || r.Provisioner == nil {
 		return
 	}
@@ -785,7 +785,7 @@ func (r *RunnerSetReconciler) nowFunc() func() time.Time {
 // Every caller needs the identical adapter (the multiplexer path, the scale-set
 // listener path, and the eviction-recovery pass), so it is constructed once here rather
 // than re-literalled per call site.
-func (r *RunnerSetReconciler) provisionerTarget(rs *v2alpha1.RunnerSet) *runnerSetTarget {
+func (r *RunnerSetReconciler) provisionerTarget(rs *v2.RunnerSet) *runnerSetTarget {
 	return &runnerSetTarget{
 		client: r.Client,
 		reader: r.APIReader,
@@ -801,7 +801,7 @@ func (r *RunnerSetReconciler) provisionerTarget(rs *v2alpha1.RunnerSet) *runnerS
 // job's completion), mirroring the RunnerGroup reaper but filtering on LabelRunnerSet and
 // reading the RunnerSet's tunables. It returns the time until the earliest retained
 // pod becomes due (0 = none) and a pod phase count for status.activeJobs/pendingJobs.
-func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet, observed *observedRunner) (time.Duration, workerPodCounts, error) {
+func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logger, rs *v2.RunnerSet, observed *observedRunner) (time.Duration, workerPodCounts, error) {
 	return reapWorkerPodsByLabel(ctx, r.Client, r.nowFunc()(), rs.Namespace, rs.Name,
 		provisioner.LabelRunnerSet,
 		provisioner.CompletedPodTTLOrDefault(rs.Spec.CompletedPodTTL),
@@ -855,7 +855,7 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 // no-op, a record still running a job must be kept (RunnerBusyError), and any other
 // failure is logged and left to the start-up sweep. None of them may stop the reap —
 // the pod is condemned either way, and a retained pod would hold its concurrency slot.
-func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2alpha1.RunnerSet, log *slog.Logger) func(context.Context, string) {
+func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2.RunnerSet, log *slog.Logger) func(context.Context, string) {
 	ssClient := r.scaleSetClientFor(types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name})
 	if ssClient == nil {
 		return nil
@@ -876,7 +876,7 @@ func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2alpha1.RunnerSet, l
 // queue it for automatic re-run once capacity returns (Q766). The recovery is deliberately
 // not waited on — the force-cancel runs bounded on its own detached context, and a
 // reconcile must not stall on GitHub.
-func (r *RunnerSetReconciler) recoverAbandonedRun(rs *v2alpha1.RunnerSet) func(context.Context, *corev1.Pod) {
+func (r *RunnerSetReconciler) recoverAbandonedRun(rs *v2.RunnerSet) func(context.Context, *corev1.Pod) {
 	if r.Provisioner == nil {
 		return nil
 	}
@@ -986,7 +986,7 @@ func (r *RunnerSetReconciler) recoverDisruptedWorkerPod(ctx context.Context, obj
 	go func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), disruptedWorkerRecoveryBudget)
 		defer cancel()
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		key := types.NamespacedName{Namespace: pod.Namespace, Name: pod.Labels[provisioner.LabelRunnerSet]}
 		if err := r.Get(ctx, key, &rs); err != nil {
 			r.Log.Debug("disrupted scale-set worker's RunnerSet is not readable; leaving it to the recovery scan",
@@ -1003,7 +1003,7 @@ func (r *RunnerSetReconciler) recoverDisruptedWorkerPod(ctx context.Context, obj
 // gatewayToRunnerSets enqueues every RunnerSet in the gateway's namespace whose
 // gatewayRef names it.
 func (r *RunnerSetReconciler) gatewayToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2alpha1.RunnerSet) bool {
+	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2.RunnerSet) bool {
 		return rs.Spec.GatewayRef.Name == obj.GetName()
 	})
 }
@@ -1013,7 +1013,7 @@ func (r *RunnerSetReconciler) gatewayToRunnerSets(ctx context.Context, obj clien
 // requires reading each set's gateway, so for simplicity (single-gateway parity)
 // any unset-proxyRef set in the namespace is enqueued; the reconcile re-resolves.
 func (r *RunnerSetReconciler) proxyToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2alpha1.RunnerSet) bool {
+	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2.RunnerSet) bool {
 		if rs.Spec.ProxyRef != nil {
 			return rs.Spec.ProxyRef.Name == obj.GetName()
 		}
@@ -1030,7 +1030,7 @@ func (r *RunnerSetReconciler) proxyToRunnerSets(ctx context.Context, obj client.
 // re-resolves (mirrors proxyToRunnerSets' generous-enqueue-then-re-resolve, simpler
 // than reading each set's gateway here).
 func (r *RunnerSetReconciler) templateToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2alpha1.RunnerSet) bool {
+	return r.runnerSetsMatching(ctx, obj.GetNamespace(), func(rs *v2.RunnerSet) bool {
 		if rs.Spec.TemplateRef == nil {
 			return true // may inherit gateway.defaultTemplateRef pointing at this template
 		}
@@ -1047,7 +1047,7 @@ func (r *RunnerSetReconciler) templateToRunnerSets(ctx context.Context, obj clie
 // namespace), so it lists from the manager cache — already scoped to this AGC's
 // namespace and gateway — and the reconcile re-resolves the actual rung.
 func (r *RunnerSetReconciler) clusterTemplateToRunnerSets(ctx context.Context, obj client.Object) []ctrl.Request {
-	var list v2alpha1.RunnerSetList
+	var list v2.RunnerSetList
 	if err := r.List(ctx, &list); err != nil {
 		return nil
 	}
@@ -1065,8 +1065,8 @@ func (r *RunnerSetReconciler) clusterTemplateToRunnerSets(ctx context.Context, o
 
 // runnerSetsMatching lists RunnerSets in ns and returns reconcile requests for
 // those satisfying match.
-func (r *RunnerSetReconciler) runnerSetsMatching(ctx context.Context, ns string, match func(*v2alpha1.RunnerSet) bool) []ctrl.Request {
-	var list v2alpha1.RunnerSetList
+func (r *RunnerSetReconciler) runnerSetsMatching(ctx context.Context, ns string, match func(*v2.RunnerSet) bool) []ctrl.Request {
+	var list v2.RunnerSetList
 	if err := r.List(ctx, &list, client.InNamespace(ns)); err != nil {
 		return nil
 	}

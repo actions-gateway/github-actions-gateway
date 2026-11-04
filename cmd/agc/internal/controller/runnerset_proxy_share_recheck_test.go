@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -63,9 +63,9 @@ func TestWithProxyShareRecheck(t *testing.T) {
 func TestRunnerSetReconcile_ProxyShareNotGrantedRequeues(t *testing.T) {
 	scheme := runnerSetTestScheme(t)
 	const ns = "team-a"
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer} // skip the finalizer-add requeue
-		rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "shared", Namespace: "platform-egress"}
+		rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "shared", Namespace: "platform-egress"}
 	})
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(rs, gwObj("gw", ns, ""), tmplObj("tmpl", ns)).
@@ -75,12 +75,12 @@ func TestRunnerSetReconcile_ProxyShareNotGrantedRequeues(t *testing.T) {
 	res, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: "set"}})
 	require.NoError(t, err)
 
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "set"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionReady)
 	require.NotNil(t, ready)
 	require.Equal(t, metav1.ConditionFalse, ready.Status)
-	require.Equal(t, v2alpha1.ReasonProxyShareNotGranted, ready.Reason)
+	require.Equal(t, v2.ReasonProxyShareNotGranted, ready.Reason)
 	assert.Equal(t, 42*time.Second, res.RequeueAfter,
 		"a share the AGC cannot watch has no other event source to restore it")
 }
@@ -91,9 +91,9 @@ func TestRunnerSetReconcile_ProxyShareNotGrantedRequeues(t *testing.T) {
 func TestRunnerSetReconcile_WatchedReferentDoesNotRequeue(t *testing.T) {
 	scheme := runnerSetTestScheme(t)
 	const ns = "team-a"
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer}
-		rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "missing"}
+		rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "missing"}
 	})
 	c := fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(rs, gwObj("gw", ns, ""), tmplObj("tmpl", ns)).
@@ -103,10 +103,10 @@ func TestRunnerSetReconcile_WatchedReferentDoesNotRequeue(t *testing.T) {
 	res, err := r.Reconcile(context.Background(), ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: "set"}})
 	require.NoError(t, err)
 
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "set"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionReady)
 	require.NotNil(t, ready)
-	require.Equal(t, v2alpha1.ReasonProxyNotFound, ready.Reason)
+	require.Equal(t, v2.ReasonProxyNotFound, ready.Reason)
 	assert.Zero(t, res.RequeueAfter, "the EgressProxy watch re-enqueues this one")
 }

@@ -1295,9 +1295,8 @@ Upgrade past the fix, which makes the drain one-way so a reconciler that has dra
 **Symptoms.** A per-gateway AGC (`<gateway>-agc`) never becomes Ready, and its logs end at:
 
 ```
-GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not
-installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing
-(install the actions-gateway-crds-v2 chart)
+GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2 RunnerSet CRD is not
+installed, so this AGC would reconcile nothing (install the actions-gateway-crds-v2 chart)
 ```
 
 **Cause.** Each AGC serves exactly one API: the v1 singleton (no `GATEWAY_NAME`) reconciles `RunnerGroup`s, and a gateway-scoped AGC reconciles only its own gateway's `RunnerSet`s.
@@ -3093,7 +3092,7 @@ kubectl describe networkpolicy -n <namespace>
 The log shows a Kubernetes API call — not a GitHub call — failing at the proxy, addressed to an **IP**, not a hostname:
 
 ```
-detect actions-gateway.com/v2alpha1 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
+detect actions-gateway.com/v2 RunnerSet CRD: … Get "https://34.118.224.1:443/api":
 proxyconnect tcp: tls: failed to verify certificate:
 x509: certificate signed by unknown authority
 ```

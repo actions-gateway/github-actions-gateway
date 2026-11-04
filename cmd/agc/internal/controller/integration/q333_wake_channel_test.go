@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,7 +15,7 @@ import (
 
 // setHasCondition reports whether the RunnerSet carries a status condition of the
 // given type (v2 counterpart of hasCondition).
-func setHasCondition(rs *v2alpha1.RunnerSet, condType string) bool {
+func setHasCondition(rs *v2.RunnerSet, condType string) bool {
 	for _, c := range rs.Status.Conditions {
 		if c.Type == condType {
 			return true
@@ -47,7 +47,7 @@ func TestV2_Reconciler_PushedConditionWakesRunnerSet(t *testing.T) {
 
 	// Wait until the set has settled at GatewayNotFound and the controller quiesces, so
 	// no in-flight reconcile can be mistaken for the wake.
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionFalse, v2alpha1.ReasonGatewayNotFound)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionFalse, v2.ReasonGatewayNotFound)
 	waitForQuiescence(t, r)
 	before := r.ReconcileCountForTest()
 
@@ -59,7 +59,7 @@ func TestV2_Reconciler_PushedConditionWakesRunnerSet(t *testing.T) {
 	})
 
 	require.Eventually(t, func() bool {
-		var fetched v2alpha1.RunnerSet
+		var fetched v2.RunnerSet
 		if err := k8sClient.Get(ctx, key, &fetched); err != nil {
 			return false
 		}

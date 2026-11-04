@@ -61,7 +61,7 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
 ```
 
 The CRDs install and validate on Kubernetes ≥ 1.30.
-The `RunnerSet` `spec.gatewayRef.name` selectable field (KEP-4358) is declared on **`v2alpha1`** (the version the AGC field-selects during coexistence) and is queryable only on ≥ 1.31; the declaration is inert on 1.30.
+The `RunnerSet` `spec.gatewayRef.name` selectable field (KEP-4358) is declared on **`v2`** (the version the AGC field-selects) and `v2beta1`, not on `v2alpha1`, and is queryable only on ≥ 1.31; the declaration is inert on 1.30.
 
 > **Requires the GMC.** A `v2`, `v2beta1` or `v2alpha1` create or read is converted through the GMC's `/convert` webhook, so apply v2 objects only once the GMC is `Ready`.
 > Once `v1alpha1` is removed, the v2 CRDs are expected to fold back into the main chart.

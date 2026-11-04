@@ -9,7 +9,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
@@ -62,11 +62,11 @@ import (
 func waitForCapacityDeclined(t *testing.T, reader client.Reader, ns, name, reason string, within time.Duration) {
 	t.Helper()
 	require.Eventually(t, func() bool {
-		var rs v2alpha1.RunnerSet
+		var rs v2.RunnerSet
 		if err := reader.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, &rs); err != nil {
 			return false
 		}
-		c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+		c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reason
 	}, within, 100*time.Millisecond,
 		"an unplaceable worker pod must close the capacity gate on RunnerSet %s/%s with reason %s",
@@ -128,7 +128,7 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
+	rs.Spec.CapacityGate = &v2.CapacityGate{Mode: v2.CapacityGateModeObserve}
 	// 30s deadline ⇒ a 15s scheduling grace, and a further 15s before the reaper
 	// deletes the pod. Every assertion below lands inside one such window.
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 30 * time.Second}
@@ -137,11 +137,11 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	rec := startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// --- half one: an ordinary scheduler failure must NOT close the gate -------
 	//
@@ -158,17 +158,17 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 	// gate had its chance to read that pod's Events — without it, "the gate is open"
 	// would be indistinguishable from "the gate has not looked yet".
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, setName, v2alpha1.ConditionWorkersUnschedulable)
+		c := setCondition(t, ns, setName, v2.ConditionWorkersUnschedulable)
 		return c != nil && c.Status == metav1.ConditionTrue
 	}, 25*time.Second, 100*time.Millisecond,
 		"the worker pod must age past the scheduling grace before the gate can be judged")
 
-	gate := setCondition(t, ns, setName, v2alpha1.ConditionWorkerCapacityDeclined)
+	gate := setCondition(t, ns, setName, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, gate, "an opted-in set must publish the condition even when the gate is open")
 	require.Equal(t, metav1.ConditionFalse, gate.Status,
 		"a transient FailedScheduling from the scheduler is not an autoscaler declination; "+
 			"gating on it would starve a tenant whose cluster was about to grow")
-	require.Equal(t, v2alpha1.ReasonCapacityAvailable, gate.Reason)
+	require.Equal(t, v2.ReasonCapacityAvailable, gate.Reason)
 
 	// --- half two: the autoscaler's own declination DOES close it -------------
 	//
@@ -181,9 +181,9 @@ func TestV2_RunnerSet_CapacityGate_ElasticClusterDiscriminatesByReporter(t *test
 		"pod didn't trigger scale-up: 1 max node group size reached, 2 node(s) had untolerated taint {dedicated: gpu}",
 		time.Now())
 
-	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonScaleUpDeclined, 25*time.Second)
+	waitForCapacityDeclined(t, rec.Client, ns, setName, v2.ReasonScaleUpDeclined, 25*time.Second)
 
-	gate = setCondition(t, ns, setName, v2alpha1.ConditionWorkerCapacityDeclined)
+	gate = setCondition(t, ns, setName, v2.ConditionWorkerCapacityDeclined)
 	require.Contains(t, gate.Message, "max node group size reached",
 		"the autoscaler's own per-node-group text must reach the operator — that is what makes "+
 			"this condition actionable rather than merely true")
@@ -220,14 +220,14 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 	require.NoError(t, k8sClient.Create(ctx, newFixedSizeGatewayForSet("gw", ns)))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newScaleSetRunnerSet(setName, ns, "gw", label, ceiling)
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
+	rs.Spec.CapacityGate = &v2.CapacityGate{Mode: v2.CapacityGateModeObserve}
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 40 * time.Second}
 	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -236,7 +236,7 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 		_, ok := srv.ScaleSetIDByName(label)
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register one scale set named %q", label)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// Before the gate closes, the set advertises its whole declared ceiling and the
 	// capacity rung publishes an explicit zero — the negative control for everything
@@ -252,7 +252,7 @@ func TestV2_RunnerSet_ScaleSet_CapacityGateWithholdsAdvertisedCapacity(t *testin
 
 	pod := createV2WorkerPod(t, ns, setName, "worker-unplaceable")
 	markUnschedulable(t, pod, "0/3 nodes are available: 3 node(s) had untolerated taint {dedicated: gpu}")
-	waitForCapacityDeclined(t, k8sClient, ns, setName, v2alpha1.ReasonPodsUnschedulable, 35*time.Second)
+	waitForCapacityDeclined(t, k8sClient, ns, setName, v2.ReasonPodsUnschedulable, 35*time.Second)
 
 	require.Eventually(t, func() bool {
 		advertised := testutil.ToFloat64(scaleSetTestMetrics.AdvertisedCapacity.WithLabelValues(ns, setName))
@@ -323,7 +323,7 @@ func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartWithholdsCapacity(t *tes
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
 	rs := newRunnerSet(setName, ns, "gw")
 	rs.Spec.MaxWorkers = ptr.To(int32(3))
-	rs.Spec.CapacityGate = &v2alpha1.CapacityGate{Mode: v2alpha1.CapacityGateModeObserve}
+	rs.Spec.CapacityGate = &v2.CapacityGate{Mode: v2.CapacityGateModeObserve}
 	// Long enough that the reaper cannot delete the gate's evidence mid-assertion.
 	rs.Spec.PendingPodDeadline = &metav1.Duration{Duration: 5 * time.Minute}
 	rs.Spec.CompletedPodTTL = &metav1.Duration{Duration: time.Hour}
@@ -331,25 +331,25 @@ func TestV2_RunnerSet_CapacityGate_WorkerThatCannotStartWithholdsCapacity(t *tes
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	rec := startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	pod := createV2WorkerPod(t, ns, setName, "worker-unpullable")
 	markImagePullBackOff(t, pod, image)
-	waitForCapacityDeclined(t, rec.Client, ns, setName, v2alpha1.ReasonPodsNotStarting, 25*time.Second)
+	waitForCapacityDeclined(t, rec.Client, ns, setName, v2.ReasonPodsNotStarting, 25*time.Second)
 
 	// The scheduler signal must stay quiet on the same object: this pod was placed, so
 	// reporting it as unschedulable would send an operator after a node it already has.
-	var seen v2alpha1.RunnerSet
+	var seen v2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: setName}, &seen))
-	unsched := meta.FindStatusCondition(seen.Status.Conditions, v2alpha1.ConditionWorkersUnschedulable)
+	unsched := meta.FindStatusCondition(seen.Status.Conditions, v2.ConditionWorkersUnschedulable)
 	require.NotNil(t, unsched)
 	require.Equal(t, metav1.ConditionFalse, unsched.Status,
 		"a bound pod is not a scheduling failure, whatever the kubelet then makes of it")
-	declined := meta.FindStatusCondition(seen.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	declined := meta.FindStatusCondition(seen.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	require.NotNil(t, declined)
 	require.Contains(t, declined.Message, image,
 		"the condition must name the image, which is the operator's whole remedy")

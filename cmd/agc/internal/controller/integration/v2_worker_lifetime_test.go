@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -86,8 +86,8 @@ func TestV2_RunnerSet_ScaleSet_WorkerCarriesLifetimeDeadline(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -98,7 +98,7 @@ func TestV2_RunnerSet_ScaleSet_WorkerCarriesLifetimeDeadline(t *testing.T) {
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register its scale set")
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	srv.EnqueueJob(ssID)
 
@@ -135,8 +135,8 @@ func TestV2_RunnerSet_RestartReclaimsWorkerKilledByLifetimeCap(t *testing.T) {
 	t.Cleanup(func() {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	// The previous process's leftover, staged before anything runs. Unstamped and
@@ -157,7 +157,7 @@ func TestV2_RunnerSet_RestartReclaimsWorkerKilledByLifetimeCap(t *testing.T) {
 	// --- The restart: a brand-new manager meets a pod it never provisioned.
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, "lifetime-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "lifetime-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool { return podGone(ns, "orphan-deadline") },
 		30*time.Second, 100*time.Millisecond,

@@ -45,7 +45,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/tracing"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/transport"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/usage"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/go-logr/logr"
@@ -292,7 +292,7 @@ func run() error {
 	gatewayName := cfg.GatewayName
 	if gatewayName != "" {
 		cacheOpts.ByObject = map[client.Object]cache.ByObject{
-			&agcv2alpha1.RunnerSet{}: {
+			&agcv2.RunnerSet{}: {
 				Field: fields.OneTermEqualSelector("spec.gatewayRef.name", gatewayName),
 			},
 		}
@@ -302,8 +302,8 @@ func run() error {
 		return fmt.Errorf("configure metrics server: %w", err)
 	}
 	// Dedupe API server warnings to one log line per unique message per process.
-	// The default handler logs every occurrence, and the v2alpha1 deprecation
-	// warnings repeat on every RunnerSet read/write —
+	// The default handler logs every occurrence, and a deprecated version's
+	// warning repeats on every read/write of it —
 	// under reconcile churn they dominate the log (Q515).
 	restCfg := ctrl.GetConfigOrDie()
 	restCfg.WarningHandlerWithContext = logf.NewKubeAPIWarningLogger(
@@ -467,10 +467,10 @@ func registerReconcilers(mgr ctrl.Manager, deps reconcilerDeps) error {
 	// mgr.Start would exit(1) after the cache-sync deadline (Q261).
 	v2Enabled, err := controller.RunnerSetInstalled(mgr.GetRESTMapper())
 	if err != nil {
-		return fmt.Errorf("detect actions-gateway.com/v2alpha1 RunnerSet CRD: %w", err)
+		return fmt.Errorf("detect actions-gateway.com/v2 RunnerSet CRD: %w", err)
 	}
 	if !v2Enabled {
-		return fmt.Errorf("GATEWAY_NAME=%s is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is "+
+		return fmt.Errorf("GATEWAY_NAME=%s is set but the actions-gateway.com/v2 RunnerSet CRD is "+
 			"not installed, so this AGC would reconcile nothing "+
 			"(install the actions-gateway-crds-v2 chart)", deps.gatewayName)
 	}
@@ -719,7 +719,7 @@ func setupProxyAttribution(mgr ctrl.Manager, namespace, gateway string) error {
 }
 
 // buildScheme builds the AGC client scheme: the core Kubernetes types
-// (clientgoscheme, which already includes corev1) plus the actions-gateway.com/v2alpha1
+// (clientgoscheme, which already includes corev1) plus the actions-gateway.com/v2
 // kinds the RunnerSet reconciler consumes. Kept as a standalone, test-reachable helper so scheme
 // registration is verifiable without standing up a manager.
 func buildScheme() (*runtime.Scheme, error) {
@@ -728,7 +728,7 @@ func buildScheme() (*runtime.Scheme, error) {
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
-	if err := agcv2alpha1.AddToScheme(scheme); err != nil {
+	if err := agcv2.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil

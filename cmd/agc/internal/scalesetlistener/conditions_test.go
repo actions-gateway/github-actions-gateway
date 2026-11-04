@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -127,11 +127,11 @@ func TestListener_PublishesHealthyBaselineOnStart(t *testing.T) {
 	sink := &statusSink{}
 	startListenerWithSink(t, srv, sink)
 
-	assert.True(t, sink.lastIs(v2alpha1.ConditionDegraded, metav1.ConditionFalse, v2alpha1.ReasonSessionAuthorized),
+	assert.True(t, sink.lastIs(v2.ConditionDegraded, metav1.ConditionFalse, v2.ReasonSessionAuthorized),
 		"Start must publish Degraded=False/SessionAuthorized")
-	assert.True(t, sink.lastIs(v2alpha1.ConditionRateLimited, metav1.ConditionFalse, v2alpha1.ReasonPollingHealthy),
+	assert.True(t, sink.lastIs(v2.ConditionRateLimited, metav1.ConditionFalse, v2.ReasonPollingHealthy),
 		"Start must publish RateLimited=False/PollingHealthy")
-	assert.True(t, sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse, v2alpha1.ReasonJobsProvisioning),
+	assert.True(t, sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionFalse, v2.ReasonJobsProvisioning),
 		"Start must publish JobProvisionStalled=False/JobsProvisioning")
 	assert.Zero(t, sink.eventCount("SessionUnauthorized"), "no warning events on the happy path")
 }
@@ -156,13 +156,13 @@ func TestListener_StalledJobSurfacesConditionAndEvent(t *testing.T) {
 	srv.EnqueueJob(ssID)
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue, v2alpha1.ReasonRunnerNameConflict)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionTrue, v2.ReasonRunnerNameConflict)
 	}, 5*time.Second, 5*time.Millisecond,
 		"a job that cannot register a runner name must surface JobProvisionStalled=True")
 	require.Eventually(t, func() bool { return sink.eventCount("JobProvisionStalled") == 1 },
 		5*time.Second, 5*time.Millisecond, "the transition must record a JobProvisionStalled event")
 
-	cond, _ := sink.last(v2alpha1.ConditionJobProvisionStalled)
+	cond, _ := sink.last(v2.ConditionJobProvisionStalled)
 	assert.Contains(t, cond.Message, "1 assigned job", "the message must say how many jobs are held")
 
 	// The re-offers keep failing while the conflict holds; the episode must not spam
@@ -173,7 +173,7 @@ func TestListener_StalledJobSurfacesConditionAndEvent(t *testing.T) {
 
 	srv.ClearJITConfigConflicts()
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse, v2alpha1.ReasonJobsProvisioning)
+		return sink.lastIs(v2.ConditionJobProvisionStalled, metav1.ConditionFalse, v2.ReasonJobsProvisioning)
 	}, 5*time.Second, 5*time.Millisecond,
 		"the job provisioning on a re-offer must clear the condition")
 }
@@ -191,13 +191,13 @@ func TestListener_SustainedRateLimitSetsAndClearsCondition(t *testing.T) {
 
 	srv.SetRateLimitPolls(true)
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionRateLimited, metav1.ConditionTrue, v2alpha1.ReasonSustainedRateLimit)
+		return sink.lastIs(v2.ConditionRateLimited, metav1.ConditionTrue, v2.ReasonSustainedRateLimit)
 	}, 5*time.Second, 5*time.Millisecond,
 		"sustained 429 polling must surface RateLimited=True/SustainedRateLimit")
 
 	srv.SetRateLimitPolls(false)
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionRateLimited, metav1.ConditionFalse, v2alpha1.ReasonPollingHealthy)
+		return sink.lastIs(v2.ConditionRateLimited, metav1.ConditionFalse, v2.ReasonPollingHealthy)
 	}, 5*time.Second, 5*time.Millisecond,
 		"a healthy poll after the episode must clear the condition")
 }
@@ -220,7 +220,7 @@ func TestListener_UnauthorizedRefreshSurfacesDegraded(t *testing.T) {
 	srv.ExpireQueueToken(ssID)
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionDegraded, metav1.ConditionTrue, v2alpha1.ReasonSessionUnauthorized)
+		return sink.lastIs(v2.ConditionDegraded, metav1.ConditionTrue, v2.ReasonSessionUnauthorized)
 	}, 5*time.Second, 5*time.Millisecond,
 		"an unauthorized session refresh must surface Degraded=True/Unauthorized")
 	require.Eventually(t, func() bool { return sink.eventCount("SessionUnauthorized") == 1 },
@@ -235,7 +235,7 @@ func TestListener_UnauthorizedRefreshSurfacesDegraded(t *testing.T) {
 	// Restore the credentials: the next refresh succeeds and clears the condition.
 	srv.FailSessionRefresh(false)
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionDegraded, metav1.ConditionFalse, v2alpha1.ReasonSessionAuthorized)
+		return sink.lastIs(v2.ConditionDegraded, metav1.ConditionFalse, v2.ReasonSessionAuthorized)
 	}, 5*time.Second, 5*time.Millisecond,
 		"a successful refresh after the episode must clear Degraded")
 }
@@ -254,13 +254,13 @@ func TestListener_UnauthorizedSessionRecreateSurfacesDegraded(t *testing.T) {
 	srv.DropSession(ssID)
 
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionDegraded, metav1.ConditionTrue, v2alpha1.ReasonSessionUnauthorized)
+		return sink.lastIs(v2.ConditionDegraded, metav1.ConditionTrue, v2.ReasonSessionUnauthorized)
 	}, 5*time.Second, 5*time.Millisecond,
 		"an unauthorized session re-create must surface Degraded=True/Unauthorized")
 
 	srv.FailSessionCreate(false)
 	require.Eventually(t, func() bool {
-		return sink.lastIs(v2alpha1.ConditionDegraded, metav1.ConditionFalse, v2alpha1.ReasonSessionAuthorized)
+		return sink.lastIs(v2.ConditionDegraded, metav1.ConditionFalse, v2.ReasonSessionAuthorized)
 	}, 5*time.Second, 5*time.Millisecond,
 		"a successful re-create after the episode must clear Degraded")
 }
@@ -289,10 +289,10 @@ func TestListener_StartUnauthorizedSurfacesDegraded(t *testing.T) {
 	_, err = l.Start(context.Background())
 	require.Error(t, err, "Start must fail when session creation is unauthorized")
 
-	assert.True(t, sink.lastIs(v2alpha1.ConditionDegraded, metav1.ConditionTrue, v2alpha1.ReasonSessionUnauthorized),
+	assert.True(t, sink.lastIs(v2.ConditionDegraded, metav1.ConditionTrue, v2.ReasonSessionUnauthorized),
 		"the unauthorized start failure must surface Degraded=True/Unauthorized")
 	assert.Equal(t, 1, sink.eventCount("SessionUnauthorized"),
 		"the start failure must record a SessionUnauthorized event")
-	_, baselinePushed := sink.last(v2alpha1.ConditionRateLimited)
+	_, baselinePushed := sink.last(v2.ConditionRateLimited)
 	assert.False(t, baselinePushed, "no healthy baseline is published on a failed start")
 }

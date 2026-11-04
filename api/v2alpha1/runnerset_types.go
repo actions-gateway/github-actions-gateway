@@ -736,7 +736,6 @@ type ContainerSizingRecommendation struct {
 // +kubebuilder:deprecatedversion:warning="actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it."
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced,shortName=rs,categories=actions-gateway
-// +kubebuilder:selectablefield:JSONPath=`.spec.gatewayRef.name`
 // +kubebuilder:printcolumn:name="Gateway",type=string,JSONPath=`.spec.gatewayRef.name`
 // +kubebuilder:printcolumn:name="MaxListeners",type=integer,JSONPath=`.spec.maxListeners`
 // +kubebuilder:printcolumn:name="ActiveSessions",type=integer,JSONPath=`.status.activeSessions`

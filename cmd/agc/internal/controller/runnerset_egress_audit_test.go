@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,17 +22,17 @@ import (
 )
 
 // egressAuditProxy is an EgressProxy whose spec.auditLogging is mode.
-func egressAuditProxy(name, ns, mode string) *v2alpha1.EgressProxy {
-	return &v2alpha1.EgressProxy{
+func egressAuditProxy(name, ns, mode string) *v2.EgressProxy {
+	return &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec:       v2alpha1.EgressProxySpec{AuditLogging: mode},
+		Spec:       v2.EgressProxySpec{AuditLogging: mode},
 	}
 }
 
 // reconcileEgressAuditSets runs one Reconcile per named set and returns the client.
 // The ScaleSet tier returns before the installation-token step, so no broker
 // scaffolding is needed to reach the egress-status writes.
-func reconcileEgressAuditSets(t *testing.T, objs []client.Object, sets ...*v2alpha1.RunnerSet) client.Client {
+func reconcileEgressAuditSets(t *testing.T, objs []client.Object, sets ...*v2.RunnerSet) client.Client {
 	t.Helper()
 	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
@@ -44,7 +44,7 @@ func reconcileEgressAuditSets(t *testing.T, objs []client.Object, sets ...*v2alp
 		all = append(all, rs)
 	}
 	c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).
-		WithObjects(all...).WithStatusSubresource(&v2alpha1.RunnerSet{}).Build()
+		WithObjects(all...).WithStatusSubresource(&v2.RunnerSet{}).Build()
 
 	p := provisioner.NewProvisioner(c, nil, slog.Default())
 	p.APIReader = c
@@ -52,7 +52,7 @@ func reconcileEgressAuditSets(t *testing.T, objs []client.Object, sets ...*v2alp
 		Client:      c,
 		Log:         slog.Default(),
 		Provisioner: p,
-		ScaleSetClientFactory: func(*v2alpha1.RunnerSet, *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+		ScaleSetClientFactory: func(*v2.RunnerSet, *v2.ActionsGateway) (*scaleset.Client, error) {
 			return newReapScaleSetClient(t, srv), nil
 		},
 	}
@@ -69,10 +69,10 @@ func reconcileEgressAuditSets(t *testing.T, objs []client.Object, sets ...*v2alp
 
 func egressAuditCondition(t *testing.T, c client.Client, ns, name string) *metav1.Condition {
 	t.Helper()
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: name}, &got))
-	cond := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionEgressAuditUnattributed)
-	require.NotNil(t, cond, "set %s carries no %s condition", name, v2alpha1.ConditionEgressAuditUnattributed)
+	cond := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionEgressAuditUnattributed)
+	require.NotNil(t, cond, "set %s carries no %s condition", name, v2.ConditionEgressAuditUnattributed)
 	return cond
 }
 
@@ -109,8 +109,8 @@ func TestRunnerSetEgressAudit_SetProxyRefOverridesDefault(t *testing.T) {
 	const ns = "team-a"
 	gw := gwObj("gw", ns, "default-pool")
 	gw.Spec.AuditLogging = string(provisioner.WorkerAuditAddresses)
-	overriding := rsObj("overriding", ns, func(rs *v2alpha1.RunnerSet) {
-		rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "dedicated"}
+	overriding := rsObj("overriding", ns, func(rs *v2.RunnerSet) {
+		rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "dedicated"}
 	})
 	inheriting := rsObj("inheriting", ns, nil)
 
@@ -121,21 +121,21 @@ func TestRunnerSetEgressAudit_SetProxyRefOverridesDefault(t *testing.T) {
 	}, overriding, inheriting)
 
 	control := egressAuditCondition(t, c, ns, "inheriting")
-	require.Equal(t, v2alpha1.ReasonEgressAuditJoined, control.Reason,
+	require.Equal(t, v2.ReasonEgressAuditJoined, control.Reason,
 		"the control set must read joined off the default pool, or the override case proves nothing")
 	assert.Equal(t, metav1.ConditionFalse, control.Status)
 
 	cond := egressAuditCondition(t, c, ns, "overriding")
 	assert.Equal(t, metav1.ConditionTrue, cond.Status,
 		"a set egressing through a pool that does not log ConnectionsWithSource must not read joined")
-	assert.Equal(t, v2alpha1.ReasonProxySourceAuditDisabled, cond.Reason)
+	assert.Equal(t, v2.ReasonProxySourceAuditDisabled, cond.Reason)
 	assert.Contains(t, cond.Message, `"dedicated"`, "the message must name the pool the set actually uses")
 
 	values, reasons := egressAuditSeries(t, c)
 	assert.Equal(t, 1.0, values["overriding"])
-	assert.Equal(t, v2alpha1.ReasonProxySourceAuditDisabled, reasons["overriding"])
+	assert.Equal(t, v2.ReasonProxySourceAuditDisabled, reasons["overriding"])
 	assert.Equal(t, 0.0, values["inheriting"])
-	assert.Equal(t, v2alpha1.ReasonEgressAuditJoined, reasons["inheriting"])
+	assert.Equal(t, v2.ReasonEgressAuditJoined, reasons["inheriting"])
 }
 
 // The false DirectEgress: a gateway with no defaultProxyRef reads DirectEgress at the
@@ -145,8 +145,8 @@ func TestRunnerSetEgressAudit_ProxyRefWithoutGatewayDefault(t *testing.T) {
 	const ns = "team-a"
 	gw := gwObj("gw", ns, "")
 	gw.Spec.AuditLogging = string(provisioner.WorkerAuditAddresses)
-	proxied := rsObj("proxied", ns, func(rs *v2alpha1.RunnerSet) {
-		rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "dedicated"}
+	proxied := rsObj("proxied", ns, func(rs *v2.RunnerSet) {
+		rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "dedicated"}
 	})
 	direct := rsObj("direct", ns, nil)
 
@@ -157,13 +157,13 @@ func TestRunnerSetEgressAudit_ProxyRefWithoutGatewayDefault(t *testing.T) {
 
 	cond := egressAuditCondition(t, c, ns, "proxied")
 	assert.Equal(t, metav1.ConditionFalse, cond.Status)
-	assert.Equal(t, v2alpha1.ReasonEgressAuditJoined, cond.Reason)
+	assert.Equal(t, v2.ReasonEgressAuditJoined, cond.Reason)
 
 	// The gateway half is on, so the direct set's tenant opted in: the reason must say
 	// so rather than read like a set nobody configured.
 	cond = egressAuditCondition(t, c, ns, "direct")
 	assert.Equal(t, metav1.ConditionTrue, cond.Status)
-	assert.Equal(t, v2alpha1.ReasonWorkerAuditWithoutProxy, cond.Reason)
+	assert.Equal(t, v2.ReasonWorkerAuditWithoutProxy, cond.Reason)
 }
 
 // A shared pool is never read by the AGC, so the source half arrives in the
@@ -190,15 +190,15 @@ func TestRunnerSetEgressAudit_SharedPoolReadsTheProjection(t *testing.T) {
 		data       map[string]string
 		wantReason string
 	}{
-		{"source half projected", map[string]string{proxyShareAuditLoggingKey: proxyAuditConnectionsWithSource}, v2alpha1.ReasonEgressAuditJoined},
-		{"source half off", map[string]string{proxyShareAuditLoggingKey: "Off"}, v2alpha1.ReasonProxySourceAuditDisabled},
-		{"key absent", nil, v2alpha1.ReasonProxySourceAuditDisabled},
+		{"source half projected", map[string]string{proxyShareAuditLoggingKey: proxyAuditConnectionsWithSource}, v2.ReasonEgressAuditJoined},
+		{"source half off", map[string]string{proxyShareAuditLoggingKey: "Off"}, v2.ReasonProxySourceAuditDisabled},
+		{"key absent", nil, v2.ReasonProxySourceAuditDisabled},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			gw := gwObj("gw", ns, "")
 			gw.Spec.AuditLogging = string(provisioner.WorkerAuditAddresses)
-			rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
-				rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: proxyName, Namespace: proxyNS}
+			rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
+				rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: proxyName, Namespace: proxyNS}
 			})
 			c := reconcileEgressAuditSets(t, []client.Object{gw, tmplObj("tmpl", ns), share(tc.data)}, rs)
 			cond := egressAuditCondition(t, c, ns, "set")
@@ -211,24 +211,24 @@ func TestRunnerSetEgressAudit_SharedPoolReadsTheProjection(t *testing.T) {
 // Every reason names the half that is off, and only the joined pair clears.
 func TestRunnerSetEgressAudit_Reasons(t *testing.T) {
 	pool := func(mode string) *resolvedProxy { return &resolvedProxy{name: "pool", auditLogging: mode} }
-	gw := func(mode string) *v2alpha1.ActionsGateway {
-		return &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw"},
-			Spec: v2alpha1.ActionsGatewaySpec{AuditLogging: mode}}
+	gw := func(mode string) *v2.ActionsGateway {
+		return &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw"},
+			Spec: v2.ActionsGatewaySpec{AuditLogging: mode}}
 	}
 	const on, src = "WorkerAddresses", proxyAuditConnectionsWithSource
 	for _, tc := range []struct {
 		name       string
-		gw         *v2alpha1.ActionsGateway
+		gw         *v2.ActionsGateway
 		proxy      *resolvedProxy
 		wantReason string
 		wantInMsg  string
 	}{
-		{"joined", gw(on), pool(src), v2alpha1.ReasonEgressAuditJoined, src},
-		{"worker half off", gw(""), pool(src), v2alpha1.ReasonWorkerAuditDisabled, `"Off"`},
-		{"source half off", gw(on), pool("Connections"), v2alpha1.ReasonProxySourceAuditDisabled, `"Connections"`},
-		{"neither", gw("Off"), pool(""), v2alpha1.ReasonEgressAuditDisabled, `"pool"`},
-		{"direct, gateway half on", gw(on), nil, v2alpha1.ReasonWorkerAuditWithoutProxy, "Attach an EgressProxy"},
-		{"direct, gateway half off", gw(""), nil, v2alpha1.ReasonDirectEgress, "direct"},
+		{"joined", gw(on), pool(src), v2.ReasonEgressAuditJoined, src},
+		{"worker half off", gw(""), pool(src), v2.ReasonWorkerAuditDisabled, `"Off"`},
+		{"source half off", gw(on), pool("Connections"), v2.ReasonProxySourceAuditDisabled, `"Connections"`},
+		{"neither", gw("Off"), pool(""), v2.ReasonEgressAuditDisabled, `"pool"`},
+		{"direct, gateway half on", gw(on), nil, v2.ReasonWorkerAuditWithoutProxy, "Attach an EgressProxy"},
+		{"direct, gateway half off", gw(""), nil, v2.ReasonDirectEgress, "direct"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			reason, msg := runnerSetEgressAudit(tc.gw, tc.proxy)
@@ -253,8 +253,8 @@ func TestRunnerSetEgressAuditCollector_SkipsSetsWithoutTheCondition(t *testing.T
 // not-opted-in reasons appear exactly when neither half is on.
 func TestRunnerSetEgressAudit_ReasonSaysWhetherTheTenantOptedIn(t *testing.T) {
 	notOptedIn := map[string]bool{
-		v2alpha1.ReasonEgressAuditDisabled: true,
-		v2alpha1.ReasonDirectEgress:        true,
+		v2.ReasonEgressAuditDisabled: true,
+		v2.ReasonDirectEgress:        true,
 	}
 	pools := map[string]*resolvedProxy{
 		"no pool":          nil,
@@ -265,8 +265,8 @@ func TestRunnerSetEgressAudit_ReasonSaysWhetherTheTenantOptedIn(t *testing.T) {
 	}
 	for _, gwMode := range []string{"", "Off", string(provisioner.WorkerAuditAddresses)} {
 		for poolName, pool := range pools {
-			gw := &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw"},
-				Spec: v2alpha1.ActionsGatewaySpec{AuditLogging: gwMode}}
+			gw := &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw"},
+				Spec: v2.ActionsGatewaySpec{AuditLogging: gwMode}}
 			optedIn := gwMode == string(provisioner.WorkerAuditAddresses) ||
 				(pool != nil && pool.auditLogging == proxyAuditConnectionsWithSource)
 			reason, _ := runnerSetEgressAudit(gw, pool)

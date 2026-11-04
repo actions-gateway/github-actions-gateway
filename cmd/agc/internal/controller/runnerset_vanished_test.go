@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -13,8 +13,8 @@ import (
 // only when the set's own status shows a prior successful resolution under an
 // unchanged spec generation.
 func TestVanishedReferentReason(t *testing.T) {
-	set := func(gen, observed int64, templateSource, proxyMode string) *v2alpha1.RunnerSet {
-		rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Generation: gen}}
+	set := func(gen, observed int64, templateSource, proxyMode string) *v2.RunnerSet {
+		rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Generation: gen}}
 		rs.Status.ObservedGeneration = observed
 		rs.Status.TemplateSource = templateSource
 		rs.Status.ProxyMode = proxyMode
@@ -23,7 +23,7 @@ func TestVanishedReferentReason(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		rs         *v2alpha1.RunnerSet
+		rs         *v2.RunnerSet
 		in         refResolution
 		wantReason string
 		wantSuffix string // non-empty ⇒ the message must gain this suffix
@@ -31,40 +31,40 @@ func TestVanishedReferentReason(t *testing.T) {
 		{
 			name:       "never-resolved template stays NotFound",
 			rs:         set(1, 1, "", ""),
-			in:         refResolution{reason: v2alpha1.ReasonTemplateNotFound, message: "m"},
-			wantReason: v2alpha1.ReasonTemplateNotFound,
+			in:         refResolution{reason: v2.ReasonTemplateNotFound, message: "m"},
+			wantReason: v2.ReasonTemplateNotFound,
 		},
 		{
 			name:       "previously-resolved template upgrades to TemplateDeleted",
-			rs:         set(1, 1, v2alpha1.TemplateSourceRef, v2alpha1.ProxyModeDirect),
-			in:         refResolution{reason: v2alpha1.ReasonTemplateNotFound, message: "m"},
-			wantReason: v2alpha1.ReasonTemplateDeleted,
+			rs:         set(1, 1, v2.TemplateSourceRef, v2.ProxyModeDirect),
+			in:         refResolution{reason: v2.ReasonTemplateNotFound, message: "m"},
+			wantReason: v2.ReasonTemplateDeleted,
 			wantSuffix: "deleted",
 		},
 		{
 			name:       "spec edit (generation bumped) falls back to NotFound",
-			rs:         set(2, 1, v2alpha1.TemplateSourceRef, ""),
-			in:         refResolution{reason: v2alpha1.ReasonTemplateNotFound, message: "m"},
-			wantReason: v2alpha1.ReasonTemplateNotFound,
+			rs:         set(2, 1, v2.TemplateSourceRef, ""),
+			in:         refResolution{reason: v2.ReasonTemplateNotFound, message: "m"},
+			wantReason: v2.ReasonTemplateNotFound,
 		},
 		{
 			name:       "previously-proxied set upgrades to ProxyDeleted",
-			rs:         set(3, 3, v2alpha1.TemplateSourceRef, v2alpha1.ProxyModeProxied),
-			in:         refResolution{reason: v2alpha1.ReasonProxyNotFound, message: "m"},
-			wantReason: v2alpha1.ReasonProxyDeleted,
+			rs:         set(3, 3, v2.TemplateSourceRef, v2.ProxyModeProxied),
+			in:         refResolution{reason: v2.ReasonProxyNotFound, message: "m"},
+			wantReason: v2.ReasonProxyDeleted,
 			wantSuffix: "deleted",
 		},
 		{
 			name:       "direct-egress set never upgrades a dangling proxy ref",
-			rs:         set(1, 1, v2alpha1.TemplateSourceRef, v2alpha1.ProxyModeDirect),
-			in:         refResolution{reason: v2alpha1.ReasonProxyNotFound, message: "m"},
-			wantReason: v2alpha1.ReasonProxyNotFound,
+			rs:         set(1, 1, v2.TemplateSourceRef, v2.ProxyModeDirect),
+			in:         refResolution{reason: v2.ReasonProxyNotFound, message: "m"},
+			wantReason: v2.ReasonProxyNotFound,
 		},
 		{
 			name:       "non-referent reasons pass through untouched",
-			rs:         set(1, 1, v2alpha1.TemplateSourceRef, v2alpha1.ProxyModeProxied),
-			in:         refResolution{reason: v2alpha1.ReasonAmbiguousDefault, message: "m"},
-			wantReason: v2alpha1.ReasonAmbiguousDefault,
+			rs:         set(1, 1, v2.TemplateSourceRef, v2.ProxyModeProxied),
+			in:         refResolution{reason: v2.ReasonAmbiguousDefault, message: "m"},
+			wantReason: v2.ReasonAmbiguousDefault,
 		},
 	}
 	for _, tc := range tests {
@@ -88,21 +88,21 @@ func TestVanishedReferentReason(t *testing.T) {
 // status marker that would otherwise upgrade later reconciles to *Deleted, while
 // the *Deleted reasons keep theirs (the evidence of the prior resolution).
 func TestClearStaleResolutionMarkers(t *testing.T) {
-	rs := &v2alpha1.RunnerSet{}
-	rs.Status.TemplateSource = v2alpha1.TemplateSourceRef
-	rs.Status.ProxyMode = v2alpha1.ProxyModeProxied
+	rs := &v2.RunnerSet{}
+	rs.Status.TemplateSource = v2.TemplateSourceRef
+	rs.Status.ProxyMode = v2.ProxyModeProxied
 
-	clearStaleResolutionMarkers(rs, v2alpha1.ReasonTemplateDeleted)
-	clearStaleResolutionMarkers(rs, v2alpha1.ReasonProxyDeleted)
+	clearStaleResolutionMarkers(rs, v2.ReasonTemplateDeleted)
+	clearStaleResolutionMarkers(rs, v2.ReasonProxyDeleted)
 	if rs.Status.TemplateSource == "" || rs.Status.ProxyMode == "" {
 		t.Fatal("*Deleted reasons must keep their prior-resolution markers")
 	}
 
-	clearStaleResolutionMarkers(rs, v2alpha1.ReasonTemplateNotFound)
+	clearStaleResolutionMarkers(rs, v2.ReasonTemplateNotFound)
 	if rs.Status.TemplateSource != "" {
 		t.Fatal("TemplateNotFound must clear status.templateSource")
 	}
-	clearStaleResolutionMarkers(rs, v2alpha1.ReasonProxyNotFound)
+	clearStaleResolutionMarkers(rs, v2.ReasonProxyNotFound)
 	if rs.Status.ProxyMode != "" {
 		t.Fatal("ProxyNotFound must clear status.proxyMode")
 	}

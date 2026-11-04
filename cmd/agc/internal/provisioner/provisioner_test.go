@@ -175,7 +175,7 @@ func (t *testGroupTarget) Key() client.ObjectKey {
 }
 func (t *testGroupTarget) OwnerRef() metav1.OwnerReference {
 	return metav1.OwnerReference{
-		APIVersion: "actions-gateway.com/v2alpha1", Kind: "RunnerSet",
+		APIVersion: "actions-gateway.com/v2", Kind: "RunnerSet",
 		Name: t.g.Name, UID: t.g.UID, Controller: ptr.To(true),
 	}
 }
@@ -325,7 +325,7 @@ type fakeTarget struct {
 
 func (f *fakeTarget) Key() client.ObjectKey { return f.key }
 func (f *fakeTarget) OwnerRef() metav1.OwnerReference {
-	return metav1.OwnerReference{APIVersion: "actions-gateway.com/v2alpha1", Kind: "RunnerSet", Name: f.key.Name, UID: types.UID("uid-" + f.key.Name)}
+	return metav1.OwnerReference{APIVersion: "actions-gateway.com/v2", Kind: "RunnerSet", Name: f.key.Name, UID: types.UID("uid-" + f.key.Name)}
 }
 func (f *fakeTarget) PodOwnerLabels() map[string]string                       { return f.labels }
 func (f *fakeTarget) Ceiling(context.Context) (int32, bool)                   { return 0, false }
@@ -1452,7 +1452,7 @@ func TestProvisioner_SetsOwnerReferences(t *testing.T) {
 	} {
 		require.Len(t, refs, 1, "%s must have exactly one ownerReference", name)
 		ref := refs[0]
-		assert.Equal(t, "actions-gateway.com/v2alpha1", ref.APIVersion, name)
+		assert.Equal(t, "actions-gateway.com/v2", ref.APIVersion, name)
 		assert.Equal(t, "RunnerSet", ref.Kind, name)
 		assert.Equal(t, "mygroup", ref.Name, name)
 		assert.Equal(t, types.UID("rg-uid-123"), ref.UID, name)

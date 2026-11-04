@@ -11,7 +11,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/usage"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // SizingSource supplies the status-shaped worker sizing recommendation for a
@@ -19,7 +19,7 @@ import (
 // a typed-nil sampler, which returns nil) leaves any persisted recommendation
 // untouched and the drift judgment running against it.
 type SizingSource interface {
-	SizingStatus(key types.NamespacedName) []v2alpha1.ContainerSizingRecommendation
+	SizingStatus(key types.NamespacedName) []v2.ContainerSizingRecommendation
 }
 
 // sizingDriftWasteFactor is the over-provisioning threshold for the SizingDrift
@@ -38,7 +38,7 @@ const sizingDriftWasteFactor = 2.0
 // sampler re-seeds from. The drift judgment then runs against whatever the
 // status holds, so a confident persisted recommendation keeps judging drift
 // across restarts.
-func (r *RunnerSetReconciler) applySizingStatus(rs *v2alpha1.RunnerSet, template *v2alpha1.RunnerTemplateSpec) {
+func (r *RunnerSetReconciler) applySizingStatus(rs *v2.RunnerSet, template *v2.RunnerTemplateSpec) {
 	if r.Sizing != nil {
 		if recs := r.Sizing.SizingStatus(types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}); len(recs) > 0 {
 			rs.Status.SizingRecommendation = recs
@@ -51,22 +51,22 @@ func (r *RunnerSetReconciler) applySizingStatus(rs *v2alpha1.RunnerSet, template
 	// never disagree with what Resolve actually does.
 	rs.Status.SizingProfileState = ""
 	profileSelected := rs.Spec.Sizing != nil && rs.Spec.Sizing.Profile != "" &&
-		rs.Spec.Sizing.Profile != v2alpha1.SizingProfileStatic
+		rs.Spec.Sizing.Profile != v2.SizingProfileStatic
 	if profileSelected && template != nil {
 		if sizingProfileApplies(rs.Spec.Sizing, template, recs) {
-			rs.Status.SizingProfileState = v2alpha1.SizingProfileStateActive
+			rs.Status.SizingProfileState = v2.SizingProfileStateActive
 		} else {
-			rs.Status.SizingProfileState = v2alpha1.SizingProfileStateAwaitingSamples
+			rs.Status.SizingProfileState = v2.SizingProfileStateAwaitingSamples
 		}
 	}
 	// An actively-applied profile supersedes the drift judgment: pods run the
 	// derived values, so comparing the template ask against the recommendation
 	// would mislead.
-	if rs.Status.SizingProfileState == v2alpha1.SizingProfileStateActive {
+	if rs.Status.SizingProfileState == v2.SizingProfileStateActive {
 		meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-			Type:               v2alpha1.ConditionSizingDrift,
+			Type:               v2.ConditionSizingDrift,
 			Status:             metav1.ConditionFalse,
-			Reason:             v2alpha1.ReasonSizingProfileActive,
+			Reason:             v2.ReasonSizingProfileActive,
 			Message:            fmt.Sprintf("the %s sizing profile applies the measured recommendation at pod build; the template's static ask is not what worker pods run with", rs.Spec.Sizing.Profile),
 			ObservedGeneration: rs.Generation,
 		})
@@ -96,19 +96,19 @@ func (r *RunnerSetReconciler) applySizingStatus(rs *v2alpha1.RunnerSet, template
 	}
 
 	status := metav1.ConditionFalse
-	reason := v2alpha1.ReasonSizingWithinRange
+	reason := v2.ReasonSizingWithinRange
 	msg := "template container resources are within the drift thresholds of the measured recommendation"
 	switch {
 	case !confident:
-		reason = v2alpha1.ReasonInsufficientSamples
+		reason = v2.ReasonInsufficientSamples
 		msg = fmt.Sprintf("fewer than %d sampled jobs for every template container; not judging drift yet (see status.sizingRecommendation sampleCount)", usage.MinSamplesForDrift)
 	case len(findings) > 0:
 		status = metav1.ConditionTrue
-		reason = v2alpha1.ReasonSizingDriftDetected
+		reason = v2.ReasonSizingDriftDetected
 		msg = strings.Join(findings, "; ")
 	}
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionSizingDrift,
+		Type:               v2.ConditionSizingDrift,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -118,7 +118,7 @@ func (r *RunnerSetReconciler) applySizingStatus(rs *v2alpha1.RunnerSet, template
 
 // templateContainer returns the named regular container of the template's pod
 // spec, or nil.
-func templateContainer(template *v2alpha1.RunnerTemplateSpec, name string) *corev1.Container {
+func templateContainer(template *v2.RunnerTemplateSpec, name string) *corev1.Container {
 	for i := range template.PodTemplate.Spec.Containers {
 		if template.PodTemplate.Spec.Containers[i].Name == name {
 			return &template.PodTemplate.Spec.Containers[i]
@@ -143,7 +143,7 @@ func effectiveAsk(res corev1.ResourceRequirements) corev1.ResourceRequirements {
 // measured recommendation and returns a human-readable finding per material
 // mismatch: waste (a request ≥ sizingDriftWasteFactor × the recommendation) or
 // OOM risk (a memory limit below the highest observed per-job peak).
-func sizingDriftFindings(rec v2alpha1.ContainerSizingRecommendation, ask corev1.ResourceRequirements) []string {
+func sizingDriftFindings(rec v2.ContainerSizingRecommendation, ask corev1.ResourceRequirements) []string {
 	var findings []string
 	for _, res := range []corev1.ResourceName{corev1.ResourceCPU, corev1.ResourceMemory} {
 		askQ, ok := ask.Requests[res]

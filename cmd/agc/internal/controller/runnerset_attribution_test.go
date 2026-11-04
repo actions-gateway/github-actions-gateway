@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -30,23 +30,23 @@ func TestResolveRunnerSetRefs_UsesTheProjectedAttributionPort(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: proxyShareConfigMapName(proxyNS, "shared"), Namespace: ns},
 		Data:       map[string]string{proxyShareHostKey: "shared-proxy." + proxyNS + ".svc.cluster.local", proxySharePortKey: "8080"},
 	}
-	local := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}}
+	local := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}}
 
 	for _, tc := range []struct {
 		name     string
-		ref      v2alpha1.ProxyObjectRef
+		ref      v2.ProxyObjectRef
 		extra    []client.Object
 		wantPort int
 	}{
-		{"own pool, not attributed", v2alpha1.ProxyObjectRef{Name: "local"}, nil, 8080},
-		{"own pool, attributed", v2alpha1.ProxyObjectRef{Name: "local"}, []client.Object{attributionProjection(ns, ns, "local", "8101")}, 8101},
-		{"shared pool, not attributed", v2alpha1.ProxyObjectRef{Name: "shared", Namespace: proxyNS}, nil, 8080},
-		{"shared pool, attributed", v2alpha1.ProxyObjectRef{Name: "shared", Namespace: proxyNS}, []client.Object{attributionProjection(ns, proxyNS, "shared", "8102")}, 8102},
-		{"another pool's projection", v2alpha1.ProxyObjectRef{Name: "local"}, []client.Object{attributionProjection(ns, proxyNS, "shared", "8102")}, 8080},
+		{"own pool, not attributed", v2.ProxyObjectRef{Name: "local"}, nil, 8080},
+		{"own pool, attributed", v2.ProxyObjectRef{Name: "local"}, []client.Object{attributionProjection(ns, ns, "local", "8101")}, 8101},
+		{"shared pool, not attributed", v2.ProxyObjectRef{Name: "shared", Namespace: proxyNS}, nil, 8080},
+		{"shared pool, attributed", v2.ProxyObjectRef{Name: "shared", Namespace: proxyNS}, []client.Object{attributionProjection(ns, proxyNS, "shared", "8102")}, 8102},
+		{"another pool's projection", v2.ProxyObjectRef{Name: "local"}, []client.Object{attributionProjection(ns, proxyNS, "shared", "8102")}, 8080},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ref := tc.ref
-			rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.ProxyRef = &ref })
+			rs := rsObj("set", ns, func(rs *v2.RunnerSet) { rs.Spec.ProxyRef = &ref })
 			objs := append([]client.Object{gwObj("gw", ns, ""), tmplObj("tmpl", ns), share, local, rs}, tc.extra...)
 			c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(objs...).Build()
 
@@ -61,10 +61,10 @@ func TestResolveRunnerSetRefs_RejectsABadAttributionPort(t *testing.T) {
 	for port, want := range map[string]string{"eighty": "unparseable", "8080": "outside", "8133": "outside"} {
 		t.Run(port, func(t *testing.T) {
 			const ns = "team-a"
-			rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "local"} })
+			rs := rsObj("set", ns, func(rs *v2.RunnerSet) { rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "local"} })
 			c := fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).WithObjects(
 				gwObj("gw", ns, ""), tmplObj("tmpl", ns), rs,
-				&v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}},
+				&v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "local", Namespace: ns}},
 				attributionProjection(ns, ns, "local", port),
 			).Build()
 

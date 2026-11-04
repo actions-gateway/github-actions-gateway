@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +41,7 @@ func scaleSetWorkerPods(t *testing.T, ns, setName string) []corev1.Pod {
 // startScaleSetFixture applies a direct-egress gateway, a RunnerTemplate and the given
 // ScaleSet RunnerSet, starts the reconciler against a fresh scale-set fake, and returns
 // the fake and the registered scale set's ID.
-func startScaleSetFixture(t *testing.T, ns string, tmpl *v2alpha1.RunnerTemplate, rs *v2alpha1.RunnerSet) (*scalesettest.Server, int) {
+func startScaleSetFixture(t *testing.T, ns string, tmpl *v2.RunnerTemplate, rs *v2.RunnerSet) (*scalesettest.Server, int) {
 	t.Helper()
 	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
@@ -52,7 +52,7 @@ func startScaleSetFixture(t *testing.T, ns string, tmpl *v2alpha1.RunnerTemplate
 	t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), tmpl)
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: "gw", Namespace: ns}})
 	})
 
 	startRunnerSetReconcilerWithScaleSet(t, srv)
@@ -64,7 +64,7 @@ func startScaleSetFixture(t *testing.T, ns string, tmpl *v2alpha1.RunnerTemplate
 		ssID = id
 		return ok
 	}, 20*time.Second, 100*time.Millisecond, "the listener must register a scale set named %q", label)
-	waitForSetReadyReason(t, ns, rs.Name, metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, rs.Name, metav1.ConditionTrue, v2.ReasonListenerActive)
 	return srv, ssID
 }
 
@@ -95,7 +95,7 @@ func TestV2_RunnerSet_ScaleSet_TemplateEditTakesEffectWithoutRestart(t *testing.
 	assert.Equal(t, "original", first.Spec.NodeSelector["q117-template"], "the first worker uses the original template")
 
 	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		var fetched v2alpha1.RunnerTemplate
+		var fetched v2.RunnerTemplate
 		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(tmpl), &fetched); err != nil {
 			return err
 		}
@@ -141,7 +141,7 @@ func TestV2_RunnerSet_ScaleSet_PriorityTiers(t *testing.T) {
 	}
 
 	rs := newScaleSetRunnerSet("priority-set", ns, "gw", "linux", 5)
-	rs.Spec.PriorityTiers = []v2alpha1.PriorityTier{
+	rs.Spec.PriorityTiers = []v2.PriorityTier{
 		{PriorityClassName: "critical-test", Threshold: 2},
 		{PriorityClassName: "standard-test", Threshold: 5},
 	}

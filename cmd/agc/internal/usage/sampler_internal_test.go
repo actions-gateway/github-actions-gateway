@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 const testNS = "tenant-a"
@@ -46,14 +46,14 @@ func newScheme(t *testing.T) *runtime.Scheme {
 	if err := corev1.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
-	if err := agcv2alpha1.AddToScheme(scheme); err != nil {
+	if err := agcv2.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
 	}
 	return scheme
 }
 
-func runnerSet(name string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: testNS, Name: name}}
+func runnerSet(name string) *agcv2.RunnerSet {
+	return &agcv2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Namespace: testNS, Name: name}}
 }
 
 func workerPod(name, set string, phase corev1.PodPhase) *corev1.Pod {

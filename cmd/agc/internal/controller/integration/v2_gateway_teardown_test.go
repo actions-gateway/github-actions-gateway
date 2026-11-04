@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,17 +48,17 @@ func TestV2_RunnerSet_GatewayTeardownReapsWorkers(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() {
 		bg := context.Background()
-		var held v2alpha1.ActionsGateway
+		var held v2.ActionsGateway
 		if err := k8sClient.Get(bg, types.NamespacedName{Namespace: ns, Name: "gw"}, &held); err == nil {
 			held.Finalizers = nil
 			_ = k8sClient.Update(bg, &held)
 		}
 		_ = k8sClient.Delete(bg, rs)
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, "teardown-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "teardown-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	// A Running worker with no completion stamp is the pod the ordinary reaper retains
 	// forever — the one that pinned the node in the 2026-07-31 dogfood observation.
@@ -78,7 +78,7 @@ func TestV2_RunnerSet_GatewayTeardownReapsWorkers(t *testing.T) {
 	// The GMC holds its teardown open until these reach zero, so they are what actually
 	// releases the AGC Deployment for deletion.
 	require.Eventually(t, func() bool {
-		var got v2alpha1.RunnerSet
+		var got v2.RunnerSet
 		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "teardown-set"}, &got); err != nil {
 			return false
 		}
@@ -86,7 +86,7 @@ func TestV2_RunnerSet_GatewayTeardownReapsWorkers(t *testing.T) {
 	}, 20*time.Second, 100*time.Millisecond,
 		"status.activeJobs/pendingJobs must reach zero — the GMC gates teardown on them")
 
-	waitForSetReadyReason(t, ns, "teardown-set", metav1.ConditionFalse, v2alpha1.ReasonGatewayTerminating)
+	waitForSetReadyReason(t, ns, "teardown-set", metav1.ConditionFalse, v2.ReasonGatewayTerminating)
 }
 
 // TestV2_RunnerSet_LiveGatewayRetainsWorkers is the control against the same real
@@ -106,11 +106,11 @@ func TestV2_RunnerSet_LiveGatewayRetainsWorkers(t *testing.T) {
 		bg := context.Background()
 		_ = k8sClient.Delete(bg, rs)
 		_ = k8sClient.Delete(bg, newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
-	waitForSetReadyReason(t, ns, "live-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "live-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	running := createV2WorkerPod(t, ns, "live-set", "worker-running")
 	running.Status.Phase = corev1.PodRunning

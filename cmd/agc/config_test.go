@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -110,7 +110,7 @@ func TestScaleSetStubBaseURL(t *testing.T) {
 	}
 }
 
-// TestBuildScheme verifies the AGC client scheme registers the core and v2alpha1
+// TestBuildScheme verifies the AGC client scheme registers the core and v2
 // kinds it wires reconcilers for.
 func TestBuildScheme(t *testing.T) {
 	scheme, err := buildScheme()
@@ -121,7 +121,7 @@ func TestBuildScheme(t *testing.T) {
 	if !scheme.Recognizes(corev1.SchemeGroupVersion.WithKind("Pod")) {
 		t.Error("scheme must recognize core/v1 Pod")
 	}
-	if !scheme.Recognizes(agcv2alpha1.GroupVersion.WithKind("RunnerSet")) {
-		t.Error("scheme must recognize actions-gateway.com/v2alpha1 RunnerSet")
+	if !scheme.Recognizes(agcv2.GroupVersion.WithKind("RunnerSet")) {
+		t.Error("scheme must recognize actions-gateway.com/v2 RunnerSet")
 	}
 }

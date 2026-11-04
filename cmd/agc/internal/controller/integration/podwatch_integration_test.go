@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -48,7 +48,7 @@ func TestV2_RunnerSet_WorkerPodEventTriggersReconcile(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
 
-	waitForSetReadyReason(t, ns, setName, metav1.ConditionFalse, v2alpha1.ReasonGatewayNotFound)
+	waitForSetReadyReason(t, ns, setName, metav1.ConditionFalse, v2.ReasonGatewayNotFound)
 	waitForQuiescence(t, r)
 	before := r.ReconcileCountForTest()
 

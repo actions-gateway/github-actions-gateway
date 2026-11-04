@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	"github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,9 +22,9 @@ import (
 // terminatingGateway returns a gateway carrying a deletion timestamp. The finalizer is
 // what lets the object exist in that state — the GMC's own cleanup finalizer holds it
 // there for real, and the fake client requires one for the same reason.
-func terminatingGateway(name, ns string) *v2alpha1.ActionsGateway {
+func terminatingGateway(name, ns string) *v2.ActionsGateway {
 	gw := gwObj(name, ns, "")
-	gw.Finalizers = []string{v2alpha1.ActionsGatewayFinalizer}
+	gw.Finalizers = []string{v2.ActionsGatewayFinalizer}
 	now := metav1.Now()
 	gw.DeletionTimestamp = &now
 	return gw
@@ -49,7 +49,7 @@ func TestRunnerSetReconcile_GatewayTerminatingReapsEveryWorker(t *testing.T) {
 	ns := "team-a"
 	ctx := context.Background()
 
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer}
 	})
 	// Each of these is retained by the ordinary reaper: no TTL has elapsed, no deadline
@@ -88,12 +88,12 @@ func TestRunnerSetReconcile_GatewayTerminatingReapsEveryWorker(t *testing.T) {
 		r.Metrics.WorkerPodsReaped.WithLabelValues(ns, "set", "set", reapReasonGatewayDeleted)),
 		"only the three live pods of this set are reaped: the neighbour's and the already-terminating one are not")
 
-	var got v2alpha1.RunnerSet
+	var got v2.RunnerSet
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: ns, Name: "set"}, &got))
-	ready := meta.FindStatusCondition(got.Status.Conditions, v2alpha1.ConditionReady)
+	ready := meta.FindStatusCondition(got.Status.Conditions, v2.ConditionReady)
 	require.NotNil(t, ready)
 	assert.Equal(t, metav1.ConditionFalse, ready.Status)
-	assert.Equal(t, v2alpha1.ReasonGatewayTerminating, ready.Reason)
+	assert.Equal(t, v2.ReasonGatewayTerminating, ready.Reason)
 	assert.Zero(t, got.Status.ActiveJobs, "the GMC gates its teardown on these counts reaching zero")
 	assert.Zero(t, got.Status.PendingJobs)
 
@@ -112,7 +112,7 @@ func TestRunnerSetReconcile_LiveGatewayRetainsWorkers(t *testing.T) {
 	ns := "team-a"
 	ctx := context.Background()
 
-	rs := rsObj("set", ns, func(rs *v2alpha1.RunnerSet) {
+	rs := rsObj("set", ns, func(rs *v2.RunnerSet) {
 		rs.Finalizers = []string{runnerSetFinalizer}
 	})
 	running := setWorkerPod("worker-running", ns, "set", corev1.PodRunning)
@@ -143,7 +143,7 @@ func TestGatewayTerminating_Trigger(t *testing.T) {
 
 	for _, tc := range []struct {
 		name    string
-		gateway *v2alpha1.ActionsGateway
+		gateway *v2.ActionsGateway
 		want    bool
 	}{
 		{"terminating", terminatingGateway("gw", ns), true},

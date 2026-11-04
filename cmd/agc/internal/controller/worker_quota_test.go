@@ -8,7 +8,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -230,7 +230,7 @@ func TestRunnerSetWorkerQuota(t *testing.T) {
 				return objs
 			}
 
-			rs := rsObj("pool", ns, func(r *v2alpha1.RunnerSet) { r.Spec.MaxWorkers = ptr.To(int32(ceiling)) })
+			rs := rsObj("pool", ns, func(r *v2.RunnerSet) { r.Spec.MaxWorkers = ptr.To(int32(ceiling)) })
 			rsr := &RunnerSetReconciler{Client: fake.NewClientBuilder().WithScheme(runnerSetTestScheme(t)).
 				WithObjects(objsFor(provisioner.LabelRunnerSet)...).Build()}
 			st := rsr.evalRunnerSetWorkerQuota(context.Background(), rs, capTemplate("500m"))

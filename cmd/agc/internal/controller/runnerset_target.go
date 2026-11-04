@@ -11,7 +11,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -93,7 +93,7 @@ func proxyShareConfigMapName(proxyNamespace, proxyName string) string {
 	return apinames.Join(apinames.MaxLabelValue, proxyShareNamePrefix, proxyNamespace, proxyName)
 }
 
-// runnerSetTarget adapts a v2alpha1.RunnerSet to the provisioner Target seam. It
+// runnerSetTarget adapts a v2.RunnerSet to the provisioner Target seam. It
 // owns worker pods via an OwnerReference to the real RunnerSet (a synthesized
 // in-memory RunnerGroup would have a dangling owner-ref the apiserver GCs), and
 // resolves the RunnerSet's RunnerTemplate (pod shape) and EgressProxy (worker
@@ -132,7 +132,7 @@ func (t *runnerSetTarget) OwnerRef() metav1.OwnerReference {
 // drift into two spellings of the same reference.
 func runnerSetOwnerRef(name string, uid types.UID) metav1.OwnerReference {
 	return metav1.OwnerReference{
-		APIVersion: v2alpha1.GroupVersion.String(),
+		APIVersion: v2.GroupVersion.String(),
 		Kind:       "RunnerSet",
 		Name:       name,
 		UID:        uid,
@@ -158,7 +158,7 @@ func (t *runnerSetTarget) RecordEvent(eventtype, reason, action, note string) {
 
 // Ceiling reads the worker ceiling from the fresh RunnerSet spec.
 func (t *runnerSetTarget) Ceiling(ctx context.Context) (int32, bool) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		// Cannot read the set; admit conservatively as unbounded (the post-acquire
 		// ceilingCheck remains the authoritative backstop, matching the v1 fallback).
@@ -224,7 +224,7 @@ func (t *runnerSetTarget) CapacityDeclined(ctx context.Context) (bool, string) {
 	if c == nil {
 		return false, ""
 	}
-	if c.Reason == v2alpha1.ReasonAwaitingProbe {
+	if c.Reason == v2.ReasonAwaitingProbe {
 		if _, probeOutstanding := t.activeWorkerPodsWithProbe(ctx, c.LastTransitionTime.Time); !probeOutstanding {
 			return false, ""
 		}
@@ -253,7 +253,7 @@ func (t *runnerSetTarget) DeclinedCapacity(ctx context.Context, max int32) (int3
 	}
 	active, probeOutstanding := t.activeWorkerPodsWithProbe(ctx, c.LastTransitionTime.Time)
 	limit := active
-	if c.Reason == v2alpha1.ReasonAwaitingProbe && !probeOutstanding {
+	if c.Reason == v2.ReasonAwaitingProbe && !probeOutstanding {
 		limit++
 	}
 	if limit > max {
@@ -267,7 +267,7 @@ func (t *runnerSetTarget) DeclinedCapacity(ctx context.Context, max int32) (int3
 // long-poll without an AGC restart (Q117). Fail-open like Ceiling: an unreadable set
 // yields nil, which leaves the rung unbound rather than starving the set.
 func (t *runnerSetTarget) ScaleUpLimit(ctx context.Context) *provisioner.ScaleUpConfig {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil
 	}
@@ -280,14 +280,14 @@ func (t *runnerSetTarget) ScaleUpLimit(ctx context.Context) *provisioner.ScaleUp
 // unreadable set, mode Off (re-checked live so opting out takes effect on the next
 // delivered job), and a condition absent, False, or not yet computed.
 func (t *runnerSetTarget) capacityGateCondition(ctx context.Context) *metav1.Condition {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil
 	}
-	if runnerSetCapacityGateMode(rs) == v2alpha1.CapacityGateModeOff {
+	if runnerSetCapacityGateMode(rs) == v2.CapacityGateModeOff {
 		return nil
 	}
-	c := meta.FindStatusCondition(rs.Status.Conditions, v2alpha1.ConditionWorkerCapacityDeclined)
+	c := meta.FindStatusCondition(rs.Status.Conditions, v2.ConditionWorkerCapacityDeclined)
 	if c == nil || c.Status != metav1.ConditionTrue {
 		return nil
 	}
@@ -329,9 +329,9 @@ func (t *runnerSetTarget) activeWorkerPodsWithProbe(ctx context.Context, since t
 // the Off default for an unset spec.capacityGate (an older object stored before the
 // field existed, or one that simply omits it). Off is the only value that means "no
 // rung", so defaulting to it is the fail-open direction.
-func runnerSetCapacityGateMode(rs *v2alpha1.RunnerSet) string {
+func runnerSetCapacityGateMode(rs *v2.RunnerSet) string {
 	if rs.Spec.CapacityGate == nil || rs.Spec.CapacityGate.Mode == "" {
-		return v2alpha1.CapacityGateModeOff
+		return v2.CapacityGateModeOff
 	}
 	return rs.Spec.CapacityGate.Mode
 }
@@ -341,11 +341,11 @@ func runnerSetCapacityGateMode(rs *v2alpha1.RunnerSet) string {
 // footprint needs), with the sizing profile applied. ok=false means something did not
 // resolve, and every caller must then fail open.
 func (t *runnerSetTarget) workerPodSpec(ctx context.Context) (*corev1.PodSpec, bool) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil, false
 	}
-	gw := &v2alpha1.ActionsGateway{}
+	gw := &v2.ActionsGateway{}
 	if err := t.client.Get(ctx, types.NamespacedName{Namespace: t.key.Namespace, Name: rs.Spec.GatewayRef.Name}, gw); err != nil {
 		return nil, false
 	}
@@ -360,7 +360,7 @@ func (t *runnerSetTarget) workerPodSpec(ctx context.Context) (*corev1.PodSpec, b
 // spec. A missing RunnerSet/Gateway/Template/Proxy yields an error so the job is
 // failed without creating a worker pod (fail-closed, §H.7).
 func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpec, error) {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil, fmt.Errorf("read RunnerSet: %w", err)
 	}
@@ -430,7 +430,7 @@ func (t *runnerSetTarget) Resolve(ctx context.Context) (*provisioner.ResolvedSpe
 // scaleUpConfigFromV2 converts the v2 ScaleUpRateLimit into the neutral
 // provisioner.ScaleUpConfig, defaulting Burst to MaxPerSecond when the spec omits
 // it. Nil in ⇒ nil out (no rate limit), mirroring the v1 adapter.
-func scaleUpConfigFromV2(s *v2alpha1.ScaleUpRateLimit) *provisioner.ScaleUpConfig {
+func scaleUpConfigFromV2(s *v2.ScaleUpRateLimit) *provisioner.ScaleUpConfig {
 	if s == nil {
 		return nil
 	}
@@ -444,11 +444,11 @@ func scaleUpConfigFromV2(s *v2alpha1.ScaleUpRateLimit) *provisioner.ScaleUpConfi
 // resolvedRefs holds a RunnerSet's resolved references: the gateway it binds to,
 // the worker pod shape from its template, and the egress proxy its workers use.
 type resolvedRefs struct {
-	gateway  *v2alpha1.ActionsGateway
-	template *v2alpha1.RunnerTemplateSpec
+	gateway  *v2.ActionsGateway
+	template *v2.RunnerTemplateSpec
 	proxy    *resolvedProxy
 	// templateSource is which rung of the optional-templateRef chain supplied the
-	// template (Q172): one of v2alpha1.TemplateSource{Ref,GatewayDefault,ClusterDefault}.
+	// template (Q172): one of v2.TemplateSource{Ref,GatewayDefault,ClusterDefault}.
 	// Set only on full resolution; surfaced in RunnerSet status.templateSource.
 	templateSource string
 	// templateAnnotations are the resolved template object's metadata annotations,
@@ -493,7 +493,7 @@ func (r refResolution) resolved() bool { return r.reason == "" && r.err == nil }
 // informer: the projected proxy-share ConfigMap. The AGC Role grants get on
 // ConfigMaps but not list/watch, so a cached read would try to start an informer it
 // has no permission to run. Nil falls back to the cached client, as elsewhere.
-func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Reader, rs *v2alpha1.RunnerSet) (*resolvedRefs, refResolution) {
+func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Reader, rs *v2.RunnerSet) (*resolvedRefs, refResolution) {
 	if reader == nil {
 		reader = c
 	}
@@ -501,10 +501,10 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 	refs := &resolvedRefs{}
 
 	// gatewayRef → ActionsGateway (same namespace).
-	gw := &v2alpha1.ActionsGateway{}
+	gw := &v2.ActionsGateway{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: rs.Spec.GatewayRef.Name}, gw); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, refResolution{reason: v2alpha1.ReasonGatewayNotFound,
+			return nil, refResolution{reason: v2.ReasonGatewayNotFound,
 				message: fmt.Sprintf("ActionsGateway %q not found in namespace %q", rs.Spec.GatewayRef.Name, ns)}
 		}
 		return nil, refResolution{err: fmt.Errorf("read ActionsGateway: %w", err)}
@@ -544,10 +544,10 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 		refs.proxy = proxy
 		return refs, refResolution{}
 	}
-	proxy := &v2alpha1.EgressProxy{}
+	proxy := &v2.EgressProxy{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyName}, proxy); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, refResolution{reason: v2alpha1.ReasonProxyNotFound,
+			return nil, refResolution{reason: v2.ReasonProxyNotFound,
 				message: fmt.Sprintf("EgressProxy %q not found in namespace %q", proxyName, ns)}
 		}
 		return nil, refResolution{err: fmt.Errorf("read EgressProxy: %w", err)}
@@ -570,7 +570,7 @@ func resolveRunnerSetRefs(ctx context.Context, c client.Client, reader client.Re
 // proxyRefOf returns the EgressProxy a set's workers egress through: its proxyRef,
 // else the gateway's defaultProxyRef, "" for direct egress. proxyNS is "" where the
 // reference names no namespace.
-func proxyRefOf(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (proxyName, proxyNS string) {
+func proxyRefOf(rs *v2.RunnerSet, gw *v2.ActionsGateway) (proxyName, proxyNS string) {
 	if rs.Spec.ProxyRef != nil {
 		return rs.Spec.ProxyRef.Name, rs.Spec.ProxyRef.Namespace
 	}
@@ -588,11 +588,11 @@ var _ provisioner.EgressProxyReader = (*runnerSetTarget)(nil)
 // with no readiness; a colocated pool the cache does not hold is reported with none.
 // Nil for direct egress, or where the set or its gateway cannot be read.
 func (t *runnerSetTarget) EgressProxyReadiness(ctx context.Context) *provisioner.ProxySnapshot {
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	if err := t.client.Get(ctx, t.key, rs); err != nil {
 		return nil
 	}
-	gw := &v2alpha1.ActionsGateway{}
+	gw := &v2.ActionsGateway{}
 	if rs.Spec.ProxyRef == nil {
 		if err := t.client.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}, gw); err != nil {
 			return nil
@@ -606,11 +606,11 @@ func (t *runnerSetTarget) EgressProxyReadiness(ctx context.Context) *provisioner
 		return &provisioner.ProxySnapshot{Name: name, Mode: provisioner.ProxyModeShared}
 	}
 	out := &provisioner.ProxySnapshot{Name: name, Mode: provisioner.ProxyModeColocated}
-	proxy := &v2alpha1.EgressProxy{}
+	proxy := &v2.EgressProxy{}
 	if err := t.client.Get(ctx, types.NamespacedName{Namespace: rs.Namespace, Name: name}, proxy); err != nil {
 		return out
 	}
-	if c := meta.FindStatusCondition(proxy.Status.Conditions, v2alpha1.ConditionReady); c != nil {
+	if c := meta.FindStatusCondition(proxy.Status.Conditions, v2.ConditionReady); c != nil {
 		out.Ready, out.Reason = string(c.Status), c.Reason
 	}
 	out.ReadyReplicas = ptr.To(proxy.Status.ReadyReplicas)
@@ -673,7 +673,7 @@ func resolveSharedProxy(ctx context.Context, reader client.Reader, consumerNS, p
 	var cm corev1.ConfigMap
 	if err := reader.Get(ctx, types.NamespacedName{Namespace: consumerNS, Name: name}, &cm); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, refResolution{reason: v2alpha1.ReasonProxyShareNotGranted,
+			return nil, refResolution{reason: v2.ReasonProxyShareNotGranted,
 				message: fmt.Sprintf("EgressProxy %q in namespace %q does not list namespace %q in spec.sharing.allowedNamespaces",
 					proxyName, proxyNS, consumerNS)}
 		}
@@ -720,19 +720,19 @@ func resolveSharedProxy(ctx context.Context, reader client.Reader, consumerNS, p
 // gateway's defaultTemplateRef renamed to a missing template) is indistinguishable
 // from deletion without tracking resolved UIDs; the message names the missing
 // referent either way.
-func vanishedReferentReason(rs *v2alpha1.RunnerSet, res refResolution) (string, string) {
+func vanishedReferentReason(rs *v2.RunnerSet, res refResolution) (string, string) {
 	if rs.Generation != rs.Status.ObservedGeneration {
 		return res.reason, res.message
 	}
 	switch res.reason {
-	case v2alpha1.ReasonTemplateNotFound:
+	case v2.ReasonTemplateNotFound:
 		if rs.Status.TemplateSource != "" {
-			return v2alpha1.ReasonTemplateDeleted,
+			return v2.ReasonTemplateDeleted,
 				res.message + "; the previously-resolved template was deleted — no new worker pods until it is restored"
 		}
-	case v2alpha1.ReasonProxyNotFound:
-		if rs.Status.ProxyMode == v2alpha1.ProxyModeProxied {
-			return v2alpha1.ReasonProxyDeleted,
+	case v2.ReasonProxyNotFound:
+		if rs.Status.ProxyMode == v2.ProxyModeProxied {
+			return v2.ReasonProxyDeleted,
 				res.message + "; the previously-resolved proxy was deleted — no new worker pods until it is restored"
 		}
 	}
@@ -745,11 +745,11 @@ func vanishedReferentReason(rs *v2alpha1.RunnerSet, res refResolution) (string, 
 // invalidates proxyMode. The *Deleted reasons deliberately keep their marker —
 // it is the evidence of the prior resolution that distinguishes them, and keeping
 // it makes the reason stable across reconciles.
-func clearStaleResolutionMarkers(rs *v2alpha1.RunnerSet, reason string) {
+func clearStaleResolutionMarkers(rs *v2.RunnerSet, reason string) {
 	switch reason {
-	case v2alpha1.ReasonTemplateNotFound:
+	case v2.ReasonTemplateNotFound:
 		rs.Status.TemplateSource = ""
-	case v2alpha1.ReasonProxyNotFound, v2alpha1.ReasonProxyShareNotGranted:
+	case v2.ReasonProxyNotFound, v2.ReasonProxyShareNotGranted:
 		// A withdrawn grant invalidates proxyMode exactly as a deleted proxy does:
 		// the set resolved no proxy, so it must not keep reporting Proxied.
 		rs.Status.ProxyMode = ""
@@ -765,20 +765,20 @@ func clearStaleResolutionMarkers(rs *v2alpha1.RunnerSet, reason string) {
 // AmbiguousDefault, and an exhausted chain yields TemplateNotFound — the AGC never
 // synthesizes a pod shape. A set with an explicit templateRef behaves exactly as
 // before the relaxation (rung 1 only).
-func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*v2alpha1.RunnerTemplateSpec, map[string]string, string, refResolution) {
+func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v2.RunnerSet, gw *v2.ActionsGateway) (*v2.RunnerTemplateSpec, map[string]string, string, refResolution) {
 	// Rung 1: the set's own explicit templateRef.
 	if rs.Spec.TemplateRef != nil {
 		spec, annotations, res := resolveTemplate(ctx, c, ns, *rs.Spec.TemplateRef)
-		return spec, annotations, v2alpha1.TemplateSourceRef, res
+		return spec, annotations, v2.TemplateSourceRef, res
 	}
 	// Rung 2: the gateway's defaultTemplateRef, inherited because templateRef is unset.
 	if gw.Spec.DefaultTemplateRef != nil {
 		spec, annotations, res := resolveTemplate(ctx, c, ns, *gw.Spec.DefaultTemplateRef)
-		return spec, annotations, v2alpha1.TemplateSourceGatewayDefault, res
+		return spec, annotations, v2.TemplateSourceGatewayDefault, res
 	}
 	// Rung 3: the single cluster-default ClusterRunnerTemplate.
 	spec, annotations, res := resolveClusterDefaultTemplate(ctx, c)
-	return spec, annotations, v2alpha1.TemplateSourceClusterDefault, res
+	return spec, annotations, v2.TemplateSourceClusterDefault, res
 }
 
 // resolveClusterDefaultTemplate resolves the single cluster-default ClusterRunnerTemplate
@@ -791,22 +791,22 @@ func resolveTemplateChain(ctx context.Context, c client.Client, ns string, rs *v
 // CEL cannot express it) and admission-time rejection would break GitOps apply-ordering
 // (§H.7). The cluster-scoped List is authorized by the per-gateway
 // agc-clusterrunnertemplate-reader ClusterRoleBinding the GMC creates (M3b).
-func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alpha1.RunnerTemplateSpec, map[string]string, refResolution) {
-	var list v2alpha1.ClusterRunnerTemplateList
+func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2.RunnerTemplateSpec, map[string]string, refResolution) {
+	var list v2.ClusterRunnerTemplateList
 	if err := c.List(ctx, &list); err != nil {
 		return nil, nil, refResolution{err: fmt.Errorf("list ClusterRunnerTemplates: %w", err)}
 	}
-	var defaults []*v2alpha1.ClusterRunnerTemplate
+	var defaults []*v2.ClusterRunnerTemplate
 	for i := range list.Items {
-		if list.Items[i].Annotations[v2alpha1.IsDefaultTemplateAnnotation] == v2alpha1.IsDefaultTemplateValue {
+		if list.Items[i].Annotations[v2.IsDefaultTemplateAnnotation] == v2.IsDefaultTemplateValue {
 			defaults = append(defaults, &list.Items[i])
 		}
 	}
 	switch len(defaults) {
 	case 0:
-		return nil, nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+		return nil, nil, refResolution{reason: v2.ReasonTemplateNotFound,
 			message: fmt.Sprintf("no templateRef, no gateway defaultTemplateRef, and no ClusterRunnerTemplate marked %s=%s",
-				v2alpha1.IsDefaultTemplateAnnotation, v2alpha1.IsDefaultTemplateValue)}
+				v2.IsDefaultTemplateAnnotation, v2.IsDefaultTemplateValue)}
 	case 1:
 		return &defaults[0].Spec, defaults[0].Annotations, refResolution{}
 	default:
@@ -815,9 +815,9 @@ func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alp
 			names[i] = d.Name
 		}
 		sort.Strings(names)
-		return nil, nil, refResolution{reason: v2alpha1.ReasonAmbiguousDefault,
+		return nil, nil, refResolution{reason: v2.ReasonAmbiguousDefault,
 			message: fmt.Sprintf("%d ClusterRunnerTemplates are marked the cluster default (%s); exactly one must be: %s",
-				len(defaults), v2alpha1.IsDefaultTemplateAnnotation, strings.Join(names, ", "))}
+				len(defaults), v2.IsDefaultTemplateAnnotation, strings.Join(names, ", "))}
 	}
 }
 
@@ -825,25 +825,25 @@ func resolveClusterDefaultTemplate(ctx context.Context, c client.Client) (*v2alp
 // cluster-scoped ClusterRunnerTemplate; the default (empty/RunnerTemplate) is the
 // namespaced RunnerTemplate. Both fail closed with TemplateNotFound when the
 // referent is absent, so the set waits for the referent→referrer watch (§H.7).
-func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2alpha1.ObjectRef) (*v2alpha1.RunnerTemplateSpec, map[string]string, refResolution) {
+func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2.ObjectRef) (*v2.RunnerTemplateSpec, map[string]string, refResolution) {
 	if ref.Kind == "ClusterRunnerTemplate" {
 		// Cluster-scoped read, authorized by the per-gateway ClusterRoleBinding to
 		// agc-clusterrunnertemplate-reader the GMC creates (M3b). The kind is
 		// platform-authored and holds golden (incl. privileged) templates (§H.7).
-		crt := &v2alpha1.ClusterRunnerTemplate{}
+		crt := &v2.ClusterRunnerTemplate{}
 		if err := c.Get(ctx, types.NamespacedName{Name: ref.Name}, crt); err != nil {
 			if apierrors.IsNotFound(err) {
-				return nil, nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+				return nil, nil, refResolution{reason: v2.ReasonTemplateNotFound,
 					message: fmt.Sprintf("ClusterRunnerTemplate %q not found", ref.Name)}
 			}
 			return nil, nil, refResolution{err: fmt.Errorf("read ClusterRunnerTemplate: %w", err)}
 		}
 		return &crt.Spec, crt.Annotations, refResolution{}
 	}
-	rt := &v2alpha1.RunnerTemplate{}
+	rt := &v2.RunnerTemplate{}
 	if err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: ref.Name}, rt); err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil, nil, refResolution{reason: v2alpha1.ReasonTemplateNotFound,
+			return nil, nil, refResolution{reason: v2.ReasonTemplateNotFound,
 				message: fmt.Sprintf("RunnerTemplate %q not found in namespace %q", ref.Name, ns)}
 		}
 		return nil, nil, refResolution{err: fmt.Errorf("read RunnerTemplate: %w", err)}
@@ -853,7 +853,7 @@ func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2alph
 
 // runnerSetTierThresholds converts v2 priority tiers to the neutral TierThreshold
 // shape the provisioner's shared ceiling logic consumes.
-func runnerSetTierThresholds(tiers []v2alpha1.PriorityTier) []provisioner.TierThreshold {
+func runnerSetTierThresholds(tiers []v2.PriorityTier) []provisioner.TierThreshold {
 	if len(tiers) == 0 {
 		return nil
 	}

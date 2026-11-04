@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	nodev1 "k8s.io/api/node/v1"
@@ -28,7 +28,7 @@ import (
 // newRunnerTemplateWithSidecar builds a template whose expensive half is a native
 // sidecar (an init container with restartPolicy: Always) — the shape the DinD daemon
 // must use, since a regular-container sidecar strands the pod (Q249).
-func newRunnerTemplateWithSidecar(name, ns, runnerCPU, sidecarCPU string) *v2alpha1.RunnerTemplate {
+func newRunnerTemplateWithSidecar(name, ns, runnerCPU, sidecarCPU string) *v2.RunnerTemplate {
 	tmpl := newRunnerTemplateWithCPURequest(name, ns, runnerCPU)
 	tmpl.Spec.PodTemplate.Spec.InitContainers = []corev1.Container{{
 		Name:          "dind",
@@ -66,15 +66,15 @@ func TestV2_RunnerSet_WorkerQuota_CountsNativeSidecar(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
-	waitForSetReadyReason(t, ns, "sidecar-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "sidecar-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "sidecar-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "sidecar-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
 	}, 20*time.Second, 100*time.Millisecond,
 		"a native sidecar's request must count toward the worker footprint (Q450)")
@@ -120,15 +120,15 @@ func TestV2_RunnerSet_WorkerQuota_CountsRuntimeClassOverhead(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
-	waitForSetReadyReason(t, ns, "overhead-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "overhead-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "overhead-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "overhead-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
 	}, 20*time.Second, 100*time.Millisecond,
 		"RuntimeClass pod overhead must count toward the worker footprint (Q450)")
@@ -143,7 +143,7 @@ func TestV2_RunnerSet_WorkerQuota_CountsRuntimeClassOverhead(t *testing.T) {
 // generic ephemeral volume, the shape the reference Kata worker uses for its raw
 // block device (deploy/dogfood-e2e/overlays/kata/resources.yaml). Kubernetes creates
 // a real PVC per pod from it, charged against the namespace quota.
-func newRunnerTemplateWithEphemeralVolume(name, ns, storage string) *v2alpha1.RunnerTemplate {
+func newRunnerTemplateWithEphemeralVolume(name, ns, storage string) *v2.RunnerTemplate {
 	tmpl := newRunnerTemplateWithCPURequest(name, ns, "100m")
 	tmpl.Spec.PodTemplate.Spec.Volumes = []corev1.Volume{{
 		Name: "docker-blk",
@@ -191,15 +191,15 @@ func TestV2_RunnerSet_WorkerQuota_CountsEphemeralVolumeStorage(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
-	waitForSetReadyReason(t, ns, "storage-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "storage-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "storage-set", v2alpha1.ConditionWorkerQuotaExceeded)
+		c := setCondition(t, ns, "storage-set", v2.ConditionWorkerQuotaExceeded)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "QuotaExhausted"
 	}, 20*time.Second, 100*time.Millisecond,
 		"a generic ephemeral volume's storage ask must count toward the worker footprint (Q453)")
@@ -232,22 +232,22 @@ func TestV2_RunnerSet_WorkerQuota_CountsPerWorkerClaims(t *testing.T) {
 		_ = k8sClient.Delete(context.Background(), rs)
 		_ = k8sClient.Delete(context.Background(), quota)
 		_ = k8sClient.Delete(context.Background(), newGatewayForSet("gw", ns, ""))
-		_ = k8sClient.Delete(context.Background(), &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(context.Background(), &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 	})
 
 	startRunnerSetReconciler(t)
 
-	waitForSetReadyReason(t, ns, "claims-set", metav1.ConditionTrue, v2alpha1.ReasonListenerActive)
+	waitForSetReadyReason(t, ns, "claims-set", metav1.ConditionTrue, v2.ReasonListenerActive)
 
 	require.Eventually(t, func() bool {
-		c := setCondition(t, ns, "claims-set", v2alpha1.ConditionWorkerQuotaPressure)
+		c := setCondition(t, ns, "claims-set", v2.ConditionWorkerQuotaPressure)
 		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == "InsufficientQuotaHeadroom"
 	}, 20*time.Second, 100*time.Millisecond,
 		"6 workers needing 1 PVC each must not fit a 3-claim quota (Q453)")
 
 	// The error tier must stay False: one worker's single claim fits in 3, and
 	// tripping it here would report "no job can run" for a set that can run several.
-	exceeded := setCondition(t, ns, "claims-set", v2alpha1.ConditionWorkerQuotaExceeded)
+	exceeded := setCondition(t, ns, "claims-set", v2.ConditionWorkerQuotaExceeded)
 	require.NotNil(t, exceeded)
 	require.Equal(t, metav1.ConditionFalse, exceeded.Status,
 		"one worker's claim fits the quota; only scaling to the ceiling does not")

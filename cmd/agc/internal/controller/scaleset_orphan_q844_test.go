@@ -11,7 +11,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -30,7 +30,7 @@ import (
 
 // orphanRecoveryFixture wires a reconciler against a fake cluster holding pods, plus a
 // counting stand-in for the rerun-failed-jobs endpoint.
-func orphanRecoveryFixture(t *testing.T, rs *v2alpha1.RunnerSet, objs ...client.Object) (*RunnerSetReconciler, *atomic.Int64) {
+func orphanRecoveryFixture(t *testing.T, rs *v2.RunnerSet, objs ...client.Object) (*RunnerSetReconciler, *atomic.Int64) {
 	t.Helper()
 
 	rerunCount := &atomic.Int64{}
@@ -57,7 +57,7 @@ func orphanRecoveryFixture(t *testing.T, rs *v2alpha1.RunnerSet, objs ...client.
 
 // storeInFlight persists an in-flight record through the real ConfigMap-backed store, so
 // the test reads it back the way a restarted AGC does.
-func storeInFlight(t *testing.T, r *RunnerSetReconciler, rs *v2alpha1.RunnerSet, jobIDs ...string) {
+func storeInFlight(t *testing.T, r *RunnerSetReconciler, rs *v2.RunnerSet, jobIDs ...string) {
 	t.Helper()
 	state := scalesetlistener.GuardState{}
 	for _, id := range jobIDs {

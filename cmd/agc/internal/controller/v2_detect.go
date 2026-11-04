@@ -5,10 +5,10 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
-// RunnerSetInstalled reports whether the actions-gateway.com/v2alpha1 RunnerSet
+// RunnerSetInstalled reports whether the actions-gateway.com/v2 RunnerSet
 // CRD is installed and served by the apiserver. The AGC calls it once at startup
 // to decide whether to register the v2 RunnerSetReconciler: the RunnerSet CRD
 // (and the sibling ActionsGateway/EgressProxy/RunnerTemplate kinds the reconciler
@@ -26,7 +26,7 @@ import (
 // hiccup. Detection happens at startup, so installing the v2 CRDs later requires
 // an AGC restart to enable the RunnerSetReconciler.
 func RunnerSetInstalled(mapper meta.RESTMapper) (bool, error) {
-	gvk := agcv2alpha1.GroupVersion.WithKind("RunnerSet")
+	gvk := agcv2.GroupVersion.WithKind("RunnerSet")
 	if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 		if meta.IsNoMatchError(err) {
 			return false, nil

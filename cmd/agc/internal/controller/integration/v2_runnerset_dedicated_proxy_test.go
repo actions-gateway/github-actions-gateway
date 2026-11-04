@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset/scalesettest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,14 +31,14 @@ func TestV2_RunnerSet_DedicatedProxyPool(t *testing.T) {
 	gw := newGatewayForSet("gw", ns, "shared")
 	require.NoError(t, k8sClient.Create(ctx, gw))
 	require.NoError(t, k8sClient.Create(ctx, newRunnerTemplate("tmpl", ns)))
-	shared := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
-	heavy := &v2alpha1.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "heavy", Namespace: ns}}
+	shared := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "shared", Namespace: ns}}
+	heavy := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "heavy", Namespace: ns}}
 	require.NoError(t, k8sClient.Create(ctx, shared))
 	require.NoError(t, k8sClient.Create(ctx, heavy))
 
 	lightSet := newRunnerSet("dedicated-light", ns, "gw")
 	heavySet := newRunnerSet("dedicated-heavy", ns, "gw")
-	heavySet.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: "heavy"}
+	heavySet.Spec.ProxyRef = &v2.ProxyObjectRef{Name: "heavy"}
 	require.NoError(t, k8sClient.Create(ctx, lightSet))
 	require.NoError(t, k8sClient.Create(ctx, heavySet))
 	t.Cleanup(func() {
@@ -46,7 +46,7 @@ func TestV2_RunnerSet_DedicatedProxyPool(t *testing.T) {
 		_ = k8sClient.Delete(bg, lightSet)
 		_ = k8sClient.Delete(bg, heavySet)
 		_ = k8sClient.Delete(bg, gw)
-		_ = k8sClient.Delete(bg, &v2alpha1.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
+		_ = k8sClient.Delete(bg, &v2.RunnerTemplate{ObjectMeta: metav1.ObjectMeta{Name: "tmpl", Namespace: ns}})
 		_ = k8sClient.Delete(bg, shared)
 		_ = k8sClient.Delete(bg, heavy)
 	})

@@ -97,13 +97,14 @@ var reasonConstRE = regexp.MustCompile(`^Reason[A-Z][A-Za-z0-9]*$`)
 // reasonPkgs are the packages a condition reason is declared in, keyed by the
 // last segment of the import path rather than by the identifier a file reaches
 // them through — the identifier is the importer's choice, and the GMC reads the
-// same vocabulary through gmcv2alpha1 that the AGC reads through v2alpha1.
+// same vocabulary through agcv2 that another file reads through v2.
 // The v2 version packages re-export api/apiconditions, so the value behind
-// v2alpha1.ReasonX is resolved from there.
+// v2.ReasonX is resolved from there.
 var reasonPkgs = map[string]bool{
 	"v1alpha1":      true,
 	"v2alpha1":      true,
 	"v2beta1":       true,
+	"v2":            true,
 	"apiconditions": true,
 }
 

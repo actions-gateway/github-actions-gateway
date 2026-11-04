@@ -5,7 +5,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,23 +20,23 @@ import (
 func TestRunnerSetReadyConditionEventsEveryTransition(t *testing.T) {
 	rec := events.NewFakeRecorder(16)
 	r := &RunnerSetReconciler{Recorder: rec}
-	rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+	rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
-	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive, "up")
-	r.setReadyCondition(rs, false, v2alpha1.ReasonNoActiveSessions, "down")
-	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive, "up again")
+	r.setReadyCondition(rs, true, v2.ReasonListenerActive, "up")
+	r.setReadyCondition(rs, false, v2.ReasonNoActiveSessions, "down")
+	r.setReadyCondition(rs, true, v2.ReasonListenerActive, "up again")
 
 	assert.Len(t, rec.Events, 3, "True→False→True is three transitions, so three Events")
 
 	// A reconcile that changes nothing must still not re-warn.
-	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive, "up again")
+	r.setReadyCondition(rs, true, v2.ReasonListenerActive, "up again")
 	assert.Len(t, rec.Events, 3, "no transition, no Event")
 }
 
 func TestReapBlockingSidecarWarnsOnLaterTransition(t *testing.T) {
 	rec := events.NewFakeRecorder(16)
 	r := &RunnerSetReconciler{Recorder: rec}
-	rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+	rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 	runner := corev1.Container{Name: "runner"}
 	dind := corev1.Container{Name: "dind"}
 
@@ -55,14 +55,14 @@ func TestReapBlockingSidecarWarnsOnLaterTransition(t *testing.T) {
 func TestRunnerSetRunnerVersionWarnsOnLaterDowngrade(t *testing.T) {
 	rec := events.NewFakeRecorder(16)
 	r := &RunnerSetReconciler{Provisioner: &provisioner.Provisioner{}, Recorder: rec}
-	rs := &v2alpha1.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
+	rs := &v2.RunnerSet{ObjectMeta: metav1.ObjectMeta{Name: "set", Namespace: "ns"}}
 
-	r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: names.DefaultWorkerImage})
+	r.setRunnerVersionStatus(rs, &v2.RunnerTemplateSpec{WorkerImage: names.DefaultWorkerImage})
 	assert.Len(t, rec.Events, 0, "a current image is not a warning")
 
-	r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
+	r.setRunnerVersionStatus(rs, &v2.RunnerTemplateSpec{WorkerImage: staleImage})
 	assert.Len(t, rec.Events, 1, "the workerImage was downgraded below the minimum")
 
-	r.setRunnerVersionStatus(rs, &v2alpha1.RunnerTemplateSpec{WorkerImage: staleImage})
+	r.setRunnerVersionStatus(rs, &v2.RunnerTemplateSpec{WorkerImage: staleImage})
 	assert.Len(t, rec.Events, 1, "still too old, no transition, no second Event")
 }

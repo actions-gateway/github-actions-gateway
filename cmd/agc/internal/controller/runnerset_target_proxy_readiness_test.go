@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -19,11 +19,11 @@ import (
 // read from the cache: a colocated pool's Ready condition and readyReplicas, and a
 // shared pool's name alone, since its namespace is outside the cache.
 
-func proxyObj(name, ns string, ready metav1.ConditionStatus, readyReplicas int32) *v2alpha1.EgressProxy {
-	return &v2alpha1.EgressProxy{
+func proxyObj(name, ns string, ready metav1.ConditionStatus, readyReplicas int32) *v2.EgressProxy {
+	return &v2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Status: v2alpha1.EgressProxyStatus{
-			Conditions:    []metav1.Condition{{Type: v2alpha1.ConditionReady, Status: ready, Reason: "PodsUnavailable"}},
+		Status: v2.EgressProxyStatus{
+			Conditions:    []metav1.Condition{{Type: v2.ConditionReady, Status: ready, Reason: "PodsUnavailable"}},
 			ReadyReplicas: readyReplicas,
 		},
 	}
@@ -31,9 +31,9 @@ func proxyObj(name, ns string, ready metav1.ConditionStatus, readyReplicas int32
 
 func TestRunnerSetTarget_EgressProxyReadiness(t *testing.T) {
 	const ns = "team-a"
-	withProxyRef := func(name, proxyNS string) func(*v2alpha1.RunnerSet) {
-		return func(rs *v2alpha1.RunnerSet) {
-			rs.Spec.ProxyRef = &v2alpha1.ProxyObjectRef{Name: name, Namespace: proxyNS}
+	withProxyRef := func(name, proxyNS string) func(*v2.RunnerSet) {
+		return func(rs *v2.RunnerSet) {
+			rs.Spec.ProxyRef = &v2.ProxyObjectRef{Name: name, Namespace: proxyNS}
 		}
 	}
 	for _, tc := range []struct {
@@ -99,9 +99,9 @@ func TestWorkerPodHandler_SnapshotsTheSetsProxyReadiness(t *testing.T) {
 	}
 	r, q, _ := podWatchFixture(t, pod)
 	require.NoError(t, r.Create(ctx, proxyObj("ep", "team-a", metav1.ConditionFalse, 0)))
-	gw := &v2alpha1.ActionsGateway{}
+	gw := &v2.ActionsGateway{}
 	require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "gw"}, gw))
-	gw.Spec.DefaultProxyRef = &v2alpha1.ProxyObjectRef{Name: "ep"}
+	gw.Spec.DefaultProxyRef = &v2.ProxyObjectRef{Name: "ep"}
 	require.NoError(t, r.Update(ctx, gw))
 
 	running := pod.DeepCopy()
@@ -109,7 +109,7 @@ func TestWorkerPodHandler_SnapshotsTheSetsProxyReadiness(t *testing.T) {
 	r.workerPodHandler().Update(ctx, event.UpdateEvent{ObjectOld: running, ObjectNew: pod}, q)
 	require.NoError(t, r.Delete(ctx, pod))
 
-	rs := &v2alpha1.RunnerSet{}
+	rs := &v2.RunnerSet{}
 	require.NoError(t, r.Get(ctx, client.ObjectKey{Namespace: "team-a", Name: "set"}, rs))
 	target := &eventTarget{runnerSetTarget: r.provisionerTarget(rs)}
 	require.NoError(t, r.Provisioner.RecordScaleSetJobCompleted(ctx, target,

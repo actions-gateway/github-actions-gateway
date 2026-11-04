@@ -13,7 +13,7 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
@@ -180,7 +180,7 @@ func (r *RunnerSetReconciler) scaleSetListenerRunnerGroup(key types.NamespacedNa
 // only after references have resolved and worker pods have been reaped, so it receives
 // the reap result and pod counts to fold into the requeue and status like the classic
 // path does. It never touches the classic pool/multiplexer.
-func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log *slog.Logger, rs *v2alpha1.RunnerSet, refs *resolvedRefs, reapAfter time.Duration, podCounts workerPodCounts, observed observedRunner) (ctrl.Result, error) {
+func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log *slog.Logger, rs *v2.RunnerSet, refs *resolvedRefs, reapAfter time.Duration, podCounts workerPodCounts, observed observedRunner) (ctrl.Result, error) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 
 	handle, err := r.ensureScaleSetListener(ctx, log, key, rs, refs)
@@ -209,9 +209,9 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 		// A declared runner group that GitHub does not have gets its own reason: it is
 		// operator misconfiguration of an isolation boundary, not a credential or
 		// registration fault, and the set stays unregistered until it is fixed (Q712).
-		reason := v2alpha1.ReasonNoActiveSessions
+		reason := v2.ReasonNoActiveSessions
 		if errors.Is(err, scalesetlistener.ErrRunnerGroupNotFound) {
-			reason = v2alpha1.ReasonRunnerGroupNotFound
+			reason = v2.ReasonRunnerGroupNotFound
 		}
 		r.stopScaleSetListener(key)
 		r.recordEvent(rs, corev1.EventTypeWarning, "ScaleSetListenerStartFailed", "StartScaleSetListener",
@@ -237,7 +237,7 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 	applyAdvertisedCapacity(rs, handle.capacity)
 	applyObservedRunnerVersion(rs, observed)
 	rs.Status.ObservedGeneration = rs.Generation
-	r.setReadyCondition(rs, true, v2alpha1.ReasonListenerActive,
+	r.setReadyCondition(rs, true, v2.ReasonListenerActive,
 		fmt.Sprintf("references resolved (template via %s); scale-set listener active (scaleSetID %d, %d job(s) assigned)",
 			refs.templateSource, st.ScaleSetID, st.AssignedJobs))
 
@@ -266,7 +266,7 @@ func (r *RunnerSetReconciler) reconcileScaleSetListener(ctx context.Context, log
 // context derived from the manager-scoped reconcile ctx, so it lives until the set is
 // deleted (stopScaleSetListener) or the manager shuts down (ctx cancel) — mirroring the
 // classic multiplexer's lifecycle.
-func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *slog.Logger, key types.NamespacedName, rs *v2alpha1.RunnerSet, refs *resolvedRefs) (*scaleSetListenerHandle, error) {
+func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *slog.Logger, key types.NamespacedName, rs *v2.RunnerSet, refs *resolvedRefs) (*scaleSetListenerHandle, error) {
 	// The drain has run: this process deletes no more sessions, so it must open no
 	// more. Measured (Q968) — without this a reconcile queued before shutdown opens
 	// the scale set's single session on its way out, and since GitHub holds a session
@@ -445,7 +445,7 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 // the set's own spec.runnerGroup, else its gateway's defaultRunnerGroup, else empty
 // (GitHub's default group). Mirrors the templateRef/proxyRef inheritance chain (§H.4)
 // so a tenant declares its GitHub-side boundary once, on the gateway.
-func resolveRunnerGroupName(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) string {
+func resolveRunnerGroupName(rs *v2.RunnerSet, gw *v2.ActionsGateway) string {
 	if rs.Spec.RunnerGroup != "" {
 		return rs.Spec.RunnerGroup
 	}
@@ -533,7 +533,7 @@ func (r *RunnerSetReconciler) scaleSetCapacityFunc(key types.NamespacedName, tar
 // traffic routes through the per-tenant egress proxy like the classic path). It is
 // built lazily here — well after main() patches http.DefaultTransport — so the default
 // transport already carries the proxy CA (the proxy-client init-order rule).
-func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2alpha1.RunnerSet, gw *v2alpha1.ActionsGateway) (*scaleset.Client, error) {
+func (r *RunnerSetReconciler) buildScaleSetClient(rs *v2.RunnerSet, gw *v2.ActionsGateway) (*scaleset.Client, error) {
 	if r.ScaleSetClientFactory != nil {
 		return r.ScaleSetClientFactory(rs, gw)
 	}
@@ -624,7 +624,7 @@ func (r *RunnerSetReconciler) stopScaleSetListener(key types.NamespacedName) {
 // A listener that has not ensured its scale set yet reports nil, which is not the same
 // claim as "the server returned no labels" and must not be published as a shortfall —
 // the condition is left untouched until there is an observation to publish.
-func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2alpha1.RunnerSet, registered []string) {
+func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2.RunnerSet, registered []string) {
 	if registered == nil {
 		return
 	}
@@ -639,10 +639,10 @@ func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2alpha1.RunnerSet,
 		}
 	}
 
-	status, reason, msg := metav1.ConditionFalse, v2alpha1.ReasonLabelsRegistered,
+	status, reason, msg := metav1.ConditionFalse, v2.ReasonLabelsRegistered,
 		fmt.Sprintf("scale set %q carries every declared runnerLabel", scaleSetNameOf(rs))
 	if len(missing) > 0 {
-		status, reason = metav1.ConditionTrue, v2alpha1.ReasonLabelsNotRegistered
+		status, reason = metav1.ConditionTrue, v2.ReasonLabelsNotRegistered
 		msg = fmt.Sprintf(
 			"scale set %q does not carry runnerLabel(s) %v (registered: %v); jobs whose runs-on names them stay queued at GitHub. "+
 				"Labels are fixed when the scale set is created and cannot be changed afterwards (the Actions Service accepts a "+
@@ -652,9 +652,9 @@ func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2alpha1.RunnerSet,
 			scaleSetNameOf(rs), missing, registered)
 	}
 
-	was := meta.IsStatusConditionTrue(rs.Status.Conditions, v2alpha1.ConditionRunnerLabelsIncomplete)
+	was := meta.IsStatusConditionTrue(rs.Status.Conditions, v2.ConditionRunnerLabelsIncomplete)
 	meta.SetStatusCondition(&rs.Status.Conditions, metav1.Condition{
-		Type:               v2alpha1.ConditionRunnerLabelsIncomplete,
+		Type:               v2.ConditionRunnerLabelsIncomplete,
 		Status:             status,
 		Reason:             reason,
 		Message:            msg,
@@ -666,7 +666,7 @@ func (r *RunnerSetReconciler) applyRunnerLabelsCondition(rs *v2alpha1.RunnerSet,
 }
 
 // scaleSetNameOf is the scale set's name at GitHub: the RunnerSet's first runnerLabel.
-func scaleSetNameOf(rs *v2alpha1.RunnerSet) string {
+func scaleSetNameOf(rs *v2.RunnerSet) string {
 	if len(rs.Spec.RunnerLabels) == 0 {
 		return ""
 	}
@@ -684,7 +684,7 @@ func scaleSetNameOf(rs *v2alpha1.RunnerSet) string {
 // advertisement carries them in a map, and an unsorted write would reorder the list on
 // every reconcile, producing a status update (and a watch event) whenever Go's map
 // iteration order changed rather than when the capacity did.
-func applyAdvertisedCapacity(rs *v2alpha1.RunnerSet, rec *capacityRecord) {
+func applyAdvertisedCapacity(rs *v2.RunnerSet, rec *capacityRecord) {
 	adv, ok := rec.last()
 	if !ok {
 		return
@@ -698,9 +698,9 @@ func applyAdvertisedCapacity(rs *v2alpha1.RunnerSet, rec *capacityRecord) {
 	}
 	sort.Strings(reasons)
 
-	withheld := make([]v2alpha1.WithheldCapacity, 0, len(reasons))
+	withheld := make([]v2.WithheldCapacity, 0, len(reasons))
 	for _, reason := range reasons {
-		withheld = append(withheld, v2alpha1.WithheldCapacity{Reason: reason, Slots: adv.Withheld[reason]})
+		withheld = append(withheld, v2.WithheldCapacity{Reason: reason, Slots: adv.Withheld[reason]})
 	}
 	rs.Status.WithheldCapacity = withheld
 }
@@ -710,7 +710,7 @@ func applyAdvertisedCapacity(rs *v2alpha1.RunnerSet, rec *capacityRecord) {
 // gateway teardown. It is the capacity twin of zeroing activeSessions there — a set
 // with no session advertises nothing, and leaving the last advertisement behind would
 // report withheld slots against intake that no longer exists.
-func clearAdvertisedCapacity(rs *v2alpha1.RunnerSet) {
+func clearAdvertisedCapacity(rs *v2.RunnerSet) {
 	rs.Status.AdvertisedCapacity = nil
 	rs.Status.WithheldCapacity = nil
 }

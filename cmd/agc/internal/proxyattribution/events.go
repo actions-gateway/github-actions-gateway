@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,7 +76,7 @@ func (p *Poller) reportDenial(ctx context.Context, pl pool, w worker, rec record
 	}
 	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: p.Namespace, Name: w.name, UID: w.uid}}
 	var regarding, related runtime.Object = pod, nil
-	var rs v2alpha1.RunnerSet
+	var rs v2.RunnerSet
 	if err := p.Client.Get(ctx, types.NamespacedName{Namespace: p.Namespace, Name: w.set}, &rs); err == nil {
 		regarding, related = &rs, pod
 	}

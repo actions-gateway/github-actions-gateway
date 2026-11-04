@@ -77,7 +77,7 @@ import (
 	"sync"
 	"time"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/scaleset"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -872,12 +872,12 @@ func (l *Listener) start(ctx context.Context) (<-chan struct{}, error) {
 	// was discarded: this fresh instance carries no flag for it, and without the
 	// baseline the abnormal condition would sit stale on the RunnerSet forever
 	// after the credentials were fixed (Q325).
-	l.setCondition(v2alpha1.ConditionDegraded, metav1.ConditionFalse,
-		v2alpha1.ReasonSessionAuthorized, "scale-set session established")
-	l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionFalse,
-		v2alpha1.ReasonPollingHealthy, "message polling healthy")
-	l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
-		v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
+	l.setCondition(v2.ConditionDegraded, metav1.ConditionFalse,
+		v2.ReasonSessionAuthorized, "scale-set session established")
+	l.setCondition(v2.ConditionRateLimited, metav1.ConditionFalse,
+		v2.ReasonPollingHealthy, "message polling healthy")
+	l.setCondition(v2.ConditionJobProvisionStalled, metav1.ConditionFalse,
+		v2.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
 
 	done := make(chan struct{})
 	go func() {
@@ -1269,8 +1269,8 @@ func (l *Listener) handlePollError(ctx context.Context, ssID int, sess *scaleset
 			l.rateLimitedSince = now
 		} else if !l.rateLimitedCond && now.Sub(l.rateLimitedSince) >= l.rateLimitAfter {
 			l.rateLimitedCond = true
-			l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionTrue,
-				v2alpha1.ReasonSustainedRateLimit,
+			l.setCondition(v2.ConditionRateLimited, metav1.ConditionTrue,
+				v2.ReasonSustainedRateLimit,
 				fmt.Sprintf("GetMessage returning 429 for over %s", l.rateLimitAfter))
 		}
 		l.log.Warn("scaleset: rate limited", "scaleSet", l.cfg.ScaleSetName, "err", err)
@@ -1328,8 +1328,8 @@ func (l *Listener) pollHealthy() {
 	l.rateLimitedSince = time.Time{}
 	if l.rateLimitedCond {
 		l.rateLimitedCond = false
-		l.setCondition(v2alpha1.ConditionRateLimited, metav1.ConditionFalse,
-			v2alpha1.ReasonPollingHealthy, "message polling recovered")
+		l.setCondition(v2.ConditionRateLimited, metav1.ConditionFalse,
+			v2.ReasonPollingHealthy, "message polling recovered")
 	}
 	l.clearUnauthorized()
 }
@@ -1344,8 +1344,8 @@ func (l *Listener) surfaceUnauthorized(action string, err error) {
 		return
 	}
 	l.unauthorizedCond = true
-	l.setCondition(v2alpha1.ConditionDegraded, metav1.ConditionTrue,
-		v2alpha1.ReasonSessionUnauthorized, err.Error())
+	l.setCondition(v2.ConditionDegraded, metav1.ConditionTrue,
+		v2.ReasonSessionUnauthorized, err.Error())
 	l.recordEvent(corev1.EventTypeWarning, "SessionUnauthorized", action,
 		fmt.Sprintf("scale-set %s rejected as unauthorized; the gateway's GitHub App credentials are invalid or revoked: %v", action, err))
 }
@@ -1358,8 +1358,8 @@ func (l *Listener) clearUnauthorized() {
 		return
 	}
 	l.unauthorizedCond = false
-	l.setCondition(v2alpha1.ConditionDegraded, metav1.ConditionFalse,
-		v2alpha1.ReasonSessionAuthorized, "scale-set session calls authorized again")
+	l.setCondition(v2.ConditionDegraded, metav1.ConditionFalse,
+		v2.ReasonSessionAuthorized, "scale-set session calls authorized again")
 }
 
 // setCondition publishes one condition via the owner-bound sink. A no-op when no
@@ -1687,8 +1687,8 @@ func (l *Listener) refreshStalled() {
 		if l.stalledCond {
 			l.stalledCond = false
 			l.stalledEventReason = ""
-			l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionFalse,
-				v2alpha1.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
+			l.setCondition(v2.ConditionJobProvisionStalled, metav1.ConditionFalse,
+				v2.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
 		}
 		return
 	}
@@ -1696,17 +1696,17 @@ func (l *Listener) refreshStalled() {
 	// conflict is the one an operator can act on, and a pod held terminating past its
 	// grace period is the next (a lost node), while a ceiling clears itself as workers
 	// finish.
-	reason := v2alpha1.ReasonWorkerCeilingReached
+	reason := v2.ReasonWorkerCeilingReached
 	eventType, eventReason := corev1.EventTypeNormal, "WorkerCeilingReached"
 	if counts[DeferReasonWorkerTerminating] > 0 {
-		reason = v2alpha1.ReasonWorkerTerminating
+		reason = v2.ReasonWorkerTerminating
 		eventReason = "WorkerTerminating"
 	}
 	if counts[DeferReasonNameConflict] > 0 {
-		reason = v2alpha1.ReasonRunnerNameConflict
+		reason = v2.ReasonRunnerNameConflict
 		eventType, eventReason = corev1.EventTypeWarning, "JobProvisionStalled"
 	}
-	l.setCondition(v2alpha1.ConditionJobProvisionStalled, metav1.ConditionTrue,
+	l.setCondition(v2.ConditionJobProvisionStalled, metav1.ConditionTrue,
 		reason, l.stalledMessage(counts))
 	// Once per episode, on the transition in — and again when the episode changes class,
 	// so a name conflict arriving while a set is already held at its ceiling still gets

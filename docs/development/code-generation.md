@@ -198,8 +198,9 @@ Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a 
 
 - **gofmt corrupts `''` inside CEL markers.** A doubled single-quote in a `+kubebuilder:validation:XValidation` marker comment gets rewritten by gofmt into a single curly quote, silently breaking the CEL rule (and `''` is not a CEL quote escape anyway — that's SQL).
   Never use empty-string literals in XValidation: write `size(x) == 0`, not `x == ''`.
-- **`selectableFields` on one served version only.** On a multi-version CRD, declaring `+kubebuilder:selectablefield` markers on more than one version makes controller-gen hoist them in a way the apiserver rejects at CRD apply time.
-  Declare them on a single version.
+- **`selectableFields` never identical on every version.** On a multi-version CRD whose versions' schemas differ, declaring the same `+kubebuilder:selectablefield` markers on every version makes the apiserver hoist them to spec level beside a per-version schema, which it rejects at CRD apply time.
+  Leave at least one version without them: `RunnerSet` declares its field on `v2beta1` and `v2` and not on `v2alpha1`, and envtest installs it (Q1263).
+  A field selector works only at a version that declares the field, so the version a controller watches must be one of them.
 - **The v2 condition vocabulary lives in `api/apiconditions`, not in the version packages.** Condition types and reasons are runtime `.status.conditions[]` values, not schema, so they carry no version — they are declared once, with their doc comments, in [`api/apiconditions`](../../api/apiconditions/conditions.go).
   `api/v2alpha1/conditions.go` and `api/v2beta1/conditions.go` are thin re-export blocks that keep every existing `v2alpha1.ConditionReady` call site compiling.
   **Adding a condition or reason: declare it in `apiconditions`, then add the one-line re-export to both version files.** They must stay byte-identical except the `package` line — `make v2-api-sync-check` fails on a one-sided add, naming the divergent lines.

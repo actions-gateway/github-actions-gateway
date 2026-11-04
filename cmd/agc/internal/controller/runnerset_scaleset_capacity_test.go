@@ -7,7 +7,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/provisioner"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/scalesetlistener"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	"github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
@@ -164,7 +164,7 @@ func TestScaleSetCapacityFunc(t *testing.T) {
 	const ns = "team-a"
 	ctx := context.Background()
 	key := types.NamespacedName{Namespace: ns, Name: "set"}
-	max8 := func(rs *v2alpha1.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }
+	max8 := func(rs *v2.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }
 
 	t.Run("quota below the ceiling binds", func(t *testing.T) {
 		// 2 cpu free ⇒ 4 workers of 500m, against a declared ceiling of 8.
@@ -213,7 +213,7 @@ func TestScaleSetCapacityFunc_RecoversWhenHeadroomReturns(t *testing.T) {
 	key := types.NamespacedName{Namespace: ns, Name: "set"}
 
 	r, _, target := capacityReconciler(t, ns,
-		rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }),
+		rsObj("set", ns, func(rs *v2.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }),
 		gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "4", "4"))
 	capacity := r.scaleSetCapacityFunc(key, target, &capacityRecord{})
 
@@ -286,7 +286,7 @@ func TestScaleSetCapacityFunc_WakesReconcilerOnChange(t *testing.T) {
 	key := types.NamespacedName{Namespace: ns, Name: "set"}
 
 	r, _, target := capacityReconciler(t, ns,
-		rsObj("set", ns, func(rs *v2alpha1.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }),
+		rsObj("set", ns, func(rs *v2.RunnerSet) { rs.Spec.MaxWorkers = ptr.To(int32(8)) }),
 		gwObj("gw", ns, ""), tmplObj("tmpl", ns), quotaRS(ns, "4", "4"))
 	r.wakeCh = make(chan event.GenericEvent, 8)
 	capacity := r.scaleSetCapacityFunc(key, target, &capacityRecord{})
