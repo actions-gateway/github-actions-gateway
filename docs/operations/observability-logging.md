@@ -192,7 +192,7 @@ See [security §5 — credential handling](../design/05-security.md).
 
 ## Distributed Tracing (AGC)
 
-The per-tenant AGC emits **OpenTelemetry traces** for the job-to-pod path: one span per scale-set job, **`Provisioner.ProvisionScaleSetWorker`**, with child spans `stageJobSecret`, `countActivePods`, and `createPod`.
+The per-tenant AGC emits **OpenTelemetry traces** for the job-to-pod path: one root span per provisioning attempt, **`Provisioner.ProvisionScaleSetWorker`**, with child spans `stageJobSecret`, `countActivePods`, and `createPod`.
 The root span carries `k8s.namespace.name`, `gateway.owner.name` (the RunnerSet), `gateway.job.id`, `k8s.pod.name`, `gateway.active_pods`, `gateway.ceiling_held`, and `gateway.priority_class`.
 Any failing exit after the span opens sets the root span's status to error, and a failed phase also records the error on its own child span.
 The listener's capacity check normally stops a job the concurrency ceiling would hold before provisioning starts, so that job has no trace; only one that loses the race reaches this span, with `gateway.ceiling_held` true.
@@ -202,7 +202,7 @@ The AGC does not wait for the job to run, so the trace ends once the worker pod 
 > Span attribute names follow the [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/): Kubernetes-native attributes use the `k8s.*` keys (`k8s.namespace.name`, `k8s.pod.name`); project-specific attributes are namespaced under `gateway.`.
 > These keys were renamed in the Q205 naming audit — see [Breaking observability changes](observability-metrics.md#breaking-observability-changes-q205) for the old→new mapping.
 
-Each job is its own root trace, because nothing in the AGC ahead of the provision path starts a span or carries an inbound trace context.
+Each attempt is its own root trace, because nothing in the AGC ahead of the provision path starts a span or carries an inbound trace context, so a replayed job has more than one.
 
 **Tracing is opt-in and off by default.** With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.
 
@@ -213,7 +213,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:
 
 | Variable | Effect |
 |---|---|
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC collector address, with its scheme (e.g. `https://otel-collector.observability.svc.cluster.local:4317`). Setting either one enables tracing. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC collector address, with its scheme (e.g. `http://otel-collector.observability.svc.cluster.local:4317`). Setting either one enables tracing. |
 | `OTEL_SDK_DISABLED=true` | Hard kill switch — forces tracing off even when an endpoint is set. |
 | `OTEL_SERVICE_NAME` / `OTEL_RESOURCE_ATTRIBUTES` | Override the default `service.name` (`actions-gateway-agc`) and add resource attributes. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TIMEOUT`, … | All other knobs are the SDK's standard env vars. |
@@ -237,24 +237,24 @@ spec:
       name: team-a-github-app
   githubURL: https://github.com/team-a-org
   tracing:
-    endpoint: https://otel-collector.observability.svc.cluster.local:4317  # enables tracing
+    endpoint: http://otel-collector.observability.svc.cluster.local:4317  # enables tracing
+    insecure: true                                       # plaintext; see Reaching the collector
     sampler: parentbased_traceidratio                    # optional
     samplerArg: "0.1"                                     # optional — 10% of traces
     resourceAttributes:                                   # optional
       deployment.environment: prod
-    # insecure: true   # only for a plaintext in-cluster collector; TLS is the default
 ```
 
 | `spec.tracing` field | AGC env it sets | Notes |
 |---|---|---|
 | `endpoint` | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | **Setting it is what enables tracing.** Empty → no `OTEL_*` env, tracing stays off. |
-| `insecure` | `OTEL_EXPORTER_OTLP_TRACES_INSECURE` | Defaults to `false` (TLS). Set `true` only for a plaintext in-cluster collector. |
+| `insecure` | `OTEL_EXPORTER_OTLP_TRACES_INSECURE` | Defaults to `false` (TLS). Set `true` only for a plaintext collector; it wins over an `https://` scheme. |
 | `sampler` | `OTEL_TRACES_SAMPLER` | One of `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio` (CRD-enforced enum). |
 | `samplerArg` | `OTEL_TRACES_SAMPLER_ARG` | Ratio in `[0,1]` for the ratio-based samplers. |
 | `resourceAttributes` | `OTEL_RESOURCE_ATTRIBUTES` | Rendered as a sorted `key=value` list. The AGC's own `service.name`/`service.version` take precedence. |
 
 > **No auth headers via env.** `spec.tracing` deliberately has no field for `OTEL_EXPORTER_OTLP_HEADERS`: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes).
-> Authenticate the collector at the **network layer** instead: an in-cluster collector [the AGC is allowed to reach](#reaching-the-collector), mutual TLS, or a service mesh.
+> Authenticate the collector at the **network layer** instead: an in-cluster collector [the AGC is allowed to reach](#reaching-the-collector), or a service mesh.
 >
 > **Testing-only passthrough.** The `AGC_EXTRA_*` mechanism (`--allow-agc-extra-env` on the GMC, then `AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…` in the GMC pod env) still exists but is gated for tests only and not for production use.
 > When both are present, `AGC_EXTRA_*` wins (it is appended last).
@@ -277,6 +277,12 @@ Measured with a real collector over plaintext gRPC on kind with Calico, at one j
 
 A proxied tenant needs both: the full `.svc.cluster.local` name, which is what `NO_PROXY` exempts from the egress proxy, and a policy allowing the AGC to reach the collector directly.
 Anything shorter is sent through the proxy, including `otel-collector.observability.svc:4317`, and the proxy's own NetworkPolicy blocks it, so no policy on the AGC changes that.
+
+**An in-cluster collector has to be plaintext**, and every delivered row above is.
+`spec.tracing` has no CA field, so the AGC verifies a TLS collector only against the public roots in its image, and public CAs do not issue certificates for `.svc.cluster.local` names.
+An `https://` endpoint with a private-CA certificate therefore delivers nothing, and a proxied tenant, which must use the full name, has no TLS option.
+That is why the examples here use `http://` with `insecure: true`.
+The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, and any `resourceAttributes` you set, and no credentials.
 
 Add the policy in the tenant's namespace, naming your gateway and collector:
 
@@ -313,6 +319,14 @@ kubectl logs -n team-a deploy/team-a-agc | grep 'traces export'
 
 `reading server HTTP response: unexpected EOF` means the export went through the egress proxy, so the name is too short; a pool with a destination allowlist refuses it with `failed to do connect handshake` instead.
 `DeadlineExceeded` means the direct connection never opened, so the NetworkPolicy is missing or wrong.
+
+Three more come from the TLS settings, measured against an in-process OTLP server:
+
+| Log text | Meaning |
+| --- | --- |
+| `x509: certificate signed by unknown authority` | `https://` to a collector whose certificate the AGC does not trust |
+| `first record does not look like a TLS handshake` | `https://` to a plaintext collector, without `insecure: true` |
+| `error reading server preface: EOF` | Plaintext to a collector serving TLS |
 
 **Always include the scheme in `endpoint`.** Admission does not check the value, and a bare IP such as `10.0.0.5:4317` fails the SDK's URL parse, so the AGC exports to `127.0.0.1:4317` instead.
 

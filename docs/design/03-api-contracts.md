@@ -261,7 +261,7 @@ type ActionsGatewaySpec struct {
     // There is deliberately no field for OTEL_EXPORTER_OTLP_HEADERS: those
     // can carry bearer tokens, and the project keeps secrets out of
     // environment variables. Authenticate the collector at the network layer
-    // (in-cluster collector, mutual TLS, or a service mesh) instead.
+    // (in-cluster collector or a service mesh) instead.
     // +optional
     Tracing TracingConfig `json:"tracing,omitempty"`
 }
@@ -269,7 +269,7 @@ type ActionsGatewaySpec struct {
 // TracingConfig maps to the AGC's OpenTelemetry OTEL_* environment variables.
 type TracingConfig struct {
     // Endpoint is the OTLP/gRPC collector address (e.g.
-    // "https://otel-collector.observability.svc.cluster.local:4317"). Setting it enables
+    // "http://otel-collector.observability.svc.cluster.local:4317"). Setting it enables
     // tracing; an empty Endpoint emits no OTEL_* env. Maps to
     // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
     // +optional

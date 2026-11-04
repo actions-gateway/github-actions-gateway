@@ -625,7 +625,7 @@ See [kubernetes-conventions](../development/kubernetes-conventions.md#kubernetes
 
 ### Distributed tracing
 
-Beyond metrics, the AGC emits **OpenTelemetry traces** for the job-to-pod path: one `Provisioner.ProvisionScaleSetWorker` span per scale-set job, with child spans for the JIT-config Secret staging, the ceiling's pod count, and the pod create.
+Beyond metrics, the AGC emits **OpenTelemetry traces** for the job-to-pod path: one root `Provisioner.ProvisionScaleSetWorker` span per provisioning attempt, with child spans for the JIT-config Secret staging, the ceiling's pod count, and the pod create.
 Provisioning returns once the worker pod exists, so no span covers the job's run.
 Tracing is opt-in and off by default: with no OTLP endpoint configured the global provider stays the no-op default, so the spans cost effectively nothing.
 
