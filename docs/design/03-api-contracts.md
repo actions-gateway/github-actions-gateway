@@ -269,7 +269,7 @@ type ActionsGatewaySpec struct {
 // TracingConfig maps to the AGC's OpenTelemetry OTEL_* environment variables.
 type TracingConfig struct {
     // Endpoint is the OTLP/gRPC collector address (e.g.
-    // "https://otel-collector.observability:4317"). Setting it enables
+    // "https://otel-collector.observability.svc.cluster.local:4317"). Setting it enables
     // tracing; an empty Endpoint emits no OTEL_* env. Maps to
     // OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
     // +optional

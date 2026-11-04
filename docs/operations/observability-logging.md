@@ -193,8 +193,9 @@ See [security §5 — credential handling](../design/05-security.md).
 ## Distributed Tracing (AGC)
 
 The per-tenant AGC emits **OpenTelemetry traces** for the job-to-pod path: one span per scale-set job, **`Provisioner.ProvisionScaleSetWorker`**, with child spans `stageJobSecret`, `countActivePods`, and `createPod`.
-The root span carries `k8s.namespace.name`, `gateway.owner.name`, `gateway.job.id`, `k8s.pod.name`, `gateway.active_pods`, `gateway.ceiling_held`, and `gateway.priority_class`.
-Any provisioning failure sets the root span's status to error, a job held by the concurrency ceiling included, and a failed phase also records the error on its own child span.
+The root span carries `k8s.namespace.name`, `gateway.owner.name` (the RunnerSet), `gateway.job.id`, `k8s.pod.name`, `gateway.active_pods`, `gateway.ceiling_held`, and `gateway.priority_class`.
+Any failing exit after the span opens sets the root span's status to error, and a failed phase also records the error on its own child span.
+The listener's capacity check normally stops a job the concurrency ceiling would hold before provisioning starts, so that job has no trace; only one that loses the race reaches this span, with `gateway.ceiling_held` true.
 Time between `countActivePods` ending and `createPod` starting is spent in the scale-up rate limit's wait, when one is configured.
 The AGC does not wait for the job to run, so the trace ends once the worker pod exists, and the job's own run time is not in it.
 
@@ -212,7 +213,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:
 
 | Variable | Effect |
 |---|---|
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC collector address (e.g. `otel-collector.observability:4317`). Setting either one enables tracing. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/gRPC collector address, with its scheme (e.g. `https://otel-collector.observability.svc.cluster.local:4317`). Setting either one enables tracing. |
 | `OTEL_SDK_DISABLED=true` | Hard kill switch — forces tracing off even when an endpoint is set. |
 | `OTEL_SERVICE_NAME` / `OTEL_RESOURCE_ATTRIBUTES` | Override the default `service.name` (`actions-gateway-agc`) and add resource attributes. |
 | `OTEL_TRACES_SAMPLER`, `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TIMEOUT`, … | All other knobs are the SDK's standard env vars. |
@@ -224,17 +225,19 @@ On shutdown the AGC flushes buffered spans (5 s budget) before exiting.
 The GMC builds the AGC Deployment, so for a GMC-provisioned tenant you do **not** set these env vars by hand — you declare tracing on the `ActionsGateway` CR and the GMC translates `spec.tracing` into the standard `OTEL_*` env on the AGC Deployment:
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1alpha1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: team-a
   namespace: team-a
 spec:
-  gitHubAppRef:
-    name: team-a-github-app
-  gitHubURL: https://github.com/team-a-org
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: team-a-github-app
+  githubURL: https://github.com/team-a-org
   tracing:
-    endpoint: https://otel-collector.observability:4317  # enables tracing
+    endpoint: https://otel-collector.observability.svc.cluster.local:4317  # enables tracing
     sampler: parentbased_traceidratio                    # optional
     samplerArg: "0.1"                                     # optional — 10% of traces
     resourceAttributes:                                   # optional
@@ -251,11 +254,67 @@ spec:
 | `resourceAttributes` | `OTEL_RESOURCE_ATTRIBUTES` | Rendered as a sorted `key=value` list. The AGC's own `service.name`/`service.version` take precedence. |
 
 > **No auth headers via env.** `spec.tracing` deliberately has no field for `OTEL_EXPORTER_OTLP_HEADERS`: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes).
-> Authenticate the collector at the **network layer** instead — an in-cluster collector reached over the tenant's egress path, mutual TLS, or a service mesh.
+> Authenticate the collector at the **network layer** instead: an in-cluster collector [the AGC is allowed to reach](#reaching-the-collector), mutual TLS, or a service mesh.
 >
 > **Testing-only passthrough.** The `AGC_EXTRA_*` mechanism (`--allow-agc-extra-env` on the GMC, then `AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…` in the GMC pod env) still exists but is gated for tests only and not for production use.
 > When both are present, `AGC_EXTRA_*` wins (it is appended last).
 > Prefer `spec.tracing`.
+
+### Reaching the collector
+
+**Setting `spec.tracing` does not open a network path to the collector.** The GMC's default-deny egress policy has no rule for it, so on a CNI that enforces NetworkPolicy the AGC's spans go nowhere until you add one.
+The name you give the collector matters as much: its **full name** is `otel-collector.observability.svc.cluster.local:4317`, and its **short name** is `otel-collector.observability:4317`.
+Measured with a real collector over plaintext gRPC on kind with Calico, at one job per setup:
+
+| Tenant | Name | NetworkPolicy below | Spans at the collector |
+| --- | --- | --- | --- |
+| Proxied | Full | Yes | Delivered |
+| Proxied | Full | No | None |
+| Proxied | Short | Yes | None |
+| Proxied | Short | No | None |
+| Direct | Either | Yes | Delivered |
+| Direct | Short | No | None |
+
+A proxied tenant needs both: the full `.svc.cluster.local` name, which is what `NO_PROXY` exempts from the egress proxy, and a policy allowing the AGC to reach the collector directly.
+Anything shorter is sent through the proxy, including `otel-collector.observability.svc:4317`, and the proxy's own NetworkPolicy blocks it, so no policy on the AGC changes that.
+
+Add the policy in the tenant's namespace, naming your gateway and collector:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: team-a-agc-to-collector
+  namespace: team-a
+spec:
+  podSelector:
+    matchLabels:
+      app: team-a-agc   # <gateway>-agc, so it opens nothing for worker pods
+  policyTypes: [Egress]
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+      podSelector:
+        matchLabels:
+          app: otel-collector
+    ports:
+    - port: 4317
+      protocol: TCP
+```
+
+**An export that fails is reported only in the AGC's log**, as a `traces export:` line at `info`, with no metric or status condition.
+Check for it after a job has run:
+
+```bash
+kubectl logs -n team-a deploy/team-a-agc | grep 'traces export'
+```
+
+`reading server HTTP response: unexpected EOF` means the export went through the egress proxy, so the name is too short; a pool with a destination allowlist refuses it with `failed to do connect handshake` instead.
+`DeadlineExceeded` means the direct connection never opened, so the NetworkPolicy is missing or wrong.
+
+**Always include the scheme in `endpoint`.** Admission does not check the value, and a bare IP such as `10.0.0.5:4317` fails the SDK's URL parse, so the AGC exports to `127.0.0.1:4317` instead.
 
 ---
 
