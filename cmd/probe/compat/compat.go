@@ -12,7 +12,7 @@
 // credential-gated cmd/probe binary — remains the companion that confirms the
 // model matches production; this suite is the repeatable, always-green asset
 // that turns a silent wire-protocol break into a visible test failure before
-// the v2beta1 API shape is frozen.
+// a release ships it.
 //
 // This is a test/diagnostic package: it imports net/http/httptest but is not
 // imported by the probe binary (package main), so it never ships in a compiled
@@ -720,9 +720,9 @@ func Report(results []Result) string {
 	b.WriteString("The suite exercises the GitHub Actions broker wire protocol and data contracts\n")
 	b.WriteString("end to end and asserts conformance to every documented contract in\n")
 	b.WriteString("[docs/design/03-api-contracts.md](../design/03-api-contracts.md). It exists to\n")
-	b.WriteString("confirm full broker compatibility before the v2beta1 API shape is frozen, so a\n")
-	b.WriteString("silent wire-protocol break shows up as a red test rather than a field that has\n")
-	b.WriteString("to be added after the beta cut.\n\n")
+	b.WriteString("confirm full broker compatibility before a release, so a silent wire-protocol\n")
+	b.WriteString("break shows up as a red test rather than a field that has to be added after the\n")
+	b.WriteString("release is cut.\n\n")
 
 	b.WriteString("## Result\n\n")
 	fmt.Fprintf(&b, "**%d/%d contracts verified.**\n\n", pass, len(results))

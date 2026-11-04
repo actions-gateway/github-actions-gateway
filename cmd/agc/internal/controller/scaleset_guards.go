@@ -127,9 +127,10 @@ func (s *scaleSetGuardStore) Save(ctx context.Context, state scalesetlistener.Gu
 // on it, which leaves the ConfigMap behind once the set is deleted (measured on
 // kube-controller-manager 1.36.1, Q1167).
 //
-// A reference to an earlier set of the same name is left alone: that owner is gone, so
-// repointing the ConfigMap would adopt its state into this set. A failed write warns
-// and retries on the next reconcile, never holding up the set or its deletion.
+// A reference to an earlier set of the same name is left alone: naming this set would
+// tie the ConfigMap to this set's lifetime. It does not hide the contents, since Load and
+// readRerunLedger read by name. A failed write warns and retries on the next reconcile,
+// never holding up the set or its deletion.
 func (r *RunnerSetReconciler) restampConfigMapOwners(ctx context.Context, log *slog.Logger, rs *v2.RunnerSet) {
 	key := types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name}
 	if uid, done := r.ownerRefsRestamped.Load(key); done && uid == rs.UID {

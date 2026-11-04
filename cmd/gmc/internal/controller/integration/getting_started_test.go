@@ -57,7 +57,7 @@ type docBlock struct {
 // left it rendering perfectly and failing on contact.
 //
 // What this venue settles that reading the page cannot: the CRD structural
-// schemas, the GMC's validating webhooks, the v2 conversion webhook, and the
+// schemas, the GMC's validating webhooks, and the
 // CEL guardrails — every one of which this suite already stands up, so the walk
 // costs seconds on a job that is already running rather than a kind cluster of
 // its own. What it cannot settle is anything needing a kubelet: the two blocks

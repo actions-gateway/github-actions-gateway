@@ -195,7 +195,7 @@ func TestRestampConfigMapOwners(t *testing.T) {
 }
 
 // TestRestampConfigMapOwners_LeavesAnEarlierSetsConfigMapAlone: a same-named set
-// recreated after the upgrade does not adopt what its predecessor left behind.
+// recreated after the upgrade does not take ownership of what its predecessor left.
 func TestRestampConfigMapOwners_LeavesAnEarlierSetsConfigMapAlone(t *testing.T) {
 	rs := testRunnerSet()
 	name := scaleSetGuardConfigMapName(rs.Name)

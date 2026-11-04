@@ -280,7 +280,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	return nil
 }
 
-// registerWebhooks registers the GMC's admission and conversion webhooks. The
+// registerWebhooks registers the GMC's admission webhooks. The
 // caller gates this on ENABLE_WEBHOOKS != "false". It returns an error instead of
 // exiting so the flow stays test-reachable and main owns the single exit.
 func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {

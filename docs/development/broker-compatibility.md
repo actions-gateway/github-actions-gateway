@@ -5,9 +5,9 @@ This report is the published result of the broker-compatibility suite (Q191).
 The suite exercises the GitHub Actions broker wire protocol and data contracts
 end to end and asserts conformance to every documented contract in
 [docs/design/03-api-contracts.md](../design/03-api-contracts.md). It exists to
-confirm full broker compatibility before the v2beta1 API shape is frozen, so a
-silent wire-protocol break shows up as a red test rather than a field that has
-to be added after the beta cut.
+confirm full broker compatibility before a release, so a silent wire-protocol
+break shows up as a red test rather than a field that has to be added after the
+release is cut.
 
 ## Result
 

@@ -256,7 +256,7 @@ func disableHTTP2(c *tls.Config) {
 	c.NextProtos = []string{"http/1.1"}
 }
 
-// newWebhookServer builds the admission/conversion webhook server, wiring the
+// newWebhookServer builds the admission webhook server, wiring the
 // operator-provided certificate directory when --webhook-cert-path is set.
 func newWebhookServer(cfg *gmcFlags, tlsOpts []func(*tls.Config)) webhook.Server {
 	webhookServerOptions := webhook.Options{TLSOpts: tlsOpts}
