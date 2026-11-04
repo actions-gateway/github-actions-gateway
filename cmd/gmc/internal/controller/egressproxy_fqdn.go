@@ -84,10 +84,9 @@ const (
 // resolveFQDNEmitter maps the tenant intent (egressPolicyMode) and the operator backend
 // (--fqdn-policy-backend) to the concrete CNI-native emitter — the single decision point
 // that replaces the old per-CNI enum switch (Q245). The intent value FQDN defers to the
-// operator backend, and FQDN+none emits nothing. Admission rejects a new FQDN pool
-// without a backend, so a stored alias, which reads as FQDN at v2, is the one way to
-// reach that case; the base NetworkPolicy still default-denies GitHub egress, so it
-// fails closed rather than opening wide.
+// operator backend, and FQDN+none emits nothing. Admission rejects an FQDN pool without
+// a backend; were one to reach this case, the base NetworkPolicy still default-denies
+// GitHub egress, so it fails closed rather than opening wide.
 func resolveFQDNEmitter(mode gmcv2.EgressPolicyMode, backend FQDNBackend) fqdnEmitterKind {
 	switch mode {
 	case gmcv2.EgressPolicyModeFQDN:

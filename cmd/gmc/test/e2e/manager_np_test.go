@@ -251,7 +251,7 @@ spec:
 		// webhook *call* error ("failed calling webhook"/"context deadline exceeded")
 		// instead.
 		By("negative admission: an invalid ActionsGateway is rejected by the webhook (proves it ran)")
-		invalidAG := fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+		invalidAG := fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: np-webhook-invalid
@@ -288,7 +288,7 @@ spec:
 		// failurePolicy: Fail this can only succeed if the webhook was reached AND
 		// returned allow — itself strong evidence the NP leaves :9443 open.
 		By("positive admission: a valid ActionsGateway is admitted")
-		validAG := fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+		validAG := fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: np-webhook-valid

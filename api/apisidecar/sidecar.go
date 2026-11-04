@@ -5,10 +5,8 @@
 //
 // It lives in the neutral api module, outside any versioned package, because none of
 // it is schema: the annotation key is metadata, and the heuristic reads a
-// corev1.PodSpec that every version's RunnerTemplateSpec embeds unchanged. Declaring
-// it once removes the drift class rather than detecting it — the version packages
-// (api/v2alpha1, api/v2beta1) keep a thin RunnerTemplateSpec-typed wrapper so
-// existing call sites are unaffected, but the logic lives here alone (Q374).
+// corev1.PodSpec that RunnerTemplateSpec embeds unchanged. The version package (api/v2)
+// keeps a thin RunnerTemplateSpec-typed wrapper, but the logic lives here alone (Q374).
 package apisidecar
 
 import (

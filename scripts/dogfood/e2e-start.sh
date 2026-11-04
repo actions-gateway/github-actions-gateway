@@ -55,8 +55,8 @@
 #                scheduler it shares. Restarts containerd on each e2e node it
 #                lands on. e2e-stop.sh deletes it.
 #   GMC_ROLLOUT_TIMEOUT
-#                How long to wait for the GMC rollout that serves the v2beta1
-#                conversion webhook (default: 5m).
+#                How long to wait for the GMC rollout that serves the validating
+#                webhooks (default: 5m).
 #   E2E_VARIANT  Worker-isolation overlay: "kata" (unprivileged kind in a Kata
 #                micro-VM — the default, live-validated green under Q286) or
 #                "dind" (privileged DinD — explicit opt-in fallback for
@@ -296,7 +296,7 @@ main() {
 		--node-pool="${SYSTEM_POOL}" --num-nodes="${nodes}" --zone="${ZONE}" --quiet
 
 	# After the resize, which is what gives the GMC a node to schedule on, and
-	# before the apply its conversion webhook serves.
+	# before the apply its validating webhooks admit.
 	wait_for_gmc
 
 	# Spin up the on-demand e2e tenant. Idempotent server-side apply of the

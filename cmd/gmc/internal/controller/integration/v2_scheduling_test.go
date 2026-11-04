@@ -7,7 +7,6 @@ import (
 	"time"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -27,8 +26,6 @@ import (
 //     (Q243) depends on an empty object surviving a write/read round-trip as a
 //     NON-NIL pointer. Whether the apiserver preserves or elides an empty known
 //     object is an apiserver question, not a Go question.
-//  3. CONVERSION. v2beta1 is the hub, v2 the storage version, and v2alpha1 a spoke, so
-//     scheduling set at one version must survive storage and round-trip back.
 
 // tenantPoolScheduling is the Q243 egress-IP pinning shape: pin the pool to one node
 // pool (nodeSelector), tolerate that pool's dedication taint, and express the same
@@ -168,60 +165,4 @@ func TestV2_EgressProxy_NoSchedulingLeavesBuiltInSpread(t *testing.T) {
 	require.NotNil(t, pod.Affinity.PodAntiAffinity)
 	assert.Len(t, pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, 1)
 	assert.Nil(t, pod.Affinity.NodeAffinity)
-}
-
-// TestV2Conversion_EgressProxy_SchedulingRoundTrip: scheduling is an additive field of
-// identical shape in both versions, so it must ride across the conversion webhook in
-// both directions. Written at the v2alpha1 spoke, read at the v2beta1 hub, and back.
-func TestV2Conversion_EgressProxy_SchedulingRoundTrip(t *testing.T) {
-	const ns = "v2-conv-ep-sched"
-	createNamespace(t, ns)
-
-	orig := &v2.EgressProxy{
-		ObjectMeta: metav1.ObjectMeta{Name: "pinned", Namespace: ns},
-		Spec:       v2.EgressProxySpec{Scheduling: tenantPoolScheduling()},
-	}
-	require.NoError(t, k8sClient.Create(ctx, orig))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, orig) })
-
-	// Read as the v2beta1 hub — conversion must carry scheduling verbatim.
-	var hub v2beta1.EgressProxy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pinned"}, &hub))
-	require.NotNil(t, hub.Spec.Scheduling, "scheduling must survive conversion to the v2beta1 hub")
-	assert.Equal(t, "pool-tenant-a", hub.Spec.Scheduling.NodeSelector["cloud.google.com/gke-nodepool"])
-	require.Len(t, hub.Spec.Scheduling.Tolerations, 1)
-	assert.Equal(t, "tenant-a", hub.Spec.Scheduling.Tolerations[0].Value)
-	require.NotNil(t, hub.Spec.Scheduling.Affinity)
-	require.NotNil(t, hub.Spec.Scheduling.Affinity.NodeAffinity)
-	assert.Equal(t, []string{"pool-tenant-a"},
-		hub.Spec.Scheduling.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.
-			NodeSelectorTerms[0].MatchExpressions[0].Values)
-
-	// …and back down to the v2alpha1 spoke, unchanged.
-	var spoke v2.EgressProxy
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "pinned"}, &spoke))
-	assert.Equal(t, orig.Spec.Scheduling, spoke.Spec.Scheduling, "round-trip must be lossless")
-}
-
-// TestV2Conversion_ActionsGateway_SchedulingRoundTrip: the same additive-field
-// round-trip for the AGC control-plane pod's placement.
-func TestV2Conversion_ActionsGateway_SchedulingRoundTrip(t *testing.T) {
-	const ns = "v2-conv-ag-sched"
-	createNamespace(t, ns)
-
-	orig := newV2ActionsGateway(ns, "gw")
-	orig.Spec.Scheduling = tenantPoolScheduling()
-	require.NoError(t, k8sClient.Create(ctx, orig))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, orig) })
-
-	var hub v2beta1.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &hub))
-	require.NotNil(t, hub.Spec.Scheduling, "scheduling must survive conversion to the v2beta1 hub")
-	assert.Equal(t, "pool-tenant-a", hub.Spec.Scheduling.NodeSelector["cloud.google.com/gke-nodepool"])
-	require.Len(t, hub.Spec.Scheduling.Tolerations, 1)
-	require.NotNil(t, hub.Spec.Scheduling.Affinity)
-
-	var spoke v2.ActionsGateway
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &spoke))
-	assert.Equal(t, orig.Spec.Scheduling, spoke.Spec.Scheduling, "round-trip must be lossless")
 }

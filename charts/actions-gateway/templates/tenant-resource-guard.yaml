@@ -61,7 +61,7 @@ spec:
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["clusterrolebindings"]
       - apiGroups: ["actions-gateway.com"]
-        apiVersions: ["v2alpha1"]
+        apiVersions: ["v2"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["runnersets"]
   matchConditions:

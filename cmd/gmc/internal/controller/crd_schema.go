@@ -47,10 +47,8 @@ type boundaryField struct {
 // every entry against the CRDs this repo ships, so a rename cannot leave an
 // entry that refuses to start against a correct cluster.
 var boundaryFields = []boundaryField{
-	{crd: "runnersets.actions-gateway.com", version: "v2beta1", path: []string{"spec", "runnerGroup"}},
-	{crd: "runnersets.actions-gateway.com", version: "v2alpha1", path: []string{"spec", "runnerGroup"}},
-	{crd: "actionsgateways.actions-gateway.com", version: "v2beta1", path: []string{"spec", "defaultRunnerGroup"}},
-	{crd: "actionsgateways.actions-gateway.com", version: "v2alpha1", path: []string{"spec", "defaultRunnerGroup"}},
+	{crd: "runnersets.actions-gateway.com", version: "v2", path: []string{"spec", "runnerGroup"}},
+	{crd: "actionsgateways.actions-gateway.com", version: "v2", path: []string{"spec", "defaultRunnerGroup"}},
 }
 
 // VerifyCRDSchemas reports whether any installed CRD's schema predates this

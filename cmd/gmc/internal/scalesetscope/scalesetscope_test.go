@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,7 +18,7 @@ import (
 func fakeReader(t *testing.T, objs ...client.Object) client.Reader {
 	t.Helper()
 	scheme := runtime.NewScheme()
-	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
+	require.NoError(t, agcv2.AddToScheme(scheme))
 	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 }
 
@@ -29,18 +29,18 @@ func (failingReader) List(context.Context, client.ObjectList, ...client.ListOpti
 	return errors.New("apiserver unavailable")
 }
 
-func gateway(namespace, name, gitHubURL string) *agcv2alpha1.ActionsGateway {
-	return &agcv2alpha1.ActionsGateway{
+func gateway(namespace, name, gitHubURL string) *agcv2.ActionsGateway {
+	return &agcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec:       agcv2alpha1.ActionsGatewaySpec{GitHubURL: gitHubURL},
+		Spec:       agcv2.ActionsGatewaySpec{GitHubURL: gitHubURL},
 	}
 }
 
-func scaleSetRS(name, namespace, gw, label string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{
+func scaleSetRS(name, namespace, gw, label string) *agcv2.RunnerSet {
+	return &agcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:   agcv2alpha1.ObjectRef{Name: gw},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: gw},
 			RunnerLabels: []string{label},
 		},
 	}

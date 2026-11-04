@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	gmcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,8 +35,6 @@ func actionsGatewayV2TestScheme(t *testing.T) *runtime.Scheme {
 	require.NoError(t, rbacv1.AddToScheme(s))
 	require.NoError(t, networkingv1.AddToScheme(s))
 	require.NoError(t, gmcv2.AddToScheme(s))
-	// scalesetscope lists at v2alpha1 until Q1167 retypes it.
-	require.NoError(t, gmcv2alpha1.AddToScheme(s))
 	return s
 }
 

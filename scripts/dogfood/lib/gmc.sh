@@ -3,11 +3,10 @@
 #   REPO_ROOT="$(git rev-parse --show-toplevel)"
 #   source "${REPO_ROOT}/scripts/dogfood/lib/gmc.sh"
 #
-# Every v2 CRD sets `conversion.strategy: Webhook` against the GMC's
-# webhook-service, so applying any v2 object is routed through /convert and
-# fails with `no endpoints available for service "webhook-service"` while the
-# GMC is down. That message names the dataplane rather than the cause, so each
-# of the three entrypoints that applies a v2 object waits here first.
+# The GMC's validating webhooks fail closed, so applying a v2 object fails with
+# `no endpoints available for service "webhook-service"` while the GMC is down.
+# That message names the dataplane rather than the cause, so each of the three
+# entrypoints that applies a v2 object waits here first.
 #
 # At rest the dogfood cluster sits at 0 nodes, which makes that the ordinary
 # state rather than an edge one: the pool resize is what gives the GMC somewhere
@@ -15,7 +14,7 @@
 
 # shellcheck shell=bash
 
-# The Deployment serving the conversion webhook. One spelling, because three
+# The Deployment serving the validating webhooks. One spelling, because three
 # scripts had it four times between them and a rename would have missed some.
 GMC_DEPLOYMENT="deployment/gmc-controller-manager"
 GMC_NAMESPACE="gmc-system"
@@ -36,7 +35,7 @@ gmc_ready() {
 # ReplicaSet's terminating pod during a rollout, which never reaches Ready, so a
 # healthy rollout reads as a timeout.
 wait_for_gmc() {
-	echo "Waiting for the GMC rollout (it serves the v2beta1 conversion webhook)..."
+	echo "Waiting for the GMC rollout (it serves the validating webhooks)..."
 	kubectl rollout status "${GMC_DEPLOYMENT}" \
 		--namespace "${GMC_NAMESPACE}" --timeout="${1:-${GMC_ROLLOUT_TIMEOUT:-5m}}"
 }

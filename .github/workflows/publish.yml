@@ -657,7 +657,7 @@ jobs:
           PRERELEASE: ${{ steps.tag.outputs.prerelease }}
         run: |
           set -euo pipefail
-          # The opt-in actions-gateway-crds-v2 chart (v2alpha1 CRDs), published
+          # The opt-in actions-gateway-crds-v2 chart (v2 CRDs), published
           # separately so the large pod-template CRDs do not bloat the main chart's
           # Helm release (Q149). Same versioning/sign path as the main chart.
           version="${TAG#v}"
@@ -760,10 +760,7 @@ jobs:
           # signed release asset so the manual path is a single command with no helm
           # or chart checkout:
           #   kubectl apply --server-side -f <release-url>/actions-gateway-crds-v2.yaml
-          # Rendered for the DEFAULT gmc-system namespace — the conversion webhook
-          # clientConfig namespace bakes in at render time, so a GMC in another
-          # namespace still uses the `helm template --set … | kubectl apply` path in
-          # install.md. Keyless-signed via the SAME Fulcio/Rekor path as the charts
+          # Keyless-signed via the SAME Fulcio/Rekor path as the charts
           # (sign-blob → a Sigstore bundle that `cosign verify-blob --bundle` checks
           # with no key material), answering the "release assets are mutable" note in
           # release.md.

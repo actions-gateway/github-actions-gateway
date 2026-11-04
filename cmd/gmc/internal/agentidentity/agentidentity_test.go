@@ -3,24 +3,24 @@ package agentidentity
 import (
 	"testing"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func v2Gateway(namespace, name, gitHubURL string) agcv2alpha1.ActionsGateway {
-	return agcv2alpha1.ActionsGateway{
+func v2Gateway(namespace, name, gitHubURL string) agcv2.ActionsGateway {
+	return agcv2.ActionsGateway{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec:       agcv2alpha1.ActionsGatewaySpec{GitHubURL: gitHubURL},
+		Spec:       agcv2.ActionsGatewaySpec{GitHubURL: gitHubURL},
 	}
 }
 
-func runnerSet(namespace, name, gateway string) agcv2alpha1.RunnerSet {
-	return agcv2alpha1.RunnerSet{
+func runnerSet(namespace, name, gateway string) agcv2.RunnerSet {
+	return agcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:   agcv2alpha1.ObjectRef{Name: gateway},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: gateway},
 			RunnerLabels: []string{"linux"},
 		},
 	}
@@ -82,11 +82,11 @@ func TestCollisionSkipsSelf(t *testing.T) {
 func TestFromLists(t *testing.T) {
 	t.Run("claims are scoped through their gateways", func(t *testing.T) {
 		inv := FromLists(
-			[]agcv2alpha1.ActionsGateway{
+			[]agcv2.ActionsGateway{
 				v2Gateway("tenant-a", "gw1", "https://github.com/acme"),
 				v2Gateway("tenant-b", "gw2", "https://github.com/Acme/"),
 			},
-			[]agcv2alpha1.RunnerSet{runnerSet("tenant-a", "build", "gw1"), runnerSet("tenant-b", "build", "gw2")},
+			[]agcv2.RunnerSet{runnerSet("tenant-a", "build", "gw1"), runnerSet("tenant-b", "build", "gw2")},
 		)
 		require.Len(t, inv.Claims, 2)
 		for _, c := range inv.Claims {
@@ -100,13 +100,13 @@ func TestFromLists(t *testing.T) {
 	})
 
 	t.Run("a RunnerSet whose gateway is not stored resolves no scope", func(t *testing.T) {
-		inv := FromLists(nil, []agcv2alpha1.RunnerSet{runnerSet("tenant", "build", "gw-missing")})
+		inv := FromLists(nil, []agcv2.RunnerSet{runnerSet("tenant", "build", "gw-missing")})
 		require.Len(t, inv.Claims, 1)
 		assert.Empty(t, inv.Claims[0].Scope)
 	})
 
 	t.Run("scope lookups", func(t *testing.T) {
-		inv := FromLists([]agcv2alpha1.ActionsGateway{v2Gateway("tenant", "gw2", "https://ghes.corp.example/team")}, nil)
+		inv := FromLists([]agcv2.ActionsGateway{v2Gateway("tenant", "gw2", "https://ghes.corp.example/team")}, nil)
 		assert.Equal(t, "ghes.corp.example/team", inv.V2Scope("tenant", "gw2"))
 		assert.Empty(t, inv.V2Scope("tenant", "absent"))
 	})

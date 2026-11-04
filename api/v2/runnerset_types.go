@@ -677,17 +677,8 @@ type ContainerSizingRecommendation struct {
 // (gatewayRef), and carries the scheduling/quota knobs that were RunnerGroup's in
 // v1alpha1. Worker pods are provisioned per acquired job and released on completion.
 //
-// The .spec.gatewayRef.name selectable field (KEP-4358, used by the AGC to scope its
-// RunnerSet watch server-side) is declared on v2beta1 and v2, and deliberately NOT on
-// v2alpha1. A field selector is evaluated at the version a request names, so the
-// field must be declared on the version the AGC watches, which is v2 (Q1263). The
-// apiserver hoists per-version selectableFields to spec level when they are
-// identical across all versions, but leaves the schema per-version when the
-// versions' schemas differ (v2alpha1 keeps acquisitionProtocol/maxListeners). A
-// spec-level selectableFields with a nil spec-level schema is rejected
-// ("selectableFields may only be set when validations.schema is included"), so
-// declaring the field on all three versions makes the RunnerSet CRD
-// un-installable. See Q74.
+// The .spec.gatewayRef.name selectable field (KEP-4358) is how the AGC scopes its
+// RunnerSet watch server-side.
 //
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion

@@ -71,7 +71,7 @@ const (
 // kubelet's ranking picks this worker, a limit that clears the spec's fill.
 func scaleSetLiveManifest(ns, orgURL, secretName, workerImage string) string {
 	res := utils.NodePressureWorkerResources()
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: %[6]s
@@ -84,7 +84,7 @@ spec:
       name: %[2]s
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: %[8]s
@@ -104,7 +104,7 @@ spec:
             cpu: %[5]s
             memory: %[11]s
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: %[7]s
@@ -114,7 +114,6 @@ spec:
     name: %[6]s
   templateRef:
     name: %[8]s
-  acquisitionProtocol: ScaleSet
   runnerLabels: ["%[9]s"]
 `, ns, secretName, workerImage, orgURL, res.Requests.Cpu().String(),
 		scaleSetGatewayName, scaleSetName, scaleSetTemplate, scaleSetLabel,

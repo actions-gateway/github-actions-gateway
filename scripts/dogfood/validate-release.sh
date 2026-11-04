@@ -209,7 +209,7 @@ WORKERS_MAX_RESTORE=""
 
 # The e2e tenant's ResourceQuota, and the rungs of the pre-acquisition admission
 # ladder its RunnerSet must publish (Q59, Q443, Q721). ci-e2e is authored at
-# v2beta1, which is ScaleSet-only, so it advertises a capacity per long-poll and
+# v2, which is ScaleSet-only, so it advertises a capacity per long-poll and
 # attributes every withheld slot in status.withheldCapacity — the surface the
 # capacity leg reads. A classic-tier set would publish neither.
 #
@@ -1289,7 +1289,7 @@ capacity_leg() {
 		echo "error: RunnerSet ci-e2e has published no advertisedCapacity." >&2
 		echo "  The scale-set listener states a capacity every long-poll, so an empty field" >&2
 		echo "  means the ladder never ran: either no poll completed, or the set is not on" >&2
-		echo "  the scale-set tier at all (it is authored at v2beta1, which is ScaleSet-only)." >&2
+		echo "  the scale-set tier at all (it is authored at v2, which is ScaleSet-only)." >&2
 		return 1
 	fi
 	echo "  ladder: ci-e2e advertisedCapacity=${advertised}"
@@ -1471,39 +1471,21 @@ preflight_cosign() {
 	COSIGN_BIN="${cosign}"
 }
 
-# spec_canon <json> — the spec with empty strings, objects, arrays and nulls
-# dropped, so a read that skips the webhook (at the storage version) compares
-# equal to one converted through the webhook's Go types. Those types drop an
-# `omitempty` empty string and always emit an empty struct: `env[].value: ""`
-# disappears and `podTemplate.metadata: {}` appears, and both decode to the same
-# object. Measured on gag-dogfood 2026-10-03, three ClusterRunnerTemplates.
-spec_canon() {
-	jq -cS 'def prune: if type == "object" then
-			with_entries(.value |= prune | select(.value != "" and .value != {} and .value != [] and .value != null))
-		elif type == "array" then map(prune) else . end;
-		prune' <<<"$1" 2>/dev/null || printf '%s' "$1"
-}
-
-# soak_leg — the v2 GA soak readings (Q1059 criterion 2, Q1060 criterion 3) and
-# the v2beta1 <-> v2 round trip (Q1156).
+# soak_leg — the v2 GA soak reading that every kind reconciles on this cluster (Q1059).
 #
-# These are READINGS, not gates. A criterion closes when evidence exists, and a
-# negative reading is the release working: it names the shape fix v2beta1 still
-# needs. So a reading that comes back bad is reported and recorded, and only a
-# reading that could not be TAKEN is worth failing over — and not even then,
-# because the candidate is sound either way. The verdict is transcribed by hand
-# into the v2 GA plan's Phase 1 criteria table from what this prints; Q1059 and
-# Q1060 name that table and survive the plan being archived.
+# This is a READING, not a gate. A criterion closes when evidence exists, and a negative
+# reading is the release working: it names the shape fix still needed. So a reading that
+# comes back bad is reported and recorded, and only a reading that could not be TAKEN is
+# worth failing over — and not even then, because the candidate is sound either way.
 #
 # Placed after crd-smoke and before teardown: the readings need the control
-# plane and a live GMC (which serves the conversion webhook) and none needs
-# workers, so this is the cheapest point in the window at which all are
-# available. Q1048's census cannot live here for the opposite reason — it needs
+# plane and a live GMC and none needs workers, so this is the cheapest point in
+# the window at which all are available. Q1048's census cannot live here for the opposite reason — it needs
 # workers, which are reaped long before this line.
 soak_leg() {
 	gke_get_credentials_and_verify "${PROJECT}" "${ZONE}" "${CLUSTER}"
 
-	# --- Q1059: every v2beta1 kind applied and reconciled here ---------------
+	# --- Q1059: every v2 kind applied and reconciled here --------------------
 	#
 	# Four of the five already carry real traffic: setup.sh applies
 	# ActionsGateway, RunnerTemplate and RunnerSet, and deploy/templates applies
@@ -1511,7 +1493,7 @@ soak_leg() {
 	# setup.sh creates none, workers egress directly. So the reading manufactures
 	# one, asserts it reconciles, and deletes it again: the point is evidence that
 	# the kind works on this cluster, not a change to what dogfood runs.
-	echo "Q1059: exercising every v2beta1 kind on this cluster..."
+	echo "Q1059: exercising every v2 kind on this cluster..."
 	local kinds=(actionsgateways runnersets runnertemplates clusterrunnertemplates egressproxies)
 	local kind missing=0
 	# Carried out of the reconcile branch so the recorded verdict says whether the
@@ -1520,9 +1502,9 @@ soak_leg() {
 	# rather than inheriting a pass nothing measured.
 	local proxy_verdict=not-taken proxy_detail="the Ready wait did not run"
 
-	echo "  applying a v2beta1 EgressProxy (the one kind setup.sh never creates)..."
+	echo "  applying a v2 EgressProxy (the one kind setup.sh never creates)..."
 	if ! kubectl apply -f - <<EOF
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: soak-reading
@@ -1534,7 +1516,7 @@ EOF
 	then
 		echo "  Q1059: NOT TAKEN — the EgressProxy apply failed; criterion 2 stays unmet" >&2
 		progress_reading Q1059 "criterion-2-every-kind" not-taken \
-			"the v2beta1 EgressProxy apply failed, so the one uncovered kind stayed uncovered"
+			"the v2 EgressProxy apply failed, so the one uncovered kind stayed uncovered"
 		return 0
 	fi
 
@@ -1557,157 +1539,26 @@ EOF
 	fi
 
 	for kind in "${kinds[@]}"; do
-		if kubectl get "${kind}.v2beta1.actions-gateway.com" --all-namespaces \
+		if kubectl get "${kind}.v2.actions-gateway.com" --all-namespaces \
 			-o name >/dev/null 2>&1 &&
-			[[ -n "$(kubectl get "${kind}.v2beta1.actions-gateway.com" --all-namespaces -o name 2>/dev/null)" ]]; then
-			echo "  v2beta1 ${kind}: present"
+			[[ -n "$(kubectl get "${kind}.v2.actions-gateway.com" --all-namespaces -o name 2>/dev/null)" ]]; then
+			echo "  v2 ${kind}: present"
 		else
-			echo "  v2beta1 ${kind}: ABSENT — criterion 2 is not met by this window"
+			echo "  v2 ${kind}: ABSENT — criterion 2 is not met by this window"
 			missing=1
 		fi
 	done
 	if ((missing == 0)); then
-		echo "  Q1059: all five v2beta1 kinds carried traffic on this cluster"
+		echo "  Q1059: all five v2 kinds carried traffic on this cluster"
 		progress_reading Q1059 "criterion-2-every-kind" "${proxy_verdict}" \
-			"all five v2beta1 kinds present; EgressProxy ${proxy_detail}"
+			"all five v2 kinds present; EgressProxy ${proxy_detail}"
 	else
 		progress_reading Q1059 "criterion-2-every-kind" finding \
-			"a v2beta1 kind is absent, so criterion 2 is not met by this window"
+			"a v2 kind is absent, so criterion 2 is not met by this window"
 	fi
 
 	echo "  removing the manufactured EgressProxy..."
 	kubectl delete egressproxy soak-reading -n "${TENANT_NAMESPACE}" --ignore-not-found --wait=false || true
-
-	# --- Q1060: the conversion webhook round-trip ----------------------------
-	#
-	# What this covers: the two SERVED versions of the v2 CRD, v2alpha1 and
-	# v2beta1, compared field for field over a real object on this cluster.
-	# Reading at v2alpha1 forces a conversion over TLS whichever version stores
-	# the object (v2beta1 before 1.10, v2 from it), and reading back at v2beta1
-	# closes the loop.
-	echo "Q1060: round-tripping the conversion webhook, field for field..."
-	# Resource-qualified by version, `<plural>.<version>.<group>`, with the object
-	# NAME as a separate argument. Appending the suffix to a `kind/name` string
-	# instead puts it on the name, which addresses an object that does not exist
-	# and reads back empty — indistinguishable from a webhook failure.
-	local name="dogfood" beta alpha
-	beta="$(kubectl get actionsgateways.v2beta1.actions-gateway.com "${name}" \
-		-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
-	alpha="$(kubectl get actionsgateways.v2alpha1.actions-gateway.com "${name}" \
-		-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
-	[[ -z "${beta}" ]] || beta="$(spec_canon "${beta}")"
-	[[ -z "${alpha}" ]] || alpha="$(spec_canon "${alpha}")"
-
-	if [[ -z "${beta}" || -z "${alpha}" ]]; then
-		echo "  Q1060: NOT TAKEN — could not read the object at both served versions."
-		echo "         An empty read here is the caBundle or the webhook, not an equal object."
-		progress_reading Q1060 "criterion-3-conversion-round-trip" not-taken \
-			"the ActionsGateway could not be read at both served versions"
-	elif [[ "${beta}" == "${alpha}" ]]; then
-		echo "  Q1060: spec identical across v2alpha1 and v2beta1 — round-trip lossless"
-		progress_reading Q1060 "criterion-3-conversion-round-trip" pass \
-			"the standing tenant's ActionsGateway spec is identical across v2alpha1 and v2beta1"
-	else
-		# The interesting outcome, and not a gate failure: a field that does not
-		# survive the hop is exactly the shape fix GA is gated on finding.
-		echo "  Q1060: spec DIFFERS across served versions — this is the reading, record it:"
-		progress_reading Q1060 "criterion-3-conversion-round-trip" finding \
-			"the ActionsGateway spec differs across served versions; a field does not survive the hop"
-		diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${alpha}") || true
-	fi
-
-	soak_v2_round_trip
-}
-
-# soak_v2_round_trip — the Q1156 reading: v2beta1 <-> v2 conversion on real
-# objects, which is release-1.9's Definition of Done #2 and the edge v2.0.0's
-# storage migration depends on. Q1060 never reads v2.
-#
-# Both directions. Reading every standing object of the five kinds at v2beta1 and
-# at v2 converts storage -> v2 on the way out. Applying an EgressProxy AT v2
-# converts v2 -> storage on the way in, and reading it back at both versions
-# closes that loop. The one shape v2 changes, a stored CiliumFQDN/CalicoFQDN
-# alias, cannot be manufactured here because admission rejects a new alias
-# write (Q1085); a stored one would show here as a differing spec.
-soak_v2_round_trip() {
-	echo "Q1156: round-tripping v2beta1 and v2 over real objects..."
-	local kinds=(actionsgateways runnersets runnertemplates clusterrunnertemplates egressproxies)
-	local kind ns name beta v2 compared=0 differs=0 unread=0
-	local -a ns_args
-	for kind in "${kinds[@]}"; do
-		while read -r ns name; do
-			[[ -n "${name}" ]] || continue
-			ns_args=()
-			[[ "${ns}" == "-" ]] || ns_args=(-n "${ns}")
-			beta="$(kubectl get "${kind}.v2beta1.actions-gateway.com" "${name}" "${ns_args[@]}" \
-				-o jsonpath='{.spec}' 2>/dev/null || true)"
-			v2="$(kubectl get "${kind}.v2.actions-gateway.com" "${name}" "${ns_args[@]}" \
-				-o jsonpath='{.spec}' 2>/dev/null || true)"
-			[[ -z "${beta}" ]] || beta="$(spec_canon "${beta}")"
-			[[ -z "${v2}" ]] || v2="$(spec_canon "${v2}")"
-			if [[ -z "${beta}" || -z "${v2}" ]]; then
-				echo "  ${kind} ${ns}/${name}: could not be read at both versions"
-				unread=$((unread + 1))
-			elif [[ "${beta}" == "${v2}" ]]; then
-				compared=$((compared + 1))
-			else
-				echo "  ${kind} ${ns}/${name}: spec DIFFERS between v2beta1 and v2:"
-				diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${v2}") || true
-				compared=$((compared + 1))
-				differs=$((differs + 1))
-			fi
-		done < <(kubectl get "${kind}.v2beta1.actions-gateway.com" --all-namespaces \
-			-o jsonpath='{range .items[*]}{.metadata.namespace}{" "}{.metadata.name}{"\n"}{end}' 2>/dev/null |
-			awk '{ if (NF == 1) print "- " $1; else print }')
-	done
-
-	# The write direction: stored through the conversion webhook from v2.
-	local written=not-taken
-	echo "  applying an EgressProxy at v2 (v2 -> storage)..."
-	if kubectl apply -f - <<EOF; then
-apiVersion: actions-gateway.com/v2
-kind: EgressProxy
-metadata:
-  name: soak-reading-v2
-  namespace: ${TENANT_NAMESPACE}
-spec:
-  minReplicas: 1
-  maxReplicas: 1
-EOF
-		beta="$(kubectl get egressproxies.v2beta1.actions-gateway.com soak-reading-v2 \
-			-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
-		v2="$(kubectl get egressproxies.v2.actions-gateway.com soak-reading-v2 \
-			-n "${TENANT_NAMESPACE}" -o jsonpath='{.spec}' 2>/dev/null || true)"
-		[[ -z "${beta}" ]] || beta="$(spec_canon "${beta}")"
-		[[ -z "${v2}" ]] || v2="$(spec_canon "${v2}")"
-		if [[ -z "${beta}" || -z "${v2}" ]]; then
-			echo "  v2-applied EgressProxy: could not be read back at both versions"
-		elif [[ "${beta}" == "${v2}" ]]; then
-			written=pass
-		else
-			echo "  v2-applied EgressProxy: spec DIFFERS between v2beta1 and v2:"
-			diff <(printf '%s\n' "${beta}") <(printf '%s\n' "${v2}") || true
-			written=finding
-		fi
-		kubectl delete egressproxy soak-reading-v2 -n "${TENANT_NAMESPACE}" --ignore-not-found --wait=false || true
-	else
-		echo "  the v2 EgressProxy apply failed"
-	fi
-
-	if ((differs > 0)) || [[ "${written}" == "finding" ]]; then
-		echo "  Q1156: a spec DIFFERS between v2beta1 and v2 — this is the reading, record it"
-		progress_reading Q1156 "v2-conversion-round-trip" finding \
-			"${differs} of ${compared} standing objects differ between v2beta1 and v2; v2-applied EgressProxy ${written}"
-	elif ((compared == 0 || unread > 0)) || [[ "${written}" != "pass" ]]; then
-		echo "  Q1156: NOT TAKEN — ${compared} object(s) compared, ${unread} unreadable, v2 write ${written}."
-		echo "         An empty read here is the caBundle or the webhook, not an equal object."
-		progress_reading Q1156 "v2-conversion-round-trip" not-taken \
-			"${compared} standing objects compared, ${unread} not readable at both versions; v2-applied EgressProxy ${written}"
-	else
-		echo "  Q1156: ${compared} standing objects and a v2-applied EgressProxy identical at v2beta1 and v2"
-		progress_reading Q1156 "v2-conversion-round-trip" pass \
-			"${compared} standing objects across five kinds identical at v2beta1 and v2; a v2-applied EgressProxy reads back identical at both"
-	fi
 }
 
 # crd_smoke — download the RC's signed v2 CRD manifest, verify its blob signature
@@ -2334,7 +2185,7 @@ main() {
 	# negative reading is evidence the release exists to gather rather than a
 	# reason to reject the candidate. See its own comment for why it sits here.
 	if leg_selected soak; then
-		progress_phase soak "Taking the v2 soak readings (Q1059, Q1060, Q1156)"
+		progress_phase soak "Taking the v2 soak reading (Q1059)"
 		soak_leg
 		progress_event soak "done"
 		evidence_leg soak

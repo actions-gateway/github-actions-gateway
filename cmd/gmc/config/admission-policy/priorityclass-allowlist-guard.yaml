@@ -51,15 +51,13 @@ metadata:
 spec:
   failurePolicy: Fail
   paramKind:
-    apiVersion: actions-gateway.com/v2beta1
+    apiVersion: actions-gateway.com/v2
     kind: PriorityClassAllowlist
   matchConstraints:
     resourceRules:
-      # Q323: the v2 carriers of the same two PriorityClass routes. Every served
-      # version is listed explicitly (they share identical field paths), so the rule
-      # does not depend on matchPolicy version equivalence.
+      # Q323: the v2 carriers of the same two PriorityClass routes.
       - apiGroups: ["actions-gateway.com"]
-        apiVersions: ["v2alpha1", "v2beta1", "v2"]
+        apiVersions: ["v2"]
         operations: ["CREATE", "UPDATE"]
         resources: ["runnersets", "runnertemplates"]
   matchConditions:
@@ -125,7 +123,7 @@ spec:
 # until the platform admin lists it here. This is the dev/`make deploy` copy; the
 # Helm chart renders the same object from .Values.allowedPriorityClasses so the
 # webhook flag and this policy stay in lockstep.
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: PriorityClassAllowlist
 metadata:
   name: gag-priorityclass-allowlist

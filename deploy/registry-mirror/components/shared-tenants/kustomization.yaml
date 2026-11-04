@@ -7,7 +7,7 @@ kind: Component
 #
 # WHAT IT CHANGES. The mirror-side ingress stops naming a single namespace and
 # admits any namespace carrying the GMC's managed-tenant marker
-# (api/v2beta1/shared_types.go: TenantNamespaceMarkerLabel/Value). The default
+# (api/v2/shared_types.go: TenantNamespaceMarkerLabel/Value). The default
 # (../../base) is the isolated topology: one set serving one tenant, named
 # literally in both policies. Which one an adopter wants is a cost-against-risk
 # call only they can make -- see ../../README.md#two-topologies-one-shared-set-or-one-set-per-tenant

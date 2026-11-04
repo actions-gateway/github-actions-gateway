@@ -475,7 +475,7 @@ func dumpMetadataStandin(dsName string) {
 // is a placeholder — the suite probes the workload NetworkPolicy via dedicated
 // curl pods, not a runnable worker.
 func directEgressManifest(ns, secretName, workerImage string) string {
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: direct
@@ -488,7 +488,7 @@ spec:
       name: %[2]s
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: tmpl
@@ -501,7 +501,7 @@ spec:
       - name: runner
         image: %[3]s
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: set-direct

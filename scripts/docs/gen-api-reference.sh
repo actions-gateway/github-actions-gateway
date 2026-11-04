@@ -8,10 +8,8 @@
 # reads the same Go doc comments and validation markers controller-gen turns into
 # the CRD schemas, so the page cannot describe a field the API does not have.
 #
-# Scope is v2 only — the GA version every new install authors at. v1alpha1,
-# v2alpha1 and v2beta1 are removed at v2.0.0; documenting them field by field
-# beside v2 would read as a supported choice. Their readers are served
-# by docs/operations/v1alpha1-deprecation.md and migration-v1-to-v2.md.
+# Scope is v2, the only version served. Readers of the versions v2.0.0 removed are
+# served by docs/operations/v1alpha1-deprecation.md and migration-v1-to-v2.md.
 #
 #   scripts/docs/gen-api-reference.sh          # write docs/reference/api.md (make api-reference)
 #   scripts/docs/gen-api-reference.sh --check  # fail if the committed page is stale

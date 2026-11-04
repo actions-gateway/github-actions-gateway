@@ -3,8 +3,8 @@
 # Unit tests for scripts/dogfood/lib/gmc.sh — the shared GMC readiness helpers
 # three dogfood entrypoints wait on before applying a v2 object.
 #
-# Why it is tested: the helper exists because every v2 CRD routes its apply
-# through the GMC's conversion webhook, so a wait that silently stops waiting is
+# Why it is tested: the helper exists because every v2 apply goes through the
+# GMC's validating webhooks, which fail closed, so a wait that silently stops waiting is
 # a bring-up that fails later with `no endpoints available for service
 # "webhook-service"`, a message naming the dataplane rather than the cause. Two
 # failure directions matter and both are silent. A wait that swallows a failed

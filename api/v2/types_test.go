@@ -5,14 +5,11 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
-// v2 is a copy of the v2beta1 kinds, so it carries the same helper logic. These
-// tests verify the copy behaves identically and keep the api module's coverage floor
-// intact.
+// These tests keep the api module's coverage floor intact for the v2 helper logic.
 
 func TestGitHubAppSecretName(t *testing.T) {
 	tests := []struct {
@@ -131,22 +128,5 @@ func TestReapBlockingSidecars(t *testing.T) {
 func TestAddToScheme_RegistersTypesWithoutError(t *testing.T) {
 	if err := v2.AddToScheme(runtime.NewScheme()); err != nil {
 		t.Fatalf("AddToScheme() returned error: %v", err)
-	}
-}
-
-// TestSpokeMarkers asserts every converted root kind satisfies
-// conversion.Convertible: v2 is a spoke of the v2beta1 hub, not the hub itself.
-func TestSpokeMarkers(t *testing.T) {
-	spokes := []conversion.Convertible{
-		&v2.ActionsGateway{},
-		&v2.EgressProxy{},
-		&v2.RunnerSet{},
-		&v2.RunnerTemplate{},
-		&v2.ClusterRunnerTemplate{},
-	}
-	for _, s := range spokes {
-		if _, isHub := s.(conversion.Hub); isHub {
-			t.Errorf("%T is a conversion hub; the hub is v2beta1", s)
-		}
 	}
 }

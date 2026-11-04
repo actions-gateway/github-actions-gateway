@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -18,7 +20,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 )
 
 // These cover the sweep's decisions against a fake client, which neither converts
@@ -30,7 +31,6 @@ func storageScheme(t *testing.T) *runtime.Scheme {
 	s := runtime.NewScheme()
 	utilruntime.Must(apiextensionsv1.AddToScheme(s))
 	utilruntime.Must(v2.AddToScheme(s))
-	utilruntime.Must(v2beta1.AddToScheme(s))
 	return s
 }
 
@@ -164,6 +164,43 @@ func TestSweepStorageVersion_AlreadyPrunedIsANoOp(t *testing.T) {
 	}
 }
 
+// TestSweepStorageVersion_AliasVersionNotServed is the v2.0.0 candidate gate's storage
+// leg: the alias check reads at v2beta1, which a v2-only CRD set does not serve. A
+// client with a fresh RESTMapper answers no-match, and one whose mapping predates the
+// CRD apply gets the apiserver's NotFound. Any other list failure still stops the sweep.
+func TestSweepStorageVersion_AliasVersionNotServed(t *testing.T) {
+	aliasList := func(listErr error) *interceptor.Funcs {
+		return &interceptor.Funcs{
+			List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, opts ...client.ListOption) error {
+				if list.GetObjectKind().GroupVersionKind().Version == aliasVersion {
+					return listErr
+				}
+				return c.List(ctx, list, opts...)
+			},
+		}
+	}
+	notServed := map[string]error{
+		"no match":  &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: storageGroup, Kind: "EgressProxyList"}, SearchedVersions: []string{aliasVersion}},
+		"not found": apierrors.NewNotFound(schema.GroupResource{Group: storageGroup, Resource: "egressproxies"}, ""),
+	}
+	for name, listErr := range notServed {
+		t.Run(name, func(t *testing.T) {
+			c := newSweepClient(t, aliasList(listErr), allCRDs("v2")...)
+			reports, err := SweepStorageVersion(context.Background(), c, SweepOptions{Apply: true})
+			require.NoError(t, err)
+			for _, r := range reports {
+				assert.True(t, r.Pruned(), r.CRD)
+			}
+		})
+	}
+
+	t.Run("any other error stops the sweep", func(t *testing.T) {
+		c := newSweepClient(t, aliasList(errors.New("apiserver unavailable")), allCRDs("v2")...)
+		_, err := SweepStorageVersion(context.Background(), c, SweepOptions{Apply: true})
+		require.ErrorContains(t, err, "list EgressProxies at v2beta1")
+	})
+}
+
 func TestSweepStorageVersion_Preconditions(t *testing.T) {
 	cases := map[string]struct {
 		objs []client.Object
@@ -178,11 +215,12 @@ func TestSweepStorageVersion_Preconditions(t *testing.T) {
 			want: "actionsgateways.actions-gateway.com: not installed",
 		},
 		"an EgressProxy names an alias": {
-			objs: append(allCRDs("v2beta1", "v2"),
-				&v2beta1.EgressProxy{
-					ObjectMeta: metav1.ObjectMeta{Name: "pinned", Namespace: "team-a"},
-					Spec:       v2beta1.EgressProxySpec{EgressPolicyMode: v2beta1.EgressPolicyModeCalicoFQDN},
-				}),
+			objs: append(allCRDs("v2beta1", "v2"), &unstructured.Unstructured{Object: map[string]any{
+				"apiVersion": "actions-gateway.com/v2beta1",
+				"kind":       "EgressProxy",
+				"metadata":   map[string]any{"name": "pinned", "namespace": "team-a"},
+				"spec":       map[string]any{"egressPolicyMode": "CalicoFQDN"},
+			}}),
 			want: "team-a/pinned\tCalicoFQDN",
 		},
 	}

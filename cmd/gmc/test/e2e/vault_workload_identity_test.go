@@ -267,7 +267,7 @@ spec:
 // gateway declares signer.vault.networkPolicy so the GMC auto-provisions the scoped
 // AGC→Vault egress rule (Q202) — no hand-applied NetworkPolicy is needed.
 func vaultWorkloadIdentityManifest(ns, gw, runnerSet, vaultAddr, key, role, workerImage, vaultNS string) string {
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: %[2]s
@@ -295,7 +295,7 @@ spec:
                 app: vault
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: tmpl
@@ -308,7 +308,7 @@ spec:
       - name: runner
         image: %[7]s
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: %[3]s

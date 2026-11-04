@@ -12,8 +12,6 @@ import (
 	"time"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -100,12 +98,12 @@ func installPriorityClassGuard(t *testing.T) {
 // creating it if a prior step deleted it.
 func setGuardAllowlist(t *testing.T, names ...string) {
 	t.Helper()
-	var pca agcv2beta1.PriorityClassAllowlist
+	var pca agcv2.PriorityClassAllowlist
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: vapParamName}, &pca)
 	if apierrors.IsNotFound(err) {
-		pca = agcv2beta1.PriorityClassAllowlist{
+		pca = agcv2.PriorityClassAllowlist{
 			ObjectMeta: metav1.ObjectMeta{Name: vapParamName},
-			Spec:       agcv2beta1.PriorityClassAllowlistSpec{AllowedPriorityClasses: names},
+			Spec:       agcv2.PriorityClassAllowlistSpec{AllowedPriorityClasses: names},
 		}
 		require.NoError(t, k8sClient.Create(ctx, &pca))
 		return
@@ -141,7 +139,7 @@ func TestGMC_PriorityClassGuard_GatesRunnerSetAndTemplateWrites(t *testing.T) {
 		// core-type paramKind, deleting and recreating the param is exactly the
 		// transition that used to leave resolution permanently broken. The recovery
 		// assertion below is what a ConfigMap paramKind could not satisfy.
-		var pca agcv2beta1.PriorityClassAllowlist
+		var pca agcv2.PriorityClassAllowlist
 		require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: vapParamName}, &pca))
 		require.NoError(t, k8sClient.Delete(ctx, &pca))
 
@@ -179,12 +177,12 @@ func TestGMC_PriorityClassGuard_GatesRunnerSetAndTemplateWrites(t *testing.T) {
 	})
 }
 
-// plainV2RS returns a class-free v2alpha1 RunnerSet with a per-set runnerLabel.
-func plainV2RS(ns, name string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{
+// plainV2RS returns a class-free v2 RunnerSet with a per-set runnerLabel.
+func plainV2RS(ns, name string) *agcv2.RunnerSet {
+	return &agcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:   agcv2alpha1.ObjectRef{Name: "gateway"},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: "gateway"},
 			RunnerLabels: []string{name},
 		},
 	}
@@ -202,7 +200,7 @@ func guardedV2RS(ns, name, tierClass string) *agcv2.RunnerSet {
 
 // runV2GuardSubtests verifies the Q323 extension of the VAP backstop to the v2
 // kinds: runnersets (priorityTiers route) and runnertemplates (podTemplate.spec
-// route) — across v2alpha1, v2beta1 and v2. Both kinds have failurePolicy=fail
+// route). Both kinds have failurePolicy=fail
 // webhooks, so the policy is defense-in-depth: it must answer before the webhooks (VAPs run first in the validation phase), deny
 // off-allowlist classes from any writer, and admit class-free objects untouched.
 // The suite's RunnerSet webhook allowlist contains exactly "high", which lets the
@@ -275,60 +273,6 @@ func runV2GuardSubtests(t *testing.T, ns string) {
 			return lastErr != nil && !strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard")
 		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
 			return fmt.Sprintf("with the class allowlisted in the policy, the webhook must be the denier; last error: %v", lastErr)
-		})
-	})
-
-	t.Run("v2: v2beta1 writes are matched too", func(t *testing.T) {
-		setGuardAllowlist(t)
-		attempt := 0
-		var lastErr error
-		gomega.NewWithT(t).Eventually(func() bool {
-			attempt++
-			rs := &agcv2beta1.RunnerSet{
-				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("beta-tier-%d", attempt)},
-				Spec: agcv2beta1.RunnerSetSpec{
-					GatewayRef:    agcv2beta1.ObjectRef{Name: "gateway"},
-					RunnerLabels:  []string{fmt.Sprintf("beta-tier-%d", attempt)},
-					PriorityTiers: []agcv2beta1.PriorityTier{{PriorityClassName: "high", Threshold: 5}},
-				},
-			}
-			lastErr = k8sClient.Create(ctx, rs)
-			if lastErr == nil {
-				_ = k8sClient.Delete(ctx, rs)
-				return false
-			}
-			return strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard")
-		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
-			return fmt.Sprintf("a v2beta1 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
-		})
-	})
-
-	t.Run("v2: v2alpha1 writes are matched too", func(t *testing.T) {
-		// The subtests above write at v2; this keeps v2alpha1, served until Q1167,
-		// covered. It pins the outcome, not the rule's explicit "v2alpha1" entry: the
-		// default matchPolicy Equivalent can route a write to another listed version,
-		// which Q413 measured for the "v2" entry.
-		setGuardAllowlist(t)
-		attempt := 0
-		var lastErr error
-		gomega.NewWithT(t).Eventually(func() bool {
-			attempt++
-			rs := &agcv2alpha1.RunnerSet{
-				ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: fmt.Sprintf("alpha-tier-%d", attempt)},
-				Spec: agcv2alpha1.RunnerSetSpec{
-					GatewayRef:    agcv2alpha1.ObjectRef{Name: "gateway"},
-					RunnerLabels:  []string{fmt.Sprintf("alpha-tier-%d", attempt)},
-					PriorityTiers: []agcv2alpha1.PriorityTier{{PriorityClassName: "high", Threshold: 5}},
-				},
-			}
-			lastErr = k8sClient.Create(ctx, rs)
-			if lastErr == nil {
-				_ = k8sClient.Delete(ctx, rs)
-				return false
-			}
-			return strings.Contains(lastErr.Error(), "gag-priorityclass-allowlist-guard")
-		}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), func() string {
-			return fmt.Sprintf("a v2alpha1 RunnerSet tier class must be denied by the policy; last error: %v", lastErr)
 		})
 	})
 

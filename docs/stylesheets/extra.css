@@ -1134,7 +1134,7 @@ body[data-md-color-scheme="slate"] {
   white-space: nowrap;
 }
 
-/* v2 API badge — the capability requires the v2beta1 API. */
+/* v2 API badge — the capability requires the v2 API. */
 .gag-v2-badge {
   background: rgba(103, 80, 164, 0.12);
   color: #6750a4;

@@ -409,7 +409,7 @@ func podContainerEnv(ns, pod, container, envName string) string {
 func scaleSetAcquisitionManifest(ns, secretName, workerImage string) string {
 	githubURL := fmt.Sprintf("https://%s.%s.svc.cluster.local:%s/ssacqorg",
 		fakegithubServiceName, infraNamespace, fakegithubServicePort)
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: ssacq
@@ -422,7 +422,7 @@ spec:
       name: %[2]s
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: tmpl
@@ -442,7 +442,7 @@ spec:
             cpu: 50m
             memory: 64Mi
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: set-ssacq
@@ -452,7 +452,6 @@ spec:
     name: ssacq
   templateRef:
     name: tmpl
-  acquisitionProtocol: ScaleSet
   runnerLabels: ["e2e-ssacq"]
 `, ns, secretName, workerImage, githubURL)
 }

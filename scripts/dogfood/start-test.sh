@@ -93,8 +93,8 @@ echo "scripts/dogfood/start-test.sh"
 
 # --- start.sh sources the shared GMC helper ----------------------------------
 #
-# It calls wait_for_gmc before applying anything the conversion webhook has to
-# serve, and a missing `source` line fails only at runtime, with `command not
+# It calls wait_for_gmc before applying anything the validating webhooks have to
+# admit, and a missing `source` line fails only at runtime, with `command not
 # found` on a cluster that is otherwise fine. `bash -n` cannot see it and the
 # helper's own suite does not know who calls it, so the seam is asserted here.
 # What the helper then does is scripts/dogfood/gmc-test.sh's subject.

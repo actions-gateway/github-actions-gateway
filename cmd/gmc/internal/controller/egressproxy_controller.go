@@ -59,7 +59,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// EgressProxyReconciler reconciles a v2alpha1 EgressProxy into a standalone proxy
+// EgressProxyReconciler reconciles a v2 EgressProxy into a standalone proxy
 // pool, owning the proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
 // self-signed proxy TLS Secret via controller owner references for clean cascade
 // GC (§H.8). It also owns the cross-namespace sharing handshake (M4, §H.9): the CA

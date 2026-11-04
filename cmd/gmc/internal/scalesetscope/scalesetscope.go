@@ -38,7 +38,7 @@ import (
 	"net/url"
 	"strings"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -120,11 +120,11 @@ func (inv Inventory) ScopeOf(namespace, gateway string) string {
 // the reconciler passes its cached client, which already watches both kinds and is
 // reporting a persisted state rather than arbitrating a write.
 func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inventory, error) {
-	var gateways agcv2alpha1.ActionsGatewayList
+	var gateways agcv2.ActionsGatewayList
 	if err := reader.List(ctx, &gateways); err != nil {
 		return Inventory{}, fmt.Errorf("list ActionsGateways: %w", err)
 	}
-	var sets agcv2alpha1.RunnerSetList
+	var sets agcv2.RunnerSetList
 	if err := reader.List(ctx, &sets); err != nil {
 		return Inventory{}, fmt.Errorf("list RunnerSets: %w", err)
 	}
@@ -133,7 +133,7 @@ func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inv
 
 // FromLists derives the inventory [Of] returns from gateways and sets the caller has
 // already read, for a caller whose other guards read the same kinds (Q1075).
-func FromLists(gateways []agcv2alpha1.ActionsGateway, sets []agcv2alpha1.RunnerSet, pending *PendingGateway) Inventory {
+func FromLists(gateways []agcv2.ActionsGateway, sets []agcv2.RunnerSet, pending *PendingGateway) Inventory {
 	scopes := make(map[client.ObjectKey]string, len(gateways))
 	for i := range gateways {
 		gw := &gateways[i]

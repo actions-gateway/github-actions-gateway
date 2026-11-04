@@ -98,7 +98,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-// ActionsGatewayV2Reconciler reconciles a v2alpha1 ActionsGateway into the
+// ActionsGatewayV2Reconciler reconciles a v2 ActionsGateway into the
 // per-tenant AGC control plane: the AGC Deployment/ServiceAccount/RoleBinding/
 // Service, the AGC and workload NetworkPolicies, the metrics mTLS Secrets, and the
 // AGC's egress wiring through the resolved EgressProxy. Every child carries a

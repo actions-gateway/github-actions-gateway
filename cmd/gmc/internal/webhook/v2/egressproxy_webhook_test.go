@@ -2,7 +2,6 @@ package v2
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -318,24 +317,18 @@ func TestEgressProxyCustomValidator_ReferrerCheckFailsClosed(t *testing.T) {
 }
 
 // epWithMode builds a minimal EgressProxy carrying only an egressPolicyMode, for the
-// Q245 intent/backend admission cases. A deprecated alias is built as the validator
-// receives it: the v2 view, FQDN with the alias in annEgressPolicyMode.
+// Q245 intent/backend admission cases.
 func epWithMode(mode agcv2.EgressPolicyMode) *agcv2.EgressProxy {
-	ep := &agcv2.EgressProxy{
+	return &agcv2.EgressProxy{
 		ObjectMeta: metav1.ObjectMeta{Name: "ep", Namespace: "team-a"},
 		Spec:       agcv2.EgressProxySpec{EgressPolicyMode: mode},
 	}
-	if mode == egressPolicyModeCiliumFQDN || mode == egressPolicyModeCalicoFQDN {
-		ep.Spec.EgressPolicyMode = agcv2.EgressPolicyModeFQDN
-		ep.Annotations = map[string]string{annEgressPolicyMode: string(mode)}
-	}
-	return ep
 }
 
 // TestEgressProxyCustomValidator_FQDNBackend covers the Q245 intent/backend split at
 // admission: FQDN intent is rejected when the cluster declares no backend (fail-closed
-// and loud), admitted when a backend is configured, and CIDR/deprecated modes are never
-// gated by the backend.
+// and loud), admitted when a backend is configured, and CIDR is never gated by the
+// backend.
 func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
 	list := allowlist.NewEgressDestination(nil, nil)
 
@@ -344,28 +337,17 @@ func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
 		mode    agcv2.EgressPolicyMode
 		backend controller.FQDNBackend
 		wantErr bool
-		// stored re-applies the mode as an unchanged update instead of a create. The
-		// deprecated aliases can only reach the backend gate that way now that a new
-		// write naming one is rejected outright (Q1085).
-		stored bool
 	}{
 		{name: "FQDN + none rejected", mode: agcv2.EgressPolicyModeFQDN, backend: controller.FQDNBackendNone, wantErr: true},
 		{name: "FQDN + empty (zero value) rejected", mode: agcv2.EgressPolicyModeFQDN, backend: "", wantErr: true},
 		{name: "FQDN + cilium admitted", mode: agcv2.EgressPolicyModeFQDN, backend: controller.FQDNBackendCilium},
 		{name: "FQDN + gke admitted", mode: agcv2.EgressPolicyModeFQDN, backend: controller.FQDNBackendGKE},
 		{name: "CIDR + none admitted", mode: agcv2.EgressPolicyModeCIDR, backend: controller.FQDNBackendNone},
-		{name: "stored Cilium + none admitted", mode: egressPolicyModeCiliumFQDN, backend: controller.FQDNBackendNone, stored: true},
-		{name: "stored Calico + none admitted", mode: egressPolicyModeCalicoFQDN, backend: controller.FQDNBackendNone, stored: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			v := &EgressProxyCustomValidator{Allowlist: list, FQDNBackend: tc.backend}
-			var err error
-			if tc.stored {
-				_, err = v.ValidateUpdate(context.Background(), epWithMode(tc.mode), epWithMode(tc.mode))
-			} else {
-				_, err = v.ValidateCreate(context.Background(), epWithMode(tc.mode))
-			}
+			_, err := v.ValidateCreate(context.Background(), epWithMode(tc.mode))
 			if tc.wantErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "--fqdn-policy-backend")
@@ -374,124 +356,4 @@ func TestEgressProxyCustomValidator_FQDNBackend(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-}
-
-// TestEgressProxyCustomValidator_DeprecationWarnings asserts an already-stored
-// deprecated CNI-specific mode is admitted with a non-blocking warning that names the
-// removal release, while FQDN/CIDR emit none. The release is part of the contract, not decoration: an operator
-// plans the migration from it, and it is v2.0.0 — the aliases are enum members of
-// v2alpha1 and v2beta1, both removed there, and GA v2 does not define them (Q452).
-func TestEgressProxyCustomValidator_DeprecationWarnings(t *testing.T) {
-	v := &EgressProxyCustomValidator{
-		Allowlist:   allowlist.NewEgressDestination(nil, nil),
-		FQDNBackend: controller.FQDNBackendCilium,
-	}
-
-	cases := []struct {
-		mode      agcv2.EgressPolicyMode
-		wantWarn  bool
-		wantToken string
-	}{
-		{egressPolicyModeCiliumFQDN, true, "CiliumFQDN is deprecated"},
-		{egressPolicyModeCalicoFQDN, true, "CalicoFQDN is deprecated"},
-		{agcv2.EgressPolicyModeFQDN, false, ""},
-		{agcv2.EgressPolicyModeCIDR, false, ""},
-	}
-	for _, tc := range cases {
-		t.Run(string(tc.mode), func(t *testing.T) {
-			// An unchanged update, not a create: a create naming an alias is now
-			// rejected, so the warning's remaining job is to keep nudging the operator
-			// who has not migrated yet (Q1085).
-			warns, err := v.ValidateUpdate(context.Background(), epWithMode(tc.mode), epWithMode(tc.mode))
-			require.NoError(t, err)
-			if !tc.wantWarn {
-				assert.Empty(t, warns)
-				return
-			}
-			require.Len(t, warns, 1)
-			assert.Contains(t, warns[0], tc.wantToken)
-			assert.Contains(t, warns[0], "v2.0.0",
-				"the warning must name the removal release so an operator can plan the migration")
-			assert.NotContains(t, warns[0], "v3.0.0",
-				"naming the next major understates the removal by a whole release")
-		})
-	}
-}
-
-// TestEgressProxyCustomValidator_RejectsNewDeprecatedMode covers the Q1085 asymmetry:
-// a write that INTRODUCES CiliumFQDN/CalicoFQDN is rejected, one that leaves an
-// already-stored alias alone is admitted. The asymmetry is what stops the population
-// growing without breaking an operator who has not migrated — v2 cannot represent an
-// alias, and one such object fails the request it is served in, erroring a LIST that
-// would return it, so a flat reject would fail every re-apply while a flat accept
-// leaves the hazard growing.
-func TestEgressProxyCustomValidator_RejectsNewDeprecatedMode(t *testing.T) {
-	v := &EgressProxyCustomValidator{
-		Allowlist:   allowlist.NewEgressDestination(nil, nil),
-		FQDNBackend: controller.FQDNBackendCilium,
-	}
-	const cil = egressPolicyModeCiliumFQDN
-	const cal = egressPolicyModeCalicoFQDN
-
-	t.Run("create", func(t *testing.T) {
-		cases := []struct {
-			mode    agcv2.EgressPolicyMode
-			wantErr bool
-		}{
-			{cil, true},
-			{cal, true},
-			{agcv2.EgressPolicyModeFQDN, false},
-			{agcv2.EgressPolicyModeCIDR, false},
-		}
-		for _, tc := range cases {
-			t.Run(string(tc.mode), func(t *testing.T) {
-				warns, err := v.ValidateCreate(context.Background(), epWithMode(tc.mode))
-				if !tc.wantErr {
-					require.NoError(t, err)
-					return
-				}
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "may no longer be introduced")
-				assert.Contains(t, err.Error(), "v2.0.0",
-					"the rejection must name the removal release, as the warning it replaces did")
-				assert.Empty(t, warns,
-					"a rejected write carries no deprecation warning; the error already says it")
-			})
-		}
-	})
-
-	t.Run("update", func(t *testing.T) {
-		cases := []struct {
-			name             string
-			oldMode, newMode agcv2.EgressPolicyMode
-			wantErr          bool
-		}{
-			{"stored alias re-applied unchanged", cil, cil, false},
-			{"stored alias migrated to FQDN", cil, agcv2.EgressPolicyModeFQDN, false},
-			{"stored alias migrated to CIDR", cal, agcv2.EgressPolicyModeCIDR, false},
-			{"CIDR switched onto an alias", agcv2.EgressPolicyModeCIDR, cil, true},
-			{"FQDN switched onto an alias", agcv2.EgressPolicyModeFQDN, cal, true},
-			{"one alias swapped for the other", cil, cal, true},
-		}
-		// A terminating object takes the Q518 deletion-only path, which must not
-		// admit an alias switch that changes only the annotation on the v2 view.
-		for _, terminating := range []bool{false, true} {
-			for _, tc := range cases {
-				t.Run(fmt.Sprintf("%s/terminating=%t", tc.name, terminating), func(t *testing.T) {
-					oldObj, newObj := epWithMode(tc.oldMode), epWithMode(tc.newMode)
-					if terminating {
-						now := metav1.Now()
-						oldObj.DeletionTimestamp, newObj.DeletionTimestamp = &now, &now
-					}
-					_, err := v.ValidateUpdate(context.Background(), oldObj, newObj)
-					if !tc.wantErr {
-						require.NoError(t, err)
-						return
-					}
-					require.Error(t, err)
-					assert.Contains(t, err.Error(), "may no longer be introduced")
-				})
-			}
-		}
-	})
 }

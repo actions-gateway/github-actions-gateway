@@ -278,7 +278,7 @@ spec:
 func v2ProxyAttributionManifest(poolNS, pool, alphaNS, betaNS, secretName, image, runnerSet string) string {
 	consumer := func(ns, gateway, org, set string) string {
 		return fmt.Sprintf(`---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: %[2]s
@@ -294,7 +294,7 @@ spec:
     namespace: %[8]s
   proxyFailureAttribution: PerJob
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: tmpl
@@ -307,7 +307,7 @@ spec:
       - name: runner
         image: %[6]s
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: %[4]s
@@ -320,7 +320,7 @@ spec:
   runnerLabels: ["e2e-attr"]
 `, ns, gateway, org, set, secretName, image, pool, poolNS)
 	}
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: %[2]s

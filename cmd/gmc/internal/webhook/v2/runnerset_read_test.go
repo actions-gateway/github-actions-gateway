@@ -26,8 +26,8 @@ func TestRunnerSetWebhook_SharedReadListsEachKindOnce(t *testing.T) {
 	// ScaleSet set, and each kind they read is listed once per request between them.
 	ctx := context.Background()
 	want := map[string]int{
-		"*v2alpha1.ActionsGatewayList": 1,
-		"*v2alpha1.RunnerSetList":      1,
+		"*v2.ActionsGatewayList": 1,
+		"*v2.RunnerSetList":      1,
 	}
 	self := scaleSetRS("self", "tenant", "gw", "linux")
 	gw := v2Gateway("tenant", "gw", "https://github.com/acme", "")

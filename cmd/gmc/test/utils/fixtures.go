@@ -15,7 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
 
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // This file holds the v2 tenant fixture the e2e suite applies: a typed struct with
@@ -23,7 +23,7 @@ import (
 // of the whole document (Q414).
 //
 // The objects are built from the real API types and marshalled, not string-formatted,
-// so a field renamed in api/v2alpha1 breaks the compile instead of silently applying
+// so a field renamed in api/v2 breaks the compile instead of silently applying
 // a CR with an ignored (pruned) field.
 
 // FakeGitHubURL is the githubURL every fixture tenant carries unless it sets its own:
@@ -66,7 +66,7 @@ type RunnerSetFixture struct {
 	// PriorityTiers assigns a PriorityClass to the worker pod by cumulative active-pod
 	// count. Every name here must be on the platform PriorityClass allowlist or the GMC
 	// webhook (and the priorityclass-allowlist-guard policy) rejects the RunnerSet.
-	PriorityTiers []v2alpha1.PriorityTier
+	PriorityTiers []v2.PriorityTier
 	// WorkerResources, when non-nil, is set on the template's `runner` container. The
 	// AGC copies the podTemplate verbatim, so this is how a spec gives the worker pod a
 	// resource footprint the scheduler has to reason about — an extended resource, for
@@ -138,8 +138,8 @@ func RunnerTenant(ns, name, secretName, workerImage string) TenantFixture {
 // policy rejects the privileged profile label.
 func PrivilegedTenantNamespaceLabels() map[string]string {
 	return map[string]string{
-		v2alpha1.PrivilegedProfileLabel: v2alpha1.PrivilegedProfileAllowed,
-		v2alpha1.SecurityProfileLabel:   v2alpha1.SecurityProfilePrivileged,
+		v2.PrivilegedProfileLabel: v2.PrivilegedProfileAllowed,
+		v2.SecurityProfileLabel:   v2.SecurityProfilePrivileged,
 	}
 }
 
@@ -227,7 +227,7 @@ func (f TenantFixture) WithProxyReplicas(minReplicas, maxReplicas int32) TenantF
 func (f TenantFixture) WithPriorityTier(priorityClassName string, threshold int32, resources corev1.ResourceRequirements) TenantFixture {
 	f.RunnerSets = cloneSets(f.RunnerSets)
 	for i := range f.RunnerSets {
-		f.RunnerSets[i].PriorityTiers = []v2alpha1.PriorityTier{{
+		f.RunnerSets[i].PriorityTiers = []v2.PriorityTier{{
 			PriorityClassName: priorityClassName,
 			Threshold:         threshold,
 		}}
@@ -319,7 +319,7 @@ func (f TenantFixture) Manifest() string {
 	return strings.Join(docs, "---\n")
 }
 
-// Objects builds the typed v2alpha1 objects the fixture describes, in apply order:
+// Objects builds the typed v2 objects the fixture describes, in apply order:
 // the EgressProxy, the ActionsGateway, then each RunnerTemplate and its RunnerSet.
 func (f TenantFixture) Objects() []any {
 	objs := []any{f.EgressProxy(), f.Gateway()}
@@ -330,17 +330,17 @@ func (f TenantFixture) Objects() []any {
 }
 
 // Gateway builds the fixture's ActionsGateway, defaulting every set to its proxy pool.
-func (f TenantFixture) Gateway() *v2alpha1.ActionsGateway {
-	return &v2alpha1.ActionsGateway{
-		TypeMeta:   metav1.TypeMeta{APIVersion: v2alpha1.GroupVersion.String(), Kind: "ActionsGateway"},
+func (f TenantFixture) Gateway() *v2.ActionsGateway {
+	return &v2.ActionsGateway{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v2.GroupVersion.String(), Kind: "ActionsGateway"},
 		ObjectMeta: metav1.ObjectMeta{Name: f.Name, Namespace: f.Namespace},
-		Spec: v2alpha1.ActionsGatewaySpec{
-			Credentials: v2alpha1.GitHubCredentials{
-				Type:      v2alpha1.CredentialTypeGitHubApp,
-				GitHubApp: &v2alpha1.LocalSecretReference{Name: f.SecretName},
+		Spec: v2.ActionsGatewaySpec{
+			Credentials: v2.GitHubCredentials{
+				Type:      v2.CredentialTypeGitHubApp,
+				GitHubApp: &v2.LocalSecretReference{Name: f.SecretName},
 			},
 			GitHubURL:       cmp.Or(f.GitHubURL, FakeGitHubURL),
-			DefaultProxyRef: &v2alpha1.ProxyObjectRef{Name: f.EgressProxyName()},
+			DefaultProxyRef: &v2.ProxyObjectRef{Name: f.EgressProxyName()},
 			LogLevel:        f.LogLevel,
 		},
 	}
@@ -349,11 +349,11 @@ func (f TenantFixture) Gateway() *v2alpha1.ActionsGateway {
 // EgressProxy builds the fixture's proxy pool. Zero means "not set" for both replica
 // bounds, so the pointer stays nil and the CRD default applies rather than a literal
 // 0 replicas.
-func (f TenantFixture) EgressProxy() *v2alpha1.EgressProxy {
-	ep := &v2alpha1.EgressProxy{
-		TypeMeta:   metav1.TypeMeta{APIVersion: v2alpha1.GroupVersion.String(), Kind: "EgressProxy"},
+func (f TenantFixture) EgressProxy() *v2.EgressProxy {
+	ep := &v2.EgressProxy{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v2.GroupVersion.String(), Kind: "EgressProxy"},
 		ObjectMeta: metav1.ObjectMeta{Name: f.EgressProxyName(), Namespace: f.Namespace},
-		Spec: v2alpha1.EgressProxySpec{
+		Spec: v2.EgressProxySpec{
 			NoProxyCIDRs: f.NoProxyCIDRs,
 			LogLevel:     f.LogLevel,
 		},
@@ -370,7 +370,7 @@ func (f TenantFixture) EgressProxy() *v2alpha1.EgressProxy {
 }
 
 // runnerTemplate builds the RunnerTemplate the i'th set binds.
-func (f TenantFixture) runnerTemplate(i int) *v2alpha1.RunnerTemplate {
+func (f TenantFixture) runnerTemplate(i int) *v2.RunnerTemplate {
 	s := f.RunnerSets[i]
 	pod := corev1.PodSpec{
 		NodeSelector: s.NodeSelector,
@@ -379,10 +379,10 @@ func (f TenantFixture) runnerTemplate(i int) *v2alpha1.RunnerTemplate {
 	if s.WorkerResources != nil {
 		pod.Containers[0].Resources = *s.WorkerResources
 	}
-	return &v2alpha1.RunnerTemplate{
-		TypeMeta:   metav1.TypeMeta{APIVersion: v2alpha1.GroupVersion.String(), Kind: "RunnerTemplate"},
+	return &v2.RunnerTemplate{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v2.GroupVersion.String(), Kind: "RunnerTemplate"},
 		ObjectMeta: metav1.ObjectMeta{Name: f.RunnerSetName(i), Namespace: f.Namespace},
-		Spec: v2alpha1.RunnerTemplateSpec{
+		Spec: v2.RunnerTemplateSpec{
 			WorkerImage: s.WorkerImage,
 			PodTemplate: corev1.PodTemplateSpec{Spec: pod},
 		},
@@ -391,14 +391,14 @@ func (f TenantFixture) runnerTemplate(i int) *v2alpha1.RunnerTemplate {
 
 // runnerSet builds the i'th RunnerSet. Its first runnerLabel is ScaleSetName, ahead of
 // the fixture's own labels.
-func (f TenantFixture) runnerSet(i int) *v2alpha1.RunnerSet {
+func (f TenantFixture) runnerSet(i int) *v2.RunnerSet {
 	s := f.RunnerSets[i]
-	rs := &v2alpha1.RunnerSet{
-		TypeMeta:   metav1.TypeMeta{APIVersion: v2alpha1.GroupVersion.String(), Kind: "RunnerSet"},
+	rs := &v2.RunnerSet{
+		TypeMeta:   metav1.TypeMeta{APIVersion: v2.GroupVersion.String(), Kind: "RunnerSet"},
 		ObjectMeta: metav1.ObjectMeta{Name: f.RunnerSetName(i), Namespace: f.Namespace},
-		Spec: v2alpha1.RunnerSetSpec{
-			GatewayRef:         v2alpha1.ObjectRef{Name: f.Name},
-			TemplateRef:        &v2alpha1.ObjectRef{Name: f.RunnerSetName(i)},
+		Spec: v2.RunnerSetSpec{
+			GatewayRef:         v2.ObjectRef{Name: f.Name},
+			TemplateRef:        &v2.ObjectRef{Name: f.RunnerSetName(i)},
 			RunnerLabels:       append([]string{f.ScaleSetName(i)}, s.RunnerLabels...),
 			PriorityTiers:      s.PriorityTiers,
 			CompletedPodTTL:    mustParseDuration(s.CompletedPodTTL),

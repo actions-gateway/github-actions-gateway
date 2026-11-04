@@ -13,8 +13,8 @@
 # known exceptions, each with its reason, are api/unconsumed-fields.txt.
 #
 # Each API_GROUPS entry is one API group, as the comma-separated packages serving
-# its versions: versions convert through a JSON round-trip, so a v2beta1 field is
-# consumed when the controllers read its v2alpha1 counterpart. A new version goes
+# its versions: versions convert through a JSON round-trip, so an older version's
+# field is consumed when the controllers read its counterpart. A new version goes
 # in here the day it lands, because apifields fails on any package declaring a
 # root kind that no entry names.
 #
@@ -30,13 +30,13 @@ source "$REPO_ROOT/scripts/lib/common.sh"
 
 MOD="github.com/actions-gateway/github-actions-gateway"
 API_GROUPS=(
-	"$MOD/api/v2,$MOD/api/v2alpha1,$MOD/api/v2beta1"
+	"$MOD/api/v2"
 )
 BASELINE="api/unconsumed-fields.txt"
-# 326 fields at Q573. A floor well under that catches a walk that stops matching
+# 140 fields at Q1167, with `v2` the one package. A floor under that catches a walk that stops matching
 # (a renamed ObjectMeta embed, a group that loads empty) without taxing a PR that
 # removes a few fields.
-MIN_FIELDS=250
+MIN_FIELDS=120
 
 main() {
 	serialize_heavy_build "$@"

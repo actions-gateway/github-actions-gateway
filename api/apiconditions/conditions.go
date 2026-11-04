@@ -1,17 +1,13 @@
 // Package apiconditions holds the v2 condition/reason vocabulary — the strings the
 // GMC and AGC reconcilers write into every v2 kind's .status.conditions[].
 //
-// It lives in the neutral api module, outside any versioned package, because the
-// vocabulary is version-neutral by contract: a condition type or reason is a runtime
-// status value, not schema, and the v2 storage/hub conversion is only sound if both
-// served versions name the same states identically (§H.7). Declaring it once removes
-// the drift class rather than detecting it — the version packages (api/v2alpha1,
-// api/v2beta1) re-export these names so every existing `v2alpha1.ConditionReady`
-// call site keeps compiling, but the values and the rationale live here alone (Q374).
+// It lives in the neutral api module, outside any versioned package, because a
+// condition type or reason is a runtime status value, not schema: a later API version
+// names the same states. The version package (api/v2) re-exports these names, but the
+// values and the rationale live here alone (Q374).
 //
 // Adding a condition or reason: declare it here, then add the one-line re-export to
-// BOTH version packages' conditions.go. scripts/go/check-v2-api-sync.sh fails on a
-// one-sided re-export.
+// api/v2/conditions.go.
 package apiconditions
 
 // Condition types and reasons reported on v2 kinds' .status.conditions. These are

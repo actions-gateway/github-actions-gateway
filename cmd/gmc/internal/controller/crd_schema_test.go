@@ -88,11 +88,11 @@ func TestVerifyCRDSchemas_PrunedFieldReported(t *testing.T) {
 	for _, f := range boundaryFields {
 		crds[f.crd] = loadShippedCRD(t, f.crd)
 	}
-	dropProperty(t, crds["runnersets.actions-gateway.com"], "v2beta1", "spec", "runnerGroup")
+	dropProperty(t, crds["runnersets.actions-gateway.com"], "v2", "spec", "runnerGroup")
 
 	err := VerifyCRDSchemas(context.Background(), crdReader{crds: crds})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup")
+	require.Contains(t, err.Error(), "runnersets.actions-gateway.com at v2 does not declare spec.runnerGroup")
 	// The other declared entries stay quiet, so the message names the actual gap.
 	require.NotContains(t, err.Error(), "defaultRunnerGroup")
 	// The remedy travels with the finding: an operator reading only the log line
@@ -112,14 +112,14 @@ func TestVerifyCRDSchemas_ReadErrorFailsClosed(t *testing.T) {
 
 func TestVersionDeclares(t *testing.T) {
 	crd := loadShippedCRD(t, "runnersets.actions-gateway.com")
-	require.True(t, versionDeclares(crd, "v2beta1", []string{"spec", "runnerGroup"}))
+	require.True(t, versionDeclares(crd, "v2", []string{"spec", "runnerGroup"}))
 	require.False(t, versionDeclares(crd, "v3", []string{"spec", "runnerGroup"}),
 		"a version the CRD does not carry is behind, not declared")
-	require.False(t, versionDeclares(crd, "v2beta1", []string{"spec", "noSuchField"}))
+	require.False(t, versionDeclares(crd, "v2", []string{"spec", "noSuchField"}))
 
 	unserved := crd.DeepCopy()
-	setServed(t, unserved, "v2beta1", false)
-	require.False(t, versionDeclares(unserved, "v2beta1", []string{"spec", "runnerGroup"}),
+	setServed(t, unserved, "v2", false)
+	require.False(t, versionDeclares(unserved, "v2", []string{"spec", "runnerGroup"}),
 		"an unserved version cannot carry a field a tenant can set")
 }
 

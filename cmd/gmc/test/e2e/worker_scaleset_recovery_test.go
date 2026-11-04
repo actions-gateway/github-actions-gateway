@@ -367,7 +367,7 @@ func agcReachedNoDisruptionVerdict(ns, deploy, probePod string) bool {
 // provisioned from the template.
 func scaleSetRecoveryManifest(ns, secretName, workerImage string) string {
 	githubURL := "https://ghes.invalid/ssrecorg"
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: ssrec
@@ -380,7 +380,7 @@ spec:
       name: %[2]s
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: tmpl
@@ -393,7 +393,7 @@ spec:
       - name: runner
         image: %[3]s
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: set-ssrec
@@ -403,7 +403,6 @@ spec:
     name: ssrec
   templateRef:
     name: tmpl
-  acquisitionProtocol: ScaleSet
   runnerLabels: ["e2e-ssrec"]
   # Keep the spec's rerun wait short; the CRD floor is 1s, the shipped default 5s.
   evictionRetryDelay: 5s

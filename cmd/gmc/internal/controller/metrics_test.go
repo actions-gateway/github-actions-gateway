@@ -18,7 +18,7 @@ import (
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
-// newV2MetricsScheme returns the client-go scheme with the v2alpha1 kinds also
+// newV2MetricsScheme returns the client-go scheme with the v2 kinds also
 // registered, so the fake client can serve the ActionsGateway/EgressProxy lists the
 // collectors read (Q320).
 func newV2MetricsScheme(t *testing.T) *runtime.Scheme {
@@ -29,7 +29,7 @@ func newV2MetricsScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// newV2OnlyMetricsScheme returns a scheme with only the v2alpha1 kinds registered.
+// newV2OnlyMetricsScheme returns a scheme with only the v2 kinds registered.
 func newV2OnlyMetricsScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
@@ -37,7 +37,7 @@ func newV2OnlyMetricsScheme(t *testing.T) *runtime.Scheme {
 	return s
 }
 
-// v2ManagedGateway builds a v2alpha1 ActionsGateway for the managed-gateways
+// v2ManagedGateway builds a v2 ActionsGateway for the managed-gateways
 // collector's v2 count.
 func v2ManagedGateway(name string, deleting bool) *gmcv2.ActionsGateway {
 	ag := &gmcv2.ActionsGateway{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
@@ -50,7 +50,7 @@ func v2ManagedGateway(name string, deleting bool) *gmcv2.ActionsGateway {
 	return ag
 }
 
-// v2EgressProxyWithCondition builds a v2alpha1 EgressProxy carrying a single status
+// v2EgressProxyWithCondition builds a v2 EgressProxy carrying a single status
 // condition, for driving the v2 arm of the proxy-quota and egress-stale collectors.
 func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2.EgressProxy {
 	ep := &gmcv2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: name}}
@@ -60,7 +60,7 @@ func v2EgressProxyWithCondition(name, condType string, status metav1.ConditionSt
 	return ep
 }
 
-// v2GatewayWithCondition builds a v2alpha1 ActionsGateway carrying a single status
+// v2GatewayWithCondition builds a v2 ActionsGateway carrying a single status
 // condition, for driving the v2 ActionsGateway condition collector (Q321).
 func v2GatewayWithCondition(name, condType string, status metav1.ConditionStatus) *gmcv2.ActionsGateway {
 	ag := v2ManagedGateway(name, false)

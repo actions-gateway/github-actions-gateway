@@ -40,7 +40,7 @@ MANIFEST_K8S_VERSION="${MANIFEST_K8S_VERSION:-1.30.0}"
 KUBECONFORM_CACHE="${KUBECONFORM_CACHE:-}"
 
 chart="$REPO_ROOT/charts/actions-gateway"
-# The opt-in v2alpha1 (actions-gateway.com) CRD chart, shipped separately so its
+# The opt-in v2 (actions-gateway.com) CRD chart, shipped separately so its
 # large pod-template CRDs do not push the main chart's Helm release past the 1 MiB
 # limit (Q149). CRD-only: no images, no digest pinning.
 crds_v2_chart="$REPO_ROOT/charts/actions-gateway-crds-v2"

@@ -1,16 +1,6 @@
 // Package v2 holds the GMC's validating admission webhooks for the actions-gateway.com
-// data kinds, typed on api/v2. Their rules name v2 alone, so the apiserver converts a
-// write at any served version to v2 before admission (matchPolicy: Equivalent) and one
-// handler covers every version. The GMC is the cluster-singleton operator, so it — not
+// data kinds, typed on api/v2. The GMC is the cluster-singleton operator, so it — not
 // the per-tenant AGC — hosts cluster-wide admission for the whole v2 API surface.
-//
-// One value the older versions carry has no v2 field, and the conversion leaves it in
-// an annotation the validators read: an EgressProxy's CiliumFQDN/CalicoFQDN alias
-// (egressPolicyModeOf). The reader goes when v2.0.0 stops serving the versions that
-// can write it.
-//
-// Only the object under admission is v2. Reads of its siblings stay at v2alpha1, as
-// the scalesetscope and agentidentity inventories do, until Q1167 retypes them.
 package v2
 
 import (
