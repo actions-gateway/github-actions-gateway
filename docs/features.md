@@ -3,8 +3,7 @@
 Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see [Why GAG?](why-gag.md); for what is not here yet, see the [roadmap](roadmap.md).
 
-Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed `actions-gateway.com` API (`v2`); <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.10</span> marks one a recent release added; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
-No tier badge means both tiers, and a gate removes the badge when the gap closes.
+Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed `actions-gateway.com` API (`v2`); <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; and <span class="gag-new-badge">new in 1.10</span> marks one a recent release added.
 
 !!! tip "Check the version you're running"
 
@@ -13,8 +12,7 @@ No tier badge means both tiers, and a gate removes the badge when the gap closes
 
 ## Job intake and recovery
 
-- **[Runner-scale-set acquisition](design/04-operational-flows.md#42-job-execution-flow-agc)**: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
-  The default in v2.
+- **[Runner-scale-set acquisition](design/04-operational-flows.md#42-job-execution-flow-agc)**: the same single-acquirer protocol ARC uses: one listener session per set.
 - **[Quota-aware intake](design/04-operational-flows.md#42-job-execution-flow-agc)**: a job the namespace `ResourceQuota` has no room for is never taken on, so it stays queued at GitHub until there is capacity.
 - **[Multi-label runner sets](operations/troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every `runnerLabel` is registered at GitHub, so a job asking for any of them matches and a `runs-on` array migrates unedited.
 - **[Auto re-run for disrupted jobs](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do)**: a worker lost to preemption, Spot reclamation, a node drain or shutdown, most evictions, or a bare `kubectl delete pod` has its run re-run automatically, under a per-run budget.

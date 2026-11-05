@@ -260,7 +260,6 @@ Method: walk the tier seams — the `ScaleSet` early return in `runnerset_contro
 Each measures a race or a repair that only exists because many sessions acquire against one pool, or a call the AGC only makes on the classic tier: a scale-set runner renews and completes its own job, so there is no `renewjob` for the gateway to fail at.
 
 The last two joined the list from the Q776 re-walk below.
-That list is prose and this section is archived at the cut, so the machine-readable form is the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), which carries every `actions_gateway_*` series rather than only the omissions, and which `make metric-tiers-check` holds to the source.
 The two are reconciled by that gate in both directions, so a name here that the ledger does not call classic-only fails.
 
 **Alerting has its analog:** `job_acquisition_errors_total` is classic-only, and [observability-alerting.md](../operations/observability-alerting.md) ships `actions_gateway:scaleset_provision_success_rate:rate5m` in place of the classic `job_acquisition_success_rate`, which Q264 removed with the series it read.
@@ -287,8 +286,7 @@ The audit's method has a known blind spot both instances share.
 It walked the tier seams once, in July, and a capability added to `provision()` afterwards is classic-only from birth without anything re-walking them.
 Q683, Q691 and Q713 all arrived that way, and Q844 made four on 2026-08-14, found by hand rather than by any gate.
 
-**The metric surface now re-walks itself.** Q776 closed that half: every `actions_gateway_*` series the AGC defines carries a tier in the [acquisition-tier ledger](../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a series added without one, a ledger row the source refutes, and a name on the absent-by-design list above that the ledger does not call classic-only.
-Q851 took the same obligation inside the series, to the label values a `Both` row hides: the checker resolves the values each series emits out of the AGC source, and the [Label-value reach](../operations/observability-metrics.md#label-value-reach) table records the seven that reach one tier only.
+**The metric surface re-walked itself until classic left.** Q776 closed that half with a ledger giving every `actions_gateway_*` series a tier, and Q851 took it inside the series to the label values; Q1273 retired both once one tier remained.
 The re-walk it required found two: `renew_job_errors_total` and `renew_job_teardowns_total` were classic-only by construction and on no list, and `eviction_recovery_evidence_lost_total` reached no operator doc at all.
 
 That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.

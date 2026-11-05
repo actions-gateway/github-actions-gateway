@@ -39,9 +39,9 @@ Useful `grep` anchors:
 These per-session/per-job lines are at **debug** by design: at thousands of concurrent sessions they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
 Raise the AGC to debug — `spec.logLevel: debug` for a GMC-managed tenant, or `--zap-log-level=debug` standalone — to follow an individual job.
 
-**Correlation fields.** AGC log lines carry structured fields that let you follow one session→job→pod through a log pipeline.
-Filter on `namespace` and `group` (RunnerGroup name) to scope to a tenant's RunnerGroup; `agentIndex` and `sessionId` identify a single listener goroutine and its current broker session (the `sessionId` is rebound when a session is healed or an agent recycled, so it always names the live session); `podName` appears on the provisioner lines for an acquired job's worker pod.
-On the scale-set tier those lines also carry `jobID` and `runID`: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.
+**Correlation fields.** AGC log lines carry structured fields that let you follow one job to its pod through a log pipeline.
+Filter provisioner lines on `namespace` and `owner` (the `RunnerSet` name) to scope to one set; listener lines name their scale set in `scaleSet`; `podName` appears on the provisioner lines for an assigned job's worker pod.
+Those lines also carry `jobID` and `runID`: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.
 
 Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
 
@@ -156,7 +156,7 @@ The AGC's half is a second stream on that gateway's own stdout, selected on `msg
 | `event` | `bind` when the address becomes live, `release` when the pod goes away and the address may be reused |
 | `podIP` | The worker's address, which is what a proxy record's `sourceIP` matches |
 | `pod` / `owner` | The worker pod and the RunnerSet it belongs to |
-| `runID` / `repository` | The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose payload carried no run identity |
+| `runID` / `repository` | The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose assignment carried no run identity |
 
 **The join is address plus time.** A `bind` opens a window and the matching `release` closes it; an egress record whose `sourceIP` equals that `podIP`, with a `time` inside the window, is that job's connection.
 The window matters because addresses are reused: a worker pod is deleted when its job ends and its address returns to the CNI's pool, which is also why the binding has to be recorded live rather than looked up afterwards.
@@ -177,7 +177,7 @@ Three things to know before you build on it:
 
 Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: **credential material is redacted before a log line is emitted**, not by the log stack afterward.
 
-Every GitHub response body — broker and runner-scale-set protocol alike — passes through a single redaction path before it can reach a log line or an error message.
+Every GitHub response body passes through a single redaction path before it can reach a log line or an error message.
 It replaces:
 
 - JSON credential fields (`access_token`, `refresh_token`, `token`, `encoded_jit_config`, `client_secret`, `private_key`, `password`, `secret`);

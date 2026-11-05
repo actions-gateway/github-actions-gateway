@@ -48,22 +48,21 @@ kubectl edit resourcequota -n <namespace> <quota-name>
 The change takes effect immediately.
 Running jobs are not interrupted; the new quota applies on the next pod creation attempt.
 The gateway reads remaining quota and reacts to exhaustion but never writes the quota itself.
-On the **classic** acquisition tier it declines to claim a job the quota can't place, leaving it queued at GitHub for a sibling with capacity; if headroom is lost after the claim, the pod create is retried in place (`maxQuotaRetries` × `quotaRetryDelay`) and the job is abandoned if the budget runs out.
-On a `ScaleSet` set — the default — there is no pre-claim quota rung: the set advertises its configured worker ceiling to GitHub, so a quota-blocked job is assigned and goes straight to that same in-place retry.
-Either way, watch `actions_gateway_quota_retries_exhausted_total`.
+A set folds live quota headroom into the capacity it advertises to GitHub on every long poll, so a job the quota can't place stays queued at GitHub rather than being assigned.
+If headroom is lost after assignment, the pod create is retried in place (`maxQuotaRetries` × `quotaRetryDelay`), and once that budget runs out the listener retries the job on a later poll.
+Watch `actions_gateway_scaleset_capacity_withheld{reason="quota"}` and `actions_gateway_quota_retries_exhausted_total`.
 
 ---
 
-### Scaling maxListeners
+### Scaling a set's worker ceiling
 
 ```sh
-kubectl edit actionsgateway -n <namespace> <name>
-# Update spec.runnerGroups[N].maxListeners
+kubectl patch runnerset -n <namespace> <name> --type=merge -p '{"spec":{"maxWorkers":<count>}}'
 ```
 
-The GMC propagates the change to the `RunnerGroup` CR.
-The AGC reconciles the new ceiling on its next reconcile cycle (a few seconds).
-No restart needed.
+With `spec.priorityTiers` set, the last threshold is the ceiling instead of `maxWorkers`.
+The AGC reads the ceiling on the next long poll, so no restart is needed.
+Raise the namespace `ResourceQuota` with it, or the extra slots are withheld as `quota` ([sizing](resourcequota-sizing.md)).
 
 ---
 
@@ -221,7 +220,7 @@ See [`ActionsGateway` Reports `ScaleSetNameCollision`](troubleshooting.md#action
 
 ### ActionsGatewayScaleSetProvisioningStalled
 
-**Page.** The scale-set acquisition tier (the default protocol) is receiving `JobAssigned` messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start.
+**Page.** A listener is receiving `JobAssigned` messages but has provisioned no worker pods, so assigned jobs will not start.
 It needs jobs to be assigned, so a listener whose poll keeps failing is covered by [ActionsGatewayMessagePollFailing](#actionsgatewaymessagepollfailing) instead, and one that holds no session at all by [ActionsGatewayScaleSetNoSession](#actionsgatewayscalesetnosession).
 Respond with [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
 
@@ -255,7 +254,7 @@ The threshold sums every set in the namespace, so a namespace with several sets 
 
 ### ActionsGatewayScaleSetProvisionErrors
 
-**Ticket.** The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate.
+**Ticket.** A listener is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate.
 A transient failure retries on a later poll; a sustained rate means provisioning is degraded.
 Check the run service's `generate-jitconfig` responses and namespace quota headroom, then triage as for [Scale-set provisioning stalled](#scale-set-provisioning-stalled).
 
@@ -393,9 +392,10 @@ Check GitHub's audit log for unusual API activity from the App installation: Set
 
 If the AGC pod is destroyed and cannot restart (e.g. node failure without rescheduling, OOM loop):
 
-1. **In-flight jobs** whose `renewjob` loop has lapsed will be cancelled by GitHub.
-   There is no automatic recovery for these — they require manual re-run.
-2. **Queued jobs** (not yet acquired) will be redelivered by GitHub to the next healthy session within ~2 minutes of the AGC restarting.
+1. **In-flight jobs** keep running: each runner pulls and completes its own job through its own session with GitHub, so a worker pod does not depend on the AGC.
+   Worker pods that finish during the outage stay in place until the AGC returns, because it is their only reaper.
+2. **Queued jobs** stay queued at GitHub until the AGC returns, re-creates its listener sessions, and advertises capacity again.
+   It also replays any unacknowledged messages; a replayed job that already has a worker pod adopts that pod.
 3. **To force restart:**
 
    ```sh
@@ -410,9 +410,8 @@ If the AGC pod is destroyed and cannot restart (e.g. node failure without resche
 
 4. Monitor `actions_gateway_scaleset_session_open` — it should read `1` for every `runner_set` within a few seconds of the pod starting.
 
-**State that persists:** All RunnerGroup CRs, Secrets, and Kubernetes resources are durable.
-The AGC reconstructs all in-memory state (session registry, per-job renewers) from scratch on restart.
-The only non-recoverable state is in-flight job locks that expire during the blackout window.
+**State that persists:** All `RunnerSet` CRs, Secrets, and Kubernetes resources are durable.
+Each worker pod is the restart-safe record of its job, carrying the run identity and reap deadline as annotations, so a restart does not lose which run to recover.
 
 ---
 

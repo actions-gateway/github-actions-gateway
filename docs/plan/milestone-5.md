@@ -138,7 +138,7 @@ The gateway reached `Ready=True`, proxy 2/2, AGC 1/1.
 
 **Bug found and fixed (the headline result).** On the proxied secure-default path the AGC could fetch its installation token but **failed every runner registration** with `proxyconnect tcp: tls: failed to verify certificate: x509: certificate signed by unknown authority` — so no runner ever came online.
 Root cause: the AGC's registration/provisioner fallback HTTP clients were package-level vars built at package-init, **before** `main()` installs the egress-proxy CA into `http.DefaultTransport`, so they trusted only the system roots.
-Fixed by building them lazily (`sync.OnceValue`), with an `httpx` regression test and an operator [troubleshooting entry](../operations/troubleshooting.md#runners-never-appear-online--agc-unknown-authority-through-the-egress-proxy).
+Fixed by building them lazily (`sync.OnceValue`), with an `httpx` regression test and an operator troubleshooting entry.
 This bug shipped in `v1.1.0-rc.4` and breaks every proxied (v1, or v2-with-EgressProxy) install; the dogfood missed it by running direct-egress.
 **Q219's live install is exactly what surfaced it.**
 

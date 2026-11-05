@@ -305,6 +305,7 @@ CustomResourceDefinition.apiextensions.k8s.io "runnersets.actions-gateway.com" i
 
 **What to do.** Run [the `storedVersions` check](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2) first, and stop unless every line reads `[v2]`.
 The patch below changes the cluster and the apply can still refuse, so anything that would refuse it has to be settled while the webhook is still there.
+Pull the chart at this point too, [as the next section says](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them), so a wrong chart version also fails with nothing changed.
 
 Then download the release, so a wrong tag fails with nothing changed, remove the webhook from each CRD, and apply straight away, in the same shell:
 
@@ -1605,16 +1606,15 @@ The GMC renders each tenant's AGC `Deployment` from its own configuration, so wh
 **Restart, failover, eviction, node drain — no tenant impact.** A replacement leader re-derives every AGC pod template identically and writes nothing, so no new `pod-template-hash` and no new `ReplicaSet` appear and no AGC pod is replaced.
 This holds for any restart of an unchanged GMC.
 
-**Upgrade — every tenant's AGC rolls, all at once.** These GMC-side values are part of the AGC pod template, and a release normally changes at least the first two:
+**Upgrade — every tenant's AGC rolls, all at once.** These GMC-side values are part of the AGC pod template, and a release normally changes at least the first:
 
 | Value in the AGC pod template | Where the GMC gets it |
 |---|---|
 | AGC container image | `AGC_IMAGE` on the GMC pod (chart value `agc.image`) |
-| `GITHUB_RUNNER_VERSION` | compiled into the GMC binary |
 | `WRAPPER_IMAGE`, `WRAPPER_DELIVERY` | GMC pod environment |
 | `AGC_EXTRA_*` (testing only) | GMC pod environment, behind `--allow-agc-extra-env` |
 
-Every tenant whose template changes rolls, so a GMC upgrade fans out into one [AGC drain window](#agc-upgrade) per tenant, concurrently and unstaged — dropped long polls and abandoned RenewJob loops across the whole fleet rather than in one namespace.
+Every tenant whose template changes rolls, so a GMC upgrade fans out into one [AGC drain window](#agc-upgrade) per tenant, concurrently and unstaged — closed sessions and no job acquisition across the whole fleet rather than in one namespace.
 Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, and validate with the [AGC post-upgrade checks](#agc-upgrade) as well as the GMC ones.
 
 **Do not hand-edit a GMC-managed AGC `Deployment`.** The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a `kubectl set image` — or any other direct edit — is reverted within seconds.
@@ -1946,42 +1946,31 @@ A field that only the `v2.0.0` schema declares is expected to be pruned from an 
 ## AGC Upgrade
 
 The AGC runs `replicas: 1`.
-**Every AGC upgrade incurs a brief drain window** — the period between the old pod terminating and the new pod acquiring sessions.
+**Every AGC upgrade incurs a brief drain window** — the period between the old pod terminating and the new pod opening its sessions.
 During this window:
 
-- **In-flight long polls** are dropped.
-  GitHub redelivers these jobs within ~2 minutes (GitHub's redelivery window).
-- **Per-job RenewJob loops** are abandoned.
-  Any job whose lock window (~10 minutes per renewal) expires before the new AGC starts will be cancelled by GitHub.
-  These require manual re-run.
-- **Queued but unacquired jobs** are redelivered after the session TTL expires (typically < 2 minutes).
+- **No job is acquired.** Each `RunnerSet`'s message session is closed, so jobs wait in GitHub's queue for that scale set.
+- **Unacknowledged assignments replay.** The new session receives them again, and the AGC skips any it already provisioned a worker for.
+- **Running worker pods are unaffected.** They are separate from the AGC and keep running their jobs.
 
-**Scheduling guidance.** Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends) when in-flight job count is minimal.
-If zero-downtime is required, accept that GitHub redelivery provides effective recovery for most jobs.
+**Scheduling guidance.** Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends), when the fewest jobs are waiting to start.
 
 ### Per-Tenant Upgrade Procedure
 
 The image change itself is fleet-wide (Step 2), so the per-tenant work is the drain that precedes it and the validation that follows: run Step 1 for each tenant you want drained cleanly, then Steps 3–5 per namespace.
 
-**Step 1: Drain the AGC before upgrading (optional, reduces blackout window)**
+**Step 1: Let the AGC drain (optional, reduces blackout window)**
 
-The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL.
-The shutdown **blocks until every listener goroutine has issued its session DELETE** — the process does not exit while sessions are still open.
+The AGC's SIGTERM handler deletes each `RunnerSet`'s message session before exiting.
+A scale set allows one session at a time, so the next AGC cannot open its session until the previous one is gone.
 To rely on this:
 
 - Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default).
-  The session drain is bounded at 10 seconds and runs concurrently across RunnerGroups, so it does not scale with listener count.
+  Each session delete is bounded at 10 seconds.
 - Do not use `kubectl delete pod` directly — it sends SIGKILL without a grace period.
   Use `kubectl rollout restart`, which the reconciler honours on a managed Deployment.
 
-If a session cannot be deleted (the broker is unreachable during the drain), the AGC retries within its budget and then logs a Warn naming the session before exiting:
-
-```
-DeleteSession failed; the broker session is leaked until it expires server-side sessionId=... attempts=3 error=...
-```
-
-That session's runner stays online on GitHub until the server-side session TTL expires.
-It is harmless but wastes a runner slot for the TTL; a burst of these lines during a rollout points at broker or egress-path reachability, not at the AGC.
+If a session cannot be deleted (GitHub is unreachable during the drain), the new AGC's session is refused until GitHub expires the old one: see [`ScaleSetListenerStartFailed`](troubleshooting.md#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap).
 
 **Step 2: Update the AGC image**
 
@@ -2156,7 +2145,6 @@ kubectl get runnerset <name> -n <namespace> \
   -o jsonpath='{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'
 ```
 
-On the classic tier the session goroutine additionally surfaces GitHub's own rejection, a `400 Bad Request` under reason `VersionTooOld`, once the version has already stopped working.
 See [troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-image-runner-version) for reading the version a running worker actually shipped.
 
 ### Worker image rollback

@@ -107,7 +107,7 @@ The prose one exists because those gates run at the very *end* of `make check`, 
 `gate-lists-check` holds both lists to that claim in both directions: a member outside `CHECK_FAST_GATES` makes the target a second opinion, and a fast gate the list omits makes it report a green `make check` would not.
 `DOCS_GATES` was never passed in, and it had been failing the first half for the life of the list: `make docs-gates` ran `release-notes-check`, which was in neither gate list, so it tested something `make check` did not (Q920).
 It was failing the second half too, and by more: the completeness rule read only the pathspecs a gate hands git, and every page-scoped gate here names its page as a constant instead, so seven were invisible at once and `make docs-gates` was green on prose edits to nine pages `make check` can fail (Q930).
-`roadmap-check`, `comparison-stamps-check`, `promql-check`, `metric-tiers-check`, `reason-tiers-check`, `api-reference-check` and `gate-lists-check` joined the list when the rule learned to read a hardcoded subject, and `rung-order-check` with it (Q972).
+`roadmap-check`, `comparison-stamps-check`, `promql-check`, `metric-reference-check`, `event-runbook-check`, `api-reference-check` and `gate-lists-check` joined the list when the rule learned to read a hardcoded subject, and `rung-order-check` with it (Q972).
 The three store gates joined last, held there by a rule of their own rather than by a derivation, because a gate that hands its store path to a Python entry point shows neither a pathspec nor a hardcoded subject (Q1040); the target runs 23 gates in about 9 seconds.
 
 **A shell edit needs `make shellcheck` on its own.** Neither subset target includes it.
@@ -986,7 +986,7 @@ Without the second, a gate that had degenerated into "this branch touched `docs/
 The failure it exists to catch is measured (Q848).
 `docs/why-gag.md` called the Pending-reap re-run classic-only for the whole `v1.4.0` cycle after Q766 had made it reach both tiers.
 The paragraph carried an upkeep comment, and that comment asked for a re-read when a case was *added or removed*, which Q766 did neither of, so nothing fired.
-The metric half of the same drift has a gate (`make metric-tiers-check`, Q776) and the `gag-tier-badge` has the roadmap checker's rule 10, but that rule is one-directional by construction: it fails a badge that outlived its gap, never a gap nobody badged.
+The `gag-tier-badge` has the roadmap checker's rule 10, but that rule is one-directional by construction: it fails a badge that outlived its gap, never a gap nobody badged.
 Prose had nothing at all.
 
 **The rule is a stamp, not a semantic judgement.** A paragraph making a tier claim carries `<!-- tier-source: <path>#<anchor> sha=<8 hex> -->`, and the gate recomputes that digest over the **tier-bearing lines** of the section the annotation names.
@@ -1243,7 +1243,7 @@ Three shapes are registered today:
 - **A push trigger and a `changes` filter** — `doc-links.yml`, `e2e-calico.yml`, `plan-hygiene.yml`, `status-lint.yml`.
   The PR leg triggers on every `pull_request` with no path filter, so its `gate` job always reports its required check, and is scoped by the `changes` filter; the post-merge leg is scoped by `on.push.paths`.
   Q571 shipped this regression and merged green: it rewrote `e2e-calico.yml`'s filter to `scripts/{e2e,fetch,lib}/**` and left the push list naming the two now-moved files it had always enumerated.
-- **A `pull_request` trigger and a push trigger** — `dockerfile-lint.yml`, `endpoint-parity.yml`, `metric-tiers.yml`, `reason-tiers.yml`, `rung-order.yml`.
+- **A `pull_request` trigger and a push trigger** — `dockerfile-lint.yml`, `endpoint-parity.yml`, `metric-reference.yml`, `event-runbook.yml`, `rung-order.yml`.
   Both legs are scoped by their own `paths:` list.
   Ungated until Q574, by which time the shape had grown from one workflow to five; all five pairs agreed when the gate landed.
 - **Two lanes over one reusable workflow** — `e2e-test.yml`'s `e2e` filter and `e2e-calico.yml`'s `calico`, compared only under `scripts/`, since the rest of each filter is what makes the Calico lane narrower.
@@ -1332,7 +1332,7 @@ It fails when:
   A gate that is deliberately local-only declares `# ci-scope: none` with its reason directly above its `.PHONY`, the same shape the rule above uses;
 - a gate runs in CI but in no workflow the merge queue evaluates, so the candidate merge is never held to it (Q942).
   The rule above stops at *some workflow runs it*, which a `pull_request`-only workflow satisfies while the queue builds and merges a commit that gate never saw.
-  Four gates sat that way when this was written, each alone in a workflow declaring no `merge_group`: `conflict-markers-check`, `metric-tiers-check`, `reason-tiers-check` and `endpoint-parity-check`.
+  Four gates sat that way when this was written, each alone in a workflow declaring no `merge_group`: `conflict-markers-check`, `metric-reference-check`, `event-runbook-check` and `endpoint-parity-check`.
   The derivation is the one above, re-asked of the workflows whose `on:` block declares `merge_group`, with comments stripped for the same reason.
   Only a gate that passed the rule above is asked: a gate no workflow runs at all has one defect, not two.
   Whether the check a queue-evaluated workflow reports is *required*, and so blocking rather than advisory, is a repo-settings question this cannot read.
@@ -1890,7 +1890,7 @@ Each is a claim about state, and each has a cheap way of being wrong:
   The tier now says it for you: a breach of the [envtest suite budget](#the-envtest-suite-budget) reports that the *suite* ran out of time and names the panic's test as a bystander, rather than leaving the reader to notice that the name moved.
 
 - **A derived gate's green is bounded by what it can still resolve, and a derivation that shrinks says nothing.** A rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded; nothing turns red, because the check that would have fired is the one that went missing.
-  Two scanners built in the 1.5 cycle each grew a fail-on-unplaceable rule independently: `metrictiers`' `values-derivation` (Q851) and `reasontiers`' `resolution` (Q850).
+  Two scanners built in the 1.5 cycle each grew a fail-on-unplaceable rule independently: `metricreference`'s `values-derivation` (Q851) and `eventreasons`' `resolution` (Q850).
   Converging twice in one cycle is the signal that a derived inventory needs this by construction, not as an afterthought.
   `endpointparity` is the third (Q871), and there the rule is the gate rather than a guard on it: the parity half can only demand endpoints the fold resolved, so a call shape the walk stops recognising stops being checked with nothing going red.
 - **A cause you can watch happening is still only a hypothesis, and a real one does not crowd out a second.** #1432's `--assess` reported "no human has enqueued this PR" for a PR a human demonstrably had, during a GitHub timeline degradation that was real, concurrent, and sufficient to explain it, so the investigation closed there and the row was filed against it.
@@ -2478,11 +2478,11 @@ Three instances in the 1.5 cycle, all on the same argument:
 
 - The v1.4.0 release pre-flight matched `Event(obj, type, reason)` only, missed the `recordEvent(type, reason, action)` shape, and returned a false no-change (Q780).
 - The 2026-08-14 pre-flight keyed on `recordEvent(` and missed the two additions recording through `RecordEvent(`.
-- `reasontiers`' first version keyed the reason's index on the function name, read the scale-set listener's *action* string `"ProvisionWorker"` as a reason, and missed four reasons entirely.
+- `eventreasons`' first version keyed the reason's index on the function name, read the scale-set listener's *action* string `"ProvisionWorker"` as a reason, and missed four reasons entirely.
   The AGC has two methods named `recordEvent` and two named `Event`, with the reason at a different index in each.
 
 **Read the index off the callee's own declaration.** Parse the function and interface declarations, find the parameter by name, and use its position; state by hand only the signatures declared outside the repo.
-Then fail loudly on a call you cannot place, so a new wrapper cannot be added silently: `reasontiers` treats a call carrying `corev1.EventTypeWarning`/`EventTypeNormal` that matches no signature as a finding.
+Then fail loudly on a call you cannot place, so a new wrapper cannot be added silently: `eventreasons` treats a call carrying `corev1.EventTypeWarning`/`EventTypeNormal` that matches no signature as a finding.
 Two further traps sit under that: a variadic declaration's arity counts the trailing parameter, so a call omitting the varargs matches nothing unless you subtract it; and a parameter of the enclosing function is a *forwarder*, not the site that decides the value.
 
 None of the three was caught by the scan reporting a problem.
@@ -3867,7 +3867,7 @@ Triggering on every PR and gating internally means the `gate` context always rep
 
 **The same pattern serves the merge queue's `merge_group` event.** The workflows behind required checks also trigger on `merge_group`, so their gate contexts report on the queue's candidate merge commit.
 `doc-links.yml` is the tenth and most recent: Q743 gave it the trigger and the `doc-links-gate` job, and 2026-09-09 registered that context in the ruleset.
-Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-tiers.yml`, `reason-tiers.yml` and `endpoint-parity.yml` — bringing the count to 14 of 29, and `gate-lists-check` now fails a new gate that lands outside that set.
+Q942 added the trigger to the four remaining workflows behind a `make check` gate — `conflict-markers.yml`, `metric-reference.yml`, `event-runbook.yml` and `endpoint-parity.yml` — bringing the count to 14 of 29, and `gate-lists-check` now fails a new gate that lands outside that set.
 Those four carry no `changes` job: `merge_group` takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 Those four do not **block** it: the queue arbitrates on the ruleset's required checks alone and none of them sits behind one, so their verdict on a candidate merge is visible and not binding.
 `doc-links-gate` was the same shape until 2026-09-09, when it was registered under the ordering constraint [merge-queue.md](../plan/archive/merge-queue.md) gives: the workflow onto `main` first, the required check second.

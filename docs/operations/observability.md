@@ -21,7 +21,7 @@ Observability is split by surface so you can read just the part you need without
 
 | Page | What's here |
 | --- | --- |
-| [Metrics reference](observability-metrics.md) | Every metric the GMC, AGC, and proxy emit — the full catalogue, the scale-set acquisition tier, proxy metrics, the `kubectl` status columns and owner-label selectors, the label-cardinality guardrail, and the Q205 metric/span renames. |
+| [Metrics reference](observability-metrics.md) | Every metric the GMC, AGC, and proxy emit — the full catalogue, the scale-set series, proxy metrics, the `kubectl` status columns and owner-label selectors, the label-cardinality guardrail, and the Q205 metric/span renames. |
 | [Accessing metrics (scraping setup)](observability-metrics-access.md) | How to scrape: ad-hoc port-forward, the Prometheus Operator wiring, the install-time NetworkPolicy prerequisites, TLS verification for the GMC manager, and per-tenant AGC/proxy mTLS. |
 | [Alerting & SLOs](observability-alerting.md) | The symptom → metric map, the ready-to-apply `PrometheusRule` alert rules, and the SLO recording rules. |
 | [Grafana dashboards](observability-dashboards.md) | The bundled tenant, platform, budget, and security dashboards, panel by panel, and their template variables. |

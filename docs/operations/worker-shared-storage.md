@@ -2,7 +2,7 @@
 
 > **Audience:** Tenant operator, Platform engineer
 
-Workers are storage-less by default: the Actions Gateway Controller (AGC) mounts a job-payload Secret and the certificate authority (CA) projections into a worker pod and nothing else, and it deletes the pod when the job ends.
+Workers are storage-less by default: the Actions Gateway Controller (AGC) mounts the Secret holding the job's just-in-time (JIT) runner config and the certificate authority (CA) projections into a worker pod and nothing else, and it deletes the pod when the job ends.
 Jobs that must pass files to each other need a `ReadWriteMany` (RWX) volume, and that volume is entirely a tenant's `RunnerTemplate` concern: GAG neither provisions it nor gets in its way.
 
 This page is the reference architecture for doing that: what to put in the `podTemplate`, the one field that decides whether the runner can write at all, and which storage classes the arrangement has actually been exercised against.

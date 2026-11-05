@@ -96,24 +96,22 @@ Consolidate by pod shape only when workflows are resource-identical — there is
 
 ---
 
-## E.4. Sizing `maxListeners`
+## E.4. Sizing `maxWorkers`
 
-`RunnerGroup.maxListeners` caps the number of listener goroutines that can run concurrently during a burst.
-The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.
+`maxWorkers` caps the worker pods a `RunnerSet` runs at once, and it is the ceiling the set advertises to GitHub on every long poll as `X-ScaleSetMaxCapacity`, the total number of jobs GitHub may keep assigned to the set.
+With `priorityTiers` set, the last threshold is the ceiling instead.
+A set declaring neither advertises `defaultScaleSetMaxCapacity` from [`runnerset_scaleset.go`](../../cmd/agc/internal/controller/runnerset_scaleset.go).
 
-This field is a **burst ceiling, not a steady-state count.** Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist.
-The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and `maxListeners` is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.
+The advertisement can only fall below that ceiling: namespace `ResourceQuota` headroom, the opt-in capacity gate and the opt-in scale-up limit each lower it ([why a set is not being offered jobs](../operations/troubleshooting.md#why-is-my-runnerset-not-being-offered-jobs)).
+
+This field is a **soft, in-process ceiling.** Pair it with a namespace `ResourceQuota` for a hard limit.
+The cost of setting it too low is queueing rather than lost work: GitHub assigns nothing beyond the advertisement, so surplus jobs stay queued at GitHub until a slot frees.
 
 A practical starting approach:
 
-1. **Estimate peak simultaneous job arrivals** for this RunnerGroup.
-   A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.
-2. **Set `maxListeners` to cover that peak** with a small margin (e.g. peak + 2–3).
-3. **Monitor `actions_gateway_active_sessions`** relative to `maxListeners`.
-   If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it.
-   If it never exceeds 3–4, the default of 10 is more than sufficient.
-
-For most RunnerGroups the default of 10 is the right starting point and requires no tuning.
+1. **Estimate peak concurrent jobs** for this `RunnerSet`.
+2. **Set `maxWorkers` to cover that peak**, and [size the namespace `ResourceQuota`](../operations/resourcequota-sizing.md) to admit that many workers at full cost.
+3. **Compare `actions_gateway_scaleset_jobs_available` with `actions_gateway_scaleset_advertised_capacity`.** Jobs waiting while `actions_gateway_scaleset_capacity_withheld` reads zero on every rung mean the ceiling is what binds, so raise it if the cluster has room.
 
 ---
 
