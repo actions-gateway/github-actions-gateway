@@ -10,10 +10,9 @@
 // pod-selector match at runtime.
 //
 // The same single-source-of-truth discipline applies to the runner version: it
-// must be identical in the default worker image the AGC pulls, the agent.version
-// the AGC sends to GitHub at session creation, and the FROM tag in the root
-// Dockerfile's `worker` stage. RunnerVersion below drives the first two; the
-// lockstep test in runner_version_test.go pins it to the third so a Dependabot
+// must be identical in the default worker image the AGC pulls and the FROM tag in
+// the root Dockerfile's `worker` stage. RunnerVersion below drives the first; the
+// lockstep test in runner_version_test.go pins it to the second so a Dependabot
 // Dockerfile bump that forgets the constant fails CI.
 package names
 
@@ -36,10 +35,8 @@ const WorkerSAName = "actions-gateway-worker"
 
 // RunnerVersion is the pinned actions/runner version embedded in the default
 // worker image. It is the single source of truth for the runner version:
-//   - cmd/agc/internal/provisioner derives DefaultWorkerImage from it, and falls
-//     back to it for the version label of a worker image whose reference has no tag.
-//   - cmd/gmc injects it into the AGC Deployment as GITHUB_RUNNER_VERSION, which no
-//     AGC code reads; Q1272 removes the injection.
+// cmd/agc/internal/provisioner derives DefaultWorkerImage from it, and falls back to
+// it for the version label of a worker image whose reference has no tag.
 //
 // The runner version a tenant's spec.workerImage ships is a separate fact, detected
 // per RunnerSet and checked against MinRunnerVersion (Q715).

@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	"github.com/actions-gateway/github-actions-gateway/api/apilabels"
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
@@ -549,8 +548,7 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 		// server-side field selector on the informer (§H.16 #1). Without it, N AGC
 		// Deployments in one namespace would all reconcile every RunnerSet and fight.
 		{Name: "GATEWAY_NAME", Value: ag.Name},
-		{Name: "GITHUB_ORG_URL", Value: ag.Spec.GitHubURL},
-		// GITHUB_API_BASE_URL is derived from the same githubURL so the AGC's token
+		// GITHUB_API_BASE_URL is derived from githubURL so the AGC's token
 		// exchange addresses the gateway's own GitHub, not api.github.com (Q506).
 		// See the v1 builder for why it precedes extraEnv.
 		{Name: "GITHUB_API_BASE_URL", Value: githubapp.DeriveAPIBaseURL(ag.Spec.GitHubURL)},
@@ -559,7 +557,6 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 		// stamp the PSA labels — that is the NamespacePSAReconciler's job.
 		{Name: "SECURITY_PROFILE", Value: securityProfile},
 		{Name: "LOG_LEVEL", Value: logLevelOrDefault(ag.Spec.LogLevel)},
-		{Name: "GITHUB_RUNNER_VERSION", Value: agcnames.RunnerVersion},
 	}
 	// Proxied: wire the AGC's own egress through the resolved EgressProxy. Direct
 	// (proxy == nil): omit the proxy env entirely so the AGC's HTTP clients go direct.

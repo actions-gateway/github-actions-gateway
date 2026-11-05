@@ -16,18 +16,15 @@ var dockerfileFromRE = regexp.MustCompile(
 	`(?m)^FROM\s+ghcr\.io/actions/actions-runner:(\S+?)@(sha256:[0-9a-f]{64})`)
 
 // TestRunnerVersionLockstep is the drift guard for the runner-version pin
-// (Q118). The runner version lives in three places that must move together:
+// (Q118). The runner version lives in two places that must move together:
 //
 //   - the root Dockerfile's `worker` stage FROM tag — the runner binary the
 //     worker pod runs.
 //   - names.RunnerVersion / names.WorkerImageDigest — the single source of
-//     truth that drives the AGC's DefaultWorkerImage and the GMC's injected
-//     GITHUB_RUNNER_VERSION (the agent.version GitHub validates at session
-//     creation).
+//     truth that drives the AGC's DefaultWorkerImage.
 //
 // Dependabot bumps the Dockerfile but never the Go constants, so without this
-// test a bump silently desyncs the registered runnerVersion from the worker
-// image — exactly the drift #197 introduced. Failing CI here forces the
+// test a bump silently desyncs the default worker image from the Dockerfile — exactly the drift #197 introduced. Failing CI here forces the
 // constants to be updated in the same change.
 func TestRunnerVersionLockstep(t *testing.T) {
 	// The repo-root Dockerfile, via an in-module symlink. Reaching it directly
@@ -67,12 +64,10 @@ func TestRunnerVersionLockstep(t *testing.T) {
 	}
 }
 
-// TestRunnerVersionNonEmpty guards the empty-agent.version defect (Q118): the
-// GMC injects names.RunnerVersion as GITHUB_RUNNER_VERSION, which the AGC sends
-// as agent.version on CreateSession. An empty value risks GitHub rejecting the
-// session (the runner-version contract Q71 gated).
+// TestRunnerVersionNonEmpty guards the empty-version defect (Q118): an empty value
+// yields a DefaultWorkerImage with no tag.
 func TestRunnerVersionNonEmpty(t *testing.T) {
 	if names.RunnerVersion == "" {
-		t.Fatal("names.RunnerVersion must not be empty: CreateSession would send an empty agent.version")
+		t.Fatal("names.RunnerVersion must not be empty: DefaultWorkerImage would have no tag")
 	}
 }

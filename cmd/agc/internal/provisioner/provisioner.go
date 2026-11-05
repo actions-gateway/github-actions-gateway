@@ -104,8 +104,7 @@ const (
 	// the per-RunnerGroup workerImage field overrides further.
 	//
 	// Sourced from names.DefaultWorkerImage (built from names.RunnerVersion) so the
-	// runner version stays locked to the agent.version the AGC registers and to the
-	// FROM line in the root Dockerfile's `worker` stage — see the bump procedure
+	// runner version stays locked to the FROM line in the root Dockerfile's `worker` stage — see the bump procedure
 	// in that stage's header comment and the lockstep test in
 	// cmd/agc/names/runner_version_test.go.
 	DefaultWorkerImage = names.DefaultWorkerImage

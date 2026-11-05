@@ -10,7 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	agcnames "github.com/actions-gateway/github-actions-gateway/agc/names"
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
@@ -276,7 +275,6 @@ func TestBuildAGCDeploymentV2_TracingOmitsUnsetKnobs(t *testing.T) {
 func TestBuildAGCDeploymentV2_ExtraEnvWins(t *testing.T) {
 	for _, tc := range []struct{ name, extra string }{
 		{"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "extra-endpoint:4317"},
-		{"GITHUB_ORG_URL", "https://github.com/extra-org"},
 		{"GITHUB_API_BASE_URL", "http://fakegithub.e2e-infra.svc.cluster.local:8080"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -304,17 +302,6 @@ func TestBuildAGCDeploymentV2_CredentialAnnotation(t *testing.T) {
 		"pod template annotation must record the referenced Secret name for kubectl rollout history")
 }
 
-// TestBuildAGCDeploymentV2_RunnerVersionEnv asserts the GMC injects the pinned
-// runner version so the AGC's CreateSession sends a non-empty agent.version that
-// GitHub validates (Q71/Q118).
-func TestBuildAGCDeploymentV2_RunnerVersionEnv(t *testing.T) {
-	env := agcEnv(proxiedAGCDeploymentV2(v2Gateway("gw", "team-a", "github-app", "shared"), nil))
-	require.Contains(t, env, "GITHUB_RUNNER_VERSION", "GITHUB_RUNNER_VERSION must be set on the AGC Deployment")
-	assert.NotEmpty(t, env["GITHUB_RUNNER_VERSION"])
-	assert.Equal(t, agcnames.RunnerVersion, env["GITHUB_RUNNER_VERSION"],
-		"GITHUB_RUNNER_VERSION must equal the pinned agcnames.RunnerVersion")
-}
-
 // TestBuildAGCDeploymentV2_LogLevel verifies spec.logLevel is threaded to the AGC
 // Deployment as the LOG_LEVEL env var: info by default (so a CR without the
 // field never silently runs at debug verbosity) and the explicit value when set.
@@ -326,14 +313,6 @@ func TestBuildAGCDeploymentV2_LogLevel(t *testing.T) {
 	dbg.Spec.LogLevel = "debug"
 	assert.Equal(t, "debug", agcEnv(proxiedAGCDeploymentV2(dbg, nil))["LOG_LEVEL"],
 		"LOG_LEVEL must reflect spec.logLevel=debug")
-}
-
-// TestBuildAGCDeploymentV2_GitHubURL verifies that spec.githubURL is threaded to
-// the AGC Deployment as the GITHUB_ORG_URL env var.
-func TestBuildAGCDeploymentV2_GitHubURL(t *testing.T) {
-	ag := v2Gateway("gw", "team-a", "github-app", "shared")
-	ag.Spec.GitHubURL = "https://github.com/acme-org"
-	assert.Equal(t, "https://github.com/acme-org", agcEnv(proxiedAGCDeploymentV2(ag, nil))["GITHUB_ORG_URL"])
 }
 
 func TestBuildAGCDeploymentV2_TerminationGracePeriod(t *testing.T) {

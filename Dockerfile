@@ -213,9 +213,7 @@ ENTRYPOINT ["/proxy"]
 ## Pinned to the multi-arch manifest-index digest for supply-chain integrity
 ## (M-19 in docs/plan/security.md). The version MUST match the pinned runner
 ## version in cmd/agc/names (RunnerVersion / WorkerImageDigest) — the single
-## source of truth that drives both the AGC's DefaultWorkerImage and the
-## GITHUB_RUNNER_VERSION the GMC injects (the agent.version GitHub validates at
-## session creation). The lockstep test cmd/agc/names/runner_version_test.go
+## source of truth that drives the AGC's DefaultWorkerImage. The lockstep test cmd/agc/names/runner_version_test.go
 ## fails CI if this FROM line and those constants disagree, so a Dependabot bump
 ## here that forgets the constants cannot drift silently.
 ##
@@ -227,10 +225,7 @@ ENTRYPOINT ["/proxy"]
 ##      per-platform manifest.
 ##   3. Update this FROM line AND RunnerVersion + WorkerImageDigest in
 ##      cmd/agc/names/names.go to the same X.Y.Z@sha256:… (provisioner's
-##      DefaultWorkerImage and the GMC's GITHUB_RUNNER_VERSION follow
-##      automatically).
-##   4. Update any hardcoded prior runner-version string in
-##      cmd/agc/internal/agentpool tests so the registered runnerVersion matches.
+##      DefaultWorkerImage follows automatically).
 FROM ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232 AS worker
 ENV PATH=/home/runner/bin:$PATH
 ARG REVISION="unknown"
