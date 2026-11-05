@@ -140,8 +140,6 @@ spec:
   maxReplicas: 1
 ---
 %s`, proxyName, tenantNS, strings.NewReplacer(
-			"actions-gateway.com/v2alpha1", "actions-gateway.com/v2",
-			"  acquisitionProtocol: ScaleSet\n", "",
 			"name: ssacq\n", "name: "+gwName+"\n",
 			"name: set-ssacq", "name: "+setName,
 			`["e2e-ssacq"]`, `["`+label+`"]`,
