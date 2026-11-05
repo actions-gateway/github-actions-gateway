@@ -296,8 +296,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
-          "legendFormat": "{{runner_group}} ({{tier}}/{{cause}})",
+          "expr": "sum by (namespace, runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
+          "legendFormat": "{{namespace}}/{{runner_group}} ({{tier}}/{{cause}})",
           "refId": "A"
         }
       ]
@@ -347,8 +347,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
-          "legendFormat": "{{runner_group}} ({{tier}}/{{outcome}})",
+          "expr": "sum by (namespace, runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
+          "legendFormat": "{{namespace}}/{{runner_group}} ({{tier}}/{{outcome}})",
           "refId": "A"
         }
       ]
@@ -387,8 +387,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (runner_group) (increase(actions_gateway_quota_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
-          "legendFormat": "{{runner_group}}",
+          "expr": "sum by (namespace, runner_group) (increase(actions_gateway_quota_retries_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[1h]))",
+          "legendFormat": "{{namespace}}/{{runner_group}}",
           "refId": "A"
         }
       ]
@@ -933,8 +933,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
-          "legendFormat": "{{runner_group}} {{reason}}",
+          "expr": "sum by (namespace, runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total{namespace=~\"$namespace\", runner_group=~\"$runner_group\"}[5m]))",
+          "legendFormat": "{{namespace}}/{{runner_group}} {{reason}}",
           "refId": "A"
         }
       ]

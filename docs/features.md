@@ -49,8 +49,6 @@ Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capabili
   An unknown group fails the set closed.
 - **[Cross-tenant scale-set name guard](operations/troubleshooting.md#actionsgateway-reports-scalesetnamecollision)**: a set's first `runnerLabel` names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
   Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.
-- **[Agent-identity collision guard](operations/upgrade.md#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name)**: two pools reaching one agent identity both register the same GitHub runner name.
-  Admission now rejects the second, so the pair never forms; the holder is named only when the tenant owns both.
 - **[Per-tenant egress IPs](design/network-architecture.md)**: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.
 - **[Standalone `EgressProxy`](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays `NetworkPolicy`-restricted.
 - **[Cross-namespace proxy sharing](operations/security-operations.md#sharing-an-egress-proxy-across-namespaces)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in `sharing.allowedNamespaces`.

@@ -52,8 +52,8 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 |-------|-------|---------------|
 | Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series. Worker pod lifetime, so it excludes the pre-creation staging a `spec.scaleUp` throttle adds |
 | AGC / proxy version | `actions_gateway_build_info{component=~"agc\|proxy"}` | Stat showing the series name, not its value (the value is always `1`). The metric carries no `namespace` label, so `$namespace` does not filter it |
-| Disruption retries | `sum by (runner_group, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by cause (`eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `node_shutdown` rising means Spot or preemptible nodes are being reclaimed under running jobs, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
-| Abandoned runs awaiting capacity | `sum by (runner_group, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
+| Disruption retries | `sum by (namespace, runner_group, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by cause (`eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `node_shutdown` rising means Spot or preemptible nodes are being reclaimed under running jobs, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
+| Abandoned runs awaiting capacity | `sum by (namespace, runner_group, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
 | Disruption budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 | Quota retries | `increase(actions_gateway_quota_retries_total[1h])` | Bar chart |
 | Quota retry budget exhausted | `increase(actions_gateway_quota_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
@@ -114,7 +114,7 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Message poll errors/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_message_poll_errors_total[5m]))` | Time series |
-| Worker pods reaped/s (by reason) | `sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
+| Worker pods reaped/s (by reason) | `sum by (namespace, runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
 
 ## Platform dashboard
 

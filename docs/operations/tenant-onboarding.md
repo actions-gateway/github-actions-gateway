@@ -366,10 +366,6 @@ spec:
   # Step 1b — it is not a field on this CR.
   # A runner group has no `name` field — the RunnerGroup CR name is derived from
   # the gateway name + the group's first runnerLabel (here "linux").
-  # That derived name is the group's agent-identity stem, which must be unique in
-  # the namespace AND across every pool bound to this GitHub org, so admission
-  # rejects an entry whose derived name is already claimed. See
-  # troubleshooting.md#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed
   runnerGroups:
     - runnerLabels: ["linux", "self-hosted"]
       maxWorkers: 20
@@ -889,7 +885,7 @@ The rules that follow from it, and the ones most likely to bite when you author 
   Reordering the list renames the scale set and orphans the old one, so append rather than prepend.
 - **The first label is unique per GitHub org, enterprise, or repo.** Two sets claiming the same `runnerLabels[0]` would register the same scale-set name at GitHub; the second is rejected.
   The boundary is the `githubURL` the set's gateway names, **not the namespace**: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
-  Later labels may overlap freely.
+  Later labels may overlap freely, and so may the `RunnerSet` names: two sets named `build` in different namespaces are fine with distinct first labels.
 - **Declare the full list up front.** A scale set's labels are fixed when it is created and cannot be changed afterwards, so a label added to a live set never reaches GitHub — the set reports [`RunnerLabelsIncomplete`](troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete) rather than failing silently.
   Adding one later means replacing the scale set, which costs the jobs queued against it.
   On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because `DistributedTask.AllowRunnerScaleSetCustomLabels` is off.

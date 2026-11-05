@@ -67,11 +67,11 @@ Then, per container (the runner container is named `runner`):
 
 ```promql
 # p95 of per-job CPU peaks (cores), by RunnerSet and container, over 7 days
-histogram_quantile(0.95, sum by (le, runner_set, container) (
+histogram_quantile(0.95, sum by (le, namespace, runner_set, container) (
   rate(actions_gateway_worker_usage_job_cpu_peak_cores_bucket[7d])))
 
 # p95 of per-job memory peaks (bytes)
-histogram_quantile(0.95, sum by (le, runner_set, container) (
+histogram_quantile(0.95, sum by (le, namespace, runner_set, container) (
   rate(actions_gateway_worker_usage_job_memory_peak_bytes_bucket[7d])))
 
 # absolute max peak seen since the AGC last restarted
@@ -79,9 +79,9 @@ actions_gateway_worker_usage_cpu_peak_cores
 actions_gateway_worker_usage_memory_peak_bytes
 
 # how much of the job population the histograms actually saw
-sum by (runner_set) (rate(actions_gateway_worker_usage_jobs_sampled_total[7d]))
+sum by (namespace, runner_set) (rate(actions_gateway_worker_usage_jobs_sampled_total[7d]))
   /
-sum by (runner_set) (rate(actions_gateway_worker_usage_jobs_unsampled_total[7d]))
+sum by (namespace, runner_set) (rate(actions_gateway_worker_usage_jobs_unsampled_total[7d]))
 ```
 
 The histogram quantiles are bucket-interpolated — read them as the bucket range, not an exact figure, and cross-check against the max-peak gauges.

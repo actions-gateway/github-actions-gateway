@@ -27,6 +27,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
+  - [Non-breaking: two `RunnerSet`s may share a name across namespaces](#non-breaking-two-runnersets-may-share-a-name-across-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
   - [Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded](#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded)
   - [Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it](#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it)
@@ -525,6 +526,22 @@ From 1.9 on, neither could see a denial by the five `actions-gateway.com` webhoo
 Both now name the webhooks the chart ships (Q1267): five from `v2.0.0`, whose chart no longer ships the `v1alpha1` one.
 
 **What to do.** Replace the `name=~` selector in your copy of the alert with the one in [security-operations.md](security-operations.md#prometheus-abuse-alerts), and re-import `deploy/monitoring/grafana-dashboard-security.json`.
+
+### Non-breaking: two `RunnerSet`s may share a name across namespaces
+
+**Who is affected:** nobody has to change anything.
+A platform that picked distinct `RunnerSet` names only to get past the `agent-identity stem … is already claimed` rejection may stop.
+
+**What changed.** Admission no longer rejects a `RunnerSet` because another namespace holds its name under the same GitHub org, enterprise, or repo.
+That rule protected the runner names the classic agent pool derived from the CR name, and that pool no longer exists.
+A set's name now reaches only objects in its own namespace and the scale-set session owner, which is `<namespace>/<name>`.
+
+**What still has to be unique.** A set's first `runnerLabel` names its scale set at GitHub, so [admission still refuses a duplicate](troubleshooting.md#runnerset-rejected-duplicate-first-runnerlabel) across the whole scope.
+
+**How far this is tested.** The end-to-end suite runs such a pair against its fake GitHub server: each job lands in its own namespace, and deleting one set leaves the other serving.
+No run has tested the pair against github.com or GitHub Enterprise Server.
+
+**Rolling back** to a `1.x` GMC restores the rejection, which lands on the next write to either object, so rename one of a pair first.
 
 ### Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run
 
@@ -1050,6 +1067,8 @@ Runbook: [troubleshooting.md § a GHES appliance's certificate is not trusted](t
 
 ### Agent-identity collisions are now rejected at admission (`RunnerSet` name, and derived `RunnerGroup` name)
 
+This section describes the `1.x` releases; [`v2.0.0` removes the guard](#non-breaking-two-runnersets-may-share-a-name-across-namespaces).
+
 **Who is affected:** a platform where two runner pools derive the same **agent-identity stem**, the string that `agentpool-<stem>-N` and the GitHub runner name `<stem>-N` are both built from.
 Two shapes reach it, and everyone else is unaffected with no configuration change:
 
@@ -1058,7 +1077,7 @@ Two shapes reach it, and everyone else is unaffected with no configuration chang
 
 That second shape is the one most likely to be in a running cluster, and it was accepted before this release.
 It was never safe: the runner name is unique per GitHub scope, so both pools register `<stem>-N` and each 409 is resolved by deleting the incumbent's record.
-The loser reports `agent identity is owned by another pool` on every reconcile and never recovers ([runbook](troubleshooting.md#agent-pool-blocked-another-tenant-owns-the-agent-secret)).
+The loser reports `agent identity is owned by another pool` on every reconcile and never recovers.
 
 **Nothing is re-validated at upgrade time**, because admission runs on create and update.
 An existing colliding pair keeps running exactly as it did; the rejection lands whenever someone next re-applies either object, which may be long after the upgrade and on a tenant who changed nothing.
