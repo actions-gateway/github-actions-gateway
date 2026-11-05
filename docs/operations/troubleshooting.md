@@ -381,6 +381,9 @@ kubectl get crd runnersets.actions-gateway.com \
 
 Then **re-apply any `RunnerSet` that declared `runnerGroup` while the schema was stale**: the stored object had the field pruned out of it, and re-applying the CRD does not put it back.
 
+**After rolling back from `v2.0.0` to 1.x** the log lists `v2alpha1` and `v2beta1`, and "older" is backwards: the CRDs are newer than the GMC.
+The apply above is refused with a conflict on `.spec.conversion.strategy` and changes nothing, so use the forced form in [GMC rollback](upgrade.md#gmc-rollback).
+
 ---
 
 ## GMC Not Provisioning Tenant Resources

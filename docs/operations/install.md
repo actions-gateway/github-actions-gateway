@@ -237,6 +237,7 @@ Installing them:
   Re-apply on **every** GMC upgrade, not only when you want a new field: the GMC checks the installed schema at startup and refuses to start when a CRD no longer declares a field that bounds tenant access, because a structural schema prunes such a field on write with no error ([troubleshooting.md](troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)).
 
   **Rollback.** Re-apply the render of the *previous* chart version the same way.
+  From `v2.0.0` back to 1.x that takes `--force-conflicts`, and it [goes ahead of rolling back the chart](upgrade.md#gmc-rollback).
   Treat this as a deliberate migration, not a casual undo: if the newer version added a served or storage version, or a field that existing objects now populate, rolling back can reject or truncate stored resources.
   Prefer rolling *forward* with a corrected chart.
 

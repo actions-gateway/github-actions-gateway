@@ -320,7 +320,8 @@ kubectl apply --server-side -f actions-gateway-crds-v2.yaml
 Between the patch and the apply `v2alpha1` and `v2beta1` are still served with nothing converting them, so a read at either returns the stored `v2` object relabelled, without converting it.
 Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2: the CA injector did not restore the webhook during a 60-second pause, the apply then succeeded, and the CRDs served `v2` alone.
 
-**If the apply is refused after the patch.** The cluster is now half upgraded, and an object still stored at an old version reads unconverted, so do not run the storage sweep in this state.
+**If the apply is refused after the patch.** A failure that is not a refusal, such as a timeout, only needs the apply run again.
+After a refusal the cluster is half upgraded, and an object still stored at an old version reads unconverted, so do not run the storage sweep in this state.
 Measured the same way with `status.storedVersions` reading `["v2beta1","v2"]` on `runnersets`: the apply exited 1, the other four CRDs served `v2` alone, and `runnersets` served all three versions with strategy `None`.
 
 Go back by applying the CRDs of the 1.x release you came from.
@@ -332,7 +333,7 @@ kubectl apply --server-side --force-conflicts -f \
 ```
 
 Measured the same way, going back from that state to the `v1.10.0` CRDs: all five returned to strategy `Webhook` serving all three versions, the CA injector restored each `caBundle` within about 15 seconds, and once `storedVersions` read `[v2]` this section's steps then succeeded.
-Not measured: a running GMC, or reading a converted object, after going back.
+A running `v1.10.0` GMC then converts on reads, as [GMC rollback](#gmc-rollback) records.
 Fix what refused the apply, then start this section again.
 
 ### Action required at `v2.0.0`: apply the CRDs with the upgrade, because the AGC's watch depends on them
@@ -360,7 +361,8 @@ The GMC's startup schema check does not catch either, because it probes fields r
 **What to do.** Apply the `v2.0.0` CRDs and upgrade the chart as one step, and do not leave a gap between them.
 During a gap, an AGC that restarts cannot start.
 One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
-A rollback crosses the same gap in reverse.
+A `v1.10.0` GMC that starts during the gap crash-loops on these CRDs, while pods already running stayed Ready for the six minutes measured.
+A rollback crosses the same gap in reverse, so it [puts the CRDs back first](#gmc-rollback).
 
 ### Action required after `v2.0.0`: delete what an owner deleted during the upgrade left behind
 
@@ -389,13 +391,13 @@ kubectl get configmaps,pods,secrets,services,serviceaccounts,deployments,horizon
 ```
 
 The columns carry metadata only, so no Secret data reaches the pipe.
-Where the GMC manages ServiceMonitors, add `servicemonitors` to the list; it is left out because the command fails on a cluster without that CRD.
+Where the GMC manages ServiceMonitors, VerticalPodAutoscalers, `CiliumNetworkPolicy` or Calico `NetworkPolicy` objects, add those kinds to the list; they are left out because the command fails on a cluster without their CRDs.
 
 Delete an object from this list whose owner, named in its last columns, is gone.
 Deleting a Deployment takes its ReplicaSet and pods with it (measured the same way).
 Rewriting its reference did not help within three minutes: measured the same way, a ConfigMap repointed to `v2` after its owner was gone was still present then.
 A ConfigMap left in place also matters if you recreate a set of the same name, because the AGC finds these ConfigMaps by name (read from the code, not measured).
-An object whose owner still exists needs nothing.
+An object whose owner still exists needs nothing, except the agent Secrets of a set [kept from `Classic`](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol), which nothing cleans up.
 
 ### Action required if you alert on or chart the classic acquisition series: they are no longer exported
 
@@ -1837,6 +1839,42 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 
 `helm rollback` restores the prior release's values and manifests.
 CRDs carry `helm.sh/resource-policy: keep`, so they are not rolled back automatically; if the rollback targets a different CRD schema version, consult the release notes for any CRD migration.
+
+**From `v2.0.0` back to 1.x, put the CRDs back first.** The `v2.0.0` CRDs serve `v2` alone, and a `v1.10.0` GMC refuses to start without `v2alpha1` and `v2beta1`.
+Apply the CRDs of the release you are going back to, then roll back straight away:
+
+```sh
+kubectl apply --server-side --force-conflicts -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.X.Y/actions-gateway-crds-v2.yaml
+helm rollback gag --namespace gmc-system
+kubectl rollout status deploy/gmc-controller-manager -n gmc-system
+```
+
+`--force-conflicts` is required after the [`v2.0.0` patch](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), because that patch owns `.spec.conversion.strategy`.
+Between the apply and the rollback a read at `v2alpha1` or `v2beta1` fails, because a `v2.0.0` GMC has no conversion endpoint:
+
+```text
+Error from server: conversion webhook for actions-gateway.com/v2, Kind=RunnerTemplate failed: the server could not find the requested resource
+```
+
+Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2, rolling back to the `v1.10.0` chart: the rollback exited 0 with two `v1.10.0` pods Ready, and a `RunnerTemplate` stored at `v2` read back at `v2alpha1`.
+
+**If the chart went back first,** `helm rollback` still reports `Rollback was a success!` and the release reads `deployed`, or exits 1 and reads `failed` with `--wait`.
+The new pod crash-loops, and the `v2.0.0` pods keep running beside it.
+Its log says the CRDs are older than the GMC, which is backwards here, since they are newer:
+
+```text
+verify installed CRD schemas: the CustomResourceDefinitions installed in this cluster are older than this GMC and no longer declare a field that bounds tenant access:
+  - runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup
+```
+
+The plain `kubectl apply --server-side` the log recommends is refused with a conflict on `.spec.conversion.strategy` and changes nothing.
+The forced apply above is the recovery, and no restart is needed: the pods went Ready on their own within two to four minutes, once their crash-loop backoff retried.
+After that, in the same measurement, reads at `v2alpha1`, `v2beta1` and `v2` returned the stored object, and a `v2beta1` write naming a PriorityClass outside the allowlist was denied by the allowlist guard.
+Applying the `v2.0.0` CRDs and upgrading the chart again then succeeded.
+
+None of this was measured with a tenant gateway running: the cluster held the GMC and one `RunnerTemplate`.
+A field that only the `v2.0.0` schema declares is expected to be pruned from an object the next time it is written, as [install.md](install.md#the-v2-api-crds) warns; that part was not measured.
 
 ---
 
