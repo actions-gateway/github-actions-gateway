@@ -18,7 +18,7 @@ import (
 // fakeReader returns a client.Reader preloaded with the given objects, standing in
 // for the manager's uncached API reader in the Q322 referrer-graph guards.
 //
-// It registers every kind the validators read: the agent-identity guard (Q1011) is
+// It registers every kind the validators read: the label-uniqueness guard (Q791) is
 // fail-closed, so an unregistered kind fails admission with a List error rather
 // than exercising the guard under test.
 func fakeReader(t *testing.T, objs ...client.Object) client.Reader {

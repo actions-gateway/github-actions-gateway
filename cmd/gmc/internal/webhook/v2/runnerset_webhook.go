@@ -33,9 +33,6 @@ import (
 //     register the same scale-set name at GitHub and collide.
 //   - Every priorityTiers[].priorityClassName must be on the platform PriorityClass
 //     allowlist (Q132/Q289): the allowlist is dynamic platform config CEL cannot read.
-//   - No two RunnerSets may derive the same agent-identity stem (Q1011). The stem
-//     is derived from the CR name, so this is a cross-NAMESPACE comparison against
-//     sibling RunnerSets, which no CEL rule reaches.
 //
 // +kubebuilder:object:generate=false
 type RunnerSetCustomValidator struct {
@@ -45,10 +42,8 @@ type RunnerSetCustomValidator struct {
 	PriorityClasses *allowlist.PriorityClassAllowlist
 
 	// reader lists RunnerSets and the ActionsGateways that give them a GitHub scope
-	// for the label-uniqueness guard (Q791), every gateway, RunnerGroup and RunnerSet
-	// in the cluster for the agent-identity guard (Q1011), and resolves the
-	// gatewayRef/proxyRef pair for the noProxyCIDRs GitHub-bypass guard (Q322,
-	// validateProxyGitHubBypass). It is
+	// for the label-uniqueness guard (Q791), and resolves the gatewayRef/proxyRef pair
+	// for the noProxyCIDRs GitHub-bypass guard (Q322, validateProxyGitHubBypass). It is
 	// the manager's uncached API reader in production (wired by
 	// SetupRunnerSetWebhookWithManager): a just-created sibling may not be in the
 	// informer cache yet, and admitting a colliding scale-set label through a stale
@@ -61,18 +56,13 @@ type RunnerSetCustomValidator struct {
 
 // ValidateCreate rejects a RunnerSet naming an off-allowlist PriorityClass in
 // priorityTiers, a ScaleSet RunnerSet whose single runnerLabel collides with an
-// existing ScaleSet sibling under the same gateway, a set whose agent-identity stem
-// is already claimed, or a proxyRef naming an EgressProxy whose noProxyCIDRs would
-// route the gateway's GitHub host around it.
+// existing ScaleSet sibling under the same gateway, or a proxyRef naming an EgressProxy
+// whose noProxyCIDRs would route the gateway's GitHub host around it.
 func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.RunnerSet) (admission.Warnings, error) {
 	if err := v.validatePriorityTiers(obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
-	read := &runnerSetRead{reader: v.reader}
-	if err := v.validateScaleSetLabelUniqueness(ctx, read, obj); err != nil {
-		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
-	}
-	if err := v.validateAgentIdentityUniqueness(ctx, read, obj); err != nil {
+	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateProxyGitHubBypass(ctx, obj); err != nil {
@@ -84,9 +74,7 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 // ValidateUpdate applies the same checks on update: an existing RunnerSet cannot be
 // edited to smuggle in an off-allowlist PriorityClass, and runnerLabels, gatewayRef,
 // and proxyRef can still change, so an update can still move a set onto a colliding
-// label or bind the gateway's GitHub host to a proxy that excludes it. The agent-identity
-// stem comes from the CR name and so cannot move, but the gatewayRef can, which
-// changes the GitHub scope the stem is compared in. Deletion-only
+// label or bind the gateway's GitHub host to a proxy that excludes it. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
 // re-validation (Q518; see validation.DeletionOnlyUpdate).
 func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.RunnerSet) (admission.Warnings, error) {
@@ -96,11 +84,7 @@ func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	if err := v.validatePriorityTiers(newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
-	read := &runnerSetRead{reader: v.reader}
-	if err := v.validateScaleSetLabelUniqueness(ctx, read, newObj); err != nil {
-		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
-	}
-	if err := v.validateAgentIdentityUniqueness(ctx, read, newObj); err != nil {
+	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateProxyGitHubBypass(ctx, newObj); err != nil {
@@ -156,10 +140,9 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.Ru
 // collision (Q726). For a single-label set this is the same comparison it has
 // always been.
 //
-// The inventory comes from the request's shared read (runnerSetRead). The check is
-// fail-closed: if a List errors, the request is rejected rather than admitted on
+// The check is fail-closed: if a List errors, the request is rejected rather than admitted on
 // faith — admitting a possible collision is the failure mode this guards against.
-func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, read *runnerSetRead, rs *agcv2.RunnerSet) error {
+func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2.RunnerSet) error {
 	if len(rs.Spec.RunnerLabels) == 0 {
 		// MinItems=1 rejects this before the webhook runs; nothing to compare.
 		return nil
@@ -169,7 +152,7 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		// and production paths always wire the uncached API reader.
 		return nil
 	}
-	inv, err := read.scaleSets(ctx)
+	inv, err := scalesetscope.Of(ctx, v.reader, nil)
 	if err != nil {
 		return fmt.Errorf(
 			"cannot verify ScaleSet runnerLabel uniqueness for %q in namespace %q: %w",

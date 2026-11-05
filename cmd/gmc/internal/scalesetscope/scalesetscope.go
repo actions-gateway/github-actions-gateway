@@ -128,15 +128,10 @@ func Of(ctx context.Context, reader client.Reader, pending *PendingGateway) (Inv
 	if err := reader.List(ctx, &sets); err != nil {
 		return Inventory{}, fmt.Errorf("list RunnerSets: %w", err)
 	}
-	return FromLists(gateways.Items, sets.Items, pending), nil
-}
 
-// FromLists derives the inventory [Of] returns from gateways and sets the caller has
-// already read, for a caller whose other guards read the same kinds (Q1075).
-func FromLists(gateways []agcv2.ActionsGateway, sets []agcv2.RunnerSet, pending *PendingGateway) Inventory {
-	scopes := make(map[client.ObjectKey]string, len(gateways))
-	for i := range gateways {
-		gw := &gateways[i]
+	scopes := make(map[client.ObjectKey]string, len(gateways.Items))
+	for i := range gateways.Items {
+		gw := &gateways.Items[i]
 		if s := GitHubScope(gw.Spec.GitHubURL); s != "" {
 			scopes[client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name}] = s
 		}
@@ -146,8 +141,8 @@ func FromLists(gateways []agcv2.ActionsGateway, sets []agcv2.RunnerSet, pending 
 	}
 
 	inv := Inventory{Scopes: scopes}
-	for i := range sets {
-		rs := &sets[i]
+	for i := range sets.Items {
+		rs := &sets.Items[i]
 		if len(rs.Spec.RunnerLabels) == 0 {
 			continue
 		}
@@ -159,5 +154,5 @@ func FromLists(gateways []agcv2.ActionsGateway, sets []agcv2.RunnerSet, pending 
 			Scope:      scopes[client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}],
 		})
 	}
-	return inv
+	return inv, nil
 }
