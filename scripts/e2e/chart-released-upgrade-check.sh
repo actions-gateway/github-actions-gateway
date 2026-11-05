@@ -20,7 +20,8 @@
 #   Before installing that chart it puts the out-of-band actions-gateway-crds-v2
 #   CRDs back to the released ones, because the released GMC refuses a cluster whose
 #   CRDs dropped a version it reads, and then takes those CRDs to HEAD's along
-#   upgrade.md's documented path once the released chart is up (Q1167).
+#   upgrade.md's documented path once the released chart is up (Q1167). The chart-root
+#   CRDs go to HEAD's after the upgrade, ahead of the admission assertions.
 #
 #   1. A release whose values set a key HEAD removed must fail AT RENDER with
 #      the chart's migration message (today: priorityClassAllowlist.configMapName,
@@ -691,6 +692,24 @@ for want in "${PROBE_WORKER_CLASS}" "${PROBE_INFRA_CLASS}"; do
 	fi
 done
 echo "OK: both allowlists round-trip into the CR: ${rendered}"
+
+# upgrade.md's v2.0.0 exception. Helm maps the current release's manifest before applying
+# anything, so a CRD dropping the version that manifest names goes on after the upgrade. The
+# plain branch above never applies it, and the upgrade below proves the next one still maps.
+step "applying HEAD's chart-root CRDs after the upgrade, then upgrading once more"
+kc apply -f - <<<"$(helm show crds "${CHART_DIR}")" >/dev/null
+for crd in ${head_root_crds[@]+"${head_root_crds[@]}"}; do
+	served="$(kc get crd "${crd}" -o json | jq -c '[.spec.versions[] | select(.served) | .name]')"
+	[[ "${served}" == '["v2"]' ]] ||
+		die "after the documented step ${crd} serves ${served}, not v2 alone."
+done
+upgrade_with_lists --wait --timeout 10m
+if ((UPGRADE_RC != 0)); then
+	echo "FAIL: an upgrade after the chart-root CRDs went to HEAD's was refused. Helm said:" >&2
+	echo "  ${UPGRADE_OUT}" >&2
+	exit 1
+fi
+echo "OK: every chart-root CRD serves v2 alone, and the next upgrade still applies"
 
 step "admission must work on the upgraded release"
 # A previous run's cleanup deletes the probe namespace with --wait=false, so a
