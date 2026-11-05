@@ -16,7 +16,7 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
   Only `crds/` is installed ahead of that resolution.
 
   The cost lands on **upgrades**: Helm skips `crds/` there entirely.
-  So applying the chart's CRDs is a standard pre-upgrade step for this chart, run every time rather than conditionally:
+  So applying the chart's CRDs is a standard pre-upgrade step for this chart, run every time rather than conditionally, except from 1.x to `v2.0.0`, where it goes after `helm upgrade` ([upgrade.md](../../docs/operations/upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)):
 
   ```sh
   helm pull <chart> --version <version> --untar --untardir gag-chart-<version>

@@ -358,19 +358,26 @@ GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD
 
 The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.
 
-**What to do.** Apply the five CRDs in `actions-gateway-crds-v2.yaml`, upgrade the chart, then apply the chart-root CRD, with no gap between them:
+**What to do.** Pull the chart before [the webhook removal](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), so a wrong version fails with nothing changed.
+Then apply the five CRDs in `actions-gateway-crds-v2.yaml`, upgrade the chart, and apply the chart-root CRD, with no gap between them:
 
 ```sh
-kubectl apply --server-side -f actions-gateway-crds-v2.yaml
+# Before the webhook removal
 helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --version <chart-version> --untar --untardir gag-chart-<chart-version>
+
+# Straight after the webhook removal, whose block ends with this same apply
+kubectl apply --server-side -f actions-gateway-crds-v2.yaml
 helm upgrade gag gag-chart-<chart-version>/actions-gateway \
-  --namespace gmc-system --reset-then-reuse-values
+  --namespace gmc-system --reset-then-reuse-values \
+  --set gmc.image.digest=sha256:<new-gmc> \
+  --set agc.image.digest=sha256:<new-agc> \
+  --set proxy.image.digest=sha256:<new-proxy> \
+  --set wrapper.image.digest=sha256:<new-wrapper>
 helm show crds gag-chart-<chart-version>/actions-gateway | kubectl apply -f -
 ```
 
-The first line assumes [the webhook removal](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them) has just run.
-Add your usual `--set` values to the `helm upgrade`.
+Set all four digests to the new release's, because `--reset-then-reuse-values` otherwise replays the `v1.10.0` ones.
 
 During a gap, an AGC that restarts cannot start.
 One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
@@ -1887,7 +1894,7 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 ```
 
 `--force-conflicts` is required after the [`v2.0.0` patch](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), because that patch owns `.spec.conversion.strategy`.
-Between the applies and the rollback, a read at `v2alpha1` or `v2beta1` fails because a `v2.0.0` GMC has no conversion endpoint, and a write at either is denied with `failed to convert object version`:
+Between the applies and the rollback, a read at `v2alpha1` or `v2beta1` fails because a `v2.0.0` GMC has no conversion endpoint, and a write at `v2beta1` is denied with `failed to convert object version`:
 
 ```text
 Error from server: conversion webhook for actions-gateway.com/v2, Kind=RunnerTemplate failed: the server could not find the requested resource
