@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2938,7 +2938,7 @@ So even if someone fat-fingers <code>true</code>, eligibility is denied rather t
 </code></pre></div>
 <p>on the namespace, and the GMC <code>NamespacePSAReconciler</code> stamps the <code>pod-security.kubernetes.io/*</code> labels from it.
 The value follows the enum-keyword convention above (not a boolean), and the <code>gmc-namespace-security-profile-guard</code> ValidatingAdmissionPolicy fail-closes on an invalid value, a silent downgrade, or a <code>privileged</code> selection without the <code>actions-gateway.com/privileged-profile=allowed</code> eligibility label.
-See <code>SecurityProfileLabel</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/shared_types.go"><code>api/v2alpha1/shared_types.go</code></a>.</p>
+See <code>SecurityProfileLabel</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/shared_types.go"><code>api/v2/shared_types.go</code></a>.</p>
 <h3 id="the-true-values-v1-shipped-were-retired-by-a-migration">The <code>"true"</code> values v1 shipped were retired by a migration<a class="headerlink" href="#the-true-values-v1-shipped-were-retired-by-a-migration" title="Permanent link">&para;</a></h3>
 <p>Two v1 keys predated this convention and used <code>"true"</code>: the managed-tenant marker <code>actions-gateway.github.com/tenant: "true"</code> and the downgrade opt-in annotation <code>actions-gateway.github.com/allow-profile-downgrade: "true"</code>.
 Changing a value every admission policy and runbook matches is a breaking change to deployed clusters, so it took a deliberate migration rather than an edit.</p>
@@ -2948,7 +2948,7 @@ Nothing reads an <code>actions-gateway.github.com</code> namespace key now.</p>
 <h2 id="label--annotation-key-conventions">Label &amp; annotation key conventions<a class="headerlink" href="#label--annotation-key-conventions" title="Permanent link">&para;</a></h2>
 <p>Use the <code>actions-gateway.github.com/&lt;name&gt;</code> prefix for every label and annotation key the project defines, matching the API group.
 Define the key (and its sentinel value, if any) as an exported <code>const</code> in the relevant <code>api/v1alpha1</code> package with godoc, and reference that const from controllers, webhooks, and tests — never re-type the literal string, so a rename can't drift between the producer and the consumers.</p>
-<p><strong>v2 (<code>actions-gateway.com</code>) keys use the owned domain from birth</strong> — the v2 kinds and their controllers prefix labels/annotations with <code>actions-gateway.com/</code> (the group the project owns), defined as exported consts in the neutral <code>api/v2alpha1</code> package.
+<p><strong>v2 (<code>actions-gateway.com</code>) keys use the owned domain from birth</strong> — the v2 kinds and their controllers prefix labels/annotations with <code>actions-gateway.com/</code> (the group the project owns), defined as exported consts in the neutral <code>api/v2</code> package.
 Controller-set v2 labels:</p>
 <ul>
 <li><code>actions-gateway.com/gateway: &lt;name&gt;</code> — stamped by the v2 <code>ActionsGateway</code> reconciler on every AGC control-plane child (Deployment/SA/RoleBinding/Service/ NetworkPolicy/Secret), so M3b's per-gateway naming has an identity to key on and operators can <code>kubectl get -l actions-gateway.com/gateway=&lt;name&gt;</code> a gateway's resources.</li>
@@ -3172,7 +3172,7 @@ Upstream: <a href="https://github.com/kubernetes/kubernetes/issues/130887">kuber
 <p><strong>Corollaries for a new policy:</strong></p>
 <ul>
 <li>Give the policy a small, purpose-built cluster-scoped CRD for its params.
-  <code>PriorityClassAllowlist</code> (<code>api/v2beta1</code>) is the worked example.</li>
+  <code>PriorityClassAllowlist</code> (<code>api/v2</code>) is the worked example.</li>
 <li>Keep <code>parameterNotFoundAction: Deny</code>.
   It is the fail-closed default and the reason a broken <code>paramKind</code> is so loud; the fix is the CRD, not weakening this.</li>
 <li>Do <strong>not</strong> try to fix it by retaining the binding across uninstall (<code>helm.sh/resource-policy: keep</code>).

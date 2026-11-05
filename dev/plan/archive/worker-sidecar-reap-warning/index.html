@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2759,7 +2759,7 @@
 This surfaces that misconfiguration at admission
 + status + metrics and steers operators to native sidecars.
   <strong>No custom reaper.</strong></p>
-<p><strong>What shipped.</strong> Shared detection helper <code>ReapBlockingSidecars</code> + <code>SelfExitingSidecarsAnnotation</code> / <code>RunnerContainerName</code> constants in the neutral <code>api/v2alpha1</code> module (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/sidecar.go">sidecar.go</a>).
+<p><strong>What shipped.</strong> Shared detection helper <code>ReapBlockingSidecars</code> + <code>SelfExitingSidecarsAnnotation</code> / <code>RunnerContainerName</code> constants in the neutral <code>api/v2alpha1</code> module (<code>sidecar.go</code>, deleted by Q1167).
 Three non-blocking outlets, all gated by the name-list opt-out: (a) a GMC validating- webhook admission <strong>Warning</strong> on RunnerTemplate/ClusterRunnerTemplate create+update (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go">runnertemplate_webhook.go</a>); (b) the advisory <code>PossibleReapBlockingSidecar</code> RunnerSet condition, set/cleared from the resolved template by the AGC reconciler (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_controller.go">runnerset_controller.go</a>); (c) the <code>actions_gateway_reap_blocking_sidecar_templates</code> gauge.
 Tested at the tier that observes each: unit (helper, condition+metric), GMC webhook unit (warning emitted/suppressed, never blocks), and AGC envtest integration (condition True/False end-to-end + set still reaches Ready).
 Docs: operator how-to in <a href="../../../operations/in-runner-image-builds/#sidecar-containers-must-be-native-sidecars-q249">in-runner-image-builds.md</a>, troubleshooting + observability + kata cross-ref, design note in <a href="../../../design/appendix-b-worker-isolation/">appendix-b §B.5</a>.</p>

@@ -2934,7 +2934,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3322,11 +3322,11 @@
 <li><strong>The cleanup finalizer is the primary path.</strong> It is ordered and fail-closed (Q125): the GMC deletes the <code>RunnerGroup</code>s first and waits for them to be gone — so listeners and worker pods drain before the AGC <code>Deployment</code> and its credentials are removed — then deletes the remaining children, and only removes the finalizer once <em>every</em> delete is confirmed.
   A delete that keeps failing retains the finalizer and requeues rather than abandoning a live, credentialed AGC.
   It also reaches objects the current reconciler no longer applies (the pre-v0.X per-tenant <code>Role</code>, the legacy <code>actions-gateway</code> <code>NetworkPolicy</code>), which nothing else would reclaim.</li>
-<li><strong>Owner-reference cascade garbage collection is the backstop.</strong> Every namespaced child the GMC applies carries a controller <code>OwnerReference</code> to its <code>ActionsGateway</code> — in both <code>v1alpha1</code> and <code>v2alpha1</code> (Q394).
-  Because a <code>ResourceQuota</code>-style platform-owned object is never a GMC child, and because both API versions place their children in the CR's own namespace, the reference is always valid.
+<li><strong>Owner-reference cascade garbage collection is the backstop.</strong> Every namespaced child the GMC applies carries a controller <code>OwnerReference</code> to its <code>ActionsGateway</code> (Q394).
+  Because a <code>ResourceQuota</code>-style platform-owned object is never a GMC child, and because the GMC places the children in the CR's own namespace, the reference is always valid.
   It costs nothing in the normal path (the CR is not removed from etcd until the finalizer clears, so the ordered drain always runs first) and it is what makes an operator force-removing the finalizer a recoverable mistake rather than a leak of credentialed <code>ServiceAccount</code>s, the AGC <code>RoleBinding</code>, the egress <code>NetworkPolicy</code>s, and the proxy <code>HPA</code>/<code>PDB</code>/<code>Service</code> into a namespace the tenant still controls.</li>
 </ul>
-<p>The one intentional exception is a <strong>cluster-scoped</strong> child: a namespaced <code>ActionsGateway</code> cannot own one (the apiserver rejects the cross-scope reference and never collects it), so <code>v2alpha1</code>'s per-gateway <code>ClusterRoleBinding</code> is un-owned and reclaimed by the finalizer alone.
+<p>The one intentional exception is a <strong>cluster-scoped</strong> child: a namespaced <code>ActionsGateway</code> cannot own one (the apiserver rejects the cross-scope reference and never collects it), so the per-gateway <code>ClusterRoleBinding</code> is un-owned and reclaimed by the finalizer alone.
 Any new cluster-scoped child inherits that constraint and must be deleted explicitly in <code>reconcileDelete</code>.</p>
 <p><strong>v2 needs a third mechanism for the tenant's worker pods</strong> (Q547).
 The ordered drain above works in v1 because <code>RunnerGroup</code>s <em>are</em> the gateway's children: deleting them first cascades to their worker pods. v2 decomposed them into standalone <code>RunnerSet</code>s that only reference the gateway and are deliberately <strong>not</strong> deleted with it — a tenant re-applies the gateway and its sets resume — which leaves worker pods owned by a live object whose only reaper is about to be torn down.
@@ -3344,7 +3344,7 @@ So the two controllers split it:</p>
 <h2 id="42-job-execution-flow-agc">4.2. Job Execution Flow (AGC)<a class="headerlink" href="#42-job-execution-flow-agc" title="Permanent link">&para;</a></h2>
 <p>This flow runs per-job inside the tenant namespace, entirely managed by the AGC.</p>
 <blockquote>
-<p><strong>This is the classic acquisition flow.</strong> A <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> — the default, and <code>v2beta1</code>'s only option — does not run steps 2a–5 as written: the runner pulls and completes its own job through its own session, and the AGC advertises a single capacity integer (<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job.
+<p><strong>This is the classic acquisition flow.</strong> A <code>RunnerSet</code>, which always acquires through a scale set, does not run steps 2a–5 as written: the runner pulls and completes its own job through its own session, and the AGC advertises a single capacity integer (<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job.
 Two consequences are called out where they arise.
 Eviction auto-retry is ported to this tier (Q417, <a href="#on-the-scale-set-tier-q417">below</a>), as is the admission ladder of step 2a (Q443, <a href="#the-ladder-as-an-integer-scale-set-tier-q443">below</a>) and the abandoned-run force-cancel with its capacity-gated re-run (Q766, <a href="#on-the-scale-set-tier-q766">below</a>).
 All three were classic-only, which the <code>v2.0.0</code> removal of classic acquisition would have turned into a silent capability deletion.</p>
@@ -3570,7 +3570,7 @@ See <a href="../../operations/troubleshooting/#sessions-stuck-in-401eof-getmessa
 <blockquote>
 <p><strong>Both acquisition tiers, by two different routes.</strong> The flow below is the classic <code>provision()</code> path, which blocks on the worker pod's terminal phase.
 <code>ProvisionScaleSetWorker</code> is fire-and-forget by design — the runner pulls and completes its own job — so it observes nothing, and until Q417 an evicted <code>ScaleSet</code> worker got no rerun at all.
-That mattered because <code>ScaleSet</code> is the default protocol (Q264 P5) and the only one <code>v2beta1</code> offers, so the capability covered only the <em>deprecated</em> tier.
+That mattered because <code>ScaleSet</code> is the default protocol (Q264 P5) and the only one <code>v2</code> offers, so the capability covered only the <em>deprecated</em> tier.
 The port relocates both of the classic path's inputs onto the worker pod; see <a href="#on-the-scale-set-tier-q417">On the scale-set tier</a> below.</p>
 </blockquote>
 <pre class="mermaid"><code>sequenceDiagram

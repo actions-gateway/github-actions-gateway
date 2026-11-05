@@ -2842,7 +2842,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3262,20 +3262,12 @@ It gives ready-to-apply Argo CD <code>Application</code> and Flux <code>HelmRele
 <p>The main chart installs no tenant CRD.
 The <code>actions-gateway.com</code> API ships its five CRDs in a <strong>separate chart</strong>, <code>actions-gateway-crds-v2</code>, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
 Install it alongside the main chart: without it neither controller has a kind to reconcile.</p>
-<p>Each v2 CRD is served at <strong>three versions</strong>: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only shape, and the conversion hub), <strong><code>v2</code></strong> (the General Availability (GA) version, identical but for the dropped <code>CiliumFQDN</code>/<code>CalicoFQDN</code> aliases, and the storage version from 1.10), and <strong><code>v2alpha1</code></strong> (served as the <code>gag-migrate</code> on-ramp, deprecated, and <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>).
-An unpinned <code>kubectl get</code> returns <code>v2</code>, the version the apiserver prefers (<a href="../upgrade/#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2">what that changes</a>).
-The apiserver converts between them through a <strong>conversion webhook hosted by the GMC</strong> (the <code>/convert</code> endpoint on the same <code>webhook-service</code> that fronts the validating webhooks).
-Two consequences for an operator:</p>
-<ul>
-<li><strong>The v2 CRD chart depends on the main chart + cert-manager.</strong> The conversion webhook's <code>clientConfig</code> points at the GMC <code>webhook-service</code>, and cert-manager's ca-injector supplies its CA.
-  Install the v2 CRD chart into the <strong>same namespace as the GMC</strong> (<code>--namespace gmc-system</code>) so the webhook <code>clientConfig</code> resolves, or set <code>conversion.webhook.service.namespace</code> explicitly.
-  With cert-manager disabled, set <code>conversion.certManager.enabled=false</code> and supply <code>conversion.caBundle</code> (the CA that signed the GMC webhook serving cert).</li>
-<li><strong>Create v2 objects only once the GMC is running.</strong> The CRDs may be installed in any order, but a <code>RunnerSet</code>/<code>RunnerTemplate</code>/… create is routed through <code>/convert</code>, so it fails until the GMC (the conversion webhook server) is <code>Ready</code>.
-  On a fresh install this resolves itself; on an existing cluster, install the CRDs and let the GMC roll out before applying v2 objects.</li>
-</ul>
+<p>Each v2 CRD serves <code>v2</code>, the General Availability (GA) version, alone.
+The CRDs may be installed before or after the GMC, but a create or update of any v2 kind passes through the GMC's validating webhooks, so it fails until the GMC is <code>Ready</code>.
+On a fresh install this resolves itself; on an existing cluster, install the CRDs and let the GMC roll out before applying v2 objects.</p>
 <p>Installing them:</p>
 <ul>
-<li><strong>Without them, nothing reconciles.</strong> The GMC <strong>detects the v2 CRDs at startup</strong>: when they are absent it logs a single info line — <code>actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled</code> — and starts no tenant controller or IP-range refresh pass.
+<li><strong>Without them, nothing reconciles.</strong> The GMC <strong>detects the v2 CRDs at startup</strong>: when they are absent it logs a single info line — <code>actions-gateway.com/v2 CRDs not installed; v2 controllers disabled</code> — and starts no tenant controller or IP-range refresh pass.
   A per-tenant AGC exits at startup with an error naming the missing <code>RunnerSet</code> CRD.</li>
 <li><strong>Apply them server-side</strong> — do <strong>not</strong> <code>helm install</code> the chart.
   The two <code>RunnerTemplate</code> CRDs each embed a full <code>PodTemplateSpec</code>, so the rendered chart (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit and <code>helm install</code> cannot store it.
@@ -3294,27 +3286,27 @@ Two consequences for an operator:</p>
 <a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span>https://token.actions.githubusercontent.com<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">  </span>actions-gateway-crds-v2.yaml
 </code></pre></div>
-<p><strong>Custom GMC namespace, or a GitOps render — use helm.</strong> The release asset bakes in the default <code>gmc-system</code> namespace for the conversion webhook <code>clientConfig</code>; if the GMC runs elsewhere (or cert-manager is disabled), render for that namespace and apply server-side (this carries the same <code>spec.conversion</code> wiring, resolved to your namespace):</p>
+<p><strong>A GitOps render — use helm.</strong> Render the chart and apply it server-side; the output is the same CRDs as the release asset, whatever namespace the GMC runs in:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>helm<span class="w"> </span>template<span class="w"> </span>actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
-<p>Override <code>conversion.webhook.service.namespace</code> / <code>conversion.certManager.*</code> with <code>--set</code> if the GMC runs elsewhere or cert-manager is disabled.</p>
 <p><strong>Why apply-render and not <code>helm install</code>.</strong> Server-side apply is declarative and idempotent, so install and upgrade are the <em>same</em> command; it also clears kubectl's 256 KB client-side-apply annotation ceiling, which each ~1.16 MB <code>RunnerTemplate</code> CRD exceeds on its own.
   This is the mainstream practice for large CRDs (cert-manager, Crossplane, Istio, Gateway API all apply their CRDs out-of-band).
   The properties it forgoes — <code>helm rollback</code>, <code>helm uninstall</code> cleanup — are ones you should not use on CRDs anyway: rolling a schema backward can strand stored objects, and a cascading CRD delete removes every custom resource with it.</p>
 <p><strong>Upgrade.</strong> Re-apply the newer release the same way you installed — either <code>kubectl apply --server-side -f …/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml</code> with the newer tag, or re-run the <code>helm template … | kubectl apply --server-side</code> render with the newer chart (<code>--version &lt;x.y.z&gt;</code> for a pinned OCI ref).
-  Server-side apply merges the new schema in place — additive field/version changes need no other step.
-  Re-apply on <strong>every</strong> GMC upgrade, not only when you want a new field: the GMC checks the installed schema at startup and refuses to start when a CRD no longer declares a field that bounds tenant access, because a structural schema prunes such a field on write with no error (<a href="../troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">troubleshooting.md</a>).
-  On a running cluster the conversion <code>caBundle</code> is supplied by cert-manager's ca-injector, so it resolves post-apply; a <code>helm template</code> alone cannot look it up.</p>
+  Server-side apply merges the new schema in place, so an additive field change needs no other step.
+  From 1.x to <code>v2.0.0</code>, <a href="../upgrade/#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them">remove the conversion webhook first</a>, or the apply is refused.
+  Re-apply on <strong>every</strong> GMC upgrade, not only when you want a new field: the GMC checks the installed schema at startup and refuses to start when a CRD no longer declares a field that bounds tenant access, because a structural schema prunes such a field on write with no error (<a href="../troubleshooting/#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc">troubleshooting.md</a>).</p>
 <p><strong>Rollback.</strong> Re-apply the render of the <em>previous</em> chart version the same way.
+  From <code>v2.0.0</code> back to 1.x that takes <code>--force-conflicts</code>, and it <a href="../upgrade/#gmc-rollback">goes ahead of rolling back the chart</a>, along with the 1.x chart's own chart-root CRD.
   Treat this as a deliberate migration, not a casual undo: if the newer version added a served or storage version, or a field that existing objects now populate, rolling back can reject or truncate stored resources.
   Prefer rolling <em>forward</em> with a corrected chart.</p>
 <p><strong>Uninstall.</strong> There is no Helm release to <code>helm uninstall</code>; remove the CRDs explicitly and only when you intend to — deleting a CRD <strong>cascades to every custom resource of that kind</strong> (<code>kubectl delete -f &lt;(helm template actions-gateway-crds-v2 … )</code>).
   The templates carry <code>helm.sh/resource-policy: keep</code>, so a GitOps tool that fronts this chart with a real Helm release will not prune the CRDs on its own uninstall.</p>
 <p>Detection happens once at GMC startup, so <strong>after installing the CRDs into a running v1-only cluster, restart the GMC</strong> (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>) to enable the v2 controllers.
-  On startup the GMC logs <code>actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers</code>.</p>
+  On startup the GMC logs <code>actions-gateway.com/v2 CRDs detected; enabling v2 controllers</code>.</p>
 <p>See <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">getting-started.md § the v2 API</a> for what v2 adds, and <a href="../../getting-started/#1-deploy-the-gmc">§1 Deploy the GMC</a> for the v2 CRD chart install and the Kubernetes version requirements.</p>
 <hr />
 <h2 id="key-values-an-operator-sets">Key values an operator sets<a class="headerlink" href="#key-values-an-operator-sets" title="Permanent link">&para;</a></h2>
@@ -3400,7 +3392,7 @@ This is measured rather than inferred: <code>scripts/e2e/vap-param-informer-chec
 <p><strong>One consequence, and it is not install-time.</strong> This CRD ships in the chart-root <code>crds/</code> directory rather than as a template, because the same release also creates a <code>PriorityClassAllowlist</code> object and Helm resolves REST mappings for the whole manifest before applying any of it — a CR whose CRD is a template in the same release fails the install outright.
 A <strong>fresh <code>helm install</code> handles this for you</strong>; <code>crds/</code> is applied first.</p>
 <p>An <strong>upgrade does not</strong>.
-Helm skips <code>crds/</code> entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:</p>
+Helm skips <code>crds/</code> entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from, except 1.x to <code>v2.0.0</code>, where <a href="../upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">it goes after the upgrade</a>:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>&lt;chart&gt;<span class="w"> </span>--version<span class="w"> </span>&lt;version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;version&gt;
 <a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>

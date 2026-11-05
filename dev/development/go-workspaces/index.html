@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2892,7 +2892,7 @@ The <strong>Internal deps</strong> column lists the other workspace modules each
 </tr>
 </tbody>
 </table>
-<p>The <code>api/</code> module holds the v2 (<code>actions-gateway.com</code>) <code>v2alpha1</code> API kinds shared by both controllers.
+<p>The <code>api/</code> module holds the v2 (<code>actions-gateway.com</code>) API kinds shared by both controllers.
 It is a pure API leaf — only <code>k8s.io/*</code> and <code>controller-runtime</code> scheme deps, no internal deps — so both <code>agc</code> and <code>gmc</code> import it without inverting the layering.
 It exists to break a would-be module cycle: the AGC's <code>RunnerSet</code> reconciler must read the GMC-group <code>ActionsGateway</code>/<code>EgressProxy</code>, but <code>gmc</code> already imports <code>agc</code>, so the shared kinds live in this neutral module instead of either controller importing the other's API package (Q164).</p>
 <h3 id="dependency-direction">Dependency direction<a class="headerlink" href="#dependency-direction" title="Permanent link">&para;</a></h3>

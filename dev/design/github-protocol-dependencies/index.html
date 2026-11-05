@@ -2711,7 +2711,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2892,7 +2892,7 @@ A protocol GAG assumed was stable had already drifted.</p>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go"><code>broker/client.go</code></a>; brokertest fake</td>
 <td>Reverse-engineered from <code>actions/runner</code> + ARC (Milestone 1 wire probe); GAG documents it in <a href="../03-api-contracts/#33-re-implemented-broker-api-endpoints">03-api-contracts §3.3</a>.</td>
 <td><strong>T3</strong></td>
-<td>Being retired (Q264): the classic machinery is removed at the v2beta1 graduation. Until then, the dogfood e2e is the early-warning for a silent broker change; a live wedge that is <em>not</em> an on-our-side seam is the signal (the fan-out saga was one such investigation).</td>
+<td>Being retired (Q264): classic acquisition is removed at <code>v2.0.0</code>. The dogfood e2e is the early-warning for a silent broker change; a live wedge that is <em>not</em> an on-our-side seam is the signal (the fan-out saga was one such investigation).</td>
 </tr>
 <tr>
 <td><strong>Runner scale-set</strong></td>

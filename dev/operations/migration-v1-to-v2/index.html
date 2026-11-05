@@ -122,7 +122,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api" class="md-skip">
+        <a href="#migrating-a-tenant-from-the-v1alpha1-api-to-the-v2-api" class="md-skip">
           Skip to content
         </a>
       
@@ -2865,7 +2865,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3138,25 +3138,22 @@
   
 
 
-<h1 id="migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api">Migrating a tenant from the v1alpha1 to the v2alpha1 API<a class="headerlink" href="#migrating-a-tenant-from-the-v1alpha1-to-the-v2alpha1-api" title="Permanent link">&para;</a></h1>
+<h1 id="migrating-a-tenant-from-the-v1alpha1-api-to-the-v2-api">Migrating a tenant from the v1alpha1 API to the v2 API<a class="headerlink" href="#migrating-a-tenant-from-the-v1alpha1-api-to-the-v2-api" title="Permanent link">&para;</a></h1>
 <blockquote>
 <p><strong>Audience:</strong> Platform engineer, Tenant operator</p>
 </blockquote>
-<p>The v2 API (<code>actions-gateway.com</code>) replaces the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> shape with a decomposed set of kinds — <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code>, and <code>RunnerSet</code>.
-The two API groups are <strong>served side by side</strong>: nothing forces a tenant onto v2, and v1 keeps working until you migrate it.
-Because one v1 object fans out into several v2 objects, the move is a tool-assisted <strong>fan-out on create</strong>, not an automatic conversion — see the <a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">design rationale</a>.</p>
-<p>This guide covers running the <code>gag-migrate</code> tool: dry-run → review → <code>--apply</code>, the coexistence/rollback story, and the post-migration teardown.</p>
+<p>The v2 API (<code>actions-gateway.com</code>) replaces the monolithic <code>v1alpha1</code> <code>ActionsGateway</code> + <code>RunnerGroup</code> shape with a decomposed set of kinds: <code>ActionsGateway</code>, <code>EgressProxy</code>, <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code>, and <code>RunnerSet</code>.
+Because one v1 object fans out into several v2 objects, the move is a tool-assisted <strong>fan-out on create</strong>, not an automatic conversion; see the <a href="../../design/appendix-h-v2-api-decomposition/#h11-migration-v2-tool-assisted">design rationale</a>.</p>
+<div class="admonition warning">
+<p class="admonition-title">Run this guide on a 1.x release, before upgrading to <code>v2.0.0</code></p>
+<p><code>v2.0.0</code> removes <code>v1alpha1</code> and the <code>v1alpha1</code> to v2 fan-out with it: its <code>gag-migrate</code> carries only <code>storage-version</code>, and a v1 object left in the cluster is not reconciled (<a href="../v1alpha1-deprecation/">removal notice</a>).
+The steps below run with the <code>gag-migrate</code> of a 1.x release (1.10 or earlier), against a cluster that still runs the 1.x controllers.</p>
+</div>
+<p>This guide covers running that tool: dry-run, review, <code>--apply</code>, the coexistence and rollback story, and the post-migration teardown.</p>
 <h2 id="why-upgrade-to-v2">Why upgrade to v2<a class="headerlink" href="#why-upgrade-to-v2" title="Permanent link">&para;</a></h2>
-<p>v2 is <strong>opt-in</strong>.
-It is served at three versions: <strong><code>v2beta1</code></strong> (the graduated, ScaleSet-only hub version), <strong><code>v2</code></strong> (the GA version, storage from 1.10), and <strong><code>v2alpha1</code></strong> (deprecated, served as this tool's on-ramp).
-<code>gag-migrate</code> lands v1 RunnerGroups on <strong><code>v2alpha1</code></strong> so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to <code>v2beta1</code> (a lossless, apiserver-side conversion) once it no longer needs Classic.
-Multi-label matching is not a reason to stay: <code>v2beta1</code> registers every <code>runnerLabel</code> on the scale set.
-Because <code>v2alpha1</code> is deprecated, the apiserver warns on every <code>v2alpha1</code> read or write, including the objects <code>gag-migrate</code> applies.
-The warning is advisory and blocks nothing; it clears when the tenant moves to <code>v2beta1</code>.
-<a href="../upgrade/#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v1alpha1</code> warns the same way</a>, so a tenant mid-migration sees a notice on both sides until v1 is decommissioned.
-Detail: <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">upgrade.md</a>. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one CR decomposed into several kinds, a tool-assisted fan-out).
-<code>v1alpha1</code> stays fully supported until it is <a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>, which also removes <code>v2alpha1</code> and Classic, so treat the <code>v2alpha1</code> landing spot as a way station and <code>v2beta1</code> as the destination.
-Migrate a tenant when one of these is worth that trade-off.</p>
+<p>A 1.x <code>gag-migrate</code> lands v1 RunnerGroups on <code>v2alpha1</code>, so a migrated set keeps the Classic protocol it was registered under; the set then moves to the GA <code>v2</code> version before the upgrade to <code>v2.0.0</code>, which serves <code>v2</code> alone and has no Classic protocol.
+Moving the objects is covered in <a href="../upgrade/">upgrade.md</a>. v2 is <strong>not a drop-in replacement</strong> (new API group <code>actions-gateway.com</code>, one CR decomposed into several kinds, a tool-assisted fan-out).
+Multi-label matching is not a reason to stay on Classic: <code>v2</code> registers every <code>runnerLabel</code> on the scale set.</p>
 <p><strong>New capabilities — no v1 equivalent:</strong></p>
 <ul>
 <li><strong>Multiple gateways per namespace.</strong> Run several GitHub orgs, or rebalance <code>maxWorkers</code>/<code>priorityTiers</code> across runner sets against a single namespace <code>ResourceQuota</code>, without spreading across namespaces (v1 is one gateway per namespace).</li>
@@ -3168,13 +3165,11 @@ Migrate a tenant when one of these is worth that trade-off.</p>
 <li><strong>Per-gateway managed right-sizing.</strong> <code>ActionsGateway.spec.agcAutoscaling</code> has the GMC stamp a <code>VerticalPodAutoscaler</code> next to the AGC <code>Deployment</code> so an autoscaler sizes its requests instead of you tuning <code>agcResources</code> by hand.
   Opt-in, recommendation-only by default, and it composes with <code>agcResources</code> rather than overriding it. v1 has no equivalent field (<a href="../tenant-onboarding/#letting-an-autoscaler-size-the-agc-agcautoscaling">tenant-onboarding</a>).</li>
 <li><strong>DNS-aware egress policy.</strong> <code>EgressProxy.egressPolicyMode</code> adds an <code>FQDN</code> intent (default <code>CIDR</code>) to allowlist GitHub by hostname; the operator picks the enforcement mechanism with the GMC <code>--fqdn-policy-backend</code> flag (<code>none</code>|<code>cilium</code>|<code>calico</code>|<code>gke</code>).
-  The earlier per-CNI <code>CiliumFQDN</code> / <code>CalicoFQDN</code> values are accepted-but-deprecated (Q245) and <strong>are</strong> removed by <code>v2.0.0</code>, along with both versions that define them (<a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).
+  The earlier per-CNI <code>CiliumFQDN</code> / <code>CalicoFQDN</code> values are removed at <code>v2.0.0</code>, along with the versions that define them (<a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).
   Migrate any <code>EgressProxy</code> naming one before upgrading to <code>v2.0.0</code>: the GA <code>v2</code> version cannot represent it, so <code>v2.0.0</code> stores it as plain <code>FQDN</code>.</li>
 </ul>
 <p><strong>Quality-of-life and hardening — batched into the one schema break:</strong></p>
 <ul>
-<li><strong>Higher default concurrency.</strong> <code>maxListeners</code> defaults to <code>10</code> (v1: <code>1</code>), so job pickup is not serialized per group.
-  The migration tool pins each set to its v1 <em>effective</em> value, so an existing tenant's ceiling does not jump silently.</li>
 <li><strong>Better <code>kubectl</code> ergonomics.</strong> Additional printer columns (Ready, profile, active sessions) and short names.</li>
 <li><strong>Safer by construction.</strong> <code>githubURL</code> is immutable (CEL) — no accidental rebinding of a running gateway's org — and secret references are name-only, dropping v1's cross-namespace <code>SecretReference.namespace</code> footgun.</li>
 <li><strong>Fewer fail-closed webhooks.</strong> Checks that needed a validating webhook on Kubernetes ≤ 1.30 move to structural/CEL, so admission has fewer single points of failure (<a href="../../design/appendix-h-v2-api-decomposition/#h15-other-breaking-changes-worth-batching">§H.15</a>).</li>
@@ -3221,7 +3216,7 @@ Migrate a tenant when one of these is worth that trade-off.</p>
 <p>The fan-out preserves v1 behavior and weakens no security property:</p>
 <ul>
 <li><strong>Egress stays proxied.</strong> The tool always emits an <code>EgressProxy</code> and always sets <code>defaultProxyRef</code>, so a migrated tenant never silently falls through to direct egress (which would lose its per-tenant egress-IP attribution).</li>
-<li><strong>Concurrency ceiling preserved.</strong> v1 defaulted <code>maxListeners</code> to 1; v2 defaults to 10.
+<li><strong>Concurrency ceiling preserved.</strong> v1 defaulted <code>maxListeners</code> to 1; <code>v2alpha1</code> defaulted it to 10.
   The tool pins each <code>RunnerSet.maxListeners</code> to the v1 <em>effective</em> value, so the ceiling does not silently jump.</li>
 <li><strong>No secret is read.</strong> Only the GitHub App Secret <strong>name</strong> is carried across — from v1's <code>spec.githubAppRef.name</code> into v2's <code>spec.credentials.githubApp.name</code> (Q196) — and the tool never reads, prints, or copies the credential Secret's contents.</li>
 <li><strong>The eligibility grant is never invented.</strong> A tenant migrating to <code>securityProfile: privileged</code> keeps the <em>existing</em> platform grant (domain-migrated); if the namespace holds no grant, the tool warns rather than self-granting one.
@@ -3474,7 +3469,7 @@ Recovery, once you have confirmed the namespace is otherwise empty and no cluste
 <p>Repeat per stuck kind.
 Prefer the ordered teardown above; this is a recovery path, not an alternative.</p>
 <p>If you later retire the tenant entirely, remember that any <code>ClusterRunnerTemplate</code> the migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by its provenance label (<a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">detail</a>).</p>
-<p>The legacy <code>actions-gateway.github.com/*</code> namespace markers and finalizers are retired cluster-wide when <code>v1alpha1</code> is removed at <strong><code>v2.0.0</code></strong> (see the <a href="../v1alpha1-deprecation/">deprecation and removal notice</a>); until then the dual-read window keeps both spellings working.</p>
+<p>The legacy <code>actions-gateway.github.com/*</code> namespace markers and finalizers are retired cluster-wide when <code>v1alpha1</code> is removed at <strong><code>v2.0.0</code></strong> (see the <a href="../v1alpha1-deprecation/">removal notice</a>); until then the dual-read window keeps both spellings working.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>A <code>RunnerSet</code> sits <code>Ready=False</code>/<code>TemplateNotFound</code>.</strong> Its <code>templateRef</code> names a template that has not been applied (or was hand-deleted).

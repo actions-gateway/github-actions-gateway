@@ -3095,7 +3095,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3605,9 +3605,11 @@
 <p>← <a href="../appendix-g-future-enhancements/">Optional Future Enhancements</a> | <a href="../">Back to index</a></p>
 <hr />
 <blockquote>
-<p><strong>Status: shipped — <code>v2alpha1</code>, served beside <code>v1alpha1</code>.</strong> This appendix is the design source of truth for the <code>v2alpha1</code> API (<code>actions-gateway.com</code> group) that replaces the monolithic <code>ActionsGateway</code> + <code>RunnerGroup</code> model.
-<strong>All milestones M1–M5 have landed</strong>: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built.
-<code>v2alpha1</code> is an <strong>alpha</strong> API served side by side with <code>v1alpha1</code> during the coexistence window — nothing in the shipped <code>v1alpha1</code> API changes, and tenants migrate on their own schedule via the migration tool, a deliberate tool-assisted fan-out (see <a href="#h11-migration-v2-tool-assisted">§H.11</a>).
+<p><strong>Status: shipped.
+<code>v2.0.0</code> serves <code>actions-gateway.com/v2</code> alone.</strong> This appendix is the design source of truth for the v2 API (<code>actions-gateway.com</code> group) that replaced the monolithic <code>ActionsGateway</code> + <code>RunnerGroup</code> model.
+It was designed and shipped as <code>v2alpha1</code>, then graduated through <code>v2beta1</code> to <code>v2</code>; <code>v2.0.0</code> removed <code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code>.
+A version name in the sections below is the version current when the decision was made.
+<strong>All milestones M1–M5 landed</strong>: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool (a deliberate tool-assisted fan-out, see <a href="#h11-migration-v2-tool-assisted">§H.11</a>) that 1.x carried.
 Milestone sequencing and the itemized task record are in the <a href="../../plan/v2-api/">v2 API plan</a>.</p>
 </blockquote>
 <hr />
@@ -4385,8 +4387,8 @@ The transport-error signatures are kept identical to the e2e helper's (Q392) so 
 </code></pre></div>
 <p>A conversion webhook can't create those sibling objects — which is exactly why the migration is a tool, not a webhook.</p>
 <p>The v1→v2 fan-out is one-time.
-Once on <code>v2alpha1</code>, the API graduates <strong>in place</strong> <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook <em>can</em> do, since the kinds no longer change shape) — see the <a href="../../plan/v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a> in the implementation plan for the per-hop mechanics.
-The superseded versions do not linger indefinitely: <code>v2alpha1</code> is dropped at <strong><code>v2.0.0</code></strong>, the same release that removes <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead in <code>v1.3.0</code>.
+Once on <code>v2alpha1</code>, the API graduated <strong>in place</strong> <code>v2alpha1 → v2beta1 → v2</code> through 1.x via a conversion webhook (a thing a conversion webhook <em>can</em> do, since the kinds no longer change shape) — see the <a href="../../plan/v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a> in the implementation plan for the per-hop mechanics.
+The superseded versions did not linger: <code>v2alpha1</code> and <code>v2beta1</code> were dropped at <strong><code>v2.0.0</code></strong>, with the conversion webhook, in the same release that removed <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead in <code>v1.3.0</code>.
 That coupling and the operator-facing contract are the <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release sequencing is <a href="../../plan/v2-ga/">v2-ga.md</a>.</p>
 <p><strong><code>gag-migrate storage-version</code> rewrites what is stored when the storage version advances (Q1086).</strong> 1.10 marks <code>v2</code> the storage version of all six <code>actions-gateway.com</code> kinds, which changes only what the apiserver writes next.
 The subcommand lists every object of each kind at <code>v2</code> and writes it back unchanged: the apiserver persists the bytes at the new storage version, so a write of an object stored at <code>v2beta1</code> changes its <code>resourceVersion</code>, while one already stored at <code>v2</code> is a no-op it skips.
@@ -4435,7 +4437,7 @@ Non-exhaustive impact list, to be turned into plan-doc scope when scheduled:</p>
 <li><strong>Label keys + values (Q147 + group rename):</strong> both the domain <em>prefix</em> (<code>actions-gateway.github.com/*</code> → <code>actions-gateway.com/*</code>, plus finalizer names) and the grandfathered <code>tenant</code>/<code>allow-profile-downgrade</code> <code>"true"</code> <em>values</em> migrate during the cutover (<a href="#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>) — VAP CEL, onboarding scripts, runbooks, and the convention doc's "grandfathered" note all update, and one dual-read window covers both, riding the v1alpha1 serving window.</li>
 </ul>
 <h3 id="h131-crd-packaging-and-conditional-gmc-startup">H.13.1. CRD packaging and conditional GMC startup<a class="headerlink" href="#h131-crd-packaging-and-conditional-gmc-startup" title="Permanent link">&para;</a></h3>
-<p>The five <code>actions-gateway.com/v2alpha1</code> CRDs ship in a <strong>separate, opt-in Helm chart</strong> (<code>actions-gateway-crds-v2</code>), not the main <code>actions-gateway</code> chart.
+<p>The five <code>actions-gateway.com/v2</code> CRDs ship in a <strong>separate, opt-in Helm chart</strong> (<code>actions-gateway-crds-v2</code>), not the main <code>actions-gateway</code> chart.
 The split keeps the main chart's Helm release Secret under Kubernetes' 1 MiB object limit — the five v2 CRDs' OpenAPI schemas are large enough that bundling them would push it over.</p>
 <p>So a supported install can have the GMC running without the v2 CRDs present.
 The GMC makes the opt-in real on the controller side: at startup it queries the REST mapper for the <code>ActionsGateway</code> and <code>EgressProxy</code> v2 kinds and only registers the v2 controllers (<code>ActionsGatewayV2Reconciler</code>, <code>EgressProxyReconciler</code>, <code>NamespacePSAReconciler</code>) and the IP-range reconciler's v2 NetworkPolicy refresh passes when both are served.
@@ -4452,9 +4454,9 @@ Reconstructing that encoding for the five-CRD chart lands at <strong>~1.10 MiB s
 <p><strong>Decision: apply-render is the supported, deliberate install/upgrade path — not a stopgap.</strong> Server-side apply is declarative and idempotent, so install and upgrade are the <em>same</em> command (re-run it to carry CRD field changes); it also clears kubectl's 256 KB client-side-apply annotation ceiling, which the two ~1.16 MB <code>RunnerTemplate</code> CRDs blow past on their own.
 This is the mainstream practice for large CRDs (cert- manager, Crossplane, Istio, Gateway API all ship CRDs to be applied out-of-band and warn against Helm-managing them).
 The templates carry <code>helm.sh/resource-policy: keep</code> so an operator who fronts them with a GitOps tool that <em>does</em> build a Helm release keeps the CRDs on prune/uninstall.</p>
-<p>To keep the <em>manual</em> path a single command with no helm or chart checkout, each release attaches a <strong>pre-rendered, cosign-signed <code>actions-gateway-crds-v2.yaml</code></strong> (rendered for the default <code>gmc-system</code> namespace) to its GitHub Release, so a manual install is just <code>kubectl apply --server-side -f &lt;release-url&gt;/actions-gateway-crds-v2.yaml</code>.
+<p>To keep the <em>manual</em> path a single command with no helm or chart checkout, each release attaches a <strong>pre-rendered, cosign-signed <code>actions-gateway-crds-v2.yaml</code></strong> to its GitHub Release, so a manual install is just <code>kubectl apply --server-side -f &lt;release-url&gt;/actions-gateway-crds-v2.yaml</code>.
 It is keyless-signed via the same Fulcio/Rekor path as the images and charts (<code>sign-blob</code> → a Sigstore bundle verified with <code>cosign verify-blob --bundle</code>), which also answers the "release assets are mutable" caveat.
-The asset covers the default-namespace case; a GMC in a non-default namespace, or a GitOps render, still uses the <code>helm template --set … | kubectl apply --server-side</code> path (the conversion webhook <code>clientConfig</code> namespace bakes in at render time).
+A GitOps render uses the <code>helm template … | kubectl apply --server-side</code> path.
 Argo CD renders the chart itself and never builds a release Secret, so it is unaffected by the 1 MiB limit; Flux <code>HelmRelease</code> <em>does</em> build one and uses the rendered manifest or a Kustomization instead.</p>
 <p>The properties this forgoes — <code>helm upgrade</code> revision history, <code>helm rollback</code>, <code>helm uninstall</code> cleanup — are <strong>low-value for CRDs specifically</strong> and partly anti-patterns: rolling a CRD schema <em>backward</em> can strand stored objects (removing a served/storage version or field is a deliberate migration, never a casual rollback), and cascading <code>helm uninstall</code> of a CRD deletes every custom resource with it (data loss — exactly what <code>resource-policy: keep</code> prevents).
 The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operations/install/#the-v2-api-crds">install.md § the v2 API CRDs</a>.</p>
@@ -4510,8 +4512,8 @@ The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operati
 <p><strong>Fold-back into the main chart is gated on v2 reaching a <em>single served version</em>, not on <code>v1alpha1</code> removal.</strong> Measured against the same encoding: with v2 down to one version (<code>v2beta1</code> only — <code>v2alpha1</code> and the conversion webhook retired), the folded main chart stores at <strong>~0.65 MiB, ~0.4 MiB under the ceiling.</strong> It fits because a single-version v2 CRD set (~1.3 MB) is about the same footprint as the two v1 CRDs it replaces (~1.3 MB), and today's main chart already carries those and installs cleanly (<strong>~0.62 MiB stored</strong>).
 The trap is the coexistence window: while v2 serves <em>both</em> <code>v2beta1</code> and <code>v2alpha1</code> (which is what forces the conversion webhook), that set alone stores at <strong>~1.26 MiB</strong> — over the limit before a single controller is added, which is exactly why the v2 CRDs live in their own chart today.
 So the clean fold-back sequence is two removals, both required: retire <code>v1alpha1</code>, <strong>and</strong> drop <code>v2alpha1</code> (retiring the conversion webhook), leaving one served version — then the now single-version v2 CRDs fold into the main chart with headroom to spare.
-Both of those removals land at <strong><code>v2.0.0</code></strong> (<a href="../../operations/v1alpha1-deprecation/">notice</a>), which is therefore the earliest the fold-back can be reconsidered, and only once v2 is genuinely down to one served version.
-Until then, the opt-in chart plus apply-render stands.</p>
+Both of those removals landed at <strong><code>v2.0.0</code></strong> (<a href="../../operations/v1alpha1-deprecation/">notice</a>), so v2 is down to one served version and the fold-back can be reconsidered.
+Until it is, the opt-in chart plus apply-render stands.</p>
 <h2 id="h14-admin-policy-layer--deferred-until-tiering-is-real">H.14. Admin policy layer — deferred until tiering is real<a class="headerlink" href="#h14-admin-policy-layer--deferred-until-tiering-is-real" title="Permanent link">&para;</a></h2>
 <p>The decomposition above mirrors Gateway API's <code>Gateway → route attachment</code> but stops one level short: there is no cluster-scoped, <strong>admin-owned</strong> object — no <code>GatewayClass</code> equivalent.
 Today the admin/tenant boundary is real but lives <em>outside the API</em>, scattered across mechanisms that cannot be RBAC'd, audited, or GitOps'd as objects:</p>

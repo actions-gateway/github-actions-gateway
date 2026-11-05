@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2739,7 +2739,7 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 </blockquote>
 <p>Two things this flow does that a released install would not, both flagged as backlog items:</p>
 <ul>
-<li>Installs the <strong>v2alpha1 CRDs</strong> alongside the v1 platform.
+<li>Installs the <strong>v2 CRDs</strong> alongside the v1 platform.
   A v1-only install currently crash-loops the AGC (its v2 <code>RunnerSet</code> reconciler is registered unconditionally and its informer cache never syncs) — see <code>Q261</code> in <a href="../../queue/">docs/STATUS.md</a>.</li>
 <li>Adds a <strong><code>LimitRange</code></strong> so the requests-less AGC pod is admitted under the namespace <code>ResourceQuota</code> — see <code>Q262</code>.</li>
 </ul>
@@ -2775,7 +2775,7 @@ It uses the repo's <code>make</code> targets and a local image registry, so run 
 <a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="nv">GMC_IMG</span><span class="o">=</span><span class="s2">"127.0.0.1:5000/gmc:</span><span class="nv">$TAG</span><span class="s2">"</span><span class="w">    </span><span class="nv">AGC_IMG</span><span class="o">=</span><span class="s2">"127.0.0.1:5000/agc:</span><span class="nv">$TAG</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="nv">PROXY_IMG</span><span class="o">=</span><span class="s2">"127.0.0.1:5000/proxy:</span><span class="nv">$TAG</span><span class="s2">"</span><span class="w"> </span><span class="nv">WRAPPER_IMG</span><span class="o">=</span><span class="s2">"127.0.0.1:5000/wrapper:</span><span class="nv">$TAG</span><span class="s2">"</span><span class="w"> </span><span class="o">)</span>
 <a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
-<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Install the v2alpha1 CRDs too, so the controller's v2 reconciler has its types.</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Install the v2 CRDs too, so the controller's v2 reconciler has its types.</span>
 <a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>--force-conflicts<span class="w"> </span>-f<span class="w"> </span>api/config/crd
 <a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
 <a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager

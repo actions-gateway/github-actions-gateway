@@ -2784,7 +2784,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3051,7 +3051,7 @@ It does <strong>not</strong> hold <code>resourcequotas</code>/<code>limitranges<
   The Tenant Provisioner also stamps <code>pod-security.kubernetes.io/enforce</code> on the tenant namespace at the level chosen by <code>spec.securityProfile</code> (default <code>baseline</code>), so the in-tree PodSecurity admission plugin rejects privileged worker pods at admission without requiring an external policy engine.
   Stamping PSA labels requires cluster-wide <code>namespaces:patch</code>; the <code>namespace-psa-guard</code> ValidatingAdmissionPolicy confines that grant to namespaces an administrator has marked <code>actions-gateway.com/tenant: managed</code> (and to the PSA label keys only), so a compromised GMC cannot relabel system namespaces.
   See <a href="../05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a> for the profile semantics and the privileged opt-in pattern.
-  (In the <code>v2alpha1</code> (<code>actions-gateway.com</code>) API this <code>spec.securityProfile</code> field is <strong>removed</strong>: the level is chosen by the namespace label <code>actions-gateway.com/security-profile</code> instead — GMC-guarded, namespace-scoped, shared by co-located gateways — see <a href="../appendix-h-v2-api-decomposition/">Appendix H §H.16 #7</a>.
+  (In the <code>v2</code> (<code>actions-gateway.com</code>) API this <code>spec.securityProfile</code> field is <strong>removed</strong>: the level is chosen by the namespace label <code>actions-gateway.com/security-profile</code> instead — GMC-guarded, namespace-scoped, shared by co-located gateways — see <a href="../appendix-h-v2-api-decomposition/">Appendix H §H.16 #7</a>.
   The stamping mechanism described here is unchanged.)</li>
 <li><strong>Proxy Deployer:</strong> Creates and manages a proxy <code>Deployment</code> and <code>ClusterIP</code> <code>Service</code> within the tenant namespace, along with a <code>HorizontalPodAutoscaler</code> that scales the proxy pool based on CPU utilization.
   Proxy pods are given explicit <code>resources.requests</code> and <code>resources.limits</code> so the HPA can compute CPU utilization percentages.

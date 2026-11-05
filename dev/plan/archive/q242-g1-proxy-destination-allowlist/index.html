@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2807,7 +2807,7 @@ Destination policy lives entirely in the proxy pod's egress <code>NetworkPolicy<
 Appendix G left a proxy-side allowlist out for two reasons: a single policy surface (NetworkPolicy) is simpler to reason about, and a byte-forwarding proxy with no policy code is trivial to audit.</p>
 <p>This design keeps that spirit by deriving <strong>both</strong> surfaces from <strong>one</strong> field (see Approach), so there are not two overlapping policies to keep in sync.</p>
 <h2 id="approach">Approach<a class="headerlink" href="#approach" title="Permanent link">&para;</a></h2>
-<p>Add one field to <code>EgressProxySpec</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/egressproxy_types.go"><code>api/v2alpha1/egressproxy_types.go</code></a>), alongside the existing <code>egressPolicyMode</code> / <code>managedNetworkPolicy</code> / <code>noProxyCIDRs</code>:</p>
+<p>Add one field to <code>EgressProxySpec</code> (<code>api/v2alpha1/egressproxy_types.go</code>, deleted by Q1167), alongside the existing <code>egressPolicyMode</code> / <code>managedNetworkPolicy</code> / <code>noProxyCIDRs</code>:</p>
 <p><strong>Two destination forms</strong> — host suffixes (DNS names) <strong>and</strong> CIDR blocks — because real CI dependencies need both: package/module hosts resolve by DNS (<code>proxy.golang.org</code>), but internal services are often reachable only by <strong>IP with no internal DNS</strong>, and cloud private API endpoints resolve into known <strong>CIDR ranges</strong> on a private network (e.g.
 GCP Private Google Access → <code>private.googleapis.com</code> is <code>199.36.153.8/30</code>, <code>restricted.googleapis.com</code> <code>199.36.153.4/30</code>).
 An FQDN-only allowlist would force operators to invent DNS or give up; a CIDR-only one can't express a moving package host.

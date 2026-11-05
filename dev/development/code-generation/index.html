@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2915,9 +2915,7 @@ Editing a field's description means editing the Go doc comment, then:</p>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>make<span class="w"> </span>api-reference-check<span class="w">  </span><span class="c1"># the drift gate, run by `make check` and CI's lint job</span>
 </code></pre></div>
 <p><code>crd-ref-docs</code> is pinned in the vendored <code>tools/</code> module like controller-gen, so <code>make tools</code> builds it into <code>.build/</code> and no host install is involved.</p>
-<p><strong>Scope is <code>api/v2</code> only</strong> — the General Availability (GA) version every new install authors at.
-<code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code> are removed at v2.0.0; a version on its way out documented field by field beside the current one reads as a supported choice, and <code>v2beta1</code> is <code>v2</code>'s shape anyway apart from the two deprecated <code>egressPolicyMode</code> values (<code>v2alpha1</code> adds the two RunnerSet fields the conversion webhook round-trips).
-Readers on any of them get <code>kubectl explain</code> and the <a href="../../operations/v1alpha1-deprecation/">deprecation</a> and <a href="../../operations/migration-v1-to-v2/">migration</a> pages instead — spelled out on the <a href="../../reference/">reference overview</a>.
+<p><strong>Scope is <code>api/v2</code> only</strong>: the General Availability (GA) version, and the only one <code>v2.0.0</code> serves (<code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code> were removed there).
 <strong>Adding a version to the page is a deliberate decision, not a mechanical one</strong>; adding a <em>kind</em> to <code>v2</code> needs nothing beyond <code>make api-reference</code>, but do add it to the generator's completeness assertion (below).</p>
 <p>Three inputs shape the output, all under <a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/api/hack/crd-ref-docs"><code>api/hack/crd-ref-docs/</code></a>:</p>
 <ul>
@@ -2992,16 +2990,12 @@ Each is a claim about how gofmt, controller-gen, or the apiserver behaves, so a 
 <li><strong>gofmt corrupts <code>''</code> inside CEL markers.</strong> A doubled single-quote in a <code>+kubebuilder:validation:XValidation</code> marker comment gets rewritten by gofmt into a single curly quote, silently breaking the CEL rule (and <code>''</code> is not a CEL quote escape anyway — that's SQL).
   Never use empty-string literals in XValidation: write <code>size(x) == 0</code>, not <code>x == ''</code>.</li>
 <li><strong><code>selectableFields</code> never identical on every version.</strong> On a multi-version CRD whose versions' schemas differ, declaring the same <code>+kubebuilder:selectablefield</code> markers on every version makes the apiserver hoist them to spec level beside a per-version schema, which it rejects at CRD apply time.
-  Leave at least one version without them: <code>RunnerSet</code> declares its field on <code>v2beta1</code> and <code>v2</code> and not on <code>v2alpha1</code>, and envtest installs it (Q1263).
+  Leave at least one version without them: the three-version <code>RunnerSet</code> CRD of 1.x declared its field on <code>v2beta1</code> and <code>v2</code> and not on <code>v2alpha1</code>, and envtest installed it (Q1263).
   A field selector works only at a version that declares the field, so the version a controller watches must be one of them.</li>
 <li><strong>The v2 condition vocabulary lives in <code>api/apiconditions</code>, not in the version packages.</strong> Condition types and reasons are runtime <code>.status.conditions[]</code> values, not schema, so they carry no version — they are declared once, with their doc comments, in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions</code></a>.
-  <code>api/v2alpha1/conditions.go</code> and <code>api/v2beta1/conditions.go</code> are thin re-export blocks that keep every existing <code>v2alpha1.ConditionReady</code> call site compiling.
-  <strong>Adding a condition or reason: declare it in <code>apiconditions</code>, then add the one-line re-export to both version files.</strong> They must stay byte-identical except the <code>package</code> line — <code>make v2-api-sync-check</code> fails on a one-sided add, naming the divergent lines.
-  A new condition needs <strong>no</strong> <code>make manifests</code>/<code>make generate</code>.
-  The same split applies to the worker-pod sidecar contract (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apisidecar/sidecar.go"><code>api/apisidecar</code></a>): the heuristic and the annotation key live there, and each version keeps a <code>RunnerTemplateSpec</code>-typed wrapper.</li>
-<li><strong>Everything else the two v2 packages share must stay identical.</strong> Kubernetes requires the <em>versioned types</em> to be duplicated per version, but the shared spec fragments beside them (<code>shared_types.go</code>, <code>scheduling_types.go</code>, the near-identical <code>actionsgateway_types.go</code>/<code>egressproxy_types.go</code>/<code>runnertemplate_types.go</code>) are identical by contract, and a one-sided edit breaks the storage/hub conversion silently.
-  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/check-v2-api-sync.sh"><code>scripts/go/check-v2-api-sync.sh</code></a> (wired into <code>make check</code> and CI's <code>lint</code> job via <code>make v2-api-sync-check</code>) holds <strong>every</strong> <code>.go</code> file present in both packages identical, normalising away the entitled differences: the <code>package</code> clause, a <code>+kubebuilder:storageversion</code> marker, and a <code>+kubebuilder:deprecatedversion</code> marker (only <code>v2alpha1</code> carries it, and its warning text names the deprecated version and Kind, so it cannot be mirrored).
-  Files that genuinely differ per version (<code>runnerset_types.go</code>, <code>conversion.go</code>, <code>groupversion_info.go</code>, <code>types_test.go</code>, <code>zz_generated.deepcopy.go</code>) are named in the script's <code>EXEMPT</code> list with the reason — the DeepCopy exemption leans on <code>make codegen-check</code> guarding those two files instead, which it does since <a href="../../queue/">Q477</a>; a stale entry fails the gate, and a file added to both packages is covered the day it lands with no edit to the script.</li>
+  <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/conditions.go"><code>api/v2/conditions.go</code></a> is a thin re-export block that keeps every <code>v2.ConditionReady</code> call site compiling.
+  <strong>Adding a condition or reason: declare it in <code>apiconditions</code>, then add the one-line re-export to <code>api/v2/conditions.go</code>.</strong> A new condition needs <strong>no</strong> <code>make manifests</code>/<code>make generate</code>.
+  The same split applies to the worker-pod sidecar contract (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apisidecar/sidecar.go"><code>api/apisidecar</code></a>): the heuristic and the annotation key live there, and <code>api/v2</code> keeps a <code>RunnerTemplateSpec</code>-typed wrapper.</li>
 </ul>
 <h2 id="no-per-file-license-headers">No per-file license headers<a class="headerlink" href="#no-per-file-license-headers" title="Permanent link">&para;</a></h2>
 <p>First-party Go files carry <strong>no</strong> per-file Apache license header — the repo-root <code>LICENSE</code> (Apache-2.0) is the canonical, sufficient grant, so the boilerplate that Kubebuilder scaffolds is redundant.

@@ -2787,7 +2787,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3033,16 +3033,10 @@ A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page i
 <td>Long-running per-tenant <code>Deployment</code></td>
 </tr>
 <tr>
-<td><strong>AGC (v1alpha1)</strong></td>
+<td><strong>AGC</strong></td>
 <td>GMC</td>
 <td>tenant</td>
-<td>Long-running per-tenant control plane</td>
-</tr>
-<tr>
-<td><strong>AGC (v2alpha1)</strong></td>
-<td>GMC</td>
-<td>tenant</td>
-<td>As above; adds resource defaults</td>
+<td>Long-running per-tenant control plane; the GMC gap-fills resource defaults</td>
 </tr>
 <tr>
 <td><strong>GMC manager</strong></td>
@@ -3208,7 +3202,7 @@ A "require digest" policy scoped to tenant namespaces is a good way to force ten
 </ul>
 <p><strong>Require CPU/memory requests + limits</strong> — Workers are gap-filled with <code>500m</code> CPU / <code>1Gi</code> memory as <em>both</em> requests and limits when a container sets neither.
 The proxy sets requests+limits.
-<strong>AGC v1alpha1 stamps no resources</strong> — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 <code>ActionsGateway</code> (which gap-fills <code>500m</code>/<code>2Gi</code> requests, <code>2</code>/<code>4Gi</code> limits) or exempt AGC pods.
+The AGC gets <code>500m</code>/<code>2Gi</code> requests and <code>2</code>/<code>4Gi</code> limits unless <code>ActionsGateway.spec.agcResources</code> overrides them, so a "require limits" policy admits it.
 The GMC's resources come from the chart's <code>resources</code> value, which ships with a sane default (<code>10m</code>/<code>64Mi</code> request, <code>500m</code>/<code>128Mi</code> limit).</p>
 <h2 id="sample-policies">Sample policies<a class="headerlink" href="#sample-policies" title="Permanent link">&para;</a></h2>
 <p>Ready-to-apply samples live in <a href="../examples/policies/"><code>examples/policies/</code></a>.

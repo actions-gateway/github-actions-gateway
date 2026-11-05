@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3403,7 +3403,7 @@ Live proof: scaling one tenant's <code>EgressProxy</code> to 2 replicas landed t
 The reference arch's Approach B assumes "the tenant's <code>EgressProxy</code> pods … via nodeSelector/toleration to the tenant pool"; that binding did not exist in the API, and the anti-affinity actively worked against it.
 GAG delivered the <em>choke point</em> but not the <em>per-tenant IP</em>.</p>
 <h3 id="placement-pass-through-q282">Placement pass-through (Q282)<a class="headerlink" href="#placement-pass-through-q282" title="Permanent link">&para;</a></h3>
-<p><strong>Closed 2026-07-07.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/egressproxy_types.go"><code>EgressProxy.spec.scheduling</code></a> and <code>ActionsGateway.spec.scheduling</code> (a shared <code>PodScheduling</code>: <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, served at both <code>v2alpha1</code> and <code>v2beta1</code>) are plumbed into the proxy pool Deployment and the AGC Deployment (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a>).
+<p><strong>Closed 2026-07-07.</strong> <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/egressproxy_types.go"><code>EgressProxy.spec.scheduling</code></a> and <code>ActionsGateway.spec.scheduling</code> (a shared <code>PodScheduling</code>: <code>nodeSelector</code>/<code>tolerations</code>/<code>affinity</code>, served at both <code>v2alpha1</code> and <code>v2beta1</code>) are plumbed into the proxy pool Deployment and the AGC Deployment (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a>).
 The two design points the gap raised were resolved as:</p>
 <p><strong>(a) Anti-affinity composition.</strong> A supplied <code>nodeAffinity</code>/<code>podAffinity</code> is applied <em>alongside</em> the builder's required cross-node anti-affinity, which is preserved (pinning to a pool should not disable HA <em>within</em> it).
 A supplied <code>podAntiAffinity</code> — any non-nil value — <strong>replaces</strong> the built-in term entirely.

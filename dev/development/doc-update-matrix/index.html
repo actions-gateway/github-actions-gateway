@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2691,7 +2691,7 @@ Use this after making changes, before committing — update docs proactively rat
 <tbody>
 <tr>
 <td>New or changed CRD fields / API surface</td>
-<td><strong><code>make api-reference</code></strong> — a <code>v2beta1</code> doc comment or validation marker is published verbatim at <a href="../../reference/api/">reference/api.md</a>, so write it for an operator reading the site, not only for a contributor reading the type (<a href="../code-generation/#the-generated-api-reference">code-generation.md</a>; <code>make check</code> fails on a stale page). Then <a href="../../design/03-api-contracts/">design/03-api-contracts.md</a> — add the field with its comment block; <a href="../../design/02-architecture/">design/02-architecture.md</a> — update prose, and the metrics table if new metrics were added. Apply the <a href="../api-review/#design-rules">API design rules</a> <em>before</em> writing the field, and check the change against <a href="../api-review/#is-this-change-breaking">Is this change breaking?</a> if it touches shipped surface. <strong>If the chart renders an instance of the CRD</strong> (today: <code>PriorityClassAllowlist</code>), the chart template must <a href="../api-review/#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty">omit the new field when empty</a> — Helm never reapplies <code>crds/</code> on upgrade, so an unconditional render breaks <code>helm upgrade</code> midway.</td>
+<td><strong><code>make api-reference</code></strong> — a <code>v2</code> doc comment or validation marker is published verbatim at <a href="../../reference/api/">reference/api.md</a>, so write it for an operator reading the site, not only for a contributor reading the type (<a href="../code-generation/#the-generated-api-reference">code-generation.md</a>; <code>make check</code> fails on a stale page). Then <a href="../../design/03-api-contracts/">design/03-api-contracts.md</a> — add the field with its comment block; <a href="../../design/02-architecture/">design/02-architecture.md</a> — update prose, and the metrics table if new metrics were added. Apply the <a href="../api-review/#design-rules">API design rules</a> <em>before</em> writing the field, and check the change against <a href="../api-review/#is-this-change-breaking">Is this change breaking?</a> if it touches shipped surface. <strong>If the chart renders an instance of the CRD</strong> (today: <code>PriorityClassAllowlist</code>), the chart template must <a href="../api-review/#if-the-chart-renders-an-instance-of-the-crd-omit-the-new-field-when-empty">omit the new field when empty</a> — Helm never reapplies <code>crds/</code> on upgrade, so an unconditional render breaks <code>helm upgrade</code> midway.</td>
 </tr>
 <tr>
 <td>New behaviour, retry logic, or operational mode</td>

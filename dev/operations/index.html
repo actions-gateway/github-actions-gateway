@@ -2612,7 +2612,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2811,12 +2811,12 @@
 <tr>
 <td><a href="v1alpha1-deprecation/">v1alpha1-deprecation.md</a></td>
 <td>Platform engineer, Tenant operator</td>
-<td>Standing deprecation notice: what the <code>v2.0.0</code> release removes (<code>v1alpha1</code>, <code>v2alpha1</code>, Classic acquisition), what keeps working until then, and the pre-upgrade checklist.</td>
+<td>Removal notice: what <code>v2.0.0</code> removed (<code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, Classic acquisition) and what to do before upgrading from 1.x.</td>
 </tr>
 <tr>
 <td><a href="migration-v1-to-v2/">migration-v1-to-v2.md</a></td>
 <td>Platform engineer, Tenant operator</td>
-<td>Move a tenant off the deprecated <code>v1alpha1</code> API with the <code>gag-migrate</code> one-shot fan-out: dry-run → review → <code>--apply</code>, coexistence, rollback, teardown.</td>
+<td>Move a tenant off the removed <code>v1alpha1</code> API with a 1.x <code>gag-migrate</code> one-shot fan-out, before upgrading to <code>v2.0.0</code>: dry-run → review → <code>--apply</code>, coexistence, rollback, teardown.</td>
 </tr>
 <tr>
 <td><a href="upgrade/">upgrade.md</a></td>

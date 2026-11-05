@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2927,7 +2927,7 @@ A v2beta1 (Q74) input alongside <a href="../archive/q242-g1-proxy-destination-al
 <strong>Note (2026-07-06): <code>egressPolicyMode</code> has already graduated into <code>v2beta1</code> (served + storage) via Q74 (#557), so the reshape is no longer a free alpha-only change — it now needs a compatible-superset + conversion path (see <a href="#migration--compatibility">Migration</a>).</strong> Promoted from the <a href="../archive/q242-g1-proxy-destination-allowlist/#provider-fqdn-egress-fragmentation-post-implementation-finding">Q242 plan § Provider FQDN-egress fragmentation</a>.</p>
 <hr />
 <h2 id="the-problem-the-enum-conflates-intent-with-mechanism">The problem: the enum conflates intent with mechanism<a class="headerlink" href="#the-problem-the-enum-conflates-intent-with-mechanism" title="Permanent link">&para;</a></h2>
-<p><code>EgressProxy.spec.egressPolicyMode</code> today is a three-value enum (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/egressproxy_types.go"><code>api/v2alpha1/egressproxy_types.go</code></a>):</p>
+<p><code>EgressProxy.spec.egressPolicyMode</code> today is a three-value enum (<code>api/v2alpha1/egressproxy_types.go</code>, deleted by Q1167):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">// +kubebuilder:validation:Enum=CIDR;CiliumFQDN;CalicoFQDN</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kd">type</span><span class="w"> </span><span class="nx">EgressPolicyMode</span><span class="w"> </span><span class="kt">string</span>
 </code></pre></div>

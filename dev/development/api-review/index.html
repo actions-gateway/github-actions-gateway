@@ -2598,7 +2598,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3166,7 +3166,7 @@ The tells are mechanical:</p>
 </ul>
 <p>Q470 split <code>capacityGate.mode</code> for exactly this reason.</p>
 <p>When the axes genuinely belong together, the Kubernetes shape for it is a discriminated union: a required discriminator field plus optional, pointer union members — not one flat enum whose values imply which sibling to read.</p>
-<p><strong>A "yes" to the tells is not automatically a split.</strong> The same tell is visible in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2beta1/runnerset_types.go"><code>WorkerSizing</code></a>, whose three <code>XValidation</code> rules each tie a sibling field to one <code>profile</code> value.
+<p><strong>A "yes" to the tells is not automatically a split.</strong> The same tell is visible in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/runnerset_types.go"><code>WorkerSizing</code></a>, whose three <code>XValidation</code> rules each tie a sibling field to one <code>profile</code> value.
 Q481 asked the question of <code>sizing.profile</code> before 1.3.0 and shipped it bundled anyway.
 Three follow-ups decide it, in ascending order of how much they settle:</p>
 <ol>
@@ -3331,7 +3331,7 @@ Changing how one is derived orphans live objects, which is worse than a field re
   Never make a spec decision depend on a value only status carries.</li>
 <li>Condition types and reasons are runtime strings, not schema, so they carry <strong>no version and have no conversion path</strong>.
   Renaming one breaks every operator alert at once, in every served version simultaneously.
-  Declare them in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions</code></a> and re-export from both version packages; <code>make v2-api-sync-check</code> fails a one-sided add.</li>
+  Declare them in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apiconditions/conditions.go"><code>api/apiconditions</code></a> and re-export from <code>api/v2</code>.</li>
 <li>Keep the polarity convention: normal-is-True (<code>Ready</code>), with abnormal-is-True conditions named so they read that way (<code>CredentialUnavailable</code>).</li>
 <li>Carry <code>observedGeneration</code> so a reader can tell a stale status from a current one.</li>
 <li>Ship a field with its consumer.
@@ -3458,12 +3458,13 @@ The rule survived; only its input changed.
 State the floor <em>and</em> what it is derived from, so the next reader can tell which half a change invalidates.
 A bare "no earlier than <code>v3.0.0</code>" gives them no way to know the sentence is load-bearing on something else.</p>
 <h3 id="a-new-version-must-round-trip-losslessly">A new version must round-trip losslessly<a class="headerlink" href="#a-new-version-must-round-trip-losslessly" title="Permanent link">&para;</a></h3>
-<p><code>v2alpha1</code> and <code>v2</code> are spokes and <code>v2beta1</code> is the hub, so every served version converts to and from one hub rather than pairwise; <code>v2</code> is the storage version from 1.10.
-If a new version drops something the old one can store, a field or an enum value, the object must still round-trip: <code>RunnerSet</code> conversion stashes the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in <code>conversion.actions-gateway.com/*</code> annotations, and <code>v2</code>'s <code>EgressProxy</code> carries a stored <code>CiliumFQDN</code>/<code>CalicoFQDN</code> alias the same way while showing <code>FQDN</code>.
-Any such carrier needs a round-trip test — see <code>TestRunnerSetConversion_RoundTrip</code> and friends in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2alpha1/conversion_test.go"><code>api/v2alpha1/conversion_test.go</code></a>.</p>
+<p><code>v2.0.0</code> serves <code>v2</code> alone, so no conversion webhook exists today; a later version brings one back.
+If a new version drops something the old one can store, a field or an enum value, the object must still round-trip.
+The 1.x precedent: <code>RunnerSet</code> conversion stashed the dropped <code>acquisitionProtocol</code> and <code>maxListeners</code> in <code>conversion.actions-gateway.com/*</code> annotations, and <code>v2</code>'s <code>EgressProxy</code> carried a stored <code>CiliumFQDN</code>/<code>CalicoFQDN</code> alias the same way while showing <code>FQDN</code>.
+Any such carrier needs a round-trip test.</p>
 <p><strong>Never make a conversion fail on a stored object.</strong> A failed conversion fails the whole request, so one object breaks every <code>LIST</code> at that version, and a GA version is the group's preferred one: kube-controller-manager's namespace deleter and garbage collector list at it.
 Q413 first refused the alias, and its review measured the metadata-client <code>LIST</code> and <code>DELETECOLLECTION</code> failing, which leaves a namespace <code>Terminating</code> and the collector unable to track the kind.</p>
-<p>Two supporting habits: mark the outgoing version with <code>+kubebuilder:deprecatedversion:warning=…</code> naming the replacement <em>and</em> the release that removes it, so the apiserver warns at apply time; and keep the two version packages byte-identical except for the entitled differences, which <code>make v2-api-sync-check</code> enforces.</p>
+<p>Mark the outgoing version with <code>+kubebuilder:deprecatedversion:warning=…</code> naming the replacement <em>and</em> the release that removes it, so the apiserver warns at apply time.</p>
 <h2 id="the-pre-release-review">The pre-release review<a class="headerlink" href="#the-pre-release-review" title="Permanent link">&para;</a></h2>
 <p>Run this in <a href="../../operations/release/#1-pre-flight">release pre-flight</a>, before tagging any release — including a prerelease that will become a stable line.</p>
 <h3 id="step-1--enumerate-what-is-new">Step 1 — enumerate what is new<a class="headerlink" href="#step-1--enumerate-what-is-new" title="Permanent link">&para;</a></h3>

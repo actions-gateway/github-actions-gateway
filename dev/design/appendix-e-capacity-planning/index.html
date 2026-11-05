@@ -2844,7 +2844,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3105,6 +3105,8 @@
 <p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth.
 The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
 <blockquote>
+<p><strong>Scope.</strong> This appendix sizes the 1.x <code>v1alpha1</code> <code>RunnerGroup</code>, which <code>v2.0.0</code> removed along with <code>maxListeners</code>.
+The <code>v2</code> API has no <code>maxListeners</code> field: every <code>RunnerSet</code> runs one scale-set session.</p>
 <p><strong>Milestone 1 protocol findings</strong> (see <a href="../../plan/archive/milestone-1/#8-investigation-findings">docs/plan/archive/milestone-1.md §8</a>):</p>
 <p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle.
 The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
@@ -3304,7 +3306,7 @@ The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listen
 <p>Under v2 this is a first-class opt-in rather than something the operator hand-rolls: see <a href="#e11-managed-vertical-right-sizing-of-the-control-planes">E.11</a> for the two managed opt-ins the system ships, the precedence rules against <code>agcResources</code>, and what happens on a cluster where the VPA CRDs are not installed.</p>
 <blockquote>
 <p><strong>v2 promotes AGC sizing to a CR field — <code>spec.agcResources</code> (Q171).</strong> This appendix describes the v1 API (<code>actions-gateway.github.com/v1alpha1</code>), where AGC sizing is platform-applied on the Deployment as above.
-The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2alpha1</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged.
+The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged.
 See <a href="../appendix-h-v2-api-decomposition/">Appendix H</a> for the v2 decomposition and <a href="../../operations/tenant-onboarding/#tuning-agc-control-plane-resources">tenant-onboarding</a> for the operator-facing how-to and the recommended floor.</p>
 </blockquote>
 <p><strong>Horizontal sharding.</strong> When the number of RunnerGroups or their aggregate <code>maxListeners</code> exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see <a href="#e6-when-to-shard-across-installations">E.6</a>) — the correct scale path is to shard into a second <code>ActionsGateway</code> CR in a new namespace with a separate GitHub App installation.

@@ -2789,7 +2789,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3120,7 +3120,7 @@ Jobs that exhaust their retry budget surface via a dedicated metric rather than 
 That mark was measured (2026-07-29) to be absent on a human-cancelled run and on a genuine failure, which is what made it safe to act on; the AGC's own deletions (the reaper's, and the Q501 reclaim of an abandoned job's worker) are excluded by a stamp written before each delete, and a deleted worker whose container never ran stays unrecovered (no reportable failure exists to re-run).
 Detail: <a href="../04-operational-flows/#which-disruptions-are-recovered-and-which-are-not">§4.2</a> and <a href="../../plan/eviction-oversubscription-validation/#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
 <p>This recovery runs on <strong>both acquisition tiers</strong>.
-It was classic-only until Q417, because the <code>ScaleSet</code> protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since <code>ScaleSet</code> is the default and the only protocol <code>v2beta1</code> exposes.
+It was classic-only until Q417, because the <code>ScaleSet</code> protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since <code>ScaleSet</code> is the only protocol <code>v2</code> exposes.
 The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the <code>v2.0.0</code> removal of classic (<a href="../../plan/scaleset-eviction-recovery/">plan</a>, <a href="../04-operational-flows/#on-the-scale-set-tier-q417">§4</a>).</p>
 <h3 id="gpu-node-utilization">GPU Node Utilization<a class="headerlink" href="#gpu-node-utilization" title="Permanent link">&para;</a></h3>
 <p>For teams running GPU-accelerated workflows, runner pod lifecycle is a direct driver of hardware utilization.

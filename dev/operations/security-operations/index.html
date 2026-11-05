@@ -3281,7 +3281,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -4708,16 +4708,11 @@ The GMC cannot know those ranges, so it names the gap: <code>GitHubEgressIncompl
 Supply the ranges in <code>spec.destinationCIDRs</code> — allowlisting them under <code>--allowed-egress-cidrs</code> first, since that field is platform-gated — or move the pool to an FQDN mode, which carries the host for you.
 See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">troubleshooting</a>.</p>
 </blockquote>
-<p><strong>Deprecated <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> Through 1.10 the earlier per-CNI enum values still work on a pool that already stores one: each pins its namesake backend regardless of <code>--fqdn-policy-backend</code>, so existing <code>EgressProxy</code> objects keep behaving exactly as before, and the admission webhook attaches a warning steering you to <code>FQDN</code> + <code>--fqdn-policy-backend</code>.
-<strong>A new one is rejected</strong>, whether by a create or by an update that switches a pool onto an alias; re-applying an unmigrated pool unchanged, and migrating it off, are both still admitted.
-Migrate by changing the tenant field to <code>FQDN</code> and setting the matching operator backend.</p>
+<p><strong>Removed <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> The earlier per-CNI enum values were removed at <code>v2.0.0</code>: the <code>v2</code> CRD's <code>egressPolicyMode</code> accepts only <code>CIDR</code> and <code>FQDN</code>, so the apiserver rejects an alias.
+Through 1.10 each alias pinned its namesake backend regardless of <code>--fqdn-policy-backend</code>; the equivalent now is <code>FQDN</code> on the tenant field plus the matching operator backend.
+Migrate a pool that still names one before upgrading from 1.x: <code>v2.0.0</code> stores it as plain <code>FQDN</code>, enforced by whatever <code>--fqdn-policy-backend</code> names.
+Reasoning and the pre-upgrade check: <a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">the removal notice</a>.</p>
 <blockquote>
-<p><strong>They are removed at <code>v2.0.0</code></strong>, alongside <code>v1alpha1</code>, <code>v2alpha1</code> and classic acquisition.
-The two values are enum members of <code>egressPolicyMode</code> in <code>actions-gateway.com/v2alpha1</code> and <code>v2beta1</code>; <code>v2.0.0</code> removes both versions, and the General Availability (GA) <code>v2</code> version that replaces them does not define the values.
-An API element can only be removed by incrementing the version, never deleted from a version that is still served — which is why these two live exactly as long as <code>v2beta1</code> does, and <code>v2beta1</code> ends at <code>v2.0.0</code> (<a href="../../plan/v2beta1-retirement/">decided 2026-09-08</a>).
-An earlier notice put the floor at <code>v3.0.0</code>, on the expectation that <code>v2.0.0</code> would keep serving <code>v2beta1</code>; the reasoning was sound and that expectation changed.
-<strong>Migrate before upgrading to <code>v2.0.0</code>:</strong> one <code>EgressProxy</code> still naming an alias fails the conversion for every object in the same request, so it breaks <code>kubectl get egressproxies</code> at <code>v2</code> cluster-wide.
-Full reasoning and the coupling to the other clocks: <a href="../v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">the deprecation and removal notice</a>.</p>
 <p><strong>Managed "Cilium" platforms usually do NOT accept the <code>cilium</code> backend.</strong> The CRD test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does not install it</strong> (dropped since GKE 1.21.5-gke.1300) — use <code>--fqdn-policy-backend=gke</code> there, not <code>cilium</code>.
 If a selected backend's CRD is absent, the GMC's apply fails loudly and the <code>EgressProxy</code> goes <code>Degraded</code>; GitHub egress stays <strong>denied</strong> (the base NetworkPolicy default-denies it), never silently opened.
@@ -5210,7 +5205,7 @@ Migration steps: <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">u
 <p><strong>Add a class without a restart.</strong> Edit the object in place:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2beta1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
 <a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
@@ -5328,7 +5323,7 @@ The chart ships a <code>ValidatingAdmissionPolicy</code> (<code>&lt;release&gt;-
 Unlike a webhook, the policy also <strong>re-validates every write to an existing object</strong>, so a pre-gate stored RunnerGroup naming an off-allowlist class is caught on its next update, not just its next re-create.
 The flip side: removing a class that stored objects still name freezes every later spec-changing write to them.
 Deletion-only updates (deletionTimestamp set, spec unchanged — the finalizer-removal write teardown depends on) are exempt via the policy's <code>exclude-deletion-only-updates</code> match condition (Q518), so narrowing can freeze a live object but can no longer wedge its deletion — see <a href="#narrowing-the-allowlist-drain-stored-references-first">Narrowing the allowlist</a>.</p>
-<p>The policy matches the v2 kinds too (Q323): <code>runnersets</code> (<code>priorityTiers[].priorityClassName</code>) and <code>runnertemplates</code> (<code>podTemplate.spec.priorityClassName</code>), across v2alpha1 and v2beta1.
+<p>The policy matches the v2 kinds too (Q323): <code>runnersets</code> (<code>priorityTiers[].priorityClassName</code>) and <code>runnertemplates</code> (<code>podTemplate.spec.priorityClassName</code>), at <code>v2</code>.
 Those kinds are already gated by <code>failurePolicy: Fail</code> GMC webhooks, so for them the policy is defense-in-depth — coverage while the webhook is unavailable or bypassed, plus the stored-object re-validation a webhook cannot provide.
 <code>ClusterRunnerTemplate</code> is exempt (cluster-scoped, platform-authored — its writers can create <code>PriorityClass</code> objects anyway).</p>
 <p>The policy reads its allowlist from the cluster-scoped <strong><code>PriorityClassAllowlist</code> CR</strong> <code>&lt;release&gt;-priorityclass-allowlist</code> (the apiserver cannot read the GMC flag).

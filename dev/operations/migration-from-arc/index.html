@@ -2864,7 +2864,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3148,7 +3148,7 @@ The worker pod template is the <strong>same Kubernetes type</strong> ARC uses, s
 <p><strong>Scope.</strong> This covers ARC's <strong>scale-set mode</strong> (the <code>AutoscalingRunnerSet</code> / <code>gha-runner-scale-set</code> chart — GitHub's current and recommended mode), and targets GAG's <strong>v2 API</strong> (<code>actions-gateway.com/v2</code>), which is where new tenants onboard.
 Legacy ARC (<code>RunnerDeployment</code> + <code>HorizontalRunnerAutoscaler</code>) maps similarly, including its multi-label routing; see <a href="#job-routing-a-11-map">Job routing</a>.</p>
 <blockquote>
-<p><strong>Do not migrate via GAG's v1 API.</strong> The older single-CR <code>actions-gateway.github.com/v1alpha1</code> shape is <strong><a href="../v1alpha1-deprecation/">deprecated</a></strong> and, more to the point here, it is <em>Classic-protocol only</em> — it would move you <strong>off</strong> the single-acquirer model your ARC scale sets already use.
+<p><strong>Do not migrate via GAG's v1 API.</strong> The older single-CR <code>actions-gateway.github.com/v1alpha1</code> shape was <strong><a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a></strong>, and it was <em>Classic-protocol only</em>, so it would have moved you <strong>off</strong> the single-acquirer model your ARC scale sets already use.
 Migrate straight to v2.</p>
 </blockquote>
 <hr />
@@ -3549,7 +3549,7 @@ Because both register independently with GitHub, there is no split-brain to unta
 <li><a href="../../getting-started/">Getting Started</a> — the end-to-end first install.</li>
 <li><a href="../../design/network-architecture/">Network architecture</a> — egress proxy and NetworkPolicy detail, with isolation-validation probes.</li>
 <li><a href="../troubleshooting/">Troubleshooting</a> — common first-day failures.</li>
-<li><a href="../v1alpha1-deprecation/">Deprecation and removal notice</a>, covering what <code>v2.0.0</code> removes (<code>v1alpha1</code>, <code>v2alpha1</code>, Classic acquisition).
+<li><a href="../v1alpha1-deprecation/">Removal notice</a>, covering what <code>v2.0.0</code> removed (<code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, Classic acquisition).
   Relevant only if you are <em>already</em> on GAG's v1 API; new migrations should not start there.</li>
 </ul>
 

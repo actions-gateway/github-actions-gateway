@@ -1750,10 +1750,32 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required at v2.0.0: remove the CRDs' conversion webhook before applying them
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them" class="md-nav__link">
     <span class="md-ellipsis">
       
         Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required after v2.0.0: delete what an owner deleted during the upgrade left behind
       
     </span>
   </a>
@@ -3658,7 +3680,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3812,10 +3834,32 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required at v2.0.0: remove the CRDs' conversion webhook before applying them
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them" class="md-nav__link">
     <span class="md-ellipsis">
       
         Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required after v2.0.0: delete what an owner deleted during the upgrade left behind
       
     </span>
   </a>
@@ -4742,7 +4786,9 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#migration-notes">Migration Notes</a></li>
 <li><a href="#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting">Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting</a></li>
 <li><a href="#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol">Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol</a></li>
+<li><a href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them">Action required at v2.0.0: remove the CRDs' conversion webhook before applying them</a></li>
 <li><a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them</a></li>
+<li><a href="#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind">Action required after v2.0.0: delete what an owner deleted during the upgrade left behind</a></li>
 <li><a href="#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported">Action required if you alert on or chart the classic acquisition series: they are no longer exported</a></li>
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
@@ -4968,19 +5014,104 @@ List their Secrets:</p>
 </code></pre></div>
 <p>Delete each one it prints, and remove the offline <code>rs-&lt;set&gt;-&lt;n&gt;</code> runners in the org's or repository's runner settings.</p>
 <p><strong>Rolling back</strong> to 1.10 returns the set to classic acquisition.</p>
+<h3 id="action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them">Action required at <code>v2.0.0</code>: remove the CRDs' conversion webhook before applying them<a class="headerlink" href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> every cluster on the 1.x CRD chart whose conversion <code>caBundle</code> was set by cert-manager, which is the default, or by a <code>kubectl patch</code>.</p>
+<p><strong>What changed.</strong> The <code>v2.0.0</code> CRDs serve <code>v2</code> alone and carry no <code>spec.conversion</code>.
+Server-side apply removes only the fields its own field manager owns, and the <code>caBundle</code> belongs to whichever manager set it, so the apply leaves it behind, and the apiserver refuses a <code>caBundle</code> on a CRD with no webhook strategy.</p>
+<p><strong>What you see.</strong> <code>kubectl apply --server-side</code> refuses all five CRDs, with or without <code>--force-conflicts</code>, and the refused CRDs stay as they were:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>CustomResourceDefinition.apiextensions.k8s.io "runnersets.actions-gateway.com" is invalid: [spec.conversion.strategy: Required value, spec.conversion.webhookClientConfig: Forbidden: should not be set when strategy is not set to Webhook]
+</code></pre></div>
+<p><strong>What to do.</strong> Run <a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">the <code>storedVersions</code> check</a> first, and stop unless every line reads <code>[v2]</code>.
+The patch below changes the cluster and the apply can still refuse, so anything that would refuse it has to be settled while the webhook is still there.</p>
+<p>Then download the release, so a wrong tag fails with nothing changed, remove the webhook from each CRD, and apply straight away, in the same shell:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>curl<span class="w"> </span>-fsSLo<span class="w"> </span>actions-gateway-crds-v2.yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="k">for</span><span class="w"> </span>crd<span class="w"> </span><span class="k">in</span><span class="w"> </span>actionsgateways<span class="w"> </span>clusterrunnertemplates<span class="w"> </span>egressproxies<span class="w"> </span>runnersets<span class="w"> </span>runnertemplates<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>crd<span class="w"> </span><span class="s2">"</span><span class="si">${</span><span class="nv">crd</span><span class="si">}</span><span class="s2">.actions-gateway.com"</span><span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span>-p<span class="w"> </span><span class="s1">'{"spec":{"conversion":{"strategy":"None","webhook":null}}}'</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">done</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>actions-gateway-crds-v2.yaml
+</code></pre></div>
+<p>Between the patch and the apply <code>v2alpha1</code> and <code>v2beta1</code> are still served with nothing converting them, so a read at either returns the stored <code>v2</code> object relabelled, without converting it.
+Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2: the CA injector did not restore the webhook during a 60-second pause, the apply then succeeded, and the CRDs served <code>v2</code> alone.</p>
+<p><strong>If the apply is refused after the patch.</strong> A failure that is not a refusal, such as a timeout, only needs the apply run again.
+After a refusal the cluster is half upgraded, and an object still stored at an old version reads unconverted, so do not run the storage sweep in this state.
+Measured the same way with <code>status.storedVersions</code> reading <code>["v2beta1","v2"]</code> on <code>runnersets</code>: the apply exited 1, the other four CRDs served <code>v2</code> alone, and <code>runnersets</code> served all three versions with strategy <code>None</code>.</p>
+<p>Go back by applying the CRDs of the 1.x release you came from.
+<code>--force-conflicts</code> is required, because the plain form is refused with a conflict on <code>.spec.conversion.strategy</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>--force-conflicts<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.X.Y/actions-gateway-crds-v2.yaml
+</code></pre></div>
+<p>Measured the same way, going back from that state to the <code>v1.10.0</code> CRDs: all five returned to strategy <code>Webhook</code> serving all three versions, the CA injector restored each <code>caBundle</code> within about 15 seconds, and once <code>storedVersions</code> read <code>[v2]</code> this section's steps then succeeded.
+A running <code>v1.10.0</code> GMC then converts on reads, as <a href="#gmc-rollback">GMC rollback</a> records.
+Fix what refused the apply, then start this section again.</p>
 <h3 id="action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">Action required at <code>v2.0.0</code>: apply the CRDs with the upgrade, because the AGC's watch depends on them<a class="headerlink" href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> every gateway.</p>
 <p><strong>What changed.</strong> Each Actions Gateway Controller (AGC) watches only its own gateway's <code>RunnerSet</code>s, through a server-side field selector on <code>spec.gatewayRef.name</code>, and the apiserver evaluates that selector at the API version the request names.
-A <code>v1.10.0</code> AGC lists at <code>v2alpha1</code> and its CRD declares the field there alone; a <code>v2.0.0</code> AGC lists at <code>v2</code>, and its CRD declares the field there.
+A <code>v1.10.0</code> AGC lists at <code>v2alpha1</code>, and the <code>v1.10.0</code> CRD declares the field there alone; a <code>v2.0.0</code> AGC lists at <code>v2</code>, and <code>v2</code> is the only version the <code>v2.0.0</code> CRD serves.
 So neither AGC can list its <code>RunnerSet</code>s against the other release's CRDs.</p>
-<p><strong>What you see.</strong> The <code>RunnerSet</code> list fails with this error, and an AGC that hits it at startup does not become ready:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>field label not supported: spec.gatewayRef.name
+<p><strong>What you see.</strong> A <code>v2.0.0</code> AGC on the <code>v1.10.0</code> CRDs fails its <code>RunnerSet</code> list with this error and does not become ready:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>field label not supported: spec.gatewayRef.name
 </code></pre></div>
-<p>The GMC's startup schema check does not catch this, because it probes fields rather than selectable fields.</p>
-<p><strong>What to do.</strong> Apply the <code>v2.0.0</code> CRDs and upgrade the chart as one step, and do not leave a gap between them.
-During a gap, an AGC that restarts cannot start.
+<p>A <code>v1.10.0</code> AGC that restarts on the <code>v2.0.0</code> CRDs exits at startup, because the version it looks for is gone (read from the <code>v1.10.0</code> source, not run):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>GATEWAY_NAME=&lt;gateway&gt; is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing (install the actions-gateway-crds-v2 chart)
+</code></pre></div>
+<p>The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.</p>
+<p><strong>What to do.</strong> Pull the chart before <a href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them">the webhook removal</a>, so a wrong version fails with nothing changed.
+Then apply the five CRDs in <code>actions-gateway-crds-v2.yaml</code>, upgrade the chart, and apply the chart-root CRD, with no gap between them:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Before the webhook removal</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span>--version<span class="w"> </span>&lt;chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;chart-version&gt;
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># Straight after the webhook removal, whose block ends with this same apply</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>actions-gateway-crds-v2.yaml
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>gag-chart-&lt;chart-version&gt;/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;new-gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;new-agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;new-proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;new-wrapper&gt;
+<a id="__codelineno-16-13" name="__codelineno-16-13" href="#__codelineno-16-13"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+</code></pre></div>
+<p>Set all four digests to the new release's, because <code>--reset-then-reuse-values</code> otherwise replays the <code>v1.10.0</code> ones.</p>
+<p>During a gap, an AGC that restarts cannot start.
 One already running cannot re-establish its watch, so it is expected to stop seeing new <code>RunnerSet</code>s; that part is inferred from the code, not measured.
-A rollback crosses the same gap in reverse.</p>
+A <code>v1.10.0</code> GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.
+A rollback crosses the same gap in reverse, so it <a href="#gmc-rollback">puts the CRDs back first</a>.</p>
+<p><strong>The chart-root CRD goes last at this release only.</strong> Helm builds the current release's manifest before it applies anything, that manifest names the <code>PriorityClassAllowlist</code> at <code>v2beta1</code>, and the <code>v2.0.0</code> CRD serves <code>v2</code> alone.
+Applied first, as other upgrades do it, it stops the upgrade with the revision unchanged:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>Error: UPGRADE FAILED: unable to build kubernetes objects from current release manifest: resource mapping not found for name: "gmc-priorityclass-allowlist" namespace: "" from "": no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>ensure CRDs are installed first
+</code></pre></div>
+<p>A <code>v1.10.0</code> GMC pod that starts in that state logs <code>failed to determine if *v2beta1.PriorityClassAllowlist is namespaced</code> and crash-loops.
+To recover, go forward: apply the chart-root CRD of the 1.x chart you are on, run the <code>helm upgrade</code>, then apply the <code>v2.0.0</code> chart-root CRD.
+Applying the 1.x CRD alone does not bring the pods back, because the five CRDs are still on <code>v2</code>.</p>
+<p>Measured on kind with Kubernetes 1.36.1, cert-manager v1.20.2 and a local chart directory, from <code>v1.10.0</code>, with no tenant gateway: in this order every step exited 0, all six CRDs served <code>v2</code> alone, the guard denied an off-allowlist write, and a further <code>helm upgrade</code> exited 0.</p>
+<h3 id="action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind">Action required after <code>v2.0.0</code>: delete what an owner deleted during the upgrade left behind<a class="headerlink" href="#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> a cluster where an owner went away between the CRD apply and its <code>v2.0.0</code> controller reconciling it.
+That means a <code>RunnerSet</code> whose finalizer cleared before a <code>v2.0.0</code> Actions Gateway Controller (AGC) reconciled it, an <code>EgressProxy</code>, which has no finalizer and so goes at once, or an <code>ActionsGateway</code> already being deleted when the <code>v2.0.0</code> Gateway Manager Controller (GMC) starts.</p>
+<p><strong>What changed.</strong> A <code>v1.10.0</code> AGC writes an owner reference naming <code>actions-gateway.com/v2alpha1</code> on each set's three long-lived ConfigMaps, the scale-set guard, the recovery claims and the failure ledger, and on its worker pods.
+A <code>v1.10.0</code> GMC writes the same reference on the children of each <code>ActionsGateway</code> and <code>EgressProxy</code>.
+The garbage collector cannot map a version the cluster no longer serves, so it leaves the object in place when the owner goes away.</p>
+<p>Measured on kind with <code>kube-controller-manager</code> 1.36.1: such a ConfigMap was still present 12 minutes after its owner was deleted, across a controller-manager restart, while one naming <code>v2</code> was collected within 30 seconds.
+An <code>EgressProxy</code>'s Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget, NetworkPolicy and Secret behaved the same way: all six naming <code>v2alpha1</code> were still present 10 minutes after their owner was deleted, with the Deployment's pod still running, while the same six naming <code>v2</code> were gone within 45 seconds.
+So a proxy Deployment and its TLS Secret can outlive their <code>EgressProxy</code>.</p>
+<p>A <code>v2.0.0</code> AGC rewrites the three ConfigMaps' references to <code>v2</code> the first time it reconciles each set, including a set already being deleted, so nothing is needed for any set it sees.
+It does not rewrite worker pods, which end with their job.
+A <code>v2.0.0</code> GMC rewrites a child's reference each time it applies the child, so nothing is needed for a live gateway or proxy (read from the code, not measured).
+For a gateway being deleted it deletes the children by name, except the two metrics Secrets, which it leaves to the garbage collector (also read from the code).</p>
+<p><strong>What to do.</strong> After the upgrade, once the GMC and every AGC have started, list what still names the old version:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmaps,pods,secrets,services,serviceaccounts,deployments,horizontalpodautoscalers,poddisruptionbudgets,networkpolicies,rolebindings<span class="w"> </span>-A<span class="w"> </span>--no-headers<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'KIND:.kind,NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER_KIND:.metadata.ownerReferences[*].kind,OWNER:.metadata.ownerReferences[*].name,VERSION:.metadata.ownerReferences[*].apiVersion'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'actions-gateway.com/v2alpha1'</span>
+</code></pre></div>
+<p>The columns carry metadata only, so no Secret data reaches the pipe.
+Where the GMC manages ServiceMonitors, VerticalPodAutoscalers, <code>CiliumNetworkPolicy</code> or Calico <code>NetworkPolicy</code> objects, add those kinds to the list; they are left out because the command fails on a cluster without their CRDs.</p>
+<p>Delete an object from this list whose owner, named in its last columns, is gone.
+Deleting a Deployment takes its ReplicaSet and pods with it (measured the same way).
+Rewriting its reference did not help within three minutes: measured the same way, a ConfigMap repointed to <code>v2</code> after its owner was gone was still present then.
+A ConfigMap left in place also matters if you recreate a set of the same name, because the AGC finds these ConfigMaps by name (read from the code, not measured).
+An object whose owner still exists needs nothing, except the agent Secrets of a set <a href="#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol">kept from <code>Classic</code></a>, which nothing cleans up.</p>
 <h3 id="action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported">Action required if you alert on or chart the classic acquisition series: they are no longer exported<a class="headerlink" href="#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone whose alerts, recording rules or dashboards read a series only the classic tier wrote, including copies of the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> and Grafana dashboards taken before <code>v2.0.0</code>.</p>
 <p><strong>What changed.</strong> With the classic tier gone (Q264), the AGC no longer exports <code>actions_gateway_active_sessions</code>, <code>jobs_acquired_total</code>, <code>job_acquisition_errors_total</code>, <code>jobs_admission_rejected_total</code>, <code>jobs_duplicate_delivery_total</code>, <code>abandoned_delivery_completions_total</code>, <code>fanout_loser_recycle_deferred_total</code>, <code>renew_job_errors_total</code>, <code>renew_job_teardowns_total</code>, <code>agent_recycles_total</code>, <code>agent_recycle_errors_total</code>, <code>broker_token_propagation_retries_total</code> or <code>broker_session_leaks_total</code>.
@@ -5037,12 +5168,12 @@ A gateway in an unmarked namespace stops reconciling, and the GMC logs a <code>s
   The chart sets it; a GMC deployed from your own manifests needs the same <code>env</code> entry, <code>fieldRef: {fieldPath: spec.serviceAccountName}</code>.</li>
 </ul>
 <p><strong>What to do.</strong> Before upgrading, list the namespaces holding gateways or proxies that carry neither marker, and label each one:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\n"}{end}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateways.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\n"}{end}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
 <p>On a cluster with the v2 CRDs, run it again for <code>actionsgateways.actions-gateway.com</code> and <code>egressproxies.actions-gateway.com</code>.
 Label each namespace that <code>kubectl get namespace &lt;namespace&gt; --show-labels</code> shows without a marker:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway.com/tenant<span class="o">=</span>managed
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway.com/tenant<span class="o">=</span>managed
 </code></pre></div>
 <p><code>v2.0.0</code> honours only this marker (<a href="#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels">why</a>), so apply it rather than the 1.x <code>actions-gateway.github.com/tenant=true</code>.</p>
 <p><strong>Removing a namespace from the tenants</strong> now has a second step: delete its <code>gmc-tenant-secret-reader</code> RoleBinding after removing the marker.
@@ -5265,10 +5396,10 @@ Nothing else is required.</p>
 <p><strong>Who is affected:</strong> anyone who still creates an <code>EgressProxy</code> naming one of the two deprecated per-CNI <code>spec.egressPolicyMode</code> values, or switches an existing pool onto one.
 A pool that already stores one is unaffected and keeps running.</p>
 <p><strong>What changed.</strong> The GMC admission webhook warned on these values; it now rejects a write that <em>introduces</em> one:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>the same policy.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>the same policy.
 </code></pre></div>
 <p>A create is always a new write.
 An update is one only when it changes the value, so re-applying an unmigrated pool, editing the rest of its spec, and migrating it off the alias are all still admitted; switching one alias for the other is not.
@@ -5416,7 +5547,7 @@ What changes for an operator coming from 1.3 is the ending: a worker reaped whil
 Behaviour is covered in <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">Worker Pod Reaped While Pending</a>.</p>
 <h3 id="non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns">Non-breaking: <code>v1alpha1</code> is deprecated and the apiserver now warns<a class="headerlink" href="#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns" title="Permanent link">&para;</a></h3>
 <p>Both <code>actions-gateway.github.com</code> kinds carry <code>deprecated: true</code> on their <code>v1alpha1</code> version, so <code>kubectl</code> prints a warning on any <code>v1alpha1</code> read or write:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>Warning: actions-gateway.github.com/v1alpha1 ActionsGateway is deprecated; use actions-gateway.com/v2beta1 ActionsGateway. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Warning: actions-gateway.github.com/v1alpha1 ActionsGateway is deprecated; use actions-gateway.com/v2beta1 ActionsGateway. v1alpha1 is served until v2.0.0, which removes it; migrate with gag-migrate.
 </code></pre></div>
 <p><code>RunnerGroup</code> carries the same warning naming <code>actions-gateway.com/v2beta1 RunnerSet</code> as its replacement.
 The v1 monolith fans out into several v2 objects, so unlike the <code>v2alpha1</code> → <code>v2beta1</code> move below, the replacement is a different <strong>kind</strong> and not the same kind at a newer version — which is why the warning names <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> rather than a re-apply.</p>
@@ -5446,7 +5577,7 @@ The replacement's pods wait out the old pods' termination grace period on the ho
 A tenant migrating <em>after</em> the upgrade never pays this: <code>gag-migrate</code> creates the <code>EgressProxy</code> fresh, so its pool is born with the narrowed selector.</p>
 <p><strong>What to do about it.</strong> Nothing, unless you select v2 proxy pods by <code>app</code> yourself.
 Any hand-authored <code>NetworkPolicy</code>, monitoring rule, <code>kubectl -l</code>, or dashboard that reaches a <strong>v2</strong> pool's pods via <code>app=actions-gateway-proxy</code> must move to <code>actions-gateway.com/egress-proxy=&lt;proxy&gt;</code> (or its presence, for any pool):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/egress-proxy
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/egress-proxy
 </code></pre></div>
 <p>v1 pools keep <code>app=actions-gateway-proxy</code>, so recipes aimed at a v1 pool are unchanged.
 The recommended <code>app.kubernetes.io/name=actions-gateway-proxy</code> label is still on both pools' pods and remains the version-agnostic way to find any proxy pod — as additive metadata only; never build a policy selector on it.</p>
@@ -5487,7 +5618,7 @@ One of those copies tested <code>github.com</code> as a substring of the whole U
   A pool in this state now reports <code>GitHubEgressIncomplete=True</code> with reason <code>ApplianceRangesRequired</code>, naming the unreachable host, instead of failing as an unexplained connect timeout.</li>
 </ul>
 <p><strong>Post-upgrade check</strong> for a GHES tenant:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>egressproxy<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[?(@.status.conditions[?(@.type=="GitHubEgressIncomplete")].status=="True")]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>egressproxy<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[?(@.status.conditions[?(@.type=="GitHubEgressIncomplete")].status=="True")]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'</span>
 </code></pre></div>
 <p><strong>Rolling back</strong> restores the defect: GHES gateways return to minting against <code>api.github.com</code> and acquiring no jobs.
 There is no configuration that works around it on an older image other than the testing-only <code>--allow-agc-extra-env</code> flag, which <a href="../security-operations/#github-api-base-url-must-be-https">security-operations.md</a> tells you not to use in production.</p>
@@ -5502,9 +5633,9 @@ This was the last gap named by the audit behind the change above.</p>
 <p><strong>What changed.</strong> <code>ActionsGateway.spec.githubCABundleRef</code> (v2 only) names a <code>ConfigMap</code> in the gateway's namespace carrying a PEM bundle under <code>ca.crt</code>.
 The GMC mounts it on the AGC <code>Deployment</code> and the AGC projects the same <code>ConfigMap</code> into every worker pod, so the control plane and the runners trust the same appliance.
 The bundle is <strong>additive</strong> — the system roots stay trusted — so a gateway that also reaches public hosts is unaffected.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>create<span class="w"> </span>configmap<span class="w"> </span>ghes-ca<span class="w"> </span>--from-file<span class="o">=</span>ca.crt<span class="o">=</span>/path/to/corp-root-ca.pem
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>my-gateway<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"githubCABundleRef":{"name":"ghes-ca"}}}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>create<span class="w"> </span>configmap<span class="w"> </span>ghes-ca<span class="w"> </span>--from-file<span class="o">=</span>ca.crt<span class="o">=</span>/path/to/corp-root-ca.pem
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>my-gateway<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"githubCABundleRef":{"name":"ghes-ca"}}}'</span>
 </code></pre></div>
 <p>Setting the field re-renders the AGC <code>Deployment</code>, so <strong>that tenant's AGC pod restarts</strong>.
 In-flight jobs are unaffected — worker pods are separate.</p>
@@ -5529,10 +5660,10 @@ An existing colliding pair keeps running exactly as it did; the rejection lands 
 Unlike the scale-set guard above, there is <strong>no</strong> status condition or gauge reporting a pair carried in from an older release: the AGC's existing <code>AgentPoolError</code> Event is the only signal, and it fires only once a pool is actually blocked.</p>
 <p>Find it in advance, before upgrading, in two commands.
 Any stem appearing twice under one GitHub scope, or twice in one namespace, is a collision:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\trs-"}{.metadata.name}{"\n"}{end}'</span>
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\trs-"}{.metadata.name}{"\n"}{end}'</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroups.actions-gateway.github.com<span class="w"> </span>-A<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\n"}{end}'</span>
 </code></pre></div>
 <p><strong>A v1 <code>ActionsGateway</code> write is rejected too</strong>, for a <code>spec.runnerGroups</code> entry whose derived <code>RunnerGroup</code> name (<code>&lt;gateway&gt;-&lt;first runnerLabel&gt;-&lt;hash&gt;</code>) lands on a taken stem.
 The entry has no name field, so the rejection names the spec index and the derived name.
@@ -5552,7 +5683,7 @@ A colliding pair keeps running until someone re-applies either set, and the reje
 The condition does not gate <code>Ready</code> and does not stop the AGC: GAG cannot pick which tenant loses the name, and refusing to provision would take down the tenant that was there first as well.
 Resolution steps: <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision"><code>ActionsGateway</code> reports <code>ScaleSetNameCollision</code></a>.</p>
 <p>You can also find it in advance, before upgrading, for one command:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnersets<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnersets<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'</span>
 </code></pre></div>
 <p>Any first label appearing twice under one GitHub scope is a collision: give one of the sets a distinct first label, which registers a new scale set.
 Labels <em>after</em> the first may be shared freely.</p>
@@ -5626,7 +5757,7 @@ On a GHES tenant the failure below was never observed, because token exchange fa
 <p>Before this version the AGC resolved <code>GITHUB_API_BASE_URL</code> for the App <strong>token exchange</strong> but not for the <code>rerun-failed-jobs</code> call that eviction and preemption recovery make.
 That call read a provisioner field nothing ever assigned, so it fell back to <code>https://api.github.com</code> unconditionally.
 On GHES it therefore posted a valid installation token — minted against <em>your</em> endpoint — to a host that had never issued it, and the recovery failed with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>disruption auto-retry failed; manual rerun may be required ... rerun API returned 401: Bad credentials
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>disruption auto-retry failed; manual rerun may be required ... rerun API returned 401: Bad credentials
 </code></pre></div>
 <p>The 401 names <code>api.github.com</code>, a server the operator never configured, which is why this read as a credential problem rather than a routing one.
 Recovery on GHES could not work, whatever <code>maxEvictionRetries</code> was set to.</p>
@@ -5749,14 +5880,14 @@ Asking each tenant to assert the second meant asking them to speak for infrastru
 </tr>
 </tbody>
 </table>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># 1. If your cluster has NO node autoscaler, state that once per gateway.</span>
-<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1">#    Skip this entirely on a cluster that can grow — Present is the default.</span>
-<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gateway&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"clusterCapacity":{"nodeAutoscaling":"Absent"}}}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># 1. If your cluster has NO node autoscaler, state that once per gateway.</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1">#    Skip this entirely on a cluster that can grow — Present is the default.</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gateway&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"clusterCapacity":{"nodeAutoscaling":"Absent"}}}'</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># 2. Move each opted-in runner set to the single mode value.</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>runnerset<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;runner-set&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"capacityGate":{"mode":"Observe"}}}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># 2. Move each opted-in runner set to the single mode value.</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>runnerset<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;runner-set&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span>-p<span class="w"> </span><span class="s1">'{"spec":{"capacityGate":{"mode":"Observe"}}}'</span>
 </code></pre></div>
 <p><strong>Order matters on a fixed-size cluster.</strong> Apply the gateway patch first.
 Between the CRD upgrade and the gateway patch, a set that was gating on the scheduler's verdict falls back to the autoscaler-declination signal, which on a cluster with no autoscaler simply never gates — you get today's un-gated behavior, never over-gating.</p>
@@ -5773,8 +5904,8 @@ The derivation is now bounded to 63 characters, with a hash replacing whatever i
 Only a gateway whose derived name exceeded 63 characters is affected — on the first reconcile after the upgrade the GMC creates the correctly-named <code>RunnerGroup</code> and prunes the old one.
 That tenant could not place a worker pod before the rename, so no working runner is disturbed; it starts working.</p>
 <p>To check whether any of your gateways is affected before upgrading:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroups<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.items[] | select(.metadata.name | length &gt; 63) | "\(.metadata.namespace)/\(.metadata.name)"'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnergroups<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.items[] | select(.metadata.name | length &gt; 63) | "\(.metadata.namespace)/\(.metadata.name)"'</span>
 </code></pre></div>
 <p>Anything of yours keyed on such a name — dashboards, alerts, scripts — should move to the gateway's own name or a label selector.</p>
 <h3 id="non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix">Non-breaking: a <code>RunnerSet</code>'s agent Secrets and runner names gain an <code>rs-</code> prefix<a class="headerlink" href="#non-breaking-a-runnersets-agent-secrets-and-runner-names-gain-an-rs--prefix" title="Permanent link">&para;</a></h3>
@@ -5811,19 +5942,19 @@ Nothing re-registers, so no runner record is stranded and no runner goes offline
 The old runner <em>name</em> survives at GitHub until that agent is next recycled (which happens after its next job), at which point the old record is deregistered and the <code>rs-</code>-prefixed one replaces it — expect the names to change over gradually, not at once.</p>
 <p>The one thing to check is <strong>anything of yours that matches those names</strong>: dashboards, alerts, scripts, or GitHub runner-name filters keyed on <code>agentpool-&lt;set&gt;-</code> or on a <code>RunnerSet</code>'s runner names.
 Prefer the label selector, which is stable:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;tenant&gt;<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;set&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>&lt;tenant&gt;<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;set&gt;
 </code></pre></div>
 <p>Agent Secrets also now carry an <code>ownerReference</code> to their <code>RunnerGroup</code> or <code>RunnerSet</code>, back-filled onto existing ones during the same reconcile, so deleting the owner reclaims them even if its finalizer never runs.</p>
 <h3 id="non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns">Non-breaking: <code>v2alpha1</code> is deprecated and the apiserver now warns<a class="headerlink" href="#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns" title="Permanent link">&para;</a></h3>
 <p>All five <code>actions-gateway.com</code> kinds carry <code>deprecated: true</code> on their <code>v2alpha1</code> version, so <code>kubectl</code> prints a warning on any <code>v2alpha1</code> read or write:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>Warning: actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>Warning: actions-gateway.com/v2alpha1 RunnerSet is deprecated; use actions-gateway.com/v2beta1. v2alpha1 is served until v2.0.0, which removes it.
 </code></pre></div>
 <p><strong>Nothing breaks, and the upgrade needs no action.</strong> Deprecation marks intent and removes nothing: <code>v2alpha1</code> stays fully served, the conversion webhook still round-trips it against the <code>v2beta1</code> storage version, and existing objects keep reconciling untouched.
 The warning is advisory client-side output; it does not fail an <code>apply</code>, and controllers or CI that ignore warnings are unaffected.
 The AGC and GMC receive the same warning through their Kubernetes clients but log it once per unique message per process (deduplicated), so a controller reconciling <code>v2alpha1</code> objects under churn does not flood its own log.</p>
 <p><strong>What to do about it.</strong> Onboard new tenants on <code>v2beta1</code> (see <a href="../tenant-onboarding/">tenant onboarding</a>), and move existing <code>v2alpha1</code> objects to <code>v2beta1</code> at your convenience by re-applying the same object with the <code>apiVersion</code> changed, since the two versions convert both ways.
 <code>v2alpha1</code> remains the <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> on-ramp for tenants coming off <code>v1alpha1</code>, so a freshly migrated tenant emits these warnings until it is moved onto <code>v2beta1</code>.
-Note that <code>v2beta1</code> is ScaleSet-only: a <code>RunnerSet</code> still on <code>acquisitionProtocol: Classic</code> must adopt the runner-scale-set protocol as part of that move (see <a href="../troubleshooting/#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter">"<code>RunnerSet</code> Rejected: <code>acquisitionProtocol</code>"</a>).
+Note that <code>v2beta1</code> is ScaleSet-only: a <code>RunnerSet</code> still on <code>acquisitionProtocol: Classic</code> must adopt the runner-scale-set protocol as part of that move (see <a href="#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol">a Classic <code>RunnerSet</code> now runs on the scale-set protocol</a>).
 <code>v2alpha1</code> is one of three things <code>v2.0.0</code> removes; the standing notice for all three, with a pre-upgrade checklist, is the <a href="../v1alpha1-deprecation/">deprecation and removal notice</a>.</p>
 <h3 id="non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart">Non-breaking: <code>v2alpha1</code> CRDs ship in a separate, opt-in chart<a class="headerlink" href="#non-breaking-v2alpha1-crds-ship-in-a-separate-opt-in-chart" title="Permanent link">&para;</a></h3>
 <p>The v2 (<code>actions-gateway.com</code>) API is introduced as a decomposed set of five CRDs — <code>actionsgateways</code>, <code>egressproxies</code>, <code>runnersets</code>, <code>runnertemplates</code>, and the cluster-scoped <code>clusterrunnertemplates</code>.
@@ -5831,14 +5962,14 @@ Note that <code>v2beta1</code> is ScaleSet-only: a <code>RunnerSet</code> still 
 <p><strong>No action is required for existing tenants.</strong> Install the v2 CRDs only when you want the v2 API available.
 They are <strong>applied server-side, not <code>helm install</code>ed</strong> — the chart is over the 1 MiB release-Secret limit — and the same command upgrades them (re-apply with the newer tag to carry CRD field changes).
 For the default <code>gmc-system</code> namespace, apply the signed manifest attached to the release:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 </code></pre></div>
 <p>For a custom GMC namespace, render the chart instead.
 Either way, see <a href="../install/#the-v2-api-crds">install.md § the v2 API CRDs</a> for the full lifecycle (upgrade/rollback/uninstall), signature verification, and namespace/cert-manager overrides:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>helm<span class="w"> </span>template<span class="w"> </span>actions-gateway-crds-v2<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a>helm<span class="w"> </span>template<span class="w"> </span>actions-gateway-crds-v2<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span>--namespace<span class="w"> </span>&lt;gmc-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
 <p><strong>Skipping the re-apply is the one v2 upgrade mistake that is not self-announcing, so the GMC refuses to start on it.</strong> A structural schema prunes an undeclared field on write with no error, so a cluster left on the previous release's CRD accepts a manifest setting a newer field and stores nothing.
 For <a href="../../design/05-security/#unbounded-job-intake-via-the-installations-default-runner-group"><code>spec.runnerGroup</code></a> that is a tenant boundary silently going away, not a feature going missing, so the GMC probes the installed schema at startup and exits with the field, the version, and this command rather than provisioning against a boundary that is not there.
@@ -5857,27 +5988,27 @@ The rationale: a tenant-set quota is no real cap (the tenant could raise it in t
 <li><strong>Provision a platform-managed <code>ResourceQuota</code> in each tenant namespace</strong> <em>before</em> the new GMC takes over — the gateway no longer creates one, so a namespace with no quota becomes uncapped.
    For each tenant that relied on <code>spec.namespaceQuota</code>, read the current values and create a standalone <code>ResourceQuota</code>:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Inspect the GAG-managed quota the old GMC created (named "actions-gateway")</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>actions-gateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>-o<span class="w"> </span>yaml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Inspect the GAG-managed quota the old GMC created (named "actions-gateway")</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>resourcequota<span class="w"> </span>actions-gateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>-o<span class="w"> </span>yaml
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant&gt;-quota</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant-namespace&gt;</span>
-<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
-<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"20"</span>
-<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">"40Gi"</span>
-<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">"50"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ResourceQuota</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant&gt;-quota</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;tenant-namespace&gt;</span>
+<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-37-7" name="__codelineno-37-7" href="#__codelineno-37-7"></a><span class="w">  </span><span class="nt">hard</span><span class="p">:</span>
+<a id="__codelineno-37-8" name="__codelineno-37-8" href="#__codelineno-37-8"></a><span class="w">    </span><span class="nt">requests.cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"20"</span>
+<a id="__codelineno-37-9" name="__codelineno-37-9" href="#__codelineno-37-9"></a><span class="w">    </span><span class="nt">requests.memory</span><span class="p">:</span><span class="w"> </span><span class="s">"40Gi"</span>
+<a id="__codelineno-37-10" name="__codelineno-37-10" href="#__codelineno-37-10"></a><span class="w">    </span><span class="nt">pods</span><span class="p">:</span><span class="w"> </span><span class="s">"50"</span>
 </code></pre></div>
 <ol>
 <li><strong>Adopt or replace the orphaned GAG-created quota.</strong> A <code>ResourceQuota</code> the old GMC created carries an <code>ownerReference</code> to the <code>ActionsGateway</code> CR, so it would be garbage-collected if the CR were ever deleted.
    Either adopt it by stripping that ownerReference (so it survives independently), or delete it and recreate a platform-managed one as in step 1:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Adopt: drop the ownerReference so the quota is no longer GC-tied to the CR</span>
-<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>resourcequota<span class="w"> </span>actions-gateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="o">=</span><span class="s1">'[{"op":"remove","path":"/metadata/ownerReferences"}]'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Adopt: drop the ownerReference so the quota is no longer GC-tied to the CR</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>resourcequota<span class="w"> </span>actions-gateway<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span>-p<span class="o">=</span><span class="s1">'[{"op":"remove","path":"/metadata/ownerReferences"}]'</span>
 </code></pre></div>
 <ol>
 <li><strong>Drop <code>namespaceQuota</code> from your <code>ActionsGateway</code> manifests / GitOps.</strong> On upgrade the CRD's structural-schema pruning silently drops the now-unknown field from stored and re-applied CRs — applying a manifest that still sets <code>namespaceQuota</code> is <strong>not rejected</strong>, the field is just ignored.
@@ -5908,10 +6039,10 @@ The rationale: a tenant-set quota is no real cap (the tenant could raise it in t
 Both deny the GMC unless the target namespace already carries <code>actions-gateway.github.com/tenant: "true"</code>.
 <strong>Existing tenant namespaces created before this change do not have the label</strong>, so after upgrade the GMC cannot stamp their Pod Security Admission labels <em>or provision any resources in them</em>, and each affected <code>ActionsGateway</code> will emit a <code>NamespaceMarkerMissing</code> warning event.</p>
 <p>Before (or immediately after) upgrading, label every existing tenant namespace:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Label all namespaces that currently hold an ActionsGateway CR.</span>
-<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\n"}{end}'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>-I<span class="o">{}</span><span class="w"> </span>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span><span class="o">{}</span><span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span><span class="w"> </span>--overwrite
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Label all namespaces that currently hold an ActionsGateway CR.</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.namespace}{"\n"}{end}'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>xargs<span class="w"> </span>-I<span class="o">{}</span><span class="w"> </span>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span><span class="o">{}</span><span class="w"> </span>actions-gateway.github.com/tenant<span class="o">=</span><span class="nb">true</span><span class="w"> </span>--overwrite
 </code></pre></div>
 <p>For a phased rollout where you cannot label every namespace up front, temporarily set <strong>both</strong> bindings' <code>validationActions</code> to <code>[Audit]</code> (instead of <code>[Deny]</code>) so denials are logged but not enforced, label the namespaces, then restore <code>[Deny]</code> on each.</p>
 <p>From <code>v2.0.0</code> the marker is <code>actions-gateway.com/tenant=managed</code> instead (<a href="#before-upgrading-to-v200-every-tenant-namespace-carries-the-actions-gatewaycom-labels">why</a>).</p>
@@ -5948,12 +6079,12 @@ For a Docker-in-Docker (DinD) or Kata tenant the reported footprint goes <strong
 The condition now reports it up front instead of surfacing it as burnt lock time.
 Re-derive the affected quotas with <a href="../resourcequota-sizing/">sizing the platform-owned <code>ResourceQuota</code></a>.</p>
 <p>Find the tenants this can affect before upgrading — any runner template with a native sidecar, a <code>runtimeClassName</code>, or a generic ephemeral volume:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnertemplate,clusterrunnertemplate<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.items[] | select(any((.spec.podTemplate.spec.initContainers // [])[]; .restartPolicy == "Always") or (.spec.podTemplate.spec.runtimeClassName // "") != "" or any((.spec.podTemplate.spec.volumes // [])[]; has("ephemeral"))) | "\(.kind) \(.metadata.namespace // "-")/\(.metadata.name)"'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnertemplate,clusterrunnertemplate<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.items[] | select(any((.spec.podTemplate.spec.initContainers // [])[]; .restartPolicy == "Always") or (.spec.podTemplate.spec.runtimeClassName // "") != "" or any((.spec.podTemplate.spec.volumes // [])[]; has("ephemeral"))) | "\(.kind) \(.metadata.namespace // "-")/\(.metadata.name)"'</span>
 </code></pre></div>
 <p>Reading <code>RuntimeClass</code> overhead needs a cluster-scoped <code>runtimeclasses</code> read, added to the per-gateway <code>agc-clusterrunnertemplate-reader</code> <code>ClusterRole</code> in the same release — so <strong>upgrade the Helm chart, not just the AGC image</strong>.
 The read is fail-open: without the grant the overhead term is simply omitted and the conditions behave as they did before.
 Verify after upgrading:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>kubectl<span class="w"> </span>auth<span class="w"> </span>can-i<span class="w"> </span>get<span class="w"> </span>runtimeclasses<span class="w"> </span>--as<span class="o">=</span>system:serviceaccount:&lt;NAMESPACE&gt;:&lt;AGC_SERVICEACCOUNT&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>kubectl<span class="w"> </span>auth<span class="w"> </span>can-i<span class="w"> </span>get<span class="w"> </span>runtimeclasses<span class="w"> </span>--as<span class="o">=</span>system:serviceaccount:&lt;NAMESPACE&gt;:&lt;AGC_SERVICEACCOUNT&gt;
 </code></pre></div>
 <h3 id="worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended">Worker pods are now cleaned up automatically (one-time sweep recommended)<a class="headerlink" href="#worker-pods-are-now-cleaned-up-automatically-one-time-sweep-recommended" title="Permanent link">&para;</a></h3>
 <p>AGC versions with Q95 delete completed worker pods after <code>completedPodTTL</code> (default 5m) and stuck-Pending worker pods after <code>pendingPodDeadline</code> (default 10m), and stamp every new worker pod and job Secret with an OwnerReference to its RunnerGroup.
@@ -5964,10 +6095,10 @@ Two operator-visible consequences:</p>
 <li><strong>One-time sweep:</strong> pods created by <em>pre-upgrade</em> AGC versions whose RunnerGroup still exists are reaped automatically after upgrade, but pods whose RunnerGroup was already deleted have no OwnerReference and no reconciler to reap them.
   Clean those up once per tenant namespace:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Terminal worker pods left behind by pre-Q95 AGCs (label is stamped on all worker pods)</span>
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">  </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-runner<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">  </span>--field-selector<span class="w"> </span><span class="s1">'status.phase!=Running,status.phase!=Pending'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="c1"># Terminal worker pods left behind by pre-Q95 AGCs (label is stamped on all worker pods)</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">  </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>actions-runner<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">  </span>--field-selector<span class="w"> </span><span class="s1">'status.phase!=Running,status.phase!=Pending'</span>
 </code></pre></div>
 <h3 id="agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller">AGC Deployment renamed from <code>actions-gateway-agc</code> to <code>actions-gateway-controller</code><a class="headerlink" href="#agc-deployment-renamed-from-actions-gateway-agc-to-actions-gateway-controller" title="Permanent link">&para;</a></h3>
 <p>This section is v1 history: it is the rename that gave v1 its fixed per-namespace name.
@@ -5979,7 +6110,7 @@ After upgrading the GMC:</p>
 <li>The old <code>actions-gateway-agc</code> Deployment is left <strong>orphaned</strong> (still running but no longer managed).
    Remove it manually per tenant:</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>deploy<span class="w"> </span>actions-gateway-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>deploy<span class="w"> </span>actions-gateway-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <ol>
 <li>Pods labelled <code>app=actions-gateway-agc</code> become <code>app=actions-gateway-controller</code>, which is v1's fixed label; on v2 the same label carries <code>&lt;gateway&gt;-agc</code> instead.
@@ -5989,7 +6120,7 @@ After upgrading the GMC:</p>
 <p>The default install ships the GMC manager NetworkPolicy enabled (<code>networkPolicy.enabled=true</code>).
 This flips the controller-manager pod to default-deny ingress and admits its <code>:8443</code> <code>/metrics</code> endpoint <strong>only</strong> from namespaces labelled <code>metrics: enabled</code>.
 <strong>If your Prometheus runs in an unlabelled namespace, GMC manager scrapes will start failing after upgrade.</strong> Label it before (or right after) upgrading:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span><span class="nv">metrics</span><span class="o">=</span>enabled<span class="w"> </span>--overwrite
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>kubectl<span class="w"> </span>label<span class="w"> </span>namespace<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span><span class="nv">metrics</span><span class="o">=</span>enabled<span class="w"> </span>--overwrite
 </code></pre></div>
 <p>The validating-webhook port (<code>9443</code>) is re-allowed from any source, so CR admission is unaffected.
 This change also adds a <code>PodDisruptionBudget</code> (<code>minAvailable: 1</code>) and <code>priorityClassName: system-cluster-critical</code> to the manager — no operator action required.
@@ -6079,41 +6210,42 @@ For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of
 <p><strong>Current release — <code>v1.10.0</code></strong> (chart version = release tag without the leading <code>v</code>).
 Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
 </blockquote>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
-<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.0<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
-<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a>
-<a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="c1"># Apply the chart-root CRDs first — EVERY upgrade, not just some. Helm installs</span>
-<a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a><span class="c1"># that directory on `helm install` only and skips it on upgrade, so this is the</span>
-<a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="c1"># only way changes to those CRDs reach an existing release. Idempotent, and</span>
-<a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a><span class="c1"># version-correct: it reads the CRDs out of the exact chart you are upgrading to.</span>
-<a id="__codelineno-38-14" name="__codelineno-38-14" href="#__codelineno-38-14"></a><span class="c1"># Pull first: `helm show crds oci://...` prints its pull banner on stdout</span>
-<a id="__codelineno-38-15" name="__codelineno-38-15" href="#__codelineno-38-15"></a><span class="c1"># (measured on Helm 4.2), and kubectl rejects the banner.</span>
-<a id="__codelineno-38-16" name="__codelineno-38-16" href="#__codelineno-38-16"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-17" name="__codelineno-38-17" href="#__codelineno-38-17"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
-<a id="__codelineno-38-18" name="__codelineno-38-18" href="#__codelineno-38-18"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
-<a id="__codelineno-38-19" name="__codelineno-38-19" href="#__codelineno-38-19"></a>
-<a id="__codelineno-38-20" name="__codelineno-38-20" href="#__codelineno-38-20"></a><span class="c1"># Upgrade in place to a newer published chart version (carries CRD field changes — see below)</span>
-<a id="__codelineno-38-21" name="__codelineno-38-21" href="#__codelineno-38-21"></a><span class="c1"># --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below</span>
-<a id="__codelineno-38-22" name="__codelineno-38-22" href="#__codelineno-38-22"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-23" name="__codelineno-38-23" href="#__codelineno-38-23"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-24" name="__codelineno-38-24" href="#__codelineno-38-24"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;new-gmc&gt;
-<a id="__codelineno-38-25" name="__codelineno-38-25" href="#__codelineno-38-25"></a>
-<a id="__codelineno-38-26" name="__codelineno-38-26" href="#__codelineno-38-26"></a><span class="c1"># Roll back to the previous release</span>
-<a id="__codelineno-38-27" name="__codelineno-38-27" href="#__codelineno-38-27"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-5" name="__codelineno-45-5" href="#__codelineno-45-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-6" name="__codelineno-45-6" href="#__codelineno-45-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-7" name="__codelineno-45-7" href="#__codelineno-45-7"></a><span class="w">  </span>--set<span class="w"> </span>proxy.image.digest<span class="o">=</span>sha256:&lt;proxy&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-8" name="__codelineno-45-8" href="#__codelineno-45-8"></a><span class="w">  </span>--set<span class="w"> </span>wrapper.image.digest<span class="o">=</span>sha256:&lt;wrapper&gt;
+<a id="__codelineno-45-9" name="__codelineno-45-9" href="#__codelineno-45-9"></a>
+<a id="__codelineno-45-10" name="__codelineno-45-10" href="#__codelineno-45-10"></a><span class="c1"># Apply the chart-root CRDs first — EVERY upgrade, not just some, except 1.x to</span>
+<a id="__codelineno-45-11" name="__codelineno-45-11" href="#__codelineno-45-11"></a><span class="c1"># v2.0.0, where they go after the upgrade (see "apply the CRDs with the upgrade").</span>
+<a id="__codelineno-45-12" name="__codelineno-45-12" href="#__codelineno-45-12"></a><span class="c1"># Helm installs that directory on `helm install` only and skips it on upgrade, so</span>
+<a id="__codelineno-45-13" name="__codelineno-45-13" href="#__codelineno-45-13"></a><span class="c1"># this is the only way changes to those CRDs reach an existing release. Idempotent,</span>
+<a id="__codelineno-45-14" name="__codelineno-45-14" href="#__codelineno-45-14"></a><span class="c1"># and version-correct: it reads the CRDs out of the exact chart you are upgrading to.</span>
+<a id="__codelineno-45-15" name="__codelineno-45-15" href="#__codelineno-45-15"></a><span class="c1"># Pull first: `helm show crds oci://...` prints its pull banner on stdout</span>
+<a id="__codelineno-45-16" name="__codelineno-45-16" href="#__codelineno-45-16"></a><span class="c1"># (measured on Helm 4.2), and kubectl rejects the banner.</span>
+<a id="__codelineno-45-17" name="__codelineno-45-17" href="#__codelineno-45-17"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-18" name="__codelineno-45-18" href="#__codelineno-45-18"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
+<a id="__codelineno-45-19" name="__codelineno-45-19" href="#__codelineno-45-19"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<a id="__codelineno-45-20" name="__codelineno-45-20" href="#__codelineno-45-20"></a>
+<a id="__codelineno-45-21" name="__codelineno-45-21" href="#__codelineno-45-21"></a><span class="c1"># Upgrade in place to a newer published chart version (carries CRD field changes — see below)</span>
+<a id="__codelineno-45-22" name="__codelineno-45-22" href="#__codelineno-45-22"></a><span class="c1"># --reset-then-reuse-values, NOT --reuse-values: see the values-reuse note below</span>
+<a id="__codelineno-45-23" name="__codelineno-45-23" href="#__codelineno-45-23"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-24" name="__codelineno-45-24" href="#__codelineno-45-24"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-25" name="__codelineno-45-25" href="#__codelineno-45-25"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;new-gmc&gt;
+<a id="__codelineno-45-26" name="__codelineno-45-26" href="#__codelineno-45-26"></a>
+<a id="__codelineno-45-27" name="__codelineno-45-27" href="#__codelineno-45-27"></a><span class="c1"># Roll back to the previous release (from v2.0.0 to 1.x, see "GMC rollback")</span>
+<a id="__codelineno-45-28" name="__codelineno-45-28" href="#__codelineno-45-28"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
 </code></pre></div>
 <p>The following upgrade-time behaviors are specific to this chart:</p>
 <ul>
 <li><strong>Use <code>--reset-then-reuse-values</code>, not <code>--reuse-values</code>.</strong> <code>--reuse-values</code> replays the <em>old</em> release's values over the <em>old</em> chart's defaults, so any values key introduced after your release was created is simply absent — and a template reading a field under it fails the render with an opaque Go error naming a file you did not touch:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>Error: UPGRADE FAILED: actions-gateway/templates/vpa.yaml:1:14
-<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>  executing "actions-gateway/templates/vpa.yaml" at &lt;.Values.vpa.enabled&gt;:
-<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>    nil pointer evaluating interface {}.enabled
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>Error: UPGRADE FAILED: actions-gateway/templates/vpa.yaml:1:14
+<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>  executing "actions-gateway/templates/vpa.yaml" at &lt;.Values.vpa.enabled&gt;:
+<a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>    nil pointer evaluating interface {}.enabled
 </code></pre></div>
 <p><code>--reset-then-reuse-values</code> (Helm ≥ 3.14) starts from the <em>new</em> chart's defaults and layers your release's values on top, so new keys get their intended defaults and everything you set is preserved.
   It is the correct flag for every upgrade of this chart, not just ones that hit the error.</p>
@@ -6129,11 +6261,12 @@ Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="http
   It therefore ships in the chart-root <code>crds/</code> directory — which Helm installs on <code>helm install</code> <strong>only, never on upgrade</strong>.
   The tenant CRDs are not in this chart: they ship in <code>actions-gateway-crds-v2</code>, applied with <code>kubectl apply --server-side</code>.</p>
 <p>Rather than make that a conditional "did your release predate X?" step, the upgrade command above applies the chart's CRDs unconditionally:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
-<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
+<a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
 <p>It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
+  The one exception is 1.x to <code>v2.0.0</code>, where <a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">it goes after the upgrade</a>.
   The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster.
 - <strong>The webhook cert path depends on <code>certManager.enabled</code>.</strong> With the default <code>certManager.enabled=true</code>, cert-manager issues and rotates the serving cert; nothing to do on upgrade.
   With <code>certManager.enabled=false</code>, the chart generates a self-signed serving cert and wires the webhook <code>caBundle</code> itself.
@@ -6149,9 +6282,9 @@ Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="http
   This is a stale <em>schema</em>, not a missing kind, which the older CRD-presence preflight cannot see.
 - <strong>A hand-patched release blocks the next <code>helm upgrade</code>.</strong> Helm 4 applies server-side, so a field owned by a different field manager is a hard conflict rather than a silent overwrite.
   If you have <code>kubectl patch</code>ed or <code>kubectl edit</code>ed a chart-owned object — the GMC Deployment's container <code>args</code> is the usual one — the next upgrade fails outright:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>Error: UPGRADE FAILED: conflict occurred while applying object gmc-system/gmc-controller-manager
-<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a>apps/v1, Kind=Deployment: Apply failed with 1 conflict: conflict with "kubectl-patch" using
-<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a>apps/v1: .spec.template.spec.containers[name="manager"].args
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>Error: UPGRADE FAILED: conflict occurred while applying object gmc-system/gmc-controller-manager
+<a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a>apps/v1, Kind=Deployment: Apply failed with 1 conflict: conflict with "kubectl-patch" using
+<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>apps/v1: .spec.template.spec.containers[name="manager"].args
 </code></pre></div>
 <p>Re-run the upgrade with <code>--force-conflicts</code> to hand the field back to Helm — your manual edit is reverted, which is the point of the flag.
   The durable fix is to express the change in chart values so it survives every upgrade instead of being reapplied by hand.
@@ -6170,41 +6303,41 @@ A CRD <code>paramKind</code> gets a fresh dynamic informer per context and survi
 <code>crds/</code> is the only directory Helm installs early enough.
 The cost is that Helm skips <code>crds/</code> entirely on upgrade, so an existing release never receives it.</p>
 <h4 id="1-apply-the-charts-crds">1. Apply the chart's CRDs<a class="headerlink" href="#1-apply-the-charts-crds" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
-<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;new-chart-version&gt;<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;
+<a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-&lt;new-chart-version&gt;/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
 </code></pre></div>
-<p>This is the standard pre-upgrade step for every release (<a href="#gmc-install-and-upgrade-via-helm-recommended">above</a>), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
+<p>This is the standard pre-upgrade step for every release but <code>v2.0.0</code> (<a href="#gmc-install-and-upgrade-via-helm-recommended">above</a>), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
 From a chart directory, <code>helm show crds charts/actions-gateway | kubectl apply -f -</code> does the same thing.</p>
 <p>Skip it and the upgrade stops before changing anything, naming the command:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>Error: UPGRADE FAILED: execution error at (actions-gateway/templates/priorityclass-allowlist.yaml):
-<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the
-<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so
-<a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>applying it is a standard pre-upgrade step for this chart. ...
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>Error: UPGRADE FAILED: execution error at (actions-gateway/templates/priorityclass-allowlist.yaml):
+<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a>the PriorityClassAllowlist CRD is not installed in this cluster. Helm installs the
+<a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a>chart-root crds/ dir on a fresh install ONLY and skips it on every upgrade, so
+<a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a>applying it is a standard pre-upgrade step for this chart. ...
 </code></pre></div>
 <p>The check is skipped on a fresh <code>helm install</code>, where <code>crds/</code> is applied for you.</p>
 <h4 id="2-move-any-watched-configmap-names-into-allowedpriorityclasses">2. Move any watched-ConfigMap names into <code>allowedPriorityClasses</code><a class="headerlink" href="#2-move-any-watched-configmap-names-into-allowedpriorityclasses" title="Permanent link">&para;</a></h4>
 <p>Only if your release sets <code>priorityClassAllowlist.configMapName</code>.
 That key is removed, and the render fails while it is set:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>priorityClassAllowlist.configMapName ("gmc-priority-class-allowlist") is removed as
-<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>of Q492. ...
+<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>priorityClassAllowlist.configMapName ("gmc-priority-class-allowlist") is removed as
+<a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a>of Q492. ...
 </code></pre></div>
 <p>Read the names the ConfigMap currently carries — including any added self-service since install, which will <strong>not</strong> be in your values file.
 Use <em>your</em> configured name, not the example (<code>helm get values &lt;release&gt; -n gmc-system</code> shows it under <code>priorityClassAllowlist.configMapName</code>):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>&lt;your-configmap-name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.allowedPriorityClasses}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>&lt;your-configmap-name&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.allowedPriorityClasses}'</span>
 </code></pre></div>
 <p>Put the <strong>union</strong> of those and your existing <code>allowedPriorityClasses</code> into <code>allowedPriorityClasses</code>, and unset the removed key:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
-<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span><span class="w">      </span><span class="c1"># was already in values</span>
-<a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span><span class="w">        </span><span class="c1"># was ConfigMap-only</span>
-<a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span><span class="w">         </span><span class="c1"># was ConfigMap-only</span>
-<a id="__codelineno-46-5" name="__codelineno-46-5" href="#__codelineno-46-5"></a><span class="nt">priorityClassAllowlist</span><span class="p">:</span>
-<a id="__codelineno-46-6" name="__codelineno-46-6" href="#__codelineno-46-6"></a><span class="w">  </span><span class="nt">configMapName</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
+<a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span><span class="w">      </span><span class="c1"># was already in values</span>
+<a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span><span class="w">        </span><span class="c1"># was ConfigMap-only</span>
+<a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span><span class="w">         </span><span class="c1"># was ConfigMap-only</span>
+<a id="__codelineno-53-5" name="__codelineno-53-5" href="#__codelineno-53-5"></a><span class="nt">priorityClassAllowlist</span><span class="p">:</span>
+<a id="__codelineno-53-6" name="__codelineno-53-6" href="#__codelineno-53-6"></a><span class="w">  </span><span class="nt">configMapName</span><span class="p">:</span><span class="w"> </span><span class="s">""</span>
 </code></pre></div>
 <p>Getting this wrong fails <strong>closed</strong>, not open: a name you drop stops being admitted, denying writes that name it.
 Nothing becomes permitted that was not permitted before.</p>
 <h4 id="3-upgrade-then-verify">3. Upgrade, then verify<a class="headerlink" href="#3-upgrade-then-verify" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.allowedPriorityClasses}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.allowedPriorityClasses}'</span>
 </code></pre></div>
 <p>The GMC's grant becomes a <code>ClusterRole</code> with <code>get</code>/<code>list</code>/<code>watch</code> on <code>priorityclassallowlists</code> (the kind is cluster-scoped); it carries no write verb, so the GMC still cannot widen its own allowlist.
 No manual RBAC step.</p>
@@ -6232,10 +6365,10 @@ No manual RBAC step.</p>
 </table>
 <p>So if you set <code>configMapName</code>, delete your ConfigMap once you are satisfied the CR carries everything.
 Nothing reads it any more:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>&lt;your-configmap-name&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>kubectl<span class="w"> </span>delete<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>&lt;your-configmap-name&gt;
 </code></pre></div>
 <p><strong>Your self-service workflow moves to the CR.</strong> Adding a class without a GMC rollout used to mean editing that ConfigMap; it now means editing the CR, which the GMC watches the same way:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>&lt;release&gt;-priorityclass-allowlist
+<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>&lt;release&gt;-priorityclass-allowlist
 </code></pre></div>
 <p>A chart upgrade reasserts <code>allowedPriorityClasses</code> over it, exactly as it would have reasserted a chart-rendered ConfigMap — so persist anything durable in values.
 Full detail: <a href="../security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">security-operations.md</a>.</p>
@@ -6247,9 +6380,9 @@ Rollback succeeds, the <code>paramKind</code> reverts to <code>ConfigMap</code>,
 Upgrading to the CRD <code>paramKind</code> removes the last binding naming <code>v1/ConfigMap</code>, which is precisely the transition that kills that apiserver's shared ConfigMap param informer for the life of the process.
 The rollback then recreates a ConfigMap-<code>paramKind</code> binding, and that informer is never coming back — so it can never resolve, exactly as a fresh install could not after the break.</p>
 <p><strong>Roll forward, not back.</strong> If you need to undo this release for an unrelated reason, do it in a way that does not recreate a ConfigMap-<code>paramKind</code> binding — upgrade to the older chart version with the guard disabled rather than rolling back to it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;older-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a><span class="w">  </span>--reset-then-reuse-values<span class="w"> </span>--set<span class="w"> </span>admissionPolicy.enabled<span class="o">=</span><span class="nb">false</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a><span class="w">  </span>--version<span class="w"> </span>&lt;older-chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-57-3" name="__codelineno-57-3" href="#__codelineno-57-3"></a><span class="w">  </span>--reset-then-reuse-values<span class="w"> </span>--set<span class="w"> </span>admissionPolicy.enabled<span class="o">=</span><span class="nb">false</span>
 </code></pre></div>
 <p>Verified: writes are admitted again within seconds.
 You lose the PriorityClass backstop until you roll forward again, so treat it as an incident mitigation — the GMC webhook still gates the tenant-facing CRs meanwhile.
@@ -6257,31 +6390,68 @@ The other recovery is a kube-apiserver restart, which is not available on EKS/GK
 <p>Rolling back a release that has <em>always</em> been on the CR <code>paramKind</code> is unaffected — this is specifically about crossing the ConfigMap→CR boundary downwards.</p>
 <p><code>helm upgrade</code> rolls the GMC Deployment (and carries additive CRD field changes — no separate CRD apply step).
 Watch the rollout:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
 </code></pre></div>
 <p>The rolling update replaces one replica at a time.
 Leadership transfers before the old leader is deleted.
 The total rollout time is typically &lt; 30 seconds.</p>
 <h3 id="gmc-post-upgrade-validation">GMC post-upgrade validation<a class="headerlink" href="#gmc-post-upgrade-validation" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="c1"># Confirm both replicas are on the new image</span>
-<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-o<span class="w"> </span>wide
-<a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a>
-<a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a><span class="c1"># Confirm the GMC has re-elected a leader</span>
-<a id="__codelineno-52-5" name="__codelineno-52-5" href="#__codelineno-52-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
-<a id="__codelineno-52-6" name="__codelineno-52-6" href="#__codelineno-52-6"></a>
-<a id="__codelineno-52-7" name="__codelineno-52-7" href="#__codelineno-52-7"></a><span class="c1"># Confirm no new reconcile errors appeared</span>
-<a id="__codelineno-52-8" name="__codelineno-52-8" href="#__codelineno-52-8"></a><span class="c1"># Metric: controller_runtime_reconcile_errors_total</span>
-<a id="__codelineno-52-9" name="__codelineno-52-9" href="#__codelineno-52-9"></a>
-<a id="__codelineno-52-10" name="__codelineno-52-10" href="#__codelineno-52-10"></a><span class="c1"># Spot-check one ActionsGateway CR</span>
-<a id="__codelineno-52-11" name="__codelineno-52-11" href="#__codelineno-52-11"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Confirm both replicas are on the new image</span>
+<a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a>
+<a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a><span class="c1"># Confirm the GMC has re-elected a leader</span>
+<a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>lease<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-59-6" name="__codelineno-59-6" href="#__codelineno-59-6"></a>
+<a id="__codelineno-59-7" name="__codelineno-59-7" href="#__codelineno-59-7"></a><span class="c1"># Confirm no new reconcile errors appeared</span>
+<a id="__codelineno-59-8" name="__codelineno-59-8" href="#__codelineno-59-8"></a><span class="c1"># Metric: controller_runtime_reconcile_errors_total</span>
+<a id="__codelineno-59-9" name="__codelineno-59-9" href="#__codelineno-59-9"></a>
+<a id="__codelineno-59-10" name="__codelineno-59-10" href="#__codelineno-59-10"></a><span class="c1"># Spot-check one ActionsGateway CR</span>
+<a id="__codelineno-59-11" name="__codelineno-59-11" href="#__codelineno-59-11"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
 </code></pre></div>
 <h3 id="gmc-rollback">GMC rollback<a class="headerlink" href="#gmc-rollback" title="Permanent link">&para;</a></h3>
 <p>Roll back to the previously deployed release with <code>helm rollback</code> (see the Helm section above):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
-<a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<div class="highlight"><pre><span></span><code><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
 </code></pre></div>
 <p><code>helm rollback</code> restores the prior release's values and manifests.
 CRDs carry <code>helm.sh/resource-policy: keep</code>, so they are not rolled back automatically; if the rollback targets a different CRD schema version, consult the release notes for any CRD migration.</p>
+<p><strong>From <code>v2.0.0</code> back to 1.x, put the CRDs back first.</strong> A <code>v1.10.0</code> GMC refuses to start without <code>v2alpha1</code> and <code>v2beta1</code>, and its release's manifest names the <code>PriorityClassAllowlist</code> at a version the <code>v2.0.0</code> chart-root CRD no longer serves.
+So both sets of CRDs go back before the chart.
+Read the revision from <code>helm history</code> at that moment, and pick the newest <code>superseded</code> one on a 1.x chart.
+Do not leave it out: with no revision <code>helm rollback</code> goes to the previous one, which after any further upgrade is still <code>v2.0.0</code>, and it exits 0 with <code>rollout status</code> passing.
+Helm also prunes old revisions, so one too old fails with <code>release has no 1 version</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>helm<span class="w"> </span><span class="nb">history</span><span class="w"> </span>gag<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a>helm<span class="w"> </span>pull<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-61-3" name="__codelineno-61-3" href="#__codelineno-61-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.X.Y<span class="w"> </span>--untar<span class="w"> </span>--untardir<span class="w"> </span>gag-chart-1.X.Y
+<a id="__codelineno-61-4" name="__codelineno-61-4" href="#__codelineno-61-4"></a>helm<span class="w"> </span>show<span class="w"> </span>crds<span class="w"> </span>gag-chart-1.X.Y/actions-gateway<span class="w"> </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>-
+<a id="__codelineno-61-5" name="__codelineno-61-5" href="#__codelineno-61-5"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>--force-conflicts<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-61-6" name="__codelineno-61-6" href="#__codelineno-61-6"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.X.Y/actions-gateway-crds-v2.yaml
+<a id="__codelineno-61-7" name="__codelineno-61-7" href="#__codelineno-61-7"></a>helm<span class="w"> </span>rollback<span class="w"> </span>gag<span class="w"> </span>&lt;revision&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system
+<a id="__codelineno-61-8" name="__codelineno-61-8" href="#__codelineno-61-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
+</code></pre></div>
+<p><code>--force-conflicts</code> is required after the <a href="#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them"><code>v2.0.0</code> patch</a>, because that patch owns <code>.spec.conversion.strategy</code>.
+Between the applies and the rollback, a read at <code>v2alpha1</code> or <code>v2beta1</code> fails because a <code>v2.0.0</code> GMC has no conversion endpoint, and a write at <code>v2beta1</code> is denied with <code>failed to convert object version</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a>Error from server: conversion webhook for actions-gateway.com/v2, Kind=RunnerTemplate failed: the server could not find the requested resource
+</code></pre></div>
+<p>Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2, rolling back to the <code>v1.10.0</code> chart with no restart: every command exited 0, two <code>v1.10.0</code> pods were Ready, reads at all three versions returned a <code>RunnerTemplate</code> stored at <code>v2</code>, and the guard denied an off-allowlist write.</p>
+<p><strong>If <code>helm rollback</code> ran with the chart-root CRD still on <code>v2</code> alone,</strong> it exits 1 in one of two forms, depending on what the client has cached about the API:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a>Error: unable to build kubernetes objects from new release manifest: resource mapping not found for name: "gmc-priorityclass-allowlist" namespace: "" from "": no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
+<a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a>ensure CRDs are installed first
+</code></pre></div>
+<p>With this form the Deployment is unchanged and the revision reads <code>pending-rollback</code>, and <code>helm upgrade</code> then fails with <code>another operation (install/upgrade/rollback) is in progress</code> until a rollback succeeds.
+The other form is <code>server-side apply failed for object /gmc-priorityclass-allowlist</code>, with the revision <code>failed</code>, the Deployment changed, and a <code>v1.10.0</code> pod crash-looping beside the <code>v2.0.0</code> pods.
+Either way, run the block above again.</p>
+<p><strong>If <code>helm rollback</code> ran with the chart-root CRD still serving <code>v2beta1</code>,</strong> which is the state between the <code>helm upgrade</code> and the chart-root apply, it reports <code>Rollback was a success!</code> and reads <code>deployed</code>, or exits 1 and reads <code>failed</code> with <code>--wait</code>.
+The new pod crash-loops, and the <code>v2.0.0</code> pods keep running beside it.
+Its log says the CRDs are older than the GMC, which is backwards here, since they are newer:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a>verify installed CRD schemas: the CustomResourceDefinitions installed in this cluster are older than this GMC and no longer declare a field that bounds tenant access:
+<a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a>  - runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup
+</code></pre></div>
+<p>The plain <code>kubectl apply --server-side</code> the log recommends is refused with a conflict on <code>.spec.conversion.strategy</code> and changes nothing.
+The forced apply above is the recovery, and no restart is needed: the pods went Ready on their own in up to about four minutes.</p>
+<p>Going forward again by the <a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them"><code>v2.0.0</code> steps</a> succeeded after the block above.
+None of this was measured with a tenant gateway running: the cluster held the GMC and one <code>RunnerTemplate</code>.
+A field that only the <code>v2.0.0</code> schema declares is expected to be pruned from an object the next time it is written, as <a href="../install/#the-v2-api-crds">install.md</a> warns; that part was not measured.</p>
 <hr />
 <h2 id="agc-upgrade">AGC Upgrade<a class="headerlink" href="#agc-upgrade" title="Permanent link">&para;</a></h2>
 <p>The AGC runs <code>replicas: 1</code>.
@@ -6310,7 +6480,7 @@ To rely on this:</p>
   Use <code>kubectl rollout restart</code>, which the reconciler honours on a managed Deployment.</li>
 </ul>
 <p>If a session cannot be deleted (the broker is unreachable during the drain), the AGC retries within its budget and then logs a Warn naming the session before exiting:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a>DeleteSession failed; the broker session is leaked until it expires server-side sessionId=... attempts=3 error=...
+<div class="highlight"><pre><span></span><code><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>DeleteSession failed; the broker session is leaked until it expires server-side sessionId=... attempts=3 error=...
 </code></pre></div>
 <p>That session's runner stays online on GitHub until the server-side session TTL expires.
 It is harmless but wastes a runner slot for the TTL; a burst of these lines during a rollout points at broker or egress-path reachability, not at the AGC.</p>
@@ -6320,32 +6490,32 @@ It is harmless but wastes a runner slot for the TTL; a burst of these lines duri
 <code>kubectl set image</code> on the AGC Deployment appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.</p>
 <p><strong>Step 3: Watch the rollout</strong></p>
 <p>The AGC Deployment is named per gateway under v2, as <code>&lt;gateway&gt;-agc</code>; under v1 there is one per namespace, named <code>actions-gateway-controller</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># v2</span>
-<a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <p><strong>Step 4: Confirm session recovery</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a><span class="c1"># every RunnerSet's listener session should be open again within a few seconds of pod startup</span>
-<a id="__codelineno-57-2" name="__codelineno-57-2" href="#__codelineno-57-2"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open{namespace="&lt;namespace&gt;"} == 1 per runner_set</span>
-<a id="__codelineno-57-3" name="__codelineno-57-3" href="#__codelineno-57-3"></a>
-<a id="__codelineno-57-4" name="__codelineno-57-4" href="#__codelineno-57-4"></a><span class="c1"># No new message poll errors</span>
-<a id="__codelineno-57-5" name="__codelineno-57-5" href="#__codelineno-57-5"></a><span class="c1"># Metric: rate(actions_gateway_message_poll_errors_total{namespace="&lt;namespace&gt;"}[5m])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="c1"># every RunnerSet's listener session should be open again within a few seconds of pod startup</span>
+<a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open{namespace="&lt;namespace&gt;"} == 1 per runner_set</span>
+<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a>
+<a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a><span class="c1"># No new message poll errors</span>
+<a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a><span class="c1"># Metric: rate(actions_gateway_message_poll_errors_total{namespace="&lt;namespace&gt;"}[5m])</span>
 </code></pre></div>
 <p><strong>Step 5: Check for cancelled jobs</strong></p>
 <p>After the rollout, verify that jobs active during the restart have either completed or been redelivered.
 Check the GitHub Actions UI for any unexpectedly cancelled runs.</p>
 <h3 id="agc-rollback">AGC rollback<a class="headerlink" href="#agc-rollback" title="Permanent link">&para;</a></h3>
 <p>Roll the AGC image back where the GMC reads it, not on the Deployment — <code>kubectl rollout undo</code> on a managed AGC Deployment is reverted on the next reconcile, same as <code>kubectl set image</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a><span class="c1"># Re-run the GMC upgrade pinning the previous AGC digest, then watch the AGCs converge</span>
-<a id="__codelineno-58-2" name="__codelineno-58-2" href="#__codelineno-58-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-58-3" name="__codelineno-58-3" href="#__codelineno-58-3"></a><span class="w">  </span>--version<span class="w"> </span>&lt;chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-58-4" name="__codelineno-58-4" href="#__codelineno-58-4"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;previous-agc&gt;
-<a id="__codelineno-58-5" name="__codelineno-58-5" href="#__codelineno-58-5"></a><span class="c1"># v2</span>
-<a id="__codelineno-58-6" name="__codelineno-58-6" href="#__codelineno-58-6"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-58-7" name="__codelineno-58-7" href="#__codelineno-58-7"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-58-8" name="__codelineno-58-8" href="#__codelineno-58-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a><span class="c1"># Re-run the GMC upgrade pinning the previous AGC digest, then watch the AGCs converge</span>
+<a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-69-3" name="__codelineno-69-3" href="#__codelineno-69-3"></a><span class="w">  </span>--version<span class="w"> </span>&lt;chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-69-4" name="__codelineno-69-4" href="#__codelineno-69-4"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;previous-agc&gt;
+<a id="__codelineno-69-5" name="__codelineno-69-5" href="#__codelineno-69-5"></a><span class="c1"># v2</span>
+<a id="__codelineno-69-6" name="__codelineno-69-6" href="#__codelineno-69-6"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-69-7" name="__codelineno-69-7" href="#__codelineno-69-7"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-69-8" name="__codelineno-69-8" href="#__codelineno-69-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <p>Then confirm sessions are re-established and job acquisition resumes.</p>
 <hr />
@@ -6356,58 +6526,58 @@ Rolling updates are non-disruptive as long as the <code>PodDisruptionBudget</cod
 Both stages share one 45s budget inside a 60s <code>terminationGracePeriodSeconds</code>, so a pod with quiet traffic typically terminates in a few seconds and a busy one takes longer.
 Pods that appear to hang for tens of seconds during a rollout are draining, not stuck — see <a href="../troubleshooting/#proxy-tunnel-cut-during-a-rollout">Proxy Tunnel Cut During a Rollout</a> for the budget breakdown, and the spot/preemptible note beneath it if your nodes reclaim on a short notice.</p>
 <h3 id="step-1-pre-upgrade-checks">Step 1: Pre-Upgrade Checks<a class="headerlink" href="#step-1-pre-upgrade-checks" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-59-1" name="__codelineno-59-1" href="#__codelineno-59-1"></a><span class="c1"># Confirm the PodDisruptionBudget is in place</span>
-<a id="__codelineno-59-2" name="__codelineno-59-2" href="#__codelineno-59-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pdb<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
-<a id="__codelineno-59-3" name="__codelineno-59-3" href="#__codelineno-59-3"></a>
-<a id="__codelineno-59-4" name="__codelineno-59-4" href="#__codelineno-59-4"></a><span class="c1"># Confirm current replica count</span>
-<a id="__codelineno-59-5" name="__codelineno-59-5" href="#__codelineno-59-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
-<a id="__codelineno-59-6" name="__codelineno-59-6" href="#__codelineno-59-6"></a>
-<a id="__codelineno-59-7" name="__codelineno-59-7" href="#__codelineno-59-7"></a><span class="c1"># Confirm the HPA is healthy (TARGETS should show a percentage, not &lt;unknown&gt;)</span>
-<a id="__codelineno-59-8" name="__codelineno-59-8" href="#__codelineno-59-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a><span class="c1"># Confirm the PodDisruptionBudget is in place</span>
+<a id="__codelineno-70-2" name="__codelineno-70-2" href="#__codelineno-70-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pdb<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-70-3" name="__codelineno-70-3" href="#__codelineno-70-3"></a>
+<a id="__codelineno-70-4" name="__codelineno-70-4" href="#__codelineno-70-4"></a><span class="c1"># Confirm current replica count</span>
+<a id="__codelineno-70-5" name="__codelineno-70-5" href="#__codelineno-70-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-70-6" name="__codelineno-70-6" href="#__codelineno-70-6"></a>
+<a id="__codelineno-70-7" name="__codelineno-70-7" href="#__codelineno-70-7"></a><span class="c1"># Confirm the HPA is healthy (TARGETS should show a percentage, not &lt;unknown&gt;)</span>
+<a id="__codelineno-70-8" name="__codelineno-70-8" href="#__codelineno-70-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <h3 id="step-2-update-the-proxy-image">Step 2: Update the Proxy Image<a class="headerlink" href="#step-2-update-the-proxy-image" title="Permanent link">&para;</a></h3>
 <p>The GMC manages the proxy Deployment.
 Update the proxy image via the GMC's Helm values or Kustomize overlay, then re-deploy the GMC (which will reconcile the updated image into all tenant proxy Deployments).
 To patch a single namespace:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a><span class="w">  </span><span class="nv">proxy</span><span class="o">=</span>&lt;registry&gt;/proxy:&lt;new-tag&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-60-3" name="__codelineno-60-3" href="#__codelineno-60-3"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-71-2" name="__codelineno-71-2" href="#__codelineno-71-2"></a><span class="w">  </span><span class="nv">proxy</span><span class="o">=</span>&lt;registry&gt;/proxy:&lt;new-tag&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-71-3" name="__codelineno-71-3" href="#__codelineno-71-3"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <h3 id="step-3-watch-the-rollout">Step 3: Watch the Rollout<a class="headerlink" href="#step-3-watch-the-rollout" title="Permanent link">&para;</a></h3>
 <p>The rolling update replaces one proxy pod at a time.
 Kubernetes honours the <code>PodDisruptionBudget</code> and only terminates a pod once its replacement is <code>Ready</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <p>In-flight <code>CONNECT</code> tunnels through the old proxy pod will be interrupted when that pod is terminated.
 The AGC and worker pods will reconnect through the remaining proxy pods automatically.
 For high-concurrency tenants, schedule the upgrade during a low-traffic window to minimise connection resets.</p>
 <h3 id="step-4-post-upgrade-validation">Step 4: Post-Upgrade Validation<a class="headerlink" href="#step-4-post-upgrade-validation" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-62-1" name="__codelineno-62-1" href="#__codelineno-62-1"></a><span class="c1"># All proxy pods on the new image</span>
-<a id="__codelineno-62-2" name="__codelineno-62-2" href="#__codelineno-62-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w"> </span>-o<span class="w"> </span>wide
-<a id="__codelineno-62-3" name="__codelineno-62-3" href="#__codelineno-62-3"></a>
-<a id="__codelineno-62-4" name="__codelineno-62-4" href="#__codelineno-62-4"></a><span class="c1"># HPA still computing utilization (not &lt;unknown&gt;)</span>
-<a id="__codelineno-62-5" name="__codelineno-62-5" href="#__codelineno-62-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-62-6" name="__codelineno-62-6" href="#__codelineno-62-6"></a>
-<a id="__codelineno-62-7" name="__codelineno-62-7" href="#__codelineno-62-7"></a><span class="c1"># No spike in token or message poll errors after the rollout</span>
-<a id="__codelineno-62-8" name="__codelineno-62-8" href="#__codelineno-62-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a><span class="c1"># All proxy pods on the new image</span>
+<a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>
+<a id="__codelineno-73-4" name="__codelineno-73-4" href="#__codelineno-73-4"></a><span class="c1"># HPA still computing utilization (not &lt;unknown&gt;)</span>
+<a id="__codelineno-73-5" name="__codelineno-73-5" href="#__codelineno-73-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-73-6" name="__codelineno-73-6" href="#__codelineno-73-6"></a>
+<a id="__codelineno-73-7" name="__codelineno-73-7" href="#__codelineno-73-7"></a><span class="c1"># No spike in token or message poll errors after the rollout</span>
+<a id="__codelineno-73-8" name="__codelineno-73-8" href="#__codelineno-73-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total</span>
 </code></pre></div>
 <h3 id="proxy-rollback">Proxy rollback<a class="headerlink" href="#proxy-rollback" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-63-1" name="__codelineno-63-1" href="#__codelineno-63-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-63-2" name="__codelineno-63-2" href="#__codelineno-63-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-74-2" name="__codelineno-74-2" href="#__codelineno-74-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <hr />
 <h2 id="worker-image-upgrade">Worker Image Upgrade<a class="headerlink" href="#worker-image-upgrade" title="Permanent link">&para;</a></h2>
 <p>Worker image upgrades are non-disruptive: the new image takes effect on future jobs; running pods complete on the old image.</p>
 <h3 id="upgrade-procedure">Upgrade Procedure<a class="headerlink" href="#upgrade-procedure" title="Permanent link">&para;</a></h3>
 <p>Update <code>spec.runnerGroups[N].workerImage</code> in the <code>ActionsGateway</code> CR:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-64-1" name="__codelineno-64-1" href="#__codelineno-64-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
-<a id="__codelineno-64-2" name="__codelineno-64-2" href="#__codelineno-64-2"></a><span class="c1"># Update spec.runnerGroups[N].workerImage to the new image digest</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+<a id="__codelineno-75-2" name="__codelineno-75-2" href="#__codelineno-75-2"></a><span class="c1"># Update spec.runnerGroups[N].workerImage to the new image digest</span>
 </code></pre></div>
 <p>The GMC propagates the change to the <code>RunnerGroup</code> CR.
 The AGC starts using the new image on the next job acquisition.
 No restart required.</p>
 <p><strong>Production recommendation:</strong> pin to a digest, not a tag:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/my-org/actions-runner-worker@sha256:abc123...</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/my-org/actions-runner-worker@sha256:abc123...</span>
 </code></pre></div>
 <p>This ensures the exact same image is used for all jobs until explicitly changed, and enables unambiguous rollback.</p>
 <h3 id="canary-testing-a-new-worker-image">Canary Testing a New Worker Image<a class="headerlink" href="#canary-testing-a-new-worker-image" title="Permanent link">&para;</a></h3>
@@ -6425,31 +6595,31 @@ No restart required.</p>
 <p>You do not have to wait for a failure to see this.
 On both acquisition tiers, every reconcile, the AGC reads the runner version off the effective <code>workerImage</code> reference, then out of the image itself in its registry, and reports <code>RunnerVersionTooOld</code> with reason <code>WorkerImageBelowMinimum</code> (<code>True</code>), <code>WorkerImageCurrent</code> (<code>False</code>), or <code>WorkerImageVersionUnknown</code> (<code>Unknown</code>, while the registry read is pending or failed and the reference names no version, or when the image is not <code>actions/runner</code>-derived).
 Check it right after deploying a different worker image:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-77-2" name="__codelineno-77-2" href="#__codelineno-77-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'</span>
 </code></pre></div>
 <p>On the classic tier the session goroutine additionally surfaces GitHub's own rejection, a <code>400 Bad Request</code> under reason <code>VersionTooOld</code>, once the version has already stopped working.
 See <a href="../troubleshooting/#worker-image-runner-version">troubleshooting § Worker Image Runner Version</a> for reading the version a running worker actually shipped.</p>
 <h3 id="worker-image-rollback">Worker image rollback<a class="headerlink" href="#worker-image-rollback" title="Permanent link">&para;</a></h3>
 <p>Set <code>workerImage</code> back to the previous digest:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">'[{"op":"replace","path":"/spec/runnerGroups/0/workerImage","value":"&lt;previous-digest&gt;"}]'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-78-2" name="__codelineno-78-2" href="#__codelineno-78-2"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-78-3" name="__codelineno-78-3" href="#__codelineno-78-3"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">'[{"op":"replace","path":"/spec/runnerGroups/0/workerImage","value":"&lt;previous-digest&gt;"}]'</span>
 </code></pre></div>
 <hr />
 <h2 id="post-upgrade-validation">Post-Upgrade Validation<a class="headerlink" href="#post-upgrade-validation" title="Permanent link">&para;</a></h2>
 <p>After any component upgrade:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="c1"># All ActionsGateway CRs healthy</span>
-<a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
-<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a>
-<a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a><span class="c1"># Listener sessions restored</span>
-<a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open per namespace and runner_set</span>
-<a id="__codelineno-68-6" name="__codelineno-68-6" href="#__codelineno-68-6"></a>
-<a id="__codelineno-68-7" name="__codelineno-68-7" href="#__codelineno-68-7"></a><span class="c1"># No spike in errors</span>
-<a id="__codelineno-68-8" name="__codelineno-68-8" href="#__codelineno-68-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total, controller_runtime_reconcile_errors_total</span>
-<a id="__codelineno-68-9" name="__codelineno-68-9" href="#__codelineno-68-9"></a>
-<a id="__codelineno-68-10" name="__codelineno-68-10" href="#__codelineno-68-10"></a><span class="c1"># Pod creation latency within SLO</span>
-<a id="__codelineno-68-11" name="__codelineno-68-11" href="#__codelineno-68-11"></a><span class="c1"># Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a><span class="c1"># All ActionsGateway CRs healthy</span>
+<a id="__codelineno-79-2" name="__codelineno-79-2" href="#__codelineno-79-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
+<a id="__codelineno-79-3" name="__codelineno-79-3" href="#__codelineno-79-3"></a>
+<a id="__codelineno-79-4" name="__codelineno-79-4" href="#__codelineno-79-4"></a><span class="c1"># Listener sessions restored</span>
+<a id="__codelineno-79-5" name="__codelineno-79-5" href="#__codelineno-79-5"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open per namespace and runner_set</span>
+<a id="__codelineno-79-6" name="__codelineno-79-6" href="#__codelineno-79-6"></a>
+<a id="__codelineno-79-7" name="__codelineno-79-7" href="#__codelineno-79-7"></a><span class="c1"># No spike in errors</span>
+<a id="__codelineno-79-8" name="__codelineno-79-8" href="#__codelineno-79-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total, controller_runtime_reconcile_errors_total</span>
+<a id="__codelineno-79-9" name="__codelineno-79-9" href="#__codelineno-79-9"></a>
+<a id="__codelineno-79-10" name="__codelineno-79-10" href="#__codelineno-79-10"></a><span class="c1"># Pod creation latency within SLO</span>
+<a id="__codelineno-79-11" name="__codelineno-79-11" href="#__codelineno-79-11"></a><span class="c1"># Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))</span>
 </code></pre></div>
 <p>If a regression is detected within the first 15 minutes after an upgrade, roll back immediately rather than investigating in production.
 Investigate using a non-production environment.</p>
