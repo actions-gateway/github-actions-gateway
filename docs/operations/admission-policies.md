@@ -24,8 +24,7 @@ The matrix distinguishes seven pod classes because their security posture differ
 | **Worker — `restricted`** | AGC | tenant | As above, hardened tenant opt-in |
 | **Worker — `privileged`** | AGC | tenant | As above, escape-hatch tenant opt-in (Docker-in-Docker (DinD), host caps) |
 | **Egress proxy** | GMC | tenant | Long-running per-tenant `Deployment` |
-| **AGC (v1alpha1)** | GMC | tenant | Long-running per-tenant control plane |
-| **AGC (v2alpha1)** | GMC | tenant | As above; adds resource defaults |
+| **AGC** | GMC | tenant | Long-running per-tenant control plane; the GMC gap-fills resource defaults |
 | **GMC manager** | Helm chart | install ns | Long-running cluster control plane |
 
 The worker profile is the tenant's `ActionsGateway.spec.securityProfile` (`baseline` default, `restricted`, or `privileged`); the GMC mirrors it onto the worker pods and the namespace PSA level.
@@ -92,7 +91,7 @@ A "require digest" policy scoped to tenant namespaces is a good way to force ten
 
 **Require CPU/memory requests + limits** — Workers are gap-filled with `500m` CPU / `1Gi` memory as *both* requests and limits when a container sets neither.
 The proxy sets requests+limits.
-**AGC v1alpha1 stamps no resources** — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 `ActionsGateway` (which gap-fills `500m`/`2Gi` requests, `2`/`4Gi` limits) or exempt AGC pods.
+The AGC gets `500m`/`2Gi` requests and `2`/`4Gi` limits unless `ActionsGateway.spec.agcResources` overrides them, so a "require limits" policy admits it.
 The GMC's resources come from the chart's `resources` value, which ships with a sane default (`10m`/`64Mi` request, `500m`/`128Mi` limit).
 
 ## Sample policies

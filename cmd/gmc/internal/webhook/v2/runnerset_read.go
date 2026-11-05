@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/agentidentity"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,8 +21,8 @@ type runnerSetRead struct {
 
 	done       bool
 	err        error
-	v2Gateways agcv2alpha1.ActionsGatewayList
-	sets       agcv2alpha1.RunnerSetList
+	v2Gateways agcv2.ActionsGatewayList
+	sets       agcv2.RunnerSetList
 }
 
 func (r *runnerSetRead) load(ctx context.Context) error {
@@ -31,7 +31,7 @@ func (r *runnerSetRead) load(ctx context.Context) error {
 	}
 	r.done = true
 	if err := r.reader.List(ctx, &r.v2Gateways); err != nil {
-		r.err = fmt.Errorf("list v2alpha1 ActionsGateways: %w", err)
+		r.err = fmt.Errorf("list ActionsGateways: %w", err)
 	} else if err := r.reader.List(ctx, &r.sets); err != nil {
 		r.err = fmt.Errorf("list RunnerSets: %w", err)
 	}

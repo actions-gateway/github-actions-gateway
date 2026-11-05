@@ -130,7 +130,7 @@ That mark was measured (2026-07-29) to be absent on a human-cancelled run and on
 Detail: [§4.2](04-operational-flows.md#which-disruptions-are-recovered-and-which-are-not) and [the experiment](../plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction).
 
 This recovery runs on **both acquisition tiers**.
-It was classic-only until Q417, because the `ScaleSet` protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since `ScaleSet` is the default and the only protocol `v2beta1` exposes.
+It was classic-only until Q417, because the `ScaleSet` protocol provisions its worker fire-and-forget and so never observed the pod's terminal phase — which mattered, since `ScaleSet` is the only protocol `v2` exposes.
 The port records the workflow run on the worker pod and moves detection to the owning reconciler, so the capability survives the `v2.0.0` removal of classic ([plan](../plan/scaleset-eviction-recovery.md), [§4](04-operational-flows.md#on-the-scale-set-tier-q417)).
 
 ### GPU Node Utilization

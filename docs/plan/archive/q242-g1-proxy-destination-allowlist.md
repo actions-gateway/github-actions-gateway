@@ -26,7 +26,7 @@ This design keeps that spirit by deriving **both** surfaces from **one** field (
 
 ## Approach
 
-Add one field to `EgressProxySpec` ([`api/v2alpha1/egressproxy_types.go`](../../../api/v2alpha1/egressproxy_types.go)), alongside the existing `egressPolicyMode` / `managedNetworkPolicy` / `noProxyCIDRs`:
+Add one field to `EgressProxySpec` (`api/v2alpha1/egressproxy_types.go`, deleted by Q1167), alongside the existing `egressPolicyMode` / `managedNetworkPolicy` / `noProxyCIDRs`:
 
 **Two destination forms** — host suffixes (DNS names) **and** CIDR blocks — because real CI dependencies need both: package/module hosts resolve by DNS (`proxy.golang.org`), but internal services are often reachable only by **IP with no internal DNS**, and cloud private API endpoints resolve into known **CIDR ranges** on a private network (e.g.
 GCP Private Google Access → `private.googleapis.com` is `199.36.153.8/30`, `restricted.googleapis.com` `199.36.153.4/30`).

@@ -672,16 +672,10 @@ The GMC also re-checks the emitted policy on a bounded cadence (a fraction of th
 > Supply the ranges in `spec.destinationCIDRs` — allowlisting them under `--allowed-egress-cidrs` first, since that field is platform-gated — or move the pool to an FQDN mode, which carries the host for you.
 > See [troubleshooting](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
-**Deprecated `CiliumFQDN` / `CalicoFQDN`.** Through 1.10 the earlier per-CNI enum values still work on a pool that already stores one: each pins its namesake backend regardless of `--fqdn-policy-backend`, so existing `EgressProxy` objects keep behaving exactly as before, and the admission webhook attaches a warning steering you to `FQDN` + `--fqdn-policy-backend`.
-**A new one is rejected**, whether by a create or by an update that switches a pool onto an alias; re-applying an unmigrated pool unchanged, and migrating it off, are both still admitted.
-Migrate by changing the tenant field to `FQDN` and setting the matching operator backend.
-
-> **They are removed at `v2.0.0`**, alongside `v1alpha1`, `v2alpha1` and classic acquisition.
-> The two values are enum members of `egressPolicyMode` in `actions-gateway.com/v2alpha1` and `v2beta1`; `v2.0.0` removes both versions, and the General Availability (GA) `v2` version that replaces them does not define the values.
-> An API element can only be removed by incrementing the version, never deleted from a version that is still served — which is why these two live exactly as long as `v2beta1` does, and `v2beta1` ends at `v2.0.0` ([decided 2026-09-08](../plan/v2beta1-retirement.md)).
-> An earlier notice put the floor at `v3.0.0`, on the expectation that `v2.0.0` would keep serving `v2beta1`; the reasoning was sound and that expectation changed.
-> **Migrate before upgrading to `v2.0.0`:** one `EgressProxy` still naming an alias fails the conversion for every object in the same request, so it breaks `kubectl get egressproxies` at `v2` cluster-wide.
-> Full reasoning and the coupling to the other clocks: [the deprecation and removal notice](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock).
+**Removed `CiliumFQDN` / `CalicoFQDN`.** The earlier per-CNI enum values were removed at `v2.0.0`: the `v2` CRD's `egressPolicyMode` accepts only `CIDR` and `FQDN`, so the apiserver rejects an alias.
+Through 1.10 each alias pinned its namesake backend regardless of `--fqdn-policy-backend`; the equivalent now is `FQDN` on the tenant field plus the matching operator backend.
+Migrate a pool that still names one before upgrading from 1.x: `v2.0.0` stores it as plain `FQDN`, enforced by whatever `--fqdn-policy-backend` names.
+Reasoning and the pre-upgrade check: [the removal notice](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock).
 
 > **Managed "Cilium" platforms usually do NOT accept the `cilium` backend.** The CRD test is literal: `kubectl get crd ciliumnetworkpolicies.cilium.io` must succeed.
 > **GKE Dataplane V2's managed Cilium does not install it** (dropped since GKE 1.21.5-gke.1300) — use `--fqdn-policy-backend=gke` there, not `cilium`.
@@ -1222,7 +1216,7 @@ kubectl edit priorityclassallowlist gmc-priorityclass-allowlist
 ```
 
 ```yaml
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: PriorityClassAllowlist
 metadata:
   name: gmc-priorityclass-allowlist
@@ -1324,7 +1318,7 @@ Unlike a webhook, the policy also **re-validates every write to an existing obje
 The flip side: removing a class that stored objects still name freezes every later spec-changing write to them.
 Deletion-only updates (deletionTimestamp set, spec unchanged — the finalizer-removal write teardown depends on) are exempt via the policy's `exclude-deletion-only-updates` match condition (Q518), so narrowing can freeze a live object but can no longer wedge its deletion — see [Narrowing the allowlist](#narrowing-the-allowlist-drain-stored-references-first).
 
-The policy matches the v2 kinds too (Q323): `runnersets` (`priorityTiers[].priorityClassName`) and `runnertemplates` (`podTemplate.spec.priorityClassName`), across v2alpha1 and v2beta1.
+The policy matches the v2 kinds too (Q323): `runnersets` (`priorityTiers[].priorityClassName`) and `runnertemplates` (`podTemplate.spec.priorityClassName`), at `v2`.
 Those kinds are already gated by `failurePolicy: Fail` GMC webhooks, so for them the policy is defense-in-depth — coverage while the webhook is unavailable or bypassed, plus the stored-object re-validation a webhook cannot provide.
 `ClusterRunnerTemplate` is exempt (cluster-scoped, platform-authored — its writers can create `PriorityClass` objects anyway).
 

@@ -363,7 +363,7 @@ ROLLOUT_EXIT=1
 E2E_ROUTE_VAR=1
 run_main
 check "a failed GMC rollout fails the bring-up" 1 "${MAIN_RC}"
-check_not_contains "never applies the tenant without the conversion webhook" \
+check_not_contains "never applies the tenant without the validating webhooks" \
 	"apply -k" "$(cat "${CALL_LOG}")"
 check_not_contains "never routes e2e jobs when GMC is down" \
 	"variable set" "$(cat "${CALL_LOG}")"

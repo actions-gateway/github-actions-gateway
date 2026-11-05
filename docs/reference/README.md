@@ -13,24 +13,8 @@ The reference answers "what does this field do?", not "which objects do I need?"
 
 ## Which API versions this covers
 
-**`actions-gateway.com/v2` only**: the General Availability (GA) version, the storage version from 1.10, and the one every new install should use.
-
-The cluster serves four versions today, and the other three are removed in v2.0.0:
-
-| Version | Status | Where to go |
-|---|---|---|
-| `actions-gateway.com/v2` | Served, storage version, current | [api.md](api.md) |
-| `actions-gateway.com/v2beta1` | Served, removed in v2.0.0 | [Deprecations & the v2.0.0 removal](../operations/v1alpha1-deprecation.md) |
-| `actions-gateway.com/v2alpha1` | Deprecated, removed in v2.0.0 | [Deprecations & the v2.0.0 removal](../operations/v1alpha1-deprecation.md) |
-| `actions-gateway.github.com/v1alpha1` | Deprecated, removed in v2.0.0 | [Migrate v1 → v2](../operations/migration-v1-to-v2.md) |
-
-A version on its way out documented field by field beside the current one reads as a supported choice.
-`v2beta1`'s shape is `v2`'s apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `egressPolicyMode` values, and `v2alpha1`'s adds two RunnerSet fields the conversion webhook round-trips.
-Operators still on either deprecated version get their field docs from `kubectl explain`, which reads the schema the running cluster serves:
-
-```bash
-kubectl explain actionsgateway.spec --api-version=actions-gateway.com/v2alpha1
-```
+**`actions-gateway.com/v2` only**: the General Availability (GA) version, and the only version the cluster serves.
+`v2.0.0` removed `v2beta1`, `v2alpha1` and `actions-gateway.github.com/v1alpha1` ([removal notice](../operations/v1alpha1-deprecation.md)).
 
 ## How it stays current
 

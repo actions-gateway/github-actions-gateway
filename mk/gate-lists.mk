@@ -47,7 +47,7 @@
 CHECK_FAST_GATES := roadmap-check \
                     plan-index-check no-plan-refs-check \
                     go-version-check license-header-check conflict-markers-check \
-                    v2-api-sync-check test-cache-inputs-check \
+                    test-cache-inputs-check \
                     path-filters-check gate-lists-check shellcheck \
                     errexit-prologue-check \
                     actionlint uses-pinned-check cosign-pin-check \
@@ -298,7 +298,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  fetch/prepull-manifest-images-test fetch/backfill-image-content-test \
                  manifest/check-promql-test \
                  pages/verify-pages-artifact-test pages/verify-pages-live-test \
-                 go/check-codegen-drift-test go/check-v2-api-sync-test \
+                 go/check-codegen-drift-test \
                  go/check-test-cache-inputs-test \
                  go/coverage-test go/go-lint-scope-test go/go-test-run-filter-test \
                  go/go-test-integration-test \

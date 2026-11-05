@@ -21,7 +21,7 @@ A v2beta1 (Q74) input alongside [Q242](archive/q242-g1-proxy-destination-allowli
 
 ## The problem: the enum conflates intent with mechanism
 
-`EgressProxy.spec.egressPolicyMode` today is a three-value enum ([`api/v2alpha1/egressproxy_types.go`](../../api/v2alpha1/egressproxy_types.go)):
+`EgressProxy.spec.egressPolicyMode` today is a three-value enum (`api/v2alpha1/egressproxy_types.go`, deleted by Q1167):
 
 ```go
 // +kubebuilder:validation:Enum=CIDR;CiliumFQDN;CalicoFQDN

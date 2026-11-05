@@ -10,7 +10,7 @@ For day-2 operations after onboarding, see the [Runbook](runbook.md).
 !!! tip "New tenants: onboard on the v2 API"
     Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
     At the gateway step, the recommended shape for a **new** tenant is the **v2 API** at `actions-gateway.com/v2` — see [v2 API](#v2-api-multiple-gateways-per-namespace) below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
-    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**, along with `v2alpha1`, `v2beta1` and the Classic protocol; already on v1?
+    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**, along with the Classic protocol; already on v1?
     [`gag-migrate`](migration-v1-to-v2.md) moves you across.
 
 ---
@@ -764,8 +764,6 @@ Onboarding is complete when:
 
 > **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2`** — the General Availability (GA) version, ScaleSet-only, the storage version since 1.10, and the version every **new** tenant should use.
 > It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
-> `v2alpha1` is also still served so objects stored at it still read; its [`acquisitionProtocol`](#acquisition-protocol-v2alpha1-only) field is accepted and ignored.
-> `v2alpha1` is itself deprecated and [removed at `v2.0.0`](v1alpha1-deprecation.md), and so is `v2beta1`: it stays served until then with the same shape as `v2` apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so a tenant already on it moves by re-applying at `v2`.
 > Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
 The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)).
@@ -881,7 +879,7 @@ The namespace `ResourceQuota` now has to hold both pools at their `maxReplicas`,
 ### Job acquisition, and how labels route
 
 On `v2` there is nothing to choose: every `RunnerSet` acquires jobs with the **runner-scale-set message-queue protocol** — one listener session per set, capacity-gated assignment, and a full-runner worker.
-It is the only protocol `v2` and `v2beta1` serve, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).
+It is the only protocol `v2` serves, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).
 
 The rules that follow from it, and the ones most likely to bite when you author a set by hand:
 
@@ -897,13 +895,6 @@ The rules that follow from it, and the ones most likely to bite when you author 
   On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because `DistributedTask.AllowRunnerScaleSetCustomLabels` is off.
 
 This is the same routing ARC scale sets use, so workflows migrating from ARC carry their `runs-on` lines across unedited — see [Migrating from ARC](migration-from-arc.md#job-routing-a-11-map).
-
-#### Acquisition protocol: `v2alpha1` only
-
-`v2alpha1` still carries the `spec.acquisitionProtocol` and `spec.maxListeners` fields that `v2beta1` and `v2` dropped, so an object stored at `v2alpha1` still reads.
-Nothing reads either field: every set acquires through a scale set named after its first `runnerLabels` entry, whatever `acquisitionProtocol` says, and `maxListeners` is ignored.
-A set written `Classic` before this release is covered by the [upgrade note](upgrade.md#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol).
-Both fields go with `v2alpha1` at `v2.0.0` ([removal](v1alpha1-deprecation.md)), so author new sets on `v2`.
 
 ### Bind a runner set to a GitHub runner group
 

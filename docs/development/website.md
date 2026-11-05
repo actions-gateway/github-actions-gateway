@@ -62,7 +62,7 @@ They share one geometry rule in [`extra.css`](../stylesheets/extra.css) and diff
 
 | Badge | Says | Where the fact lives |
 |---|---|---|
-| `gag-v2-badge` | needs the `v2beta1` API | the bullet, hand-written |
+| `gag-v2-badge` | needs the `v2` API | the bullet, hand-written |
 | `gag-maturity-badge` | the API shape is still under its first stability contract | the bullet, hand-written |
 | `gag-release-chip` | the release this roadmap item blocks | `docs/queue/`, injected at build time |
 | `gag-tier-badge` | reaches only one acquisition tier | the bullet, bound to a backlog row |

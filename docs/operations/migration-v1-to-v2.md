@@ -1,25 +1,21 @@
-# Migrating a tenant from the v1alpha1 to the v2alpha1 API
+# Migrating a tenant from the v1alpha1 API to the v2 API
 
 > **Audience:** Platform engineer, Tenant operator
 
-The v2 API (`actions-gateway.com`) replaces the monolithic `v1alpha1` `ActionsGateway` + `RunnerGroup` shape with a decomposed set of kinds — `ActionsGateway`, `EgressProxy`, `RunnerTemplate`/`ClusterRunnerTemplate`, and `RunnerSet`.
-The two API groups are **served side by side**: nothing forces a tenant onto v2, and v1 keeps working until you migrate it.
-Because one v1 object fans out into several v2 objects, the move is a tool-assisted **fan-out on create**, not an automatic conversion — see the [design rationale](../design/appendix-h-v2-api-decomposition.md#h11-migration-v2-tool-assisted).
+The v2 API (`actions-gateway.com`) replaces the monolithic `v1alpha1` `ActionsGateway` + `RunnerGroup` shape with a decomposed set of kinds: `ActionsGateway`, `EgressProxy`, `RunnerTemplate`/`ClusterRunnerTemplate`, and `RunnerSet`.
+Because one v1 object fans out into several v2 objects, the move is a tool-assisted **fan-out on create**, not an automatic conversion; see the [design rationale](../design/appendix-h-v2-api-decomposition.md#h11-migration-v2-tool-assisted).
 
-This guide covers running the `gag-migrate` tool: dry-run → review → `--apply`, the coexistence/rollback story, and the post-migration teardown.
+!!! warning "Run this guide on a 1.x release, before upgrading to `v2.0.0`"
+    `v2.0.0` removes `v1alpha1` and the `v1alpha1` to v2 fan-out with it: its `gag-migrate` carries only `storage-version`, and a v1 object left in the cluster is not reconciled ([removal notice](v1alpha1-deprecation.md)).
+    The steps below run with the `gag-migrate` of a 1.x release (1.10 or earlier), against a cluster that still runs the 1.x controllers.
+
+This guide covers running that tool: dry-run, review, `--apply`, the coexistence and rollback story, and the post-migration teardown.
 
 ## Why upgrade to v2
 
-v2 is **opt-in**.
-It is served at three versions: **`v2beta1`** (the graduated, ScaleSet-only hub version), **`v2`** (the GA version, storage from 1.10), and **`v2alpha1`** (deprecated, served as this tool's on-ramp).
-`gag-migrate` lands v1 RunnerGroups on **`v2alpha1`** so a migrated set keeps the Classic protocol it was registered under during the deprecation window; a tenant then moves to `v2beta1` (a lossless, apiserver-side conversion) once it no longer needs Classic.
-Multi-label matching is not a reason to stay: `v2beta1` registers every `runnerLabel` on the scale set.
-Because `v2alpha1` is deprecated, the apiserver warns on every `v2alpha1` read or write, including the objects `gag-migrate` applies.
-The warning is advisory and blocks nothing; it clears when the tenant moves to `v2beta1`.
-[`v1alpha1` warns the same way](upgrade.md#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns), so a tenant mid-migration sees a notice on both sides until v1 is decommissioned.
-Detail: [upgrade.md](upgrade.md#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns). v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one CR decomposed into several kinds, a tool-assisted fan-out).
-`v1alpha1` stays fully supported until it is [removed at `v2.0.0`](v1alpha1-deprecation.md), which also removes `v2alpha1` and Classic, so treat the `v2alpha1` landing spot as a way station and `v2beta1` as the destination.
-Migrate a tenant when one of these is worth that trade-off.
+A 1.x `gag-migrate` lands v1 RunnerGroups on `v2alpha1`, so a migrated set keeps the Classic protocol it was registered under; the set then moves to the GA `v2` version before the upgrade to `v2.0.0`, which serves `v2` alone and has no Classic protocol.
+Moving the objects is covered in [upgrade.md](upgrade.md). v2 is **not a drop-in replacement** (new API group `actions-gateway.com`, one CR decomposed into several kinds, a tool-assisted fan-out).
+Multi-label matching is not a reason to stay on Classic: `v2` registers every `runnerLabel` on the scale set.
 
 **New capabilities — no v1 equivalent:**
 
@@ -32,13 +28,11 @@ Migrate a tenant when one of these is worth that trade-off.
 - **Per-gateway managed right-sizing.** `ActionsGateway.spec.agcAutoscaling` has the GMC stamp a `VerticalPodAutoscaler` next to the AGC `Deployment` so an autoscaler sizes its requests instead of you tuning `agcResources` by hand.
   Opt-in, recommendation-only by default, and it composes with `agcResources` rather than overriding it. v1 has no equivalent field ([tenant-onboarding](tenant-onboarding.md#letting-an-autoscaler-size-the-agc-agcautoscaling)).
 - **DNS-aware egress policy.** `EgressProxy.egressPolicyMode` adds an `FQDN` intent (default `CIDR`) to allowlist GitHub by hostname; the operator picks the enforcement mechanism with the GMC `--fqdn-policy-backend` flag (`none`|`cilium`|`calico`|`gke`).
-  The earlier per-CNI `CiliumFQDN` / `CalicoFQDN` values are accepted-but-deprecated (Q245) and **are** removed by `v2.0.0`, along with both versions that define them ([why](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock)).
+  The earlier per-CNI `CiliumFQDN` / `CalicoFQDN` values are removed at `v2.0.0`, along with the versions that define them ([why](v1alpha1-deprecation.md#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock)).
   Migrate any `EgressProxy` naming one before upgrading to `v2.0.0`: the GA `v2` version cannot represent it, so `v2.0.0` stores it as plain `FQDN`.
 
 **Quality-of-life and hardening — batched into the one schema break:**
 
-- **Higher default concurrency.** `maxListeners` defaults to `10` (v1: `1`), so job pickup is not serialized per group.
-  The migration tool pins each set to its v1 *effective* value, so an existing tenant's ceiling does not jump silently.
 - **Better `kubectl` ergonomics.** Additional printer columns (Ready, profile, active sessions) and short names.
 - **Safer by construction.** `githubURL` is immutable (CEL) — no accidental rebinding of a running gateway's org — and secret references are name-only, dropping v1's cross-namespace `SecretReference.namespace` footgun.
 - **Fewer fail-closed webhooks.** Checks that needed a validating webhook on Kubernetes ≤ 1.30 move to structural/CEL, so admission has fewer single points of failure ([§H.15](../design/appendix-h-v2-api-decomposition.md#h15-other-breaking-changes-worth-batching)).
@@ -64,7 +58,7 @@ It also aligns the Q147 / domain-renamed namespace markers — adding the `actio
 The fan-out preserves v1 behavior and weakens no security property:
 
 - **Egress stays proxied.** The tool always emits an `EgressProxy` and always sets `defaultProxyRef`, so a migrated tenant never silently falls through to direct egress (which would lose its per-tenant egress-IP attribution).
-- **Concurrency ceiling preserved.** v1 defaulted `maxListeners` to 1; v2 defaults to 10.
+- **Concurrency ceiling preserved.** v1 defaulted `maxListeners` to 1; `v2alpha1` defaulted it to 10.
   The tool pins each `RunnerSet.maxListeners` to the v1 *effective* value, so the ceiling does not silently jump.
 - **No secret is read.** Only the GitHub App Secret **name** is carried across — from v1's `spec.githubAppRef.name` into v2's `spec.credentials.githubApp.name` (Q196) — and the tool never reads, prints, or copies the credential Secret's contents.
 - **The eligibility grant is never invented.** A tenant migrating to `securityProfile: privileged` keeps the *existing* platform grant (domain-migrated); if the namespace holds no grant, the tool warns rather than self-granting one.
@@ -334,7 +328,7 @@ Prefer the ordered teardown above; this is a recovery path, not an alternative.
 
 If you later retire the tenant entirely, remember that any `ClusterRunnerTemplate` the migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by its provenance label ([detail](#privileged-worker-shapes-dind-become-cluster-scoped-templates)).
 
-The legacy `actions-gateway.github.com/*` namespace markers and finalizers are retired cluster-wide when `v1alpha1` is removed at **`v2.0.0`** (see the [deprecation and removal notice](v1alpha1-deprecation.md)); until then the dual-read window keeps both spellings working.
+The legacy `actions-gateway.github.com/*` namespace markers and finalizers are retired cluster-wide when `v1alpha1` is removed at **`v2.0.0`** (see the [removal notice](v1alpha1-deprecation.md)); until then the dual-read window keeps both spellings working.
 
 ## Troubleshooting
 

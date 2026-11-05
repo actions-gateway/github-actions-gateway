@@ -12,7 +12,7 @@ import (
 )
 
 // TestV2Installed_PresentAgainstApiserver asserts the positive path of the
-// Q228 startup gate: the shared suite installs the actions-gateway.com/v2alpha1
+// Q228 startup gate: the shared suite installs the actions-gateway.com/v2
 // CRDs, so V2Installed must report true against that apiserver's discovery
 // — the signal main() uses to register the v2 controllers and enable the IPRange
 // v2 refresh passes.
@@ -27,5 +27,5 @@ func TestV2Installed_PresentAgainstApiserver(t *testing.T) {
 
 	installed, err := controller.V2Installed(mgr.GetRESTMapper())
 	require.NoError(t, err)
-	require.True(t, installed, "expected v2alpha1 CRDs to be reported present when installed")
+	require.True(t, installed, "expected v2 CRDs to be reported present when installed")
 }

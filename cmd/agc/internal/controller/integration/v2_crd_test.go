@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -18,7 +16,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -39,16 +36,15 @@ func serverMinor(t *testing.T) int {
 	return n
 }
 
-// These tests prove the v2alpha1 (actions-gateway.com) AGC kinds install into the
-// real apiserver and round-trip alongside v1alpha1 (Q149, M1 exit criterion), and
-// that the CEL/structural validation behaves under real-apiserver semantics —
-// defaulting, the gatewayRef selectable field, and CEL rejections that only the
-// apiserver applies. No reconciler is exercised: M1 is the API foundation only.
+// These tests prove the v2 (actions-gateway.com) AGC kinds install into the real
+// apiserver and round-trip, and that the CEL/structural validation behaves under
+// real-apiserver semantics — defaulting, the gatewayRef selectable field, and CEL
+// rejections that only the apiserver applies. No reconciler is exercised.
 
-func newV2RunnerTemplate(ns, name string) *agcv2alpha1.RunnerTemplate {
-	return &agcv2alpha1.RunnerTemplate{
+func newV2RunnerTemplate(ns, name string) *agcv2.RunnerTemplate {
+	return &agcv2.RunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: agcv2alpha1.RunnerTemplateSpec{
+		Spec: agcv2.RunnerTemplateSpec{
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{Name: "runner", Image: "runner:latest"}},
@@ -59,22 +55,18 @@ func newV2RunnerTemplate(ns, name string) *agcv2alpha1.RunnerTemplate {
 	}
 }
 
-func newV2RunnerSet(ns, name, gateway, template string) *agcv2alpha1.RunnerSet {
-	return &agcv2alpha1.RunnerSet{
+func newV2RunnerSet(ns, name, gateway, template string) *agcv2.RunnerSet {
+	return &agcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Spec: agcv2alpha1.RunnerSetSpec{
-			GatewayRef:  agcv2alpha1.ObjectRef{Name: gateway},
-			TemplateRef: &agcv2alpha1.ObjectRef{Name: template},
-			// Pin Classic explicitly: the default is ScaleSet (Q264 P5), which forbids
-			// this fixture's two labels, and these CRD/reconciler tests exercise the
-			// classic path. Tests asserting the new default omit or override this field.
-			AcquisitionProtocol: agcv2alpha1.AcquisitionProtocolClassic,
-			RunnerLabels:        []string{"self-hosted", "linux"},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: gateway},
+			TemplateRef:  &agcv2.ObjectRef{Name: template},
+			RunnerLabels: []string{"self-hosted", "linux"},
 		},
 	}
 }
 
-func TestV2_RunnerSet_RoundTripAndDefaulting(t *testing.T) {
+func TestV2_RunnerSet_RoundTrip(t *testing.T) {
 	const ns = "v2-runnerset-rt"
 	createNSForAGC(t, ns)
 
@@ -82,11 +74,9 @@ func TestV2_RunnerSet_RoundTripAndDefaulting(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
 
-	var got agcv2alpha1.RunnerSet
+	var got agcv2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
 
-	// maxListeners defaults to 10 in v2 (was 1 in v1alpha1) — applied by the apiserver.
-	assert.Equal(t, int32(10), got.Spec.MaxListeners, "maxListeners should default to 10")
 	assert.Equal(t, "acme", got.Spec.GatewayRef.Name)
 	assert.Equal(t, "default", got.Spec.TemplateRef.Name)
 }
@@ -105,9 +95,8 @@ func TestV2_RunnerSet_GatewayRefSelectableField(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, b))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, a); _ = k8sClient.Delete(ctx, b) })
 
-	// The CRD declares spec.gatewayRef.name a selectable field (KEP-4358) at v2, the
-	// version the AGC watches, so the apiserver filters server-side — the mechanism
-	// M3b's AGC watch-scoping relies on. v2alpha1 does not declare it (RunnerSet's godoc).
+	// The CRD declares spec.gatewayRef.name a selectable field (KEP-4358), so the
+	// apiserver filters server-side — the mechanism the AGC's watch scoping relies on.
 	var list agcv2.RunnerSetList
 	require.NoError(t, k8sClient.List(ctx, &list,
 		client.InNamespace(ns),
@@ -136,7 +125,7 @@ func TestV2_RunnerSet_MaxWorkersMustMatchLastTier(t *testing.T) {
 	rs := newV2RunnerSet(ns, "tiers", "acme", "default")
 	mw := int32(5) // does not match the last tier threshold (10)
 	rs.Spec.MaxWorkers = &mw
-	rs.Spec.PriorityTiers = []agcv2alpha1.PriorityTier{{PriorityClassName: "pc", Threshold: 10}}
+	rs.Spec.PriorityTiers = []agcv2.PriorityTier{{PriorityClassName: "pc", Threshold: 10}}
 	err := k8sClient.Create(ctx, rs)
 	require.Error(t, err)
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxWorkers != last tier, got %v", err)
@@ -152,11 +141,11 @@ func TestV2_RunnerSet_ScaleUpRoundTrip(t *testing.T) {
 
 	rs := newV2RunnerSet(ns, "linux", "acme", "default")
 	burst := int32(20)
-	rs.Spec.ScaleUp = &agcv2alpha1.ScaleUpRateLimit{MaxPerSecond: 10, Burst: &burst}
+	rs.Spec.ScaleUp = &agcv2.ScaleUpRateLimit{MaxPerSecond: 10, Burst: &burst}
 	require.NoError(t, k8sClient.Create(ctx, rs))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
 
-	var got agcv2alpha1.RunnerSet
+	var got agcv2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
 	require.NotNil(t, got.Spec.ScaleUp, "scaleUp must round-trip")
 	assert.Equal(t, int32(10), got.Spec.ScaleUp.MaxPerSecond)
@@ -165,10 +154,10 @@ func TestV2_RunnerSet_ScaleUpRoundTrip(t *testing.T) {
 
 	// Omitting burst is valid: it stays nil (the AGC defaults it to maxPerSecond).
 	rs2 := newV2RunnerSet(ns, "linux2", "acme", "default")
-	rs2.Spec.ScaleUp = &agcv2alpha1.ScaleUpRateLimit{MaxPerSecond: 5}
+	rs2.Spec.ScaleUp = &agcv2.ScaleUpRateLimit{MaxPerSecond: 5}
 	require.NoError(t, k8sClient.Create(ctx, rs2))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs2) })
-	var got2 agcv2alpha1.RunnerSet
+	var got2 agcv2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux2"}, &got2))
 	require.NotNil(t, got2.Spec.ScaleUp)
 	assert.Equal(t, int32(5), got2.Spec.ScaleUp.MaxPerSecond)
@@ -183,7 +172,7 @@ func TestV2_RunnerSet_ScaleUpRejectsZeroRate(t *testing.T) {
 	createNSForAGC(t, ns)
 
 	rs := newV2RunnerSet(ns, "linux", "acme", "default")
-	rs.Spec.ScaleUp = &agcv2alpha1.ScaleUpRateLimit{MaxPerSecond: 0}
+	rs.Spec.ScaleUp = &agcv2.ScaleUpRateLimit{MaxPerSecond: 0}
 	err := k8sClient.Create(ctx, rs)
 	require.Error(t, err)
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxPerSecond: 0, got %v", err)
@@ -194,16 +183,15 @@ func TestV2_RunnerSet_ScaleUpRejectsZeroRate(t *testing.T) {
 // carrying neither — empty, or extended resources only — actuates nothing while
 // status.sizingProfileState still reports Active. The CEL rule makes that state
 // unreachable at admission. It must not over-tighten: declaring one of the two
-// is a legitimate envelope (the other resource keeps the template's ask), and
-// both served versions carry the rule.
+// is a legitimate envelope (the other resource keeps the template's ask).
 func TestV2_RunnerSet_NodeShareAllocatableRequiresCPUOrMemory(t *testing.T) {
 	const ns = "v2-runnerset-nodeshare-envelope"
 	createNSForAGC(t, ns)
 
-	nodeShare := func(alloc corev1.ResourceList) *agcv2alpha1.WorkerSizing {
-		return &agcv2alpha1.WorkerSizing{
-			Profile:   agcv2alpha1.SizingProfileNodeShare,
-			NodeShare: &agcv2alpha1.NodeShareSizing{Allocatable: alloc, WorkersPerNode: 4},
+	nodeShare := func(alloc corev1.ResourceList) *agcv2.WorkerSizing {
+		return &agcv2.WorkerSizing{
+			Profile:   agcv2.SizingProfileNodeShare,
+			NodeShare: &agcv2.NodeShareSizing{Allocatable: alloc, WorkersPerNode: 4},
 		}
 	}
 
@@ -227,87 +215,20 @@ func TestV2_RunnerSet_NodeShareAllocatableRequiresCPUOrMemory(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, cpuOnly),
 		"an envelope declaring only cpu divides cpu and leaves memory to the template")
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, cpuOnly) })
-
-	betaGPUOnly := &agcv2beta1.RunnerSet{
-		ObjectMeta: metav1.ObjectMeta{Name: "beta-gpu-only-envelope", Namespace: ns},
-		Spec: agcv2beta1.RunnerSetSpec{
-			GatewayRef:   agcv2beta1.ObjectRef{Name: "acme"},
-			TemplateRef:  &agcv2beta1.ObjectRef{Name: "default"},
-			RunnerLabels: []string{"self-hosted"},
-			Sizing: &agcv2beta1.WorkerSizing{
-				Profile: agcv2beta1.SizingProfileNodeShare,
-				NodeShare: &agcv2beta1.NodeShareSizing{
-					Allocatable:    corev1.ResourceList{"nvidia.com/gpu": resource.MustParse("4")},
-					WorkersPerNode: 4,
-				},
-			},
-		},
-	}
-	err = k8sClient.Create(ctx, betaGPUOnly)
-	require.Error(t, err)
-	assert.True(t, apierrors.IsInvalid(err), "v2beta1 must carry the same rule, got %v", err)
 }
 
-func TestV2_RunnerSet_AcquisitionProtocolDefaultsScaleSet(t *testing.T) {
-	const ns = "v2-runnerset-acqproto-default"
-	createNSForAGC(t, ns)
-
-	// Omit acquisitionProtocol entirely — as of Q264 P5 the apiserver must default it
-	// to ScaleSet.
-	rs := newV2RunnerSet(ns, "linux", "acme", "default")
-	rs.Spec.AcquisitionProtocol = "" // clear the helper's Classic pin to test the default
-	rs.Spec.RunnerLabels = []string{"self-hosted"}
-	require.NoError(t, k8sClient.Create(ctx, rs))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
-
-	var got agcv2alpha1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
-	assert.Equal(t, agcv2alpha1.AcquisitionProtocolScaleSet, got.Spec.AcquisitionProtocol,
-		"acquisitionProtocol must default to ScaleSet (Q264 P5)")
-}
-
-// TestV2_RunnerSet_BareMultiLabelAccepted is the inverse of the rule Q264 P5's default
-// flip left behind: a runner set that omits acquisitionProtocol AND declares more than
-// one runnerLabel used to be rejected, because it defaults to ScaleSet and ScaleSet
-// required exactly one label. Q726 registers every label on the scale set, so the bare
-// multi-label shape — the one an ARC user's runs-on array maps onto — now admits, and
-// pinning Classic is no longer the price of multi-label matching.
-func TestV2_RunnerSet_BareMultiLabelAccepted(t *testing.T) {
-	const ns = "v2-runnerset-acqproto-baremulti"
-	createNSForAGC(t, ns)
-
-	bare := newV2RunnerSet(ns, "multi", "acme", "default") // two labels
-	bare.Spec.AcquisitionProtocol = ""                     // omit → defaults to ScaleSet
-	require.NoError(t, k8sClient.Create(ctx, bare),
-		"a bare multi-label set must admit and default to ScaleSet (Q726)")
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, bare) })
-
-	var got agcv2alpha1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "multi"}, &got))
-	assert.Equal(t, agcv2alpha1.AcquisitionProtocolScaleSet, got.Spec.AcquisitionProtocol,
-		"the multi-label set must have taken the ScaleSet default, not been steered to Classic")
-	assert.Equal(t, []string{"self-hosted", "linux"}, got.Spec.RunnerLabels)
-
-	// The same labels are still accepted on the deprecated Classic path.
-	classic := newV2RunnerSet(ns, "multi-classic", "acme", "default") // helper pins Classic
-	require.NoError(t, k8sClient.Create(ctx, classic))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, classic) })
-}
-
-func TestV2_RunnerSet_ScaleSetAcceptsMultiLabel(t *testing.T) {
+func TestV2_RunnerSet_AcceptsMultiLabel(t *testing.T) {
 	const ns = "v2-runnerset-acqproto-label"
 	createNSForAGC(t, ns)
 
-	// An explicit ScaleSet set with more than one runnerLabel: every label is
+	// A set with more than one runnerLabel: every label is
 	// registered on the scale set, the first one naming it (Q726).
 	multi := newV2RunnerSet(ns, "multi", "acme", "default") // labels: self-hosted, linux
-	multi.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
 	require.NoError(t, k8sClient.Create(ctx, multi))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, multi) })
 
 	// One label remains the ordinary shape.
 	single := newV2RunnerSet(ns, "single", "acme", "default")
-	single.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
 	single.Spec.RunnerLabels = []string{"scale-set-linux"}
 	require.NoError(t, k8sClient.Create(ctx, single))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, single) })
@@ -316,14 +237,12 @@ func TestV2_RunnerSet_ScaleSetAcceptsMultiLabel(t *testing.T) {
 	// does the no-whitespace-or-commas pattern on EVERY item rather than only the
 	// first — a list validation is the easiest thing to relax past its intent.
 	none := newV2RunnerSet(ns, "no-labels", "acme", "default")
-	none.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
 	none.Spec.RunnerLabels = []string{}
 	err := k8sClient.Create(ctx, none)
 	require.Error(t, err)
 	assert.True(t, apierrors.IsInvalid(err), "an empty runnerLabels should be Invalid, got %v", err)
 
 	comma := newV2RunnerSet(ns, "comma-label", "acme", "default")
-	comma.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
 	comma.Spec.RunnerLabels = []string{"linux", "gpu,big"}
 	err = k8sClient.Create(ctx, comma)
 	require.Error(t, err)
@@ -331,95 +250,27 @@ func TestV2_RunnerSet_ScaleSetAcceptsMultiLabel(t *testing.T) {
 		"a comma in a NON-first label should be Invalid, got %v", err)
 }
 
-// TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub is Q398's regression guard,
-// outliving the rule that caused it. A Classic multi-label set was STORED as a v2beta1
-// hub object, and v2beta1 once rejected more than one runnerLabel — so every
-// unqualified `kubectl edit/patch/apply`, which then addressed v2beta1, failed
-// on a field that had nothing to do with labels. Q726 removed the rule outright, which
-// removes the cause; this keeps asserting the symptom is gone, because the shape that
-// produced it (a hub object holding a spoke-authored value) is permanent and the next
-// hub-wide rule would bring it straight back.
-func TestV2_RunnerSet_ClassicMultiLabelEditableThroughHub(t *testing.T) {
-	const ns = "v2-runnerset-hub-edit"
+// TestV2_RunnerSet_MultiLabelCreateAccepted is the shape Q726 exists for: an ARC
+// workflow's `runs-on: [linux, gpu]` expressed directly on a runner set.
+func TestV2_RunnerSet_MultiLabelCreateAccepted(t *testing.T) {
+	const ns = "v2-runnerset-multi"
 	createNSForAGC(t, ns)
 
-	// Author on v2alpha1 — the only version that admits the multi-label shape.
-	classic := newV2RunnerSet(ns, "ci", "acme", "default") // Classic; labels: self-hosted, linux
-	require.NoError(t, k8sClient.Create(ctx, classic))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, classic) })
-
-	key := types.NamespacedName{Namespace: ns, Name: "ci"}
-
-	// Read/modify/write through the hub, which is what an unqualified kubectl does.
-	var hub agcv2beta1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, key, &hub))
-	require.Equal(t, []string{"self-hosted", "linux"}, hub.Spec.RunnerLabels,
-		"the stored hub object carries the Classic set's multi-label shape")
-
-	hub.Spec.MaxWorkers = ptr.To(int32(7))
-	require.NoError(t, k8sClient.Update(ctx, &hub),
-		"an unqualified edit of an unrelated field must not fail on runnerLabels (Q398)")
-
-	// And the labels themselves are now editable through the hub, which is what Q726
-	// changed: before it, this write was the one ratcheting could not forgive.
-	var again agcv2beta1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, key, &again))
-	require.NotNil(t, again.Spec.MaxWorkers)
-	assert.Equal(t, int32(7), *again.Spec.MaxWorkers, "the unrelated edit should have landed")
-	again.Spec.RunnerLabels = []string{"self-hosted", "linux", "arm64"}
-	require.NoError(t, k8sClient.Update(ctx, &again),
-		"changing runnerLabels through v2beta1 must now be accepted (Q726)")
-
-	// The v2alpha1 view is unharmed: protocol intact, both edits visible.
-	var spoke agcv2alpha1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, key, &spoke))
-	assert.Equal(t, agcv2alpha1.AcquisitionProtocolClassic, spoke.Spec.AcquisitionProtocol,
-		"a hub-side edit must not re-protocol the spoke object")
-	assert.Equal(t, []string{"self-hosted", "linux", "arm64"}, spoke.Spec.RunnerLabels)
-	require.NotNil(t, spoke.Spec.MaxWorkers)
-	assert.Equal(t, int32(7), *spoke.Spec.MaxWorkers)
-}
-
-// TestV2beta1_RunnerSet_MultiLabelCreateAccepted is the shape Q726 exists for: an ARC
-// workflow's `runs-on: [linux, gpu]` expressed directly on the graduated version, with
-// no acquisitionProtocol lever to pull and no v2alpha1 Classic detour.
-func TestV2beta1_RunnerSet_MultiLabelCreateAccepted(t *testing.T) {
-	const ns = "v2beta1-runnerset-multi"
-	createNSForAGC(t, ns)
-
-	multi := &agcv2beta1.RunnerSet{
+	multi := &agcv2.RunnerSet{
 		ObjectMeta: metav1.ObjectMeta{Name: "multi", Namespace: ns},
-		Spec: agcv2beta1.RunnerSetSpec{
-			GatewayRef:   agcv2beta1.ObjectRef{Name: "acme"},
-			TemplateRef:  &agcv2beta1.ObjectRef{Name: "default"},
+		Spec: agcv2.RunnerSetSpec{
+			GatewayRef:   agcv2.ObjectRef{Name: "acme"},
+			TemplateRef:  &agcv2.ObjectRef{Name: "default"},
 			RunnerLabels: []string{"self-hosted", "linux", "gpu"},
 		},
 	}
 	require.NoError(t, k8sClient.Create(ctx, multi))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, multi) })
 
-	var got agcv2beta1.RunnerSet
+	var got agcv2.RunnerSet
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "multi"}, &got))
 	assert.Equal(t, []string{"self-hosted", "linux", "gpu"}, got.Spec.RunnerLabels,
-		"every declared label must round-trip through the hub in order")
-}
-
-func TestV2_RunnerSet_AcquisitionProtocolImmutable(t *testing.T) {
-	const ns = "v2-runnerset-acqproto-immutable"
-	createNSForAGC(t, ns)
-
-	rs := newV2RunnerSet(ns, "linux", "acme", "default")
-	rs.Spec.RunnerLabels = []string{"scale-set-linux"}
-	rs.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolScaleSet
-	require.NoError(t, k8sClient.Create(ctx, rs))
-	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
-
-	var got agcv2alpha1.RunnerSet
-	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "linux"}, &got))
-	got.Spec.AcquisitionProtocol = agcv2alpha1.AcquisitionProtocolClassic
-	err := k8sClient.Update(ctx, &got)
-	require.Error(t, err)
-	assert.True(t, apierrors.IsInvalid(err), "switching acquisitionProtocol should be Invalid, got %v", err)
+		"every declared label must round-trip in order")
 }
 
 func TestV2_RunnerTemplate_RoundTrip(t *testing.T) {
@@ -430,7 +281,7 @@ func TestV2_RunnerTemplate_RoundTrip(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, rt))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, rt) })
 
-	var got agcv2alpha1.RunnerTemplate
+	var got agcv2.RunnerTemplate
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "default"}, &got))
 	assert.Equal(t, "runner:latest", got.Spec.WorkerImage)
 	require.Len(t, got.Spec.PodTemplate.Spec.Containers, 1)
@@ -440,20 +291,20 @@ func TestV2_RunnerTemplate_ReservedPodFieldsRejected(t *testing.T) {
 	const ns = "v2-runnertemplate-reserved"
 	createNSForAGC(t, ns)
 
-	cases := map[string]func(*agcv2alpha1.RunnerTemplate){
-		"hostPID": func(rt *agcv2alpha1.RunnerTemplate) {
+	cases := map[string]func(*agcv2.RunnerTemplate){
+		"hostPID": func(rt *agcv2.RunnerTemplate) {
 			rt.Spec.PodTemplate.Spec.HostPID = true
 		},
-		"hostNetwork": func(rt *agcv2alpha1.RunnerTemplate) {
+		"hostNetwork": func(rt *agcv2.RunnerTemplate) {
 			rt.Spec.PodTemplate.Spec.HostNetwork = true
 		},
-		"hostIPC": func(rt *agcv2alpha1.RunnerTemplate) {
+		"hostIPC": func(rt *agcv2.RunnerTemplate) {
 			rt.Spec.PodTemplate.Spec.HostIPC = true
 		},
-		"serviceAccountName": func(rt *agcv2alpha1.RunnerTemplate) {
+		"serviceAccountName": func(rt *agcv2.RunnerTemplate) {
 			rt.Spec.PodTemplate.Spec.ServiceAccountName = "smuggled"
 		},
-		"automountServiceAccountToken": func(rt *agcv2alpha1.RunnerTemplate) {
+		"automountServiceAccountToken": func(rt *agcv2.RunnerTemplate) {
 			yes := true
 			rt.Spec.PodTemplate.Spec.AutomountServiceAccountToken = &yes
 		},
@@ -471,9 +322,9 @@ func TestV2_RunnerTemplate_ReservedPodFieldsRejected(t *testing.T) {
 }
 
 func TestV2_ClusterRunnerTemplate_RoundTrip(t *testing.T) {
-	crt := &agcv2alpha1.ClusterRunnerTemplate{
+	crt := &agcv2.ClusterRunnerTemplate{
 		ObjectMeta: metav1.ObjectMeta{Name: "golden-dind"},
-		Spec: agcv2alpha1.RunnerTemplateSpec{
+		Spec: agcv2.RunnerTemplateSpec{
 			PodTemplate: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{Name: "runner", Image: "dind:latest"}},
@@ -485,7 +336,7 @@ func TestV2_ClusterRunnerTemplate_RoundTrip(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, crt))
 	t.Cleanup(func() { _ = k8sClient.Delete(ctx, crt) })
 
-	var got agcv2alpha1.ClusterRunnerTemplate
+	var got agcv2.ClusterRunnerTemplate
 	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: "golden-dind"}, &got))
 	assert.Equal(t, "dind:latest", got.Spec.WorkerImage)
 }

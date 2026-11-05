@@ -20,11 +20,7 @@ import (
 // intent on a cluster that declares no FQDN egress backend (--fqdn-policy-backend=none,
 // the secure default). This is the fail-closed-and-loud contract of the intent/backend
 // split (Q245): the operator learns at apply time, not from a stranded proxy pool that
-// silently goes Degraded. A stored CiliumFQDN/CalicoFQDN alias is never gated here, so
-// re-applying or migrating it stays admitted (Q1085); mode is egressPolicyModeOf's, so a
-// stored alias the v2 view shows as FQDN is recognised as one. The controller reads the
-// pool at v2 as plain FQDN, so under backend none it emits no CNI-native policy. No
-// v2.0.0 cluster can store an alias, so that gap lasts only until Q1167.
+// silently goes Degraded.
 func validateFQDNBackend(mode agcv2.EgressPolicyMode, backend controller.FQDNBackend) error {
 	// Only an explicitly-configured cilium/calico/gke backend admits FQDN intent; none,
 	// the empty zero value, and any other value all fail closed (main.go normalizes the
@@ -37,65 +33,6 @@ func validateFQDNBackend(mode agcv2.EgressPolicyMode, backend controller.FQDNBac
 			"spec.egressPolicyMode: FQDN requires the platform operator to configure an FQDN egress backend (GMC --fqdn-policy-backend=cilium|calico|gke); this cluster has none. Use egressPolicyMode: CIDR, or ask the platform operator to enable an FQDN backend")
 	}
 	return nil
-}
-
-// deprecatedModeBackend maps a deprecated CNI-specific egressPolicyMode to the
-// --fqdn-policy-backend value that replaces it. An empty string means the mode is not
-// a deprecated alias.
-func deprecatedModeBackend(mode agcv2.EgressPolicyMode) string {
-	switch mode {
-	case egressPolicyModeCiliumFQDN:
-		return "cilium"
-	case egressPolicyModeCalicoFQDN:
-		return "calico"
-	default:
-		return ""
-	}
-}
-
-// deprecatedModeWarning returns a non-blocking admission warning when an EgressProxy
-// still names a deprecated CNI-specific egressPolicyMode. Reaching it means the value
-// was already stored and is unchanged by this write — a new one is rejected by
-// rejectNewDeprecatedMode — and the operator is nudged toward the FQDN intent +
-// --fqdn-policy-backend split (Q245). The controller reads the pool at v2, where the
-// alias surfaces as FQDN, so its policy follows --fqdn-policy-backend. An empty string
-// means no warning.
-//
-// The warning names v2.0.0: the values are enum members of v2alpha1 and v2beta1, both
-// of which v2.0.0 removes, and the GA v2 version does not define them (Q452, Q1082).
-// The release is load-bearing — an operator plans the migration from it — and it is
-// derived from which versions v2.0.0 drops, so it moves if that set does.
-func deprecatedModeWarning(mode agcv2.EgressPolicyMode) string {
-	backend := deprecatedModeBackend(mode)
-	if backend == "" {
-		return ""
-	}
-	return fmt.Sprintf(
-		"spec.egressPolicyMode %s is deprecated and is removed at v2.0.0: use FQDN and have the platform operator set GMC --fqdn-policy-backend=%s. Migrate before upgrading past v2.0.0.",
-		mode, backend)
-}
-
-// rejectNewDeprecatedMode rejects a write that *introduces* a deprecated
-// CiliumFQDN/CalicoFQDN alias — a create, or an update whose stored object named
-// something else — while admitting one that leaves an already-stored alias alone
-// (Q1085). oldMode is the stored object's mode, empty on create.
-//
-// The asymmetry is the point. v2 does not define the aliases (Q452), so at v2.0.0 an
-// unmigrated object is unrepresentable in the served version, and one such object
-// fails the request it is served in: a LIST that would return it comes back an error
-// with no items, while a targeted GET of a healthy neighbour still succeeds. Rejecting new
-// writes stops the population growing; admitting an unchanged one leaves an operator
-// mid-migration able to re-apply and edit the rest of the spec. A flat reject would
-// fail every re-apply of an object nobody has migrated yet, which is the failure this
-// guard exists to give them time to avoid.
-func rejectNewDeprecatedMode(oldMode, newMode agcv2.EgressPolicyMode) error {
-	backend := deprecatedModeBackend(newMode)
-	if backend == "" || oldMode == newMode {
-		return nil
-	}
-	return fmt.Errorf(
-		"spec.egressPolicyMode: %s is deprecated and may no longer be introduced; it is removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN and have the platform operator set GMC --fqdn-policy-backend=%s, which enforces exactly the same policy. An EgressProxy that already stores %s is still admitted unchanged, so an existing pool keeps working until you migrate it",
-		newMode, backend, newMode)
 }
 
 // validateEgressDestinations rejects any EgressProxy.spec.destinationFQDNs /
@@ -212,63 +149,47 @@ type EgressProxyCustomValidator struct {
 	reservedNamespaces map[string]bool
 }
 
-// validate runs the shared admission checks for both create and update: it rejects a
-// newly-introduced CiliumFQDN/CalicoFQDN alias, rejects an FQDN intent with no
-// operator backend, gates any extra destinations against the platform allowlist, and
-// rejects noProxyCIDRs entries that would bypass the proxy for GitHub. An unchanged
-// alias is admitted with a non-blocking deprecation warning. oldMode is the stored
-// object's egressPolicyModeOf, empty on create. Every mode check reads
-// egressPolicyModeOf rather than spec.egressPolicyMode, which shows an alias as FQDN.
-func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, oldMode agcv2.EgressPolicyMode, obj *agcv2.EgressProxy) (admission.Warnings, error) {
-	mode := egressPolicyModeOf(obj)
-	if err := rejectNewDeprecatedMode(oldMode, mode); err != nil {
+// validate runs the shared admission checks for both create and update: it rejects an
+// FQDN intent with no operator backend, gates any extra destinations against the
+// platform allowlist, and rejects noProxyCIDRs entries that would bypass the proxy for
+// GitHub.
+func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, obj *agcv2.EgressProxy) (admission.Warnings, error) {
+	if err := validateFQDNBackend(obj.Spec.EgressPolicyMode, v.FQDNBackend); err != nil {
 		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
-	var warnings admission.Warnings
-	if w := deprecatedModeWarning(mode); w != "" {
-		warnings = append(warnings, w)
-	}
-	if err := validateFQDNBackend(mode, v.FQDNBackend); err != nil {
-		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
-	}
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
-		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
+		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateNoProxyCIDRs(ctx, obj); err != nil {
-		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
+		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
-		return warnings, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
+		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
-	return warnings, nil
+	return nil, nil
 }
 
 // ValidateCreate rejects an EgressProxy created in a reserved namespace (Q323),
-// naming a deprecated CiliumFQDN/CalicoFQDN mode (Q1085), requesting an off-allowlist
-// destination, or carrying an FQDN intent with no operator backend. The
-// reserved-namespace guard is create-only, matching the v1 gateway webhook (namespace
-// is immutable). A create has no stored object, so every alias it names is a new one.
+// requesting an off-allowlist destination, or carrying an FQDN intent with no operator
+// backend. The reserved-namespace guard is create-only, matching the v1 gateway webhook
+// (namespace is immutable).
 func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.EgressProxy) (admission.Warnings, error) {
 	if v.reservedNamespaces[obj.Namespace] {
 		return nil, logRejection(ctx, "EgressProxy", "create", obj.Namespace, obj.Name,
 			fmt.Errorf("EgressProxy may not be created in reserved namespace %q", obj.Namespace))
 	}
-	return v.validate(ctx, "create", "", obj)
+	return v.validate(ctx, "create", obj)
 }
 
 // ValidateUpdate applies the same gates on update, so widening the destinations or
-// switching mode on an existing EgressProxy is checked too. The stored mode is passed
-// through so a deprecated alias already on the object is admitted unchanged while a
-// switch onto one is rejected (Q1085). Deletion-only updates — deletionTimestamp set,
-// spec and egressPolicyModeOf unchanged — are admitted without re-validation (Q518; see
-// validation.DeletionOnlyUpdate). The mode is compared too because an alias swap
-// changes only the annotation on the v2 view.
+// switching mode on an existing EgressProxy is checked too. Deletion-only updates —
+// deletionTimestamp set, spec unchanged — are admitted without re-validation (Q518; see
+// validation.DeletionOnlyUpdate).
 func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.EgressProxy) (admission.Warnings, error) {
-	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) &&
-		egressPolicyModeOf(oldObj) == egressPolicyModeOf(newObj) {
+	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
 		return nil, nil
 	}
-	return v.validate(ctx, "update", egressPolicyModeOf(oldObj), newObj)
+	return v.validate(ctx, "update", newObj)
 }
 
 // ValidateDelete is a no-op.

@@ -291,12 +291,12 @@ dashboard-tables-check: ## Fail when the dashboard doc's panel tables have drift
 registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tenant's wiring to them name different endpoints
 	scripts/manifest/check-registry-mirror-wiring.sh
 
-# A webhook rule naming only versions no CRD serves matches no request, so its
-# validation stops without an error anywhere (Q1068). The rule versions come from
-# +kubebuilder:webhook markers nothing ties to the CRDs' served set, which is how
-# v2.0.0 removing v2alpha1 would silently un-match every actions-gateway.com rule.
+# A webhook or admission-policy rule naming only versions no CRD serves matches no
+# request, so its validation stops without an error anywhere (Q1068). The webhook
+# versions come from +kubebuilder:webhook markers nothing ties to the CRDs' served
+# set, and the policies are hand-written.
 .PHONY: webhook-versions-check
-webhook-versions-check: ## Fail when an admission webhook rule names only API versions no CRD serves
+webhook-versions-check: ## Fail when an admission webhook or policy rule names only API versions no CRD serves
 	scripts/manifest/check-webhook-versions.sh
 
 # The webhook rejection counter carries only the webhook's name, so the security
@@ -508,18 +508,6 @@ conflict-markers-check: ## Fail if any tracked, non-vendored file contains a lef
 .PHONY: template-library-check
 template-library-check: ## Fail if deploy/templates/ ships an entry no dogfood e2e overlay exercises, or an overlay patches one unsafely (Q554)
 	scripts/ci/check-template-library.sh
-
-# Assert every file adjacent v2 API versions share (api/v2alpha1 with api/v2beta1,
-# and api/v2beta1 with api/v2) stays byte-identical except the differences an API
-# version is entitled to — its package clause and the storageversion marker (Q345,
-# widened in Q374 and Q413). Most of what sits beside the versioned types is
-# identical by contract, and a one-sided edit breaks the storage/hub conversion
-# silently. Files that genuinely differ per version are named in the script's
-# per-pair exemption lists with a reason; everything else is covered by default,
-# including files added after this gate landed.
-.PHONY: v2-api-sync-check
-v2-api-sync-check: ## Fail if a file shared by adjacent api/v2alpha1, api/v2beta1, api/v2 packages diverges (beyond the package/storageversion lines)
-	scripts/go/check-v2-api-sync.sh
 
 # Go's test cache drops file reads that resolve outside the package's module root
 # (Q895), so a unit test asserting against a repo file one level up replays a stale

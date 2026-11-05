@@ -56,37 +56,6 @@ V2_BLOCK="$(cat <<'EOF'
     # day-2 `helm upgrade` carries CRD field changes and `helm uninstall`
     # preserves every tenant's v2 (actions-gateway.com) objects.
     helm.sh/resource-policy: keep
-{{- if .Values.conversion.certManager.enabled }}
-    # cert-manager's ca-injector copies the GMC webhook serving CA into the
-    # spec.conversion.webhook.clientConfig.caBundle below (Q74 conversion webhook).
-    cert-manager.io/inject-ca-from: {{ printf "%s/%s" (.Values.conversion.webhook.service.namespace | default .Release.Namespace) .Values.conversion.certManager.certificateName }}
-{{- end }}
-EOF
-)"
-
-# spec.conversion block injected under `spec:` for the v2 CRDs only (Q74). The v2
-# kinds are multi-version — v2beta1 is the hub, v2alpha1 and v2 the spokes, and v2
-# the storage version — so the apiserver must call the GMC-hosted /convert webhook to serve
-# or admit any version. controller-gen emits no conversion stanza (the authoritative
-# api/config/crd output stays deployment-agnostic and conversion-free), so this
-# deployment wiring is injected here, mirroring how sync-chart-webhook.sh re-injects
-# the validating webhook's Helm wiring. The clientConfig points at the GMC webhook
-# Service shipped by the main actions-gateway chart.
-V2_CONVERSION_BLOCK="$(cat <<'EOF'
-  conversion:
-    strategy: Webhook
-    webhook:
-      conversionReviewVersions:
-      - v1
-      clientConfig:
-        service:
-          name: {{ .Values.conversion.webhook.service.name }}
-          namespace: {{ .Values.conversion.webhook.service.namespace | default .Release.Namespace }}
-          path: /convert
-          port: {{ int .Values.conversion.webhook.service.port }}
-{{- if and (not .Values.conversion.certManager.enabled) .Values.conversion.caBundle }}
-        caBundle: {{ .Values.conversion.caBundle }}
-{{- end }}
 EOF
 )"
 
@@ -96,13 +65,11 @@ EOF
 CRD_SRCS=()
 CRD_DSTS=()
 CRD_BLOCKS=()
-CRD_CONVERSIONS=()
 
-add_crd() { # add_crd SRC DST BLOCK [CONVERSION_BLOCK]
+add_crd() { # add_crd SRC DST BLOCK
 	CRD_SRCS+=("$1")
 	CRD_DSTS+=("$2")
 	CRD_BLOCKS+=("$3")
-	CRD_CONVERSIONS+=("${4:-}")
 }
 
 # PriorityClassAllowlist (Q492) — two deviations from the layout of every other
@@ -119,14 +86,11 @@ add_crd() { # add_crd SRC DST BLOCK [CONVERSION_BLOCK]
 #     strings (~4 KB), not an embedded PodTemplateSpec (~600 KB).
 #  2. It ships in the chart-root crds/ dir, not templates/crds/, because the same
 #     release also renders a PriorityClassAllowlist CR. See the block above.
-#
-# Served at v2beta1 and v2 (storage) with identical schemas, so no conversion block:
-# the apiserver's default None strategy rewrites apiVersion alone.
 add_crd "api/config/crd/actions-gateway.com_priorityclassallowlists.yaml" \
 	"charts/actions-gateway/crds/priorityclassallowlist-crd.yaml" \
 	"$PRIORITYCLASSALLOWLIST_BLOCK"
 
-# v2alpha1 — actions-gateway.com (Q149). Shipped by the SEPARATE, opt-in
+# v2 — actions-gateway.com (Q149). Shipped by the SEPARATE, opt-in
 # actions-gateway-crds-v2 chart, not the main chart: the RunnerTemplate /
 # ClusterRunnerTemplate CRDs each embed a full PodTemplateSpec (~600 KB), and
 # adding them to the main chart pushed its Helm release Secret past the hard 1 MiB
@@ -137,43 +101,32 @@ add_crd "api/config/crd/actions-gateway.com_priorityclassallowlists.yaml" \
 # controller-gen output under api/config/crd is the single source.
 V2_CHART="charts/actions-gateway-crds-v2/templates/crds"
 add_crd "api/config/crd/actions-gateway.com_actionsgateways.yaml" \
-	"$V2_CHART/actionsgateway-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
+	"$V2_CHART/actionsgateway-crd.yaml" "$V2_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_egressproxies.yaml" \
-	"$V2_CHART/egressproxy-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
+	"$V2_CHART/egressproxy-crd.yaml" "$V2_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_runnersets.yaml" \
-	"$V2_CHART/runnerset-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
+	"$V2_CHART/runnerset-crd.yaml" "$V2_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_runnertemplates.yaml" \
-	"$V2_CHART/runnertemplate-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
+	"$V2_CHART/runnertemplate-crd.yaml" "$V2_BLOCK"
 add_crd "api/config/crd/actions-gateway.com_clusterrunnertemplates.yaml" \
-	"$V2_CHART/clusterrunnertemplate-crd.yaml" "$V2_BLOCK" "$V2_CONVERSION_BLOCK"
+	"$V2_CHART/clusterrunnertemplate-crd.yaml" "$V2_BLOCK"
 
 # render SRC DST BLOCK — copy SRC to DST, inserting BLOCK right after the
 # `controller-gen.kubebuilder.io/version:` annotation line. BLOCK is passed
 # through the environment (ENVIRON), not `-v`: a multi-line `-v` assignment is
 # rejected by BSD awk (macOS), while ENVIRON is portable across BSD awk and gawk.
 render() {
-	local src="$1" dst="$2" block="$3" conversion="${4:-}"
+	local src="$1" dst="$2" block="$3"
 	mkdir -p "$(dirname "$dst")"
-	BLOCK="$block" CONVERSION="$conversion" awk '
+	BLOCK="$block" awk '
 		{ print }
 		!injected && /^    controller-gen\.kubebuilder\.io\/version:/ {
 			printf "%s\n", ENVIRON["BLOCK"]
 			injected = 1
 		}
-		# For the v2 CRDs, inject the deployment-specific spec.conversion block
-		# immediately after the top-level `spec:` line (Q74). CONVERSION is empty for
-		# the PriorityClassAllowlist CRD, so this is a no-op there.
-		!conv_injected && ENVIRON["CONVERSION"] != "" && /^spec:$/ {
-			printf "%s\n", ENVIRON["CONVERSION"]
-			conv_injected = 1
-		}
 		END {
 			if (!injected) {
 				print "sync-chart-crds: no controller-gen version line found in source" > "/dev/stderr"
-				exit 1
-			}
-			if (ENVIRON["CONVERSION"] != "" && !conv_injected) {
-				print "sync-chart-crds: no top-level spec: line found for conversion injection" > "/dev/stderr"
 				exit 1
 			}
 		}
@@ -183,7 +136,7 @@ render() {
 sync() {
 	local i
 	for i in "${!CRD_SRCS[@]}"; do
-		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
+		render "${CRD_SRCS[$i]}" "${CRD_DSTS[$i]}" "${CRD_BLOCKS[$i]}"
 	done
 	echo "wrote ${#CRD_DSTS[@]} chart CRD templates from controller-gen sources."
 }
@@ -196,7 +149,7 @@ check() {
 	local rc=0 i tmp
 	for i in "${!CRD_SRCS[@]}"; do
 		tmp="$(chart_sync_mktemp)"
-		render "${CRD_SRCS[$i]}" "$tmp" "${CRD_BLOCKS[$i]}" "${CRD_CONVERSIONS[$i]}"
+		render "${CRD_SRCS[$i]}" "$tmp" "${CRD_BLOCKS[$i]}"
 		if ! diff -u "${CRD_DSTS[$i]}" "$tmp"; then
 			echo "ERROR: ${CRD_DSTS[$i]} is out of sync with ${CRD_SRCS[$i]}." >&2
 			echo "Re-sync and commit: make chart-crds" >&2

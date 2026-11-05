@@ -91,7 +91,7 @@ func TestCRDSchemaStale_PrunedBoundaryFieldIsDetected(t *testing.T) {
 	// to infer any of the above from an inert boundary.
 	err = controller.VerifyCRDSchemas(ctx, c)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup")
+	require.Contains(t, err.Error(), "runnersets.actions-gateway.com at v2 does not declare spec.runnerGroup")
 	require.Contains(t, err.Error(), "kubectl apply --server-side")
 }
 

@@ -73,7 +73,7 @@ Q470 split `capacityGate.mode` for exactly this reason.
 
 When the axes genuinely belong together, the Kubernetes shape for it is a discriminated union: a required discriminator field plus optional, pointer union members — not one flat enum whose values imply which sibling to read.
 
-**A "yes" to the tells is not automatically a split.** The same tell is visible in [`WorkerSizing`](../../api/v2beta1/runnerset_types.go), whose three `XValidation` rules each tie a sibling field to one `profile` value.
+**A "yes" to the tells is not automatically a split.** The same tell is visible in [`WorkerSizing`](../../api/v2/runnerset_types.go), whose three `XValidation` rules each tie a sibling field to one `profile` value.
 Q481 asked the question of `sizing.profile` before 1.3.0 and shipped it bundled anyway.
 Three follow-ups decide it, in ascending order of how much they settle:
 
@@ -229,7 +229,7 @@ Changing how one is derived orphans live objects, which is worse than a field re
   Never make a spec decision depend on a value only status carries.
 - Condition types and reasons are runtime strings, not schema, so they carry **no version and have no conversion path**.
   Renaming one breaks every operator alert at once, in every served version simultaneously.
-  Declare them in [`api/apiconditions`](../../api/apiconditions/conditions.go) and re-export from both version packages; `make v2-api-sync-check` fails a one-sided add.
+  Declare them in [`api/apiconditions`](../../api/apiconditions/conditions.go) and re-export from `api/v2`.
 - Keep the polarity convention: normal-is-True (`Ready`), with abnormal-is-True conditions named so they read that way (`CredentialUnavailable`).
 - Carry `observedGeneration` so a reader can tell a stale status from a current one.
 - Ship a field with its consumer.
@@ -330,14 +330,15 @@ A bare "no earlier than `v3.0.0`" gives them no way to know the sentence is load
 
 ### A new version must round-trip losslessly
 
-`v2alpha1` and `v2` are spokes and `v2beta1` is the hub, so every served version converts to and from one hub rather than pairwise; `v2` is the storage version from 1.10.
-If a new version drops something the old one can store, a field or an enum value, the object must still round-trip: `RunnerSet` conversion stashes the dropped `acquisitionProtocol` and `maxListeners` in `conversion.actions-gateway.com/*` annotations, and `v2`'s `EgressProxy` carries a stored `CiliumFQDN`/`CalicoFQDN` alias the same way while showing `FQDN`.
-Any such carrier needs a round-trip test — see `TestRunnerSetConversion_RoundTrip` and friends in [`api/v2alpha1/conversion_test.go`](../../api/v2alpha1/conversion_test.go).
+`v2.0.0` serves `v2` alone, so no conversion webhook exists today; a later version brings one back.
+If a new version drops something the old one can store, a field or an enum value, the object must still round-trip.
+The 1.x precedent: `RunnerSet` conversion stashed the dropped `acquisitionProtocol` and `maxListeners` in `conversion.actions-gateway.com/*` annotations, and `v2`'s `EgressProxy` carried a stored `CiliumFQDN`/`CalicoFQDN` alias the same way while showing `FQDN`.
+Any such carrier needs a round-trip test.
 
 **Never make a conversion fail on a stored object.** A failed conversion fails the whole request, so one object breaks every `LIST` at that version, and a GA version is the group's preferred one: kube-controller-manager's namespace deleter and garbage collector list at it.
 Q413 first refused the alias, and its review measured the metadata-client `LIST` and `DELETECOLLECTION` failing, which leaves a namespace `Terminating` and the collector unable to track the kind.
 
-Two supporting habits: mark the outgoing version with `+kubebuilder:deprecatedversion:warning=…` naming the replacement *and* the release that removes it, so the apiserver warns at apply time; and keep the two version packages byte-identical except for the entitled differences, which `make v2-api-sync-check` enforces.
+Mark the outgoing version with `+kubebuilder:deprecatedversion:warning=…` naming the replacement *and* the release that removes it, so the apiserver warns at apply time.
 
 ## The pre-release review
 

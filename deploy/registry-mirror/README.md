@@ -142,7 +142,7 @@ The worker-side `e2e-mirror-egress` policy lives in the tenant's own namespace, 
 Both selectors are keys of **one** `from` element, which ANDs them.
 Split across two elements they would OR, and the result is strictly wider than the base's; the render was read both ways.
 
-That marker is what the GMC's own confinement ValidatingAdmissionPolicies key on ([`api/v2beta1/shared_types.go`](../../api/v2beta1/shared_types.go)), so the mirror reads the same label a platform admin already sets rather than a list of its own.
+That marker is what the GMC's own confinement ValidatingAdmissionPolicies key on ([`api/v2/shared_types.go`](../../api/v2/shared_types.go)), so the mirror reads the same label a platform admin already sets rather than a list of its own.
 It also admits tenants created later, automatically: a namespace becomes a mirror client the moment the administrator marks it.
 That is the point on a cluster whose tenant set churns and the risk on one where it must not, so the overlay's header carries the `matchExpressions` form that admits a fixed subset instead.
 

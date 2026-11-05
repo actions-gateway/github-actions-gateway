@@ -250,6 +250,25 @@ preflight() {
 # crash-loops on a missing App key. git-archive pins the CRDs to the image's tag.
 # ---------------------------------------------------------------------------
 
+# A 1.x CRD's conversion webhook carries a caBundle another field manager set, which
+# no server-side apply removes, even forced, and the apiserver refuses v2's strategy
+# None beside it (measured on 1.36.1, Q1167). A no-op on a CRD with none.
+drop_crd_conversion_webhook() {
+	local crd stored present=()
+	for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
+		stored="$(kubectl get crd "${crd}.actions-gateway.com" -o jsonpath='{.status.storedVersions}' 2>/dev/null)" || continue
+		if [[ "${stored}" != '["v2"]' ]]; then
+			echo "ERROR: ${crd}.actions-gateway.com stores ${stored}. The apiserver refuses the v2 CRDs until it stores only v2, so nothing was changed: run the storage sweep in docs/operations/upgrade.md first." >&2
+			return 1
+		fi
+		present+=("${crd}")
+	done
+	for crd in "${present[@]}"; do
+		kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
+			-p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}'
+	done
+}
+
 install_crds() {
 	echo "Rendering + applying v2 CRDs from ${GAG_IMAGE_TAG} (matching the GMC image)..."
 	local crd_src
@@ -257,24 +276,22 @@ install_crds() {
 	trap 'rm -rf "${crd_src:-}"' EXIT
 	git -C "${REPO_ROOT}" archive "${GAG_IMAGE_TAG}" charts/actions-gateway-crds-v2 \
 		| tar -x -C "${crd_src}"
-	# apply-render, NOT `helm upgrade --install` (Q276/Q277). Since Q74 graduated
-	# each v2 CRD to two served versions (v2beta1 + v2alpha1), the rendered chart
-	# exceeds Helm's 1 MiB release-Secret limit, so Helm can no longer store the
+	# apply-render, NOT `helm upgrade --install` (Q276/Q277). The rendered chart can
+	# exceed Helm's 1 MiB release-Secret limit, so Helm cannot be relied on to store the
 	# release and `helm install`/`upgrade` fails outright. Render the chart and
 	# apply it server-side instead — the supported, deliberate install≡upgrade
 	# path (also clears kubectl's 256 KB client-side-apply annotation ceiling that
 	# each ~1.16 MB RunnerTemplate CRD blows on its own). Dogfood deliberately uses
 	# the from-source render (not the signed release asset): it installs a locally
 	# git-archived chart at an arbitrary build tag to exercise pre-release code, so
-	# it cannot depend on the release-only `v*` asset. --namespace gmc-system
-	# resolves each CRD's conversion-webhook clientConfig to the GMC's
-	# webhook-service (identical wiring to what the old helm install baked in via
-	# the chart's default values). --force-conflicts takes field ownership from any
-	# pre-Q277 helm-installed release of this chart so re-runs stay idempotent.
+	# it cannot depend on the release-only `v*` asset. --force-conflicts takes field
+	# ownership from any pre-Q277 helm-installed release of this chart so re-runs stay
+	# idempotent.
 	helm template actions-gateway-crds-v2 \
 		"${crd_src}/charts/actions-gateway-crds-v2" \
-		--namespace gmc-system \
-		| kubectl apply --server-side --force-conflicts -f -
+		--namespace gmc-system >"${crd_src}/crds.yaml"
+	drop_crd_conversion_webhook
+	kubectl apply --server-side --force-conflicts -f "${crd_src}/crds.yaml"
 	rm -rf "${crd_src}"
 	trap - EXIT
 }
@@ -370,78 +387,6 @@ QUOTA
 
 	rm -f "${values}"
 	trap - EXIT
-}
-
-# ---------------------------------------------------------------------------
-# Part B3b — wire the GMC's self-signed webhook CA into each v2 CRD's
-# spec.conversion.webhook.clientConfig.caBundle (Q279). From 1.10 the v2 kinds
-# are served at v2, v2beta1 and v2alpha1 and stored at v2, so a request naming
-# either older version crosses the GMC-hosted conversion webhook and one naming
-# v2 does not; the apiserver calls that webhook over TLS and must trust its
-# serving cert via each CRD's caBundle. Dogfood is self-signed (no cert-manager),
-# so the CRD chart renders an EMPTY caBundle — without this step every CR apply
-# (and conversion read-back) fails the webhook TLS handshake ("x509: certificate
-# signed by unknown authority").
-#
-# Ordering: install_crds applies the CRDs earlier with an empty caBundle (CRD
-# registration itself does not need it), because the CA is only mintable AFTER
-# install_gag creates the webhook-server-cert Secret — and the GMC must see the
-# v2 CRDs at startup to enable its v2 controllers + conversion webhook (Q228
-# detection), so the CRDs-before-GMC order must NOT be reversed. We therefore
-# patch the caBundle in here, after the GMC is up and before apply_cr, so a CR
-# is never applied against a caBundle-less clientConfig. verify_conversion is
-# what proves the wiring took; apply_cr is no proof of it, because it authored at
-# the storage version and so never reached the webhook (Q1104) until v2 took over
-# storage in 1.10, and whether an apply converts depends on which release is
-# installed.
-#
-# Secure by default: this RESTORES webhook TLS verification. Never fall back to a
-# caBundle-less clientConfig or insecureSkipTLSVerify shortcut.
-# ---------------------------------------------------------------------------
-
-patch_crd_cabundle() {
-	echo "Wiring GMC webhook CA into the v2 CRD conversion caBundle..."
-	# The chart signs the GMC webhook serving cert with a self-signed CA it mints
-	# once and stores in webhook-server-cert (reused across renders via `lookup`,
-	# so this value is stable on re-runs). The Secret's data["ca.crt"] is already
-	# base64(PEM) — exactly the encoding a CRD caBundle wants — so pass it straight
-	# through with no decode/re-encode. Read lazily on first need so a pre-Q74
-	# image (below) never touches the Secret.
-	local ca_bundle=""
-	local crd strategy patched=0
-	for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
-		# Only CRDs whose conversion strategy is Webhook have a clientConfig to wire.
-		# install_crds pins the CRDs to GAG_IMAGE_TAG; a pre-Q74 image ships
-		# single-version CRDs (strategy None, no conversion block), where patching a
-		# webhook clientConfig would be rejected ("should not be set when strategy is
-		# not Webhook"). Skip those cleanly so setup stays valid across the dogfood
-		# image-tag transition — the caBundle only matters once GAG_IMAGE_TAG is a
-		# post-Q74 release whose CRDs actually route CR conversion through /convert.
-		strategy="$(kubectl get crd "${crd}.actions-gateway.com" \
-			-o jsonpath='{.spec.conversion.strategy}' 2>/dev/null || true)"
-		if [[ "${strategy}" != "Webhook" ]]; then
-			echo "  ${crd}: conversion strategy '${strategy:-None}' (not Webhook) — no caBundle to wire, skipping."
-			continue
-		fi
-
-		if [[ -z "${ca_bundle}" ]]; then
-			ca_bundle="$(kubectl get secret webhook-server-cert -n gmc-system \
-				-o jsonpath='{.data.ca\.crt}')"
-			if [[ -z "${ca_bundle}" ]]; then
-				echo "webhook-server-cert Secret has no ca.crt — cannot wire the CRD caBundle." >&2
-				exit 1
-			fi
-		fi
-
-		# A JSON merge patch sets the caBundle leaf and leaves the chart-rendered
-		# clientConfig.service block (name/namespace/path/port) untouched. install_crds
-		# never renders caBundle, so a later server-side re-apply of the chart cannot
-		# strip this leaf (a different field manager owns it).
-		kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
-			-p "{\"spec\":{\"conversion\":{\"webhook\":{\"clientConfig\":{\"caBundle\":\"${ca_bundle}\"}}}}}"
-		patched=$((patched + 1))
-	done
-	echo "Wired the GMC webhook CA into ${patched} v2 CRD conversion caBundle(s)."
 }
 
 # ---------------------------------------------------------------------------
@@ -697,11 +642,8 @@ spec:
     name: dogfood
   templateRef:
     name: default
-  # No acquisitionProtocol here: v2 is ScaleSet-only and has no such field
-  # (api/v2alpha1/conversion.go stashes the v2alpha1 value in a conversion
-  # annotation precisely because the hub cannot hold it). Authoring one makes the
-  # apply fail strict decoding, which is what a v2 tenant gets for carrying a
-  # v2alpha1 knob rather than dropping it.
+  # No acquisitionProtocol here: v2 is ScaleSet-only and has no such field.
+  # Authoring one makes the apply fail strict decoding.
   #
   # This tenant migrated off Classic in Q399 and the protocol is now the API's by
   # construction. Classic acquired a job (AcquireJob flips it to in_progress at
@@ -764,55 +706,6 @@ spec:
 EOF
 }
 
-# ---------------------------------------------------------------------------
-# Part B7 — prove the conversion webhook and its caBundle actually work, on the
-# tenant's own objects (Q1104). Until this existed the proof was a side effect:
-# apply_cr authored at v2alpha1, a non-storage served version, so every apply
-# crossed the webhook. That version was residue from before the Q74 graduation
-# rather than a chosen exercise, and Q452 removes it at v2.0.0, so the tenant now
-# authors at v2, the storage version from 1.10 (Q1212), and the check is made
-# explicit here instead: an apply at the storage version never reaches the
-# webhook, so only a read at another version proves it.
-#
-# Reading at CONVERSION_PROBE_VERSION forces the apiserver to call the GMC over
-# TLS to convert out of storage, so an empty or wrong caBundle fails here with
-# "x509: certificate signed by unknown authority" rather than at the next apply.
-# The deprecation warning the read draws is expected: naming a deprecated version
-# is the point.
-#
-# Scope, so the next reader does not over-read it: this covers the read
-# direction and the TLS wiring, NOT conversion correctness — no field is
-# compared. Q1060 owns the field-for-field round-trip on pre-graduation objects.
-#
-# v2.0.0 removes v2alpha1 AND v2beta1 (Q1082), leaving v2 as the only served
-# version and storage both, at which point there is no conversion left to probe
-# and this step retires with the variable. 1.9 serves v2 alongside v2beta1
-# storage, so CONVERSION_PROBE_VERSION becomes v2 there.
-# ---------------------------------------------------------------------------
-
-CONVERSION_PROBE_VERSION="${CONVERSION_PROBE_VERSION:-v2alpha1}"
-
-verify_conversion() {
-	echo "Probing the conversion webhook at ${CONVERSION_PROBE_VERSION} (caBundle check)..."
-	local kube_context resource
-	kube_context="gke_${PROJECT}_${ZONE}_${CLUSTER}"
-	for resource in actionsgateway/dogfood runnertemplate/default runnerset/ci; do
-		local kind name versioned
-		kind="${resource%%/*}"
-		name="${resource#*/}"
-		versioned="${kind}s.${CONVERSION_PROBE_VERSION}.actions-gateway.com/${name}"
-		if ! kubectl --context "${kube_context}" get "${versioned}" \
-			--namespace gag-dogfood -o name >/dev/null; then
-			echo "ERROR: reading ${versioned} failed." >&2
-			echo "  The apiserver could not convert out of storage. An empty or stale" >&2
-			echo "  caBundle on the CRD is the usual cause — re-run patch_crd_cabundle," >&2
-			echo "  or check the GMC is serving its conversion webhook." >&2
-			return 1
-		fi
-	done
-	echo "  conversion webhook OK for all three kinds"
-}
-
 # Show the resolved target and require explicit confirmation before any billable
 # create or cluster write (shared helper; ASSUME_YES=1 bypasses it).
 confirm_target() {
@@ -854,13 +747,11 @@ main() {
 	preflight
 	install_crds
 	install_gag
-	patch_crd_cabundle
 	create_namespace
 	create_secret
 	apply_quota
 	apply_athens
 	apply_cr
-	verify_conversion
 
 	echo ""
 	echo "Bootstrap complete. GAG is installed and the gag-dogfood tenant is up."

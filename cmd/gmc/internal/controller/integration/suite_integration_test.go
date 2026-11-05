@@ -15,13 +15,10 @@ import (
 	"time"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/logtest"
 	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
-	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 	gmcnames "github.com/actions-gateway/github-actions-gateway/gmc/names"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -100,13 +97,6 @@ func TestMain(m *testing.M) {
 
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
-	_ = v2alpha1.AddToScheme(testScheme)
-	// Register the v2beta1 hub so envtest's modifyConversionWebhooks recognizes the
-	// five v2 kinds as convertible and redirects their CRD conversion to the local
-	// webhook server (Q74). Both spoke and hub must be in the scheme for conversion.
-	_ = v2beta1.AddToScheme(testScheme)
-	// The GA v2 spoke (Q413): with it absent, envtest would still route the CRDs'
-	// conversion here, and every v2 read would fail as an unknown version.
 	_ = v2.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
@@ -244,12 +234,6 @@ func startValidatingWebhook() error {
 	// priorityclass_allowlist_test.go and the webhook unit tests.
 	if err := webhookv2.SetupRunnerSetWebhookWithManager(mgr, allowlist.New([]string{"high"})); err != nil {
 		return fmt.Errorf("register RunnerSet webhook: %w", err)
-	}
-	// Q74: serve /convert for the five v2 hub kinds. envtest patches each convertible
-	// CRD's spec.conversion to point at this same server, so a v2beta1<->v2alpha1
-	// read/write round-trips through the real conversion path, not a fake client.
-	if err := webhookv2beta1.SetupConversionWebhooksWithManager(mgr); err != nil {
-		return fmt.Errorf("register conversion webhooks: %w", err)
 	}
 
 	var mgrCtx context.Context

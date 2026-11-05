@@ -3,27 +3,28 @@
 package integration_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/migrate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // These run gag-migrate's storage-version sweep (Q1086) against the real apiserver.
-// The suite installs CRDs that already store v2, so each test first recreates the
-// state every 1.x cluster is in: objects persisted at v2beta1 and v2beta1 listed in
-// status.storedVersions.
+// The suite installs CRDs that serve v2 alone, so a test of a 1.x cluster first
+// recreates that state on the CRD it needs: v2beta1 served again (serveV2beta1),
+// objects persisted at it, and v2beta1 listed in status.storedVersions.
 
 // storageVersionHash reads the discovery storageVersionHash the apiserver publishes
 // for resource, which changes when the version it encodes to changes.
@@ -77,6 +78,49 @@ func getCRD(t *testing.T, resource string) *unstructured.Unstructured {
 	return crd
 }
 
+// serveV2beta1 adds v2beta1 to resource's CRD as a copy of v2 and takes it away again
+// on cleanup, once the test's own objects are gone. The copy has no conversion webhook,
+// so the apiserver converts by rewriting apiVersion; the sweep reads through
+// unstructured objects and cannot tell. widen edits the copy's schema, for a value v2
+// does not admit.
+func serveV2beta1(t *testing.T, resource string, widen func(schema map[string]any)) {
+	t.Helper()
+	crd := getCRD(t, resource)
+	versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+	require.NoError(t, err)
+	require.Len(t, versions, 1, "%s must serve v2 alone before the test adds v2beta1", resource)
+	beta := runtime.DeepCopyJSONValue(versions[0]).(map[string]any)
+	beta["name"], beta["storage"] = "v2beta1", false
+	if widen != nil {
+		widen(beta["schema"].(map[string]any)["openAPIV3Schema"].(map[string]any))
+	}
+	require.NoError(t, unstructured.SetNestedSlice(crd.Object, append(versions, beta), "spec", "versions"))
+	require.NoError(t, k8sClient.Update(ctx, crd))
+
+	dc, err := discovery.NewDiscoveryClientForConfig(testEnv.Config)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		list, err := dc.ServerResourcesForGroupVersion("actions-gateway.com/v2beta1")
+		if err != nil {
+			return false
+		}
+		return slices.ContainsFunc(list.APIResources, func(r metav1.APIResource) bool { return r.Name == resource })
+	}, 30*time.Second, 100*time.Millisecond, "%s never served at v2beta1", resource)
+
+	t.Cleanup(func() {
+		setStorageVersion(t, resource, "v2")
+		crd := getCRD(t, resource)
+		require.NoError(t, unstructured.SetNestedStringSlice(crd.Object, []string{"v2"}, "status", "storedVersions"))
+		require.NoError(t, k8sClient.Status().Update(ctx, crd))
+		crd = getCRD(t, resource)
+		versions, _, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		require.NoError(t, err)
+		kept := slices.DeleteFunc(versions, func(v any) bool { return v.(map[string]any)["name"] == "v2beta1" })
+		require.NoError(t, unstructured.SetNestedSlice(crd.Object, kept, "spec", "versions"))
+		require.NoError(t, k8sClient.Update(ctx, crd))
+	})
+}
+
 func storedVersionsOf(t *testing.T, resource string) []string {
 	t.Helper()
 	stored, _, err := unstructured.NestedStringSlice(getCRD(t, resource).Object, "status", "storedVersions")
@@ -84,8 +128,7 @@ func storedVersionsOf(t *testing.T, resource string) []string {
 	return stored
 }
 
-// TestStorageVersionSweep stores a RunnerTemplate (converted by the GMC webhook) and
-// a PriorityClassAllowlist (no webhook: the apiserver rewrites apiVersion) at
+// TestStorageVersionSweep stores a RunnerTemplate and a PriorityClassAllowlist at
 // v2beta1, advances storage to v2, and sweeps. A rewrite that re-encodes bumps the
 // resourceVersion; the control object created after the advance is already stored
 // at v2, so the same write is a no-op the apiserver skips.
@@ -93,7 +136,7 @@ func TestStorageVersionSweep(t *testing.T) {
 	const ns = "storage-sweep"
 	createNamespace(t, ns)
 	for _, r := range []string{"runnertemplates", "priorityclassallowlists"} {
-		t.Cleanup(func() { setStorageVersion(t, r, "v2") })
+		serveV2beta1(t, r, nil)
 	}
 
 	rt := func(name string) *v2.RunnerTemplate {
@@ -148,46 +191,57 @@ func TestStorageVersionSweep(t *testing.T) {
 	assert.NotEqual(t, rv[oldRT.Name], oldRT.ResourceVersion, "a RunnerTemplate stored at v2beta1 must be re-encoded")
 	assert.NotEqual(t, rv[oldPCA.Name], oldPCA.ResourceVersion, "a PriorityClassAllowlist stored at v2beta1 must be re-encoded")
 	assert.Equal(t, rv[newRT.Name], newRT.ResourceVersion, "a RunnerTemplate already stored at v2 is a no-op write")
-
-	var hub v2beta1.RunnerTemplate
-	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(oldRT), &hub))
-	assert.Equal(t, "ghcr.io/example/runner:latest", hub.Spec.PodTemplate.Spec.Containers[0].Image, "v2beta1 still reads a v2-stored object")
 }
 
-// TestStorageVersionSweep_RefusesStoredAlias plants an EgressProxy naming a
-// deprecated alias, which v2 storage holds as FQDN plus the conversion annotation,
-// and confirms the sweep refuses before writing, then proceeds once the pool is
-// migrated off the alias.
+// TestStorageVersionSweep_RefusesStoredAlias plants an EgressProxy naming a deprecated
+// alias, widening the v2beta1 copy's enum as 1.10's v2beta1 declares it, and confirms
+// the sweep refuses before writing, then proceeds once the pool is migrated off it.
 func TestStorageVersionSweep_RefusesStoredAlias(t *testing.T) {
 	const ns = "storage-sweep-alias"
 	createNamespace(t, ns)
+	serveV2beta1(t, "egressproxies", func(schema map[string]any) {
+		mode := schema["properties"].(map[string]any)["spec"].(map[string]any)["properties"].(map[string]any)["egressPolicyMode"].(map[string]any)
+		mode["enum"] = append(mode["enum"].([]any), "CiliumFQDN", "CalicoFQDN")
+	})
 	// A storage round trip lists v2beta1 in storedVersions with no object stored
 	// there, so the prune after the alias clears has something to remove.
-	t.Cleanup(func() { setStorageVersion(t, "egressproxies", "v2") })
 	setStorageVersion(t, "egressproxies", "v2beta1")
 	setStorageVersion(t, "egressproxies", "v2")
 	require.Contains(t, storedVersionsOf(t, "egressproxies"), "v2beta1")
-	ep := &v2alpha1.EgressProxy{
-		ObjectMeta: metav1.ObjectMeta{Name: "pinned", Namespace: ns},
-		Spec:       v2alpha1.EgressProxySpec{EgressPolicyMode: v2alpha1.EgressPolicyModeCiliumFQDN},
-	}
-	createStoredAliasProxy(t, ep)
 
-	var hub v2beta1.EgressProxy
-	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &hub))
-	require.Equal(t, v2beta1.EgressPolicyModeCiliumFQDN, hub.Spec.EgressPolicyMode, "v2 storage must keep the alias readable at v2beta1")
-	var ga v2.EgressProxy
-	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &ga))
-	assert.Equal(t, v2.EgressPolicyModeFQDN, ga.Spec.EgressPolicyMode)
-	assert.Equal(t, "CiliumFQDN", ga.Annotations[egressPolicyModeAnnotation])
+	ep := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "actions-gateway.com/v2beta1",
+		"kind":       "EgressProxy",
+		"metadata":   map[string]any{"name": "pinned", "namespace": ns},
+		"spec":       map[string]any{"egressPolicyMode": "CiliumFQDN"},
+	}}
+	require.Eventually(t, func() bool { return k8sClient.Create(ctx, ep) == nil },
+		30*time.Second, 100*time.Millisecond, "plant an EgressProxy naming an alias at v2beta1")
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
 
 	_, err := migrate.SweepStorageVersion(ctx, k8sClient, migrate.SweepOptions{Apply: true})
 	require.ErrorIs(t, err, migrate.ErrStoragePrecondition)
 	assert.Contains(t, err.Error(), ns+"/pinned\tCiliumFQDN")
 
-	hub.Spec.EgressPolicyMode = v2beta1.EgressPolicyModeFQDN
-	require.NoError(t, k8sClient.Update(ctx, &hub))
+	require.NoError(t, unstructured.SetNestedField(ep.Object, "FQDN", "spec", "egressPolicyMode"))
+	require.NoError(t, k8sClient.Update(ctx, ep))
 	_, err = migrate.SweepStorageVersion(ctx, k8sClient, migrate.SweepOptions{Apply: true})
 	require.NoError(t, err, "the sweep proceeds once no pool names an alias")
 	assert.Equal(t, []string{"v2"}, storedVersionsOf(t, "egressproxies"))
+}
+
+// TestStorageVersionSweep_V2OnlyCRDs runs the sweep against the CRD set this tree
+// ships, which is the v2.0.0 candidate gate's storage leg: it applies these CRDs and
+// then runs this sweep, on a cluster where v2beta1 is no longer served.
+func TestStorageVersionSweep_V2OnlyCRDs(t *testing.T) {
+	dc, err := discovery.NewDiscoveryClientForConfig(testEnv.Config)
+	require.NoError(t, err)
+	_, err = dc.ServerResourcesForGroupVersion("actions-gateway.com/v2beta1")
+	require.True(t, apierrors.IsNotFound(err), "this test needs v2beta1 not served, got %v", err)
+
+	reports, err := migrate.SweepStorageVersion(ctx, k8sClient, migrate.SweepOptions{Apply: true})
+	require.NoError(t, err)
+	for _, r := range reports {
+		assert.True(t, r.Pruned(), "%s: storedVersions read back as %v", r.CRD, r.StoredAfter)
+	}
 }

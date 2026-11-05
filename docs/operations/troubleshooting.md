@@ -38,7 +38,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers](#tenant-namespace-stuck-terminating-on-agentpool-cleanup-finalizers)
 - [Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist](#tenant-namespace-stuck-terminating-after-narrowing-the-priorityclass-allowlist)
 - [Self-Serviced PriorityClasses Stopped Being Accepted All At Once](#self-serviced-priorityclasses-stopped-being-accepted-all-at-once)
-- [EgressProxy Rejected: CiliumFQDN / CalicoFQDN "may no longer be introduced"](#egressproxy-rejected-ciliumfqdn--calicofqdn-may-no-longer-be-introduced)
+- [EgressProxy Rejected: CiliumFQDN / CalicoFQDN Are Not egressPolicyMode Values](#egressproxy-rejected-ciliumfqdn--calicofqdn-are-not-egresspolicymode-values)
 - [AGC CrashLoopBackOff or Not Acquiring Jobs](#agc-crashloopbackoff-or-not-acquiring-jobs)
 - [ScaleSet RunnerSet Stuck Not Ready: `ScaleSetListenerStartFailed` Naming the Guard ConfigMap](#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap)
 - [AGC Exits at Startup: GATEWAY_NAME Set but the v2 RunnerSet CRD Is Missing](#agc-exits-at-startup-gateway_name-set-but-the-v2-runnerset-crd-is-missing)
@@ -100,15 +100,15 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
 - [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
-- [`RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)](#runnertemplate-rejected-reserved-pod-field-v2alpha1)
-- [`RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)
+- [`RunnerTemplate` Rejected: Reserved Pod Field](#runnertemplate-rejected-reserved-pod-field)
+- [`RunnerSet` Rejected: Duplicate First `runnerLabel`](#runnerset-rejected-duplicate-first-runnerlabel)
 - [RunnerSet or ActionsGateway Rejected: Agent Identity Already Claimed](#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed)
 - [`ActionsGateway` Reports `ScaleSetNameCollision`](#actionsgateway-reports-scalesetnamecollision)
 - [`RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory](#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)
-- [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)](#runnerset-stuck-readyfalse-with-a-notfound-reason-v2alpha1)
+- [`RunnerSet` Stuck `Ready=False` With a `NotFound` Reason](#runnerset-stuck-readyfalse-with-a-notfound-reason)
 - [`RunnerSet` Stuck `Ready=False` With `RunnerGroupNotFound`](#runnerset-stuck-readyfalse-with-runnergroupnotfound)
 - [v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)](#v2-actionsgateway-stuck-readyfalse-credentialunavailable--proxynotfound)
-- [RunnerSet or gateway reports EgressUnattributed (direct egress) (v2alpha1)](#runnerset-or-gateway-reports-egressunattributed-direct-egress-v2alpha1)
+- [RunnerSet or gateway reports EgressUnattributed (direct egress)](#runnerset-or-gateway-reports-egressunattributed-direct-egress)
 - [`AGCAutoscalingUnavailable` — the VPA CRDs are not installed](#agcautoscalingunavailable--the-vpa-crds-are-not-installed)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
 - [v2 Objects Not Reconciling After Installing the CRD Chart](#v2-objects-not-reconciling-after-installing-the-crd-chart)
@@ -297,7 +297,7 @@ kubectl get validatingadmissionpolicy gmc-priorityclass-allowlist-guard \
   -o jsonpath='{.spec.paramKind}{"\n"}'
 ```
 
-- `{"apiVersion":"actions-gateway.com/v2beta1","kind":"PriorityClassAllowlist"}` — current.
+- `{"apiVersion":"actions-gateway.com/v2","kind":"PriorityClassAllowlist"}` — current.
   The apiserver defect below does not apply.
   A persistent denial means the object really is missing or the binding names the wrong one: compare `kubectl get validatingadmissionpolicybinding gmc-priorityclass-allowlist-guard-binding -o jsonpath='{.spec.paramRef.name}'` against `kubectl get priorityclassallowlist`, and recreate the object (or re-run the chart upgrade) to recover.
 - `{"apiVersion":"v1","kind":"ConfigMap"}` — a release predating Q492, exposed to the defect below.
@@ -353,7 +353,7 @@ Full mechanism and the reproducer: [`q444-vap-param-resolution.md`](../plan/arch
 Failed to register controllers ... verify installed CRD schemas: the CustomResourceDefinitions
 installed in this cluster are older than this GMC and no longer declare a field that bounds
 tenant access:
-  - runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup
+  - runnersets.actions-gateway.com at v2 does not declare spec.runnerGroup
 ```
 
 **Cause.** The v2 CRDs are applied out-of-band, because they exceed Helm's 1 MiB release-Secret limit, so `helm upgrade` of the main chart never touches them.
@@ -376,10 +376,15 @@ Confirm the schema landed before waiting on the rollout:
 
 ```bash
 kubectl get crd runnersets.actions-gateway.com \
-  -o jsonpath='{.spec.versions[?(@.name=="v2beta1")].schema.openAPIV3Schema.properties.spec.properties.runnerGroup}'
+  -o jsonpath='{.spec.versions[?(@.name=="v2")].schema.openAPIV3Schema.properties.spec.properties.runnerGroup}'
 ```
 
 Then **re-apply any `RunnerSet` that declared `runnerGroup` while the schema was stale**: the stored object had the field pruned out of it, and re-applying the CRD does not put it back.
+
+**After rolling back from `v2.0.0` to 1.x** the log lists `v2alpha1` and `v2beta1`, and "older" is backwards: the CRDs are newer than the GMC.
+The apply above is refused with a conflict on `.spec.conversion.strategy` and changes nothing, so use the forced form in [GMC rollback](upgrade.md#gmc-rollback).
+
+**A `v1.10.0` GMC that logs `failed to determine if *v2beta1.PriorityClassAllowlist is namespaced`** is running with the `v2.0.0` chart-root CRD applied, which at that upgrade [goes after `helm upgrade`, with the recovery there](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
 
 ---
 
@@ -755,7 +760,6 @@ In short:
 - Add GAG's registries to your allowlist (`ghcr.io/actions-gateway/*` for the control plane, `ghcr.io/actions/actions-runner` for the default worker).
 - For `drop-ALL` / no-privilege-escalation requirements: have tenants set `securityProfile: restricted` (which satisfies them), or apply the scoped [exception samples](examples/policies/README.md) so `baseline` workers pass.
 - For `readOnlyRootFilesystem`: exempt worker pods (no profile can satisfy it).
-- For "require limits" on AGC v1alpha1: migrate the tenant to a v2alpha1 `ActionsGateway`, or exempt AGC pods.
 
 ---
 
@@ -1028,7 +1032,7 @@ Give it a few seconds, then confirm the namespace is clean and delete anything l
 kubectl get all,sa,rolebinding,networkpolicy,pdb,hpa,secret,runnergroup -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-gmc
 ```
 
-Two categories are **not** covered by that cascade and must be checked explicitly after a stripped finalizer: the `v2alpha1` per-gateway `ClusterRoleBinding` (cluster-scoped, so a namespaced gateway cannot own it) and any object left over from a pre-v0.X install (the per-tenant `Role`, the legacy `actions-gateway` `NetworkPolicy`), which only the finalizer's explicit deletes reach.
+Two categories are **not** covered by that cascade and must be checked explicitly after a stripped finalizer: the per-gateway `ClusterRoleBinding` (cluster-scoped, so a namespaced gateway cannot own it) and any object left over from a pre-v0.X install (the per-tenant `Role`, the legacy `actions-gateway` `NetworkPolicy`), which only the finalizer's explicit deletes reach.
 
 ```sh
 kubectl get clusterrolebinding -l app.kubernetes.io/managed-by=actions-gateway-gmc
@@ -1142,24 +1146,13 @@ See [Disjointness is enforced on every edit](security-operations.md#disjointness
 
 ---
 
-## EgressProxy Rejected: `CiliumFQDN` / `CalicoFQDN` "may no longer be introduced"
+## EgressProxy Rejected: `CiliumFQDN` / `CalicoFQDN` Are Not `egressPolicyMode` Values
 
-**Symptoms.** Applying an `EgressProxy` fails at admission:
+**Symptoms.** Applying an `EgressProxy` that sets `spec.egressPolicyMode: CiliumFQDN` or `CalicoFQDN` is rejected by the apiserver's schema validation, because the `v2` CRD accepts only `CIDR` and `FQDN`.
+This shows up on a **new** pool, on a pool being switched onto an alias, or on a GitOps apply that recreates a deleted one from a manifest nobody has updated.
 
-```text
-admission webhook "vegressproxy-v2.kb.io" denied the request:
-spec.egressPolicyMode: CiliumFQDN is deprecated and may no longer be introduced; it is
-removed at v2.0.0 along with every API version that defines it. Use egressPolicyMode: FQDN
-and have the platform operator set GMC --fqdn-policy-backend=cilium, which enforces exactly
-the same policy. An EgressProxy that already stores CiliumFQDN is still admitted unchanged,
-so an existing pool keeps working until you migrate it
-```
-
-A pool that was already running on the alias is unaffected, so this shows up on a **new** pool, on a pool being switched onto an alias, or on a GitOps apply that recreates a deleted one from a manifest nobody has updated.
-
-**Cause.** The two per-CNI `spec.egressPolicyMode` values are on the `v2.0.0` removal clock, and `v2` does not define them.
-A `v2` read shows a stored alias as `FQDN` with the alias in a conversion annotation, and `v2.0.0` removes every version that can store it, so an unmigrated pool is rewritten as plain `FQDN` then.
-Admission stops the population growing while it can still be drained; it deliberately leaves an already-stored value alone so an operator mid-migration is not locked out of their own object.
+**Cause.** The two per-CNI aliases were removed at `v2.0.0`; the CNI is chosen by the platform operator's GMC flag instead.
+An alias that an upgrade left stored is the case [the pre-upgrade alias check](upgrade.md#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias) exists to catch.
 
 **Recovery.** Replace the alias with the intent plus the operator-selected backend.
 On the `EgressProxy`:
@@ -1511,7 +1504,7 @@ Both are fixed; both are worth recognising if you are running an older release, 
 - **The `RunnerGroup` name used as a label value (Q473, `v1alpha1` only).** The GMC derives `<gateway>-<runner-label>`, and the AGC stamps that on every worker pod as `actions-gateway/runner-group`.
   Object names may be 253 characters but **label values stop at 63**, so past that the `RunnerGroup` reconciles perfectly while every worker pod create fails.
   A 15-character gateway with a 40-character runner label was enough.
-  `v2alpha1`/`v2beta1` are unaffected — v2 caps CR names at 52 characters precisely so derived children fit.
+  `v2` is unaffected: it caps CR names at 52 characters precisely so derived children fit.
 
 Both now derive through one bounded helper: the budget is split across the name's segments and each truncated tail carries a hash, so a derived name is always valid and still unique.
 **On upgrade, a gateway whose derived `RunnerGroup` name exceeded 63 characters gets a renamed `RunnerGroup`** (the old one is pruned) — that tenant could not place a worker pod before the rename, so nothing working is disturbed.
@@ -1522,7 +1515,7 @@ Both now derive through one bounded helper: the budget is split across the name'
 # The AGC records a WorkerPodCreateFailed Warning on the owner, carrying the API
 # server's own message. This is the shortest path to the real cause.
 kubectl describe runnergroup -n <namespace> <name>          # v1alpha1
-kubectl describe runnerset   -n <namespace> <name>          # v2alpha1
+kubectl describe runnerset   -n <namespace> <name>          # v2
 ```
 
 ```sh
@@ -1880,8 +1873,6 @@ Note the ceiling you cannot raise past: GitHub terminates any job on a self-host
 
 ## Worker Pods Reaped on Gateway Teardown (WorkerPodsReapedOnGatewayTeardown)
 
-> Applies to the `v2alpha1`/`v2beta1` (`actions-gateway.com`) API. v1 gateway teardown deletes its `RunnerGroup`s, so the pods cascade off their owner reference instead.
-
 **Symptoms.** Someone deleted an `ActionsGateway`, and the jobs that were running on its tenant failed mid-run with "The runner has received a shutdown signal" or lost communication.
 A `Warning` Event with reason `WorkerPodsReapedOnGatewayTeardown` appears on each affected `RunnerSet`, `actions_gateway_worker_pods_reaped_total{reason="gateway_deleted"}` increments by the number of pods, and the sets sit `Ready=False`/`GatewayTerminating` until the gateway is gone.
 
@@ -1905,8 +1896,6 @@ Prefer setting `maxWorkers: 0` on the sets, which stops new jobs while leaving t
 ---
 
 ## ActionsGateway Deletion Hangs on WaitingForWorkerDrain
-
-> Applies to the `v2alpha1`/`v2beta1` (`actions-gateway.com`) API.
 
 **Symptoms.** `kubectl delete actionsgateway` does not return.
 The gateway sits `Terminating` on the `actions-gateway.com/gmc-cleanup` finalizer, and `kubectl describe` shows repeated `Normal` `WaitingForWorkerDrain` events naming the sets that still report workers.
@@ -1966,7 +1955,7 @@ See [Migration v1 to v2](migration-v1-to-v2.md#the-two-tenants-keep-separate-run
 
 ## Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)
 
-**Symptoms.** On the scale-set path (`acquisitionProtocol: ScaleSet`), one job is never picked up while others in the same `RunnerSet` run fine.
+**Symptoms.** One job is never picked up while others in the same `RunnerSet` run fine.
 The AGC logs repeat `scaleset: runner name conflict` for a single `jobID`, and — on versions before the fix — end in `scaleset: runner name conflict persists, skipping job`.
 Restarting the AGC clears it.
 In the repo/org runner list, offline records named `<scaleSet>-<jobID>` (and `<scaleSet>-<jobID>-1`, `-2`, `-3`) accumulate over time.
@@ -2033,7 +2022,7 @@ kubectl get runnerset <name> -n <namespace> \
   -o jsonpath='{.status.conditions[?(@.type=="JobProvisionStalled")].message}'
 ```
 
-**The condition's four reasons.** `JobProvisionStalled` is advisory — it never gates `Ready` — and it appears only on the scale-set path (`acquisitionProtocol: ScaleSet`):
+**The condition's four reasons.** `JobProvisionStalled` is advisory — it never gates `Ready`:
 
 | `status` / `reason` | Meaning |
 |---|---|
@@ -2237,7 +2226,7 @@ kubectl get runnerset <name> -n <namespace> \
 
 ## Job-Lifecycle Events on a RunnerGroup / RunnerSet
 
-**What this is.** Beyond `WorkerPodStuckPending` (above), the AGC records `Warning` Kubernetes Events on the owning `RunnerGroup` (`v1alpha1`) or `RunnerSet` (`v2alpha1`) when a job-lifecycle transition fails terminally (Q170).
+**What this is.** Beyond `WorkerPodStuckPending` (above), the AGC records `Warning` Kubernetes Events on the owning `RunnerGroup` (`v1alpha1`) or `RunnerSet` (`v2`) when a job-lifecycle transition fails terminally (Q170).
 They are the event-based companion to the always-present metrics and status conditions — surfacing the same incident in `kubectl describe`, `kubectl get events`, and any event watcher, without a Prometheus query.
 Each `Reason` mirrors the corresponding metric name so you can correlate the two.
 
@@ -2274,7 +2263,7 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 ```sh
 # All AGC-emitted Warning events on one owner, newest last.
 kubectl describe runnergroup -n <namespace> <name>          # v1alpha1
-kubectl describe runnerset   -n <namespace> <name>          # v2alpha1
+kubectl describe runnerset   -n <namespace> <name>          # v2
 
 # Filter the namespace event stream by a specific reason.
 kubectl get events -n <namespace> --field-selector reason=EvictionRetriesExhausted
@@ -3029,11 +3018,8 @@ Any job it then declines to provision is orphaned (`in_progress`, a runner name,
 The mitigations above bound that behaviour; they do not remove it.
 Measured on the project's own dogfood tenant (2026-07-25, a 6-job CI matrix bursted across 18 runs): **85 jobs acquired, 16 worker pods, 69 orphaned, 81%.**
 
-The `ScaleSet` acquisition protocol (the default since `v1.1.0`, and the only protocol in `v2beta1`) is single-acquirer: one listener holds the scale set's message queue, and GitHub never assigns beyond the capacity the gateway advertises, so there is no fan-out to dedup and nothing to orphan.
+The `ScaleSet` acquisition protocol (the default since `v1.1.0`, and the only protocol in `v2`) is single-acquirer: one listener holds the scale set's message queue, and GitHub never assigns beyond the capacity the gateway advertises, so there is no fan-out to dedup and nothing to orphan.
 Side-by-side on the same cluster and workload it ran 7/7 jobs green against Classic's 2/7.
-If you are on Classic only because a runner set matches multiple labels, split it into one single-label `ScaleSet` runner set per `runs-on` target.
-That is the supported migration, and Classic is deprecated.
-Note `spec.acquisitionProtocol` is **immutable**: delete and recreate the runner set rather than patching it.
 
 ---
 
@@ -3688,7 +3674,7 @@ kubectl logs -n <namespace> <worker-pod> --tail=50
 
 ## Evicted Scale-Set Jobs Are Not Re-Run Automatically
 
-**Symptoms.** A `RunnerSet` on the scale-set acquisition tier (`spec.acquisitionProtocol: ScaleSet`, the default) has workers being evicted, but `actions_gateway_eviction_retries_total{tier="scaleset"}` stays flat and the jobs stay failed until someone re-runs them by hand.
+**Symptoms.** A `RunnerSet` has workers being evicted, but `actions_gateway_eviction_retries_total{tier="scaleset"}` stays flat and the jobs stay failed until someone re-runs them by hand.
 Usually one of two accompanying signals is present:
 
 - `actions_gateway_eviction_recovery_identity_unknown_total` is incrementing, and `kubectl describe runnerset` shows a `Warning` event with reason `EvictionRecoveryIdentityUnknown`; or
@@ -4133,8 +4119,8 @@ Deleting either CR then tears down the survivor's infrastructure.
 To run a second logical gateway, give it its own namespace (the guard is per-namespace, so a different namespace's first CR is admitted).
 To rename or replace an existing CR, delete the old one and wait for teardown to complete before creating the replacement.
 
-> **`v2alpha1` lifts this restriction.** The singleton guard is a `v1alpha1`-only constraint rooted in fixed per-tenant resource names.
-> The `v2alpha1` (`actions-gateway.com`) API supports **multiple `ActionsGateway`s per namespace**: every derived resource is named per gateway (`<gateway>-agc`, `<gateway>-worker`, …) and each gateway's AGC reconciles only its own `RunnerSet`s, so they never contend.
+> **`v2` lifts this restriction.** The singleton guard is a `v1alpha1`-only constraint rooted in fixed per-tenant resource names.
+> The `v2` (`actions-gateway.com`) API supports **multiple `ActionsGateway`s per namespace**: every derived resource is named per gateway (`<gateway>-agc`, `<gateway>-worker`, …) and each gateway's AGC reconciles only its own `RunnerSet`s, so they never contend.
 > `securityProfile` also moved off the gateway onto the namespace, so co-located gateways share one Pod Security posture instead of flapping it.
 > See ["Multiple v2 gateways in one namespace"](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) below.
 
@@ -4198,10 +4184,7 @@ Privileged worker containers are permitted **only** under the explicit `security
 
 ---
 
-## `RunnerTemplate` Rejected: Reserved Pod Field (`v2alpha1`)
-
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
-> The `v1alpha1` path uses the `ActionsGateway`/`RunnerGroup` checks above.
+## `RunnerTemplate` Rejected: Reserved Pod Field
 
 **Symptoms.** Creating or updating a `RunnerTemplate` (or `ClusterRunnerTemplate`) is rejected by the GMC validating webhook with one of:
 
@@ -4220,7 +4203,7 @@ privileged (DinD/sysbox) worker shapes
 ```
 
 **Likely cause.** A worker pod's identity and egress wiring are controller-enforced invariants.
-In `v1alpha1` the AGC silently overwrote these fields when it built the pod; `v2alpha1` makes them an author-time rejection so a template fails closed instead of being rewritten behind your back.
+The `v2` API makes them an author-time rejection, so a template fails closed instead of being rewritten behind your back.
 
 - **Reserved proxy env vars** (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`PROXY_CA_CERT_PATH`, matched case-insensitively) are injected by the AGC and may not be set in a template — on either kind.
 - **Privileged containers** are rejected on the namespaced `RunnerTemplate` (a tenant must not self-author a privileged worker shape) but **allowed** on the cluster-scoped `ClusterRunnerTemplate`, which only a platform administrator can create.
@@ -4234,19 +4217,9 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 
 ---
 
-## `RunnerSet` Rejected: `acquisitionProtocol` (`v2alpha1`, early-adopter)
-
-> Applies to the `v2alpha1` (`actions-gateway.com`) API.
-> `acquisitionProtocol` no longer changes how the AGC acquires jobs: every set acquires through a scale set, whatever the field says ([upgrade note](upgrade.md#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)).
-> `v2alpha1` still accepts and validates it, so the rejections below can still fire; the field goes with `v2alpha1` at `v2.0.0`.
+## `RunnerSet` Rejected: Duplicate First `runnerLabel`
 
 **Symptoms.** Creating or updating a `RunnerSet` is rejected with one of:
-
-```
-The RunnerSet "linux" is invalid: spec.acquisitionProtocol: Invalid value: "string":
-acquisitionProtocol is immutable; create a new RunnerSet to change the acquisition
-protocol
-```
 
 ```
 admission webhook "vrunnerset-v2.kb.io" denied the request: ScaleSet
@@ -4267,17 +4240,16 @@ scale-set names that GitHub scope already holds)
 
 **Likely cause & resolution.**
 
-- **Duplicate first label in one GitHub scope (GMC webhook).** A `ScaleSet` set's **first** `runnerLabel` is the name of its scale-set object at GitHub, so two sets may not share it: they would drive one scale set from two controllers.
+- **Duplicate first label in one GitHub scope (GMC webhook).** A set's **first** `runnerLabel` is the name of its scale-set object at GitHub, so two sets may not share it: they would drive one scale set from two controllers.
   Give each set a distinct *first* label.
   Labels after the first are ordinary match targets and **may** be shared: `[gpu, linux]` and `[arm64, linux]` coexist happily, and a job asking for `runs-on: linux` alone reaches whichever GitHub picks.
-  (Two `Classic` sets are unaffected: they register no scale set at all.)
 
   **The uniqueness boundary is the GitHub org, enterprise, or repo that the set's gateway `githubURL` names, not the namespace.** A scale set is adopted by name against the Actions service that URL reaches, so two `RunnerSet`s in *different namespaces* whose gateways point at the *same* org still collide, and each tenant's AGC would acquire the other's jobs.
   That is why the second message names a GitHub scope but not the holding set: the conflicting `RunnerSet` may belong to another tenant, so it is withheld from the rejection and written to the GMC controller log instead.
   A platform admin can find it there, or with:
 
   ```bash
-  kubectl get runnersets -A -o jsonpath='{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
+  kubectl get runnersets -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
   ```
 
   The same label under a gateway bound to a **different** org, enterprise, or repo is free, because that is a different scale-set namespace at GitHub.
@@ -4294,10 +4266,6 @@ scale-set names that GitHub scope already holds)
   ```
 
   Rename the named set's first `runnerLabel`, or bind the gateway to a different GitHub org, enterprise, or repo.
-- **Immutable (CRD CEL).** Switching a live set between `Classic` and `ScaleSet` is a full re-registration storm, so the field is frozen after creation.
-  To change it, create a **new** `RunnerSet` (with a distinct name and first label) and delete the old one.
-- **More than one label is no longer rejected.** Until Q726 a `ScaleSet` set had to declare exactly one `runnerLabel` and a multi-label set had to set `acquisitionProtocol: Classic`; both CEL rules are gone.
-  If you still see one of those messages, the cluster is running an older CRD than the controller; reapply the chart's CRDs.
 
 ---
 
@@ -4372,14 +4340,13 @@ Org and repo names are matched case-insensitively, so `github.com/Acme` and `git
 - **Mid-rollback.** Re-applying a v1 gateway while the v2 `RunnerSet` it collides with still exists is rejected.
   Delete that `RunnerSet` first; a rollback removes the v2 objects regardless, and the rejection names which one is in the way.
 
-**Not to be confused with** [`RunnerSet` Rejected: `acquisitionProtocol`](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter), which is about a `ScaleSet` set's first `runnerLabel`, the *scale-set* name at GitHub, rather than the CR name the agent identity comes from.
+**Not to be confused with** [`RunnerSet` Rejected: Duplicate First `runnerLabel`](#runnerset-rejected-duplicate-first-runnerlabel), which is about a set's first `runnerLabel`, the *scale-set* name at GitHub, rather than the CR name the agent identity comes from.
 The two guards are independent and a write can trip either.
 
 ---
 
 ## `ActionsGateway` Reports `ScaleSetNameCollision`
 
-> Applies to the `v2alpha1` (`actions-gateway.com`) API.
 > This is the **already-happening** form of the rejection above: admission stops a new colliding pair, and this reports one that is already stored.
 
 **Symptoms.** A v2 `ActionsGateway` is `Ready=True` and provisioning normally, but carries:
@@ -4398,7 +4365,7 @@ Message: 1 RunnerSet(s) bound to this gateway claim a scale-set name another Run
 `kubectl describe` shows a matching `Warning` Event with reason `ScaleSetNameShared`, and `actions_gateway_scale_set_name_collision` reads `1` for the gateway.
 Tenants may also report jobs disappearing into another tenant's runners, or workflow logs from a repository they do not own.
 
-**Likely cause.** Two `ScaleSet` `RunnerSet`s share a first `runnerLabel` under gateways bound to the same GitHub org, enterprise, or repo: the collision the [`acquisitionProtocol` rejection above](#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter) explains in full.
+**Likely cause.** Two `RunnerSet`s share a first `runnerLabel` under gateways bound to the same GitHub org, enterprise, or repo: the collision the [duplicate-first-label rejection above](#runnerset-rejected-duplicate-first-runnerlabel) explains in full.
 Admission (Q791) rejects every write that would create such a pair, in any apply order, so a pair that exists anyway got there without being validated.
 Two ways that happens:
 
@@ -4419,7 +4386,7 @@ Two ways that happens:
    Or list every claim in the cluster and look for a repeated first label:
 
    ```bash
-   kubectl get runnersets -A -o jsonpath='{range .items[?(@.spec.acquisitionProtocol=="ScaleSet")]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
+   kubectl get runnersets -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{.spec.runnerLabels[0]}{"\n"}{end}'
    ```
 
    Cross-reference each set's gateway `githubURL`: only sets under gateways bound to the *same* org, enterprise, or repo collide.
@@ -4477,9 +4444,7 @@ Full walkthrough: [worker right-sizing](worker-rightsizing.md#sizing-profiles-op
 
 ---
 
-## `RunnerSet` Stuck `Ready=False` With a `NotFound` Reason (`v2alpha1`)
-
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+## `RunnerSet` Stuck `Ready=False` With a `NotFound` Reason
 
 **Symptoms.** A `RunnerSet` never starts acquiring jobs and `kubectl describe runnerset <name>` shows `Ready=False` with one of:
 
@@ -4495,7 +4460,7 @@ The AGC watches the referents and flips the set to `Ready` the moment the missin
 
 A `ProxyNotFound` here means a `proxyRef`/`defaultProxyRef` **names an `EgressProxy` that does not exist** — a named-but-missing reference fails closed (it does not silently fall back to direct egress).
 Apply the named `EgressProxy`, or remove the reference if you want direct egress.
-**Unset everywhere is not an error:** a `RunnerSet` with no `proxyRef` under a gateway with no `defaultProxyRef` resolves to **direct egress** (`Ready=True`, `status.proxyMode: Direct`, advisory `EgressUnattributed` condition), not `ProxyNotFound` — see ["RunnerSet reports `EgressUnattributed`"](#runnerset-or-gateway-reports-egressunattributed-direct-egress-v2alpha1).
+**Unset everywhere is not an error:** a `RunnerSet` with no `proxyRef` under a gateway with no `defaultProxyRef` resolves to **direct egress** (`Ready=True`, `status.proxyMode: Direct`, advisory `EgressUnattributed` condition), not `ProxyNotFound` — see ["RunnerSet reports `EgressUnattributed`"](#runnerset-or-gateway-reports-egressunattributed-direct-egress).
 
 A `ClusterRunnerTemplate` ref (`templateRef.kind: ClusterRunnerTemplate`) resolves the same way: `TemplateNotFound` means the named cluster-scoped template does not exist yet.
 The AGC reads it through a per-gateway `ClusterRoleBinding` to the shipped `agc-clusterrunnertemplate-reader` ClusterRole that the GMC creates with the gateway — so if every namespaced reference resolves but a `ClusterRunnerTemplate` ref stays `TemplateNotFound`, confirm a platform administrator has created that `ClusterRunnerTemplate` (it is cluster-scoped and platform-authored; tenants cannot create it).
@@ -4580,7 +4545,6 @@ Clearing the field does **not** move the scale set back to the default group: wi
 
 ## v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)
 
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
 > The v1 `ActionsGateway` provisioning checks are above (["GMC Not Provisioning Tenant Resources"](#gmc-not-provisioning-tenant-resources)).
 
 **Symptoms.** No AGC Deployment appears in the tenant namespace and `kubectl describe actionsgateway <name>` shows `Ready=False` with either:
@@ -4628,9 +4592,7 @@ Events are emitted only on a genuine state change (never on every reconcile):
 
 ---
 
-## `RunnerSet` or gateway reports `EgressUnattributed` (direct egress) (`v2alpha1`)
-
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
+## `RunnerSet` or gateway reports `EgressUnattributed` (direct egress)
 
 **Symptoms.** `kubectl get actionsgateway,runnerset -n <ns>` shows `Egress: Direct`, and `kubectl describe` shows an `EgressUnattributed=True` condition (`Reason: DirectEgress`).
 The object is otherwise `Ready`.
@@ -4654,8 +4616,6 @@ The gateway self-heals on the next watch event.
 ---
 
 ## `AGCAutoscalingUnavailable` — the VPA CRDs are not installed
-
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
 
 **Symptoms.** You set `ActionsGateway.spec.agcAutoscaling`, but `kubectl get vpa -n <ns>` finds nothing named `<gateway>-agc`.
 `kubectl describe actionsgateway <gateway> -n <ns>` shows:
@@ -4696,9 +4656,7 @@ Install the autoscaler first, or set `vpa.enabled=false`.
 
 ## Multiple v2 gateways in one namespace: naming, scoping, prerequisites
 
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
-
-The `v2alpha1` API supports **multiple `ActionsGateway`s per namespace** (unlike `v1alpha1` — see ["Second ActionsGateway in a Namespace Rejected"](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)).
+The `v2` API supports **multiple `ActionsGateway`s per namespace** (unlike `v1alpha1` — see ["Second ActionsGateway in a Namespace Rejected"](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)).
 A few operator-visible facts and failure modes:
 
 - **Per-gateway resource names.** Every resource a gateway derives is prefixed with the gateway name: `<gateway>-agc` (AGC Deployment / ServiceAccount / RoleBinding / Service / AGC NetworkPolicy), `<gateway>-worker` (worker ServiceAccount), `<gateway>-workload` (workload NetworkPolicy), `<gateway>-agc-metrics-tls` / `-agc-metrics-client` (metrics Secrets).
@@ -4723,17 +4681,15 @@ The shipped `agc-clusterrunnertemplate-reader` ClusterRole is in the main chart.
 
 ## v2 Objects Not Reconciling After Installing the CRD Chart
 
-> Applies to the `v2alpha1` (`actions-gateway.com`) API, currently early-adopter only.
-
 **Symptom.** You created a v2 `ActionsGateway` or `EgressProxy` and nothing happens — no AGC Deployment, no proxy pool, no status conditions.
-The GMC log shows it came up v1-only:
+The GMC log shows it came up without the v2 controllers:
 
 ```text
-actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled (install the actions-gateway-crds-v2 chart and restart the GMC to enable them)
+actions-gateway.com/v2 CRDs not installed; v2 controllers disabled (install the actions-gateway-crds-v2 chart and restart the GMC to enable them)
 ```
 
-**Cause.** The GMC checks for the `actions-gateway.com/v2alpha1` CRDs **once at startup**.
-If they were absent then, it disables the v2 controllers (and the v2 IP-range refresh passes) deliberately — this is the secure, quiet default that keeps a v1-only install from spinning a "no matches for kind" retry loop.
+**Cause.** The GMC checks for the `actions-gateway.com/v2` CRDs **once at startup**.
+If they were absent then, it disables the v2 controllers (and the v2 IP-range refresh passes) deliberately, which keeps an install without the CRD chart from spinning a "no matches for kind" retry loop.
 Installing the CRD chart into an already-running cluster does **not** retroactively enable them.
 
 **Remediation.**
@@ -4746,18 +4702,14 @@ kubectl get crd actionsgateways.actions-gateway.com egressproxies.actions-gatewa
 kubectl rollout restart deploy -n gmc-system gmc-controller-manager
 
 # 3. Confirm the GMC now reports v2 enabled.
-kubectl logs -n gmc-system deploy/gmc-controller-manager | grep v2alpha1
-# Expected: actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers
+kubectl logs -n gmc-system deploy/gmc-controller-manager | grep 'actions-gateway.com/v2'
+# Expected: actions-gateway.com/v2 CRDs detected; enabling v2 controllers
 ```
 
-After the restart the v2 controllers pick up any v2 objects already in the cluster. v1alpha1 tenants are unaffected throughout — they reconcile whether or not the v2 CRDs are installed.
+After the restart the v2 controllers pick up any v2 objects already in the cluster.
 
-> **Note on older GMC builds.** A GMC predating this startup gate (before Q228) started the v2 controllers unconditionally, so on a v1-only install it logged `no matches for kind "ActionsGateway"/"EgressProxy" in version "actions-gateway.com/v2alpha1"` every ~10s and the IP-range reconciler logged `failed to list EgressProxies`.
-> The fix is the same — install the CRD chart — or upgrade to a build with the gate, which logs a single info line instead.
-
-> **The per-tenant AGC has the same gate.** Each AGC checks for the `actions-gateway.com/v2alpha1` `RunnerSet` CRD once at startup and, when it is absent, disables its v2 RunnerSet reconciler and runs only the v1 RunnerGroup reconciler, logging `actions-gateway.com/v2alpha1 RunnerSet CRD not installed; v1-only mode, v2 RunnerSet reconciler disabled`.
-> An AGC predating this gate (before Q261) registered the RunnerSet reconciler unconditionally, so on a v1-only install its informer cache never synced and the pod **crash-looped** — `mgr.Start` exited after the ~2m cache-sync deadline, the pod restarted, and it repeated.
-> If a v1 AGC pod is in `CrashLoopBackOff` with no other cause, upgrade to a build with the gate (Q261+); like the GMC, enabling v2 later requires an AGC restart, which the GMC performs automatically when it rolls the AGC Deployment.
+> **The per-tenant AGC has the same gate.** Each AGC checks for the `actions-gateway.com/v2` `RunnerSet` CRD once at startup and, when it is absent, exits with `GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2 RunnerSet CRD is not installed, so this AGC would reconcile nothing (install the actions-gateway-crds-v2 chart)`.
+> Install the CRD chart and the restarted AGC pod comes up; the GMC also restarts it when it rolls the AGC Deployment.
 
 ---
 
@@ -4969,25 +4921,24 @@ kubectl rollout status deployment/gmc-controller-manager -n gmc-system --timeout
 **Symptoms.** Creating or updating any v2 custom resource fails immediately, with no timeout:
 
 ```
-Internal error occurred: conversion webhook for actions-gateway.com/v2beta1,
-Kind=ActionsGateway failed: Post
-"https://webhook-service.gmc-system.svc:443/convert?timeout=30s":
-no endpoints available for service "webhook-service"
+Internal error occurred: failed calling webhook "vrunnerset-v2.kb.io": failed to call webhook: Post
+"https://webhook-service.gmc-system.svc:443/validate-actions-gateway-com-v2-runnerset?timeout=10s":
+dial tcp <ClusterIP>:443: connect: connection refused
 ```
 
-It affects every v2 kind, not just `ActionsGateway`: `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate` and `EgressProxy` all set `conversion.strategy: Webhook` against the same Service, so a `kubectl apply` of any of them is routed through `/convert`.
+The last clause depends on how the apiserver reaches a Service.
+That form is measured on a kind cluster on Kubernetes 1.36.1; a cluster whose apiserver routes to endpoints directly reports `no endpoints available for service "webhook-service"`.
+It affects every v2 kind, because each one's validating webhook fails closed against the same Service.
+Reads are unaffected.
 
 **This is not the rollout race documented above.** That one reports `context deadline exceeded`, has endpoints present but not yet serving, and clears in seconds on retry.
-This one names *no endpoints at all*, fails instantly, and does not clear on retry, because there is no GMC pod for the Service to select.
+This one has *no endpoints at all*, fails instantly, and does not clear on retry, because there is no GMC pod for the Service to select.
 
 **Likely causes.**
 
 - **The cluster has no schedulable node**, so the GMC is `Pending` rather than crashed.
   A cluster kept at zero nodes for cost reasons returns through this state on every scale-up: the resize is what gives the GMC somewhere to schedule, and it is still pulling its image when the first apply lands.
-- The GMC Deployment is scaled to zero, or its namespace was cleaned up while the CRDs were left installed.
-  The CRDs and the GMC are separate charts ([install.md § the v2 API CRDs](install.md#the-v2-api-crds)), so removing one leaves the other's conversion wiring in place.
-- The GMC is deployed to a namespace other than the one baked into the CRDs' `clientConfig`.
-  The release asset hardcodes `gmc-system`; a GMC installed elsewhere leaves that Service permanently empty.
+- The GMC Deployment is scaled to zero.
 
 **Diagnostics.**
 
@@ -5015,8 +4966,6 @@ kubectl get nodes
 
 - **If the pod is `Pending`, add capacity** and let the rollout complete.
   The apply cannot succeed before it does.
-- **If the GMC runs outside `gmc-system`**, re-render the CRDs for that namespace.
-  The conversion `clientConfig` is baked per namespace, and no amount of waiting fixes a Service reference that points somewhere the GMC is not ([install.md § the v2 API CRDs](install.md#the-v2-api-crds)).
 
 **Ordering, so it does not recur.** Bring the GMC up before applying v2 objects, which is the rule [install.md § the v2 API CRDs](install.md#the-v2-api-crds) states as *create v2 objects only once the GMC is running*.
 The dogfood scripts encode it: `wait_for_gmc` in `scripts/dogfood/lib/gmc.sh` runs after the pool resize that gives the GMC a node and before the apply its webhook serves.

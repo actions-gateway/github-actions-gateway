@@ -4,9 +4,11 @@
 
 ---
 
-> **Status: shipped — `v2alpha1`, served beside `v1alpha1`.** This appendix is the design source of truth for the `v2alpha1` API (`actions-gateway.com` group) that replaces the monolithic `ActionsGateway` + `RunnerGroup` model.
-> **All milestones M1–M5 have landed**: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built.
-> `v2alpha1` is an **alpha** API served side by side with `v1alpha1` during the coexistence window — nothing in the shipped `v1alpha1` API changes, and tenants migrate on their own schedule via the migration tool, a deliberate tool-assisted fan-out (see [§H.11](#h11-migration-v2-tool-assisted)).
+> **Status: shipped.
+> `v2.0.0` serves `actions-gateway.com/v2` alone.** This appendix is the design source of truth for the v2 API (`actions-gateway.com` group) that replaced the monolithic `ActionsGateway` + `RunnerGroup` model.
+> It was designed and shipped as `v2alpha1`, then graduated through `v2beta1` to `v2`; `v2.0.0` removed `v1alpha1`, `v2alpha1` and `v2beta1`.
+> A version name in the sections below is the version current when the decision was made.
+> **All milestones M1–M5 landed**: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool (a deliberate tool-assisted fan-out, see [§H.11](#h11-migration-v2-tool-assisted)) that 1.x carried.
 > Milestone sequencing and the itemized task record are in the [v2 API plan](../plan/v2-api.md).
 
 ---
@@ -789,8 +791,8 @@ The transport-error signatures are kept identical to the e2e helper's (Q392) so 
 A conversion webhook can't create those sibling objects — which is exactly why the migration is a tool, not a webhook.
 
 The v1→v2 fan-out is one-time.
-Once on `v2alpha1`, the API graduates **in place** `v2alpha1 → v2beta1 → v2` via a conversion webhook (a thing a conversion webhook *can* do, since the kinds no longer change shape) — see the [graduation path](../plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2) in the implementation plan for the per-hop mechanics.
-The superseded versions do not linger indefinitely: `v2alpha1` is dropped at **`v2.0.0`**, the same release that removes `v1alpha1` and the classic acquisition machinery, announced one release ahead in `v1.3.0`.
+Once on `v2alpha1`, the API graduated **in place** `v2alpha1 → v2beta1 → v2` through 1.x via a conversion webhook (a thing a conversion webhook *can* do, since the kinds no longer change shape) — see the [graduation path](../plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2) in the implementation plan for the per-hop mechanics.
+The superseded versions did not linger: `v2alpha1` and `v2beta1` were dropped at **`v2.0.0`**, with the conversion webhook, in the same release that removed `v1alpha1` and the classic acquisition machinery, announced one release ahead in `v1.3.0`.
 That coupling and the operator-facing contract are the [deprecation and removal notice](../operations/v1alpha1-deprecation.md); the release sequencing is [v2-ga.md](../plan/v2-ga.md).
 
 **`gag-migrate storage-version` rewrites what is stored when the storage version advances (Q1086).** 1.10 marks `v2` the storage version of all six `actions-gateway.com` kinds, which changes only what the apiserver writes next.
@@ -850,7 +852,7 @@ Non-exhaustive impact list, to be turned into plan-doc scope when scheduled:
 
 ### H.13.1. CRD packaging and conditional GMC startup
 
-The five `actions-gateway.com/v2alpha1` CRDs ship in a **separate, opt-in Helm chart** (`actions-gateway-crds-v2`), not the main `actions-gateway` chart.
+The five `actions-gateway.com/v2` CRDs ship in a **separate, opt-in Helm chart** (`actions-gateway-crds-v2`), not the main `actions-gateway` chart.
 The split keeps the main chart's Helm release Secret under Kubernetes' 1 MiB object limit — the five v2 CRDs' OpenAPI schemas are large enough that bundling them would push it over.
 
 So a supported install can have the GMC running without the v2 CRDs present.
@@ -875,9 +877,9 @@ helm template actions-gateway-crds-v2 <chart-or-oci-ref> --namespace gmc-system 
 This is the mainstream practice for large CRDs (cert- manager, Crossplane, Istio, Gateway API all ship CRDs to be applied out-of-band and warn against Helm-managing them).
 The templates carry `helm.sh/resource-policy: keep` so an operator who fronts them with a GitOps tool that *does* build a Helm release keeps the CRDs on prune/uninstall.
 
-To keep the *manual* path a single command with no helm or chart checkout, each release attaches a **pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`** (rendered for the default `gmc-system` namespace) to its GitHub Release, so a manual install is just `kubectl apply --server-side -f <release-url>/actions-gateway-crds-v2.yaml`.
+To keep the *manual* path a single command with no helm or chart checkout, each release attaches a **pre-rendered, cosign-signed `actions-gateway-crds-v2.yaml`** to its GitHub Release, so a manual install is just `kubectl apply --server-side -f <release-url>/actions-gateway-crds-v2.yaml`.
 It is keyless-signed via the same Fulcio/Rekor path as the images and charts (`sign-blob` → a Sigstore bundle verified with `cosign verify-blob --bundle`), which also answers the "release assets are mutable" caveat.
-The asset covers the default-namespace case; a GMC in a non-default namespace, or a GitOps render, still uses the `helm template --set … | kubectl apply --server-side` path (the conversion webhook `clientConfig` namespace bakes in at render time).
+A GitOps render uses the `helm template … | kubectl apply --server-side` path.
 Argo CD renders the chart itself and never builds a release Secret, so it is unaffected by the 1 MiB limit; Flux `HelmRelease` *does* build one and uses the rendered manifest or a Kustomization instead.
 
 The properties this forgoes — `helm upgrade` revision history, `helm rollback`, `helm uninstall` cleanup — are **low-value for CRDs specifically** and partly anti-patterns: rolling a CRD schema *backward* can strand stored objects (removing a served/storage version or field is a deliberate migration, never a casual rollback), and cascading `helm uninstall` of a CRD deletes every custom resource with it (data loss — exactly what `resource-policy: keep` prevents).
@@ -896,8 +898,8 @@ Alternatives, each measured by reconstructing Helm's stored-Secret encoding:
 **Fold-back into the main chart is gated on v2 reaching a *single served version*, not on `v1alpha1` removal.** Measured against the same encoding: with v2 down to one version (`v2beta1` only — `v2alpha1` and the conversion webhook retired), the folded main chart stores at **~0.65 MiB, ~0.4 MiB under the ceiling.** It fits because a single-version v2 CRD set (~1.3 MB) is about the same footprint as the two v1 CRDs it replaces (~1.3 MB), and today's main chart already carries those and installs cleanly (**~0.62 MiB stored**).
 The trap is the coexistence window: while v2 serves *both* `v2beta1` and `v2alpha1` (which is what forces the conversion webhook), that set alone stores at **~1.26 MiB** — over the limit before a single controller is added, which is exactly why the v2 CRDs live in their own chart today.
 So the clean fold-back sequence is two removals, both required: retire `v1alpha1`, **and** drop `v2alpha1` (retiring the conversion webhook), leaving one served version — then the now single-version v2 CRDs fold into the main chart with headroom to spare.
-Both of those removals land at **`v2.0.0`** ([notice](../operations/v1alpha1-deprecation.md)), which is therefore the earliest the fold-back can be reconsidered, and only once v2 is genuinely down to one served version.
-Until then, the opt-in chart plus apply-render stands.
+Both of those removals landed at **`v2.0.0`** ([notice](../operations/v1alpha1-deprecation.md)), so v2 is down to one served version and the fold-back can be reconsidered.
+Until it is, the opt-in chart plus apply-render stands.
 
 ## H.14. Admin policy layer — deferred until tiering is real
 

@@ -17,6 +17,12 @@
 # from GHCR, not a rebuild from an old git ref — and then walks the operator's
 # upgrade path to HEAD:
 #
+#   Before installing that chart it puts the out-of-band actions-gateway-crds-v2
+#   CRDs back to the released ones, because the released GMC refuses a cluster whose
+#   CRDs dropped a version it reads, and then takes those CRDs to HEAD's along
+#   upgrade.md's documented path once the released chart is up (Q1167). The chart-root
+#   CRDs go to HEAD's after the upgrade, ahead of the admission assertions.
+#
 #   1. A release whose values set a key HEAD removed must fail AT RENDER with
 #      the chart's migration message (today: priorityClassAllowlist.configMapName,
 #      removed by Q492), never midway through applying.
@@ -81,7 +87,10 @@ source "${REPO_ROOT}/scripts/lib/common.sh"
 source "${REPO_ROOT}/scripts/lib/registry-mirror.sh"
 
 readonly CHART_DIR="${REPO_ROOT}/charts/actions-gateway"
+readonly CRDS_CHART_DIR="${REPO_ROOT}/charts/actions-gateway-crds-v2"
 readonly PROBE_NS="chart-released-upgrade-check"
+# The actions-gateway-crds-v2 CRDs that carried a conversion webhook through 1.x.
+readonly OOB_CRDS=(actionsgateways clusterrunnertemplates egressproxies runnersets runnertemplates)
 # Allowlist entries for the values-set leg. Names only — neither list is checked
 # against real PriorityClass objects — but they must be DISJOINT, or the CRD's
 # CEL rule rejects the pair and the leg fails for the wrong reason.
@@ -113,6 +122,15 @@ release_revision() {
 release_chart_version() {
 	helm get metadata "${HELM_RELEASE}" --kube-context "${KUBE_CONTEXT}" \
 		--namespace "${RELEASE_NS}" -o json | jq -r '.version'
+}
+
+# oob_crd_state echoes one CRD's conversion strategy, whether a caBundle is set, and its
+# served versions, so a before and an after compare as one string.
+oob_crd_state() {
+	kc get crd "$1.actions-gateway.com" -o json | jq -c '[
+		.spec.conversion.strategy,
+		(.spec.conversion.webhook.clientConfig.caBundle != null),
+		[.spec.versions[] | select(.served) | .name]]'
 }
 
 # upgrade_to_head attempts the released -> HEAD upgrade with the captured
@@ -388,6 +406,17 @@ for crd in ${head_root_crds[@]+"${head_root_crds[@]}"}; do
 	kc delete crd "${crd}" --ignore-not-found >/dev/null
 done
 
+# The published chart, for the same reason as the main one. Applied over HEAD's rather
+# than deleted: a CRD delete cascades to every custom resource and hangs on any whose
+# finalizer's controller has gone with the release.
+step "resetting the out-of-band v2 CRDs to the released chart's"
+"${REPO_ROOT}/scripts/fetch/retry.sh" helm pull "${helm_pull_ref}-crds-v2" "${helm_pull_scheme_args[@]}" \
+	--version "${released_version}" -d "${work_dir}" >/dev/null ||
+	die "could not pull ${helm_pull_ref}-crds-v2 version ${released_version}."
+helm template actions-gateway-crds-v2 "${work_dir}/actions-gateway-crds-v2-${released_version}.tgz" \
+	--namespace "${RELEASE_NS}" >"${work_dir}/released-crds-v2.yaml"
+kc apply --server-side --force-conflicts -f "${work_dir}/released-crds-v2.yaml" >/dev/null
+
 # Pre-pull the released GMC image on the host and load it onto the kind nodes,
 # so kubelet's pull from ghcr.io is a local hit — same de-flake pattern as the
 # cert-manager/metrics-server pre-pulls in e2e-reusable.yml. kind-load-image.sh
@@ -459,6 +488,52 @@ if grep -rq "priorityClassAllowlist.configMapName" "${CHART_DIR}/templates"; the
 else
 	echo "     (skipping the removed-values probe: HEAD's chart no longer guards configMapName)"
 fi
+
+# --- The out-of-band CRDs go to HEAD's by the documented path, ahead of the chart ---
+# upgrade.md, "remove the CRDs' conversion webhook before applying them". The refusal is
+# anchored on the released CRDs still carrying a webhook, so this half retires by itself
+# once the last release is v2-only, and the rest stays as a no-op.
+step "taking the out-of-band CRDs to HEAD's by the documented path"
+helm template actions-gateway-crds-v2 "${CRDS_CHART_DIR}" --namespace "${RELEASE_NS}" \
+	>"${work_dir}/head-crds-v2.yaml"
+if grep -q '^    strategy: Webhook$' "${work_dir}/released-crds-v2.yaml"; then
+	for crd in "${OOB_CRDS[@]}"; do
+		for _ in $(seq 1 60); do
+			[[ "$(oob_crd_state "${crd}")" == '["Webhook",true,'* ]] && break
+			sleep 2
+		done
+		[[ "$(oob_crd_state "${crd}")" == '["Webhook",true,'* ]] ||
+			die "${crd} never got a caBundle from the CA injector: $(oob_crd_state "${crd}")"
+	done
+	before_state="$(for crd in "${OOB_CRDS[@]}"; do oob_crd_state "${crd}"; done)"
+	apply_rc=0
+	apply_out="$(kc apply --server-side --force-conflicts -f "${work_dir}/head-crds-v2.yaml" 2>&1)" || apply_rc=$?
+	if ((apply_rc == 0)) || [[ "${apply_out}" != *"webhookClientConfig: Forbidden"* ]]; then
+		echo "FAIL: upgrade.md says a forced apply of the v2.0.0 CRDs is refused while the CA" >&2
+		echo "  injector holds a caBundle. It exited ${apply_rc} and said:" >&2
+		echo "  ${apply_out}" >&2
+		exit 1
+	fi
+	after_state="$(for crd in "${OOB_CRDS[@]}"; do oob_crd_state "${crd}"; done)"
+	[[ "${after_state}" == "${before_state}" ]] ||
+		die "the refused apply changed a CRD, and upgrade.md says it does not:
+${before_state}
+${after_state}"
+	echo "OK: the apply is refused until the webhook is removed, with the CRDs left as they were"
+fi
+for crd in "${OOB_CRDS[@]}"; do
+	stored="$(kc get crd "${crd}.actions-gateway.com" -o jsonpath='{.status.storedVersions}')"
+	[[ "${stored}" == '["v2"]' ]] ||
+		die "${crd} stores ${stored}, so the check upgrade.md puts first would stop an operator here."
+	kc patch crd "${crd}.actions-gateway.com" --type=merge \
+		-p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}' >/dev/null
+done
+kc apply --server-side -f "${work_dir}/head-crds-v2.yaml" >/dev/null
+for crd in "${OOB_CRDS[@]}"; do
+	[[ "$(oob_crd_state "${crd}")" == '["None",false,["v2"]]' ]] ||
+		die "after the documented steps ${crd} reads $(oob_crd_state "${crd}"), not v2 alone."
+done
+echo "OK: the documented steps leave every out-of-band CRD serving v2 alone"
 
 # --- 2. A plain upgrade must succeed, or fail with the documented preflight ---
 step "helm upgrade ${HELM_RELEASE} -> HEAD's chart, with no pre-upgrade step"
@@ -617,6 +692,24 @@ for want in "${PROBE_WORKER_CLASS}" "${PROBE_INFRA_CLASS}"; do
 	fi
 done
 echo "OK: both allowlists round-trip into the CR: ${rendered}"
+
+# upgrade.md's v2.0.0 exception. Helm maps the current release's manifest before applying
+# anything, so a CRD dropping the version that manifest names goes on after the upgrade. The
+# plain branch above never applies it, and the upgrade below proves the next one still maps.
+step "applying HEAD's chart-root CRDs after the upgrade, then upgrading once more"
+kc apply -f - <<<"$(helm show crds "${CHART_DIR}")" >/dev/null
+for crd in ${head_root_crds[@]+"${head_root_crds[@]}"}; do
+	served="$(kc get crd "${crd}" -o json | jq -c '[.spec.versions[] | select(.served) | .name]')"
+	[[ "${served}" == '["v2"]' ]] ||
+		die "after the documented step ${crd} serves ${served}, not v2 alone."
+done
+upgrade_with_lists --wait --timeout 10m
+if ((UPGRADE_RC != 0)); then
+	echo "FAIL: an upgrade after the chart-root CRDs went to HEAD's was refused. Helm said:" >&2
+	echo "  ${UPGRADE_OUT}" >&2
+	exit 1
+fi
+echo "OK: every chart-root CRD serves v2 alone, and the next upgrade still applies"
 
 step "admission must work on the upgraded release"
 # A previous run's cleanup deletes the probe namespace with --wait=false, so a

@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,12 +13,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/conversion"
 )
 
 // fakeReader returns a client.Reader preloaded with the given objects, standing in
-// for the manager's uncached API reader in the Q322 referrer-graph guards. A v2
-// object is stored as both its v2 view and its v2alpha1 view (withV2alpha1Views).
+// for the manager's uncached API reader in the Q322 referrer-graph guards.
 //
 // It registers every kind the validators read: the agent-identity guard (Q1011) is
 // fail-closed, so an unregistered kind fails admission with a List error rather
@@ -29,44 +25,7 @@ func fakeReader(t *testing.T, objs ...client.Object) client.Reader {
 	t.Helper()
 	scheme := runtime.NewScheme()
 	require.NoError(t, agcv2.AddToScheme(scheme))
-	require.NoError(t, agcv2alpha1.AddToScheme(scheme))
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(withV2alpha1Views(t, objs...)...).Build()
-}
-
-// withV2alpha1Views returns objs plus the v2alpha1 view of each v2 object, converted
-// through the v2beta1 hub as the apiserver serves a stored object to a v2alpha1 read.
-// The fake client does not convert, and the guards read at both versions: the
-// scale-set and agent-identity inventories list at v2alpha1 until Q1167 retypes them,
-// and the rest read at v2. A fixture
-// can then be both the object under admission and a sibling.
-func withV2alpha1Views(t *testing.T, objs ...client.Object) []client.Object {
-	t.Helper()
-	out := append([]client.Object{}, objs...)
-	for _, o := range objs {
-		var hub conversion.Hub
-		var dst interface {
-			client.Object
-			conversion.Convertible
-		}
-		switch o.(type) {
-		case *agcv2.ActionsGateway:
-			hub, dst = &v2beta1.ActionsGateway{}, &agcv2alpha1.ActionsGateway{}
-		case *agcv2.EgressProxy:
-			hub, dst = &v2beta1.EgressProxy{}, &agcv2alpha1.EgressProxy{}
-		case *agcv2.RunnerSet:
-			hub, dst = &v2beta1.RunnerSet{}, &agcv2alpha1.RunnerSet{}
-		case *agcv2.RunnerTemplate:
-			hub, dst = &v2beta1.RunnerTemplate{}, &agcv2alpha1.RunnerTemplate{}
-		case *agcv2.ClusterRunnerTemplate:
-			hub, dst = &v2beta1.ClusterRunnerTemplate{}, &agcv2alpha1.ClusterRunnerTemplate{}
-		default:
-			continue
-		}
-		require.NoError(t, o.(conversion.Convertible).ConvertTo(hub))
-		require.NoError(t, dst.ConvertFrom(hub))
-		out = append(out, dst)
-	}
-	return out
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
 }
 
 // failingReader errors every read, for the fail-closed paths of the Q322 guards.

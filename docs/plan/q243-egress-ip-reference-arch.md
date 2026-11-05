@@ -303,7 +303,7 @@ GAG delivered the *choke point* but not the *per-tenant IP*.
 
 ### Placement pass-through (Q282)
 
-**Closed 2026-07-07.** [`EgressProxy.spec.scheduling`](../../api/v2beta1/egressproxy_types.go) and `ActionsGateway.spec.scheduling` (a shared `PodScheduling`: `nodeSelector`/`tolerations`/`affinity`, served at both `v2alpha1` and `v2beta1`) are plumbed into the proxy pool Deployment and the AGC Deployment ([`egressproxy_builder.go`](../../cmd/gmc/internal/controller/egressproxy_builder.go), [`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go)).
+**Closed 2026-07-07.** [`EgressProxy.spec.scheduling`](../../api/v2/egressproxy_types.go) and `ActionsGateway.spec.scheduling` (a shared `PodScheduling`: `nodeSelector`/`tolerations`/`affinity`, served at both `v2alpha1` and `v2beta1`) are plumbed into the proxy pool Deployment and the AGC Deployment ([`egressproxy_builder.go`](../../cmd/gmc/internal/controller/egressproxy_builder.go), [`actionsgateway_v2_builder.go`](../../cmd/gmc/internal/controller/actionsgateway_v2_builder.go)).
 The two design points the gap raised were resolved as:
 
 **(a) Anti-affinity composition.** A supplied `nodeAffinity`/`podAffinity` is applied *alongside* the builder's required cross-node anti-affinity, which is preserved (pinning to a pool should not disable HA *within* it).

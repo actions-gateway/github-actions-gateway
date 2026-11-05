@@ -33,7 +33,7 @@ type Metrics struct {
 // manager's cached client; it backs the scrape-time collectors, which list the
 // relevant CRs on each scrape (no staleness, no reconcile-path cost).
 //
-// v2Enabled reflects whether the opt-in actions-gateway.com/v2alpha1 CRDs are
+// v2Enabled reflects whether the opt-in actions-gateway.com/v2 CRDs are
 // installed (the same startup detection that gates the v2 controllers). When true,
 // the collectors also count v2 ActionsGateways and reflect v2 EgressProxy proxy
 // conditions, and a v2-only collector exports the v2 ActionsGateway condition

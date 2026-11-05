@@ -19,7 +19,9 @@ The three independently versioned components — GMC, AGC, and worker image — 
 - [Migration Notes](#migration-notes)
   - [Action required before v2.0.0: v2 is the storage version, and stored objects need rewriting](#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)
   - [Action required before v2.0.0: a Classic RunnerSet now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)
+  - [Action required at v2.0.0: remove the CRDs' conversion webhook before applying them](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them)
   - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
+  - [Action required after v2.0.0: delete what an owner deleted during the upgrade left behind](#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
@@ -287,26 +289,149 @@ Delete each one it prints, and remove the offline `rs-<set>-<n>` runners in the 
 
 **Rolling back** to 1.10 returns the set to classic acquisition.
 
+### Action required at `v2.0.0`: remove the CRDs' conversion webhook before applying them
+
+**Who is affected:** every cluster on the 1.x CRD chart whose conversion `caBundle` was set by cert-manager, which is the default, or by a `kubectl patch`.
+
+**What changed.** The `v2.0.0` CRDs serve `v2` alone and carry no `spec.conversion`.
+Server-side apply removes only the fields its own field manager owns, and the `caBundle` belongs to whichever manager set it, so the apply leaves it behind, and the apiserver refuses a `caBundle` on a CRD with no webhook strategy.
+
+**What you see.** `kubectl apply --server-side` refuses all five CRDs, with or without `--force-conflicts`, and the refused CRDs stay as they were:
+
+```text
+CustomResourceDefinition.apiextensions.k8s.io "runnersets.actions-gateway.com" is invalid: [spec.conversion.strategy: Required value, spec.conversion.webhookClientConfig: Forbidden: should not be set when strategy is not set to Webhook]
+```
+
+**What to do.** Run [the `storedVersions` check](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2) first, and stop unless every line reads `[v2]`.
+The patch below changes the cluster and the apply can still refuse, so anything that would refuse it has to be settled while the webhook is still there.
+
+Then download the release, so a wrong tag fails with nothing changed, remove the webhook from each CRD, and apply straight away, in the same shell:
+
+```sh
+curl -fsSLo actions-gateway-crds-v2.yaml \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
+for crd in actionsgateways clusterrunnertemplates egressproxies runnersets runnertemplates; do
+  kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
+    -p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}'
+done
+kubectl apply --server-side -f actions-gateway-crds-v2.yaml
+```
+
+Between the patch and the apply `v2alpha1` and `v2beta1` are still served with nothing converting them, so a read at either returns the stored `v2` object relabelled, without converting it.
+Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2: the CA injector did not restore the webhook during a 60-second pause, the apply then succeeded, and the CRDs served `v2` alone.
+
+**If the apply is refused after the patch.** A failure that is not a refusal, such as a timeout, only needs the apply run again.
+After a refusal the cluster is half upgraded, and an object still stored at an old version reads unconverted, so do not run the storage sweep in this state.
+Measured the same way with `status.storedVersions` reading `["v2beta1","v2"]` on `runnersets`: the apply exited 1, the other four CRDs served `v2` alone, and `runnersets` served all three versions with strategy `None`.
+
+Go back by applying the CRDs of the 1.x release you came from.
+`--force-conflicts` is required, because the plain form is refused with a conflict on `.spec.conversion.strategy`:
+
+```sh
+kubectl apply --server-side --force-conflicts -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.X.Y/actions-gateway-crds-v2.yaml
+```
+
+Measured the same way, going back from that state to the `v1.10.0` CRDs: all five returned to strategy `Webhook` serving all three versions, the CA injector restored each `caBundle` within about 15 seconds, and once `storedVersions` read `[v2]` this section's steps then succeeded.
+A running `v1.10.0` GMC then converts on reads, as [GMC rollback](#gmc-rollback) records.
+Fix what refused the apply, then start this section again.
+
 ### Action required at `v2.0.0`: apply the CRDs with the upgrade, because the AGC's watch depends on them
 
 **Who is affected:** every gateway.
 
 **What changed.** Each Actions Gateway Controller (AGC) watches only its own gateway's `RunnerSet`s, through a server-side field selector on `spec.gatewayRef.name`, and the apiserver evaluates that selector at the API version the request names.
-A `v1.10.0` AGC lists at `v2alpha1` and its CRD declares the field there alone; a `v2.0.0` AGC lists at `v2`, and its CRD declares the field there.
+A `v1.10.0` AGC lists at `v2alpha1`, and the `v1.10.0` CRD declares the field there alone; a `v2.0.0` AGC lists at `v2`, and `v2` is the only version the `v2.0.0` CRD serves.
 So neither AGC can list its `RunnerSet`s against the other release's CRDs.
 
-**What you see.** The `RunnerSet` list fails with this error, and an AGC that hits it at startup does not become ready:
+**What you see.** A `v2.0.0` AGC on the `v1.10.0` CRDs fails its `RunnerSet` list with this error and does not become ready:
 
 ```text
 field label not supported: spec.gatewayRef.name
 ```
 
-The GMC's startup schema check does not catch this, because it probes fields rather than selectable fields.
+A `v1.10.0` AGC that restarts on the `v2.0.0` CRDs exits at startup, because the version it looks for is gone (read from the `v1.10.0` source, not run):
 
-**What to do.** Apply the `v2.0.0` CRDs and upgrade the chart as one step, and do not leave a gap between them.
+```text
+GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing (install the actions-gateway-crds-v2 chart)
+```
+
+The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.
+
+**What to do.** Pull the chart before [the webhook removal](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), so a wrong version fails with nothing changed.
+Then apply the five CRDs in `actions-gateway-crds-v2.yaml`, upgrade the chart, and apply the chart-root CRD, with no gap between them:
+
+```sh
+# Before the webhook removal
+helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <chart-version> --untar --untardir gag-chart-<chart-version>
+
+# Straight after the webhook removal, whose block ends with this same apply
+kubectl apply --server-side -f actions-gateway-crds-v2.yaml
+helm upgrade gag gag-chart-<chart-version>/actions-gateway \
+  --namespace gmc-system --reset-then-reuse-values \
+  --set gmc.image.digest=sha256:<new-gmc> \
+  --set agc.image.digest=sha256:<new-agc> \
+  --set proxy.image.digest=sha256:<new-proxy> \
+  --set wrapper.image.digest=sha256:<new-wrapper>
+helm show crds gag-chart-<chart-version>/actions-gateway | kubectl apply -f -
+```
+
+Set all four digests to the new release's, because `--reset-then-reuse-values` otherwise replays the `v1.10.0` ones.
+
 During a gap, an AGC that restarts cannot start.
 One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
-A rollback crosses the same gap in reverse.
+A `v1.10.0` GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.
+A rollback crosses the same gap in reverse, so it [puts the CRDs back first](#gmc-rollback).
+
+**The chart-root CRD goes last at this release only.** Helm builds the current release's manifest before it applies anything, that manifest names the `PriorityClassAllowlist` at `v2beta1`, and the `v2.0.0` CRD serves `v2` alone.
+Applied first, as other upgrades do it, it stops the upgrade with the revision unchanged:
+
+```text
+Error: UPGRADE FAILED: unable to build kubernetes objects from current release manifest: resource mapping not found for name: "gmc-priorityclass-allowlist" namespace: "" from "": no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
+ensure CRDs are installed first
+```
+
+A `v1.10.0` GMC pod that starts in that state logs `failed to determine if *v2beta1.PriorityClassAllowlist is namespaced` and crash-loops.
+To recover, go forward: apply the chart-root CRD of the 1.x chart you are on, run the `helm upgrade`, then apply the `v2.0.0` chart-root CRD.
+Applying the 1.x CRD alone does not bring the pods back, because the five CRDs are still on `v2`.
+
+Measured on kind with Kubernetes 1.36.1, cert-manager v1.20.2 and a local chart directory, from `v1.10.0`, with no tenant gateway: in this order every step exited 0, all six CRDs served `v2` alone, the guard denied an off-allowlist write, and a further `helm upgrade` exited 0.
+
+### Action required after `v2.0.0`: delete what an owner deleted during the upgrade left behind
+
+**Who is affected:** a cluster where an owner went away between the CRD apply and its `v2.0.0` controller reconciling it.
+That means a `RunnerSet` whose finalizer cleared before a `v2.0.0` Actions Gateway Controller (AGC) reconciled it, an `EgressProxy`, which has no finalizer and so goes at once, or an `ActionsGateway` already being deleted when the `v2.0.0` Gateway Manager Controller (GMC) starts.
+
+**What changed.** A `v1.10.0` AGC writes an owner reference naming `actions-gateway.com/v2alpha1` on each set's three long-lived ConfigMaps, the scale-set guard, the recovery claims and the failure ledger, and on its worker pods.
+A `v1.10.0` GMC writes the same reference on the children of each `ActionsGateway` and `EgressProxy`.
+The garbage collector cannot map a version the cluster no longer serves, so it leaves the object in place when the owner goes away.
+
+Measured on kind with `kube-controller-manager` 1.36.1: such a ConfigMap was still present 12 minutes after its owner was deleted, across a controller-manager restart, while one naming `v2` was collected within 30 seconds.
+An `EgressProxy`'s Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget, NetworkPolicy and Secret behaved the same way: all six naming `v2alpha1` were still present 10 minutes after their owner was deleted, with the Deployment's pod still running, while the same six naming `v2` were gone within 45 seconds.
+So a proxy Deployment and its TLS Secret can outlive their `EgressProxy`.
+
+A `v2.0.0` AGC rewrites the three ConfigMaps' references to `v2` the first time it reconciles each set, including a set already being deleted, so nothing is needed for any set it sees.
+It does not rewrite worker pods, which end with their job.
+A `v2.0.0` GMC rewrites a child's reference each time it applies the child, so nothing is needed for a live gateway or proxy (read from the code, not measured).
+For a gateway being deleted it deletes the children by name, except the two metrics Secrets, which it leaves to the garbage collector (also read from the code).
+
+**What to do.** After the upgrade, once the GMC and every AGC have started, list what still names the old version:
+
+```sh
+kubectl get configmaps,pods,secrets,services,serviceaccounts,deployments,horizontalpodautoscalers,poddisruptionbudgets,networkpolicies,rolebindings -A --no-headers \
+  -o custom-columns='KIND:.kind,NAMESPACE:.metadata.namespace,NAME:.metadata.name,OWNER_KIND:.metadata.ownerReferences[*].kind,OWNER:.metadata.ownerReferences[*].name,VERSION:.metadata.ownerReferences[*].apiVersion' \
+  | grep 'actions-gateway.com/v2alpha1'
+```
+
+The columns carry metadata only, so no Secret data reaches the pipe.
+Where the GMC manages ServiceMonitors, VerticalPodAutoscalers, `CiliumNetworkPolicy` or Calico `NetworkPolicy` objects, add those kinds to the list; they are left out because the command fails on a cluster without their CRDs.
+
+Delete an object from this list whose owner, named in its last columns, is gone.
+Deleting a Deployment takes its ReplicaSet and pods with it (measured the same way).
+Rewriting its reference did not help within three minutes: measured the same way, a ConfigMap repointed to `v2` after its owner was gone was still present then.
+A ConfigMap left in place also matters if you recreate a set of the same name, because the AGC finds these ConfigMaps by name (read from the code, not measured).
+An object whose owner still exists needs nothing, except the agent Secrets of a set [kept from `Classic`](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol), which nothing cleans up.
 
 ### Action required if you alert on or chart the classic acquisition series: they are no longer exported
 
@@ -1238,7 +1363,7 @@ The AGC and GMC receive the same warning through their Kubernetes clients but lo
 
 **What to do about it.** Onboard new tenants on `v2beta1` (see [tenant onboarding](tenant-onboarding.md)), and move existing `v2alpha1` objects to `v2beta1` at your convenience by re-applying the same object with the `apiVersion` changed, since the two versions convert both ways.
 `v2alpha1` remains the [`gag-migrate`](migration-v1-to-v2.md) on-ramp for tenants coming off `v1alpha1`, so a freshly migrated tenant emits these warnings until it is moved onto `v2beta1`.
-Note that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic` must adopt the runner-scale-set protocol as part of that move (see ["`RunnerSet` Rejected: `acquisitionProtocol`"](troubleshooting.md#runnerset-rejected-acquisitionprotocol-v2alpha1-early-adopter)).
+Note that `v2beta1` is ScaleSet-only: a `RunnerSet` still on `acquisitionProtocol: Classic` must adopt the runner-scale-set protocol as part of that move (see [a Classic `RunnerSet` now runs on the scale-set protocol](#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol)).
 `v2alpha1` is one of three things `v2.0.0` removes; the standing notice for all three, with a pre-upgrade checklist, is the [deprecation and removal notice](v1alpha1-deprecation.md).
 
 ### Non-breaking: `v2alpha1` CRDs ship in a separate, opt-in chart
@@ -1502,10 +1627,11 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set proxy.image.digest=sha256:<proxy> \
   --set wrapper.image.digest=sha256:<wrapper>
 
-# Apply the chart-root CRDs first — EVERY upgrade, not just some. Helm installs
-# that directory on `helm install` only and skips it on upgrade, so this is the
-# only way changes to those CRDs reach an existing release. Idempotent, and
-# version-correct: it reads the CRDs out of the exact chart you are upgrading to.
+# Apply the chart-root CRDs first — EVERY upgrade, not just some, except 1.x to
+# v2.0.0, where they go after the upgrade (see "apply the CRDs with the upgrade").
+# Helm installs that directory on `helm install` only and skips it on upgrade, so
+# this is the only way changes to those CRDs reach an existing release. Idempotent,
+# and version-correct: it reads the CRDs out of the exact chart you are upgrading to.
 # Pull first: `helm show crds oci://...` prints its pull banner on stdout
 # (measured on Helm 4.2), and kubectl rejects the banner.
 helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
@@ -1518,7 +1644,7 @@ helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --version <new-chart-version> --namespace gmc-system --reset-then-reuse-values \
   --set gmc.image.digest=sha256:<new-gmc>
 
-# Roll back to the previous release
+# Roll back to the previous release (from v2.0.0 to 1.x, see "GMC rollback")
 helm rollback gag --namespace gmc-system
 ```
 
@@ -1556,6 +1682,7 @@ The following upgrade-time behaviors are specific to this chart:
   ```
 
   It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
+  The one exception is 1.x to `v2.0.0`, where [it goes after the upgrade](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
   The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade.
   With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself.
@@ -1608,7 +1735,7 @@ helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
 helm show crds gag-chart-<new-chart-version>/actions-gateway | kubectl apply -f -
 ```
 
-This is the standard pre-upgrade step for every release ([above](#gmc-install-and-upgrade-via-helm-recommended)), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
+This is the standard pre-upgrade step for every release but `v2.0.0` ([above](#gmc-install-and-upgrade-via-helm-recommended)), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
 From a chart directory, `helm show crds charts/actions-gateway | kubectl apply -f -` does the same thing.
 
 Skip it and the upgrade stops before changing anything, naming the command:
@@ -1748,6 +1875,59 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 
 `helm rollback` restores the prior release's values and manifests.
 CRDs carry `helm.sh/resource-policy: keep`, so they are not rolled back automatically; if the rollback targets a different CRD schema version, consult the release notes for any CRD migration.
+
+**From `v2.0.0` back to 1.x, put the CRDs back first.** A `v1.10.0` GMC refuses to start without `v2alpha1` and `v2beta1`, and its release's manifest names the `PriorityClassAllowlist` at a version the `v2.0.0` chart-root CRD no longer serves.
+So both sets of CRDs go back before the chart.
+Read the revision from `helm history` at that moment, and pick the newest `superseded` one on a 1.x chart.
+Do not leave it out: with no revision `helm rollback` goes to the previous one, which after any further upgrade is still `v2.0.0`, and it exits 0 with `rollout status` passing.
+Helm also prunes old revisions, so one too old fails with `release has no 1 version`.
+
+```sh
+helm history gag --namespace gmc-system
+helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version 1.X.Y --untar --untardir gag-chart-1.X.Y
+helm show crds gag-chart-1.X.Y/actions-gateway | kubectl apply -f -
+kubectl apply --server-side --force-conflicts -f \
+  https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.X.Y/actions-gateway-crds-v2.yaml
+helm rollback gag <revision> --namespace gmc-system
+kubectl rollout status deploy/gmc-controller-manager -n gmc-system
+```
+
+`--force-conflicts` is required after the [`v2.0.0` patch](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), because that patch owns `.spec.conversion.strategy`.
+Between the applies and the rollback, a read at `v2alpha1` or `v2beta1` fails because a `v2.0.0` GMC has no conversion endpoint, and a write at `v2beta1` is denied with `failed to convert object version`:
+
+```text
+Error from server: conversion webhook for actions-gateway.com/v2, Kind=RunnerTemplate failed: the server could not find the requested resource
+```
+
+Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2, rolling back to the `v1.10.0` chart with no restart: every command exited 0, two `v1.10.0` pods were Ready, reads at all three versions returned a `RunnerTemplate` stored at `v2`, and the guard denied an off-allowlist write.
+
+**If `helm rollback` ran with the chart-root CRD still on `v2` alone,** it exits 1 in one of two forms, depending on what the client has cached about the API:
+
+```text
+Error: unable to build kubernetes objects from new release manifest: resource mapping not found for name: "gmc-priorityclass-allowlist" namespace: "" from "": no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
+ensure CRDs are installed first
+```
+
+With this form the Deployment is unchanged and the revision reads `pending-rollback`, and `helm upgrade` then fails with `another operation (install/upgrade/rollback) is in progress` until a rollback succeeds.
+The other form is `server-side apply failed for object /gmc-priorityclass-allowlist`, with the revision `failed`, the Deployment changed, and a `v1.10.0` pod crash-looping beside the `v2.0.0` pods.
+Either way, run the block above again.
+
+**If `helm rollback` ran with the chart-root CRD still serving `v2beta1`,** which is the state between the `helm upgrade` and the chart-root apply, it reports `Rollback was a success!` and reads `deployed`, or exits 1 and reads `failed` with `--wait`.
+The new pod crash-loops, and the `v2.0.0` pods keep running beside it.
+Its log says the CRDs are older than the GMC, which is backwards here, since they are newer:
+
+```text
+verify installed CRD schemas: the CustomResourceDefinitions installed in this cluster are older than this GMC and no longer declare a field that bounds tenant access:
+  - runnersets.actions-gateway.com at v2beta1 does not declare spec.runnerGroup
+```
+
+The plain `kubectl apply --server-side` the log recommends is refused with a conflict on `.spec.conversion.strategy` and changes nothing.
+The forced apply above is the recovery, and no restart is needed: the pods went Ready on their own in up to about four minutes.
+
+Going forward again by the [`v2.0.0` steps](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them) succeeded after the block above.
+None of this was measured with a tenant gateway running: the cluster held the GMC and one `RunnerTemplate`.
+A field that only the `v2.0.0` schema declares is expected to be pruned from an object the next time it is written, as [install.md](install.md#the-v2-api-crds) warns; that part was not measured.
 
 ---
 

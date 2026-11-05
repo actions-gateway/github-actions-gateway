@@ -97,7 +97,7 @@ A fixture builder that keeps running after its setup broke turns one root failur
 In Q703, `release-delta-test`'s fixture repository lost a commit object partway through `build_repo`; the suite ran seven more failing `git commit` calls and ended on `release-delta: 'HEAD' is not a commit-ish in this repo`, which reads as a defect in the report under test.
 With `inherit_errexit` the same injected fault stops at the first `git` fatal and exits 128, git's own status, naming the fixture as the thing that broke.
 
-The hole was in 12 of 59 `scripts/**/*-test.sh` suites when it was found, including [`check-v2-api-sync-test.sh`](../../scripts/go/check-v2-api-sync-test.sh), whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict.
+The hole was in 12 of 59 `scripts/**/*-test.sh` suites when it was found, including `check-v2-api-sync-test.sh` (since deleted with its gate), whose own flake (Q596) was undiagnosable for the same reason: a failure that is not distinguished from a legitimate verdict.
 All 12 carry the shopt now.
 
 The gates were left behind by that pass, and Q733 closed them: 154 more scripts, of which 75 had at least one substitution running an in-script function, the shape that actually swallows a failure.

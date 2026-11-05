@@ -10,12 +10,11 @@ import (
 	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 )
 
 // StorageVersion is the version every actions-gateway.com CustomResourceDefinition
@@ -210,20 +209,27 @@ func readStorage(ctx context.Context, c client.Client, k StorageKind) ([]string,
 	return stored, "", nil
 }
 
-// aliasEgressProxies lists every EgressProxy naming a deprecated alias, read at
-// v2beta1 because v2 shows a stored alias as FQDN.
+// aliasVersion is the version a deprecated alias is read at, because v2 shows a stored
+// alias as FQDN. 1.10 serves it and v2.0.0 does not, and a v2-only CRD set cannot hold
+// an alias, so a version no longer served answers no aliases.
+const aliasVersion = "v2beta1"
+
+// aliasEgressProxies lists every EgressProxy naming a deprecated alias.
 func aliasEgressProxies(ctx context.Context, c client.Client, pageSize int64) ([]string, error) {
 	var out []string
-	err := eachObject(ctx, c, schema.GroupVersionKind{Group: storageGroup, Version: v2beta1.GroupVersion.Version, Kind: "EgressProxy"}, pageSize,
+	err := eachObject(ctx, c, schema.GroupVersionKind{Group: storageGroup, Version: aliasVersion, Kind: "EgressProxy"}, pageSize,
 		func(o *unstructured.Unstructured) error {
 			mode, _, _ := unstructured.NestedString(o.Object, "spec", "egressPolicyMode")
-			if mode == string(v2beta1.EgressPolicyModeCiliumFQDN) || mode == string(v2beta1.EgressPolicyModeCalicoFQDN) {
+			if mode == "CiliumFQDN" || mode == "CalicoFQDN" {
 				out = append(out, fmt.Sprintf("%s/%s\t%s", o.GetNamespace(), o.GetName(), mode))
 			}
 			return nil
 		})
+	if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("list EgressProxies at v2beta1: %w", err)
+		return nil, fmt.Errorf("list EgressProxies at %s: %w", aliasVersion, err)
 	}
 	sort.Strings(out)
 	return out, nil

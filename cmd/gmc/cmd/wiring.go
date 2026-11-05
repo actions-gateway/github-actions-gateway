@@ -21,7 +21,6 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
-	webhookv2beta1 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2beta1"
 )
 
 // newManager constructs the controller-runtime manager from the resolved config,
@@ -33,8 +32,8 @@ import (
 func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Options,
 	webhookServer webhook.Server) (ctrl.Manager, error) {
 	// Dedupe API server warnings to one log line per unique message per process.
-	// The default handler logs every occurrence, and the v2alpha1/v2beta1
-	// deprecation warnings repeat on every read/write of a deprecated-version CR —
+	// The default handler logs every occurrence, and an API-version
+	// deprecation warning repeats on every read/write of a deprecated-version CR —
 	// under reconcile churn they dominate the log (Q515).
 	restCfg := ctrl.GetConfigOrDie()
 	restCfg.WarningHandlerWithContext = logf.NewKubeAPIWarningLogger(
@@ -89,7 +88,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	ipCache := &controller.IPRangeCache{}
 
 	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
-	// the actions-gateway.com/v2alpha1 CRDs, which ship in the SEPARATE, opt-in
+	// the actions-gateway.com/v2 CRDs, which ship in the SEPARATE, opt-in
 	// actions-gateway-crds-v2 chart. Detect them once at startup: on an install
 	// without that chart the kinds are absent, so registering the v2 controllers
 	// unconditionally would spin a source.Kind retry loop. Installing the v2 CRDs
@@ -99,9 +98,9 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		return fmt.Errorf("detect actions-gateway.com/v2 CRDs: %w", err)
 	}
 	if v2Enabled {
-		setupLog.Info("actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers")
+		setupLog.Info("actions-gateway.com/v2 CRDs detected; enabling v2 controllers")
 	} else {
-		setupLog.Info("actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled " +
+		setupLog.Info("actions-gateway.com/v2 CRDs not installed; v2 controllers disabled " +
 			"(install the actions-gateway-crds-v2 chart and restart the GMC to enable them)")
 	}
 
@@ -281,7 +280,7 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	return nil
 }
 
-// registerWebhooks registers the GMC's admission and conversion webhooks. The
+// registerWebhooks registers the GMC's admission webhooks. The
 // caller gates this on ENABLE_WEBHOOKS != "false". It returns an error instead of
 // exiting so the flow stays test-reachable and main owns the single exit.
 func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
@@ -302,17 +301,13 @@ func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
 	// Q284: gate the v2 ActionsGateway spec.scheduling.priorityClassName on the AGC
 	// control-plane pod against the infra-only allowlist.
 	if err := webhookv2.SetupActionsGatewayWebhookWithManager(mgr, rc.infraPriorityClassAllowlist); err != nil {
-		return fmt.Errorf("create ActionsGateway (v2alpha1) webhook: %w", err)
+		return fmt.Errorf("create ActionsGateway webhook: %w", err)
 	}
 	// Q264 P3: reject two ScaleSet-protocol RunnerSets sharing a runnerLabel under
 	// one gateway. Q289: gate priorityTiers[].priorityClassName against the platform
 	// PriorityClass allowlist.
 	if err := webhookv2.SetupRunnerSetWebhookWithManager(mgr, rc.priorityClassAllowlist); err != nil {
 		return fmt.Errorf("create RunnerSet webhook: %w", err)
-	}
-	// Q74: the GMC-hosted conversion webhook (/convert) for the five v2 hub kinds.
-	if err := webhookv2beta1.SetupConversionWebhooksWithManager(mgr); err != nil {
-		return fmt.Errorf("create conversion webhook: %w", err)
 	}
 	return nil
 }

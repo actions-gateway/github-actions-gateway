@@ -12,7 +12,7 @@ The worker pod template is the **same Kubernetes type** ARC uses, so your pod sp
 **Scope.** This covers ARC's **scale-set mode** (the `AutoscalingRunnerSet` / `gha-runner-scale-set` chart — GitHub's current and recommended mode), and targets GAG's **v2 API** (`actions-gateway.com/v2`), which is where new tenants onboard.
 Legacy ARC (`RunnerDeployment` + `HorizontalRunnerAutoscaler`) maps similarly, including its multi-label routing; see [Job routing](#job-routing-a-11-map).
 
-> **Do not migrate via GAG's v1 API.** The older single-CR `actions-gateway.github.com/v1alpha1` shape is **[deprecated](v1alpha1-deprecation.md)** and, more to the point here, it is *Classic-protocol only* — it would move you **off** the single-acquirer model your ARC scale sets already use.
+> **Do not migrate via GAG's v1 API.** The older single-CR `actions-gateway.github.com/v1alpha1` shape was **[removed at `v2.0.0`](v1alpha1-deprecation.md)**, and it was *Classic-protocol only*, so it would have moved you **off** the single-acquirer model your ARC scale sets already use.
 > Migrate straight to v2.
 
 ---
@@ -309,5 +309,5 @@ Because both register independently with GitHub, there is no split-brain to unta
 - [Getting Started](../getting-started.md) — the end-to-end first install.
 - [Network architecture](../design/network-architecture.md) — egress proxy and NetworkPolicy detail, with isolation-validation probes.
 - [Troubleshooting](troubleshooting.md) — common first-day failures.
-- [Deprecation and removal notice](v1alpha1-deprecation.md), covering what `v2.0.0` removes (`v1alpha1`, `v2alpha1`, Classic acquisition).
+- [Removal notice](v1alpha1-deprecation.md), covering what `v2.0.0` removed (`v1alpha1`, `v2alpha1`, `v2beta1`, Classic acquisition).
   Relevant only if you are *already* on GAG's v1 API; new migrations should not start there.

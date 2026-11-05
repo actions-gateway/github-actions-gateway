@@ -289,11 +289,6 @@ jobs:
       # a separate runner and checkout would cost more than the check.
       - name: no per-file license headers (make license-header-check)
         run: make license-header-check
-      # Assert the two served v2 API packages hold their shared files identically
-      # (Q345, widened in Q374). Ran only under a local `make check` before, so the
-      # drift it guards could reach main unnoticed.
-      - name: v2 API package sync (make v2-api-sync-check)
-        run: make v2-api-sync-check
       # Fail a unit test that reads a repo file outside its module root (Q895).
       # Go drops those reads from the test-cache key, so the assertion replays a
       # stale pass when only the external file changes -- which is how a cached

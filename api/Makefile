@@ -1,6 +1,6 @@
 # Makefile for the neutral v2 API module (github.com/.../api).
 #
-# This module holds the actions-gateway.com v2alpha1 kinds shared by the GMC and
+# This module holds the actions-gateway.com v2 kinds shared by the GMC and
 # AGC controller modules. It owns only API artifacts: the DeepCopy methods and the
 # five v2 CRD manifests. RBAC and webhook manifests are NOT generated here — those
 # markers live on the controllers/webhooks in cmd/gmc and cmd/agc and are generated

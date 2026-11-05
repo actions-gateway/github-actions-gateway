@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,43 +45,6 @@ func TestWebhookAdmission_ScaleSetRunnerLabelUniqueness(t *testing.T) {
 	require.NoError(t, k8sClient.Create(ctx, distinct),
 		"a ScaleSet set claiming a distinct label must be admitted")
 	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), distinct)) })
-}
-
-// TestWebhookAdmission_V2alpha1ClassicSetIsGuardedLikeAnyOther covers the window
-// Q264 leaves open: v2alpha1 still serves acquisitionProtocol, but the AGC runs every
-// set as ScaleSet, so a set written Classic registers a scale set under its first
-// label and must face the same uniqueness guard. The write reaches the v2 validator
-// through the v2beta1 hub, which carries Classic in an annotation nothing now reads.
-func TestWebhookAdmission_V2alpha1ClassicSetIsGuardedLikeAnyOther(t *testing.T) {
-	const nsName = "team-webhook-classic-guarded"
-	createNamespace(t, nsName)
-
-	scaleSet := newScaleSetRunnerSet("scaleset-set", nsName, "gw", "linux")
-	require.NoError(t, k8sClient.Create(ctx, scaleSet), "the ScaleSet set claiming the name must be admitted")
-	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), scaleSet)) })
-
-	classic := func(name, label string) *v2alpha1.RunnerSet {
-		return &v2alpha1.RunnerSet{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: nsName},
-			Spec: v2alpha1.RunnerSetSpec{
-				GatewayRef:          v2alpha1.ObjectRef{Name: "gw"},
-				AcquisitionProtocol: v2alpha1.AcquisitionProtocolClassic,
-				RunnerLabels:        []string{label, "amd64"},
-			},
-		}
-	}
-
-	dup := classic("classic-dup", "linux")
-	err := k8sClient.Create(ctx, dup)
-	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), dup)) })
-	require.Error(t, err, "a Classic-written set reusing a claimed first label must be rejected")
-	assert.Contains(t, err.Error(), "already used by RunnerSet")
-
-	// The control: the same write under a free first label is admitted, so the
-	// rejection above is the collision and not the protocol value.
-	free := classic("classic-free", "windows")
-	require.NoError(t, k8sClient.Create(ctx, free), "a Classic-written set under a free label must be admitted")
-	t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), free)) })
 }
 
 // TestWebhookAdmission_ScaleSetUniquenessIsOnTheFirstLabelOnly covers what Q726 moved.

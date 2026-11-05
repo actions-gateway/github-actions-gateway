@@ -24,7 +24,7 @@ A release is a `vX.Y.Z` git tag plus its outputs:
   Operators install it straight from the registry (`helm install … oci://…`) with the published image **digests** pinned — no `git clone` of the chart.
   OCI (over a `gh-pages` chart repo) is chosen so the chart reuses the images' registry, login, and keyless-signing path; Artifact Hub (see [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) annotations) indexes the OCI ref for discoverability.
 - The **opt-in v2 CRD chart**, packaged and pushed alongside the main chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same version derivation and keyless signature.
-  It ships only the v2alpha1 (`actions-gateway.com`) CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
+  It ships only the `actions-gateway.com` CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
   Operators install it only when adopting the v2 API.
   Both chart packages are produced by the same `chart-publish` job.
 - The **signed v2 CRD manifest** (Q276), a pre-rendered `actions-gateway-crds-v2.yaml` (rendered for the default `gmc-system` namespace) attached to the tag's **GitHub Release** with a keyless **cosign blob signature** (`sign-blob` → a Sigstore bundle, `actions-gateway-crds-v2.yaml.cosign.bundle`).
@@ -612,10 +612,8 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
    It should read `6` (`deploy/dogfood-e2e/base/resources.yaml`).
    The next run's `e2e-start.sh` reapplies the overlay and repairs it anyway, so this is a backstop rather than the plan.
 5. **Smoke the signed v2 CRD asset.** Download the RC release's `actions-gateway-crds-v2.yaml` + `.cosign.bundle`, `cosign verify-blob` against the publish identity (step 3 below), `kubectl apply --server-side` it, and assert the five v2 CRDs register — the helm-free install path operators actually use.
-6. **Take the v2 GA soak readings.** Manufacture a `v2beta1` `EgressProxy` in the standing tenant, assert it reconciles, confirm all five `v2beta1` kinds are present, delete it again; then read the tenant's `ActionsGateway` back at `v2alpha1` and `v2beta1` and compare the specs.
-   Then take the `v2beta1` ↔ `v2` round trip (Q1156): every standing object of the five kinds is read at both versions and compared, and a second `EgressProxy` is applied *at* `v2`, read back at both, and deleted, so the conversion runs in each direction on real objects.
-   A stored `CiliumFQDN`/`CalicoFQDN` alias would show as a differing spec; one cannot be manufactured, because admission rejects a new alias write.
-   **These are readings, not gates, and a bad one does not stop the ship.** A proxy that never reaches Ready, or a spec that loses a field crossing the webhook, is the negative evidence the soak exists to find: record it against the criteria and let the candidate stand.
+6. **Take the v2 GA soak reading.** Manufacture a `v2` `EgressProxy` in the standing tenant, assert it reconciles, confirm all five `v2` kinds are present, and delete it again.
+   **This is a reading, not a gate, and a bad one does not stop the ship.** A proxy that never reaches Ready is the negative evidence the soak exists to find: record it against the criteria and let the candidate stand.
    Only a reading that could not be *taken* is worth re-running the window for, and the gate says which happened.
    The `EgressProxy` is manufactured and deleted because dogfood deliberately runs without one; this does not change what the cluster runs.
    **The readings outlive the run.** The gate appends one record per reading to `tmp/soak-readings.jsonl`, and `scripts/dogfood/soak-readings.sh` renders them as the rows the v2 GA plan's soak table takes, so transcribing them is a paste rather than a re-read of the terminal.
@@ -976,7 +974,7 @@ A guide with no feature to attach to goes in the contributor-facing section with
 Then fold the rest — new spec fields, new status fields, new condition reasons — grouped by kind, counted like any other fold.
 `v1.3.0` listed 28 new condition reasons this way, and had to name `kubectl explain` and the signed CRD asset as the authority because no reference page existed.
 Link the [generated API reference](../reference/api.md) instead, at **this release's** version path (`/X.Y.Z/reference/api/`), so the fields the notes name are one click from their descriptions.
-It covers `v2beta1` only; a deprecated-version field still needs `kubectl explain`.
+It covers `v2`, the one served version.
 
 **Validation is receipts, not adjectives.** "Thoroughly tested" is worth nothing.
 Link the run, quote the counts, and quote a value measured at the layer that matters: `v1.3.0` cites 73/73 specs with a run link, and a derived `1500m` observed on the pod where the templates asked for 2 and 3 CPU.

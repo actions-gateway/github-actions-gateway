@@ -22,12 +22,6 @@ import (
 //     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
 //     closed and loud, never a silent runtime Degraded.
 //
-// v2 does not define the deprecated CiliumFQDN / CalicoFQDN aliases that v2alpha1 and
-// v2beta1 still carry (Q452). An EgressProxy stored with one cannot be read at v2:
-// its conversion fails, and so does every other object batched into the same
-// request. Migrate it to FQDN plus --fqdn-policy-backend first. See
-// docs/operations/v1alpha1-deprecation.md.
-//
 // FQDN mode is fail-closed: the standard NetworkPolicy still
 // default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
 // allow), so if the CNI cannot enforce the native policy — or the additive-allow GKE

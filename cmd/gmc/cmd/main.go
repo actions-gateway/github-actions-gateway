@@ -21,8 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	v2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	v2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/go-logr/logr"
 	// +kubebuilder:scaffold:imports
 )
@@ -35,19 +33,9 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	// Register the v2alpha1 (actions-gateway.com) kinds. All five v2 kinds (the GMC-group
-	// ActionsGateway/EgressProxy and the AGC-group RunnerSet/RunnerTemplate/
-	// ClusterRunnerTemplate the GMC serves the validating webhook for) share one neutral
-	// api module, so a single AddToScheme registers them all. M2 reconciles EgressProxy;
-	// the ActionsGateway/RunnerSet reconcilers that consume the rest land in M3a.
-	utilruntime.Must(v2alpha1.AddToScheme(scheme))
-	// Register the v2beta1 kinds (Q74): the graduated, ScaleSet-only API and the
-	// conversion hub. Both v2alpha1 (spoke) and v2beta1 (hub) must be
-	// in the scheme for the GMC-hosted conversion webhook to resolve each kind as
-	// convertible and serve /convert.
-	utilruntime.Must(v2beta1.AddToScheme(scheme))
-	// Register the GA v2 kinds (Q413): served beside v2beta1 as a second conversion
-	// spoke, so the conversion webhook needs them in the scheme to decode a v2 request.
+	// Register the v2 (actions-gateway.com) kinds. All six share one neutral api module,
+	// so a single AddToScheme registers the kinds the GMC reconciles and the ones it
+	// serves the validating webhook for.
 	utilruntime.Must(v2.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }

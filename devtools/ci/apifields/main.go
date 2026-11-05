@@ -12,8 +12,8 @@
 // Each argument names one API group as a comma-separated list of the packages
 // serving its versions. Versions convert through a JSON round-trip, so they are
 // judged together: a field is consumed when the field at the same path in any
-// version of its group is. That is what lets the controllers reconcile v2alpha1
-// objects stored at another version.
+// version of its group is. That is what lets the controllers reconcile one
+// version of an object stored at another.
 //
 // Within a version the unit is the Go struct field, not the Kind and JSON path:
 // a type shared by two kinds is recorded once, under the first path the walk

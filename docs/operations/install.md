@@ -186,20 +186,13 @@ The main chart installs no tenant CRD.
 The `actions-gateway.com` API ships its five CRDs in a **separate chart**, `actions-gateway-crds-v2`, split out so the main chart's Helm release Secret stays under the 1 MiB limit.
 Install it alongside the main chart: without it neither controller has a kind to reconcile.
 
-Each v2 CRD is served at **three versions**: **`v2beta1`** (the graduated, ScaleSet-only shape, and the conversion hub), **`v2`** (the General Availability (GA) version, identical but for the dropped `CiliumFQDN`/`CalicoFQDN` aliases, and the storage version from 1.10), and **`v2alpha1`** (served as the `gag-migrate` on-ramp, deprecated, and [removed at `v2.0.0`](v1alpha1-deprecation.md)).
-An unpinned `kubectl get` returns `v2`, the version the apiserver prefers ([what that changes](upgrade.md#non-breaking-v2-is-served-beside-v2beta1-and-an-unpinned-read-now-returns-v2)).
-The apiserver converts between them through a **conversion webhook hosted by the GMC** (the `/convert` endpoint on the same `webhook-service` that fronts the validating webhooks).
-Two consequences for an operator:
-
-- **The v2 CRD chart depends on the main chart + cert-manager.** The conversion webhook's `clientConfig` points at the GMC `webhook-service`, and cert-manager's ca-injector supplies its CA.
-  Install the v2 CRD chart into the **same namespace as the GMC** (`--namespace gmc-system`) so the webhook `clientConfig` resolves, or set `conversion.webhook.service.namespace` explicitly.
-  With cert-manager disabled, set `conversion.certManager.enabled=false` and supply `conversion.caBundle` (the CA that signed the GMC webhook serving cert).
-- **Create v2 objects only once the GMC is running.** The CRDs may be installed in any order, but a `RunnerSet`/`RunnerTemplate`/… create is routed through `/convert`, so it fails until the GMC (the conversion webhook server) is `Ready`.
-  On a fresh install this resolves itself; on an existing cluster, install the CRDs and let the GMC roll out before applying v2 objects.
+Each v2 CRD serves `v2`, the General Availability (GA) version, alone.
+The CRDs may be installed before or after the GMC, but a create or update of any v2 kind passes through the GMC's validating webhooks, so it fails until the GMC is `Ready`.
+On a fresh install this resolves itself; on an existing cluster, install the CRDs and let the GMC roll out before applying v2 objects.
 
 Installing them:
 
-- **Without them, nothing reconciles.** The GMC **detects the v2 CRDs at startup**: when they are absent it logs a single info line — `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled` — and starts no tenant controller or IP-range refresh pass.
+- **Without them, nothing reconciles.** The GMC **detects the v2 CRDs at startup**: when they are absent it logs a single info line — `actions-gateway.com/v2 CRDs not installed; v2 controllers disabled` — and starts no tenant controller or IP-range refresh pass.
   A per-tenant AGC exits at startup with an error naming the missing `RunnerSet` CRD.
 - **Apply them server-side** — do **not** `helm install` the chart.
   The two `RunnerTemplate` CRDs each embed a full `PodTemplateSpec`, so the rendered chart (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit and `helm install` cannot store it.
@@ -224,7 +217,7 @@ Installing them:
     actions-gateway-crds-v2.yaml
   ```
 
-  **Custom GMC namespace, or a GitOps render — use helm.** The release asset bakes in the default `gmc-system` namespace for the conversion webhook `clientConfig`; if the GMC runs elsewhere (or cert-manager is disabled), render for that namespace and apply server-side (this carries the same `spec.conversion` wiring, resolved to your namespace):
+  **A GitOps render — use helm.** Render the chart and apply it server-side; the output is the same CRDs as the release asset, whatever namespace the GMC runs in:
 
   ```sh
   helm template actions-gateway-crds-v2 \
@@ -233,18 +226,18 @@ Installing them:
     | kubectl apply --server-side -f -
   ```
 
-  Override `conversion.webhook.service.namespace` / `conversion.certManager.*` with `--set` if the GMC runs elsewhere or cert-manager is disabled.
 
   **Why apply-render and not `helm install`.** Server-side apply is declarative and idempotent, so install and upgrade are the *same* command; it also clears kubectl's 256 KB client-side-apply annotation ceiling, which each ~1.16 MB `RunnerTemplate` CRD exceeds on its own.
   This is the mainstream practice for large CRDs (cert-manager, Crossplane, Istio, Gateway API all apply their CRDs out-of-band).
   The properties it forgoes — `helm rollback`, `helm uninstall` cleanup — are ones you should not use on CRDs anyway: rolling a schema backward can strand stored objects, and a cascading CRD delete removes every custom resource with it.
 
   **Upgrade.** Re-apply the newer release the same way you installed — either `kubectl apply --server-side -f …/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml` with the newer tag, or re-run the `helm template … | kubectl apply --server-side` render with the newer chart (`--version <x.y.z>` for a pinned OCI ref).
-  Server-side apply merges the new schema in place — additive field/version changes need no other step.
+  Server-side apply merges the new schema in place, so an additive field change needs no other step.
+  From 1.x to `v2.0.0`, [remove the conversion webhook first](upgrade.md#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), or the apply is refused.
   Re-apply on **every** GMC upgrade, not only when you want a new field: the GMC checks the installed schema at startup and refuses to start when a CRD no longer declares a field that bounds tenant access, because a structural schema prunes such a field on write with no error ([troubleshooting.md](troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)).
-  On a running cluster the conversion `caBundle` is supplied by cert-manager's ca-injector, so it resolves post-apply; a `helm template` alone cannot look it up.
 
   **Rollback.** Re-apply the render of the *previous* chart version the same way.
+  From `v2.0.0` back to 1.x that takes `--force-conflicts`, and it [goes ahead of rolling back the chart](upgrade.md#gmc-rollback), along with the 1.x chart's own chart-root CRD.
   Treat this as a deliberate migration, not a casual undo: if the newer version added a served or storage version, or a field that existing objects now populate, rolling back can reject or truncate stored resources.
   Prefer rolling *forward* with a corrected chart.
 
@@ -252,7 +245,7 @@ Installing them:
   The templates carry `helm.sh/resource-policy: keep`, so a GitOps tool that fronts this chart with a real Helm release will not prune the CRDs on its own uninstall.
 
   Detection happens once at GMC startup, so **after installing the CRDs into a running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`) to enable the v2 controllers.
-  On startup the GMC logs `actions-gateway.com/v2alpha1 CRDs detected; enabling v2 controllers`.
+  On startup the GMC logs `actions-gateway.com/v2 CRDs detected; enabling v2 controllers`.
 
 See [getting-started.md § the v2 API](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended) for what v2 adds, and [§1 Deploy the GMC](../getting-started.md#1-deploy-the-gmc) for the v2 CRD chart install and the Kubernetes version requirements.
 
@@ -297,7 +290,7 @@ This is measured rather than inferred: `scripts/e2e/vap-param-informer-check.sh`
 A **fresh `helm install` handles this for you**; `crds/` is applied first.
 
 An **upgrade does not**.
-Helm skips `crds/` entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:
+Helm skips `crds/` entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from, except 1.x to `v2.0.0`, where [it goes after the upgrade](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them):
 
 ```sh
 helm pull <chart> --version <version> --untar --untardir gag-chart-<version>

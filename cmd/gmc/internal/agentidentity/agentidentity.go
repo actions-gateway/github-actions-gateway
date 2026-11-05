@@ -34,7 +34,7 @@ package agentidentity
 
 import (
 	"github.com/actions-gateway/github-actions-gateway/api/apinames"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
+	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -91,7 +91,7 @@ func (inv Inventory) V2Scope(namespace, gateway string) string {
 // the caller has already read (Q1075). The reads must be cluster-wide, because the
 // GitHub half of the boundary is: a namespace-scoped read cannot see the collision it
 // is looking for.
-func FromLists(v2Gateways []agcv2alpha1.ActionsGateway, sets []agcv2alpha1.RunnerSet) Inventory {
+func FromLists(v2Gateways []agcv2.ActionsGateway, sets []agcv2.RunnerSet) Inventory {
 	v2Scopes := v2GatewayScopes(v2Gateways)
 	inv := Inventory{v2Scopes: v2Scopes}
 	for i := range sets {
@@ -136,7 +136,7 @@ func RunnerSetClaim(namespace, name, scope string) Claim {
 }
 
 // v2GatewayScopes maps each stored v2 ActionsGateway to the GitHub scope it binds.
-func v2GatewayScopes(gateways []agcv2alpha1.ActionsGateway) map[client.ObjectKey]string {
+func v2GatewayScopes(gateways []agcv2.ActionsGateway) map[client.ObjectKey]string {
 	scopes := make(map[client.ObjectKey]string, len(gateways))
 	for i := range gateways {
 		gw := &gateways[i]

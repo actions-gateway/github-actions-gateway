@@ -11,8 +11,6 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/agc/internal/runnercore"
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
-	agcv2alpha1 "github.com/actions-gateway/github-actions-gateway/api/v2alpha1"
-	agcv2beta1 "github.com/actions-gateway/github-actions-gateway/api/v2beta1"
 	"github.com/actions-gateway/github-actions-gateway/broker/brokertest"
 	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -39,14 +37,6 @@ func TestMain(m *testing.M) {
 
 	testScheme = runtime.NewScheme()
 	_ = clientgoscheme.AddToScheme(testScheme)
-	_ = agcv2alpha1.AddToScheme(testScheme)
-	// Register the v2beta1 hub (Q74) so envtest recognizes the five v2 kinds as
-	// convertible and redirects their CRD conversion to the local /convert server
-	// this suite starts below. The v2 CRDs are now multi-version with v2beta1 as
-	// storage, so a v2alpha1 create is only lossless if conversion is wired.
-	_ = agcv2beta1.AddToScheme(testScheme)
-	// The GA v2 spoke (Q413): with it absent, envtest would still route the CRDs'
-	// conversion here, and every v2 read would fail as an unknown version.
 	_ = agcv2.AddToScheme(testScheme)
 
 	testEnv = &envtest.Environment{
@@ -70,16 +60,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	// Serve /convert for the v2 hub kinds so v2alpha1<->v2beta1 conversion works
-	// against the real apiserver (Q74). Must run before any v2 create in the suite.
-	if err := startConversionWebhook(); err != nil {
-		panic(err)
-	}
-
 	exitCode := m.Run()
-	if conversionWebhookCancel != nil {
-		conversionWebhookCancel()
-	}
 	_ = testEnv.Stop()
 	cancel()
 	os.Exit(exitCode)

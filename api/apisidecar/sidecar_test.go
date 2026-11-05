@@ -24,10 +24,10 @@ func nativeSidecar(name string) corev1.Container {
 }
 
 // TestReapBlocking exercises the heuristic at its version-neutral entry point — the
-// one the v2alpha1/v2beta1 RunnerTemplateSpec wrappers delegate to (Q374). The
-// per-version tests cover the same cases through those wrappers; this pins the
-// contract the shared package owns, including the nil-podSpec guard the wrappers
-// cannot reach (they screen a nil template first).
+// one the v2 RunnerTemplateSpec wrapper delegates to (Q374). The
+// v2 tests cover the same cases through that wrapper; this pins the
+// contract the shared package owns, including the nil-podSpec guard the wrapper
+// cannot reach (it screens a nil template first).
 func TestReapBlocking(t *testing.T) {
 	tests := []struct {
 		name        string

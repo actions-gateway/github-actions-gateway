@@ -252,7 +252,7 @@ func assertGatewayJobYieldsScopedWorker(ns, runnerSet, scaleSet, wantSA string) 
 // RunnerSets each bound to a different gateway. workerImage is a placeholder (the
 // job-isolation spec asserts pod creation + ServiceAccount, not job completion).
 func v2MultiGatewayManifest(ns, secretName, workerImage string) string {
-	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2alpha1
+	return fmt.Sprintf(`apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: shared
@@ -261,7 +261,7 @@ spec:
   minReplicas: 1
   maxReplicas: 2
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: alpha
@@ -276,7 +276,7 @@ spec:
     name: shared
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: beta
@@ -291,7 +291,7 @@ spec:
     name: shared
   logLevel: debug
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerTemplate
 metadata:
   name: tmpl
@@ -304,7 +304,7 @@ spec:
       - name: runner
         image: %[3]s
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: set-alpha
@@ -316,7 +316,7 @@ spec:
     name: tmpl
   runnerLabels: ["e2e-alpha"]
 ---
-apiVersion: actions-gateway.com/v2alpha1
+apiVersion: actions-gateway.com/v2
 kind: RunnerSet
 metadata:
   name: set-beta

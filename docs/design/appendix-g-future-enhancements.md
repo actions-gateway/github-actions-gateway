@@ -216,7 +216,7 @@ The **workload** policy permits worker pods egress to cluster DNS + the proxy on
 The link-local block `169.254.0.0/16` is permitted on **port 53 only** (NodeLocal DNSCache), not for anything else.
 
 The Vault work established the reusable pattern for opening a hole in the default-deny envelope: a peer the **tenant names in its own CR**, that the **GMC scopes** to a single peer + port, attached to the **AGC policy only** so untrusted worker pods never inherit it.
-That peer descriptor is now the shared [`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type (selector | CIDR + optional explicit port), extracted from the Vault-specific shape before the v2 freeze so future consumers reuse one descriptor (Q204; see the pre-v2 analysis below).
+That peer descriptor is now the shared [`EgressPeer`](../../api/v2/actionsgateway_types.go) type (selector | CIDR + optional explicit port), extracted from the Vault-specific shape before the v2 freeze so future consumers reuse one descriptor (Q204; see the pre-v2 analysis below).
 The entries below are the other egress holes we can foresee wanting, the governance each needs, and — the load-bearing question — confirmation that none of them forces a breaking API change before v2.
 
 **Gap — the egress holes we can foresee.**
@@ -242,10 +242,10 @@ The Vault `signer.vault.networkPolicy` is the canonical tenant-delegated case (A
 
 The **one** pre-v2 hygiene decision worth settling deliberately was: the Vault work shipped a per-feature peer descriptor (`VaultNetworkPolicy`: selector | CIDR, port derived from the address).
 If KMS, telemetry, and worker-egress had each grown their own near-duplicate descriptor, v2 would freeze three inconsistent shapes.
-**Resolved (Q204):** the descriptor is now the shared [`EgressPeer`](../../api/v2alpha1/actionsgateway_types.go) type (selector | CIDR
+**Resolved (Q204):** the descriptor is now the shared [`EgressPeer`](../../api/v2/actionsgateway_types.go) type (selector | CIDR
 + an optional explicit port), and `signer.vault.networkPolicy` references it.
-  The extraction is serialization-compatible — the field keys (`podSelector`, `namespaceSelector`, `cidr`) are unchanged, so the v2alpha1 shape already shipped is preserved; only the additive optional `port` is new, with the Vault builder still deriving the port from the address when `port` is unset.
-  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2alpha1 → v2beta1 graduation ([Q74](../queue/README.md)) than after.
+  The extraction is serialization-compatible — the field keys (`podSelector`, `namespaceSelector`, `cidr`) are unchanged, so the shape already shipped is preserved; only the additive optional `port` is new, with the Vault builder still deriving the port from the address when `port` is unset.
+  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2 graduation ([Q74](../queue/README.md)) than after.
 
 **What would trigger building any of it.** A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.
 
@@ -445,7 +445,7 @@ The full analysis of why the native design won over external tooling is [Appendi
 
 **The deferred generality.** Almost none of the measurement/derivation core is GAG-specific.
 Peak-per-pod-lifetime sampling, the per-job-peak histograms and quantile interpolation, the p95-requests / max-plus-headroom-limit derivation, and the confidence gating all apply to any one-pod-one-unit-of-work workload: Kubernetes Jobs, Tekton TaskRuns, Argo Workflows, and ARC's ephemeral runners share the shape, and no good open-source batch right-sizer exists (stock VPA is structurally unfit for run-to-completion pods — §D.7).
-The implementation deliberately keeps the extraction seams narrow: the `usage` package touches GAG at exactly two points — the worker-pod owner label (`provisioner.LabelRunnerSet`) it selects on, and the `v2alpha1` recommendation status types it emits.
+The implementation deliberately keeps the extraction seams narrow: the `usage` package touches GAG at exactly two points — the worker-pod owner label (`provisioner.LabelRunnerSet`) it selects on, and the `v2` recommendation status types it emits.
 
 **What extraction would look like.** Two increments, either stoppable:
 

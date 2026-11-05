@@ -4,11 +4,8 @@
 
 !!! tip "New tenants: start on `v2`"
     The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set-v2-recommended) below.
-    `v2` is the General Availability (GA) version, ScaleSet-only, and the storage version from 1.10.
-    `v2beta1` stays served beside it until `v2.0.0` removes it, with the same shape apart from the deprecated `CiliumFQDN`/`CalicoFQDN` `EgressProxy` aliases, so manifests already on `v2beta1` move by re-applying at `v2`.
-    `v2alpha1` stays served so objects stored at it still read, and the apiserver converts between the versions; its `acquisitionProtocol` and `maxListeners` fields are accepted and ignored, because every set acquires through a scale set.
-    The older single-custom-resource (CR) **`v1alpha1`** API is no longer served by this GMC.
-    `v1alpha1`, `v2alpha1`, `v2beta1` and the classic acquisition protocol are all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md).
+    `v2` is the General Availability (GA) version and the only version served: every set acquires through a scale set.
+    The older single-custom-resource (CR) **`v1alpha1`** API, `v2alpha1`, `v2beta1` and the classic acquisition protocol were all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md).
     Already on v1?
     Migrate with a 1.x [`gag-migrate`](operations/migration-v1-to-v2.md) before you upgrade to this release.
 
@@ -48,7 +45,7 @@ See the [chart README](../charts/actions-gateway/README.md) for the full values 
 
 For the recommended **v2** path, also install the opt-in v2 CRDs.
 They ship separately (and are applied server-side, never `helm install`ed) because the CRDs are large enough that a Helm release Secret would exceed its 1 MiB limit.
-For the default `gmc-system` namespace, apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:
+Apply the pre-rendered, cosign-signed manifest attached to the release, no helm needed:
 
 <!-- gag:verify id=crds-v2-release-asset mode=skip reason=names-a-release-asset-that-only-exists-after-a-tag -->
 ```sh
@@ -56,18 +53,17 @@ kubectl apply --server-side -f \
   https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
 ```
 
-If the GMC runs in a **different namespace**, render the chart for that namespace instead (`--server-side` also avoids the 256 KB client-side apply limit):
+To apply from the OCI chart instead of the release asset, render it (`--server-side` also avoids the 256 KB client-side apply limit):
 
 <!-- gag:verify id=crds-v2-oci-render mode=skip reason=pulls-a-remote-oci-chart -->
 ```sh
 helm template actions-gateway-crds-v2 \
   oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2 \
-  --namespace <gmc-namespace> \
   | kubectl apply --server-side -f -
 ```
 
-Either way the `clientConfig` must resolve to the GMC's `webhook-service`: each v2 CRD is served at `v2beta1` (the hub version), `v2` (the storage version) and `v2alpha1`, and the apiserver converts between them via a conversion webhook hosted by the GMC (see [install.md § the v2 API CRDs](operations/install.md#the-v2-api-crds) for signature verification and the full options).
-The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean with no gateway controllers running (logging `actions-gateway.com/v2alpha1 CRDs not installed; v2 controllers disabled`).
+Each v2 CRD is served and stored at `v2` alone and carries no conversion webhook, so it does not depend on where the GMC runs (see [install.md § the v2 API CRDs](operations/install.md#the-v2-api-crds) for signature verification and the full options).
+The GMC **detects the v2 CRDs at startup**: with them present it starts the v2 controllers; without them it comes up clean with no gateway controllers running (logging `actions-gateway.com/v2 CRDs not installed; v2 controllers disabled`).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`).
 See the [chart README](../charts/actions-gateway-crds-v2/README.md).

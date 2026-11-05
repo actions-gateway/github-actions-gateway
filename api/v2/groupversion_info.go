@@ -1,21 +1,8 @@
 // Package v2 contains the API Schema definitions for the actions-gateway.com v2
-// API group, the General Availability (GA) version: the five converted v2 kinds —
-// the GMC-reconciled ActionsGateway (control) and EgressProxy (data) kinds, and the
-// AGC-reconciled RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate
-// (data) kinds — plus the platform-owned PriorityClassAllowlist and their shared
-// types.
-//
-// v2 is the storage version from 1.10 (Q1086). It was served beside v2beta1 a release
-// earlier, in 1.9, because Kubernetes' deprecation policy (rule #4b) will not let the
-// storage version advance in the release that introduces its successor (Q413).
-//
-// v2 is a conversion **spoke** of the v2beta1 hub (see conversion.go), like
-// v2alpha1. The shape is identical to v2beta1 with one exception: EgressProxy's
-// egressPolicyMode enum is CIDR;FQDN, without the deprecated CiliumFQDN/CalicoFQDN
-// aliases (Q452); a stored alias reads at v2 as FQDN with the alias carried in a
-// conversion annotation (see conversion.go).
-// PriorityClassAllowlist has no conversion webhook: its schema is identical at
-// every version, so the apiserver converts it by rewriting apiVersion alone.
+// API group, the General Availability (GA) version and the only one served: the
+// GMC-reconciled ActionsGateway (control) and EgressProxy (data) kinds, the
+// AGC-reconciled RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data)
+// kinds, the platform-owned PriorityClassAllowlist, and their shared types.
 //
 // +kubebuilder:object:generate=true
 // +groupName=actions-gateway.com

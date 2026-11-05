@@ -44,7 +44,7 @@ func TestImpairingConditionTypesIsACopy(t *testing.T) {
 }
 
 // TestVocabularyIsDistinct catches a copy-paste bind of two names to one value — the
-// failure the re-export files make possible (v2alpha1.ConditionDegraded pointing at
+// failure the re-export files make possible (v2.ConditionDegraded pointing at
 // apiconditions.ConditionReady would compile fine). Two condition types sharing a
 // value would collapse into one entry of the listType=map conditions slice, silently
 // dropping a signal.

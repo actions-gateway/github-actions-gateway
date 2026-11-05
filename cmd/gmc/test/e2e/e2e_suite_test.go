@@ -279,26 +279,23 @@ func setupGMC() {
 // chart, which operators install separately.
 //
 // The CRDs are applied from the chart RENDER (`helm template | kubectl apply
-// --server-side`) rather than `helm install` or a raw `kubectl apply -f
-// api/config/crd`. Two reasons:
-//   - As of Q74 each v2 CRD carries a spec.conversion pointing at the GMC-hosted
-//     /convert webhook (v2beta1 is the hub, v2 the storage version, v2alpha1 a spoke),
-//     so the deployment-specific conversion stanza must be present or the apiserver
-//     silently prunes the ScaleSet-only-stripped RunnerSet fields on storage. Only the
-//     chart carries that wiring — api/config/crd stays conversion-free.
-//   - The two RunnerTemplate CRDs embed a full PodTemplateSpec (~600 KB each), so the
-//     rendered chart (~2.5 MB) exceeds the 1 MiB Helm release-Secret limit — `helm
-//     install` cannot store it. Server-side apply sidesteps that and the 256 KB
-//     client-side apply ceiling.
+// --server-side`) rather than `helm install`: the two RunnerTemplate CRDs embed a
+// full PodTemplateSpec (~600 KB each), so the rendered chart exceeds the 1 MiB Helm
+// release-Secret limit and `helm install` cannot store it. Server-side apply sidesteps
+// that and the 256 KB client-side apply ceiling.
 //
-// Rendered with .Release.Namespace = gmcNamespace so the conversion clientConfig +
-// cert-manager annotation resolve to the GMC's namespace. Installed before the GMC so
-// its v2 informers sync on first start; the conversion webhook is only exercised once
-// v2 objects exist, by which point the GMC is Ready.
+// A cluster reused from a 1.x suite still holds the conversion webhook, and a caBundle
+// another manager set refuses the apply even when forced (Q1167), so the patch runs first.
+//
+// Installed before the GMC so its v2 informers sync on first start.
 func setupV2CRDs() {
 	By("installing the v2 (actions-gateway.com) CRDs from the actions-gateway-crds-v2 chart render")
-	render := fmt.Sprintf(
-		"set -o pipefail; helm template actions-gateway-crds-v2 %q --namespace %s | kubectl apply --server-side --force-conflicts -f -",
+	render := fmt.Sprintf(`set -o pipefail
+for crd in actionsgateways clusterrunnertemplates egressproxies runnersets runnertemplates; do
+  kubectl get crd "$crd.actions-gateway.com" >/dev/null 2>&1 || continue
+  kubectl patch crd "$crd.actions-gateway.com" --type=merge -p '{"spec":{"conversion":{"strategy":"None","webhook":null}}}'
+done
+helm template actions-gateway-crds-v2 %q --namespace %s | kubectl apply --server-side --force-conflicts -f -`,
 		v2CRDChartDir(), gmcNamespace)
 	// G204: this one really does invoke a shell, so it is not covered by the
 	// constant-binary gosec exclusion in .golangci.yml and is accepted by hand.

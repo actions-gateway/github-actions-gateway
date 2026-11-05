@@ -310,41 +310,6 @@ QUOTA
 	kubectl -n gmc-system rollout status deploy/gmc-controller-manager --timeout=180s
 }
 
-# patch_crd_cabundle — wire the GMC's self-signed webhook CA into each v2 CRD's
-# spec.conversion.webhook.clientConfig.caBundle. Since Q74 the v2 kinds are stored
-# at v2beta1 and served at v2alpha1 through the GMC-hosted conversion webhook; the
-# apiserver calls that webhook over TLS on every CR apply and must trust its serving
-# cert via each CRD's caBundle. With certManager.enabled=false the CRD chart renders
-# an EMPTY caBundle, so without this the first EgressProxy apply fails the handshake
-# ("x509: certificate signed by unknown authority"). Mirrors scripts/dogfood/setup.sh
-# Part B3b (Q279). Secure by default: this RESTORES webhook TLS verification — never
-# fall back to a caBundle-less clientConfig or insecureSkipTLSVerify.
-patch_crd_cabundle() {
-	echo "== Wiring GMC webhook CA into the v2 CRD conversion caBundle =="
-	# The chart mints a self-signed CA once and stores it in webhook-server-cert;
-	# data["ca.crt"] is already base64(PEM) — the encoding a CRD caBundle wants — so
-	# pass it straight through. Read lazily so a pre-Q74 (strategy None) image is a no-op.
-	local ca_bundle="" crd strategy patched=0
-	for crd in actionsgateways runnersets runnertemplates egressproxies clusterrunnertemplates; do
-		strategy="$(kubectl get crd "${crd}.actions-gateway.com" \
-			-o jsonpath='{.spec.conversion.strategy}' 2>/dev/null || true)"
-		if [[ "${strategy}" != "Webhook" ]]; then
-			echo "  ${crd}: conversion strategy '${strategy:-None}' (not Webhook) — skipping."
-			continue
-		fi
-		if [[ -z "${ca_bundle}" ]]; then
-			ca_bundle="$(kubectl get secret webhook-server-cert -n gmc-system \
-				-o jsonpath='{.data.ca\.crt}')"
-			[[ -n "${ca_bundle}" ]] ||
-				{ echo "webhook-server-cert Secret has no ca.crt — cannot wire the CRD caBundle." >&2; exit 1; }
-		fi
-		kubectl patch crd "${crd}.actions-gateway.com" --type=merge \
-			-p "{\"spec\":{\"conversion\":{\"webhook\":{\"clientConfig\":{\"caBundle\":\"${ca_bundle}\"}}}}}"
-		patched=$((patched + 1))
-	done
-	echo "Wired the GMC webhook CA into ${patched} v2 CRD conversion caBundle(s)."
-}
-
 # --- Deploy the pinned proxies ----------------------------------------------
 
 deploy_proxies() {
@@ -369,7 +334,7 @@ deploy_proxies() {
 		# (minReplicas=2) land on this one pool → one pod range → one NAT IP.
 		# This is exactly the API that did not exist on 2026-07-07.
 		kubectl apply -f - <<EOF
-apiVersion: actions-gateway.com/v2beta1
+apiVersion: actions-gateway.com/v2
 kind: EgressProxy
 metadata:
   name: tenant-${name}-proxy
@@ -596,7 +561,6 @@ main() {
 	create_nat
 	install_crds
 	install_gmc
-	patch_crd_cabundle
 	deploy_proxies
 	assert_pinning
 }
