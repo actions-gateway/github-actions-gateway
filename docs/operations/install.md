@@ -237,7 +237,7 @@ Installing them:
   Re-apply on **every** GMC upgrade, not only when you want a new field: the GMC checks the installed schema at startup and refuses to start when a CRD no longer declares a field that bounds tenant access, because a structural schema prunes such a field on write with no error ([troubleshooting.md](troubleshooting.md#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)).
 
   **Rollback.** Re-apply the render of the *previous* chart version the same way.
-  From `v2.0.0` back to 1.x that takes `--force-conflicts`, and it [goes ahead of rolling back the chart](upgrade.md#gmc-rollback).
+  From `v2.0.0` back to 1.x that takes `--force-conflicts`, and it [goes ahead of rolling back the chart](upgrade.md#gmc-rollback), along with the 1.x chart's own chart-root CRD.
   Treat this as a deliberate migration, not a casual undo: if the newer version added a served or storage version, or a field that existing objects now populate, rolling back can reject or truncate stored resources.
   Prefer rolling *forward* with a corrected chart.
 
@@ -290,7 +290,7 @@ This is measured rather than inferred: `scripts/e2e/vap-param-informer-check.sh`
 A **fresh `helm install` handles this for you**; `crds/` is applied first.
 
 An **upgrade does not**.
-Helm skips `crds/` entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from:
+Helm skips `crds/` entirely on upgrade, so applying the chart's CRDs is a standard pre-upgrade step for this chart — run unconditionally rather than conditionally, so the procedure does not depend on which version you are coming from, except 1.x to `v2.0.0`, where [it goes after the upgrade](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them):
 
 ```sh
 helm pull <chart> --version <version> --untar --untardir gag-chart-<version>

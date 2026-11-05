@@ -358,11 +358,38 @@ GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD
 
 The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.
 
-**What to do.** Apply the `v2.0.0` CRDs and upgrade the chart as one step, and do not leave a gap between them.
+**What to do.** Apply the five CRDs in `actions-gateway-crds-v2.yaml`, upgrade the chart, then apply the chart-root CRD, with no gap between them:
+
+```sh
+kubectl apply --server-side -f actions-gateway-crds-v2.yaml
+helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <chart-version> --untar --untardir gag-chart-<chart-version>
+helm upgrade gag gag-chart-<chart-version>/actions-gateway \
+  --namespace gmc-system --reset-then-reuse-values
+helm show crds gag-chart-<chart-version>/actions-gateway | kubectl apply -f -
+```
+
+The first line assumes [the webhook removal](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them) has just run.
+Add your usual `--set` values to the `helm upgrade`.
+
 During a gap, an AGC that restarts cannot start.
 One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
-A `v1.10.0` GMC that starts during the gap crash-loops on these CRDs, while pods already running stayed Ready for the six minutes measured.
+A `v1.10.0` GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.
 A rollback crosses the same gap in reverse, so it [puts the CRDs back first](#gmc-rollback).
+
+**The chart-root CRD goes last at this release only.** Helm builds the current release's manifest before it applies anything, that manifest names the `PriorityClassAllowlist` at `v2beta1`, and the `v2.0.0` CRD serves `v2` alone.
+Applied first, as other upgrades do it, it stops the upgrade with the revision unchanged:
+
+```text
+Error: UPGRADE FAILED: unable to build kubernetes objects from current release manifest: resource mapping not found for name: "gmc-priorityclass-allowlist" namespace: "" from "": no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
+ensure CRDs are installed first
+```
+
+A `v1.10.0` GMC pod that starts in that state logs `failed to determine if *v2beta1.PriorityClassAllowlist is namespaced` and crash-loops.
+To recover, go forward: apply the chart-root CRD of the 1.x chart you are on, run the `helm upgrade`, then apply the `v2.0.0` chart-root CRD.
+Applying the 1.x CRD alone does not bring the pods back, because the five CRDs are still on `v2`.
+
+Measured on kind with Kubernetes 1.36.1, cert-manager v1.20.2 and a local chart directory, from `v1.10.0`, with no tenant gateway: in this order every step exited 0, all six CRDs served `v2` alone, the guard denied an off-allowlist write, and a further `helm upgrade` exited 0.
 
 ### Action required after `v2.0.0`: delete what an owner deleted during the upgrade left behind
 
@@ -1593,10 +1620,11 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set proxy.image.digest=sha256:<proxy> \
   --set wrapper.image.digest=sha256:<wrapper>
 
-# Apply the chart-root CRDs first — EVERY upgrade, not just some. Helm installs
-# that directory on `helm install` only and skips it on upgrade, so this is the
-# only way changes to those CRDs reach an existing release. Idempotent, and
-# version-correct: it reads the CRDs out of the exact chart you are upgrading to.
+# Apply the chart-root CRDs first — EVERY upgrade, not just some, except 1.x to
+# v2.0.0, where they go after the upgrade (see "apply the CRDs with the upgrade").
+# Helm installs that directory on `helm install` only and skips it on upgrade, so
+# this is the only way changes to those CRDs reach an existing release. Idempotent,
+# and version-correct: it reads the CRDs out of the exact chart you are upgrading to.
 # Pull first: `helm show crds oci://...` prints its pull banner on stdout
 # (measured on Helm 4.2), and kubectl rejects the banner.
 helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
@@ -1609,7 +1637,7 @@ helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --version <new-chart-version> --namespace gmc-system --reset-then-reuse-values \
   --set gmc.image.digest=sha256:<new-gmc>
 
-# Roll back to the previous release
+# Roll back to the previous release (from v2.0.0 to 1.x, see "GMC rollback")
 helm rollback gag --namespace gmc-system
 ```
 
@@ -1647,6 +1675,7 @@ The following upgrade-time behaviors are specific to this chart:
   ```
 
   It is idempotent (a no-op when nothing changed), needs no local checkout, and reads the CRDs from the exact chart version you are upgrading to — so it stays correct for any future schema change without a release-note callout to remember.
+  The one exception is 1.x to `v2.0.0`, where [it goes after the upgrade](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
   The chart also preflights the CRD's presence and fails with this command if you skip it, so a missed step costs you a re-run, not a broken cluster.
 - **The webhook cert path depends on `certManager.enabled`.** With the default `certManager.enabled=true`, cert-manager issues and rotates the serving cert; nothing to do on upgrade.
   With `certManager.enabled=false`, the chart generates a self-signed serving cert and wires the webhook `caBundle` itself.
@@ -1699,7 +1728,7 @@ helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
 helm show crds gag-chart-<new-chart-version>/actions-gateway | kubectl apply -f -
 ```
 
-This is the standard pre-upgrade step for every release ([above](#gmc-install-and-upgrade-via-helm-recommended)), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
+This is the standard pre-upgrade step for every release but `v2.0.0` ([above](#gmc-install-and-upgrade-via-helm-recommended)), not something special to this migration — running it unconditionally is what keeps the procedure the same whatever version you are coming from.
 From a chart directory, `helm show crds charts/actions-gateway | kubectl apply -f -` does the same thing.
 
 Skip it and the upgrade stops before changing anything, naming the command:
@@ -1840,26 +1869,44 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 `helm rollback` restores the prior release's values and manifests.
 CRDs carry `helm.sh/resource-policy: keep`, so they are not rolled back automatically; if the rollback targets a different CRD schema version, consult the release notes for any CRD migration.
 
-**From `v2.0.0` back to 1.x, put the CRDs back first.** The `v2.0.0` CRDs serve `v2` alone, and a `v1.10.0` GMC refuses to start without `v2alpha1` and `v2beta1`.
-Apply the CRDs of the release you are going back to, then roll back straight away:
+**From `v2.0.0` back to 1.x, put the CRDs back first.** A `v1.10.0` GMC refuses to start without `v2alpha1` and `v2beta1`, and its release's manifest names the `PriorityClassAllowlist` at a version the `v2.0.0` chart-root CRD no longer serves.
+So both sets of CRDs go back before the chart.
+Read the revision from `helm history` at that moment, and pick the newest `superseded` one on a 1.x chart.
+Do not leave it out: with no revision `helm rollback` goes to the previous one, which after any further upgrade is still `v2.0.0`, and it exits 0 with `rollout status` passing.
+Helm also prunes old revisions, so one too old fails with `release has no 1 version`.
 
 ```sh
+helm history gag --namespace gmc-system
+helm pull oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version 1.X.Y --untar --untardir gag-chart-1.X.Y
+helm show crds gag-chart-1.X.Y/actions-gateway | kubectl apply -f -
 kubectl apply --server-side --force-conflicts -f \
   https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.X.Y/actions-gateway-crds-v2.yaml
-helm rollback gag --namespace gmc-system
+helm rollback gag <revision> --namespace gmc-system
 kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 ```
 
 `--force-conflicts` is required after the [`v2.0.0` patch](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), because that patch owns `.spec.conversion.strategy`.
-Between the apply and the rollback a read at `v2alpha1` or `v2beta1` fails, because a `v2.0.0` GMC has no conversion endpoint:
+Between the applies and the rollback, a read at `v2alpha1` or `v2beta1` fails because a `v2.0.0` GMC has no conversion endpoint, and a write at either is denied with `failed to convert object version`:
 
 ```text
 Error from server: conversion webhook for actions-gateway.com/v2, Kind=RunnerTemplate failed: the server could not find the requested resource
 ```
 
-Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2, rolling back to the `v1.10.0` chart: the rollback exited 0 with two `v1.10.0` pods Ready, and a `RunnerTemplate` stored at `v2` read back at `v2alpha1`.
+Measured on kind with Kubernetes 1.36.1 and cert-manager v1.20.2, rolling back to the `v1.10.0` chart with no restart: every command exited 0, two `v1.10.0` pods were Ready, reads at all three versions returned a `RunnerTemplate` stored at `v2`, and the guard denied an off-allowlist write.
 
-**If the chart went back first,** `helm rollback` still reports `Rollback was a success!` and the release reads `deployed`, or exits 1 and reads `failed` with `--wait`.
+**If `helm rollback` ran with the chart-root CRD still on `v2` alone,** it exits 1 in one of two forms, depending on what the client has cached about the API:
+
+```text
+Error: unable to build kubernetes objects from new release manifest: resource mapping not found for name: "gmc-priorityclass-allowlist" namespace: "" from "": no matches for kind "PriorityClassAllowlist" in version "actions-gateway.com/v2beta1"
+ensure CRDs are installed first
+```
+
+With this form the Deployment is unchanged and the revision reads `pending-rollback`, and `helm upgrade` then fails with `another operation (install/upgrade/rollback) is in progress` until a rollback succeeds.
+The other form is `server-side apply failed for object /gmc-priorityclass-allowlist`, with the revision `failed`, the Deployment changed, and a `v1.10.0` pod crash-looping beside the `v2.0.0` pods.
+Either way, run the block above again.
+
+**If `helm rollback` ran with the chart-root CRD still serving `v2beta1`,** which is the state between the `helm upgrade` and the chart-root apply, it reports `Rollback was a success!` and reads `deployed`, or exits 1 and reads `failed` with `--wait`.
 The new pod crash-loops, and the `v2.0.0` pods keep running beside it.
 Its log says the CRDs are older than the GMC, which is backwards here, since they are newer:
 
@@ -1869,10 +1916,9 @@ verify installed CRD schemas: the CustomResourceDefinitions installed in this cl
 ```
 
 The plain `kubectl apply --server-side` the log recommends is refused with a conflict on `.spec.conversion.strategy` and changes nothing.
-The forced apply above is the recovery, and no restart is needed: the pods went Ready on their own within two to four minutes, once their crash-loop backoff retried.
-After that, in the same measurement, reads at `v2alpha1`, `v2beta1` and `v2` returned the stored object, and a `v2beta1` write naming a PriorityClass outside the allowlist was denied by the allowlist guard.
-Applying the `v2.0.0` CRDs and upgrading the chart again then succeeded.
+The forced apply above is the recovery, and no restart is needed: the pods went Ready on their own in up to about four minutes.
 
+Going forward again by the [`v2.0.0` steps](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them) succeeded after the block above.
 None of this was measured with a tenant gateway running: the cluster held the GMC and one `RunnerTemplate`.
 A field that only the `v2.0.0` schema declares is expected to be pruned from an object the next time it is written, as [install.md](install.md#the-v2-api-crds) warns; that part was not measured.
 

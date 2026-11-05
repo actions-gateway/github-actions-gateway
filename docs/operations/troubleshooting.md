@@ -384,6 +384,8 @@ Then **re-apply any `RunnerSet` that declared `runnerGroup` while the schema was
 **After rolling back from `v2.0.0` to 1.x** the log lists `v2alpha1` and `v2beta1`, and "older" is backwards: the CRDs are newer than the GMC.
 The apply above is refused with a conflict on `.spec.conversion.strategy` and changes nothing, so use the forced form in [GMC rollback](upgrade.md#gmc-rollback).
 
+**A `v1.10.0` GMC that logs `failed to determine if *v2beta1.PriorityClassAllowlist is namespaced`** is running with the `v2.0.0` chart-root CRD applied, which at that upgrade [goes after `helm upgrade`, with the recovery there](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
+
 ---
 
 ## GMC Not Provisioning Tenant Resources
