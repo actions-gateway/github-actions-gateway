@@ -1,26 +1,19 @@
-// Command reasontiers reconciles the condition reasons and Event reasons the AGC
-// emits against the acquisition-tier ledger an operator reads (Q850).
+// Command eventreasons enumerates the condition and Event reasons the AGC emits, and
+// holds every Event reason to the runbook an operator looks it up in (Q850).
 //
-// It is the sibling of metrictiers, which did the same for the 53 actions_gateway_*
-// series (Q776). Metrics were one of three signal surfaces; a capability that
-// reaches only the classic tier is just as invisible when it surfaces as a
-// condition reason or a Kubernetes Event, and neither of those was derived from
-// the source or gated.
+// An Event is met in `kubectl describe`, where a reason with no remedy is no help.
 //
-// Five checks:
+// Two checks:
 //
-//	inventory     the reasons the AGC emits and the ledger's name the same set
-//	vocabulary    every ledger row states one of the four tiers, with a reason
-//	contradiction no single-tier row is emitted from the tier it excludes
-//	resolution    every recorder call's reason argument resolves to a name
-//	reference     every Event reason also has a runbook entry
+//	resolution  every recorder call's reason argument resolves to a name
+//	reference   every Event reason has a runbook entry
 //
-// resolution is the check with no metric counterpart, and it exists because an
-// Event reason is an argument rather than a declaration. It reaches the recorder
-// as a literal at some sites, through a local at others, and the wrappers forward
-// it as a parameter — so a scan keyed on the call name counts plumbing as emission
-// and misses the computed cases. Every reason argument is placed in one of the
-// forms placeReason lists, and what cannot be placed is a finding.
+// resolution exists because an Event reason is an argument rather than a
+// declaration. It reaches the recorder as a literal at some sites, through a local
+// at others, and the wrappers forward it as a parameter, so a scan keyed on the call
+// name counts forwarding as emission and misses the computed cases. Every reason
+// argument is placed in one of the forms placeReason lists, and what cannot be
+// placed is a finding.
 //
 // Which argument holds the reason is itself derived, not tabulated: two different
 // methods here are called Event and two are called recordEvent, and their reason
@@ -28,15 +21,10 @@
 // listener's action string as its reason and missed four reasons entirely, which
 // is why the index comes from the callee's own declaration.
 //
-// Tier classification is the same seam metrictiers uses and is one-sided in the
-// same way: a site under a tier-exclusive directory refutes the opposite claim,
-// and a shared file says nothing. The ledger row carries the positive claim, and
-// inventory is what makes the row unavoidable.
-//
 // `-list <src-dir> <api-dir>` prints the same scan's reasons instead of checking
 // them, which is what the release pre-flight diffs between two refs (Q780). The
-// checks read the AGC, as the ledger does; -list is run over the GMC as well,
-// whose Event reasons no release stated before Q925.
+// checks read the AGC; -list is run over the GMC as well, whose Event reasons no
+// release stated before Q925.
 package main
 
 import (
@@ -50,31 +38,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-
-	"github.com/actions-gateway/github-actions-gateway/devtools/docs/markdown"
-)
-
-// Tier vocabulary, identical to the metric ledger's so an operator reads one set
-// of words across all three tables.
-const (
-	tierBoth     = "Both"
-	tierClassic  = "Classic only"
-	tierScaleSet = "Scale-set only"
-	tierNeutral  = "Tier-neutral"
-)
-
-// The ledger's two tables, found by the heading each sits under.
-const (
-	conditionHeading = "Condition reasons"
-	eventHeading     = "Event reasons"
-)
-
-// Source subtrees only one acquisition tier ever executes, and the file-name
-// convention for the scale-set arm of a package that serves both.
-var (
-	classicOnlyDirs    = []string{"internal/listener"}
-	scaleSetOnlyDirs   = []string{"internal/scalesetlistener"}
-	scaleSetOnlySuffix = "_scaleset.go"
 )
 
 // externalRecorders are the recorder signatures declared outside this repo, so
@@ -136,19 +99,11 @@ type reason struct {
 	sites []string
 }
 
-// ledgerRow is one row of a tier table.
-type ledgerRow struct {
-	name string
-	tier string
-	note string
-	line int
-}
-
 func main() {
 	if len(os.Args) == 4 && os.Args[1] == "-list" {
 		lines, err := list(os.Args[2], os.Args[3])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "reasontiers: %v\n", err)
+			fmt.Fprintf(os.Stderr, "eventreasons: %v\n", err)
 			os.Exit(2)
 		}
 		for _, l := range lines {
@@ -156,21 +111,21 @@ func main() {
 		}
 		return
 	}
-	if len(os.Args) != 5 {
-		fmt.Fprintln(os.Stderr, "usage: reasontiers <agc-src-dir> <api-dir> <observability-metrics.md> <troubleshooting.md>")
-		fmt.Fprintln(os.Stderr, "       reasontiers -list <src-dir> <api-dir>")
+	if len(os.Args) != 4 {
+		fmt.Fprintln(os.Stderr, "usage: eventreasons <agc-src-dir> <api-dir> <troubleshooting.md>")
+		fmt.Fprintln(os.Stderr, "       eventreasons -list <src-dir> <api-dir>")
 		os.Exit(2)
 	}
-	findings, err := run(os.Args[1], os.Args[2], os.Args[3], os.Args[4])
+	findings, err := run(os.Args[1], os.Args[2], os.Args[3])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "reasontiers: %v\n", err)
+		fmt.Fprintf(os.Stderr, "eventreasons: %v\n", err)
 		os.Exit(2)
 	}
 	for _, f := range findings {
 		fmt.Println(f)
 	}
 	if len(findings) > 0 {
-		fmt.Fprintf(os.Stderr, "reasontiers: %d finding(s)\n", len(findings))
+		fmt.Fprintf(os.Stderr, "eventreasons: %d finding(s)\n", len(findings))
 		os.Exit(1)
 	}
 }
@@ -217,7 +172,7 @@ func list(srcDir, apiDir string) ([]string, error) {
 	return lines, nil
 }
 
-func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
+func run(srcDir, apiDir, eventDoc string) ([]string, error) {
 	values, err := reasonValues(apiDir, srcDir)
 	if err != nil {
 		return nil, err
@@ -234,19 +189,6 @@ func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
 		return nil, err
 	}
 
-	docBytes, err := os.ReadFile(ledgerDoc)
-	if err != nil {
-		return nil, err
-	}
-	condRows, err := parseLedger(docBytes, conditionHeading)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ledgerDoc, err)
-	}
-	eventRows, err := parseLedger(docBytes, eventHeading)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ledgerDoc, err)
-	}
-
 	eventDocBytes, err := os.ReadFile(eventDoc)
 	if err != nil {
 		return nil, err
@@ -254,12 +196,6 @@ func run(srcDir, apiDir, ledgerDoc, eventDoc string) ([]string, error) {
 
 	var findings []string
 	findings = append(findings, unresolved...)
-	findings = append(findings, checkInventory(conds, condRows, ledgerDoc, "condition reason")...)
-	findings = append(findings, checkInventory(events, eventRows, ledgerDoc, "Event reason")...)
-	findings = append(findings, checkVocabulary(condRows, ledgerDoc)...)
-	findings = append(findings, checkVocabulary(eventRows, ledgerDoc)...)
-	findings = append(findings, checkContradiction(conds, condRows)...)
-	findings = append(findings, checkContradiction(events, eventRows)...)
 	findings = append(findings, checkEventReference(events, string(eventDocBytes), eventDoc)...)
 	sort.Strings(findings)
 	return findings, nil
@@ -493,7 +429,7 @@ func importedPkgs(file *ast.File) map[string]string {
 // collectConditions records every reference to a condition-reason constant. A
 // reason the AGC only compares against is one it also writes, or the comparison
 // is dead — so references, not writes, are the inventory. Over-approximating
-// adds a ledger row; it never drops one.
+// adds a line to -list; it never drops one.
 func collectConditions(file *ast.File, rel string, imports, values map[string]string, out map[string]*reason) {
 	ast.Inspect(file, func(n ast.Node) bool {
 		sel, ok := n.(*ast.SelectorExpr)
@@ -546,7 +482,7 @@ func collectEvents(file *ast.File, fset *token.FileSet, rel string, imports, val
 		if !recognized {
 			if carriesEventType(call) {
 				findings = append(findings, fmt.Sprintf(
-					"%s:%d: %s records an Event and matches no recorder signature reasontiers can read — give its declaration parameters named eventtype and reason, or the reasons it emits reach an operator ungated",
+					"%s:%d: %s records an Event and matches no recorder signature eventreasons can read — give its declaration parameters named eventtype and reason, or the reasons it emits reach an operator ungated",
 					rel, fset.Position(call.Pos()).Line, name))
 			}
 			return true
@@ -559,10 +495,10 @@ func collectEvents(file *ast.File, fset *token.FileSet, rel string, imports, val
 			}
 		case formForward, formCondition:
 			// A forwarder passes its caller's reason through, and a condition
-			// reason re-emitted as an Event is carried by the condition ledger.
+			// reason re-emitted as an Event is listed as a condition.
 		case formUnplaceable:
 			findings = append(findings, fmt.Sprintf(
-				"%s:%d: this Event's reason argument does not resolve to a name — the ledger cannot carry a reason nobody can state; pass a literal, or assign it from literals or Reason* constants",
+				"%s:%d: this Event's reason argument does not resolve to a name, and an operator cannot look up a reason nobody can state; pass a literal, or assign it from literals or Reason* constants",
 				rel, fset.Position(call.Pos()).Line))
 		}
 		return true
@@ -582,8 +518,8 @@ func enclosingFunc(stack []ast.Node) ast.Node {
 }
 
 // The forms a reason argument can take. Only formLiteral adds to the Event
-// inventory; formForward is plumbing and formCondition is carried by the
-// condition ledger.
+// inventory; formForward passes a caller's reason through and formCondition is
+// listed as a condition.
 const (
 	formLiteral = iota
 	formForward
@@ -682,8 +618,7 @@ func isParam(fn ast.Node, name string) bool {
 
 // resolveLocal reads every assignment to name inside fn. All-literals makes the
 // Event reasons those literals; all-constants makes it a re-emitted condition
-// reason. A mix, or anything else, is unplaceable — the two ledgers would each
-// half-carry it.
+// reason. A mix, or anything else, is unplaceable.
 func resolveLocal(fn ast.Node, name string, imports, values map[string]string) ([]string, int) {
 	var lits []string
 	consts, other := 0, 0
@@ -743,135 +678,18 @@ func record(out map[string]*reason, value, site string) {
 	r.sites = append(r.sites, site)
 }
 
-// parseLedger reads the tier table under the given heading. The document goes
-// through the shared goldmark layer rather than a hand-rolled scan, which is
-// what every Markdown gate here reads with since Q612.
-func parseLedger(doc []byte, heading string) ([]ledgerRow, error) {
-	d := markdown.Parse(doc)
-	start, end, ok := d.SectionRange(3, heading)
-	if !ok {
-		return nil, fmt.Errorf("no %q section — the tier ledger is the gate's input and cannot be absent", heading)
-	}
-	var rows []ledgerRow
-	for _, t := range d.Tables() {
-		if t.Line < start || t.Line > end {
-			continue
-		}
-		for _, r := range t.Rows {
-			if len(r.Text) < 3 {
-				continue
-			}
-			rows = append(rows, ledgerRow{name: r.Text[0], tier: r.Text[1], note: r.Text[2], line: r.Line})
-		}
-	}
-	// An empty table is not an error here: the inventory check then reports every
-	// reason by name, which is the more useful failure than one line saying the
-	// table went missing.
-	return rows, nil
-}
-
-func checkInventory(emitted map[string]*reason, rows []ledgerRow, docPath, kind string) []string {
-	inLedger := map[string]bool{}
-	for _, r := range rows {
-		inLedger[r.name] = true
-	}
-	var findings []string
-	for _, name := range sortedKeys(emitted) {
-		if !inLedger[name] {
-			findings = append(findings, fmt.Sprintf(
-				"%s: %s is a %s emitted from %s and has no ledger row — state which acquisition tier reaches it",
-				docPath, name, kind, strings.Join(emitted[name].sites, ", ")))
-		}
-	}
-	for _, r := range rows {
-		if _, ok := emitted[r.name]; !ok {
-			findings = append(findings, fmt.Sprintf(
-				"%s:%d: %s is listed as a %s and the AGC emits no such reason",
-				docPath, r.line, r.name, kind))
-		}
-	}
-	return findings
-}
-
-func checkVocabulary(rows []ledgerRow, docPath string) []string {
-	var findings []string
-	for _, r := range rows {
-		switch r.tier {
-		case tierBoth, tierNeutral:
-		case tierClassic, tierScaleSet:
-			if r.note == "" {
-				findings = append(findings, fmt.Sprintf(
-					"%s:%d: %s is %q with no reason — say why the other tier does not reach it, and what to read there instead",
-					docPath, r.line, r.name, r.tier))
-			}
-		default:
-			findings = append(findings, fmt.Sprintf(
-				"%s:%d: %s has tier %q, which is not one of %q, %q, %q, %q",
-				docPath, r.line, r.name, r.tier, tierBoth, tierClassic, tierScaleSet, tierNeutral))
-		}
-	}
-	return findings
-}
-
-// checkContradiction fails a single-tier row a site refutes. One-sided by
-// construction: a shared file says nothing about the tier, so this can refute a
-// claim and never confirm one.
-func checkContradiction(emitted map[string]*reason, rows []ledgerRow) []string {
-	tier := map[string]string{}
-	for _, r := range rows {
-		tier[r.name] = r.tier
-	}
-	var findings []string
-	for _, name := range sortedKeys(emitted) {
-		for _, site := range emitted[name].sites {
-			switch {
-			case tier[name] == tierClassic && isScaleSetOnly(site):
-				findings = append(findings, fmt.Sprintf(
-					"%s: %s is emitted here, and the ledger calls it %q", site, name, tierClassic))
-			case tier[name] == tierScaleSet && isClassicOnly(site):
-				findings = append(findings, fmt.Sprintf(
-					"%s: %s is emitted here, and the ledger calls it %q", site, name, tierScaleSet))
-			}
-		}
-	}
-	return findings
-}
-
-// checkEventReference asserts the ledger never becomes the only place an Event
-// reason is described. An operator meets an Event in `kubectl describe` and looks
-// it up in the runbook; a reason that reaches the ledger alone gets a tier and no
-// remedy, which is how a metric shipped undocumented in Q809.
+// checkEventReference asserts every Event reason is named in the runbook, where an
+// operator who meets it in `kubectl describe` looks it up.
 func checkEventReference(events map[string]*reason, doc, docPath string) []string {
 	var findings []string
 	for _, name := range sortedKeys(events) {
 		if !strings.Contains(doc, "`"+name+"`") {
 			findings = append(findings, fmt.Sprintf(
-				"%s: %s (recorded from %s) has a tier and no runbook entry — an operator who sees the Event gets no remedy",
+				"%s: %s (recorded from %s) has no runbook entry, so an operator who sees the Event gets no remedy",
 				docPath, name, strings.Join(events[name].sites, ", ")))
 		}
 	}
 	return findings
-}
-
-func isClassicOnly(path string) bool {
-	for _, d := range classicOnlyDirs {
-		if strings.Contains(path, d+"/") {
-			return true
-		}
-	}
-	return false
-}
-
-func isScaleSetOnly(path string) bool {
-	if strings.HasSuffix(path, scaleSetOnlySuffix) {
-		return true
-	}
-	for _, d := range scaleSetOnlyDirs {
-		if strings.Contains(path, d+"/") {
-			return true
-		}
-	}
-	return false
 }
 
 func dirExists(path string) bool {

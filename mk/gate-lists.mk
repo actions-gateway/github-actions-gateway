@@ -61,7 +61,7 @@ CHECK_FAST_GATES := roadmap-check \
                     semver-floor-sources-check template-library-check \
                     registry-mirror-render-check \
                     md-reflow-check comparison-stamps-check promql-check \
-                    metric-tiers-check reason-tiers-check rung-order-check \
+                    metric-reference-check event-runbook-check rung-order-check \
                     doc-toc-check make-targets-check card-bullets-check \
                     agc-names-check tier-claims-check design-scope-check \
                     row-commits-check \
@@ -145,10 +145,8 @@ QUEUE_GATES := queue-lint queue-rules-check queue-claims-check row-commits-check
 #   roadmap-check        a roadmap or features.md bullet over its word cap, or naming an item that moved
 #   comparison-stamps-check an ARC-column verdict in why-gag.md left without a version and date
 #   promql-check         an alert renamed in observability-alerting.md or the runbook but not in the rule
-#   metric-tiers-check   a metric's tier edited in observability-metrics.md away from what the AGC emits
-#   reason-tiers-check   a reason edited in observability-metrics.md or troubleshooting.md the same way,
-#                        and (Q994) a listener reason on a two-producer condition type absent from the
-#                        membership its consumers honour — that half fails on a pure Go edit, no doc
+#   metric-reference-check a metric's entry removed from observability-metrics.md
+#   event-runbook-check  an Event reason's entry removed from troubleshooting.md
 #   rung-order-check     the admission ladder's rungs listed in 04-operational-flows.md in an order Admit does not walk
 #   api-reference-check  docs/reference/api.md hand-edited away from what controller-gen renders
 #   gate-lists-check     testing.md stopping short of citing the list targets it must name
@@ -182,7 +180,7 @@ DOCS_GATES := doc-links plan-index-check no-plan-refs-check em-dash-check \
               conflict-markers-check \
               release-ladder-check \
               roadmap-check comparison-stamps-check promql-check \
-              metric-tiers-check reason-tiers-check rung-order-check \
+              metric-reference-check event-runbook-check rung-order-check \
               api-reference-check gate-lists-check
 
 # Behavioural assertions for the scripts/ tree that shellcheck (a linter) can't
@@ -313,7 +311,7 @@ SCRIPTS_TESTS := agent/claude-go-throttle-hook-test agent/local-throttle-test \
                  release/render-release-body-test release/check-release-notes-test \
                  release/check-release-digests-test \
                  updatecli/latest-cluster-autoscaler-patch-test \
-                 docs/check-metric-tiers-test docs/check-reason-tiers-test \
+                 docs/check-metric-reference-test docs/check-event-runbook-test \
                  docs/check-rung-order-test \
                  e2e/check-endpoint-parity-test \
                  manifest/check-dashboard-render-test \

@@ -48,7 +48,7 @@ var apiBases = []string{"", "/api/v3"}
 
 // startFake runs the fakegithub binary on loopback ports and returns its base
 // URL and a stop function. The binary is passed in rather than built here so the
-// gate script owns the build, the way check-metric-tiers.sh owns the checker's.
+// gate script owns the build, the way check-metric-reference.sh owns the checker's.
 //
 // The child's output goes to a file rather than to this process's stderr. The
 // fake logs before it binds, so anything that could block that write would stop

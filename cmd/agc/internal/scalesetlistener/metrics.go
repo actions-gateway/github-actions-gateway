@@ -110,7 +110,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		JobsCompletedTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_scaleset_jobs_completed_total",
-			Help: "Total terminal JobCompleted messages the scale set's queue delivered, by result (the completion signal the classic protocol never delivered).",
+			Help: "Total terminal JobCompleted messages the scale set's queue delivered, by result.",
 		}, []string{"namespace", "runner_set", "result"}),
 
 		AdvertisedCapacity: prometheus.NewGaugeVec(prometheus.GaugeOpts{

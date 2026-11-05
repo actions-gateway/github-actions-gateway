@@ -335,24 +335,16 @@ registry-mirror-render-check: ## Fail when a shipped registry-mirror kustomize t
 gha-cache-render-check: ## Fail when the gha-cache tenant example does not render, or renders a wrong server address, volume, or budget (Q215)
 	scripts/manifest/check-gha-cache-render.sh
 
-# Capability parity between the two acquisition tiers rested on a one-time seam
-# walk that went stale four times (Q683, Q691, Q713, Q844), each a capability
-# classic-only from birth with nothing re-walking it. This inverts the
-# obligation for the metric surface: a series cannot reach an operator without a
-# tier in the ledger, and a ledger row the source refutes fails too.
-.PHONY: metric-tiers-check
-metric-tiers-check: ## Fail on an AGC metric with no acquisition-tier row, or a tier claim the source refutes
-	scripts/docs/check-metric-tiers.sh
+# A metric's Help and reference entry are what an operator reads off a scrape, and
+# a registered series nothing writes is a permanent zero that reads as a quiet system.
+.PHONY: metric-reference-check
+metric-reference-check: ## Fail on an AGC metric with no reference entry, no emission site, or a Help behind its label values
+	scripts/docs/check-metric-reference.sh
 
-# The same obligation for the other two signals an operator reads (Q850). Metrics
-# were one surface of three, so the completeness the gate above earned stopped at
-# the counters: a condition reason or an Event reason reaching one tier only was
-# still unrecorded. This one also fails an Event reason with no runbook entry,
-# which a metric does not need — an Event is met in `kubectl describe`, where a
-# tier without a remedy is no help.
-.PHONY: reason-tiers-check
-reason-tiers-check: ## Fail on a condition/Event reason with no acquisition-tier row, or a tier claim the source refutes
-	scripts/docs/check-reason-tiers.sh
+# An Event is met in `kubectl describe`, where a reason with no remedy is no help.
+.PHONY: event-runbook-check
+event-runbook-check: ## Fail on an AGC Event reason with no runbook entry, or a recorder call whose reason cannot be placed
+	scripts/docs/check-event-runbook.sh
 
 .PHONY: rung-order-check
 rung-order-check: ## Fail when the design doc lists the admission ladder's rungs in an order Admit does not evaluate

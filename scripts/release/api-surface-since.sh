@@ -18,7 +18,7 @@
 # this") needs a human, and a gate that answered them mechanically would be
 # wrong in both directions.
 #
-# The Event reasons are enumerated by devtools/docs/reasontiers, which needs Go
+# The Event reasons are enumerated by devtools/docs/eventreasons, which needs Go
 # and adds a build plus two `git archive` extractions to a run that has AGC or
 # GMC source in its window (Q780, Q925). A window with none skips all of it.
 #
@@ -115,7 +115,7 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 # and two recordEvent, with the reason at a different index in each. The v1.4.0
 # notes were enumerated by a pattern that read the wrong declaration, published
 # the action string `ProvisionWorker` as a reason, and missed four real ones.
-# devtools/docs/reasontiers reads the index off the callee's own declaration and
+# devtools/docs/eventreasons reads the index off the callee's own declaration and
 # fails rather than shortening its list, which is what makes a set diff of its
 # output mean anything (Q780).
 #
@@ -125,16 +125,16 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 reason_error=""
 reasons_bin=""
 
-build_reasontiers() {
+build_eventreasons() {
 	if ! command -v go >/dev/null 2>&1; then
 		reason_error="go is not on PATH"
 		return 1
 	fi
-	reasons_bin="$WORK/reasontiers"
+	reasons_bin="$WORK/eventreasons"
 	# devtools/ is outside the Go workspace, hence GOWORK=off — see
 	# docs/development/go-workspaces.md.
-	if ! (cd devtools && GOWORK=off go build -o "$reasons_bin" ./docs/reasontiers) >"$WORK/build.log" 2>&1; then
-		reason_error="building devtools/docs/reasontiers failed: $(tail -n 1 "$WORK/build.log")"
+	if ! (cd devtools && GOWORK=off go build -o "$reasons_bin" ./docs/eventreasons) >"$WORK/build.log" 2>&1; then
+		reason_error="building devtools/docs/eventreasons failed: $(tail -n 1 "$WORK/build.log")"
 		return 1
 	fi
 }
@@ -197,7 +197,7 @@ event_reason_body() {
 
 new_event_reasons=""
 if [[ -n "$(git diff --name-only "$ref"..HEAD -- "${REASON_SRC[@]}")" ]]; then
-	if build_reasontiers && scan_ref "$ref" ref && scan_ref HEAD head; then
+	if build_eventreasons && scan_ref "$ref" ref && scan_ref HEAD head; then
 		new_event_reasons="$(comm -13 <(event_reasons_at ref) <(event_reasons_at head))"
 	fi
 fi

@@ -129,7 +129,7 @@ It reconciles the `actions_gateway_*` names across both sides against the absent
 Q844 found the fourth instance a day later, and by hand rather than by any gate, which is the argument for Q776 restated as evidence.
 It has since closed the gap it found; Q776 is what makes the next one visible without someone thinking to ask, and landing it is what lets the release notes say parity rather than name four ports.
 
-**✅ Q776 shipped.** The re-walk covered all 53 `actions_gateway_*` series the AGC defines, and the [acquisition-tier ledger](../../operations/observability-metrics.md#acquisition-tier-reach) is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral.
+**✅ Q776 shipped.** The re-walk covered all 53 `actions_gateway_*` series the AGC defines, and the acquisition-tier ledger is where each one's tier now lives: 26 reach both tiers, 16 are classic-only, 10 are scale-set-only, and one is tier-neutral.
 `make metric-tiers-check` holds the ledger to the source in both directions, so a series added on one tier fails until someone answers the tier question, and a row the source refutes fails too.
 
 It found two things the one-time walk had not, which is the argument for the gate rather than a fifth walk:
@@ -296,7 +296,7 @@ The pre-flight above closed and the tag was the next step.
 Then a question — *did we finally reach v1→v2 and classic→ScaleSet parity, and should that go in the notes, docs, or marketing?* — reopened the release on eight rows.
 Recorded because the sequence, not the rows, is the lesson: each answer was measured, and each measurement found something the pass before it had not.
 
-**Both axes are closed, and only one of them is a 1.5 story.** The [capability parity table](../v2-ga.md#capability-parity-is-a-precondition-of-the-removal) reads Both tiers on all six rows, `features.md` carries no `partly classic-only` badge, and the [tier ledger](../../operations/observability-metrics.md#acquisition-tier-reach) reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
+**Both axes are closed, and only one of them is a 1.5 story.** The [capability parity table](../v2-ga.md#capability-parity-is-a-precondition-of-the-removal) reads Both tiers on all six rows, `features.md` carries no `partly classic-only` badge, and the tier ledger reconciles all 53 series (26 Both, 16 classic-only, 10 scale-set-only, 1 tier-neutral) under a gate.
 The v1 to v2 axis closed mostly before the 1.4 tag; 1.5 contributed Q726 alone.
 
 **Asking the question found the stale claim the pass had missed**, recorded in the pre-flight section above, and then the same reasoning applied one level up.

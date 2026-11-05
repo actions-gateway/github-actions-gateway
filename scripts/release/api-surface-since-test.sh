@@ -23,7 +23,7 @@ fails=0
 
 # The AGC shapes the scanner has to read through: a recorder declared as an
 # interface method, a wrapper forwarding to it, and one literal reason of its
-# own. devtools/docs/reasontiers/main_test.go owns the scanner's own cases;
+# own. devtools/docs/eventreasons/main_test.go owns the scanner's own cases;
 # these only have to be scannable.
 api_src() {
 	local extra="${1:-}"

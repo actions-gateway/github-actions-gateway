@@ -125,8 +125,8 @@ TWICE_WRITTEN=(
 	# Both legs scoped by their own trigger list.
 	'pr:dockerfile-lint.yml|push:dockerfile-lint.yml'
 	'pr:endpoint-parity.yml|push:endpoint-parity.yml'
-	'pr:metric-tiers.yml|push:metric-tiers.yml'
-	'pr:reason-tiers.yml|push:reason-tiers.yml'
+	'pr:metric-reference.yml|push:metric-reference.yml'
+	'pr:event-runbook.yml|push:event-runbook.yml'
 	'pr:rung-order.yml|push:rung-order.yml'
 )
 

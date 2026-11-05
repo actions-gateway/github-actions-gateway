@@ -27,8 +27,7 @@ import (
 // defect Q443 fixed for the quota rung and Q717 then hand-mirrored for the rate
 // rung.
 //
-// The obligation decays the way check-metric-tiers.sh records the same walk
-// decaying four times before a gate replaced it. Two tests hold it here:
+// The obligation decays if nothing re-walks it. Two tests hold it here:
 //
 //	the case table below binds each rung in BOTH tiers and asserts what it produces
 //	CoversEveryAdmitReason walks the AdmitReason* declarations and requires a case

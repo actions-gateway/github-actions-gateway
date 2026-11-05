@@ -1,6 +1,6 @@
 # Reconcile the classic admission ladder's rung order in the design doc against
 # the order Provisioner.Admit evaluates it in (Q972 retro). Its own workflow for
-# the reason reason-tiers.yml has one, and separate from that one because their
+# the reason event-runbook.yml has one, and separate from that one because their
 # inputs differ: this gate reads one source file and one design doc, so folding
 # it in would re-run each on the other's triggers.
 #
