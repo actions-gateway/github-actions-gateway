@@ -268,7 +268,7 @@ The table specifies *what to alert on* once that policy is in place.
 | Detection | Audit predicate | Why it matters | Response |
 |---|---|---|---|
 | **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc`) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
-| **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway.com/runner-set=*` or the AGC's `spec.credentials.githubApp` Secret | The AGC only needs its agent-pool and payload Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
+| **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway.com/runner-set=*` or the AGC's `spec.credentials.githubApp` Secret | The AGC only needs its worker JIT-config and credential Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
 | **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `spec.credentials.githubApp` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
 | **GMC Secret read outside tenant namespaces** | `verb` `get`/`list`/`watch` on `secrets` by the GMC SA with `responseStatus.code=403`, or a `list`/`watch` with no `objectRef.namespace` | The GMC holds Secret reads only through the `gmc-tenant-secret-reader` RoleBinding it creates in each tenant namespace (Q1188), so RBAC refuses a read anywhere else. A refusal means the binary tried a read its source never makes. | A refusal is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
 | **GMC namespace-PSA escalation attempt** | `namespace-psa-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)) blocks the GMC relabelling non-tenant namespaces (e.g. `kube-system` → `privileged`). A denial means the GMC tried. | A denial is a successful block, but a *signal* of compromise. Isolate the GMC and investigate. |
@@ -1197,7 +1197,7 @@ One object carries both sets, in two lists that mirror the two flags:
 
 The chart always renders this object (named `<release>-priorityclass-allowlist`) from `allowedPriorityClasses` and `allowedInfraPriorityClasses`, and always points the GMC at it.
 The **same object is the [`priorityclass-allowlist-guard`](#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289) policy's parameter**, so the webhook and the policy read one source and cannot drift — there is no superset discipline to remember.
-The policy reads only `allowedPriorityClasses`: its job is the direct-write path to `runnergroups`, which carry no infra scheduling block, and the two infra kinds have `failurePolicy: fail` webhooks of their own.
+The policy reads only `allowedPriorityClasses`: its job is the direct-write path to `runnersets` and `runnertemplates`, which carry no infra scheduling block, and the two infra kinds have `failurePolicy: fail` webhooks of their own.
 
 !!! note "This replaced a watched ConfigMap (Q492)"
     `priorityClassAllowlist.configMapName` is removed; setting it now fails the Helm render with a migration message.
@@ -1312,7 +1312,7 @@ See [Self-service additions](#self-service-additions-via-the-priorityclassallowl
 **Why a CRD and not a ConfigMap (Q492).** A `paramKind` on a *core* type is destroyed by a kube-apiserver defect the moment the set of bindings naming it goes empty — which `helm uninstall` does.
 See [below](#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492).
 
-**Failure mode.** The binding uses `parameterNotFoundAction: Deny`: if the parameter object is **deleted**, every matched write — `runnergroups`, `runnersets`, and `runnertemplates` alike — is denied (`no params found for policy binding`) until it is recreated — loud and fail-closed rather than silently off.
+**Failure mode.** The binding uses `parameterNotFoundAction: Deny`: if the parameter object is **deleted**, every matched write, to `runnersets` and `runnertemplates` alike, is denied (`no params found for policy binding`) until it is recreated — loud and fail-closed rather than silently off.
 The GMC surfaces this as provisioning errors on affected gateways; recreate the object (or re-run the chart upgrade) to recover.
 Deleting it does not affect running workloads.
 

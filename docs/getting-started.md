@@ -2,8 +2,8 @@
 
 > **Want to see it first?** The [Demo](demo.md) walks one real GitHub job through a local kind cluster (job → ephemeral worker pod → green on GitHub) with the exact commands to reproduce it.
 
-!!! tip "New tenants: start on `v2`"
-    The recommended shape for a new tenant is the **v2 API** at **`actions-gateway.com/v2`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set) below.
+!!! tip "The API is `v2`"
+    A tenant uses the **v2 API** at **`actions-gateway.com/v2`**: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate` (+ optional `EgressProxy`), shown in [Step 4](#4-create-your-gateway-and-runner-set) below.
     `v2` is the General Availability (GA) version and the only version served: every set acquires through a scale set.
     The older single-custom-resource (CR) **`v1alpha1`** API, `v2alpha1`, `v2beta1` and the classic acquisition protocol were all [removed at `v2.0.0`](operations/v1alpha1-deprecation.md).
     Already on v1?
@@ -11,7 +11,7 @@
 
 ## Prerequisites
 
-- Kubernetes 1.30+ (GA `ValidatingAdmissionPolicy`); **1.31+** for the recommended v2 path (per-gateway `RunnerSet` scoping uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)
+- Kubernetes **1.31+** (each AGC's `RunnerSet` watch uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)
 - A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the isolation controls to take effect
 - [cert-manager](https://cert-manager.io) installed, *or* install with `--set certManager.enabled=false` to use the chart's self-signed webhook cert
 - A GitHub App with a private key and installation ID
@@ -80,7 +80,7 @@ kubectl label namespace team-a actions-gateway.com/tenant=managed
 ```
 
 > **v2 namespace labels.** The Pod Security level lives on the namespace as the `actions-gateway.com/security-profile` label (absent ⇒ `baseline`), not on the CR.
-> For the exact v2 namespace labels and the profile-guard admission policy, see [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#multiple-gateways-per-namespace).
+> For the exact v2 namespace labels and the profile-guard admission policy, see [Tenant Onboarding § Pre-Conditions](operations/tenant-onboarding.md#pre-conditions).
 
 The namespace `ResourceQuota` (and any `LimitRange`) is **platform-owned**: the platform admin creates and manages it on the tenant namespace, and the gateway operates *within* it but never creates or mutates it.
 This is the real, tenant-uncontrollable cap on how much compute a tenant can consume.
@@ -231,7 +231,7 @@ Add tiers after onboarding, once the class is allowlisted: [Priority classes —
 
 **The proxy is optional in v2.** Drop the `EgressProxy` and the `defaultProxyRef` and traffic egresses **directly** to GitHub, still `NetworkPolicy`-restricted to DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to allow-list.
 That collapses the minimal onboarding to three objects.
-For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see [Tenant Onboarding — v2 API](operations/tenant-onboarding.md#multiple-gateways-per-namespace) and [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md).
+For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see [Tenant Onboarding § Multiple gateways per namespace](operations/tenant-onboarding.md#multiple-gateways-per-namespace) and [Appendix H — v2 API decomposition](design/appendix-h-v2-api-decomposition.md).
 
 Tenants requiring more than 250 concurrent sessions should shard across multiple `ActionsGateway` CRs, each backed by a separate GitHub App installation.
 See [Appendix A — Capacity Targets & SLOs](design/appendix-a-capacity-slos.md) for limits.

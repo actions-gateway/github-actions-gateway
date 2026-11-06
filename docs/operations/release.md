@@ -23,9 +23,9 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 - The **Helm chart**, packaged and pushed as an OCI artifact to `oci://ghcr.io/actions-gateway/charts/actions-gateway`, with its `version` and `appVersion` set to the release tag and a keyless **cosign signature** from the same Fulcio/Rekor flow as the images.
   Operators install it straight from the registry (`helm install … oci://…`) with the published image **digests** pinned — no `git clone` of the chart.
   OCI (over a `gh-pages` chart repo) is chosen so the chart reuses the images' registry, login, and keyless-signing path; Artifact Hub (see [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) annotations) indexes the OCI ref for discoverability.
-- The **opt-in v2 CRD chart**, packaged and pushed alongside the main chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same version derivation and keyless signature.
+- The **v2 CRD chart**, packaged and pushed alongside the main chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same version derivation and keyless signature.
   It ships only the `actions-gateway.com` CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
-  Operators install it only when adopting the v2 API.
+  Every install needs it, because `v2` is the only API served.
   Both chart packages are produced by the same `chart-publish` job.
 - The **signed v2 CRD manifest** (Q276), a pre-rendered `actions-gateway-crds-v2.yaml` (rendered for the default `gmc-system` namespace) attached to the tag's **GitHub Release** with a keyless **cosign blob signature** (`sign-blob` → a Sigstore bundle, `actions-gateway-crds-v2.yaml.cosign.bundle`).
   This is the helm-free manual install path — the v2 CRD chart is too large to `helm install`, so operators `kubectl apply --server-side -f …/releases/download/<tag>/actions-gateway-crds-v2.yaml`.

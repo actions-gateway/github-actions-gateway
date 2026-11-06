@@ -262,7 +262,7 @@ A failed render is the safe direction, so this error is deliberate rather than a
 **Symptoms.** Every write to a `runnersets` or `runnertemplates` object is rejected — including ones that name no `priorityClassName` at all — while the parameter object plainly exists at the name the binding references:
 
 ```
-kubectl apply -f runnergroup.yaml
+kubectl apply -f runnerset.yaml
 # Error from server: ... ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard'
 # with binding 'gmc-priorityclass-allowlist-guard-binding' denied request:
 # failed to configure binding: no params found for policy binding with `Deny`

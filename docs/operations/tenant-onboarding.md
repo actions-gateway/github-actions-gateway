@@ -639,7 +639,8 @@ kubectl get deploy,hpa -n <tenant-namespace>
 kubectl get runnerset -n <tenant-namespace>
 
 # Confirm RBAC was created
-kubectl get serviceaccount,role,rolebinding -n <tenant-namespace> | grep actions-gateway
+kubectl get serviceaccount,rolebinding -n <tenant-namespace> -l actions-gateway.com/gateway=<gateway>
+# Expected: ServiceAccounts <gateway>-agc and <gateway>-worker, RoleBinding <gateway>-agc
 
 # Confirm NetworkPolicies and ResourceQuota were applied
 kubectl get networkpolicy,resourcequota -n <tenant-namespace>

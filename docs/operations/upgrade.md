@@ -356,7 +356,9 @@ So neither AGC can list its `RunnerSet`s against the other release's CRDs.
 failed to list *v2.RunnerSet: field label not supported: spec.gatewayRef.name
 ```
 
-**That pod reads `Ready` while it holds no session.** So the rolling update removes the old AGC, and a finished rollout says nothing here: read `actions_gateway_scaleset_session_open` instead.
+**That pod reads `Ready` while it holds no session, and so does the `RunnerSet`.** The rolling update therefore removes the old AGC, and neither a finished rollout nor `kubectl get runnerset` says anything here: the set stays `Ready` `True` with reason `ListenerActive`, as last written, because no AGC can update it.
+Read `actions_gateway_scaleset_session_open` instead, and treat no series the same as `0`.
+Only a listener sets that gauge, so a pod that never syncs its cache should export no series, which also leaves `ActionsGatewayScaleSetNoSession` (`== 0`) quiet; that part is read from the code, not measured.
 
 A `v1.10.0` AGC that restarts on the `v2.0.0` CRDs crash-loops at startup, because the version it looks for is gone:
 
@@ -1958,7 +1960,8 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 
 `--force-conflicts` is required after the [`v2.0.0` patch](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), because that patch owns `.spec.conversion.strategy`.
 
-**A `v2.0.0` AGC already running survives this gap too.** On the restored CRDs it logged `field label not supported` on each watch retry, kept its session, and took a job queued in the gap.
+**A `v2.0.0` AGC already running survives this gap too**, measured on kind against `test/fakegithub` with workers held `Pending`; a job running through the gap and github.com were not measured.
+On the restored CRDs it logged `field label not supported` on each watch retry, kept its session, and took a job queued in the gap.
 A `RunnerSet` edited in the gap was admitted and left unreconciled, with `Ready` still reporting the old generation, until the `v1.10.0` AGC took over; that AGC then reconciled it through the restored conversion webhook and had a session within 30 seconds.
 An AGC pod restarted in the gap reads `Ready`, holds no session, and exits after about two minutes, as [the upgrade note](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them) describes.
 Keep this gap short as well; the chart-first order was not measured for a rollback.

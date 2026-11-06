@@ -45,11 +45,11 @@
 #     "gmc"). The default user string is therefore
 #     `system:serviceaccount:gmc-system:gmc-controller-manager`.
 #   AGC ServiceAccount users:
-#     system:serviceaccount:<tenant-namespace>:actions-gateway-controller
-#     One per tenant namespace (the SA name is constant; the namespace is
-#     per-tenant). The audit `users:` field is an exact string match with no
-#     wildcard, so you must list one entry per tenant namespace and add a line
-#     when you onboard a new tenant. (If maintaining that list is impractical,
+#     system:serviceaccount:<tenant-namespace>:<gateway>-agc
+#     One per gateway (the SA is named for the gateway, and a namespace can hold
+#     several). The audit `users:` field is an exact string match with no
+#     wildcard, so you must list one entry per gateway and add a line when you
+#     create a new gateway. (If maintaining that list is impractical,
 #     replace the `users:` selector in rule 3 with a `namespaces:` list of every
 #     namespace marked `actions-gateway.com/tenant: managed`; that is
 #     coarser — it also logs node/kubelet Secret mounts in those namespaces —
@@ -114,14 +114,14 @@ rules:
         resources: ["poddisruptionbudgets"]
 
   # 3. AGC Secret reads. The legit AGC path lists Secret *metadata* only (H-2)
-  #    and gets only its agent-pool / payload Secrets. A body list, or a get on
+  #    and gets only its worker JIT-config and credential Secrets. A body list, or a get on
   #    a user-managed Secret (e.g. ghcr-pull-token, slack-webhook), is
-  #    out-of-band enumeration. List one entry per tenant namespace (see the
+  #    out-of-band enumeration. List one entry per gateway (see the
   #    identity note above for the coarser namespace-scoped alternative).
   - level: Metadata
     users:
-      - system:serviceaccount:tenant-acme:actions-gateway-controller    # <-- one per tenant namespace
-      - system:serviceaccount:tenant-globex:actions-gateway-controller
+      - system:serviceaccount:tenant-acme:acme-agc    # <-- one per gateway: <tenant-namespace>:<gateway>-agc
+      - system:serviceaccount:tenant-globex:globex-agc
     verbs: ["get", "list", "watch"]
     resources:
       - group: ""

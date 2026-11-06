@@ -120,7 +120,7 @@ Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capabili
 
 ## API surface and migration
 
-- **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the recommended shape for new tenants: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, served at `v2` alone.
+- **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, served at `v2` alone.
 - **[`v2` stored, and a sweep to rewrite the rest](operations/upgrade.md#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.10</span>: every kind stores `v2`, and `gag-migrate storage-version` rewrites objects already stored at an older version, so a 1.x cluster can take `v2.0.0`, which serves `v2` alone, in one CRD apply.
 - **[Reusable runner templates](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one `RunnerTemplate` referenced by many runner sets, or a cluster-wide `ClusterRunnerTemplate` shared across namespaces.
 - **[Multiple gateways per namespace](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.
@@ -128,7 +128,8 @@ Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capabili
   **Untested against a real GHES appliance.**
 - **[GHES behind a private CA](operations/troubleshooting.md#a-ghes-appliances-certificate-is-not-trusted)** <span class="gag-v2-badge">v2</span>: `spec.githubCABundleRef` names a ConfigMap whose CA bundle is added to the trust of both the gateway's AGC and its worker pods, never replacing the system roots.
   **Untested against a real GHES appliance.**
-- **[`gag-migrate`](operations/migration-v1-to-v2.md)**: a one-shot fan-out that moves a tenant off `v1alpha1` without changing how jobs are acquired: dry-run, review, apply.
+- **[A 1.x `gag-migrate`](operations/migration-v1-to-v2.md)**: the one-shot fan-out that moves a tenant off `v1alpha1` before upgrading to `v2.0.0`: dry-run, review, apply.
+  At `v2.0.0` the binary keeps only `storage-version`.
 - **[Deprecations and the `v2.0.0` removal](operations/v1alpha1-deprecation.md)**: what `v2.0.0` removes, and the pre-upgrade checklist.
 - **[Migrating from ARC](operations/migration-from-arc.md)**: concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.
 - **[The GitHub protocol dependency register](design/github-protocol-dependencies.md)**: each GitHub runner-facing protocol this system speaks, its source of truth, a stability tier, and the drift-watch trigger for revisiting it.

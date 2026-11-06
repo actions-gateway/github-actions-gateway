@@ -94,7 +94,7 @@ A mesh's **classic** sidecar injection adds an init container (`istio-init`, `li
 `baseline` forbids those capabilities, so the apiserver **rejects the AGC, proxy, and worker pods at creation** — the Deployments sit at zero replicas with `FailedCreate` events and no pod (hence no sidecar, and none of Problem 1's stranding) ever exists:
 
 ```
-Error creating: pods "actions-gateway-controller-…" is forbidden: violates PodSecurity
+Error creating: pods "<gateway>-agc-…" is forbidden: violates PodSecurity
 "baseline:latest": non-default capabilities (container "istio-init" must not include
 "NET_ADMIN", "NET_RAW" in securityContext.capabilities.add)
 ```
