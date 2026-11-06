@@ -3694,9 +3694,9 @@ Operators <em>consuming</em> a release pin the published digests at install time
 <li>The <strong>Helm chart</strong>, packaged and pushed as an OCI artifact to <code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>, with its <code>version</code> and <code>appVersion</code> set to the release tag and a keyless <strong>cosign signature</strong> from the same Fulcio/Rekor flow as the images.
   Operators install it straight from the registry (<code>helm install … oci://…</code>) with the published image <strong>digests</strong> pinned — no <code>git clone</code> of the chart.
   OCI (over a <code>gh-pages</code> chart repo) is chosen so the chart reuses the images' registry, login, and keyless-signing path; Artifact Hub (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/charts/actions-gateway/Chart.yaml"><code>Chart.yaml</code></a> annotations) indexes the OCI ref for discoverability.</li>
-<li>The <strong>opt-in v2 CRD chart</strong>, packaged and pushed alongside the main chart to <code>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2</code>, with the same version derivation and keyless signature.
+<li>The <strong>v2 CRD chart</strong>, packaged and pushed alongside the main chart to <code>oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2</code>, with the same version derivation and keyless signature.
   It ships only the <code>actions-gateway.com</code> CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
-  Operators install it only when adopting the v2 API.
+  Every install needs it, because <code>v2</code> is the only API served.
   Both chart packages are produced by the same <code>chart-publish</code> job.</li>
 <li>The <strong>signed v2 CRD manifest</strong> (Q276), a pre-rendered <code>actions-gateway-crds-v2.yaml</code> (rendered for the default <code>gmc-system</code> namespace) attached to the tag's <strong>GitHub Release</strong> with a keyless <strong>cosign blob signature</strong> (<code>sign-blob</code> → a Sigstore bundle, <code>actions-gateway-crds-v2.yaml.cosign.bundle</code>).
   This is the helm-free manual install path — the v2 CRD chart is too large to <code>helm install</code>, so operators <code>kubectl apply --server-side -f …/releases/download/&lt;tag&gt;/actions-gateway-crds-v2.yaml</code>.
@@ -4136,7 +4136,7 @@ From a detached checkout of the RC tag (<code>git switch --detach vX.Y.Z-rc.N</c
 <tr>
 <td><em>empty</em></td>
 <td><code>spec.sizing</code> is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through <code>setup.sh</code>'s <code>apply_cr</code> or a direct patch; <code>scripts/dogfood/start.sh</code> resizes the pool and routes CI but <strong>never applies CRs</strong>, so no start can deploy it.</td>
-<td>Re-run <code>scripts/dogfood/setup.sh</code>, or <code>kubectl patch</code> <code>runnersets.v2alpha1.actions-gateway.com/ci</code> in <code>gag-dogfood</code>.</td>
+<td>Re-run <code>scripts/dogfood/setup.sh</code>, or <code>kubectl patch</code> <code>runnersets.actions-gateway.com/ci</code> in <code>gag-dogfood</code>.</td>
 </tr>
 <tr>
 <td><code>AwaitingSamples</code></td>
@@ -4918,7 +4918,7 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
   Opted into per tenant via <code>workerImage</code> like <code>build-runner</code>, and only together with <code>ACTIONS_RESULTS_URL</code> set on the runner container: without it, jobs lose both cache and artifacts.</li>
 </ul>
 <p>Only <code>wrapper</code> is digest-pinned in the chart (<code>wrapper.image.digest</code>, like <code>agc</code>/<code>proxy</code>), so a release must publish the <code>wrapper</code> image and pin its digest for the default install to run jobs.
-The <code>worker</code> image has no chart <code>image</code> block — it is the optional batteries-included image a tenant opts into via its per-RunnerGroup <code>workerImage</code>, not a chart-provisioned one — so nothing in the chart pins it.</p>
+The <code>worker</code> image has no chart <code>image</code> block — it is the optional batteries-included image a tenant opts into via its per-<code>RunnerTemplate</code> <code>workerImage</code>, not a chart-provisioned one — so nothing in the chart pins it.</p>
 <h2 id="pr-ci-vs-publish--what-runs-where">PR CI vs publish — what runs where<a class="headerlink" href="#pr-ci-vs-publish--what-runs-where" title="Permanent link">&para;</a></h2>
 <table>
 <thead>

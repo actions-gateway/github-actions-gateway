@@ -2843,8 +2843,7 @@
 <p>Workers are storage-less by default: the Actions Gateway Controller (AGC) mounts the Secret holding the job's just-in-time (JIT) runner config and the certificate authority (CA) projections into a worker pod and nothing else, and it deletes the pod when the job ends.
 Jobs that must pass files to each other need a <code>ReadWriteMany</code> (RWX) volume, and that volume is entirely a tenant's <code>RunnerTemplate</code> concern: GAG neither provisions it nor gets in its way.</p>
 <p>This page is the reference architecture for doing that: what to put in the <code>podTemplate</code>, the one field that decides whether the runner can write at all, and which storage classes the arrangement has actually been exercised against.</p>
-<p><strong>Scope:</strong> v2 <code>RunnerSet</code> workers via <code>RunnerTemplate.podTemplate</code>.
-The same shape works on a v1 <code>RunnerGroup.spec.podTemplate</code>, which is <a href="../v1alpha1-deprecation/">deprecated</a>.</p>
+<p><strong>Scope:</strong> v2 <code>RunnerSet</code> workers via <code>RunnerTemplate.podTemplate</code>.</p>
 <h2 id="the-stance-gag-provisions-no-worker-storage-and-never-will">The stance: GAG provisions no worker storage, and never will<a class="headerlink" href="#the-stance-gag-provisions-no-worker-storage-and-never-will" title="Permanent link">&para;</a></h2>
 <p>Three properties follow from one worker pod per job, and they are design rather than a gap:</p>
 <ul>
@@ -2929,7 +2928,7 @@ A <code>ReadWriteOnce</code> class either refuses the claim outright or binds it
 <p>ARC runs a job's <code>container:</code> and <code>services:</code> steps as separate pods sharing a provisioned volume, and that volume is the RWX dependency.
 The volume half of it is the arrangement above: one claim, mounted by the workers of one runner set.</p>
 <p>The pod-per-step half is not ported.
-GAG runs one worker pod per job, so <code>container:</code> and <code>services:</code> steps run inside that pod, which today means Docker-in-Docker, under Kata Containers at <code>securityProfile: baseline</code> or privileged.
+GAG runs one worker pod per job, so <code>container:</code> and <code>services:</code> steps run inside that pod, which today means Docker-in-Docker, under Kata Containers on the <code>baseline</code> security profile, or privileged.
 <a href="../migration-from-arc/#security-profiles">Migrate from ARC § Security profiles</a> maps the choice, and <a href="../kata-dind-workloads/">Kata DinD workloads</a> covers the non-privileged route.</p>
 <h2 id="where-this-bites-in-production">Where this bites in production<a class="headerlink" href="#where-this-bites-in-production" title="Permanent link">&para;</a></h2>
 <ul>
@@ -2939,7 +2938,7 @@ GAG runs one worker pod per job, so <code>container:</code> and <code>services:<
   Jobs that write the same path need their own locking, or their own subdirectory per run.</li>
 <li><strong>Nothing garbage-collects it.</strong> The volume outlives every worker by design, so a shared cache that only ever grows will fill and start failing jobs on <code>ENOSPC</code>.
   Give the claim a size an operator watches, and prune it from a scheduled workflow.</li>
-<li><strong><code>securityProfile: restricted</code> is compatible.</strong> Pod Security Standards permit <code>persistentVolumeClaim</code> at every level, and <code>fsGroup</code> is unrestricted, so the arrangement above needs no relaxation.</li>
+<li><strong>The <code>restricted</code> security profile is compatible.</strong> Pod Security Standards permit <code>persistentVolumeClaim</code> at every level, and <code>fsGroup</code> is unrestricted, so the arrangement above needs no relaxation.</li>
 </ul>
 
 

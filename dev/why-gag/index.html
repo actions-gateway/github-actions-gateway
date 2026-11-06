@@ -3034,7 +3034,7 @@ That is a reasonable product for a single-tenant cluster, and the same gap from 
   </div>
 </div>
 
-<p>A tenant declares only namespaced resources; the GMC provisions the rest inside a platform-owned quota it cannot write, with no cluster admin after the install (<a href="../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">the object set</a>).
+<p>A tenant declares only namespaced resources; the GMC provisions the rest inside a platform-owned quota it cannot write, with no cluster admin after the install (<a href="../getting-started/#4-create-your-gateway-and-runner-set">the object set</a>).
 The <a href="../design/appendix-f-cost-model/">cost model</a> runs the utilization argument in numbers, but a benchmark at scale is <a href="../roadmap/">on the roadmap</a> and not yet done: treat those figures as a model, not a measurement.</p>
 <h2 id="gag-vs-arc-scale-set-mode">GAG vs ARC (scale-set mode)<a class="headerlink" href="#gag-vs-arc-scale-set-mode" title="Permanent link">&para;</a></h2>
 <p><strong>This is not a protocol argument.</strong> GAG acquires jobs with the same runner-scale-set protocol ARC uses, shipped as the v2 default, so every row below is additive rather than a different-architecture trade-off.
@@ -3108,7 +3108,7 @@ A cell with no stamp asserts nothing; see <a href="#how-to-read-the-arc-column">
 <tr>
 <td>Throttle the <em>rate</em> new workers start (anti-stampede)</td>
 <td><span class="twemoji gag-no"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2c5.53 0 10 4.47 10 10s-4.47 10-10 10S2 17.53 2 12 6.47 2 12 2m3.59 5L12 10.59 8.41 7 7 8.41 10.59 12 7 15.59 8.41 17 12 13.41 15.59 17 17 15.59 13.41 12 17 8.41z"/></svg></span> <strong>no per-set start-rate control</strong><br><span class="gag-cont">its throttles, per set or controller-wide, meter Kubernetes API calls, not worker onset</span><br><span class="gag-asof">0.15.0 · 2026-10-04</span></td>
-<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/tenant-onboarding/#step-2-create-the-actionsgateway-resource">per-set creation-rate limit</a></strong><br><span class="gag-cont">for shared-egress onset (NAT, firewall, VPN)</span></td>
+<td><span class="twemoji gag-yes"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2m-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z"/></svg></span> <strong>opt-in <a href="../operations/tenant-onboarding/#step-2-create-the-gateway-and-its-runner-set">per-set creation-rate limit</a></strong><br><span class="gag-cont">for shared-egress onset (NAT, firewall, VPN)</span></td>
 </tr>
 <tr>
 <td>Pod Security Admission on tenant namespaces</td>

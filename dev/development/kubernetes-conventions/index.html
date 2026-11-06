@@ -3219,7 +3219,7 @@ Conventions that keep them consistent and non-spammy:</p>
 <li><strong>Route deep-goroutine events back through the reconciler</strong> — a listener or provisioner goroutine does not hold the live owner object the <code>EventRecorder</code> needs, so it pushes the event onto a buffered channel (non-blocking; drop on full) that the reconciler drains and records on the live object — mirroring the existing condition-update channel.
   The drain consumes each event once, so it is not re-emitted on later reconciles.</li>
 <li>Shipped examples: <code>WorkerPodStuckPending</code> (reaper), and the Q170 job-lifecycle set (<code>JobAcquisitionFailed</code>, <code>RunnerVersionTooOld</code>, <code>SessionUnauthorized</code>, <code>QuotaRetriesExhausted</code>, <code>EvictionRetriesExhausted</code>).
-  The operator-facing catalogue lives in <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">troubleshooting.md</a>.</li>
+  The operator-facing catalogue lives in <a href="../../operations/troubleshooting/#job-lifecycle-events-on-a-runnerset">troubleshooting.md</a>.</li>
 </ul>
 <h2 id="graceful-shutdown-sigterm">Graceful shutdown (SIGTERM)<a class="headerlink" href="#graceful-shutdown-sigterm" title="Permanent link">&para;</a></h2>
 <p>Every binary we ship runs in a pod, so every one of them gets SIGTERM on each rollout, node drain, eviction, and scale-down.

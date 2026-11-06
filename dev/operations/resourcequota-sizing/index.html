@@ -3120,7 +3120,7 @@ A shape declaring no CPU limit is not charged <code>overhead.cpu</code> against 
 <tbody>
 <tr>
 <td>Container <code>requests</code>/<code>limits</code></td>
-<td><code>podTemplate.spec.containers[].resources</code> on the <code>RunnerTemplate</code> (v2) or <code>runnerGroups[].podTemplate</code> (v1)</td>
+<td><code>podTemplate.spec.containers[].resources</code> on the <code>RunnerTemplate</code></td>
 <td><code>500m</code> / <code>1Gi</code> as <strong>both</strong> requests and limits — the AGC gap-fills any container declaring neither, so a bare template still costs quota</td>
 </tr>
 <tr>
@@ -3161,17 +3161,17 @@ The control-plane terms:</p>
 <tr>
 <td><code>proxy.maxReplicas</code></td>
 <td><code>10</code></td>
-<td><code>spec.proxy.maxReplicas</code> (v1) / <code>EgressProxy.spec.maxReplicas</code> (v2)</td>
+<td><code>EgressProxy.spec.maxReplicas</code></td>
 </tr>
 <tr>
 <td><code>proxyReq.cpu</code> / <code>proxyReq.memory</code></td>
 <td><code>10m</code> / <code>32Mi</code></td>
-<td><code>spec.proxy.resources.requests</code></td>
+<td><code>EgressProxy.spec.resources.requests</code></td>
 </tr>
 <tr>
 <td><code>proxyLim.cpu</code> / <code>proxyLim.memory</code></td>
 <td><code>500m</code> / <code>64Mi</code></td>
-<td><code>spec.proxy.resources.limits</code></td>
+<td><code>EgressProxy.spec.resources.limits</code></td>
 </tr>
 <tr>
 <td><code>agcReq</code> / <code>agcLim</code> (<strong>v2</strong>)</td>
@@ -3268,13 +3268,12 @@ Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker 
 <p>Two ways to satisfy it:</p>
 <ul>
 <li><strong>Pair the quota with a <code>LimitRange</code></strong> that supplies namespace default requests (and limits, if you constrain them).
-  On <strong>v1</strong> this is required rather than optional: the GMC stamps no resources on the AGC pod, so a <code>requests.cpu</code>- constrained namespace rejects the AGC Deployment's pods with <code>must specify requests.cpu</code>.
-  The v2 AGC carries its own defaults and does not need this.</li>
+  The AGC carries its own defaults and does not need this.</li>
 <li><strong>Constrain only <code>pods</code></strong>, plus the storage keys if PVCs are in play.
   You lose the compute cap and keep a hard concurrency ceiling.</li>
 </ul>
 <h2 id="sizing-profiles-change-the-ask-at-pod-build">Sizing profiles change the ask at pod build<a class="headerlink" href="#sizing-profiles-change-the-ask-at-pod-build" title="Permanent link">&para;</a></h2>
-<p>An opt-in <a href="../worker-rightsizing/#sizing-profiles-opt-in-auto-apply">sizing profile</a> (<code>RunnerSet.spec.sizing.profile</code>, v2 only) rewrites the pod's CPU/memory values when the pod is built, so <strong>the template's static ask is not what the quota sees</strong>.</p>
+<p>An opt-in <a href="../worker-rightsizing/#sizing-profiles-opt-in-auto-apply">sizing profile</a> (<code>RunnerSet.spec.sizing.profile</code>) rewrites the pod's CPU/memory values when the pod is built, so <strong>the template's static ask is not what the quota sees</strong>.</p>
 <table>
 <thead>
 <tr>
@@ -3312,7 +3311,7 @@ Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker 
 </code></pre></div>
 <p><code>Active</code> means derived values are in effect; <code>AwaitingSamples</code> means the template's static values are.</p>
 <h2 id="worked-example--a-dind-tenant-at-12-concurrent-jobs">Worked example — a DinD tenant at 12 concurrent jobs<a class="headerlink" href="#worked-example--a-dind-tenant-at-12-concurrent-jobs" title="Permanent link">&para;</a></h2>
-<p><strong>Inputs.</strong> A tenant running Docker-in-Docker CI on the measured reference shape (the shipped <code>privileged-dind</code> entry, <code>deploy/templates/privileged-dind/template.yaml</code>; see <a href="../runner-template-library/">runner template library</a>), with the default egress proxy pool, on the v2 API, <code>sizing.profile: Static</code>.</p>
+<p><strong>Inputs.</strong> A tenant running Docker-in-Docker CI on the measured reference shape (the shipped <code>privileged-dind</code> entry, <code>deploy/templates/privileged-dind/template.yaml</code>; see <a href="../runner-template-library/">runner template library</a>), with the default egress proxy pool, <code>sizing.profile: Static</code>.</p>
 <table>
 <thead>
 <tr>

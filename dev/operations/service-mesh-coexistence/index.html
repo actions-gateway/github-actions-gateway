@@ -3318,7 +3318,7 @@ Both are covered in depth in the <a href="../../design/02-architecture/">archite
 </li>
 <li>
 <p><strong>All GitHub-bound egress is funnelled through the per-tenant proxy.</strong> The GMC injects <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code>, and <code>NO_PROXY</code> into the AGC and every worker pod.
-  GitHub traffic <code>CONNECT</code>-tunnels through the per-tenant proxy <code>Service</code> (<code>actions-gateway-proxy.&lt;namespace&gt;.svc.cluster.local:8080</code> by default), which egresses on the tenant's dedicated IP(s).
+  GitHub traffic <code>CONNECT</code>-tunnels through the per-tenant proxy <code>Service</code> (<code>&lt;proxy&gt;-proxy.&lt;namespace&gt;.svc.cluster.local:8080</code>), which egresses on the tenant's dedicated IP(s).
   That per-tenant egress IP <strong>is</strong> the tenant-isolation boundary for outbound traffic (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>).
   The proxy does <code>CONNECT</code> tunnelling only — it never terminates TLS.</p>
 </li>
@@ -3335,9 +3335,9 @@ That is what makes the namespace-wide opt-out below cheap: you are not removing 
 <strong>This does not work for GAG worker pods.</strong></p>
 <p>The AGC builds each worker pod from the tenant's <code>podTemplate</code>, but it does <strong>not</strong> copy arbitrary template metadata onto the pod.
 Labels are rebuilt from a fixed recommended set plus GAG's owner-identity labels, and only three node-disruption-safety annotation keys are honored from the template — every other annotation you put in <code>podTemplate.metadata.annotations</code> is dropped.
-So a mesh injection-control or egress-exclusion annotation placed on the RunnerGroup <code>podTemplate</code> never reaches the worker pod.</p>
+So a mesh injection-control or egress-exclusion annotation placed on the <code>RunnerTemplate</code> <code>podTemplate</code> never reaches the worker pod.</p>
 <p>That leaves the <strong>namespace</strong> as the only reliable lever for worker pods, which is exactly why the recommended posture is namespace-scoped.
-(Tracking the option to propagate an allowlisted set of mesh annotations onto worker pods is filed as a future enhancement; until then, configure the mesh at the namespace and the mesh-install level, never on the RunnerGroup <code>podTemplate</code>.)</p>
+(Tracking the option to propagate an allowlisted set of mesh annotations onto worker pods is filed as a future enhancement; until then, configure the mesh at the namespace and the mesh-install level, never on the <code>RunnerTemplate</code> <code>podTemplate</code>.)</p>
 <hr />
 <h2 id="the-one-label-answer">The one-label answer<a class="headerlink" href="#the-one-label-answer" title="Permanent link">&para;</a></h2>
 <p>For the overwhelming majority of operators, the correct coexistence posture is to <strong>exclude the GAG tenant namespace from the mesh</strong>.
@@ -3382,7 +3382,7 @@ Both were found during live validation (Q220); miss either and the tenant never 
 <p>The GMC stamps <code>pod-security.kubernetes.io/enforce=baseline</code> on every tenant namespace.
 A mesh's <strong>classic</strong> sidecar injection adds an init container (<code>istio-init</code>, <code>linkerd-init</code>) that requests the <code>NET_ADMIN</code> + <code>NET_RAW</code> capabilities to program the iptables redirect.
 <code>baseline</code> forbids those capabilities, so the apiserver <strong>rejects the AGC, proxy, and worker pods at creation</strong> — the Deployments sit at zero replicas with <code>FailedCreate</code> events and no pod (hence no sidecar, and none of Problem 1's stranding) ever exists:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error creating: pods "actions-gateway-controller-…" is forbidden: violates PodSecurity
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Error creating: pods "&lt;gateway&gt;-agc-…" is forbidden: violates PodSecurity
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>"baseline:latest": non-default capabilities (container "istio-init" must not include
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>"NET_ADMIN", "NET_RAW" in securityContext.capabilities.add)
 </code></pre></div>
@@ -3508,7 +3508,7 @@ Cilium's base CNI is safe in both dimensions by default (no L7 redirect) and gen
 <h3 id="fix-d--proxy-shutdown-hooks-last-resort">Fix D — proxy-shutdown hooks (last resort)<a class="headerlink" href="#fix-d--proxy-shutdown-hooks-last-resort" title="Permanent link">&para;</a></h3>
 <p>Classic meshes offer ways to ask the sidecar to exit when the main workload finishes — Istio's <code>EXIT_ON_ZERO_ACTIVE_CONNECTIONS=true</code> plus a <code>POST localhost:15020/quitquitquit</code> at job end, or Linkerd's <code>linkerd-await --shutdown -- &lt;cmd&gt;</code> wrapper, or <code>config.alpha.linkerd.io/proxy-await</code>.
 <strong>These require cooperating with the workload's entrypoint</strong> — the main process must signal the proxy as it exits.
-GAG owns the worker entrypoint (it runs the GitHub Actions runner), and these hooks cannot be injected through the RunnerGroup <code>podTemplate</code> (<a href="#why-per-pod-podtemplate-annotations-will-not-save-you">why</a>), so this path is <strong>not</strong> first-class for GAG.
+GAG owns the worker entrypoint (it runs the GitHub Actions runner), and these hooks cannot be injected through the <code>RunnerTemplate</code> <code>podTemplate</code> (<a href="#why-per-pod-podtemplate-annotations-will-not-save-you">why</a>), so this path is <strong>not</strong> first-class for GAG.
 Prefer Fix A, B, or C. Documented here only so you recognize these knobs when you see them in mesh guides — they are the wrong tool for GAG worker pods.</p>
 <hr />
 <h2 id="problem-2-mesh-egress-interception-vs-the-per-tenant-proxy">Problem 2: mesh egress interception vs the per-tenant proxy<a class="headerlink" href="#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy" title="Permanent link">&para;</a></h2>
@@ -3628,7 +3628,7 @@ If you use Cilium for egress control, prefer expressing the GitHub allowlist as 
 <p>After applying any of the above, confirm both problems are actually resolved.</p>
 <p><strong>Lifecycle — worker pods terminate and are reaped:</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Run a job, then watch its worker pod reach a terminal phase and disappear.</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span>-w
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;<span class="w"> </span>-w
 <a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># Expect: Running -&gt; Succeeded/Completed -&gt; deleted (after completedPodTTL).</span>
 <a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># A pod that sits at READY 1/2 STATUS Running long after the job finished</span>
 <a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># means a sidecar is still pinning it — revisit problem 1.</span>
@@ -3685,7 +3685,7 @@ If the observed source IP is the mesh egress gateway's, the per-tenant attributi
 <td>Safe by default (Q280): sidecar-less lifecycle + proxy egress both work, and it enforces the egress deny. Just <a href="#cilium-service-mesh">confirm no L7 redirect</a> captures <code>:8080</code>.</td>
 </tr>
 <tr>
-<td>You were about to set mesh annotations on the RunnerGroup <code>podTemplate</code></td>
+<td>You were about to set mesh annotations on the <code>RunnerTemplate</code> <code>podTemplate</code></td>
 <td>Don't — <a href="#why-per-pod-podtemplate-annotations-will-not-save-you">GAG strips them</a>. Configure the namespace and the mesh install instead.</td>
 </tr>
 </tbody>

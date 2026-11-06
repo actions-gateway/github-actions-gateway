@@ -776,10 +776,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-create-your-gateway-and-runner-set-v2-recommended" class="md-nav__link">
+  <a href="#4-create-your-gateway-and-runner-set" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Create your gateway and runner set (v2, recommended)
+        4. Create your gateway and runner set
       
     </span>
   </a>
@@ -2809,10 +2809,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#4-create-your-gateway-and-runner-set-v2-recommended" class="md-nav__link">
+  <a href="#4-create-your-gateway-and-runner-set" class="md-nav__link">
     <span class="md-ellipsis">
       
-        4. Create your gateway and runner set (v2, recommended)
+        4. Create your gateway and runner set
       
     </span>
   </a>
@@ -2855,8 +2855,8 @@
 <p><strong>Want to see it first?</strong> The <a href="../demo/">Demo</a> walks one real GitHub job through a local kind cluster (job → ephemeral worker pod → green on GitHub) with the exact commands to reproduce it.</p>
 </blockquote>
 <div class="admonition tip">
-<p class="admonition-title">New tenants: start on <code>v2</code></p>
-<p>The recommended shape for a new tenant is the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set-v2-recommended">Step 4</a> below.
+<p class="admonition-title">The API is <code>v2</code></p>
+<p>A tenant uses the <strong>v2 API</strong> at <strong><code>actions-gateway.com/v2</code></strong>: a decomposed <code>ActionsGateway</code> + <code>RunnerSet</code> + <code>RunnerTemplate</code> (+ optional <code>EgressProxy</code>), shown in <a href="#4-create-your-gateway-and-runner-set">Step 4</a> below.
 <code>v2</code> is the General Availability (GA) version and the only version served: every set acquires through a scale set.
 The older single-custom-resource (CR) <strong><code>v1alpha1</code></strong> API, <code>v2alpha1</code>, <code>v2beta1</code> and the classic acquisition protocol were all <a href="../operations/v1alpha1-deprecation/">removed at <code>v2.0.0</code></a>.
 Already on v1?
@@ -2864,7 +2864,7 @@ Migrate with a 1.x <a href="../operations/migration-v1-to-v2/"><code>gag-migrate
 </div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Kubernetes 1.30+ (GA <code>ValidatingAdmissionPolicy</code>); <strong>1.31+</strong> for the recommended v2 path (per-gateway <code>RunnerSet</code> scoping uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)</li>
+<li>Kubernetes <strong>1.31+</strong> (each AGC's <code>RunnerSet</code> watch uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)</li>
 <li>A CNI that enforces <code>NetworkPolicy</code> (Calico/Cilium) for the isolation controls to take effect</li>
 <li><a href="https://cert-manager.io">cert-manager</a> installed, <em>or</em> install with <code>--set certManager.enabled=false</code> to use the chart's self-signed webhook cert</li>
 <li>A GitHub App with a private key and installation ID</li>
@@ -2919,7 +2919,7 @@ The marker label authorizes the GMC to stamp Pod Security Admission labels on it
 </code></pre></div>
 <blockquote>
 <p><strong>v2 namespace labels.</strong> The Pod Security level lives on the namespace as the <code>actions-gateway.com/security-profile</code> label (absent ⇒ <code>baseline</code>), not on the CR.
-For the exact v2 namespace labels and the profile-guard admission policy, see <a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a>.</p>
+For the exact v2 namespace labels and the profile-guard admission policy, see <a href="../operations/tenant-onboarding/#pre-conditions">Tenant Onboarding § Pre-Conditions</a>.</p>
 </blockquote>
 <p>The namespace <code>ResourceQuota</code> (and any <code>LimitRange</code>) is <strong>platform-owned</strong>: the platform admin creates and manages it on the tenant namespace, and the gateway operates <em>within</em> it but never creates or mutates it.
 This is the real, tenant-uncontrollable cap on how much compute a tenant can consume.
@@ -2974,8 +2974,8 @@ See <a href="../operations/resourcequota-sizing/#only-constrain-keys-every-pod-d
 <a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">    </span><span class="no">...</span>
 <a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="no">-----END RSA PRIVATE KEY-----</span>
 </code></pre></div>
-<h2 id="4-create-your-gateway-and-runner-set-v2-recommended">4. Create your gateway and runner set (v2, recommended)<a class="headerlink" href="#4-create-your-gateway-and-runner-set-v2-recommended" title="Permanent link">&para;</a></h2>
-<p>The <strong>v2 API</strong> (<code>actions-gateway.com/v2</code>) decomposes the single v1 CR into small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub binding), a <code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an optional <code>EgressProxy</code>.
+<h2 id="4-create-your-gateway-and-runner-set">4. Create your gateway and runner set<a class="headerlink" href="#4-create-your-gateway-and-runner-set" title="Permanent link">&para;</a></h2>
+<p>The <strong>v2 API</strong> (<code>actions-gateway.com/v2</code>) is a set of small, composable kinds: an <code>ActionsGateway</code> (identity + GitHub binding), a <code>RunnerTemplate</code> (a reusable pod shape), a <code>RunnerSet</code> per runner type, and an optional <code>EgressProxy</code>.
 The set below is a proxied gateway with a GPU runner set (priority tiers) and a Linux runner set.</p>
 <p><strong>You can skip authoring the template.</strong> GAG ships three validated worker pod shapes; <code>kubectl apply -k deploy/templates/plain</code> gives you the baseline one, and a <code>RunnerSet</code> then points at it with <code>templateRef: { name: plain, kind: ClusterRunnerTemplate }</code> in place of the inline <code>RunnerTemplate</code> below.
 If your jobs build container images, start from <code>kata-dind</code> instead.
@@ -3016,7 +3016,7 @@ See the <a href="../operations/runner-template-library/">runner template library
 <a id="__codelineno-6-33" name="__codelineno-6-33" href="#__codelineno-6-33"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/my-org</span>
 <a id="__codelineno-6-34" name="__codelineno-6-34" href="#__codelineno-6-34"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
 <a id="__codelineno-6-35" name="__codelineno-6-35" href="#__codelineno-6-35"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-egress</span><span class="w">          </span><span class="c1"># every RunnerSet below inherits this unless it sets its own proxyRef</span>
-<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="w">  </span><span class="c1"># securityProfile is a *namespace* label in v2 (set in Step 2), not a CR field.</span>
+<a id="__codelineno-6-36" name="__codelineno-6-36" href="#__codelineno-6-36"></a><span class="w">  </span><span class="c1"># The security profile is a *namespace* label (set in Step 2), not a CR field.</span>
 <a id="__codelineno-6-37" name="__codelineno-6-37" href="#__codelineno-6-37"></a><span class="w">  </span><span class="c1"># All gateways in a namespace share one Pod Security level. See Tenant Onboarding.</span>
 <a id="__codelineno-6-38" name="__codelineno-6-38" href="#__codelineno-6-38"></a><span class="nn">---</span>
 <a id="__codelineno-6-39" name="__codelineno-6-39" href="#__codelineno-6-39"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
@@ -3054,7 +3054,7 @@ It is not a field on any of these CRs.</p>
 Add tiers after onboarding, once the class is allowlisted: <a href="../operations/security-operations/#priority-classes-the-allowed-priority-classes-allowlist">Priority classes — the <code>allowed-priority-classes</code> allowlist</a>.</p>
 <p><strong>The proxy is optional in v2.</strong> Drop the <code>EgressProxy</code> and the <code>defaultProxyRef</code> and traffic egresses <strong>directly</strong> to GitHub, still <code>NetworkPolicy</code>-restricted to DNS + the GitHub CIDR allowlist, but without a stable per-tenant egress IP to allow-list.
 That collapses the minimal onboarding to three objects.
-For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see <a href="../operations/tenant-onboarding/#v2-api-multiple-gateways-per-namespace">Tenant Onboarding — v2 API</a> and <a href="../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
+For the proxy-less flow, reusable/cluster-default templates, multiple gateways per namespace, the 52-character name cap, and workload-identity credentials, see <a href="../operations/tenant-onboarding/#multiple-gateways-per-namespace">Tenant Onboarding § Multiple gateways per namespace</a> and <a href="../design/appendix-h-v2-api-decomposition/">Appendix H — v2 API decomposition</a>.</p>
 <p>Tenants requiring more than 250 concurrent sessions should shard across multiple <code>ActionsGateway</code> CRs, each backed by a separate GitHub App installation.
 See <a href="../design/appendix-a-capacity-slos/">Appendix A — Capacity Targets &amp; SLOs</a> for limits.</p>
 <h2 id="rotating-github-app-credentials">Rotating GitHub App Credentials<a class="headerlink" href="#rotating-github-app-credentials" title="Permanent link">&para;</a></h2>

@@ -2766,12 +2766,12 @@
 <tr>
 <td><a href="in-runner-image-builds/">in-runner-image-builds.md</a></td>
 <td>Platform engineer, Tenant operator</td>
-<td>Map each in-runner image-build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) to the right <code>securityProfile</code>/PSA level, with a decision table.</td>
+<td>Map each in-runner image-build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) to the right security profile and PSA level, with a decision table.</td>
 </tr>
 <tr>
 <td><a href="kata-dind-workloads/">kata-dind-workloads.md</a></td>
 <td>Platform engineer</td>
-<td>Run DinD / image-build jobs under Kata Containers (KVM micro-VM) at <code>securityProfile: baseline</code>: nested-virt node prerequisites, the Kata DaemonSet + <code>RuntimeClass</code> setup, and the worker <code>podTemplate</code> <code>runtimeClassName</code>.</td>
+<td>Run DinD / image-build jobs under Kata Containers (KVM micro-VM) on the <code>baseline</code> security profile: nested-virt node prerequisites, the Kata DaemonSet + <code>RuntimeClass</code> setup, and the worker <code>podTemplate</code> <code>runtimeClassName</code>.</td>
 </tr>
 <tr>
 <td><a href="p2p-image-distribution/">p2p-image-distribution.md</a></td>
@@ -2836,7 +2836,7 @@
 <tr>
 <td><a href="../design/08-glossary/">../design/08-glossary.md</a></td>
 <td>All</td>
-<td>Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerGroup, broker protocol identifiers).</td>
+<td>Canonical definitions for project terms (GMC, AGC, ActionsGateway, RunnerSet, scale-set protocol identifiers).</td>
 </tr>
 </tbody>
 </table>

@@ -87,7 +87,7 @@ spec:
         violation[{"msg": msg}] {
           c := all_containers[_]
           c.securityContext.privileged == true
-          msg := sprintf("container %q must not be privileged (use securityProfile: privileged + a Constraint exclusion for DinD tenants)", [c.name])
+          msg := sprintf("container %q must not be privileged (label the namespace actions-gateway.com/security-profile=privileged + a Constraint exclusion for DinD tenants)", [c.name])
         }
 
         # --- images digest-pinned ---

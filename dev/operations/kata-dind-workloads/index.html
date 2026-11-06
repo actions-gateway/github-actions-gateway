@@ -3436,7 +3436,7 @@ Only widen the bounding set for a workload that genuinely cannot drop the cap.</
 </thead>
 <tbody>
 <tr>
-<td><code>securityProfile</code> required</td>
+<td>Security profile required</td>
 <td><code>privileged</code> (platform-granted namespace label)</td>
 <td><code>privileged</code> label still (PSS baseline forbids the capability adds; PSA is not Kata-aware) — but <strong>no privileged container</strong> behind it</td>
 </tr>
@@ -3702,11 +3702,11 @@ Run the negatives on <strong>every</strong> run rather than once: a policy that 
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a>: the pull-through cache manifests behind <a href="#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a>, with the storage options and the values to retarget.</li>
 <li><a href="../reference-architectures/">Reference architectures</a>: the supported profiles this posture belongs to, and how each was tested.</li>
 <li><a href="../runner-template-library/">Runner template library</a>: the shipped <code>kata-dind</code> entry this page describes, plus its two siblings and how to fork one.</li>
-<li><a href="../in-runner-image-builds/">In-runner image builds</a> — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the <code>securityProfile</code> each needs.</li>
+<li><a href="../in-runner-image-builds/">In-runner image builds</a> — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the security profile each needs.</li>
 <li><a href="../kata-ci-spike-runbook/">Kata-on-GKE spike runbook</a> — executable go/no-go steps for the unprivileged <code>dockerd</code> + <code>kind</code> runner.</li>
 <li><a href="../../plan/archive/kata-on-gke/">Kata Containers on GKE</a> — design rationale, the options rejected (Sysbox, rootless, kindbox), and the provider-agnostic reference architecture.</li>
 <li><a href="../../design/appendix-b-worker-isolation/">Appendix B — Worker isolation</a> — <code>runc</code> vs gVisor vs Kata sandbox-runtime trade-offs.</li>
-<li><a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a> — the authoritative <code>securityProfile</code> model.</li>
+<li><a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a> — the authoritative security profile model.</li>
 </ul>
 
 

@@ -3171,7 +3171,7 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  (shared cluster egress)                 └─ one AGC pod multiplexes all three
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                          └─ per-tenant egress proxy pool
 </code></pre></div>
-<p>Unlike GAG's deprecated v1 shape, v2 puts <strong>no one-gateway-per-namespace limit</strong> on you: if your ARC namespace spans two GitHub orgs, that is two <code>ActionsGateway</code>s side by side, closer to how your scale sets are laid out today.</p>
+<p>Unlike GAG's removed v1 shape, v2 puts <strong>no one-gateway-per-namespace limit</strong> on you: if your ARC namespace spans two GitHub orgs, that is two <code>ActionsGateway</code>s side by side, closer to how your scale sets are laid out today.</p>
 <hr />
 <h2 id="concept-mapping-arc--gag">Concept mapping: ARC → GAG<a class="headerlink" href="#concept-mapping-arc--gag" title="Permanent link">&para;</a></h2>
 <table>
@@ -3410,7 +3410,7 @@ The pool is HPA-managed between <code>spec.minReplicas</code> and <code>maxRepli
 <td><strong>Gateways per namespace</strong></td>
 <td>many scale sets per namespace</td>
 <td>many <code>RunnerSet</code>s, and many gateways, per namespace</td>
-<td>No restructuring needed. (GAG's deprecated v1 API had a one-gateway limit; v2 does not.)</td>
+<td>No restructuring needed. (GAG's removed v1 API had a one-gateway limit; v2 does not.)</td>
 </tr>
 <tr>
 <td><strong>Quota / RBAC / NetworkPolicy</strong></td>
@@ -3550,7 +3550,7 @@ Because both register independently with GitHub, there is no split-brain to unta
 <li><a href="../../design/network-architecture/">Network architecture</a> — egress proxy and NetworkPolicy detail, with isolation-validation probes.</li>
 <li><a href="../troubleshooting/">Troubleshooting</a> — common first-day failures.</li>
 <li><a href="../v1alpha1-deprecation/">Removal notice</a>, covering what <code>v2.0.0</code> removed (<code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, Classic acquisition).
-  Relevant only if you are <em>already</em> on GAG's v1 API; new migrations should not start there.</li>
+  Relevant only if you are <em>already</em> on GAG's v1 API.</li>
 </ul>
 
 

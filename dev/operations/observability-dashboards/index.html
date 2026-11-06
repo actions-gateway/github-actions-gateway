@@ -3128,8 +3128,8 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 <tbody>
 <tr>
 <td>Proxy replicas ready</td>
-<td><code>kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}</code></td>
-<td>Time series</td>
+<td><code>kube_deployment_status_replicas_ready{deployment=~".+-proxy"}</code></td>
+<td>Time series, one line per <code>&lt;proxy&gt;-proxy</code> pool. A tenant's own Deployment named <code>*-proxy</code> matches too</td>
 </tr>
 <tr>
 <td>HPA desired vs. current</td>
@@ -3416,7 +3416,7 @@ The time-series panels stay range queries, because a trend is what they are for.
 <tbody>
 <tr>
 <td>Worker consumption vs. the always-on floor</td>
-<td><code>sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))</code> against <code>kube_deployment_status_replicas_ready{deployment="actions-gateway-proxy"}</code></td>
+<td><code>sum by (namespace) (rate(actions_gateway_job_duration_seconds_sum[5m]))</code> against <code>kube_deployment_status_replicas_ready{deployment=~".+-proxy"}</code></td>
 <td>Time series, two series on one panel deliberately. Over a quiet weekend the worker line collapses toward zero while the proxy line stays flat, and that flat line is the entire idle floor. An Actions Runner Controller (ARC) scale set holding <code>minRunners &gt; 0</code> would show a worker line that never reaches zero. The worker series comes from the duration histogram, which attributes a pod's whole lifetime at completion, so it is a trailing average over the rate window rather than a live pod count: it will not equal the pod count behind the quota panel beside it. Needs kube-state-metrics</td>
 </tr>
 <tr>
@@ -3447,7 +3447,7 @@ This one answers what was not: intake an admission rung refused, which shows up 
 <tr>
 <td>Withheld capacity by rung</td>
 <td><code>sum by (namespace) (actions_gateway_scaleset_advertised_capacity)</code> stacked under <code>sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)</code></td>
-<td>Time series, stacked. The stack total is the set's declared worker ceiling, because <a href="../observability-metrics/#scale-set-acquisition-tier-q264">every evaluated rung publishes a value each poll including an explicit <code>0</code></a> and the entries sum to <code>ceiling − advertised</code>. <code>quota</code> is namespace-<code>ResourceQuota</code> headroom, <code>capacity</code> the opt-in placeability gate, <code>scaleup</code> the opt-in creation-rate limit; grouping by <code>reason</code> rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on <code>runner_set</code>, so a <code>$runner_group</code> holding a <code>RunnerGroup</code> name empties it</td>
+<td>Time series, stacked. The stack total is the set's declared worker ceiling, because <a href="../observability-metrics/#scale-set-acquisition-tier-q264">every evaluated rung publishes a value each poll including an explicit <code>0</code></a> and the entries sum to <code>ceiling − advertised</code>. <code>quota</code> is namespace-<code>ResourceQuota</code> headroom, <code>capacity</code> the opt-in placeability gate, <code>scaleup</code> the opt-in creation-rate limit; grouping by <code>reason</code> rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on <code>runner_set</code>, which carries the same set name as <code>$runner_group</code></td>
 </tr>
 </tbody>
 </table>
@@ -3495,7 +3495,7 @@ The egress-posture timeline below plots the per-set gauge; no panel reads the ga
 <tr>
 <td>Egress posture per gateway and RunnerSet</td>
 <td><code>actions_gateway_egress_unattributed</code> / <code>_egress_rules_stale</code> / <code>_github_egress_incomplete</code>, and <code>max by (namespace, runner_set) (actions_gateway_runnerset_egress_audit_unattributed{reason!~"EgressAuditDisabled\|DirectEgress"})</code></td>
-<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, an incomplete GHES allowlist denies the appliance, and a set's egress audit records join to no job. The first three from the GMC scrape, where <code>egress_rules_stale</code> is emitted for v1 and v2 gateways and the other two for v2 only; the fourth per <code>RunnerSet</code> from the AGC scrape, one row per set across a change of <code>reason</code></td>
+<td>State timeline (1 = flagged). Whether a tenant's egress is attributable at all: direct mode leaves from no per-tenant proxy, a stale allowlist may have drifted from GitHub's ranges, an incomplete GHES allowlist denies the appliance, and a set's egress audit records join to no job. The first three from the GMC scrape; the fourth per <code>RunnerSet</code> from the AGC scrape, one row per set across a change of <code>reason</code></td>
 </tr>
 </tbody>
 </table>

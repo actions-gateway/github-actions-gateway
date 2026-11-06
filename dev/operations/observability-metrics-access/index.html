@@ -2209,10 +2209,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#v2-egressproxy-proxy-metrics" class="md-nav__link">
+  <a href="#egressproxy-proxy-metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v2 EgressProxy proxy metrics
+        EgressProxy proxy metrics
       
     </span>
   </a>
@@ -2822,10 +2822,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#v2-egressproxy-proxy-metrics" class="md-nav__link">
+  <a href="#egressproxy-proxy-metrics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        v2 EgressProxy proxy metrics
+        EgressProxy proxy metrics
       
     </span>
   </a>
@@ -2922,79 +2922,69 @@ Unlike the GMC manager, the listener <strong>requires a client certificate</stro
 Three things are wired per tenant so Prometheus can scrape them:</p>
 <ol>
 <li><strong>Metrics Services (always created).</strong> The GMC creates a <code>metrics</code>-named <code>:8443</code> port on the proxy <code>Service</code> and a dedicated AGC <code>Service</code>, both in the tenant namespace.
-   Under v2 the AGC Service is named for the gateway, as <code>&lt;gateway&gt;-agc</code>; under v1 it is the fixed <code>actions-gateway-controller</code>, and the proxy Service is <code>actions-gateway-proxy</code>.
+   The AGC Service is named for the gateway, as <code>&lt;gateway&gt;-agc</code>, and the proxy Service for the <code>EgressProxy</code>, as <code>&lt;ep&gt;-proxy</code>.
    These exist regardless of the scrape toggle.</li>
-<li><strong>Per-tenant <code>ServiceMonitor</code>s (opt-in).</strong> When <code>metrics.serviceMonitor.enabled=true</code>, the GMC creates one <code>ServiceMonitor</code> per component in the tenant namespace (<code>actions-gateway-proxy-metrics</code>, <code>actions-gateway-controller-metrics</code>).
+<li><strong>Per-tenant <code>ServiceMonitor</code>s (opt-in).</strong> When <code>metrics.serviceMonitor.enabled=true</code>, the GMC creates one <code>ServiceMonitor</code> per component in the tenant namespace (<code>&lt;ep&gt;-proxy-metrics</code>, <code>&lt;gateway&gt;-agc-metrics</code>).
    Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.
    Under v2 the monitors are named per resource instead: <code>&lt;gateway&gt;-agc-metrics</code> for each <code>ActionsGateway</code>'s AGC, and <code>&lt;ep&gt;-proxy-metrics</code> for each <code>EgressProxy</code>.</li>
-<li><strong>The scraper client bundle (mTLS).</strong> Each <code>ServiceMonitor</code> presents the per-tenant scraper client bundle from the <code>actions-gateway-metrics-client</code> Secret in the tenant namespace — <code>tls.crt</code>/<code>tls.key</code> authenticate the scraper to the listener and <code>ca.crt</code> verifies the listener's server cert.
+<li><strong>The scraper client bundle (mTLS).</strong> Each <code>ServiceMonitor</code> presents the per-tenant scraper client bundle from the <code>&lt;ep&gt;-metrics-client</code> Secret in the tenant namespace (the AGC's is <code>&lt;gateway&gt;-agc-metrics-client</code>) — <code>tls.crt</code>/<code>tls.key</code> authenticate the scraper to the listener and <code>ca.crt</code> verifies the listener's server cert.
    <code>serverName</code> is the component's <code>&lt;service&gt;.&lt;namespace&gt;.svc</code> DNS name (a SAN on the server cert), so the scrape is verified end-to-end and <strong>not</strong> MITM-able:</li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">tlsConfig</span><span class="p">:</span>
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">serverName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway-proxy.&lt;tenant-namespace&gt;.svc</span>
-<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">ca</span><span class="p">:</span><span class="w">        </span><span class="p p-Indicator">{</span><span class="nt"> secret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">actions-gateway-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">ca.crt</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">cert</span><span class="p">:</span><span class="w">      </span><span class="p p-Indicator">{</span><span class="nt"> secret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">actions-gateway-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">tls.crt</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
-<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">actions-gateway-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">tls.key</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">serverName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;ep&gt;-proxy.&lt;tenant-namespace&gt;.svc</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">ca</span><span class="p">:</span><span class="w">        </span><span class="p p-Indicator">{</span><span class="nt"> secret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;ep&gt;-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">ca.crt</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">  </span><span class="nt">cert</span><span class="p">:</span><span class="w">      </span><span class="p p-Indicator">{</span><span class="nt"> secret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;ep&gt;-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">tls.crt</span><span class="w"> </span><span class="p p-Indicator">}</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;ep&gt;-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">tls.key</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
-<h4 id="v2-egressproxy-proxy-metrics">v2 <code>EgressProxy</code> proxy metrics<a class="headerlink" href="#v2-egressproxy-proxy-metrics" title="Permanent link">&para;</a></h4>
-<p>The names above are the <strong>v1</strong> layout, where a single proxy pool per namespace uses fixed names.
-Under the <strong>v2 API</strong>, the egress proxy is a standalone <code>EgressProxy</code> resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the <code>EgressProxy</code> name <code>&lt;ep&gt;</code> instead:</p>
+<h4 id="egressproxy-proxy-metrics"><code>EgressProxy</code> proxy metrics<a class="headerlink" href="#egressproxy-proxy-metrics" title="Permanent link">&para;</a></h4>
+<p>The egress proxy is a standalone <code>EgressProxy</code> resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the <code>EgressProxy</code> name <code>&lt;ep&gt;</code>:</p>
 <table>
 <thead>
 <tr>
 <th>Object</th>
-<th>v1</th>
-<th>v2 <code>EgressProxy</code></th>
+<th>Name</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Proxy <code>Service</code> (metrics port <code>:8443</code>)</td>
-<td><code>actions-gateway-proxy</code></td>
 <td><code>&lt;ep&gt;-proxy</code></td>
 </tr>
 <tr>
 <td>Server bundle Secret (mounted into the proxy)</td>
-<td><code>actions-gateway-metrics-tls</code></td>
 <td><code>&lt;ep&gt;-metrics-tls</code></td>
 </tr>
 <tr>
 <td>Scraper client bundle Secret (published)</td>
-<td><code>actions-gateway-metrics-client</code></td>
 <td><code>&lt;ep&gt;-metrics-client</code></td>
 </tr>
 <tr>
 <td><code>ServiceMonitor</code></td>
-<td><code>actions-gateway-proxy-metrics</code></td>
 <td><code>&lt;ep&gt;-proxy-metrics</code></td>
 </tr>
 </tbody>
 </table>
 <p>Each <code>EgressProxy</code> owns its <strong>own</strong> metrics CA — distinct from the AGC's and from every other <code>EgressProxy</code> — so Prometheus must read that proxy's own <code>&lt;ep&gt;-metrics-client</code> bundle, with <code>serverName: &lt;ep&gt;-proxy.&lt;namespace&gt;.svc</code>.
 The same toggle (<code>metrics.serviceMonitor.enabled</code> → <code>--enable-tenant-service-monitors</code>), the same <code>metrics: enabled</code> NetworkPolicy prerequisite, and the same graceful <code>ServiceMonitorCRDMissing</code> handling apply.</p>
-<p>The v2 AGC follows the same pattern keyed on the gateway name <code>&lt;gateway&gt;</code>, with its own CA, distinct from every <code>EgressProxy</code>'s:</p>
+<p>The AGC follows the same pattern keyed on the gateway name <code>&lt;gateway&gt;</code>, with its own CA, distinct from every <code>EgressProxy</code>'s:</p>
 <table>
 <thead>
 <tr>
 <th>Object</th>
-<th>v1</th>
-<th>v2 <code>ActionsGateway</code></th>
+<th>Name</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>AGC <code>Service</code> (metrics port <code>:8443</code>)</td>
-<td><code>actions-gateway-controller</code></td>
 <td><code>&lt;gateway&gt;-agc</code></td>
 </tr>
 <tr>
 <td>Scraper client bundle Secret (published)</td>
-<td><code>actions-gateway-metrics-client</code></td>
 <td><code>&lt;gateway&gt;-agc-metrics-client</code></td>
 </tr>
 <tr>
 <td><code>ServiceMonitor</code></td>
-<td><code>actions-gateway-controller-metrics</code></td>
 <td><code>&lt;gateway&gt;-agc-metrics</code></td>
 </tr>
 </tbody>
@@ -3010,28 +3000,24 @@ The same toggle (<code>metrics.serviceMonitor.enabled</code> → <code>--enable-
 <li><strong>NetworkPolicy:</strong> label the Prometheus namespace <code>metrics: enabled</code> so the per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit the <code>:8443</code> metrics port only from <code>metrics=enabled</code> namespaces).</li>
 </ul>
 <p><strong>Ad-hoc verification</strong> (mounting the published bundle locally).
-The Service and Secret are named per <strong>gateway</strong> under v2 and with a fixed name under v1, so set <code>svc</code>/<code>secret</code> for the tenant you are scraping and the rest of the block is identical:</p>
+The Service and Secret are named per <strong>gateway</strong>, so set <code>svc</code>/<code>secret</code> for the tenant you are scraping:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nv">ns</span><span class="o">=</span>&lt;tenant-namespace&gt;
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
-<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># v2 tenant (per ActionsGateway, e.g. gateway "dogfood" -&gt; dogfood-agc):</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Per ActionsGateway, e.g. gateway "dogfood" -&gt; dogfood-agc:</span>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nv">svc</span><span class="o">=</span>&lt;gateway&gt;-agc
 <a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="nv">secret</span><span class="o">=</span>&lt;gateway&gt;-agc-metrics-client
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># v1 tenant, instead of the two lines above:</span>
-<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># svc=actions-gateway-controller</span>
-<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="c1"># secret=actions-gateway-metrics-client</span>
-<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span><span class="s2">"</span><span class="nv">$secret</span><span class="s2">"</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.tls\.crt}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>client.crt
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span><span class="s2">"</span><span class="nv">$secret</span><span class="s2">"</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.tls\.key}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>client.key
 <a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span><span class="s2">"</span><span class="nv">$secret</span><span class="s2">"</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.tls\.crt}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>client.crt
-<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span><span class="s2">"</span><span class="nv">$secret</span><span class="s2">"</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.tls\.key}'</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>client.key
-<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span><span class="s2">"</span><span class="nv">$secret</span><span class="s2">"</span><span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.ca\.crt}'</span><span class="w">  </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>ca.crt
-<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="s2">"svc/</span><span class="nv">$svc</span><span class="s2">"</span><span class="w"> </span><span class="m">8443</span>:8443<span class="w"> </span><span class="p">&amp;</span>
-<a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>curl<span class="w"> </span>--cert<span class="w"> </span>client.crt<span class="w"> </span>--key<span class="w"> </span>client.key<span class="w"> </span>--cacert<span class="w"> </span>ca.crt<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="w">  </span><span class="s2">"https://</span><span class="nv">$svc</span><span class="s2">.</span><span class="nv">$ns</span><span class="s2">.svc:8443/metrics"</span><span class="w"> </span>--resolve<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="w">  </span><span class="s2">"</span><span class="nv">$svc</span><span class="s2">.</span><span class="nv">$ns</span><span class="s2">.svc:8443:127.0.0.1"</span>
-<a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>rm<span class="w"> </span>-f<span class="w"> </span>client.crt<span class="w"> </span>client.key<span class="w"> </span>ca.crt<span class="w">   </span><span class="c1"># delete the cert material when done</span>
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.ca\.crt}'</span><span class="w">  </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span>&gt;<span class="w"> </span>ca.crt
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>-n<span class="w"> </span><span class="s2">"</span><span class="nv">$ns</span><span class="s2">"</span><span class="w"> </span><span class="s2">"svc/</span><span class="nv">$svc</span><span class="s2">"</span><span class="w"> </span><span class="m">8443</span>:8443<span class="w"> </span><span class="p">&amp;</span>
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>curl<span class="w"> </span>--cert<span class="w"> </span>client.crt<span class="w"> </span>--key<span class="w"> </span>client.key<span class="w"> </span>--cacert<span class="w"> </span>ca.crt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="w">  </span><span class="s2">"https://</span><span class="nv">$svc</span><span class="s2">.</span><span class="nv">$ns</span><span class="s2">.svc:8443/metrics"</span><span class="w"> </span>--resolve<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="w">  </span><span class="s2">"</span><span class="nv">$svc</span><span class="s2">.</span><span class="nv">$ns</span><span class="s2">.svc:8443:127.0.0.1"</span>
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>rm<span class="w"> </span>-f<span class="w"> </span>client.crt<span class="w"> </span>client.key<span class="w"> </span>ca.crt<span class="w">   </span><span class="c1"># delete the cert material when done</span>
 </code></pre></div>
 <p>The <code>--resolve</code> host must match <code>$svc.$ns.svc</code> exactly: that name is what the AGC's serving certificate is issued for, so substituting <code>localhost</code> fails the TLS handshake rather than the authorization check.</p>
 <p>(The bundle is a client <em>certificate</em>, not a long-lived account credential; still remove the files when finished.)</p>

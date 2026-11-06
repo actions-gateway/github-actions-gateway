@@ -2658,14 +2658,17 @@
 
 
 <h1 id="raise-the-kubernetes-floor-to-a-version-ci-tests">Raise the Kubernetes floor to a version CI tests<a class="headerlink" href="#raise-the-kubernetes-floor-to-a-version-ci-tests" title="Permanent link">&para;</a></h1>
-<p>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 will not become ready, while <code>ENVTEST_K8S_VERSION</code> and the e2e node image are both 1.35.
-So the charts promise versions nothing here tests.</p>
+<p>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 cannot sync its <code>RunnerSet</code> informer, while <code>ENVTEST_K8S_VERSION</code> and the e2e node image are both 1.35.
+So the charts promise versions nothing here tests.
+<code>scripts/e2e/validate-cluster.sh:234</code> passes 1.30 too, and <code>install.md</code>'s preflight row and <code>charts/actions-gateway/README.md:45</code> state it.</p>
+<p><strong>Why it gates <code>v2.0.0</code>:</strong> the charts accept versions the docs rule out and CI does not test, and at <code>v2.0.0</code> every tenant is on the API the docs rule 1.30 out for.
+1.30 itself has not been run, so that failure is the docs' reading of the field selector's feature state unless this row runs it.</p>
 <p>Karl's reason for a higher floor, on 2026-11-04: "1.33 is end of life now".
 That date is his statement and is not checked against upstream's schedule here, and the dogfood cluster's version is not read either, so read both before choosing the number.</p>
 <p>The status-write refusal that raised the question is not a reason for this row.
 On 1.31.0 and 1.32.0 ratcheting misses the status subresource, which the <code>spec.tracing.endpoint</code> rule handles itself with <code>optionalOldSelf</code>.
 Another rule tightened without that clause would meet the same refusal on those versions, and no gate here would see it.</p>
-<p>Done when the charts, <code>migration-from-arc.md</code> and the rest of <code>docs/operations/</code> state one floor that CI covers, and <code>upgrade.md</code> tells an operator below it what they get.</p>
+<p>Done when the charts, the preflight, <code>migration-from-arc.md</code> and the rest of <code>docs/operations/</code> state one floor that CI covers, and <code>upgrade.md</code> tells an operator below it what they get.</p>
 
 
 

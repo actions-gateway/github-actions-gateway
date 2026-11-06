@@ -3694,12 +3694,11 @@
 </blockquote>
 <p>For initial setup steps see <a href="../../getting-started/">Getting Started</a>.
 For detailed symptom → diagnosis steps see <a href="../troubleshooting/">Troubleshooting</a>.</p>
-<p><strong>Addressing the AGC.</strong> Under v2 every AGC control-plane object is named per gateway, as <code>&lt;gateway&gt;-agc</code>: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+<p><strong>Addressing the AGC.</strong> Every AGC control-plane object is named per gateway, as <code>&lt;gateway&gt;-agc</code>: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
 A <code>team-a-gateway</code> tenant therefore addresses <code>deploy/team-a-gateway-agc</code>, <code>sa/team-a-gateway-agc</code>, and so on.
-Under v1 there is one AGC per namespace and all of them carry the fixed name <code>actions-gateway-controller</code>.
-Commands below give both forms; substitute your own gateway name for <code>&lt;gateway&gt;</code>.</p>
-<p><strong>Selecting AGC pods needs neither form.</strong> The bare <code>app</code> label carries the per-gateway name under v2 and the fixed name under v1, so <code>-l app=actions-gateway-controller</code> selects nothing on a v2 tenant.
-The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gateway-controller</code> under both, so <code>-l app.kubernetes.io/name=actions-gateway-controller</code> is the selector that works on either and is what the commands below use.</p>
+Commands below use <code>&lt;gateway&gt;</code>; substitute your own gateway name.</p>
+<p><strong>Selecting AGC pods.</strong> The bare <code>app</code> label carries the per-gateway name, so selecting on it by the fixed name finds nothing.
+The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gateway-controller</code> on every gateway, so <code>-l app.kubernetes.io/name=actions-gateway-controller</code> selects them all and is what the commands below use.</p>
 <hr />
 <h2 id="day-2-operations">Day-2 Operations<a class="headerlink" href="#day-2-operations" title="Permanent link">&para;</a></h2>
 <h3 id="adding-a-tenant">Adding a Tenant<a class="headerlink" href="#adding-a-tenant" title="Permanent link">&para;</a></h3>
@@ -3707,8 +3706,8 @@ The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gatew
 <li>Ensure the tenant namespace exists: <code>kubectl get namespace &lt;namespace&gt;</code>.</li>
 <li>Have the tenant create the GitHub App Secret in their namespace.
    See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</li>
-<li>Have the tenant create the gateway CR(s) — the recommended v2 <code>ActionsGateway</code> + <code>RunnerSet</code>, or the legacy v1 <code>ActionsGateway</code>.
-   See <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">Getting Started §4</a>.</li>
+<li>Have the tenant create the gateway CRs: an <code>ActionsGateway</code> and its <code>RunnerSet</code>s.
+   See <a href="../../getting-started/#4-create-your-gateway-and-runner-set">Getting Started §4</a>.</li>
 <li>Confirm the GMC has provisioned resources within ~30 seconds:
    <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy,hpa,networkpolicy,resourcequota<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
@@ -3739,7 +3738,7 @@ Raise the namespace <code>ResourceQuota</code> with it, or the extra slots are w
 <hr />
 <h3 id="rotating-github-app-credentials">Rotating GitHub App Credentials<a class="headerlink" href="#rotating-github-app-credentials" title="Permanent link">&para;</a></h3>
 <p>See <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a> for the full procedure.</p>
-<p>In brief: create a new Secret with the new private key, then change <code>spec.gitHubAppRef.name</code> in the <code>ActionsGateway</code> CR to reference the new Secret.
+<p>In brief: create a new Secret with the new private key, then change <code>spec.credentials.githubApp.name</code> in the <code>ActionsGateway</code> CR to reference the new Secret.
 The GMC detects the Secret reference change and rolls the AGC Deployment.
 Do not update the existing Secret in-place; the GMC does not watch Secret contents, only the reference.</p>
 <hr />
@@ -3867,7 +3866,7 @@ Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshoo
 Raise the quota or lower <code>maxWorkers</code> — see <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a> and <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>.</p>
 <h3 id="actionsgatewayproxyquotaexceeded">ActionsGatewayProxyQuotaExceeded<a class="headerlink" href="#actionsgatewayproxyquotaexceeded" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> The <code>ResourceQuota</code> is holding the egress proxy pool below the HPA's target.
-Raise the quota or lower <code>proxy.maxReplicas</code> — see <a href="../troubleshooting/#proxy-pool-not-scaling">Proxy Pool Not Scaling</a>.</p>
+Raise the quota or lower the <code>EgressProxy</code>'s <code>spec.maxReplicas</code> — see <a href="../troubleshooting/#proxy-pool-not-scaling">Proxy Pool Not Scaling</a>.</p>
 <h3 id="actionsgatewayquotapressure">ActionsGatewayQuotaPressure<a class="headerlink" href="#actionsgatewayquotapressure" title="Permanent link">&para;</a></h3>
 <p><strong>Ticket.</strong> A proxy or worker pool cannot reach its configured ceiling within the namespace <code>ResourceQuota</code> headroom.
 Plan a quota increase before the next load spike — see <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a> and <a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Jobs Failing Due to Namespace ResourceQuota Exhaustion</a>.</p>
@@ -3991,11 +3990,7 @@ Under a real withhold the per-window probe job is still assigned, so a set with 
 <li>Check the provision-error rate: <code>rate(actions_gateway_scaleset_provision_errors_total[5m])</code>.
    A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs for <code>generate-jitconfig</code> errors and worker-pod create rejections.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># v2</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>--tail<span class="o">=</span><span class="m">100</span>
 </code></pre></div>
 <ol>
 <li>Check the worker-pod <code>ResourceQuota</code> (see <a href="#adjusting-tenant-quota">Adjusting Tenant Quota</a>) and the <code>WorkerQuotaExceeded</code> / <code>WorkersUnschedulable</code> conditions — a full quota or an unschedulable pod stalls provisioning with no provision <em>error</em>.</li>
@@ -4017,26 +4012,22 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
 <ol>
 <li>Generate a new private key from the GitHub App settings page and download the <code>.pem</code> file.</li>
 <li>Create a new Secret with the new key:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;new-secret-name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span>&lt;appId&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span>&lt;installationId&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>&lt;path-to-new-key.pem&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>&lt;new-secret-name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">appId</span><span class="o">=</span>&lt;appId&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">installationId</span><span class="o">=</span>&lt;installationId&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--from-file<span class="o">=</span><span class="nv">privateKey</span><span class="o">=</span>&lt;path-to-new-key.pem&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
 <li>Update the <code>ActionsGateway</code> CR to reference the new Secret:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"gitHubAppRef":{"name":"&lt;new-secret-name&gt;"}}}'</span>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"credentials":{"githubApp":{"name":"&lt;new-secret-name&gt;"}}}}'</span>
 </code></pre></div></li>
 <li>Confirm the AGC Deployment has rolled and the new pod is healthy:
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># v2</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
+<li>Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.</li>
+<li>Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</li>
 </ol>
-<p><div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-</code></pre></div>
-7. Confirm <code>actions_gateway_token_refresh_errors_total</code> is no longer incrementing.
-8. Delete the old Secret once confirmed healthy, and delete the downloaded <code>.pem</code> file from disk (<code>shred -u &lt;path&gt;</code> on Linux, <code>rm -P &lt;path&gt;</code> on macOS) — the key now lives only in the Kubernetes Secret.</p>
 <p><strong>Scope assessment.</strong> The compromised key could have been used to acquire installation tokens carrying every permission the App holds.
 With the <a href="../tenant-onboarding/#0a-create-the-app-web-ui">onboarding set</a>, <code>Actions: Read and write</code> plus runner registration (<code>Self-hosted runners</code> or <code>Administration</code>, read and write), on every repository the installation covers.
 That means a holder could have re-run or cancelled workflow runs, and registered or deleted self-hosted runners; a rogue runner registered into a group can take jobs from it.
@@ -4053,11 +4044,7 @@ Check GitHub's audit log for unusual API activity from the App installation: Set
    It also replays any unacknowledged messages; a replayed job that already has a worker pod adopts that pod.</li>
 <li><strong>To force restart:</strong></li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># v2</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-</code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <ol>
 <li>Monitor <code>actions_gateway_scaleset_session_open</code> — it should read <code>1</code> for every <code>runner_set</code> within a few seconds of the pod starting.</li>
@@ -4069,7 +4056,7 @@ Each worker pod is the restart-safe record of its job, carrying the run identity
 <p>If the GMC pod is unavailable:</p>
 <ol>
 <li><strong>Existing tenant gateways continue operating normally.</strong> The GMC is not in the data plane; it only responds to <code>ActionsGateway</code> CR changes.
-   Provisioned AGCs, proxies, and RunnerGroups are not affected.</li>
+   Provisioned AGCs, proxies, and worker pods are not affected.</li>
 <li><strong>New <code>ActionsGateway</code> CRs will not be provisioned</strong> until the GMC recovers.</li>
 <li><strong>Spec changes to existing <code>ActionsGateway</code> CRs will not be reconciled</strong> until the GMC recovers.</li>
 <li>To restore: <code>kubectl rollout restart deploy/gmc-controller-manager -n gmc-system</code>.</li>

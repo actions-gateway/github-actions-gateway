@@ -3034,17 +3034,17 @@ See <a href="#secret-handling-caveats">Secret Handling Caveats</a> for where tho
 <tbody>
 <tr>
 <td>Cluster-wide (once per cluster)</td>
-<td>The GAG Custom Resource Definitions (CRDs). The current v2 CRDs — <code>actionsgateways</code>, <code>egressproxies</code>, <code>runnersets</code>, <code>runnertemplates</code>, <code>clusterrunnertemplates</code> — are in API group <code>actions-gateway.com</code>; a cluster still serving the legacy v1alpha1 API also carries <code>actionsgateways</code> and <code>runnergroups</code> under <code>actions-gateway.github.com</code>.</td>
+<td>The GAG Custom Resource Definitions (CRDs). The current v2 CRDs — <code>actionsgateways</code>, <code>egressproxies</code>, <code>runnersets</code>, <code>runnertemplates</code>, <code>clusterrunnertemplates</code> — are in API group <code>actions-gateway.com</code>.</td>
 <td>A CRD backup — or, preferably, the Helm CRD chart tracked in Git.</td>
 </tr>
 <tr>
 <td>Per-tenant namespace</td>
-<td>The <code>ActionsGateway</code> CR, any referenced <code>EgressProxy</code> CR, the GitHub App credential <code>Secret</code>, the <code>Namespace</code> (with its security-profile label), and the <code>ResourceQuota</code>.</td>
+<td>The <code>ActionsGateway</code> CR, any referenced <code>EgressProxy</code> CR, its <code>RunnerSet</code> and <code>RunnerTemplate</code> CRs, the GitHub App credential <code>Secret</code>, the <code>Namespace</code> (with its security-profile label), and the <code>ResourceQuota</code>.</td>
 <td>A namespace backup, scheduled per tenant.</td>
 </tr>
 </tbody>
 </table>
-<p>Everything else in the tenant namespace — the Actions Gateway Controller (AGC) <code>Deployment</code>, ServiceAccounts, RoleBinding, metrics <code>Service</code>, NetworkPolicies, metrics TLS <code>Secret</code>s, and the <code>RunnerGroup</code> CR — is <strong>owned and reconciled by the GMC</strong> and does not need to be in the restore path.
+<p>Everything else in the tenant namespace — the Actions Gateway Controller (AGC) <code>Deployment</code>, ServiceAccounts, RoleBinding, metrics <code>Service</code>, NetworkPolicies, and metrics TLS <code>Secret</code>s — is <strong>owned and reconciled by the GMC</strong> and does not need to be in the restore path.
 Those objects all carry the label <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>, which is exactly the selector the restore step uses to skip them.</p>
 <hr />
 <h2 id="backing-up">Backing Up<a class="headerlink" href="#backing-up" title="Permanent link">&para;</a></h2>
@@ -3087,7 +3087,7 @@ Capturing the owned children too is fine — they make the backup a useful point
 </li>
 <li>
 <p><strong>Inputs and top-level CRs, skipping owned children.</strong> Restore the tenant namespace, but <strong>exclude everything the GMC owns</strong> and let the controllers rebuild it.
-   The owned children (and the GMC-provisioned <code>RunnerGroup</code>) all carry <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>; the operator inputs and the top-level CRs do not.
+   The owned children all carry <code>app.kubernetes.io/managed-by=actions-gateway-gmc</code>; the operator inputs and the top-level CRs do not.
    A single label selector expresses exactly that:</p>
 </li>
 </ol>

@@ -3554,12 +3554,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
-<td><a href="Q1107/">Q1107</a></td>
-<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
-<td><code>milestone</code> <code>2.0-gate</code></td>
+<td><a href="Q1284/">Q1284</a></td>
+<td>Raise the Kubernetes floor to a version CI tests</td>
+<td><code>debt</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is the one <code>v2.0.0</code> ships.</td>
+<td>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 …</td>
+</tr>
+<tr>
+<td><a href="Q1107/">Q1107</a></td>
+<td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">The <code>v2.0.0</code> cut</a></td>
+<td><code>milestone</code> <code>2.0-gate</code></td>
+<td>🚫</td>
+<td>S</td>
+<td>Blocked on <a href="Q1284/">Q1284</a>, one Kubernetes floor across the charts and docs, because the charts accept versions the docs rule out and CI …</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>
@@ -3586,12 +3594,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The only measurement of the shipped acquisition tier is <code>TestScaleSetPerListenerMemory</code> (<code>make scaleset-mem-profile</code>): 200 parked scale-set …</td>
 </tr>
 <tr>
-<td><a href="Q1284/">Q1284</a></td>
-<td>Raise the Kubernetes floor to a version CI tests</td>
-<td><code>debt</code></td>
+<td><a href="Q1302/">Q1302</a></td>
+<td>Shipped CRD descriptions and a PSA Event still name the removed API</td>
+<td><code>debt</code> <code>docs</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 …</td>
+<td><code>kubectl explain</code> and the published <code>docs/reference/api.md</code> describe <code>v2</code> in terms of what <code>v2.0.0</code> removed.</td>
+</tr>
+<tr>
+<td><a href="Q1303/">Q1303</a></td>
+<td>features.md badges v2 features beta while v2 is the GA version</td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>docs/features.md</code> carries 15 <code>gag-maturity-badge"&gt;beta</code> badges (<code>git grep</code>, 2026-11-06), including the one on "The v2 API" itself at …</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>
@@ -4296,6 +4312,38 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a job ID read from GitHub Enterprise Server or another non-github.com backend is not a UUID.</td>
+</tr>
+<tr>
+<td><a href="Q1297/">Q1297</a></td>
+<td>An AGC restart re-mints a JIT config for each replayed Pending worker</td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Measured</strong> on 2026-11-06 with <code>test/fakegithub</code>, while Q1107 walked an AGC through the <code>v2.0.0</code> upgrade and rollback: with workers held …</td>
+</tr>
+<tr>
+<td><a href="Q1298/">Q1298</a></td>
+<td>A set recreated under one name reads its predecessor's guard records</td>
+<td><code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q1167 found this and Q1107 carried it until Q1107 narrowed to the cut.</td>
+</tr>
+<tr>
+<td><a href="Q1299/">Q1299</a></td>
+<td>make apply-cert-manager applies to whichever kubectl context is current</td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>cmd/gmc/Makefile:104:kubectl apply -f $(CERTMANAGER_MANIFEST)</code> names no context, and neither does the <code>wait-cert-manager</code> target beside …</td>
+</tr>
+<tr>
+<td><a href="Q1300/">Q1300</a></td>
+<td>The release-candidate gating-row check lists the row for the cut itself</td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>`.claude/skills/release-candidate/SKILL.md:52:grep -rlE '^[[:space:]]<em>-[[:space:]]</em><X\.Y>-gate[[:space:]]<em>$' docs/queue/Q</em>.md # want no …</td>
 </tr>
 </tbody>
 </table>

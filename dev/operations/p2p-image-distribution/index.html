@@ -3129,7 +3129,7 @@ GAG does not have to change anything about how it stamps the worker image — bu
   P2P still routes that check through the mirror so it does not melt the registry, but <code>Always</code> partially defeats local caching and adds latency to every cold start.
   Digest pinning (the secure default) keeps you on <code>IfNotPresent</code> — keep it there.</li>
 </ul>
-<p>Because P2P intercepts at the mirror, it works the same whether the worker image is the built-in default or a per-<code>RunnerGroup</code> <code>workerImage</code> override, and whether it is served by GHCR or a private registry.</p>
+<p>Because P2P intercepts at the mirror, it works the same whether the worker image is the built-in default or a per-<code>RunnerTemplate</code> <code>workerImage</code> override, and whether it is served by GHCR or a private registry.</p>
 <h3 id="digest-pinning-and-p2p-are-complementary">Digest pinning and P2P are complementary<a class="headerlink" href="#digest-pinning-and-p2p-are-complementary" title="Permanent link">&para;</a></h3>
 <p>GAG's worker images are digest-pinned by design (a bare tag is mutable; see <a href="../../design/05-security/">Security § Supply-Chain Compromise of Worker Image</a>).
 P2P distribution is <strong>content-addressed</strong>, so it reinforces this rather than fighting it:</p>
@@ -3211,7 +3211,7 @@ That fits the trusted-CI use DinD is already limited to, and it is one more reas
 <li><a href="../air-gapped-install/">Air-gapped install</a> — relocating images to a private registry with digests preserved; P2P sits in front of that registry.</li>
 <li><a href="../in-runner-image-builds/">In-runner image builds</a> — the sibling scale/PSA companion for build workloads inside workers.</li>
 <li><a href="../../design/05-security/">Security § Supply-Chain Compromise of Worker Image</a> — why worker images are digest-pinned and the <code>imagePullPolicy</code> rationale.</li>
-<li><a href="../tenant-onboarding/">Tenant onboarding</a> — setting a per-<code>RunnerGroup</code> <code>workerImage</code> and its pull Secret.</li>
+<li><a href="../tenant-onboarding/">Tenant onboarding</a> — setting a per-<code>RunnerTemplate</code> <code>workerImage</code> and its pull Secret.</li>
 <li>Upstream: <a href="https://github.com/spegel-org/spegel">Spegel</a> · <a href="https://d7y.io/">Dragonfly</a>.</li>
 </ul>
 

@@ -6,7 +6,7 @@
 #     its working tree / tool cache / temp on the root filesystem).
 #   * drop-ALL-caps / allowPrivilegeEscalation:false — the DEFAULT `baseline`
 #     worker profile does not set these (baseline CI relies on in-job sudo).
-#     Tenants on securityProfile: restricted DO satisfy them.
+#     Tenants on the `restricted` profile DO satisfy them.
 #
 # See ../../../admission-policies.md for the full compatibility matrix.
 #

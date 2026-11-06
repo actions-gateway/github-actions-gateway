@@ -23,7 +23,7 @@
     
     
       
-        <title>Operator docs, migration guide, and the v2.0.0 cut - GitHub Actions Gateway</title>
+        <title>The v2.0.0 cut - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#operator-docs-migration-guide-and-the-v200-cut" class="md-skip">
+        <a href="#the-v200-cut" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Operator docs, migration guide, and the v2.0.0 cut
+              The v2.0.0 cut
             
           </span>
         </div>
@@ -2657,27 +2657,16 @@
   
 
 
-<h1 id="operator-docs-migration-guide-and-the-v200-cut">Operator docs, migration guide, and the <code>v2.0.0</code> cut<a class="headerlink" href="#operator-docs-migration-guide-and-the-v200-cut" title="Permanent link">&para;</a></h1>
-<p>Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is the one <code>v2.0.0</code> ships.</p>
-<p>Split out of Q413 on 2026-09-14, which held <a href="../../plan/v2-ga/">v2-ga.md</a>'s Phases 2 and 4 in one <code>1.9-gate</code> row.
-Phase 2 ships in 1.9 and Phase 4 in <code>v2.0.0</code>, so a single row could only carry one of the two labels and misreported what blocks 1.9 for whichever release it named.
-Q413 keeps Phase 2; this is the rest.</p>
-<p><a href="../../plan/v2-api/">v2-api.md</a>'s Definition of Done for v2 GA carries "Operator docs updated" as an open item, and it is the last one that is not the graduation itself.</p>
-<p><strong>What this is not.</strong> The <code>v2.0.0</code> release executes four coupled removals and a storage advance, and every one of them is already its own row or shipped: Q1086 rewrote stored objects and pruned <code>storedVersions</code> in 1.10, Q1167 dropped <code>v2alpha1</code>, <code>v2beta1</code> and the hub, Q273 removes <code>v1alpha1</code>, Q264 removes classic acquisition and the transitional <code>acquisitionProtocol</code> / <code>maxListeners</code> fields; the validating webhooks already name <code>v2</code> alone (Q1150, in 1.9), so no rule names a removed version.
-This row is the documentation and the tag on top of them, which is why it is <code>S</code> where they are <code>L</code>.</p>
-<p><strong>What it covers.</strong> The operator-facing pages under <code>docs/operations/</code> that still describe a world where <code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code> are served, the migration guide for the <code>v1</code>→<code>v2</code> hop now that migrating off the <code>CiliumFQDN</code> / <code>CalicoFQDN</code> aliases stops being optional (<a href="../../plan/v2-ga/#decided-v2-omits-ciliumfqdncalicofqdn">Q452</a>), and the release itself.</p>
-<p><strong>The AGC and the CRDs cannot be upgraded in either order without a gap.</strong> Q1263 moved the <code>RunnerSet</code> selectable field from <code>v2alpha1</code> to <code>v2</code>, and an AGC lists at one version: a list against the other release's CRDs fails with <code>field label not supported: spec.gatewayRef.name</code> in both directions (measured in envtest on Kubernetes 1.35, 2026-11-03, on the Q1263 tree, where <code>v2alpha1</code> was still served).
-With <code>v2alpha1</code> no longer served, a <code>v1.10.0</code> AGC that restarts in the gap exits naming the missing CRD (read from the tag's <code>cmd/agc/main.go</code>, not run), and a <code>v1.10.0</code> GMC that starts on those CRDs crash-loops, with a running standby following within about 2.5 minutes of the leader going (<a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">measured</a>), so which order is least bad for the AGC is unmeasured.
-<a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">upgrade.md</a> says to close the gap and that a rollback crosses it in reverse; this row measures the running AGC's behaviour in it, then states the upgrade and rollback order.</p>
-<p><strong>Four things Q1167 found that the order has to carry.</strong> The CRD apply is refused on a cert-manager install until each CRD's conversion webhook is patched away (<a href="../../operations/upgrade/#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them">measured</a>), and a rollback re-applies that webhook.
-Re-applying it, with a <code>v1.10.0</code> GMC then serving <code>/convert</code>, is <a href="../../operations/upgrade/#gmc-rollback">measured</a> with no tenant gateway running, so what remains unmeasured is a live AGC through it.
-The <code>v2.0.0</code> <code>PriorityClassAllowlist</code> CRD goes after <code>helm upgrade</code>, because applied first it stops the upgrade: Helm cannot map the current release's manifest, which names the object at <code>v2beta1</code> (<a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">measured</a>), and <code>make chart-released-upgrade-check</code> walks that order.
-The rollback puts that CRD back too (<a href="../../operations/upgrade/#gmc-rollback">measured</a>).
-An owner deleted between the CRD apply and its <code>v2.0.0</code> controller reconciling it leaves its children behind (<a href="../../operations/upgrade/#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind">query</a>).
-A set recreated under the same name then reads what its predecessor left, because <code>scaleSetGuardStore.Load</code> and <code>readRerunLedger</code> read by name with no owner UID check, so its predecessor's in-flight jobs could read as lost workers (read from the code, not measured; whether either should check the UID is open).</p>
-<p><strong><code>v1alpha1</code> text Q1273 left for this row, read 2026-11-06.</strong> <a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a> line 13 calls the <code>v1alpha1</code> flow "still fully supported", and its Step 2 <code>runnerGroups</code> example and <code>kubectl get runnergroup</code> around line 638 depend on it.
-<a href="../../operations/air-gapped-install/">air-gapped-install.md</a> line 210 still shows <code>kind: RunnerGroup</code>, <a href="../../operations/troubleshooting/">troubleshooting.md</a> lines 1258 and 1357 describe a v1 AGC and an orphaned <code>RunnerGroup</code>, and <a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a> still tabulates the agent Secret names <code>v2</code> no longer derives.</p>
-<p><strong>Done when</strong> the operator docs and the migration guide describe the <code>v2.0.0</code> surface with no served version that <code>v2.0.0</code> removes, and the tag is cut.</p>
+<h1 id="the-v200-cut">The <code>v2.0.0</code> cut<a class="headerlink" href="#the-v200-cut" title="Permanent link">&para;</a></h1>
+<p>Blocked on <a href="../Q1284/">Q1284</a>, one Kubernetes floor across the charts and docs, because the charts accept versions the docs rule out and CI does not test.</p>
+<p>Everything else under <code>v2.0.0</code> has landed but the tag: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), and the operator docs and migration guide, which describe the surface <code>v2.0.0</code> ships with no served version it removes.</p>
+<p><strong>What is left</strong> is the release itself, run from <code>docs/operations/release.md</code>: the release candidate, its dogfood validation, and the tag.</p>
+<p><strong>What the candidate has to confirm.</strong> <a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">upgrade.md</a> states the upgrade and rollback order from a run on kind against <code>test/fakegithub</code> with workers held <code>Pending</code>, on 2026-11-06.
+So a job running through the gap, and the same walk against github.com, are unmeasured until the candidate reaches dogfood.
+<code>scripts/dogfood/setup.sh</code> applies the CRDs and then the chart, so a candidate's run crosses the gap and can give both readings; neither <code>release.md</code> nor the release-candidate skill has a step for taking them, so this row is what binds them.
+A chart-first rollback was not measured either, and no candidate run measures it, so <code>upgrade.md</code> says so and it stays unmeasured.</p>
+<p><strong>The label outlives the candidate on purpose.</strong> The release-candidate skill's gating-row check lists this row until the tag closes it, so once Q1284 closes it is the one hit that check should return.</p>
+<p><strong>Done when</strong> the candidate's run has been read for a job running through the gap and for the walk against github.com, <code>upgrade.md</code> says what came back, and the tag is cut.</p>
 
 
 

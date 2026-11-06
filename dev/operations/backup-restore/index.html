@@ -3112,7 +3112,7 @@ For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.m
 </thead>
 <tbody>
 <tr>
-<td>GitHub App credential <code>Secret</code> (<code>spec.gitHubAppRef</code>)</td>
+<td>GitHub App credential <code>Secret</code> (<code>spec.credentials.githubApp</code>)</td>
 <td>Operator/tenant-supplied; the GMC only <em>reads</em> it (no owner reference), so it <strong>survives</strong> a CR-only deletion but is lost if the Secret or namespace is deleted. Without it the gateway sits <code>Ready=False</code>/<code>CredentialUnavailable</code>.</td>
 <td>Recreate from your secret backup before re-applying the CR. See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</td>
 </tr>
@@ -3229,7 +3229,7 @@ To also capture live status and resources not in Git, add one of:</p>
    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway,deploy,svc,networkpolicy,sa,rolebinding<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
 <li><strong>Confirm the credential Secret survived</strong> (it is not owned by the CR, so a CR-only deletion leaves it in place):
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gitHubAppRef-name&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;github-app-secret-name&gt;
 </code></pre></div>
    If it is missing, recreate it first — see <a href="#scenario-b-whole-tenant-namespace-lost">Scenario B</a> step 3.</li>
 <li><strong>Re-apply the CR</strong> from version control (or your stripped CR export):
@@ -3265,7 +3265,7 @@ After restore:</p>
 <li><strong><a href="#verification">Verify</a></strong> each tenant namespace.</li>
 </ol>
 <h3 id="cr-stuck-terminating">CR Stuck Terminating<a class="headerlink" href="#cr-stuck-terminating" title="Permanent link">&para;</a></h3>
-<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
+<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
 The finalizer exists precisely to avoid orphaning the cluster-scoped <code>ClusterRoleBinding</code>.</p>
 <ol>
 <li>Check the GMC is running and reconciling — restart it if needed (<code>kubectl rollout restart deploy/gmc-controller-manager -n gmc-system</code>); it will complete teardown and clear the finalizer.</li>

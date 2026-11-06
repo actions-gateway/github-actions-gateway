@@ -2974,10 +2974,10 @@
 <p>Building container images is the single most common heavyweight runner workload, and it collides head-on with pod-security hardening: the classic recipe — Docker-in-Docker (DinD) with a privileged container — requires the cluster's least-restrictive posture.
 It is almost never the approach you actually need.
 Rootless build tooling builds the same images under <code>baseline</code> (and sometimes <code>restricted</code>) PSA, with no privileged container and no host-kernel exposure.</p>
-<p>This page maps each build approach to the GAG <code>securityProfile</code> it requires, the configuration it needs, and its caveats, then gives a decision table.
+<p>This page maps each build approach to the GAG security profile it requires, the configuration it needs, and its caveats, then gives a decision table.
 The profiles themselves — what each one admits, how the <code>privileged</code> opt-in is gated, and the floor invariants that apply at every profile — are defined in <a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">Security § 5.3</a>; read that first if the three profile names are unfamiliar.</p>
 <h2 id="how-the-security-profiles-constrain-a-build">How the security profiles constrain a build<a class="headerlink" href="#how-the-security-profiles-constrain-a-build" title="Permanent link">&para;</a></h2>
-<p><code>ActionsGateway.spec.securityProfile</code> stamps a PSA <code>enforce</code> level on the tenant namespace.
+<p>The namespace label <code>actions-gateway.com/security-profile</code> stamps a PSA <code>enforce</code> level on the tenant namespace.
 Three values exist, ranked least-to-most restrictive as <code>privileged → baseline → restricted</code>:</p>
 <table>
 <thead>
@@ -3007,7 +3007,7 @@ Three values exist, ranked least-to-most restrictive as <code>privileged → bas
 </table>
 <p>Two GAG behaviours shape what a build pod may do:</p>
 <ul>
-<li><strong>Floor invariants apply at every profile.</strong> Regardless of <code>securityProfile</code>, the AGC overwrites every worker pod with <code>hostPID/hostNetwork/hostIPC: false</code> and projects no Kubernetes API token.
+<li><strong>Floor invariants apply at every profile.</strong> Regardless of the security profile, the AGC overwrites every worker pod with <code>hostPID/hostNetwork/hostIPC: false</code> and projects no Kubernetes API token.
   None of these block image builds, but they mean a build tool can never reach for host namespaces as an escape hatch.
   See <a href="../../design/05-security/#floor-invariants-apply-at-every-profile">Security § Floor invariants</a>.</li>
 <li><strong>Secure-by-default SecurityContext gap-fills, and the tenant can opt out.</strong> Under <code>baseline</code> the AGC stamps <code>runAsNonRoot: true</code> + <code>runAsUser: 1001</code> by default.
@@ -3133,7 +3133,7 @@ Under a concurrent matrix the pool strands (the same failure class as a pod stuc
 <tr>
 <th>Build need</th>
 <th>Recommended approach</th>
-<th><code>securityProfile</code> (PSA <code>enforce</code>)</th>
+<th>Security profile (PSA <code>enforce</code>)</th>
 <th>Privileged container?</th>
 <th>Notes</th>
 </tr>

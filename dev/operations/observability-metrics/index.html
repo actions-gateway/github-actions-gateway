@@ -3090,7 +3090,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
-<td>Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerGroup</code>/<code>RunnerSet</code> (Q170). <code>cause</code> as above.</td>
+<td>Disruption retries exhausted; job requires manual re-run. Each occurrence also emits an <code>EvictionRetriesExhausted</code> Warning Event on the owning <code>RunnerSet</code> (Q170). <code>cause</code> as above.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_failures_total</code></td>
@@ -3156,13 +3156,13 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_worker_pods_reaped_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
-<td>Worker pods the AGC deleted, by the lifecycle reaper's reasons. <code>runner_group</code> carries the owning CR's name, so <code>runner_group</code>-keyed queries work; <code>runner_set</code> carries the same set name (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the v2 view. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>.</td>
+<td>Worker pods the AGC deleted, by the lifecycle reaper's reasons. <code>runner_group</code> carries the owning CR's name, so <code>runner_group</code>-keyed queries work; <code>runner_set</code> carries the same set name (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code>. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the <code>RunnerSet</code>. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Intake withheld by the opt-in per-owner scale-up rate limit (<code>spec.scaleUp</code>): the token bucket was empty, so the AGC declined to take on another job rather than create its pod (Q223, Q717). <strong>Zero unless the owner sets <code>scaleUp</code></strong>, which is default-off. A sustained rate means the ramp is actively smoothing a cold-start burst on a shared egress path (NAT/firewall/VPN); that is the knob doing its job, not an error. It means different things per tier and both are worth watching: on the classic tier it counts a job the rate rung refused to claim, the ordinary shape of a ramp; on the scale-set tier the rung is expressed as withheld capacity instead, so this counter ticks only when a pod creation <em>still</em> had to wait, which means the advertisement was stale. Sustained scale-set throttling is therefore a signal about the advertisement rather than about the ramp. If the classic rate is persistently high, raise <code>maxPerSecond</code>/<code>burst</code>, or confirm a rate limit is the right tool for the burst (see <a href="../tenant-onboarding/#step-2-create-the-actionsgateway-resource">tenant-onboarding: worker scale-up rate limit</a>).</td>
+<td>Intake withheld by the opt-in per-owner scale-up rate limit (<code>spec.scaleUp</code>): the token bucket was empty, so the AGC declined to take on another job rather than create its pod (Q223, Q717). <strong>Zero unless the owner sets <code>scaleUp</code></strong>, which is default-off. The ramp itself is expressed as withheld capacity (<code>actions_gateway_scaleset_capacity_withheld{reason="scaleup"}</code>), so this counter ticks only when a pod creation <em>still</em> had to wait, which means the advertisement was stale. Sustained throttling is therefore a signal about the advertisement rather than about the ramp. To tune the ramp, raise <code>maxPerSecond</code>/<code>burst</code>, or confirm a rate limit is the right tool for the burst (see <a href="../tenant-onboarding/#step-2-create-the-gateway-and-its-runner-set">tenant-onboarding: worker scale-up rate limit</a>).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_message_poll_errors_total</code></td>
@@ -3204,7 +3204,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_runnerset_egress_audit_unattributed</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
-<td><code>1</code> when <code>EgressAuditUnattributed=True</code> on a v2 <code>RunnerSet</code> (Q1069, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off <strong>for this set's workers</strong>. The worker half is the gateway's <code>spec.auditLogging</code>; the source half is the pool the set resolves, its own <code>spec.proxyRef</code> before the gateway's <code>defaultProxyRef</code>, which is why this and not the gateway's <code>actions_gateway_egress_audit_unattributed</code> is the series to key worker egress on. <code>reason</code> names the missing half: <code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, <code>WorkerAuditWithoutProxy</code> for a set with no pool under a gateway that logs <code>WorkerAddresses</code>, <code>DirectEgress</code> for a set with no pool under one that does not, and <code>EgressAuditJoined</code>, the one <code>0</code>. So <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a tenant that turned neither half on, and <code>reason!~"EgressAuditDisabled\|DirectEgress"</code> keeps every opted-in tenant, direct-egress sets included. One series per set; a reason change replaces it. <strong>Emitted only once the set's references have resolved</strong>, so an absent series is a set with no pool to judge, never a joined one. A shared pool's half is read from the projection the GMC writes into the consumer namespace, and reads <code>Off</code> until a GMC carrying Q1069 has re-projected it. <code>1</code> is the expected state where nobody opted in, and the <code>0</code> says the pair is configured, not that a pipeline runs the join. v2 only.</td>
+<td><code>1</code> when <code>EgressAuditUnattributed=True</code> on a v2 <code>RunnerSet</code> (Q1069, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off <strong>for this set's workers</strong>. The worker half is the gateway's <code>spec.auditLogging</code>; the source half is the pool the set resolves, its own <code>spec.proxyRef</code> before the gateway's <code>defaultProxyRef</code>, which is why this and not the gateway's <code>actions_gateway_egress_audit_unattributed</code> is the series to key worker egress on. <code>reason</code> names the missing half: <code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, <code>WorkerAuditWithoutProxy</code> for a set with no pool under a gateway that logs <code>WorkerAddresses</code>, <code>DirectEgress</code> for a set with no pool under one that does not, and <code>EgressAuditJoined</code>, the one <code>0</code>. So <code>EgressAuditDisabled</code> and <code>DirectEgress</code> are the only reasons for a tenant that turned neither half on, and <code>reason!~"EgressAuditDisabled\|DirectEgress"</code> keeps every opted-in tenant, direct-egress sets included. One series per set; a reason change replaces it. <strong>Emitted only once the set's references have resolved</strong>, so an absent series is a set with no pool to judge, never a joined one. A shared pool's half is read from the projection the GMC writes into the consumer namespace, and reads <code>Off</code> until a GMC carrying Q1069 has re-projected it. <code>1</code> is the expected state where nobody opted in, and the <code>0</code> says the pair is configured, not that a pipeline runs the join.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
@@ -3252,43 +3252,43 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_github_egress_incomplete</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when an <code>EgressProxy</code>'s <code>GitHubEgressIncomplete=True</code> (Q506): a referring gateway names a GitHub Enterprise Server host, and the pool's <code>CIDR</code>-mode allowlist carries only the ranges <code>api.github.com/meta</code> publishes — which never contain a customer appliance, so the tenant's GitHub traffic is denied. Advisory — does not gate <code>Ready</code>, but the affected tenant acquires no jobs; ticket it, as the fix is an operator config change (<code>spec.destinationCIDRs</code> or an FQDN egress mode) that will not self-heal. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>. v2 only, emitted only on a v2 install (Q537).</td>
+<td><code>1</code> when an <code>EgressProxy</code>'s <code>GitHubEgressIncomplete=True</code> (Q506): a referring gateway names a GitHub Enterprise Server host, and the pool's <code>CIDR</code>-mode allowlist carries only the ranges <code>api.github.com/meta</code> publishes — which never contain a customer appliance, so the tenant's GitHub traffic is denied. Advisory — does not gate <code>Ready</code>, but the affected tenant acquires no jobs; ticket it, as the fix is an operator config change (<code>spec.destinationCIDRs</code> or an FQDN egress mode) that will not self-heal. See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_runnersets_degraded</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>RunnerSetsDegraded=True</code> (Q304): one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) report an impairing condition. Rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate <code>Ready</code>. v2 only, emitted only on a v2 install (Q321).</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>RunnerSetsDegraded=True</code> (Q304): one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) report an impairing condition. Rolls child health up to the gateway, naming the impaired sets in the condition message. Advisory — does not gate <code>Ready</code>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_agc_available</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAvailable=True</code>: the tenant's AGC <code>Deployment</code> has a ready replica (the gateway's control plane is up). Drops to <code>0</code> while the AGC is rolling out or unavailable — correlate with <code>Ready</code>. v2 only, emitted only on a v2 install (Q321).</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAvailable=True</code>: the tenant's AGC <code>Deployment</code> has a ready replica (the gateway's control plane is up). Drops to <code>0</code> while the AGC is rolling out or unavailable — correlate with <code>Ready</code>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_egress_unattributed</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressUnattributed=True</code> (§H.10): the gateway runs in <strong>direct</strong> egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and <code>0</code> on a proxied deploy; a <code>1</code> on a deploy meant to be proxied flags a misconfiguration. v2 only, emitted only on a v2 install (Q321).</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressUnattributed=True</code> (§H.10): the gateway runs in <strong>direct</strong> egress mode, so its GitHub traffic is not attributed to a per-tenant egress proxy. Advisory — expected and <code>0</code> on a proxied deploy; a <code>1</code> on a deploy meant to be proxied flags a misconfiguration.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_agc_autoscaling_unavailable</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAutoscalingUnavailable=True</code> (Q360, §E.11): the gateway opted into managed AGC right-sizing (<code>agcAutoscaling</code>) but it cannot be satisfied — the <code>VerticalPodAutoscaler</code> CRDs are not installed (<code>VPACRDNotInstalled</code>) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped <code>agcResources</code> sizing and <code>Ready</code> is unaffected; the opt-in is simply inert until the blocker clears. <code>0</code> when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via <code>kubectl describe</code> (Q390). v2 only, emitted only on a v2 install (Q321).</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>AGCAutoscalingUnavailable=True</code> (Q360, §E.11): the gateway opted into managed AGC right-sizing (<code>agcAutoscaling</code>) but it cannot be satisfied — the <code>VerticalPodAutoscaler</code> CRDs are not installed (<code>VPACRDNotInstalled</code>) or a precedence conflict blocks the managed VPA. Advisory — the AGC still runs on its stamped <code>agcResources</code> sizing and <code>Ready</code> is unaffected; the opt-in is simply inert until the blocker clears. <code>0</code> when satisfied or not opted in. Without this gauge the unsatisfiable opt-in is visible only via <code>kubectl describe</code> (Q390).</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scale_set_name_collision</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>ScaleSetNameCollision=True</code> (Q849, §5.2): a <code>ScaleSet</code> <code>RunnerSet</code> bound to this gateway claims a scale-set name (its <strong>first</strong> <code>runnerLabel</code>) that another <code>RunnerSet</code> already claims in the same GitHub org/enterprise/repo, so both tenants' AGCs drive one scale set at GitHub and each acquires the other's jobs. Advisory: it does not gate <code>Ready</code>, and GAG does not pick a winner. <strong>Page on any <code>1</code></strong>: admission rejects every new such pair (Q791), so a <code>1</code> is a pair that predates the guard (an upgrade from before <code>v1.5.0</code>) or was applied with the validating webhook uninstalled, and it does not self-heal. See <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision">ActionsGateway reports ScaleSetNameCollision</a>. v2 only, emitted only on a v2 install.</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>ScaleSetNameCollision=True</code> (Q849, §5.2): a <code>ScaleSet</code> <code>RunnerSet</code> bound to this gateway claims a scale-set name (its <strong>first</strong> <code>runnerLabel</code>) that another <code>RunnerSet</code> already claims in the same GitHub org/enterprise/repo, so both tenants' AGCs drive one scale set at GitHub and each acquires the other's jobs. Advisory: it does not gate <code>Ready</code>, and GAG does not pick a winner. <strong>Page on any <code>1</code></strong>: admission rejects every new such pair (Q791), so a <code>1</code> is a pair that predates the guard (an upgrade from before <code>v1.5.0</code>) or was applied with the validating webhook uninstalled, and it does not self-heal. See <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision">ActionsGateway reports ScaleSetNameCollision</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_egress_audit_unattributed</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>name</code></td>
-<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressAuditUnattributed=True</code> (Q1062, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off, so no egress audit record joins to a tenant and a job. The reason names the missing half (<code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, or <code>DirectEgress</code> for no <code>defaultProxyRef</code>); <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding</a> says what to set for each. Advisory, and <strong><code>1</code> is the expected state on a gateway that never opted in</strong>: both halves default <code>Off</code>, so this flags a fleet's un-attributed tenants rather than a fault, the way <code>egress_unattributed</code> flags its direct-egress ones. The <code>0</code> says the pair is <strong>configured</strong>, not that the CNI leaves the worker's source address intact or that a pipeline runs the join, and it reads only <code>defaultProxyRef</code>, the AGC control plane's own pool: worker egress is per set, on <code>actions_gateway_runnerset_egress_audit_unattributed</code>. v2 only, emitted only on a v2 install.</td>
+<td><code>1</code> when a v2 <code>ActionsGateway</code>'s <code>EgressAuditUnattributed=True</code> (Q1062, §G.3): either half of the <a href="../observability-logging/#attributing-a-record-to-a-tenant-and-a-job">egress-attribution pair</a> is off, so no egress audit record joins to a tenant and a job. The reason names the missing half (<code>WorkerAuditDisabled</code>, <code>ProxySourceAuditDisabled</code>, <code>EgressAuditDisabled</code> for neither, or <code>DirectEgress</code> for no <code>defaultProxyRef</code>); <a href="../tenant-onboarding/#per-pool-egress-audit-record">tenant onboarding</a> says what to set for each. Advisory, and <strong><code>1</code> is the expected state on a gateway that never opted in</strong>: both halves default <code>Off</code>, so this flags a fleet's un-attributed tenants rather than a fault, the way <code>egress_unattributed</code> flags its direct-egress ones. The <code>0</code> says the pair is <strong>configured</strong>, not that the CNI leaves the worker's source address intact or that a pipeline runs the join, and it reads only <code>defaultProxyRef</code>, the AGC control plane's own pool: worker egress is per set, on <code>actions_gateway_runnerset_egress_audit_unattributed</code>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_direct_egress_rules_stale</code></td>
@@ -3433,7 +3433,7 @@ Pair them with the set's <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExcee
 One worker pod runs exactly one job, so a per-pod peak is a <strong>per-job peak</strong>.
 Emitted for v2 <code>RunnerSet</code> workers only, labelled per RunnerSet and container (bounded cardinality: one series per RunnerSet × container name).
 These are the input to the <a href="../worker-rightsizing/">worker right-sizing recipe</a>; without metrics-server they stay empty and <code>…_poll_errors_total</code> counts instead.</p>
-<p>The same sampled history also drives two status surfaces on the v2 <code>RunnerSet</code> (Q359 Phase 2): <code>status.sizingRecommendation</code> (per-container recommended <code>requests</code>/<code>limits</code> with observed p95/max, sample count, and window) and the advisory <code>SizingDrift</code> condition — <code>True</code> when, after ≥20 sampled jobs, the template's ask is ≥2× the recommendation (waste) or a memory limit is below the observed per-job peak (OOM risk).
+<p>The same sampled history also drives two status surfaces on the <code>RunnerSet</code> (Q359 Phase 2): <code>status.sizingRecommendation</code> (per-container recommended <code>requests</code>/<code>limits</code> with observed p95/max, sample count, and window) and the advisory <code>SizingDrift</code> condition — <code>True</code> when, after ≥20 sampled jobs, the template's ask is ≥2× the recommendation (waste) or a memory limit is below the observed per-job peak (OOM risk).
 Advisory only; never gates <code>Ready</code>.
 A set that opts into a sizing profile (<code>spec.sizing.profile</code>) additionally reports <code>status.sizingProfileState</code> (<code>Active</code>/<code>AwaitingSamples</code>), and <code>SizingDrift</code> reads <code>False/SizingProfileActive</code> while the profile actuates.
 A set on the <code>Throughput</code> profile also carries the advisory <code>SizingProfileOverridden</code> condition — <code>True</code> when a worker pod the profile built <em>without</em> a CPU limit was admitted <em>with</em> one (a <code>LimitRange</code> cpu default, a mutating webhook, a policy engine), which cancels the profile while rejecting nothing (<a href="../worker-rightsizing/#when-something-re-injects-the-cpu-limit-throughput-removes">detail</a>).
@@ -3581,15 +3581,13 @@ Absent if you scrape without that relabeling.</p>
 <p>For abuse/compromise detection built on these metrics (slowloris, eviction-retry loops, credential-harvesting), see <a href="../security-operations/">security-operations.md</a>.</p>
 <hr />
 <h2 id="crd-status-fields-kubectl-columns">CRD Status Fields (kubectl columns)<a class="headerlink" href="#crd-status-fields-kubectl-columns" title="Permanent link">&para;</a></h2>
-<p><code>kubectl get runnergroup</code> and <code>kubectl get runnerset</code> print a subset of each CR's <code>.status</code> as additional columns.
+<p><code>kubectl get runnerset</code> prints a subset of the CR's <code>.status</code> as additional columns.
 These give an at-a-glance view of live job state without opening Grafana:</p>
 <table>
 <thead>
 <tr>
 <th>Column</th>
 <th>Field</th>
-<th>RunnerGroup</th>
-<th>RunnerSet</th>
 <th>Description</th>
 </tr>
 </thead>
@@ -3597,36 +3595,26 @@ These give an at-a-glance view of live job state without opening Grafana:</p>
 <tr>
 <td><code>ACTIVESESSIONS</code></td>
 <td><code>.status.activeSessions</code></td>
-<td>✓</td>
-<td>✓</td>
 <td><code>1</code> while the set holds its message session; <code>0</code> means it is not polling for work.</td>
 </tr>
 <tr>
 <td><code>ACTIVEJOBS</code></td>
 <td><code>.status.activeJobs</code></td>
-<td>✓</td>
-<td>✓</td>
 <td>Worker pods in Running phase — jobs actively executing. Updated each reconcile (driven by pod phase-change events).</td>
 </tr>
 <tr>
 <td><code>PENDINGJOBS</code></td>
 <td><code>.status.pendingJobs</code></td>
-<td>✓</td>
-<td>✓</td>
 <td>Worker pods in Pending phase — jobs acquired, pod spawned but not yet running. A sustained non-zero value signals scheduling pressure; check <code>WorkersUnschedulable</code>, <code>kubectl describe pod</code>, and node capacity. Pods past <code>pendingPodDeadline</code> are automatically reaped (and counted in <code>worker_pods_reaped_total{reason="pending_deadline"}</code>).</td>
 </tr>
 <tr>
 <td><code>READY</code></td>
 <td><code>.status.conditions[Ready].status</code></td>
-<td>✓</td>
-<td>✓</td>
-<td><code>True</code> when the listener is running.</td>
+<td><code>True</code> when the listener is running, as the AGC last wrote it, so it stays <code>True</code> while no AGC can update the set.</td>
 </tr>
 <tr>
 <td><code>EGRESS</code></td>
 <td><code>.status.proxyMode</code></td>
-<td>—</td>
-<td>✓</td>
 <td><code>Proxied</code> or <code>Direct</code>.</td>
 </tr>
 </tbody>
@@ -3638,11 +3626,7 @@ A pod that was just reaped in the same reconcile cycle appears in <code>PENDINGJ
 </blockquote>
 <h3 id="drilling-down-to-individual-runner-pods">Drilling down to individual runner pods<a class="headerlink" href="#drilling-down-to-individual-runner-pods" title="Permanent link">&para;</a></h3>
 <p>The count columns tell you <em>how many</em> jobs are running; to see <em>which</em> pods back them, filter by the owner label:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># RunnerGroup (v1alpha1)</span>
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># RunnerSet (v2)</span>
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;
 </code></pre></div>
 <p>Add <code>-o wide</code> for node placement or <code>-w</code> to watch phase transitions live.</p>
 <p><strong>Correlating a pod with its GitHub Actions job:</strong> the AGC stamps these annotations on every worker pod at creation time:</p>
@@ -3725,7 +3709,7 @@ Editing or removing <code>runner-name</code> in particular makes the pod's runne
 It marks the deletion as the AGC's own, which is what excludes reaper cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
 Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery for that pod.</p>
 <p>To see them in a table:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway/runner-group<span class="o">=</span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span>actions-gateway.com/runner-set<span class="o">=</span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">'NAME:.metadata.name,PHASE:.status.phase,RUN:.metadata.annotations.actions-gateway\.com/run-id,JOB:.metadata.annotations.actions-gateway\.com/job-name,WORKFLOW:.metadata.annotations.actions-gateway\.com/workflow'</span>
 </code></pre></div>
 <p>Or inspect a single pod in full:</p>
@@ -3752,7 +3736,7 @@ They are <strong>additive metadata</strong> — the functional selectors the con
 </tr>
 <tr>
 <td><code>app.kubernetes.io/instance</code></td>
-<td>the owning <code>ActionsGateway</code> / <code>EgressProxy</code> / <code>RunnerGroup</code> / <code>RunnerSet</code> name</td>
+<td>the owning <code>ActionsGateway</code> / <code>EgressProxy</code> / <code>RunnerSet</code> name</td>
 </tr>
 <tr>
 <td><code>app.kubernetes.io/component</code></td>
@@ -3822,7 +3806,7 @@ To avoid label cardinality explosion:</p>
   Each unique combination of <code>namespace</code> + <code>runner_group</code> creates a distinct time series; thousands of unique names will cause memory pressure in Prometheus.</li>
 <li><strong>Stable, human-meaningful names</strong> like <code>gpu-2x</code>, <code>cpu-standard</code>, <code>gpu-a100</code> are correct.
   These are configured in the <code>ActionsGateway</code> spec and should not change after initial setup.</li>
-<li>If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerGroup names.</li>
+<li>If you need per-workflow or per-repo attribution, use Prometheus recording rules or labels from job metadata, not from RunnerSet names.</li>
 </ul>
 <h2 id="breaking-observability-changes-q1291">Breaking observability changes (Q1291)<a class="headerlink" href="#breaking-observability-changes-q1291" title="Permanent link">&para;</a></h2>
 <p><code>v2.0.0</code> removes the <code>tier</code> label from the six disruption series that carried it in <code>1.x</code>: <code>actions_gateway_eviction_retries_total</code>, <code>eviction_retries_exhausted_total</code>, <code>eviction_rerun_failures_total</code>, <code>eviction_rerun_withheld_total</code>, <code>abandoned_run_force_cancels_total</code> and <code>abandoned_run_rerun_waits_total</code>.

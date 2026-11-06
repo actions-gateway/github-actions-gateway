@@ -3107,7 +3107,7 @@ For the full chart reference (every value, the templates it renders, offline val
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Kubernetes &gt;= 1.30</strong> — the GMC's <code>namespace-psa-guard</code> and <code>gmc-tenant-resource-guard</code> policies need the GA <code>ValidatingAdmissionPolicy</code> API.</li>
+<li><strong>Kubernetes &gt;= 1.31</strong> — each AGC's <code>RunnerSet</code> watch uses a server-side field selector (KEP-4358) that is alpha-off on 1.30, so an AGC there holds no session.</li>
 <li><strong>Node architecture: <code>linux/amd64</code> or <code>linux/arm64</code>.</strong> Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.</li>
@@ -3151,7 +3151,7 @@ Run the preflight from a <a href="#install">source checkout</a> first:</p>
 <tr>
 <td><strong>Kubernetes &gt;= 1.30</strong></td>
 <td><strong>FAIL</strong> (blocking)</td>
-<td>The GMC's <code>namespace-psa-guard</code> / <code>gmc-tenant-resource-guard</code> policies need the GA <code>ValidatingAdmissionPolicy</code> API.</td>
+<td>The GMC's <code>namespace-psa-guard</code> / <code>gmc-tenant-resource-guard</code> policies need the GA <code>ValidatingAdmissionPolicy</code> API. It does not check what a gateway needs, which is the prerequisite above.</td>
 </tr>
 <tr>
 <td><strong>cert-manager present</strong></td>
@@ -3307,7 +3307,7 @@ On a fresh install this resolves itself; on an existing cluster, install the CRD
   The templates carry <code>helm.sh/resource-policy: keep</code>, so a GitOps tool that fronts this chart with a real Helm release will not prune the CRDs on its own uninstall.</p>
 <p>Detection happens once at GMC startup, so <strong>after installing the CRDs into a running v1-only cluster, restart the GMC</strong> (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>) to enable the v2 controllers.
   On startup the GMC logs <code>actions-gateway.com/v2 CRDs detected; enabling v2 controllers</code>.</p>
-<p>See <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">getting-started.md § the v2 API</a> for what v2 adds, and <a href="../../getting-started/#1-deploy-the-gmc">§1 Deploy the GMC</a> for the v2 CRD chart install and the Kubernetes version requirements.</p>
+<p>See <a href="../../getting-started/#4-create-your-gateway-and-runner-set">getting-started.md § the v2 API</a> for what v2 adds, and <a href="../../getting-started/#1-deploy-the-gmc">§1 Deploy the GMC</a> for the v2 CRD chart install and the Kubernetes version requirements.</p>
 <hr />
 <h2 id="key-values-an-operator-sets">Key values an operator sets<a class="headerlink" href="#key-values-an-operator-sets" title="Permanent link">&para;</a></h2>
 <p>The chart ships secure, HA defaults; most installs only set the four image digests.
@@ -3447,7 +3447,7 @@ For other failure modes, see <a href="../troubleshooting/">troubleshooting.md</a
 <p>The <code>priorityclass-allowlist-guard</code> <code>ValidatingAdmissionPolicy</code> is removed by <code>helm uninstall</code> along with its binding and its parameter object; the <code>PriorityClassAllowlist</code> <strong>CRD</strong> is left behind, as <code>crds/</code> contents always are.
 Removing the binding used to be the trigger for a cluster-wide outage (Q444) when the parameter was a ConfigMap — a reinstall could not repair it.
 It is safe now that the parameter is a CRD, which is <a href="#the-policy-parameter-is-a-crd-not-a-configmap-q492">why it is one</a>; the uninstall/reinstall cycle is covered by <code>scripts/e2e/chart-reinstall-check.sh</code> in CI.
-Symptoms of the old failure, if you meet it on a pre-Q492 release: <a href="../troubleshooting/#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
+Symptoms of the old failure, if you meet it on a pre-Q492 release: <a href="../troubleshooting/#every-runnerset--runnertemplate-write-denied-no-params-found-for-policy-binding">troubleshooting.md</a>.</p>
 <p>The install namespace (<code>gmc-system</code>) is left in place if you created it with <code>--create-namespace</code>; remove it with <code>kubectl delete namespace gmc-system</code> once empty.</p>
 <hr />
 <h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>

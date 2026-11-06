@@ -2966,7 +2966,7 @@
 This guide turns the gateway's built-in usage metrics into measured values, so the guess is revisited with data instead of <code>kubectl top</code> scraping.
 Actions Runner Controller (ARC) has no equivalent feedback loop.</p>
 <p><strong>Scope:</strong> v2 <code>RunnerSet</code> worker pods.
-The Actions Gateway Controller (AGC) samples usage per RunnerSet × container; v1 <code>RunnerGroup</code> workers are not sampled (v1 is <a href="../v1alpha1-deprecation/">deprecated</a>).</p>
+The Actions Gateway Controller (AGC) samples usage per RunnerSet × container.</p>
 <h2 id="how-the-sampling-works">How the sampling works<a class="headerlink" href="#how-the-sampling-works" title="Permanent link">&para;</a></h2>
 <p>The AGC polls the <code>metrics.k8s.io</code> API (metrics-server) every 15 seconds (<code>WORKER_USAGE_SAMPLE_INTERVAL</code>; <code>0</code>/<code>off</code> disables) and keeps the running CPU/memory peak per worker pod × container.
 When the pod finishes, its peaks are folded into per-<code>RunnerSet</code> Prometheus series — one worker pod runs exactly one job, so a per-pod peak is a per-job peak.

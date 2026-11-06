@@ -3046,7 +3046,7 @@ A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page i
 </tr>
 </tbody>
 </table>
-<p>The worker profile is the tenant's <code>ActionsGateway.spec.securityProfile</code> (<code>baseline</code> default, <code>restricted</code>, or <code>privileged</code>); the GMC mirrors it onto the worker pods and the namespace PSA level.
+<p>The worker profile is the namespace's <code>actions-gateway.com/security-profile</code> label (<code>baseline</code> default, <code>restricted</code>, or <code>privileged</code>); the GMC mirrors it onto the worker pods and the namespace PSA level.
 The proxy, AGC, and GMC pods are <strong>uniformly hardened</strong> and not tenant-tunable.</p>
 <h2 id="compatibility-matrix">Compatibility matrix<a class="headerlink" href="#compatibility-matrix" title="Permanent link">&para;</a></h2>
 <p>Legend: ✅ already complies · ⚠️ complies by default but a tenant override or profile can change it · ❌ does <strong>not</strong> comply — you must allow it (exempt the pod, or pick a stricter worker profile).</p>
@@ -3178,7 +3178,7 @@ The <code>baseline</code> worker profile <strong>deliberately does not</strong> 
 A cluster policy that requires <code>drop: [ALL]</code> on <em>all</em> pods will therefore <strong>reject default workers</strong>.
 Your options, in order of preference:</p>
 <ul>
-<li>Tell tenants to set <code>securityProfile: restricted</code> — that profile gap-fills <code>allowPrivilegeEscalation: false</code> + <code>drop: [ALL]</code> on every worker container, satisfying the policy with no exception needed.</li>
+<li>Have the tenant namespace labelled <code>actions-gateway.com/security-profile=restricted</code> — that profile gap-fills <code>allowPrivilegeEscalation: false</code> + <code>drop: [ALL]</code> on every worker container, satisfying the policy with no exception needed.</li>
 <li>Or scope the cluster policy to exclude tenant namespaces (see the <a href="#sample-policies">exception samples</a>) so <code>baseline</code> keeps working.</li>
 </ul>
 <p><code>restricted</code>, proxy, AGC, and GMC pods already drop all capabilities.</p>

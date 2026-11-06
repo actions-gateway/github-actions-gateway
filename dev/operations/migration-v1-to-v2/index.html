@@ -1895,6 +1895,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-5--get-the-migrated-tenant-ready-for-v200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 — get the migrated tenant ready for v2.0.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3108,6 +3119,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#step-5--get-the-migrated-tenant-ready-for-v200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 5 — get the migrated tenant ready for v2.0.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#troubleshooting" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3211,7 +3233,7 @@ Multi-label matching is not a reason to stay on Classic: <code>v2</code> registe
 </tbody>
 </table>
 <p>It also aligns the Q147 / domain-renamed namespace markers — adding the <code>actions-gateway.com/tenant=managed</code> marker, the <code>actions-gateway.com/security-profile</code> label, the domain-migrated <code>privileged-profile</code> grant, and the aligned <code>allow-profile-downgrade=allowed</code> annotation.
-<strong>These are additive:</strong> the legacy <code>actions-gateway.github.com/*</code> keys are kept so v1 keeps working during coexistence (every admission policy dual-reads both during the window), and are removed only when <code>v1alpha1</code> is finally removed.</p>
+<strong>These are additive:</strong> the legacy <code>actions-gateway.github.com/*</code> keys are kept so v1 keeps working during coexistence, because every 1.x admission policy dual-reads both; <code>v2.0.0</code> honours only the <code>actions-gateway.com/*</code> keys.</p>
 <h3 id="behavior-preserving-guarantees">Behavior-preserving guarantees<a class="headerlink" href="#behavior-preserving-guarantees" title="Permanent link">&para;</a></h3>
 <p>The fan-out preserves v1 behavior and weakens no security property:</p>
 <ul>
@@ -3348,6 +3370,7 @@ They are still two independent tenants, and each provisions its own pool of pre-
 </tbody>
 </table>
 <p>So during coexistence you will see <strong>two sets of runners</strong> registered with GitHub for one tenant — expected, and the reason both can run at once.
+These pre-registered agents are how Classic acquisition works, so they end with it: a <code>ScaleSet</code> set provisions a worker per job, and <code>v2.0.0</code> creates neither Secret.
 Each agent Secret also carries an <code>ownerReference</code> to the <code>RunnerGroup</code> or <code>RunnerSet</code> it belongs to, so <code>kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'</code> answers "which tenant owns this?" without guessing from the name.</p>
 <h3 id="each-agc-serves-exactly-one-api">Each AGC serves exactly one API<a class="headerlink" href="#each-agc-serves-exactly-one-api" title="Permanent link">&para;</a></h3>
 <p>The namespace runs two AGC Deployments during coexistence, and they divide the work by kind rather than sharing it:</p>
@@ -3463,7 +3486,10 @@ Recovery, once you have confirmed the namespace is otherwise empty and no cluste
 <p>Repeat per stuck kind.
 Prefer the ordered teardown above; this is a recovery path, not an alternative.</p>
 <p>If you later retire the tenant entirely, remember that any <code>ClusterRunnerTemplate</code> the migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by its provenance label (<a href="#privileged-worker-shapes-dind-become-cluster-scoped-templates">detail</a>).</p>
-<p>The legacy <code>actions-gateway.github.com/*</code> namespace markers and finalizers are retired cluster-wide when <code>v1alpha1</code> is removed at <strong><code>v2.0.0</code></strong> (see the <a href="../v1alpha1-deprecation/">removal notice</a>); until then the dual-read window keeps both spellings working.</p>
+<p>The legacy <code>actions-gateway.github.com/*</code> namespace markers and finalizers are retired cluster-wide at <strong><code>v2.0.0</code></strong>; on 1.x the dual-read keeps both spellings working.</p>
+<h2 id="step-5--get-the-migrated-tenant-ready-for-v200">Step 5 — get the migrated tenant ready for <code>v2.0.0</code><a class="headerlink" href="#step-5--get-the-migrated-tenant-ready-for-v200" title="Permanent link">&para;</a></h2>
+<p>The fan-out is not the last step: it lands the tenant on <code>v2alpha1</code> with the Classic protocol, and <code>v2.0.0</code> serves neither.
+Before upgrading, while the 1.x controllers still run, finish the <a href="../v1alpha1-deprecation/#before-you-upgrade-from-1x">removal notice's checklist</a>: re-apply the objects at <code>v2</code>, replace each Classic set with a <code>ScaleSet</code> set, and move any <code>EgressProxy</code> still naming <code>CiliumFQDN</code> or <code>CalicoFQDN</code> onto <code>FQDN</code>.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>A <code>RunnerSet</code> sits <code>Ready=False</code>/<code>TemplateNotFound</code>.</strong> Its <code>templateRef</code> names a template that has not been applied (or was hand-deleted).
