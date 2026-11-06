@@ -3003,6 +3003,12 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: gated because tightening costs least while a major is open; an unchanged value passes the rule, so a stored one keeps working</td>
 </tr>
 <tr>
+<td>Q1290</td>
+<td>First-label prefix overlap lets a sweep deregister another set's runners</td>
+<td><code>2.0-gate</code></td>
+<td>✅ landed: gated because one tenant's first label could cost another a job with no visible failure; the sweep deletes only names it minted, which covers a pair already running, and what github.com does with such a job stays unmeasured (<a href="../../design/05-security/#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap">why</a>)</td>
+</tr>
+<tr>
 <td>Q1291</td>
 <td>Drop the one-valued <code>tier</code> label from the disruption metrics</td>
 <td><code>2.0-gate</code></td>
@@ -3012,7 +3018,7 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td><a href="../../queue/Q1107/">Q1107</a></td>
 <td>Operator docs, migration guide, and the cut (Phase 4)</td>
 <td><code>2.0-gate</code></td>
-<td>🚫 blocked on Q1290</td>
+<td>🔲 open</td>
 </tr>
 <tr>
 <td>Q555</td>

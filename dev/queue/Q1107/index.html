@@ -2658,7 +2658,7 @@
 
 
 <h1 id="operator-docs-migration-guide-and-the-v200-cut">Operator docs, migration guide, and the <code>v2.0.0</code> cut<a class="headerlink" href="#operator-docs-migration-guide-and-the-v200-cut" title="Permanent link">&para;</a></h1>
-<p>Blocked on the rows below: Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is the one <code>v2.0.0</code> ships.</p>
+<p>Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is the one <code>v2.0.0</code> ships.</p>
 <p>Split out of Q413 on 2026-09-14, which held <a href="../../plan/v2-ga/">v2-ga.md</a>'s Phases 2 and 4 in one <code>1.9-gate</code> row.
 Phase 2 ships in 1.9 and Phase 4 in <code>v2.0.0</code>, so a single row could only carry one of the two labels and misreported what blocks 1.9 for whichever release it named.
 Q413 keeps Phase 2; this is the rest.</p>
@@ -2677,8 +2677,6 @@ An owner deleted between the CRD apply and its <code>v2.0.0</code> controller re
 A set recreated under the same name then reads what its predecessor left, because <code>scaleSetGuardStore.Load</code> and <code>readRerunLedger</code> read by name with no owner UID check, so its predecessor's in-flight jobs could read as lost workers (read from the code, not measured; whether either should check the UID is open).</p>
 <p><strong><code>v1alpha1</code> text Q1273 left for this row, read 2026-11-06.</strong> <a href="../../operations/tenant-onboarding/">tenant-onboarding.md</a> line 13 calls the <code>v1alpha1</code> flow "still fully supported", and its Step 2 <code>runnerGroups</code> example and <code>kubectl get runnergroup</code> around line 638 depend on it.
 <a href="../../operations/air-gapped-install/">air-gapped-install.md</a> line 210 still shows <code>kind: RunnerGroup</code>, <a href="../../operations/troubleshooting/">troubleshooting.md</a> lines 1258 and 1357 describe a v1 AGC and an orphaned <code>RunnerGroup</code>, and <a href="../../operations/migration-v1-to-v2/">migration-v1-to-v2.md</a> still tabulates the agent Secret names <code>v2</code> no longer derives.</p>
-<p><strong>Why it is blocked rather than ready.</strong> Writing it before the removals land means describing a surface that does not exist yet, and the removals are where the surface is actually decided.
-The sequencing constraint is Phase 3's, not this row's: storage-migrate first, drop served versions second, then strip the dual-read arms.</p>
 <p><strong>Done when</strong> the operator docs and the migration guide describe the <code>v2.0.0</code> surface with no served version that <code>v2.0.0</code> removes, and the tag is cut.</p>
 
 

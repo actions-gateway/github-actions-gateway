@@ -7269,7 +7269,8 @@ Keep it that way: a second hand-rolled scale-set stub is a second dialect to kee
 <ul>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/scaleset/scalesettest"><code>scaleset/scalesettest</code></a> serves it over an <code>httptest.Server</code>, for the scale-set listener's unit tests, the <code>cmd/agc</code> v2 RunnerSet integration suite, and <code>cmd/probe</code>'s Investigation E and F scenarios (Q389).</li>
 <li><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/test/fakegithub"><code>test/fakegithub</code></a> mounts it into the deployed fake-GitHub e2e image, next to the classic broker protocol (Q528).
-  That is what lets the scale-set tier's acquisition half run on kind at all — see <code>E2E_AGC_ScaleSetAcquisition</code>.</li>
+  That is what lets the scale-set tier's acquisition half run on kind at all — see <code>E2E_AGC_ScaleSetAcquisition</code>.
+  Its REST runner list and delete routes answer from the stub's registry too, so <code>E2E_AGC_ScaleSetSweep</code> reaches a scale-set record.</li>
 </ul>
 <p>The split exists because <code>httptest</code> cannot be linked into fakegithub (see the <code>package main</code> rule below), which is the same reason <code>broker/brokerstub</code> is separate from <code>broker/brokertest</code>.
 The one thing the wrapper supplies is the base for the protocol's self-referential URLs — the admin connection's tenant URL, a session's <code>messageQueueUrl</code>, a <code>JobAvailable</code>'s <code>acquireJobUrl</code> — fixed for httptest, request-derived for a deployed pod.</p>

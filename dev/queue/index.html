@@ -3557,9 +3557,9 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked on the rows below: Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is …</td>
+<td>Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is the one <code>v2.0.0</code> ships.</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>
@@ -3632,14 +3632,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>During the Q1167 work on 2026-11-04, <code>E2E_V2_PerGatewayJobIsolation</code> passed in 0.09 s, because the pod list was already non-empty 47 ms …</td>
-</tr>
-<tr>
-<td><a href="Q1290/">Q1290</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">First-label prefix overlap lets a sweep deregister another set's runners</a></td>
-<td><code>debt</code> <code>security</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Two <code>RunnerSet</code>s with first labels <code>ci</code> and <code>ci-linux</code> pass the Q791 guard, because it compares first labels as exact strings.</td>
 </tr>
 <tr>
 <td><a href="Q1294/">Q1294</a></td>
