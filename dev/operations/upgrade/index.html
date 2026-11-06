@@ -1794,6 +1794,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required if a query reads tier on a disruption series: the label is gone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3900,6 +3911,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action required if a query reads tier on a disruption series: the label is gone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4834,6 +4856,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them</a></li>
 <li><a href="#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind">Action required after v2.0.0: delete what an owner deleted during the upgrade left behind</a></li>
 <li><a href="#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported">Action required if you alert on or chart the classic acquisition series: they are no longer exported</a></li>
+<li><a href="#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone">Action required if a query reads tier on a disruption series: the label is gone</a></li>
 <li><a href="#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected">Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected</a></li>
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
@@ -5194,6 +5217,16 @@ A rule reading one of them never fires again, and a panel reading one shows <cod
 The AGC's <code>Provisioner.provision</code> span went with the classic path too, and the scale-set path is traced as <code>Provisioner.ProvisionScaleSetWorker</code> instead, so a trace query or dashboard that filters on the old span name needs the new one (<a href="../observability-logging/#distributed-tracing-agc">Distributed Tracing</a>).
 A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and <code>spec.tracing.networkPolicy</code> can now replace it (<a href="../observability-logging/#reaching-the-collector">Reaching the collector</a>).</p>
 <p><strong>Before you upgrade,</strong> search your own rules and dashboards for the names above, and re-apply the reference <code>PrometheusRule</code> and re-import the dashboards if you run copies of them.</p>
+<h3 id="action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone">Action required if a query reads <code>tier</code> on a disruption series: the label is gone<a class="headerlink" href="#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> anyone whose own alerts, recording rules or dashboards filter or group on <code>tier</code> on a disruption series, including copies of the tenant Grafana dashboard taken before <code>v2.0.0</code>.
+The reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> never read it.</p>
+<p><strong>What changed.</strong> <a href="../observability-metrics/#breaking-observability-changes-q1291">Six series</a> no longer carry <code>tier</code>, whose values were <code>classic</code> and <code>scaleset</code>, because the classic tier is gone.
+A query filtering on either value, such as <code>{tier="scaleset"}</code>, returns nothing and raises no error, so a rule reading it never fires again and a panel reading it shows <code>No data</code>.
+<code>by (tier)</code> keeps working, with one group and an empty <code>tier</code> value.
+Series recorded before the upgrade keep the label, so an <code>increase()</code> across the upgrade spans two series.</p>
+<p><strong>Before you upgrade,</strong> remove <code>tier</code> from those queries and legends, and re-import the tenant dashboard if you run a copy.</p>
+<p><strong>Rolling back</strong> to a <code>1.x</code> AGC brings the label back on those six series, so a query with the filter removed keeps working.
+It also stops <code>actions_gateway_eviction_rerun_outcomes_total</code>, which <code>1.x</code> does not export.</p>
 <h3 id="action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected">Action required if <code>spec.tracing.endpoint</code> does not parse as a URL: the value is now rejected<a class="headerlink" href="#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> operators whose <code>spec.tracing.endpoint</code> is a bare IP with a port, such as <code>10.0.0.5:4317</code>, or another value in <a href="../troubleshooting/#tracing-endpoint-rejected-by-admission">Tracing Endpoint Rejected by Admission</a>.</p>
 <p><strong>What changed.</strong> The exporter ignores such a value and sends spans to <code>127.0.0.1:4317</code> with no error, so no spans arrive unless a collector listens on the AGC pod's own loopback, and the schema now refuses the value.

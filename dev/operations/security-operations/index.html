@@ -4047,7 +4047,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <tbody>
 <tr>
 <td><strong>Eviction-Retry API Misuse</strong> (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>) — compromised AGC looping <code>rerun-failed-jobs</code></td>
-<td><code>eviction_retries_total{cause="eviction"}</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments. Split by the <code>tier</code> label to see which acquisition path is issuing the re-runs (Q417); the alert below aggregates over it, so it fires either way. <strong>Scope the query to <code>cause="eviction"</code></strong> — the same counter records legitimate <code>preemption</code> recoveries, which are the expected steady state under a preempting <code>priorityTiers</code> floor and would otherwise read as abuse (Q497)</td>
+<td><code>eviction_retries_total{cause="eviction"}</code> rate climbs without matching node pressure; <code>eviction_retries_exhausted_total</code> increments. <strong>Scope the query to <code>cause="eviction"</code></strong> — the same counter records legitimate <code>preemption</code> recoveries, which are the expected steady state under a preempting <code>priorityTiers</code> floor and would otherwise read as abuse (Q497)</td>
 <td>Metric</td>
 <td>Ticket → Page on sustained climb</td>
 </tr>

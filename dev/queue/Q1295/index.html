@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1291/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1295/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Drop the one-valued tier label from the disruption metrics - GitHub Actions Gateway</title>
+        <title>metric-reference-check does not read the reference's rows - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#drop-the-one-valued-tier-label-from-the-disruption-metrics" class="md-skip">
+        <a href="#metric-reference-check-does-not-read-the-references-rows" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Drop the one-valued tier label from the disruption metrics
+              metric-reference-check does not read the reference's rows
             
           </span>
         </div>
@@ -2657,21 +2657,41 @@
   
 
 
-<h1 id="drop-the-one-valued-tier-label-from-the-disruption-metrics">Drop the one-valued tier label from the disruption metrics<a class="headerlink" href="#drop-the-one-valued-tier-label-from-the-disruption-metrics" title="Permanent link">&para;</a></h1>
-<p>Seven disruption and re-run series carry a <code>tier</code> label whose only value is now <code>scaleset</code> (<code>cmd/agc/internal/runnercore/metrics.go</code>, the label lists at lines 184-214 and 285, read 2026-11-05).
-An operator gets nothing from a label with one value.</p>
-<p><strong>Who reads it, measured 2026-11-05 with a word-boundary scan of tracked files.</strong> No shipped alert or recording rule does: <code>prometheusrule.yaml</code> mentions a tier only in prose, and <code>tier=</code> appears nowhere under <code>deploy/</code> outside the preview exporter.
-Two panels on <code>grafana-dashboard-tenant.json</code> group on it and print it in their legends, <em>Disruption retries (1h)</em> and <em>Abandoned runs awaiting capacity (1h)</em>; the other three dashboards do not.
-<code>deploy/monitoring/preview/exporter.py</code> writes it, and <code>devtools/docs/metricreference/values.go</code> knows its name.
-<code>tier</code> is also a log field, which <code>github_e2e_test.go:1325</code> asserts, so that is a separate decision from the metric label.</p>
-<p><strong>What breaks if it goes.</strong> A query filtering <code>{tier="scaleset"}</code> returns nothing rather than erroring, which is how an operator's own dashboard would fail; <code>by (tier)</code> keeps working and loses the split.
-Series recorded before the upgrade keep the label, so an <code>increase()</code> across the upgrade spans two series, the same continuity <a href="../../operations/observability-metrics/#breaking-observability-changes-q417">Q417's change</a> documented going the other way.</p>
-<p><strong>What removal costs.</strong> It takes the seven label lists and their <code>WithLabelValues</code> calls, and optionally the parameter threaded through 13 functions (46 source lines match <code>, tier</code> in <code>cmd/agc/internal/provisioner</code>, plus 89 test lines naming the tier constants), which <a href="../Q1272/">Q1272</a> already approaches by removing <code>evictionTierClassic</code>.</p>
-<p><strong>Why it blocks the tag.</strong> <code>v2.0.0</code> is a convenient moment rather than the last chance: its upgrade guide already makes an operator rework queries against the removed classic series, so one more change costs little there.
-No document found here promises metric-label stability, and Q417 and Q497 changed these label sets in <code>1.x</code> with an upgrade note, so a later removal stays possible; Karl chose to take it at <code>v2.0.0</code>, at the cost of one more PR and review before the release candidate.</p>
-<p><strong>Scope.</strong> The metric label, the two tenant dashboard panels with a re-rendered screenshot, <code>exporter.py</code>, <code>metricreference/values.go</code>, the metrics reference, and an upgrade note saying <code>{tier="scaleset"}</code> now returns nothing.
-The <code>tier</code> log field stays out.
-Whether the parameter comes out of the 13 functions is for the PR to decide, with its reason stated.</p>
+<h1 id="metric-reference-check-does-not-read-the-references-rows">metric-reference-check does not read the reference's rows<a class="headerlink" href="#metric-reference-check-does-not-read-the-references-rows" title="Permanent link">&para;</a></h1>
+<p>An operator copies a query from the <a href="../../operations/observability-metrics/">metrics reference</a>, so a label the reference lists and the AGC does not write gives them a query that returns nothing and raises no error.
+<code>make metric-reference-check</code> cannot catch that, because it never reads a row: <code>checkReference</code> in <code>main.go</code> passes a metric whose backticked name appears anywhere on the page, and the label-value check holds values to <code>Help</code>.</p>
+<p><strong>Measured 2026-11-06 at the head that closed Q1291</strong>, running <code>scripts/docs/check-metric-reference.sh cmd/agc &lt;doc&gt;</code> over edited copies of the reference:</p>
+<table>
+<thead>
+<tr>
+<th>Copy</th>
+<th>Exit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>eviction_retries_total</code> row lists <code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>bogus</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td>Both rows opening with <code>eviction_retries_total</code> removed, 2 mentions left in other rows' prose</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Those rows removed and every other mention renamed, as the control</td>
+<td>1, <code>has no entry</code></td>
+</tr>
+</tbody>
+</table>
+<p>Q1291 met the same gap by hand: the gate stayed green while the reference still listed the removed <code>tier</code> on all seven rows.</p>
+<p><strong>The column is accurate today, as far as a one-off scan reaches.</strong> A regex comparison of <code>cmd/agc</code> definitions against the reference's rows compared 36 metrics, and all agree except <code>worker_usage_cpu_peak_cores</code>, which is the scan's own miss: <code>internal/usage/metrics.go</code> passes its labels as the variable <code>setContainer</code>, and the reference is right.
+All 42 <code>Name:</code> literals in <code>cmd/agc</code> also have a row opening with their name.
+So this row adds a check and fixes no known wrong entry.</p>
+<p><strong>What the fix has to handle.</strong> <code>constructorArgs</code> already collects each metric's label names, but only from a <code>[]string</code> literal, so a list held in a variable reads as no labels.
+The check has to resolve that form or report it, or those metrics would read as mismatched or go unchecked.
+It also has to parse the reference's label cells, and a metric's row may appear more than once on the page, as the older <em>Breaking observability changes</em> tables do with a different column shape.</p>
+<p><strong>Done when</strong> <code>make metric-reference-check</code> fails a metric with no row of its own and a row whose labels differ from the definition's, with <code>main_test.go</code> covering a metric named only in prose, a wrong label, a missing label and a list held in a variable.
+Both failures come from the one change, reading the rows.</p>
 
 
 

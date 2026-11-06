@@ -3554,14 +3554,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
-<td><a href="Q1291/">Q1291</a></td>
-<td>Drop the one-valued tier label from the disruption metrics</td>
-<td><code>debt</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Seven disruption and re-run series carry a <code>tier</code> label whose only value is now <code>scaleset</code> (<code>cmd/agc/internal/runnercore/metrics.go</code>, the …</td>
-</tr>
-<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
@@ -3656,6 +3648,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>The AGC's tenant Role grants Secret <code>list</code>, <code>update</code> and <code>patch</code>, and the comments justifying all three name the classic agent pool that …</td>
+</tr>
+<tr>
+<td><a href="Q1295/">Q1295</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/metricreference/main.go">metric-reference-check does not read the reference's rows</a></td>
+<td><code>ci</code> <code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>An operator copies a query from the <a href="../operations/observability-metrics/">metrics reference</a>, so a label the reference lists and the AGC …</td>
 </tr>
 <tr>
 <td><a href="Q310/">Q310</a></td>
