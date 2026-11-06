@@ -725,8 +725,10 @@ The sweep now requires the name after `<scale set>-` to be exactly what the list
 A UUID's fixed shape makes that unambiguous, since another set's name always leaves its own label text in front of the UUID.
 A record that fails the test is left alone and counted in the log line.
 
-**The format is measured on github.com and is a safe dependency.** All 56 self-hosted job runner names in 149 recent CI runs of this repository, read 2026-11-06 from October and November 2026 across two scale sets, were `<scale set>-<UUID>`.
-A backend minting another format makes the sweep delete nothing, so records then wait for the per-name reclaim or the [manual cleanup](../operations/troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) rather than another tenant losing one.
+**The format is measured on github.com, and the isolation depends on it.** All 56 self-hosted job runner names in 149 recent CI runs of this repository, read 2026-11-06 from October and November 2026 across two scale sets, were `<scale set>-<UUID>`.
+A backend minting another format leaves a set's own records unswept, so they wait for the per-name reclaim or the [manual cleanup](../operations/troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
+One case on such a backend still crosses sets: with all-digit job IDs, a set labelled `ci-<UUID>` mints `ci-<UUID>-123`, which the `ci` sweep reads as a job UUID and an attempt.
+No backend with non-UUID job IDs has been measured.
 
 `TestListener_SweepLeavesAnExtendingSetsRecords` and `E2E_AGC_ScaleSetSweep` pin this, the second with a seeded stale record that proves the sweep ran.
 Neither reaches GitHub.
