@@ -23,6 +23,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
   - [Action required after v2.0.0: delete what an owner deleted during the upgrade left behind](#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
+  - [Action required if a query reads tier on a disruption series: the label is gone](#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone)
   - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
@@ -457,6 +458,20 @@ The AGC's `Provisioner.provision` span went with the classic path too, and the s
 A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and `spec.tracing.networkPolicy` can now replace it ([Reaching the collector](observability-logging.md#reaching-the-collector)).
 
 **Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
+
+### Action required if a query reads `tier` on a disruption series: the label is gone
+
+**Who is affected:** anyone whose own alerts, recording rules or dashboards filter or group on `tier` on a disruption series, including copies of the tenant Grafana dashboard taken before `v2.0.0`.
+The reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml) never read it.
+
+**What changed.** [Seven series](observability-metrics.md#breaking-observability-changes-q1291) no longer carry `tier`, whose only value was `scaleset`.
+A query filtering `{tier="scaleset"}` returns nothing and raises no error, so a rule reading it never fires again and a panel reading it shows `No data`.
+`by (tier)` keeps working, with one group and an empty `tier` value.
+Series recorded before the upgrade keep the label, so an `increase()` across the upgrade spans two series.
+
+**Before you upgrade,** remove `tier` from those queries and legends, and re-import the tenant dashboard if you run a copy.
+
+**Rolling back** to a `1.x` AGC brings the label back on new samples, so a query with the filter removed keeps working.
 
 ### Action required if `spec.tracing.endpoint` does not parse as a URL: the value is now rejected
 
