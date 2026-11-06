@@ -334,7 +334,7 @@ So it stays an explicit opt-in for the narrow stampede cases above, never a defa
 **Status — ✅ implemented (Q223).** Shipped as an opt-in, default-off per-RunnerGroup token bucket on worker-pod creation: `spec.scaleUp.maxPerSecond` (required, ≥1) + `spec.scaleUp.burst` (optional, defaults to `maxPerSecond`), on both the v1 `RunnerGroup` and v2 `RunnerSet`.
 The limiter gates pod creation in the AGC provisioner (`golang.org/x/time/rate`), so a throttled job **waits** for a token — holding its GitHub lock, renewed in the background — composing with the `WorkerQuotaPressure` / quota-retry wait rather than adding a new state machine; it coexists with the node autoscaler (bounding pod-admission rate eases the node-scale-up burst, and the autoscaler keeps its own rate controls).
 Each throttle increments `actions_gateway_worker_scaleup_throttled_total`.
-Operator guidance: [tenant-onboarding.md § worker scale-up rate limit](../operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource); design record: [archive/q223-worker-scaleup-rate-limit.md](../plan/archive/q223-worker-scaleup-rate-limit.md).
+Operator guidance: [tenant-onboarding.md § worker scale-up rate limit](../operations/tenant-onboarding.md#step-2-create-the-gateway-and-its-runner-set); design record: [archive/q223-worker-scaleup-rate-limit.md](../plan/archive/q223-worker-scaleup-rate-limit.md).
 
 **Related.** The Q211 P2P image-distribution operations guide (image-pull storms); [G.2](#g2-proxy-enforced-per-tenant-rate-limiting) (proxy egress rate limiting — distinct); [appendix-e-capacity-planning.md](appendix-e-capacity-planning.md) (worker quota / capacity model).
 

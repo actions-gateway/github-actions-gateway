@@ -25,9 +25,9 @@ Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capabili
   Reported whether or not the gate is on.
 - **[Fast, honest ending for an abandoned run](design/04-operational-flows.md)**: a run whose worker is removed before it started is force-cancelled in about a second, measured live, then re-run automatically once capacity returns.
 - **[Priority tiers per runner set](design/02-architecture.md)**: reserve a guaranteed floor of slots for expensive runner types so cheap CPU jobs cannot starve critical GPU work.
-- **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
+- **[Worker scale-up rate limiting](operations/tenant-onboarding.md#step-2-create-the-gateway-and-its-runner-set)**: opt-in token bucket capping how *fast* workers start, distinct from the count ceiling, to smooth cold-start stampedes on shared egress.
 - **[Scale-to-zero workers](design/02-architecture.md)**: worker pods exist only while a job runs; listeners are single-digit-KiB goroutines in one shared pod, not a listener pod per runner group.
-- **[Unmodified upstream runner images](operations/tenant-onboarding.md#step-2-create-the-actionsgateway-resource)**: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock `actions/runner` image, or any derivative, runs with no rebuild.
+- **[Unmodified upstream runner images](operations/tenant-onboarding.md#step-2-create-the-gateway-and-its-runner-set)**: the wrapper is injected into each worker pod at runtime (an OCI image volume on Kubernetes 1.33+, an initContainer below), so the stock `actions/runner` image, or any derivative, runs with no rebuild.
 - **[A job conclusion survives losing the process](design/02-architecture.md)**: conclusions are persisted before any message delete is issued, so a hard kill leaves the message to be replayed rather than the conclusion lost.
   Measured over 60 graceful stops at maximum pressure.
 - **[Orphaned workers are bounded without a live controller](design/02-architecture.md)**: `maxWorkerLifetime` is stamped on each worker pod as its `activeDeadlineSeconds`, so the **kubelet** enforces it.
@@ -69,7 +69,7 @@ Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capabili
 - **[Kata micro-VM workers](operations/kata-dind-workloads.md)**: validated on nested virtualization, and the default for GAG's own end-to-end CI, which builds a `kind` cluster inside an unprivileged worker pod.
 - **[Untrusted-PR egress posture](operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)**: an in-cluster pull-through registry mirror, and a tenant with no allow-all rule, leave a Kata worker reaching cluster DNS, GitHub, and the mirror, and nothing else.
   Measured on every run of GAG's own Kata lane.
-- **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right `securityProfile` and PSA level.
+- **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right security profile and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.
 - **[Admission policy compatibility](operations/admission-policies.md)**: a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.
 - **[Optional CONNECT destination allow-listing](operations/security-operations.md)**: defense in depth, off by default.
@@ -124,12 +124,12 @@ Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capabili
 - **[`v2` stored, and a sweep to rewrite the rest](operations/upgrade.md#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.10</span>: every kind stores `v2`, and `gag-migrate storage-version` rewrites objects already stored at an older version, so a 1.x cluster can take `v2.0.0`, which serves `v2` alone, in one CRD apply.
 - **[Reusable runner templates](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one `RunnerTemplate` referenced by many runner sets, or a cluster-wide `ClusterRunnerTemplate` shared across namespaces.
 - **[Multiple gateways per namespace](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.
-- **[GitHub Enterprise Server gateways](operations/troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance)**: a gateway whose `gitHubURL` names a GHES appliance addresses that appliance on every GitHub surface, with a `GitHubEgressIncomplete` condition flagging an incomplete CIDR allow-list.
+- **[GitHub Enterprise Server gateways](operations/troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance)**: a gateway whose `githubURL` names a GHES appliance addresses that appliance on every GitHub surface, with a `GitHubEgressIncomplete` condition flagging an incomplete CIDR allow-list.
   **Untested against a real GHES appliance.**
 - **[GHES behind a private CA](operations/troubleshooting.md#a-ghes-appliances-certificate-is-not-trusted)** <span class="gag-v2-badge">v2</span>: `spec.githubCABundleRef` names a ConfigMap whose CA bundle is added to the trust of both the gateway's AGC and its worker pods, never replacing the system roots.
   **Untested against a real GHES appliance.**
 - **[`gag-migrate`](operations/migration-v1-to-v2.md)**: a one-shot fan-out that moves a tenant off `v1alpha1` without changing how jobs are acquired: dry-run, review, apply.
-- **[Deprecations and the `v2.0.0` removal](operations/v1alpha1-deprecation.md)**: what `v2.0.0` removes, what keeps working until then, and the pre-upgrade checklist.
+- **[Deprecations and the `v2.0.0` removal](operations/v1alpha1-deprecation.md)**: what `v2.0.0` removes, and the pre-upgrade checklist.
 - **[Migrating from ARC](operations/migration-from-arc.md)**: concept mapping, behavioral differences, and a worked zero-downtime migration of one runner group.
 - **[The GitHub protocol dependency register](design/github-protocol-dependencies.md)**: each GitHub runner-facing protocol this system speaks, its source of truth, a stability tier, and the drift-watch trigger for revisiting it.
   One of the two is Public Preview with no wire specification.

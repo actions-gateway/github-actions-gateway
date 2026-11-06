@@ -51,7 +51,7 @@ Multi-label matching is not a reason to stay on Classic: `v2` registers every `r
 | `ActionsGateway.spec.securityProfile` | the namespace label `actions-gateway.com/security-profile` |
 
 It also aligns the Q147 / domain-renamed namespace markers — adding the `actions-gateway.com/tenant=managed` marker, the `actions-gateway.com/security-profile` label, the domain-migrated `privileged-profile` grant, and the aligned `allow-profile-downgrade=allowed` annotation.
-**These are additive:** the legacy `actions-gateway.github.com/*` keys are kept so v1 keeps working during coexistence (every admission policy dual-reads both during the window), and are removed only when `v1alpha1` is finally removed.
+**These are additive:** the legacy `actions-gateway.github.com/*` keys are kept so v1 keeps working during coexistence, because every 1.x admission policy dual-reads both; `v2.0.0` honours only the `actions-gateway.com/*` keys.
 
 ### Behavior-preserving guarantees
 
@@ -209,6 +209,7 @@ They are still two independent tenants, and each provisions its own pool of pre-
 | GitHub runner name | `web-<index>` | `rs-web-<index>` |
 
 So during coexistence you will see **two sets of runners** registered with GitHub for one tenant — expected, and the reason both can run at once.
+These pre-registered agents are how Classic acquisition works, so they end with it: a `ScaleSet` set provisions a worker per job, and `v2.0.0` creates neither Secret.
 Each agent Secret also carries an `ownerReference` to the `RunnerGroup` or `RunnerSet` it belongs to, so `kubectl -n team-a get secret agentpool-web-0 -o jsonpath='{.metadata.ownerReferences}'` answers "which tenant owns this?" without guessing from the name.
 
 ### Each AGC serves exactly one API
@@ -323,7 +324,12 @@ Prefer the ordered teardown above; this is a recovery path, not an alternative.
 
 If you later retire the tenant entirely, remember that any `ClusterRunnerTemplate` the migration emitted is cluster-scoped and survives deleting the namespace — reclaim it by its provenance label ([detail](#privileged-worker-shapes-dind-become-cluster-scoped-templates)).
 
-The legacy `actions-gateway.github.com/*` namespace markers and finalizers are retired cluster-wide when `v1alpha1` is removed at **`v2.0.0`** (see the [removal notice](v1alpha1-deprecation.md)); until then the dual-read window keeps both spellings working.
+The legacy `actions-gateway.github.com/*` namespace markers and finalizers are retired cluster-wide at **`v2.0.0`**; on 1.x the dual-read keeps both spellings working.
+
+## Step 5 — get the migrated tenant ready for `v2.0.0`
+
+The fan-out is not the last step: it lands the tenant on `v2alpha1` with the Classic protocol, and `v2.0.0` serves neither.
+Before upgrading, while the 1.x controllers still run, finish the [removal notice's checklist](v1alpha1-deprecation.md#before-you-upgrade-from-1x): re-apply the objects at `v2`, replace each Classic set with a `ScaleSet` set, and move any `EgressProxy` still naming `CiliumFQDN` or `CalicoFQDN` onto `FQDN`.
 
 ## Troubleshooting
 

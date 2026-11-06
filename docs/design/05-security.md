@@ -165,7 +165,7 @@ That write access is therefore trusted at the level of administering the GMC, no
 > Both GMC validating webhooks reject any entry that NO_PROXY-matches a protected GitHub host (shared guard: `gmc/internal/webhook/noproxy`), while still admitting the legitimate internal-destination entries (CIDRs, bare IPs, non-GitHub domain suffixes such as `svc.cluster.local`).
 > On the v2 `EgressProxy` — which carries no `gitHubURL` of its own — the protected set is the public GitHub hosts **plus the `gitHubURL` host (a GitHub Enterprise Server host included) of every referrer**, resolved through the uncached API reader from both directions (Q322): the `EgressProxy` write checks the gateways/RunnerSets that reference it, and the `ActionsGateway`/`RunnerSet` write checks the referenced proxy's `noProxyCIDRs`, so the bypass pair is rejected regardless of creation order (`gmc/internal/webhook/v2/noproxy_referrers.go`; unresolvable reads fail closed).
 > One accepted residual: a **CIDR/IP entry covering GitHub's rotating published ranges** is not detected on either version (an in-tree IP blocklist would rot; operator responsibility).
-> The runbook for the rejection: [troubleshooting.md § `proxy.noProxyCIDRs` rejected](../operations/troubleshooting.md#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github).
+> The runbook for the rejection: [troubleshooting.md § `proxy.noProxyCIDRs` rejected](../operations/troubleshooting.md#noproxycidrs-rejected-entry-would-bypass-the-proxy-for-github).
 
 > **The GMC's own `NO_PROXY` defaults exempt the API server, not a network range (Q465).** The same `NO_PROXY` var carries a platform-authored half that the GMC appends to every tenant's entries, and it is subject to the identical rule: whatever it lists escapes the tenant's egress proxy and so escapes egress-IP attribution.
 > The mandatory set is therefore **DNS names plus one address**: `svc.cluster.local` and `kubernetes.default.svc` (in-cluster names, not publicly resolvable), `localhost`/`127.0.0.1` (the pod's own loopback), and — for the AGC only — **this cluster's API server ClusterIP**, read from the GMC's own `KUBERNETES_SERVICE_HOST` and emitted as a single bare address.
@@ -788,7 +788,7 @@ The label is the platform's eligibility decision; the annotation is the tenant's
 
 This is a webhook check rather than a CRD CEL `XValidation` rule because the decision depends on a label of a *different* object (the namespace), which a spec-scoped CEL rule cannot read.
 The webhook reads the namespace's current label through the uncached API reader, so a tenant cannot smuggle eligibility in through the CR.
-Operators grant eligibility per [Tenant Onboarding](../operations/tenant-onboarding.md); a tenant who hits the rejection is pointed at [troubleshooting: privileged profile rejected](../operations/troubleshooting.md#privileged-securityprofile-rejected-namespace-not-eligible).
+Operators grant eligibility per [Tenant Onboarding](../operations/tenant-onboarding.md); a tenant who hits the rejection is pointed at [troubleshooting: privileged profile rejected](../operations/troubleshooting.md#privileged-security-profile-rejected-namespace-not-eligible).
 
 ### Constraining the GMC's PSA-stamping privilege
 

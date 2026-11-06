@@ -8,7 +8,7 @@
     A cluster upgrading from 1.x has to move its objects before the upgrade: the steps are [below](#before-you-upgrade-from-1x).
 
 This page records what `v2.0.0` removed and what an operator upgrading from 1.x has to do first.
-A fourth removal, [the `CiliumFQDN` / `CalicoFQDN` egress modes](#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock), was announced on a later clock and rode this one.
+A fifth removal, [the `CiliumFQDN` / `CalicoFQDN` egress modes](#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock), was announced on a later clock and rode this one.
 
 ## What `v2.0.0` removed
 

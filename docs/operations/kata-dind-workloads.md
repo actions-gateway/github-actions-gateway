@@ -258,7 +258,7 @@ Two are easy to miss: **`FOWNER`** (image layer unpack `chmod`s files it does no
 
 | Property | Privileged DinD | DinD under Kata |
 |---|---|---|
-| `securityProfile` required | `privileged` (platform-granted namespace label) | `privileged` label still (PSS baseline forbids the capability adds; PSA is not Kata-aware) — but **no privileged container** behind it |
+| Security profile required | `privileged` (platform-granted namespace label) | `privileged` label still (PSS baseline forbids the capability adds; PSA is not Kata-aware) — but **no privileged container** behind it |
 | `privileged: true` container | Yes | No |
 | Escape blast radius | The host node and, from there, other tenants | A throwaway guest VM kernel |
 | Node `/proc`, `/sys`, devices, kernel | Exposed | Behind the VM boundary |
@@ -488,8 +488,8 @@ Run the negatives on **every** run rather than once: a policy that stops selecti
 - [`deploy/registry-mirror/`](../../deploy/registry-mirror/README.md): the pull-through cache manifests behind [the tight-egress posture](#untrusted-pull-requests--the-tight-egress-posture), with the storage options and the values to retarget.
 - [Reference architectures](reference-architectures.md): the supported profiles this posture belongs to, and how each was tested.
 - [Runner template library](runner-template-library.md): the shipped `kata-dind` entry this page describes, plus its two siblings and how to fork one.
-- [In-runner image builds](in-runner-image-builds.md) — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the `securityProfile` each needs.
+- [In-runner image builds](in-runner-image-builds.md) — pick a build approach (BuildKit rootless, Kaniko, Sysbox, Kata, privileged DinD) and the security profile each needs.
 - [Kata-on-GKE spike runbook](kata-ci-spike-runbook.md) — executable go/no-go steps for the unprivileged `dockerd` + `kind` runner.
 - [Kata Containers on GKE](../plan/archive/kata-on-gke.md) — design rationale, the options rejected (Sysbox, rootless, kindbox), and the provider-agnostic reference architecture.
 - [Appendix B — Worker isolation](../design/appendix-b-worker-isolation.md) — `runc` vs gVisor vs Kata sandbox-runtime trade-offs.
-- [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in) — the authoritative `securityProfile` model.
+- [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in) — the authoritative security profile model.

@@ -93,7 +93,7 @@ Cross-namespace sharing was deferred at audit time (M4/Q166) with `spec.sharing`
 **Gap — metrics-mTLS stack (Q324, FIXED).** As found, v1 wired the proxy metrics listener end to end (`PROXY_METRICS_*` env + TLS volume + `metrics` container/Service port + metrics-scrape NP ingress rule + ServiceMonitor) while the v2 builder omitted all of it, documented as "lands in M3a" — but M3a and M3b shipped without it, so a v2 proxy pool's `/metrics` fell back to plaintext on the health port and was unscrapable.
 Fixed: the v2 `EgressProxy` now mounts a per-`EgressProxy` metrics-mTLS bundle (`<ep>-metrics-tls`), publishes the scraper client bundle (`<ep>-metrics-client`), exposes the `metrics` container/Service port, threads all three `PROXY_METRICS_*` env (the mTLS gate — this removes the plaintext fallback), and admits the `:8443` scrape from `metrics: enabled` namespaces.
 Each `EgressProxy` owns its own metrics CA — no cross-tenant reuse, no security regression vs classic.
-Design: [appendix-h §H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion); operator doc: [observability-metrics-access.md](../operations/observability-metrics-access.md#v2-egressproxy-proxy-metrics).
+Design: [appendix-h §H.8](../design/appendix-h-v2-api-decomposition.md#h8-ownership-gc-and-deletion); operator doc: [observability-metrics-access.md](../operations/observability-metrics-access.md#egressproxy-proxy-metrics).
 
 **Gap — `logLevel` (Q327, FIXED).** v1 threads `spec.logLevel` to the proxy container as `LOG_LEVEL` (`builder.go:693-699`); as found, the `EgressProxy` API had no logLevel field and the v2 container got no LOG_LEVEL env — no per-proxy debug knob on v2.
 Dropped by API design without a documented decision.

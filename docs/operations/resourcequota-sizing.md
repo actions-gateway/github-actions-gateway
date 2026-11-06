@@ -62,7 +62,7 @@ Where the inputs come from:
 
 | Term | Source | Default if unset |
 |---|---|---|
-| Container `requests`/`limits` | `podTemplate.spec.containers[].resources` on the `RunnerTemplate` (v2) or `runnerGroups[].podTemplate` (v1) | `500m` / `1Gi` as **both** requests and limits — the AGC gap-fills any container declaring neither, so a bare template still costs quota |
+| Container `requests`/`limits` | `podTemplate.spec.containers[].resources` on the `RunnerTemplate` | `500m` / `1Gi` as **both** requests and limits — the AGC gap-fills any container declaring neither, so a bare template still costs quota |
 | Native sidecar `requests`/`limits` | `podTemplate.spec.initContainers[]` entries with `restartPolicy: Always` | none — the gap-fill deliberately skips init containers, so an undeclared sidecar contributes `0` |
 | `overhead.podFixed` | `podTemplate.spec.overhead` when the template declares it, else the `RuntimeClass` named by `podTemplate.spec.runtimeClassName` | none (no `runtimeClassName` and no declared `overhead` ⇒ no overhead) |
 
@@ -88,9 +88,9 @@ The control-plane terms:
 
 | Term | Default | Set by |
 |---|---|---|
-| `proxy.maxReplicas` | `10` | `spec.proxy.maxReplicas` (v1) / `EgressProxy.spec.maxReplicas` (v2) |
-| `proxyReq.cpu` / `proxyReq.memory` | `10m` / `32Mi` | `spec.proxy.resources.requests` |
-| `proxyLim.cpu` / `proxyLim.memory` | `500m` / `64Mi` | `spec.proxy.resources.limits` |
+| `proxy.maxReplicas` | `10` | `EgressProxy.spec.maxReplicas` |
+| `proxyReq.cpu` / `proxyReq.memory` | `10m` / `32Mi` | `EgressProxy.spec.resources.requests` |
+| `proxyLim.cpu` / `proxyLim.memory` | `500m` / `64Mi` | `EgressProxy.spec.resources.limits` |
 | `agcReq` / `agcLim` (**v2**) | requests `500m` / `2Gi`, limits `2` / `4Gi` | `spec.agcResources`, overlaid per key on these defaults |
 | `agcReq` / `agcLim` (**v1**) | **none stamped** | the platform, on the AGC Deployment, or a namespace `LimitRange` |
 
@@ -159,14 +159,13 @@ Before applying a quota, check each key you intend to constrain:
 Two ways to satisfy it:
 
 - **Pair the quota with a `LimitRange`** that supplies namespace default requests (and limits, if you constrain them).
-  On **v1** this is required rather than optional: the GMC stamps no resources on the AGC pod, so a `requests.cpu`- constrained namespace rejects the AGC Deployment's pods with `must specify requests.cpu`.
-  The v2 AGC carries its own defaults and does not need this.
+  The AGC carries its own defaults and does not need this.
 - **Constrain only `pods`**, plus the storage keys if PVCs are in play.
   You lose the compute cap and keep a hard concurrency ceiling.
 
 ## Sizing profiles change the ask at pod build
 
-An opt-in [sizing profile](worker-rightsizing.md#sizing-profiles-opt-in-auto-apply) (`RunnerSet.spec.sizing.profile`, v2 only) rewrites the pod's CPU/memory values when the pod is built, so **the template's static ask is not what the quota sees**.
+An opt-in [sizing profile](worker-rightsizing.md#sizing-profiles-opt-in-auto-apply) (`RunnerSet.spec.sizing.profile`) rewrites the pod's CPU/memory values when the pod is built, so **the template's static ask is not what the quota sees**.
 
 | Profile | Effect on the quota footprint |
 |---|---|
@@ -191,7 +190,7 @@ kubectl get runnerset <NAME> -n <NAMESPACE> -o jsonpath='{.status.sizingProfileS
 
 ## Worked example — a DinD tenant at 12 concurrent jobs
 
-**Inputs.** A tenant running Docker-in-Docker CI on the measured reference shape (the shipped `privileged-dind` entry, `deploy/templates/privileged-dind/template.yaml`; see [runner template library](runner-template-library.md)), with the default egress proxy pool, on the v2 API, `sizing.profile: Static`.
+**Inputs.** A tenant running Docker-in-Docker CI on the measured reference shape (the shipped `privileged-dind` entry, `deploy/templates/privileged-dind/template.yaml`; see [runner template library](runner-template-library.md)), with the default egress proxy pool, `sizing.profile: Static`.
 
 | Input | Value |
 |---|---|

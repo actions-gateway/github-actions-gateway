@@ -53,7 +53,7 @@ Use the `app.kubernetes.io/*` set below, which is the stable contract for toolin
 | `app.kubernetes.io/part-of` | `actions-gateway` | `actions-gateway` | `actions-gateway` |
 | `app.kubernetes.io/component` | `runner` | `proxy` | `controller` |
 | `app.kubernetes.io/name` | `actions-runner` | `actions-gateway-proxy` | `actions-gateway-controller` |
-| `app.kubernetes.io/instance` | owning `RunnerGroup` / `RunnerSet` name | owning `EgressProxy` / `ActionsGateway` name | owning `ActionsGateway` name |
+| `app.kubernetes.io/instance` | owning `RunnerSet` name | owning `EgressProxy` / `ActionsGateway` name | owning `ActionsGateway` name |
 | `app.kubernetes.io/managed-by` | `actions-gateway-controller` | `actions-gateway-gmc` | `actions-gateway-gmc` |
 | `app.kubernetes.io/version` | runner image version | *(omitted)* | *(omitted)* |
 
@@ -61,9 +61,9 @@ Use the `app.kubernetes.io/*` set below, which is the stable contract for toolin
 The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant.
 There is no separate proxy or worker namespace to reconcile.
 
-**Per-RunnerGroup / per-RunnerSet drill-down.** To split a tenant's worker cost by runner shape (e.g.
-`gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerGroup/RunnerSet name.
-(GAG also sets project-specific `actions-gateway/runner-group` and `actions-gateway.com/runner-set` labels for `kubectl` selection — see [observability.md](observability-metrics.md#drilling-down-to-individual-runner-pods) — but for cost queries prefer the recommended `instance` label.)
+**Per-RunnerSet drill-down.** To split a tenant's worker cost by runner shape (e.g.
+`gpu-a100` vs `cpu-standard`), aggregate by `app.kubernetes.io/instance`, which carries the owning RunnerSet name.
+(GAG also sets the project-specific `actions-gateway.com/runner-set` label for `kubectl` selection — see [observability.md](observability-metrics.md#drilling-down-to-individual-runner-pods) — but for cost queries prefer the recommended `instance` label.)
 
 **Re-run compute by cause.** A scale-set worker built for a run GAG has re-run carries the annotation `actions-gateway.com/rerun-cause`, valued with the cause of GAG's latest re-run of that run: `eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished` or `oom` (Q1245).
 Its values are few, so aggregating worker cost by it is safe where your cost tool reads pod annotations; a worker with no such annotation is not part of a GAG re-run.

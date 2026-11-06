@@ -27,7 +27,7 @@ The matrix distinguishes seven pod classes because their security posture differ
 | **AGC** | GMC | tenant | Long-running per-tenant control plane; the GMC gap-fills resource defaults |
 | **GMC manager** | Helm chart | install ns | Long-running cluster control plane |
 
-The worker profile is the tenant's `ActionsGateway.spec.securityProfile` (`baseline` default, `restricted`, or `privileged`); the GMC mirrors it onto the worker pods and the namespace PSA level.
+The worker profile is the namespace's `actions-gateway.com/security-profile` label (`baseline` default, `restricted`, or `privileged`); the GMC mirrors it onto the worker pods and the namespace PSA level.
 The proxy, AGC, and GMC pods are **uniformly hardened** and not tenant-tunable.
 
 ## Compatibility matrix
@@ -62,7 +62,7 @@ The `baseline` worker profile **deliberately does not** drop capabilities or set
 A cluster policy that requires `drop: [ALL]` on *all* pods will therefore **reject default workers**.
 Your options, in order of preference:
 
-- Tell tenants to set `securityProfile: restricted` — that profile gap-fills `allowPrivilegeEscalation: false` + `drop: [ALL]` on every worker container, satisfying the policy with no exception needed.
+- Have the tenant namespace labelled `actions-gateway.com/security-profile=restricted` — that profile gap-fills `allowPrivilegeEscalation: false` + `drop: [ALL]` on every worker container, satisfying the policy with no exception needed.
 - Or scope the cluster policy to exclude tenant namespaces (see the [exception samples](#sample-policies)) so `baseline` keeps working.
 
 `restricted`, proxy, AGC, and GMC pods already drop all capabilities.

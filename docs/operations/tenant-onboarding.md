@@ -7,12 +7,6 @@ For the full setup reference, see [Getting Started](../getting-started.md).
 For day-2 operations after onboarding, see the [Runbook](runbook.md).
 **Coming from Actions Runner Controller (ARC)?** Start with the [Migrating from ARC guide](migration-from-arc.md) — it maps ARC scale-set concepts onto the steps below and walks one runner group across.
 
-!!! tip "New tenants: onboard on the v2 API"
-    Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
-    At the gateway step, the recommended shape for a **new** tenant is the **v2 API** at `actions-gateway.com/v2` — see [v2 API](#v2-api-multiple-gateways-per-namespace) below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
-    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**; already on v1?
-    [`gag-migrate`](migration-v1-to-v2.md) moves you across.
-
 ---
 
 ## Pre-Conditions
@@ -39,14 +33,14 @@ Before beginning, confirm all of the following:
   Decide this before provisioning — see [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md).
 - [ ] **GMC is running.** The Gateway Manager Controller (GMC) is deployed and healthy: `kubectl get deploy -n gmc-system gmc-controller-manager`.
   Install it with the [`actions-gateway` Helm chart](../../charts/actions-gateway/README.md) (`helm install gag charts/actions-gateway -n gmc-system --create-namespace …`).
-- [ ] **CRDs are installed.** `kubectl get crd actionsgateways.actions-gateway.com && kubectl get crd runnergroups.actions-gateway.github.com`.
-- [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with the permissions in [Step 0a](#0a-create-the-app-web-ui): `Actions: Read and write`, plus `Self-hosted runners: Read and write` (organization `gitHubURL`) or `Administration: Read and write` (repository `gitHubURL`).
+- [ ] **CRDs are installed.** `kubectl get crd actionsgateways.actions-gateway.com runnersets.actions-gateway.com runnertemplates.actions-gateway.com`.
+- [ ] **GitHub App is registered.** The GitHub App is registered in the target GitHub organization with the permissions in [Step 0a](#0a-create-the-app-web-ui): `Actions: Read and write`, plus `Self-hosted runners: Read and write` (organization `githubURL`) or `Administration: Read and write` (repository `githubURL`).
   The platform team has the `appId`, `installationId`, and private key `.pem` file.
   First time?
   [Step 0](#step-0-create-and-install-the-github-app) walks through creating the App and capturing all three.
 - [ ] **GitHub App is installed.** The App is installed on the organization (or specific repos): Settings → Developer settings → GitHub Apps → `<app>` → Install App.
 - [ ] **GitHub URL is known.** The org/enterprise/repo URL the runners register against — `https://github.com/<org>`, `https://github.com/<org>/<repo>`, or a GitHub Enterprise Server URL `https://ghes.example.com/<org>`.
-  It goes in `spec.gitHubURL` (Step 2) and must match where the App is installed.
+  It goes in the gateway's `spec.githubURL` (Step 2) and must match where the App is installed.
   It is a required field — there is no default.
   Everything the control plane addresses is derived from it: the REST API base (`https://api.github.com`, or `https://<host>/api/v3` for GHES), the registration endpoints, and — in an FQDN egress mode — the proxy's hostname allowlist.
 - [ ] **GHES only: the appliance's egress ranges are allowlisted.** A GitHub Enterprise Server appliance sits on your own address space, so it appears in none of the ranges `api.github.com/meta` publishes — which is exactly what the default `CIDR` egress mode programs.
@@ -76,21 +70,16 @@ Before beginning, confirm all of the following:
   Add an entry only for a destination the tenant genuinely reaches directly, and keep it as narrow as possible: everything listed bypasses the tenant's egress proxy and so leaves its traffic unattributed.
 - [ ] **Security profile decided.** Default `baseline` is correct for normal CI workloads (builds, tests).
   Confirm with the tenant whether they need `restricted` (compliance / high-isolation) or `privileged` (docker-in-docker, kernel-module workflows).
-  Tenants with both needs deploy two `ActionsGateway` CRs in two namespaces.
-  You can *harden* a profile later in place (`baseline → restricted`) freely, but *relaxing* it (a downgrade) is rejected by admission unless you set the `actions-gateway.github.com/allow-profile-downgrade: "true"` annotation — see [troubleshooting: securityProfile downgrade rejected](troubleshooting.md#securityprofile-downgrade-rejected-by-admission-webhook).
-  See [§5.3 — Security Profiles](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+  The profile is a property of the **namespace**, not of any CR, because Pod Security Admission is namespace-scoped, so co-located gateways share it and tenants with both needs use two namespaces.
+  Label the namespace, and the GMC stamps the `pod-security.kubernetes.io/*` labels from it:
 
-  > **v2 API (`actions-gateway.com`):** the security profile is **no longer a field on the `ActionsGateway` CR** — it is a property of the **namespace**, because Pod Security Admission is namespace-scoped (appendix-h §H.16 #7).
-  > Instead of `spec.securityProfile`, label the namespace:
-  >
-  > ```bash
-  > kubectl label namespace <tenant-namespace> actions-gateway.com/security-profile=restricted   # baseline | restricted | privileged; absent ⇒ baseline
-  > ```
-  >
-  > The GMC stamps the `pod-security.kubernetes.io/*` labels from it.
-  > The downgrade and privileged-eligibility rules are identical to v1 but enforced by the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy on the **namespace** (downgrade needs `actions-gateway.com/allow-profile-downgrade: allowed` as a namespace annotation; `privileged` needs `actions-gateway.com/privileged-profile: allowed` as a namespace label).
-  > Co-located v2 gateways share the one namespace profile; tenants needing different postures use different namespaces.
-- [ ] **Privileged eligibility granted (only if the tenant needs `privileged`).** `securityProfile: privileged` is a **platform** decision, not tenant-settable: the GMC validating webhook rejects it (at create *and* update) unless the namespace carries the eligibility label, applied by a trusted administrator:
+  ```bash
+  kubectl label namespace <tenant-namespace> actions-gateway.com/security-profile=restricted   # baseline | restricted | privileged; absent means baseline
+  ```
+
+  You can *harden* a profile later in place (`baseline → restricted`) freely, but *relaxing* it is denied by the `gmc-namespace-security-profile-guard` ValidatingAdmissionPolicy unless the namespace carries the annotation `actions-gateway.com/allow-profile-downgrade: allowed` — see [troubleshooting: security profile downgrade rejected](troubleshooting.md#security-profile-downgrade-rejected-by-admission).
+  See [§5.3 — Security Profiles](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+- [ ] **Privileged eligibility granted (only if the tenant needs `privileged`).** The `privileged` profile is a **platform** decision, not tenant-settable: the same policy refuses the profile label unless the namespace carries the eligibility label, applied by a trusted administrator:
 
   ```bash
   kubectl label namespace <tenant-namespace> actions-gateway.com/privileged-profile=allowed
@@ -98,11 +87,11 @@ Before beginning, confirm all of the following:
 
   The granting value is the enum keyword `allowed`, not `true` — a boolean-looking label value is a YAML footgun.
   This is a separate gate from the `actions-gateway.com/tenant` marker (which authorizes GMC management at all): without `privileged-profile`, the tenant can still run `baseline`/`restricted` but not `privileged`.
-  The gate is fail-closed — absent the label (or any value other than `allowed`), privileged is refused — so a tenant cannot self-grant the cluster's least-restrictive PSA posture by creating a CR.
+  The gate is fail-closed — absent the label (or any value other than `allowed`), privileged is refused — so a tenant cannot self-grant the cluster's least-restrictive PSA posture.
   Apply this only for tenants approved for docker-in-docker / kernel-module workloads, ideally paired with a sandbox `runtimeClassName`.
-  Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.github\.com/privileged-profile}'` → `allowed`.
+  Verify: `kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.com/privileged-profile}'` → `allowed`.
   To revoke, remove the label (`…/privileged-profile-`).
-  See [troubleshooting: privileged securityProfile rejected](troubleshooting.md#privileged-securityprofile-rejected-namespace-not-eligible) and [§5.3](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
+  See [troubleshooting: privileged security profile rejected](troubleshooting.md#privileged-security-profile-rejected-namespace-not-eligible) and [§5.3](../design/05-security.md#privileged-eligibility-is-a-platform-decision).
 
 ---
 
@@ -112,7 +101,7 @@ Before beginning, confirm all of the following:
 > Otherwise, this is where those three values come from.
 > The output of this step feeds directly into [Step 1](#step-1-create-the-github-app-secret).
 
-GitHub Apps are the gateway's only credential model on the v1 API — there is no Personal Access Token (PAT) path.
+A GitHub App is the gateway's credential unless the cluster is set up for workload identity — there is no Personal Access Token (PAT) path.
 This is deliberate: an App yields **short-lived, auto-rotating installation tokens** scoped to the installation and to the App's declared permissions (the [Step 0a](#0a-create-the-app-web-ui) set), so a compromise has a far smaller blast radius than a long-lived PAT carrying its owner's full account access.
 The App is also an **automation-owned identity** — it does not break when a user leaves the org or loses access — and installation-level rate/concurrency budgets are what let one tenant scale to thousands of sessions (and shard across installations; see [Appendix E §E.6](../design/appendix-e-capacity-planning.md#e6-when-to-shard-across-installations)).
 See [security §5](../design/05-security.md) for the full credential trust model.
@@ -130,7 +119,7 @@ There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh a
 5. **Permissions** — grant these; the access levels are from GitHub's [permissions required for GitHub Apps](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps) reference:
    - **Repository permissions → Actions: Read and write.** Read is what observes a workflow run.
      Write is used only for automatic recovery: re-running a job whose worker pod was lost (`rerun-failed-jobs`), and force-cancelling the run of a job abandoned before its worker started (`force-cancel`).
-   - **Runner registration: Read and write** on the permission that matches the scope of the `gitHubURL` you set in [Step 2](#step-2-create-the-actionsgateway-resource).
+   - **Runner registration: Read and write** on the permission that matches the scope of the `githubURL` you set in [Step 2](#step-2-create-the-gateway-and-its-runner-set).
      For an organization URL that is **Organization permissions → Self-hosted runners**; for a repository URL it is **Repository permissions → Administration**.
      GitHub has no read-only way to register a runner: `generate-jitconfig` and `registration-token` both require write.
    - **Repository permissions → Metadata: Read-only** is added by GitHub automatically.
@@ -146,7 +135,7 @@ There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh a
 > - A job whose worker pod is evicted, preempted, deleted, or vanishes is not re-run: GitHub refuses each attempt for want of the permission, which counts as `actions_gateway_eviction_rerun_failures_total{reason="api_error"}`, and the run needs a manual re-run.
 > - The run of a job abandoned before its worker started is not force-cancelled, so it stays queued until GitHub cancels it at its roughly 15-minute unstarted-job timeout, and is never re-run (`actions_gateway_abandoned_run_force_cancels_total{outcome="error"}`).
 >
-> If you choose read-only, set `maxEvictionRetries: 0` on every `RunnerGroup` or `RunnerSet` so the gateway never attempts the re-run.
+> If you choose read-only, set `maxEvictionRetries: 0` on every `RunnerSet` so the gateway never attempts the re-run.
 > Each lost worker then emits `EvictionRetriesExhausted` instead of a failed re-run, which is accurate: the job needs a manual re-run either way.
 > The force-cancel call has no switch; it fails harmlessly and the timeout above applies.
 
@@ -158,7 +147,7 @@ This is `appId` — a small integer, not the App name or the client ID.
 ### 0c. Install the App and capture the `installationId`
 
 1. On the App's **Install App** tab, install it onto the target organization (or specific repositories).
-   The org/repos you install it on **must match** the `gitHubURL` you set in [Step 2](#step-2-create-the-actionsgateway-resource).
+   The org/repos you install it on **must match** the `githubURL` you set in [Step 2](#step-2-create-the-gateway-and-its-runner-set).
 2. After installing, the browser lands on the installation's settings page; the `installationId` is the trailing number in the URL: `https://github.com/organizations/<org>/settings/installations/<installationId>`.
 
 You can also read it back with the GitHub CLI authenticated as the App (advanced — requires an App JWT, not your user token).
@@ -284,10 +273,10 @@ kubectl apply -f resourcequota.yaml
 
 If you already provision namespaces and quotas through a GitOps pipeline or a tenant operator (Capsule, HNC, vCluster, kiosk), set the quota there instead — the gateway will not fight it.
 
-**Size the quota for both pools at full scale.** The quota must leave room for the proxy pool at `spec.proxy.maxReplicas` *and* worker pods up to `maxWorkers` (each × its per-pod requests/limits, plus pod count).
-When the remaining headroom can't cover scaling to those ceilings, the gateway flags it without blocking provisioning: the GMC raises `ProxyQuotaPressure`/`ProxyQuotaExceeded` on the `ActionsGateway` and the AGC raises `WorkerQuotaPressure`/`WorkerQuotaExceeded` on each `RunnerGroup` (each also exported as a gauge for alerting).
+**Size the quota for both pools at full scale.** The quota must leave room for the proxy pool at the `EgressProxy`'s `spec.maxReplicas` *and* worker pods up to `maxWorkers` (each × its per-pod requests/limits, plus pod count).
+When the remaining headroom can't cover scaling to those ceilings, the gateway flags it without blocking provisioning: the GMC raises `ProxyQuotaPressure`/`ProxyQuotaExceeded` on the `ActionsGateway` and the AGC raises `WorkerQuotaPressure`/`WorkerQuotaExceeded` on each `RunnerSet` (each also exported as a gauge for alerting).
 See [troubleshooting: Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling) and [Jobs Failing Due to Namespace ResourceQuota Exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion).
-On the v2 (`actions-gateway.com`) API a pool that opts out of the managed HPA (`EgressProxy.spec.managedAutoscaling: false`) makes `maxReplicas` inert — size the proxy term to *your own* autoscaler's ceiling instead, and note `ProxyQuotaPressure` then measures headroom to the Deployment's current desired replicas.
+A pool that opts out of the managed HPA (`EgressProxy.spec.managedAutoscaling: false`) makes `maxReplicas` inert — size the proxy term to *your own* autoscaler's ceiling instead, and note `ProxyQuotaPressure` then measures headroom to the Deployment's current desired replicas.
 
 #### Deriving the numbers
 
@@ -299,110 +288,120 @@ Read it before setting the numbers for a real tenant — the three things it exi
   On the reference DinD shape that is 25% of the pod's CPU request and 75% of its memory request.
 - **Kata workers carry `RuntimeClass` pod overhead** (`250m` / `160Mi` per pod), added to requests in full and to limits only for a key the pod already limits, plus one PVC and its `requests.storage` per worker if the shape uses a generic ephemeral volume.
 - **Constraining a key makes it mandatory for every pod.** The measured DinD shapes declare no CPU limit, so a quota constraining `limits.cpu` rejects 100% of worker pods with `must specify limits.cpu for: runner`.
-  On v1 the same trap applies to `requests.cpu` and the AGC pod, which stamps no resources — pair the quota with a `LimitRange`, or constrain only `pods`.
 
 ---
 
-## Step 2: Create the ActionsGateway Resource
+## Step 2: Create the gateway and its runner set
 
-Apply the `ActionsGateway` CR in the tenant's namespace.
-Adjust `proxy` and `runnerGroups` for the tenant's workload.
-The namespace quota is set separately on the namespace (Step 1b), not on this CR.
+Apply these four objects in the tenant's namespace, adjusting the `EgressProxy` and the `RunnerSet` for the tenant's workload.
+The namespace quota is set separately on the namespace (Step 1b), not on any of them.
 
-**One `ActionsGateway` per namespace.** The admission webhook rejects a second `ActionsGateway` in a namespace that already has one — every per-tenant resource has a fixed, namespace-scoped name, so two CRs would contend over them and flap the namespace's PSA labels.
-To run a second logical gateway (e.g. a `privileged` profile alongside a `baseline` one), give it its own namespace.
 **Keep unrelated Secrets out of the gateway's namespace.** The AGC can read every Secret in it, since it manages its runners' credential Secrets and creates pods that could mount any of them, so the namespace is the boundary that keeps it from the rest.
-See [troubleshooting: second ActionsGateway rejected](troubleshooting.md#second-actionsgateway-in-a-namespace-rejected-singleton-guard).
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1alpha1
+apiVersion: actions-gateway.com/v2
+kind: EgressProxy
+metadata:
+  name: <tenant>-egress
+  namespace: <tenant-namespace>
+spec:
+  # minReplicas is a floor, not a replica count: the GMC applies it when the pool
+  # is first created (or has been scaled to zero) and passes it to the pool's HPA.
+  # Above the floor, .spec.replicas belongs to the HPA — raising minReplicas on a
+  # running pool takes effect through the HPA, which needs a healthy metrics-server.
+  # See troubleshooting: "Proxy Pool Never Scales Out".
+  minReplicas: 2
+  maxReplicas: 10
+  # Optional: noProxyCIDRs excludes internal destinations from the egress proxy.
+  # Entries may be CIDRs (10.0.0.0/8), bare IPs, or NO_PROXY domain suffixes
+  # (svc.cluster.local, internal.example.com). Admission rejects any entry that
+  # would route this tenant's GitHub traffic around the proxy — a hostname
+  # matching the githubURL host or the public GitHub domains (github.com,
+  # githubusercontent.com, ghcr.io) — since that breaks egress-IP attribution.
+  # Never list GitHub here. The cluster-internal exemptions are appended
+  # automatically — svc.cluster.local, kubernetes.default.svc, localhost,
+  # 127.0.0.1, and this cluster's API server ClusterIP — so neither the API
+  # server nor the service CIDR belongs here on any distribution.
+  # noProxyCIDRs: ["10.0.0.0/8"]
+---
+apiVersion: actions-gateway.com/v2
+kind: RunnerTemplate
+metadata:
+  name: <tenant>-linux
+  namespace: <tenant-namespace>
+spec:
+  podTemplate:
+    spec:
+      containers:
+        - name: runner
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+---
+apiVersion: actions-gateway.com/v2
 kind: ActionsGateway
 metadata:
   name: <tenant>-gateway
   namespace: <tenant-namespace>
 spec:
-  gitHubAppRef:
-    name: github-app-v1
-  # GitHub org/enterprise/repo URL the runners register against (required). Use an
-  # org URL (https://github.com/my-org) for org-wide runners, a repo URL
+  credentials:
+    type: GitHubApp
+    githubApp:
+      name: github-app-v1
+  # GitHub org/enterprise/repo URL the runners register against (required, immutable).
+  # Use an org URL (https://github.com/my-org) for org-wide runners, a repo URL
   # (https://github.com/my-org/my-repo) to scope to one repo, or your GitHub
-  # Enterprise Server URL (https://ghes.example.com/my-org). The App referenced by
-  # gitHubAppRef must be installed on this same org/enterprise.
-  gitHubURL: https://github.com/my-org
-  # Default: blocks privileged containers, host namespaces, hostPath, dangerous caps.
-  # Set to "restricted" for stricter isolation, or "privileged" only if the workload
-  # genuinely needs an unrestricted PodSpec (DinD, Buildah without sandbox, kernel modules).
-  # "privileged" requires the namespace to be eligible: a platform admin must label it
-  # actions-gateway.com/privileged-profile=allowed (see Pre-Conditions), else the webhook
-  # rejects the CR at create/update. It is deliberately not tenant-settable.
-  # A privileged worker container (securityContext.privileged: true in a podTemplate)
-  # is ONLY admitted under securityProfile: privileged — under baseline/restricted the
-  # webhook rejects it. See troubleshooting: privileged worker container rejected.
-  securityProfile: baseline
-  # Log verbosity for this tenant's AGC and egress proxy: info (default) or debug.
-  # Leave at info; flip to debug only for a bug repro (see "Per-tenant log level"
-  # below). Changing it is a rolling restart of the AGC and proxy, not a hot reload.
+  # Enterprise Server URL (https://ghes.example.com/my-org). The App named above
+  # must be installed on this same org/enterprise.
+  githubURL: https://github.com/my-org
+  defaultProxyRef:
+    name: <tenant>-egress
+  # Log verbosity for this tenant's AGC: info (default) or debug. Leave at info;
+  # flip to debug only for a bug repro (see "Per-tenant log level" below). Changing
+  # it is a rolling restart of the AGC, not a hot reload.
   logLevel: info
-  proxy:
-    # minReplicas is a floor, not a replica count: the GMC applies it when the pool
-    # is first created (or has been scaled to zero) and passes it to the pool's HPA.
-    # Above the floor, .spec.replicas belongs to the HPA — raising minReplicas on a
-    # running pool takes effect through the HPA, which needs a healthy metrics-server.
-    # See troubleshooting: "Proxy Pool Never Scales Out".
-    minReplicas: 2
-    maxReplicas: 10
-    # Optional: noProxyCIDRs excludes internal destinations from the egress proxy.
-    # Entries may be CIDRs (10.0.0.0/8), bare IPs, or NO_PROXY domain suffixes
-    # (svc.cluster.local, internal.example.com). Admission rejects any entry that
-    # would route this tenant's GitHub traffic around the proxy — a hostname
-    # matching the gitHubURL host or the public GitHub domains (github.com,
-    # githubusercontent.com, ghcr.io) — since that breaks egress-IP attribution.
-    # Never list GitHub here. The cluster-internal exemptions are appended
-    # automatically — svc.cluster.local, kubernetes.default.svc, localhost,
-    # 127.0.0.1, and this cluster's API server ClusterIP — so neither the API
-    # server nor the service CIDR belongs here on any distribution.
-    # noProxyCIDRs: ["10.0.0.0/8"]
-  # The namespace ResourceQuota is platform-owned and set on the namespace in
-  # Step 1b — it is not a field on this CR.
-  # A runner group has no `name` field — the RunnerGroup CR name is derived from
-  # the gateway name + the group's first runnerLabel (here "linux").
-  runnerGroups:
-    - runnerLabels: ["linux", "self-hosted"]
-      maxWorkers: 20
-      podTemplate:
-        spec:
-          containers:
-            - name: runner
-              resources:
-                requests:
-                  cpu: "1"
-                  memory: "2Gi"
+---
+apiVersion: actions-gateway.com/v2
+kind: RunnerSet
+metadata:
+  name: linux
+  namespace: <tenant-namespace>
+spec:
+  gatewayRef: { name: <tenant>-gateway }
+  templateRef: { name: <tenant>-linux }
+  # Every label is a runs-on match target. The FIRST one is also this set's scale-set
+  # name at GitHub, so it must be unique per gateway, and reordering renames the scale set.
+  runnerLabels: ["linux", "self-hosted"]
+  maxWorkers: 20
 ```
 
 ```sh
-kubectl apply -f actionsgateway.yaml
+kubectl apply -f gateway.yaml
 ```
 
-**Optional — worker-pod lifecycle.** Each `runnerGroups[]` entry accepts two cleanup knobs.
+A privileged worker container (`securityContext.privileged: true` in a `podTemplate`) is admitted only in a namespace on the `privileged` security profile; see [troubleshooting: privileged worker container rejected](troubleshooting.md#privileged-worker-container-rejected-by-admission).
+
+**Optional — worker-pod lifecycle.** Each `RunnerSet` accepts two cleanup knobs.
 `completedPodTTL` (default `5m`) is how long a finished worker pod (Succeeded/Failed) is kept before the AGC deletes it — the retention window is your chance to `kubectl logs`/`describe` a failed pod; `"0s"` deletes pods immediately on completion.
 `pendingPodDeadline` (default `10m`, minimum `1s`) is how long a worker pod may sit Pending (unpullable image, unschedulable constraints) before the AGC deletes it and frees the concurrency slot it was holding — raise it above your worst-case node-autoscaling time for GPU pools, e.g.:
 
 ```yaml
-  runnerGroups:
-    - runnerLabels: ["self-hosted", "gpu"]
-      completedPodTTL: "30m"      # longer debugging window for failed jobs
-      pendingPodDeadline: "30m"   # GPU node provisioning can exceed the 10m default
+spec:
+  runnerLabels: ["gpu", "self-hosted"]
+  completedPodTTL: "30m"      # longer debugging window for failed jobs
+  pendingPodDeadline: "30m"   # GPU node provisioning can exceed the 10m default
 ```
 
 A third cleanup arm has no knob: a worker pod still `Running` five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing.
 It emits a `WorkerPodOrphanedRunning` Warning Event — see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning).
 A pod whose job is still assigned is never touched, however long it runs.
 
-A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the RunnerGroup and cancels the job (it never started); see [troubleshooting: worker pod reaped while Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
+A reaped Pending pod emits a `WorkerPodStuckPending` Warning Event on the `RunnerSet` and cancels the job (it never started); see [troubleshooting: worker pod reaped while Pending](troubleshooting.md#worker-pod-reaped-while-pending-workerpodstuckpending).
 
 **Per-job Secrets are reclaimed on job completion, not on `completedPodTTL`.** Alongside each worker pod the AGC stages one short-lived Secret holding that job's credentials.
 It is deleted as soon as the job finishes — independent of `completedPodTTL`, which retains only the pod — so `kubectl get secrets -n <tenant-ns>` shows Secrets for in-flight jobs only, never a backlog proportional to jobs run.
-Both objects also carry an `OwnerReference` to their RunnerGroup/RunnerSet as a backstop, so deleting the owner cascade-deletes anything still present.
+Both objects also carry an `OwnerReference` to their `RunnerSet` as a backstop, so deleting the owner cascade-deletes anything still present.
 If you do see `job-` or `job-ss-` Secrets outliving their pods, check the AGC log for `reclaim completed job's worker Secret` warnings — a persistently failing delete (usually an RBAC regression on `secrets`) falls back to that cascade-GC and leaves credentials in the namespace until the owner is deleted.
 
 **Up to three small ConfigMaps per `RunnerSet` is normal.** All are labelled `actions-gateway.com/runner-set=<name>`, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
@@ -447,7 +446,7 @@ Set `maxPerSecond` high enough that jobs are picked up promptly once the burst p
 
 It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate eases the node-scale-up burst they react to, and they keep their own independent rate controls.
 
-**Optional — refuse jobs the cluster can't place (`capacityGate`, v2 only, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.capacityGate` that adds a *placeability* rung to the capacity the AGC advertises.
+**Optional — refuse jobs the cluster can't place (`capacityGate`, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.capacityGate` that adds a *placeability* rung to the capacity the AGC advertises.
 Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, leaves a worker pod `Pending` until `pendingPodDeadline`, and ends as a **cancelled** workflow run.
 With it, those jobs stay queued at GitHub instead.
 
@@ -503,11 +502,9 @@ Two things to expect once a set turns it on:
 - **A gated set says so.** It reports `WorkerCapacityDeclined=True` with a Warning event, and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` moves.
   Diagnosis and the one-line rollback: [troubleshooting](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs).
 
-Everything about it fails **open**: an unreadable set, an unresolved gateway or template, an unreadable pod list, an unreadable Event list, an unset `clusterCapacity`, and a mode this AGC does not implement all leave intake exactly as it is today. v1 `RunnerGroup` has no equivalent field and never will — v1 is terminal.
+Everything about it fails **open**: an unreadable set, an unresolved gateway or template, an unreadable pod list, an unreadable Event list, an unset `clusterCapacity`, and a mode this AGC does not implement all leave intake exactly as it is today.
 
-**Changing `runnerGroups` later.** Editing `spec.runnerGroups` on an existing `ActionsGateway` reconciles to the desired set: added entries create new `RunnerGroup` CRs, and **removing an entry deletes its `RunnerGroup`** (which stops its listeners and cascades to its worker pods).
-Reordering entries is safe — the GMC keys pruning on owner labels, not list position, so a reorder never deletes or recreates a group.
-Removing an entry is the way to retire a runner group.
+**Retiring a runner set.** Deleting a `RunnerSet` stops its listener and cascades to its worker pods.
 
 **Worker image — the default works out of the box.** A plain install runs jobs with no `workerImage` set: the AGC **injects** GAG's wrapper into every worker pod — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — so the runner image itself can be the unmodified upstream `ghcr.io/actions/actions-runner` (the default) or **any `actions/runner`-derived image**.
 The wrapper is what hands the mounted JIT config to the runner's `run.sh`; injecting it means the runner image does not have to carry it.
@@ -535,7 +532,7 @@ A working reference you can copy and extend lives at [`scripts/dogfood/runner/Do
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently `2.329.0`, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.
 
-**Tag your image with the runner version it ships, and expect the AGC to check the image itself.** The AGC reads the runner version off the `workerImage` reference at once, then reads it out of the image in its registry (the runner's own `bin/Runner.Listener.deps.json`, streamed from the layers) and reports the verdict as the `RunnerVersionTooOld` condition on the `RunnerGroup`/`RunnerSet`:
+**Tag your image with the runner version it ships, and expect the AGC to check the image itself.** The AGC reads the runner version off the `workerImage` reference at once, then reads it out of the image in its registry (the runner's own `bin/Runner.Listener.deps.json`, streamed from the layers) and reports the verdict as the `RunnerVersionTooOld` condition on the `RunnerSet`:
 
 | Condition | Reason | What it means |
 |---|---|---|
@@ -583,8 +580,8 @@ spec:
 There is no field for OTLP auth headers: collector authentication is a network-layer concern (in-cluster collector or a service mesh), not a CR secret.
 See [observability — enabling tracing on GMC-managed AGCs](observability-logging.md#enabling-tracing-on-gmc-managed-agcs).
 
-<a id="per-tenant-log-level"></a> **Optional — per-tenant log level.** `spec.logLevel` sets the log verbosity of this tenant's AGC and egress proxy: `info` (the default) or `debug`.
-The GMC threads it to both workloads as the `LOG_LEVEL` environment variable, so you can crank one gateway to `debug` for a bug repro without redeploying the GMC or touching any other tenant:
+<a id="per-tenant-log-level"></a> **Optional — per-tenant log level.** `spec.logLevel` on an `ActionsGateway` sets the log verbosity of that gateway's AGC, and on an `EgressProxy` of that pool: `info` (the default) or `debug`.
+The GMC threads it to the workload as the `LOG_LEVEL` environment variable, so you can crank one gateway to `debug` for a bug repro without redeploying the GMC or touching any other tenant:
 
 ```sh
 kubectl patch actionsgateway -n <tenant-namespace> <name> \
@@ -596,12 +593,12 @@ kubectl patch actionsgateway -n <tenant-namespace> <name> \
 
 - **The default is `info`, never `debug`.** A CR that omits the field — or sets it back to `info` — runs at `info`.
   At high job volume the per-job `debug` lines dominate log volume, so `debug` is a deliberate, temporary opt-in, not a steady state.
-- **Changing it is a rolling restart, not a hot reload.** The new level takes effect once the AGC and proxy pods roll (the value is part of their pod templates).
+- **Changing it is a rolling restart, not a hot reload.** The new level takes effect once the pods roll (the value is part of their pod templates).
   Expect the AGC's listener sessions to close and re-open; jobs already running in worker pods are unaffected, because each runner holds its own session with GitHub.
 - `debug` surfaces the AGC's per-job and per-pod lifecycle lines (the listener and provisioner traces; [observability: logging](observability-logging.md) lists their correlation fields) and the proxy's per-CONNECT detail.
   The grep anchors are in [observability — debug diagnostics](observability-logging.md#debug-diagnostics-for-otherwise-silent-paths).
 - Only `info` and `debug` are accepted; admission rejects any other value.
-- **v2 splits the knob per kind.** On the v2 (`actions-gateway.com`) API, `ActionsGateway.spec.logLevel` covers the AGC only; a proxy pool carries its own `EgressProxy.spec.logLevel` (same `info` | `debug` values and default, same rolling-restart semantics), so a shared pool can be flipped to `debug` without touching any gateway:
+- **The two kinds are independent**, so a shared pool can be flipped to `debug` without touching any gateway:
 
   ```sh
   kubectl patch egressproxy -n <tenant-namespace> <name> \
@@ -627,43 +624,39 @@ kubectl get actionsgateway -n <tenant-namespace> <name> \
 #   ProxyQuotaExceeded=False  (True means proxy replica creates are being rejected by the ResourceQuota)
 ```
 
-The AGC Deployment is named per gateway under v2, as `<gateway>-agc`, so a `team-a-gateway` tenant runs `deploy/team-a-gateway-agc`.
-Under v1 there is one AGC Deployment per namespace, named `actions-gateway-controller`.
+The AGC Deployment is named per gateway, as `<gateway>-agc`, so a `team-a-gateway` tenant runs `deploy/team-a-gateway-agc`.
 
 ```sh
 # Confirm the AGC Deployment is running
-# v2
 kubectl get deploy -n <tenant-namespace> <gateway>-agc
-# v1 (legacy)
-kubectl get deploy -n <tenant-namespace> actions-gateway-controller
 # Expected: READY 1/1
 
 # Confirm the proxy pool is running
 kubectl get deploy,hpa -n <tenant-namespace>
 # Expected: proxy Deployment READY >= minReplicas, HPA TARGETS shows a percentage (not <unknown>)
 
-# Confirm RunnerGroup CRs were created
-kubectl get runnergroup -n <tenant-namespace>
+# Confirm the RunnerSets report a listener
+kubectl get runnerset -n <tenant-namespace>
 
 # Confirm RBAC was created
 kubectl get serviceaccount,role,rolebinding -n <tenant-namespace> | grep actions-gateway
 
 # Confirm NetworkPolicies and ResourceQuota were applied
 kubectl get networkpolicy,resourcequota -n <tenant-namespace>
-# Expected NetworkPolicies (3). Under v2 the first two are named for the gateway and
-# the third for the EgressProxy; the v1 names are in parentheses.
-#   <gateway>-workload (actions-gateway-workload)     restricts AGC and worker pods to proxy + DNS
-#   <gateway>-agc (actions-gateway-controller)        adds Kubernetes API server egress for the AGC only
-#   <proxy> (actions-gateway-proxy)                   restricts proxy pods to GitHub CIDRs + DNS
+# Expected NetworkPolicies (3). The first two are named for the gateway and the
+# third for the EgressProxy.
+#   <gateway>-workload    restricts AGC and worker pods to proxy + DNS
+#   <gateway>-agc         adds Kubernetes API server egress for the AGC only
+#   <proxy>-proxy         restricts proxy pods to GitHub CIDRs + DNS
 
-# Confirm the Pod Security Admission label matches the chosen securityProfile
+# Confirm the Pod Security Admission label matches the chosen security profile
 kubectl get namespace <tenant-namespace> \
   -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}{"\n"}'
 # Expected: baseline (default), or restricted / privileged if explicitly chosen
 ```
 
 **If `TARGETS: <unknown>` on the HPA:** `resources.requests.cpu` is not set on proxy pods.
-Add it to `spec.proxy.resources.requests.cpu` in the `ActionsGateway` spec.
+Add it to `spec.resources.requests.cpu` on the `EgressProxy`.
 See [Troubleshooting — Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling).
 
 ---
@@ -674,10 +667,7 @@ The AGC should begin polling GitHub within seconds of starting.
 
 ```sh
 # Check AGC logs for session registration
-# v2
 kubectl logs -n <tenant-namespace> deploy/<gateway>-agc --tail=30
-# v1 (legacy)
-kubectl logs -n <tenant-namespace> deploy/actions-gateway-controller --tail=30
 
 # Check the listener session metric
 # Metric: actions_gateway_scaleset_session_open{namespace="<tenant-namespace>"}
@@ -744,46 +734,44 @@ Onboarding is complete when:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `ActionsGateway` condition `AGCAvailable=False`, logs show `RSA key parse error` | Private key has trailing whitespace or incorrect PEM format | Recreate the Secret; ensure the key starts with `-----BEGIN RSA PRIVATE KEY-----` (PKCS#1) or `-----BEGIN PRIVATE KEY-----` (PKCS#8, RSA or Ed25519) and has no extra blank lines or spaces |
-| `HPA TARGETS: <unknown>` | `proxy.resources.requests.cpu` not set | Add `requests.cpu: "10m"` under `spec.proxy.resources.requests` |
+| `HPA TARGETS: <unknown>` | The `EgressProxy`'s `spec.resources.requests.cpu` is not set | Add `requests.cpu: "10m"` under its `spec.resources` |
 | Worker pods stuck `Pending` | `ResourceQuota` exhausted or no schedulable nodes | Check `kubectl describe resourcequota -n <namespace>` and node capacity |
-| `RunnerGroup`/`RunnerSet` condition `RunnerVersionTooOld=True`, reason `WorkerImageBelowMinimum` | The `workerImage` tag names a runner version below GitHub's enforced minimum | Update `workerImage` to a runner `2.329.0` or later |
+| `RunnerSet` condition `RunnerVersionTooOld=True`, reason `WorkerImageBelowMinimum` | The `workerImage` tag names a runner version below GitHub's enforced minimum | Update `workerImage` to a runner `2.329.0` or later |
 | `RunnerVersionTooOld=Unknown`, reason `WorkerImageVersionUnknown` | The registry read of the image is pending or failed and the reference names no runner version to fall back on, or the image is not `actions/runner`-derived | An authentication failure is about the AGC's registry read, not the pull ([details](troubleshooting.md#worker-image-runner-version)). A dial error means the AGC's egress policy does not reach the registry; otherwise tag the image with the runner version it ships, or read the worker pod's `runner version detected` log line |
 | Test job stays queued in GitHub for >2 minutes | `scaleset_session_open = 0` — the set's listener holds no message session | Check AGC logs for credential or proxy errors |
 | HPA present but proxy doesn't scale up | `maxReplicas` too low or HPA metric is `<unknown>` | Check both the HPA spec and that `requests.cpu` is set |
-| Proxy stuck below `maxReplicas`; `FailedCreate ... exceeded quota` events | `proxy.maxReplicas` exceeds the namespace `ResourceQuota` | Check the `ProxyQuotaPressure` condition (`kubectl describe actionsgateway …`); raise the quota or lower `maxReplicas` |
+| Proxy stuck below `maxReplicas`; `FailedCreate ... exceeded quota` events | The `EgressProxy`'s `spec.maxReplicas` exceeds the namespace `ResourceQuota` | Check the `ProxyQuotaPressure` condition (`kubectl describe actionsgateway …`); raise the quota or lower `maxReplicas` |
 | Jobs acquired but pods not appearing | `priorityClassName` referenced in `priorityTiers` does not exist | `kubectl get priorityclass <name>` — create it if missing |
-| `ActionsGateway` apply rejected: `priorityClassName … is not in the platform allowlist` | The named `PriorityClass` is not on the GMC `--allowed-priority-classes` flag (the allowlist is empty by default) | Have the platform admin create the `PriorityClass` and add its name to `--allowed-priority-classes`; see [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist) |
+| `RunnerSet` or `RunnerTemplate` apply rejected: `priorityClassName … is not in the platform allowlist` | The named `PriorityClass` is not on the GMC `--allowed-priority-classes` flag (the allowlist is empty by default) | Have the platform admin create the `PriorityClass` and add its name to `--allowed-priority-classes`; see [security-operations.md § Priority classes](security-operations.md#priority-classes-the-allowed-priority-classes-allowlist) |
 | `EgressProxy`/`ActionsGateway` apply rejected: `spec.scheduling.priorityClassName … is not in the platform infra allowlist` | The class named for an **infra** pod is not on the infra allowlist — the GMC `--allowed-infra-priority-classes` flag plus the `PriorityClassAllowlist` CR's `allowedInfraPriorityClasses` (a *separate* allowlist from the worker one, empty by default) | Have the platform admin create the `PriorityClass` and add its name to `spec.allowedInfraPriorityClasses` on the CR (restart-free) or to the flag, kept disjoint from the worker allowlist either way; see [security-operations.md § Infra pods](security-operations.md#infra-pods-the-separate-allowed-infra-priority-classes-allowlist) |
 
 ---
 
-## v2 API: multiple gateways per namespace
+## Multiple gateways per namespace
 
-> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2`** — the General Availability (GA) version, the storage version since 1.10, and the version every **new** tenant should use.
-> It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
-> Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
+> **Audience:** Platform engineer onboarding a tenant that needs more than one gateway, or a shape beyond [Step 2](#step-2-create-the-gateway-and-its-runner-set).
 
-The biggest onboarding change in v2 is that a single namespace may hold **multiple `ActionsGateway`s**, lifting the v1 one-gateway-per-namespace rule ([Step 2](#step-2-create-the-actionsgateway-resource)).
-What that changes when onboarding a v2 tenant:
+A single namespace may hold **multiple `ActionsGateway`s**.
+What that changes when onboarding:
 
 - **Per-gateway resource naming.** Every resource a gateway derives is prefixed with the gateway name — `<gateway>-agc` (AGC Deployment / ServiceAccount / RoleBinding / Service), `<gateway>-worker` (worker ServiceAccount), `<gateway>-workload` (workload NetworkPolicy), and so on — so two gateways in one namespace never contend over a fixed name.
   List one gateway's resources with `kubectl get all,networkpolicy,secret -n <tenant-namespace> -l actions-gateway.com/gateway=<gateway>`.
-- **52-character name cap.** Any v2 CR (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) whose `metadata.name` exceeds **52 characters** is rejected at admission.
+- **52-character name cap.** Any CR (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) whose `metadata.name` exceeds **52 characters** is rejected at admission.
   The cap reserves room for the derived `<name>-<suffix>` so a label value / Service name stays under RFC 1123's 63-character ceiling (appendix-h §H.6).
   Pick short gateway names.
 - **Kubernetes ≥ 1.31 required.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, via a server-side CRD field selector (KEP-4358) that is alpha-off on 1.30.
-  On a 1.30 cluster a v2 AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the pod never becomes ready.
-  Confirm the cluster is ≥ 1.31 before onboarding any v2 gateway.
+  On a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`), so the pod opens no session and exits about two minutes later, reading `Ready` in between.
+  Confirm the cluster is ≥ 1.31 before onboarding any gateway.
   The same error on ≥ 1.31 means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
-- **Co-located gateways share one namespace security profile.** In v2 the Pod Security level is a property of the **namespace**, not the gateway (see the v2 callout in [Pre-Conditions](#pre-conditions)) — so all gateways in a namespace run under the same `actions-gateway.com/security-profile` label.
+- **Co-located gateways share one namespace security profile.** The Pod Security level is a property of the **namespace**, not the gateway (see [Pre-Conditions](#pre-conditions)) — so all gateways in a namespace run under the same `actions-gateway.com/security-profile` label.
   Tenants needing different postures (e.g.
-  `baseline` vs `privileged`) still use separate namespaces, exactly as in v1.
+  `baseline` vs `privileged`) use separate namespaces.
 
 For the full reference — the naming table, per-gateway garbage-collection behavior, the CRD chart prerequisite, and the failure modes — see [Troubleshooting — Multiple v2 gateways in one namespace](troubleshooting.md#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) and [Appendix H — v2 API decomposition](../design/appendix-h-v2-api-decomposition.md).
 
 ### Proxy-less onboarding (direct egress)
 
-In v2 the egress proxy is **optional**.
+The egress proxy is **optional**.
 A gateway with no `spec.defaultProxyRef` and a `RunnerSet` with no `spec.proxyRef` egress **directly** to GitHub, collapsing the minimal onboarding to **three objects** — one `ActionsGateway`, one `RunnerTemplate`, one `RunnerSet`, with no `EgressProxy` at all:
 
 ```yaml
@@ -1251,8 +1239,8 @@ Once onboarding is complete, share with the tenant team:
 
 - The namespace name and the `ActionsGateway` CR name they own.
 - The runner labels to use in their workflow `runs-on` fields.
-- A link to [Getting Started](../getting-started.md) for self-service changes (RunnerGroup config, quota requests, credential rotation).
+- A link to [Getting Started](../getting-started.md) for self-service changes (`RunnerSet` and `RunnerTemplate` config, quota requests, credential rotation).
 - A link to [Observability](observability.md) for the metrics they can watch.
 - The on-call contact for platform-level issues (AGC crashes, GMC failures).
 
-Tenants can manage their own RunnerGroup configuration, credential rotation, and `maxWorkers` tuning without platform team involvement after this handoff.
+Tenants can manage their own `RunnerSet` and `RunnerTemplate` configuration, credential rotation, and `maxWorkers` tuning without platform team involvement after this handoff.

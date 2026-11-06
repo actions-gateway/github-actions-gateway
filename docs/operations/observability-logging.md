@@ -41,7 +41,7 @@ Raise the AGC to debug — `spec.logLevel: debug` for a GMC-managed tenant, or `
 Filter provisioner lines on `namespace` and `owner` (the `RunnerSet` name) to scope to one set; listener lines name their scale set in `scaleSet`; `podName` appears on the provisioner lines for an assigned job's worker pod.
 Those lines also carry `jobID` and `runID`: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.
 
-Admission **rejections** (reserved-namespace, cross-namespace `gitHubAppRef`, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
+Admission **rejections** (reserved-namespace, privileged container, disallowed PriorityClass) are logged server-side at **info** — they need no debug flag — as `ActionsGateway admission denied` with the `operation`, `namespace`, `name`, and `reason` fields, giving an audit trail of denied attempts.
 
 **API server warnings** (for example, the deprecation warning the apiserver attaches to a deprecated API version) are logged at info, **deduplicated to one line per unique message per process** in both controllers.
 The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.

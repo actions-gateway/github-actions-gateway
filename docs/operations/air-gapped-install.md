@@ -21,7 +21,7 @@ Only the GMC image is pulled by the chart itself; the AGC, proxy, wrapper, and w
 | **AGC** | `ghcr.io/actions-gateway/agc` | per-tenant AGC Deployments (GMC-provisioned) | `agc.image.repository` + `agc.image.digest` (chart value; GMC injects it as `AGC_IMAGE`) |
 | **Proxy** | `ghcr.io/actions-gateway/proxy` | per-tenant egress-proxy pools (GMC-provisioned) | `proxy.image.repository` + `proxy.image.digest` (chart value; GMC injects it as `PROXY_IMAGE`) |
 | **Wrapper** | `ghcr.io/actions-gateway/wrapper` | worker pods (init container the AGC injects, or a read-only image volume) | `wrapper.image.repository` + `wrapper.image.digest` (chart value; GMC injects it as `WRAPPER_IMAGE`, forwarded to each AGC) |
-| **Worker** | `ghcr.io/actions/actions-runner` (default) | worker pods (AGC-provisioned) | `RunnerGroup.spec.workerImage` per tenant — **not** a chart value |
+| **Worker** | `ghcr.io/actions/actions-runner` (default) | worker pods (AGC-provisioned) | `RunnerTemplate.spec.workerImage` per tenant — **not** a chart value |
 | **Helm chart** | `oci://ghcr.io/actions-gateway/charts/actions-gateway` | `helm install` | the `oci://` ref you pass to `helm` |
 
 > The **wrapper** is on by default: the chart always sets `WRAPPER_IMAGE`, and the GMC rejects a floating wrapper tag at startup exactly as it does for `agc`/`proxy`, so you must mirror it and pin `wrapper.image.digest` like the others.
@@ -31,7 +31,7 @@ Only the GMC image is pulled by the chart itself; the AGC, proxy, wrapper, and w
 > The worker default is the upstream digest-pinned `ghcr.io/actions/actions-runner`.
 > The project also publishes three first-party runner images: `ghcr.io/actions-gateway/worker`, `ghcr.io/actions-gateway/build-runner` for jobs needing `docker compose` or a Docker CLI and buildx GAG pins itself ([runner templates](runner-template-library.md)), and `ghcr.io/actions-gateway/cache-runner` for jobs using an in-cluster cache.
 > If a tenant uses one of them, mirror that ref instead.
-> Either way the worker image is set per tenant on the `RunnerGroup`, so it is configured during tenant onboarding, not at chart install.
+> Either way the worker image is set per tenant on the `RunnerTemplate`, so it is configured during tenant onboarding, not at chart install.
 > See [release.md § The worker images](release.md#the-worker-images-wrapper-worker-build-runner-and-cache-runner).
 
 Copy the four chart-referenced image digests (`gmc`, `agc`, `proxy`, `wrapper`) from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases) for the version you are installing; that is the count the mirror loop below uses.
@@ -162,24 +162,14 @@ For each tenant namespace, first create the pull Secret there (repeat step 3 wit
 ```sh
 TENANT_NS=team-a
 
-# AGC pods run as the AGC ServiceAccount. Under v2 it is named for the gateway,
-# so a namespace holding two gateways has two of them and both need patching;
-# under v1 there is one per namespace, named "actions-gateway-controller".
-# v2
+# AGC pods run as the AGC ServiceAccount, named for the gateway, so a namespace
+# holding two gateways has two of them and both need patching.
 kubectl patch serviceaccount <gateway>-agc -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
-# v1 (legacy)
-kubectl patch serviceaccount actions-gateway-controller -n "$TENANT_NS" \
-  -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
-# Worker pods run as the worker ServiceAccount, named for the gateway under v2 and
-# fixed under v1. It also pulls the injected wrapper init container, so no separate
-# wrapper Secret/SA is needed.
-# v2
+# Worker pods run as the worker ServiceAccount, also named for the gateway. It also
+# pulls the injected wrapper init container, so no separate wrapper Secret/SA is needed.
 kubectl patch serviceaccount <gateway>-worker -n "$TENANT_NS" \
-  -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
-# v1 (legacy)
-kubectl patch serviceaccount actions-gateway-worker -n "$TENANT_NS" \
   -p '{"imagePullSecrets":[{"name":"private-registry"}]}'
 
 # Proxy pods run as the namespace "default" ServiceAccount.
@@ -188,7 +178,7 @@ kubectl patch serviceaccount default -n "$TENANT_NS" \
 ```
 
 The GMC creates both ServiceAccounts when it reconciles the `ActionsGateway` CR, so create the gateway first, then patch.
-Under v2 they are `<gateway>-agc` and `<gateway>-worker`, one pair per gateway, so a namespace holding two gateways has two pairs to patch; under v1 they are the fixed `actions-gateway-controller` and `actions-gateway-worker`, one pair per namespace.
+They are `<gateway>-agc` and `<gateway>-worker`, one pair per gateway, so a namespace holding two gateways has two pairs to patch.
 The patch **survives GMC reconciliation** — the GMC only manages those SAs' labels and owner reference, never their `imagePullSecrets` — and it never touches the `default` SA at all.
 
 > Alternative: if your registry is reachable by the cluster but only needs auth, a cluster-wide approach (e.g. a `default`-SA mutating policy, or a registry pull-through cache that injects credentials) also works.
@@ -203,11 +193,11 @@ The patch **survives GMC reconciliation** — the GMC only manages those SAs' la
 ## 6. Point the worker image at the mirror
 
 The worker image is **not** a chart value — it is set per tenant.
-When onboarding a tenant (see [tenant-onboarding.md](tenant-onboarding.md)), set the mirrored, digest-pinned worker reference on the `RunnerGroup`:
+When onboarding a tenant (see [tenant-onboarding.md](tenant-onboarding.md)), set the mirrored, digest-pinned worker reference on the `RunnerTemplate`:
 
 ```yaml
-apiVersion: actions-gateway.github.com/v1alpha1
-kind: RunnerGroup
+apiVersion: actions-gateway.com/v2
+kind: RunnerTemplate
 spec:
   # Mirror of ghcr.io/actions/actions-runner, digest preserved.
   workerImage: registry.internal/gag/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232

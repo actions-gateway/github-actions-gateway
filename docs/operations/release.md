@@ -580,7 +580,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    | `sizingProfileState` | What it means | Fix |
    |---|---|---|
-   | *empty* | `spec.sizing` is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through `setup.sh`'s `apply_cr` or a direct patch; `scripts/dogfood/start.sh` resizes the pool and routes CI but **never applies CRs**, so no start can deploy it. | Re-run `scripts/dogfood/setup.sh`, or `kubectl patch` `runnersets.v2alpha1.actions-gateway.com/ci` in `gag-dogfood`. |
+   | *empty* | `spec.sizing` is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through `setup.sh`'s `apply_cr` or a direct patch; `scripts/dogfood/start.sh` resizes the pool and routes CI but **never applies CRs**, so no start can deploy it. | Re-run `scripts/dogfood/setup.sh`, or `kubectl patch` `runnersets.actions-gateway.com/ci` in `gag-dogfood`. |
    | `AwaitingSamples` | The profile is deployed but a template container is below the threshold. Check the `sampleCounts` the leg prints for which one. | Let ordinary CI traffic run ~20 jobs per container. |
 
    Sample history needs no advance planning: the sampler tracks every worker pod regardless of `spec.sizing`, and the aggregate re-seeds from the persisted `status.sizingRecommendation` — so samples accrue without the profile configured and survive a stop/start rather than being re-earned.
@@ -1420,7 +1420,7 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
   Opted into per tenant via `workerImage` like `build-runner`, and only together with `ACTIONS_RESULTS_URL` set on the runner container: without it, jobs lose both cache and artifacts.
 
 Only `wrapper` is digest-pinned in the chart (`wrapper.image.digest`, like `agc`/`proxy`), so a release must publish the `wrapper` image and pin its digest for the default install to run jobs.
-The `worker` image has no chart `image` block — it is the optional batteries-included image a tenant opts into via its per-RunnerGroup `workerImage`, not a chart-provisioned one — so nothing in the chart pins it.
+The `worker` image has no chart `image` block — it is the optional batteries-included image a tenant opts into via its per-`RunnerTemplate` `workerImage`, not a chart-provisioned one — so nothing in the chart pins it.
 
 ## PR CI vs publish — what runs where
 

@@ -8,7 +8,6 @@ Jobs that must pass files to each other need a `ReadWriteMany` (RWX) volume, and
 This page is the reference architecture for doing that: what to put in the `podTemplate`, the one field that decides whether the runner can write at all, and which storage classes the arrangement has actually been exercised against.
 
 **Scope:** v2 `RunnerSet` workers via `RunnerTemplate.podTemplate`.
-The same shape works on a v1 `RunnerGroup.spec.podTemplate`, which is [deprecated](v1alpha1-deprecation.md).
 
 ## The stance: GAG provisions no worker storage, and never will
 
@@ -98,7 +97,7 @@ ARC runs a job's `container:` and `services:` steps as separate pods sharing a p
 The volume half of it is the arrangement above: one claim, mounted by the workers of one runner set.
 
 The pod-per-step half is not ported.
-GAG runs one worker pod per job, so `container:` and `services:` steps run inside that pod, which today means Docker-in-Docker, under Kata Containers at `securityProfile: baseline` or privileged.
+GAG runs one worker pod per job, so `container:` and `services:` steps run inside that pod, which today means Docker-in-Docker, under Kata Containers on the `baseline` security profile, or privileged.
 [Migrate from ARC § Security profiles](migration-from-arc.md#security-profiles) maps the choice, and [Kata DinD workloads](kata-dind-workloads.md) covers the non-privileged route.
 
 ## Where this bites in production
@@ -109,4 +108,4 @@ GAG runs one worker pod per job, so `container:` and `services:` steps run insid
   Jobs that write the same path need their own locking, or their own subdirectory per run.
 - **Nothing garbage-collects it.** The volume outlives every worker by design, so a shared cache that only ever grows will fill and start failing jobs on `ENOSPC`.
   Give the claim a size an operator watches, and prune it from a scheduled workflow.
-- **`securityProfile: restricted` is compatible.** Pod Security Standards permit `persistentVolumeClaim` at every level, and `fsGroup` is unrestricted, so the arrangement above needs no relaxation.
+- **The `restricted` security profile is compatible.** Pod Security Standards permit `persistentVolumeClaim` at every level, and `fsGroup` is unrestricted, so the arrangement above needs no relaxation.

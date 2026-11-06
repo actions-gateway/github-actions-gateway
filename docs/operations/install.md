@@ -247,7 +247,7 @@ Installing them:
   Detection happens once at GMC startup, so **after installing the CRDs into a running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`) to enable the v2 controllers.
   On startup the GMC logs `actions-gateway.com/v2 CRDs detected; enabling v2 controllers`.
 
-See [getting-started.md § the v2 API](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended) for what v2 adds, and [§1 Deploy the GMC](../getting-started.md#1-deploy-the-gmc) for the v2 CRD chart install and the Kubernetes version requirements.
+See [getting-started.md § the v2 API](../getting-started.md#4-create-your-gateway-and-runner-set) for what v2 adds, and [§1 Deploy the GMC](../getting-started.md#1-deploy-the-gmc) for the v2 CRD chart install and the Kubernetes version requirements.
 
 ---
 
@@ -364,7 +364,7 @@ The main chart ships no tenant CRD, so `helm uninstall` leaves every tenant's ob
 The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by `helm uninstall` along with its binding and its parameter object; the `PriorityClassAllowlist` **CRD** is left behind, as `crds/` contents always are.
 Removing the binding used to be the trigger for a cluster-wide outage (Q444) when the parameter was a ConfigMap — a reinstall could not repair it.
 It is safe now that the parameter is a CRD, which is [why it is one](#the-policy-parameter-is-a-crd-not-a-configmap-q492); the uninstall/reinstall cycle is covered by `scripts/e2e/chart-reinstall-check.sh` in CI.
-Symptoms of the old failure, if you meet it on a pre-Q492 release: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+Symptoms of the old failure, if you meet it on a pre-Q492 release: [troubleshooting.md](troubleshooting.md#every-runnerset--runnertemplate-write-denied-no-params-found-for-policy-binding).
 
 The install namespace (`gmc-system`) is left in place if you created it with `--create-namespace`; remove it with `kubectl delete namespace gmc-system` once empty.
 

@@ -117,8 +117,8 @@ That is what makes per-team allowlisting, per-tenant audit attribution, and a co
 
 ### Also in the box
 
-**Scheduling priority tiers per `RunnerGroup`.** The `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds.
-The first N pods of a GPU runner group get a preempting `PriorityClass`, so they displace lower-priority CPU pods when quota is contended and are guaranteed to schedule (measured, Q423).
+**Scheduling priority tiers per `RunnerSet`.** The `priorityTiers` field maps Kubernetes `PriorityClass` objects to cumulative pod-count thresholds.
+The first N pods of a GPU runner set get a preempting `PriorityClass`, so they displace lower-priority CPU pods when quota is contended and are guaranteed to schedule (measured, Q423).
 Higher tiers use `preemptionPolicy: Never`, so burst capacity gains scheduling preference without evicting running jobs, and a final threshold caps total concurrency per group.
 The job a preempting tier displaces concludes on GitHub rather than hanging, and is re-run automatically (measured, Q497).
 

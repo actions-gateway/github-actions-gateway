@@ -50,7 +50,7 @@ Restore planning hinges on one distinction: **GMC-generated children reconcile b
 
 | Resource | Why it is not restored by re-applying the CR | Recovery |
 | --- | --- | --- |
-| GitHub App credential `Secret` (`spec.gitHubAppRef`) | Operator/tenant-supplied; the GMC only *reads* it (no owner reference), so it **survives** a CR-only deletion but is lost if the Secret or namespace is deleted. Without it the gateway sits `Ready=False`/`CredentialUnavailable`. | Recreate from your secret backup before re-applying the CR. See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret). |
+| GitHub App credential `Secret` (`spec.credentials.githubApp`) | Operator/tenant-supplied; the GMC only *reads* it (no owner reference), so it **survives** a CR-only deletion but is lost if the Secret or namespace is deleted. Without it the gateway sits `Ready=False`/`CredentialUnavailable`. | Recreate from your secret backup before re-applying the CR. See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret). |
 | Tenant `Namespace` + Pod Security Admission labels | The namespace is operator-created; the GMC stamps PSA labels but does not create the namespace. | Recreate the namespace (the GMC re-stamps PSA labels on reconcile). |
 | Namespace `ResourceQuota` | Platform-owned — not a field on the CR. See [Runbook — Adjusting Tenant Quota](runbook.md#adjusting-tenant-quota). | Re-apply from version control. |
 | `EgressProxy` CR (`spec.defaultProxyRef`) | A separate CR with its own owned children; not owned by the `ActionsGateway`. A `defaultProxyRef` pointing at a missing proxy fails closed (`Ready=False`/`ProxyNotFound`). | Re-apply the `EgressProxy` CR before (or alongside) the gateway. |
@@ -126,7 +126,7 @@ The namespace and the GitHub App credential Secret are intact; only the CR is go
    ```
 2. **Confirm the credential Secret survived** (it is not owned by the CR, so a CR-only deletion leaves it in place):
    ```sh
-   kubectl get secret -n <namespace> <gitHubAppRef-name>
+   kubectl get secret -n <namespace> <github-app-secret-name>
    ```
    If it is missing, recreate it first — see [Scenario B](#scenario-b-whole-tenant-namespace-lost) step 3.
 3. **Re-apply the CR** from version control (or your stripped CR export):
@@ -165,7 +165,7 @@ After restore:
 
 ### CR Stuck Terminating
 
-If a deleted CR hangs in `Terminating`, the GMC's cleanup finalizer (`actions-gateway.github.com/gmc-cleanup`) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
+If a deleted CR hangs in `Terminating`, the GMC's cleanup finalizer (`actions-gateway.com/gmc-cleanup`) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
 The finalizer exists precisely to avoid orphaning the cluster-scoped `ClusterRoleBinding`.
 
 1. Check the GMC is running and reconciling — restart it if needed (`kubectl rollout restart deploy/gmc-controller-manager -n gmc-system`); it will complete teardown and clear the finalizer.
