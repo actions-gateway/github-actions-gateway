@@ -142,12 +142,12 @@ const runStatusCompleted = "completed"
 // obligation to report its result. Callers may block on the channel (tests), select
 // with a timeout, or ignore it.
 //
-// tier labels the metrics and the operator-facing wording, and selects the budget. The
+// tier names the recovery in its log line and selects the budget. The
 // classic tier's is the in-process evictionCounts, keyed by run_id; the scale-set
 // tier's is the owner's failure ledger (handleScaleSetEviction, Q1182), which survives
 // a restart. Within a tier the Q106 cap of maxRetries re-runs per run holds across every
 // disruption cause together, so a run alternately evicted and preempted cannot spend
-// two budgets. cause labels the same surfaces and, on the classic tier, selects the
+// two budgets. cause labels the metrics and Events and, on the classic tier, selects the
 // conclusion check (attemptRerun, Q811), which only recoveryCauseDeletion takes there.
 // d names the disruption to the scale-set ledger and is ignored on the classic tier.
 func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, tier, cause string, d rerunDisruption) <-chan struct{} {
@@ -167,7 +167,7 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 	// refused re-run several times before it lands) at maxRetries per run.
 	attempt, ok := p.reserveEvictionRetry(runID, maxRetries)
 	if !ok {
-		p.recordRetriesExhausted(target, runID, log, maxRetries, tier, cause)
+		p.recordRetriesExhausted(target, runID, log, maxRetries, cause)
 		return closedChan()
 	}
 	p.recordRetryStarted(target, runID, log, attempt, tier, cause)
@@ -219,7 +219,7 @@ func (p *Provisioner) handleEviction(ctx context.Context, target Target, owner, 
 func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target, owner, repo, runID string, log *slog.Logger, maxRetries int, retryDelay time.Duration, cause string, d rerunDisruption) <-chan struct{} {
 	const tier = evictionTierScaleSet
 	if maxRetries <= 0 {
-		p.recordRetriesExhausted(target, runID, log, maxRetries, tier, cause)
+		p.recordRetriesExhausted(target, runID, log, maxRetries, cause)
 		return closedChan()
 	}
 
@@ -247,14 +247,14 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 			}
 			log.Error("could not read the disrupted run, so its re-run budget cannot be reserved; manual rerun may be required",
 				"runID", runID, "cause", cause, "reason", reason, "error", err)
-			p.recordRerunFailure(target, runID, tier, cause, reason, err)
+			p.recordRerunFailure(target, runID, cause, reason, err)
 			return
 		}
 		if d.failedAttempt == 0 {
 			d.failedAttempt = run.attempt
 		}
 		// A futile re-run is withheld here, before the reservation, so it spends no slot.
-		if p.futileRerun(rctx, target, owner, repo, runID, tier, cause, run, log) {
+		if p.futileRerun(rctx, target, owner, repo, runID, cause, run, log) {
 			return
 		}
 
@@ -268,10 +268,10 @@ func (p *Provisioner) handleScaleSetEviction(ctx context.Context, target Target,
 		case err != nil:
 			log.Error("could not record the run's re-run budget decision; the re-run is withheld, manual rerun may be required",
 				"runID", runID, "cause", cause, "error", err)
-			p.recordRerunFailure(target, runID, tier, cause, rerunFailureReasonBudgetUnrecorded, err)
+			p.recordRerunFailure(target, runID, cause, rerunFailureReasonBudgetUnrecorded, err)
 			return
 		case outcome == rerunRefused:
-			p.recordRetriesExhausted(target, runID, log, maxRetries, tier, cause)
+			p.recordRetriesExhausted(target, runID, log, maxRetries, cause)
 			return
 		case outcome == rerunMerged:
 			log.Info("a re-run is already reserved for this run attempt; this disruption spends no slot and re-runs only if that one never lands",
@@ -333,12 +333,12 @@ func (p *Provisioner) readRerunCandidate(ctx context.Context, owner, repo, runID
 }
 
 // recordRetriesExhausted surfaces a disruption refused for an exhausted budget.
-func (p *Provisioner) recordRetriesExhausted(target Target, runID string, log *slog.Logger, maxRetries int, tier, cause string) {
+func (p *Provisioner) recordRetriesExhausted(target Target, runID string, log *slog.Logger, maxRetries int, cause string) {
 	key := target.Key()
 	log.Warn("disruption retry budget exhausted; manual rerun required",
 		"runID", runID, "maxRetries", maxRetries, "cause", cause)
 	if p.Metrics != nil {
-		p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name, tier, cause).Inc()
+		p.Metrics.EvictionRetriesExhausted.WithLabelValues(key.Namespace, key.Name, cause).Inc()
 	}
 	target.RecordEvent(corev1.EventTypeWarning, "EvictionRetriesExhausted", "RetryEvictedJob",
 		fmt.Sprintf("worker pod for run %s was lost to %s and the auto-retry budget (%d) is exhausted; a manual re-run is required", runID, cause, maxRetries))
@@ -350,7 +350,7 @@ func (p *Provisioner) recordRetryStarted(target Target, runID string, log *slog.
 	log.Info("worker pod disrupted; scheduling auto-retry",
 		"runID", runID, "attempt", attempt, "tier", tier, "cause", cause)
 	if p.Metrics != nil {
-		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name, tier, cause).Inc()
+		p.Metrics.EvictionRetries.WithLabelValues(key.Namespace, key.Name, cause).Inc()
 	}
 }
 
@@ -382,12 +382,12 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 		case errors.Is(err, errRunCancelled):
 			log.Info("the run was cancelled at GitHub, so the disruption auto-retry stands down rather than undoing the cancel",
 				"runID", runID, "attempt", attempt, "cause", cause, "rerunCalls", call)
-			p.recordRerunWithheld(target, runID, tier, cause, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
+			p.recordRerunWithheld(target, runID, cause, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
 			return
 		case !errors.Is(err, errRunNotConcluded) && !errors.Is(err, errRunConclusionUnreadable):
 			log.Error("disruption auto-retry failed; manual rerun may be required",
 				"runID", runID, "cause", cause, "error", err)
-			p.recordRerunFailure(target, runID, tier, cause, rerunFailureReasonAPIError, err)
+			p.recordRerunFailure(target, runID, cause, rerunFailureReasonAPIError, err)
 			return
 		}
 
@@ -415,7 +415,7 @@ func (p *Provisioner) rerunUntilAccepted(ctx context.Context, target Target, own
 			err := fmt.Errorf("no re-run landed within %s: %w", p.rerunWindow(), err)
 			log.Error("disruption auto-retry failed within the re-run window; manual rerun may be required",
 				"runID", runID, "cause", cause, "reason", reason, "window", p.rerunWindow(), "rerunCalls", call)
-			p.recordRerunFailure(target, runID, tier, cause, reason, err)
+			p.recordRerunFailure(target, runID, cause, reason, err)
 			return
 		case <-p.rerunRetryTick():
 		}
@@ -489,10 +489,10 @@ func (p *Provisioner) canReadRun(owner, repo string) bool {
 // read before its force-cancel (Q1232), own_limit from withholdOwnLimitRerun
 // (eviction only, Q1177), and the scale-set tier's pre-reservation futility checks
 // (futileRerun, Q1181).
-func (p *Provisioner) recordRerunWithheld(target Target, runID, tier, cause, reason, message string) {
+func (p *Provisioner) recordRerunWithheld(target Target, runID, cause, reason, message string) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunWithheld != nil {
-		p.Metrics.EvictionRerunWithheld.WithLabelValues(key.Namespace, key.Name, tier, cause, reason).Inc()
+		p.Metrics.EvictionRerunWithheld.WithLabelValues(key.Namespace, key.Name, cause, reason).Inc()
 	}
 	target.RecordEvent(corev1.EventTypeNormal, "EvictionRerunWithheld", "RetryEvictedJob", message)
 }
@@ -500,10 +500,10 @@ func (p *Provisioner) recordRerunWithheld(target Target, runID, tier, cause, rea
 // recordRerunFailure surfaces a recovery whose re-run never landed: the retry budget
 // was spent and eviction_retries_total incremented, but the job was not re-run, so
 // without this the operator-visible story reads as a recovery that happened (Q503).
-func (p *Provisioner) recordRerunFailure(target Target, runID, tier, cause, reason string, err error) {
+func (p *Provisioner) recordRerunFailure(target Target, runID, cause, reason string, err error) {
 	key := target.Key()
 	if p.Metrics != nil && p.Metrics.EvictionRerunFailures != nil {
-		p.Metrics.EvictionRerunFailures.WithLabelValues(key.Namespace, key.Name, tier, cause, reason).Inc()
+		p.Metrics.EvictionRerunFailures.WithLabelValues(key.Namespace, key.Name, cause, reason).Inc()
 	}
 	target.RecordEvent(corev1.EventTypeWarning, "EvictionRerunFailed", "RetryEvictedJob",
 		fmt.Sprintf("the automatic re-run for run %s (lost to %s) was never accepted by GitHub (%v); a manual re-run is required", runID, cause, err))

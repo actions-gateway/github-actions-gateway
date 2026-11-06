@@ -145,7 +145,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 	case err != nil:
 		log.Error("could not record the raised memory limit; the re-run is withheld, manual rerun may be required",
 			"runID", runID, "cause", recoveryCauseOOM, "error", err)
-		p.recordRerunFailure(target, runID, evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonBudgetUnrecorded, err)
+		p.recordRerunFailure(target, runID, recoveryCauseOOM, rerunFailureReasonBudgetUnrecorded, err)
 		return closedChan()
 	case prior != nil:
 		p.withholdOOMRerun(target, runID, log, rerunWithheldReasonSameClassAgain, fmt.Sprintf("job %q of run %s was killed for memory again after an automatic re-run raised its limit from %s to %s, so no further re-run was requested: the job needs more than a retry gives it. Investigate its memory use or raise the limit, then re-run it by hand",
@@ -177,7 +177,7 @@ func (p *Provisioner) recoverOOMKilled(ctx context.Context, target Target, spec 
 // withholdOOMRerun logs and records one withheld out-of-memory retry.
 func (p *Provisioner) withholdOOMRerun(target Target, runID string, log *slog.Logger, reason, message string) {
 	log.Info("runner killed for memory; no automatic re-run", "runID", runID, "reason", reason)
-	p.recordRerunWithheld(target, runID, evictionTierScaleSet, recoveryCauseOOM, reason, message)
+	p.recordRerunWithheld(target, runID, recoveryCauseOOM, reason, message)
 }
 
 // recordMemoryFloor records f for job's next attempts under the ledger's

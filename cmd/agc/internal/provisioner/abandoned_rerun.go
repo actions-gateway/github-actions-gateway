@@ -48,7 +48,7 @@ type pendingAbandonedRerun struct {
 	runID       string
 	abandonedAt time.Time
 	// tier is the acquisition tier the abandonment was detected on, carried through
-	// to the recovery's metric labels and its choice of budget (Q766, Q1182).
+	// to the recovery's log lines and its choice of budget (Q766, Q1182).
 	tier string
 	// disruption names the abandoned worker and the attempt GAG force-cancelled to the
 	// scale-set budget, so the re-run merges into one already reserved for that attempt.
@@ -143,7 +143,7 @@ func (p *Provisioner) sweepAbandonedReruns(ctx context.Context) []<-chan struct{
 			}
 			log.Warn("capacity never returned for an abandoned run within the wait window; the run stays cancelled and needs a manual re-run",
 				"runID", key.runID, "tier", e.tier, "window", p.abandonedRerunWaitWindow())
-			p.countAbandonedRerunWait(e.target, e.tier, abandonedRerunOutcomeExpired)
+			p.countAbandonedRerunWait(e.target, abandonedRerunOutcomeExpired)
 			continue
 		}
 
@@ -164,7 +164,7 @@ func (p *Provisioner) sweepAbandonedReruns(ctx context.Context) []<-chan struct{
 		if _, claimed := p.takeAbandonedRerun(key); !claimed {
 			continue
 		}
-		p.countAbandonedRerunWait(e.target, e.tier, abandonedRerunOutcomeCapacityReturned)
+		p.countAbandonedRerunWait(e.target, abandonedRerunOutcomeCapacityReturned)
 		log.Info("a worker pod was placed for this owner since the run was abandoned; re-running it",
 			"runID", key.runID, "tier", e.tier)
 		// The budget is the tier's per-run one (Q106, Q1182), so an abandoned run that
@@ -209,12 +209,12 @@ func (p *Provisioner) capacityReturnedSince(ctx context.Context, target Target, 
 }
 
 // countAbandonedRerunWait records how a wait ended.
-func (p *Provisioner) countAbandonedRerunWait(target Target, tier, outcome string) {
+func (p *Provisioner) countAbandonedRerunWait(target Target, outcome string) {
 	if p.Metrics == nil || p.Metrics.AbandonedRunRerunWaits == nil {
 		return
 	}
 	key := target.Key()
-	p.Metrics.AbandonedRunRerunWaits.WithLabelValues(key.Namespace, key.Name, tier, outcome).Inc()
+	p.Metrics.AbandonedRunRerunWaits.WithLabelValues(key.Namespace, key.Name, outcome).Inc()
 }
 
 // abandonedRerunWaitWindow returns how long a recovery waits for capacity, honouring

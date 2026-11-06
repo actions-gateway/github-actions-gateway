@@ -99,19 +99,19 @@ func ledgerMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1182_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1182_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1182_eviction_rerun_failures_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1182_eviction_rerun_withheld_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1182_abandoned_run_force_cancels_total",
-		}, []string{"namespace", "runner_group", "tier", "outcome"}),
+		}, []string{"namespace", "runner_group", "outcome"}),
 	}
 }
 
@@ -162,7 +162,7 @@ func TestScaleSetBudget_SurvivesARestart(t *testing.T) {
 
 	assert.Equal(t, int64(1), api.reruns.Load(), "a restart must not refill the run's budget")
 	assert.Equal(t, float64(1), testutil.ToFloat64(after.Metrics.EvictionRetriesExhausted.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)))
+		"team-a", "gpu", recoveryCauseEviction)))
 	assert.Contains(t, target.events, "EvictionRetriesExhausted")
 }
 
@@ -219,7 +219,7 @@ func TestScaleSetBudget_ARunWithNoAttemptIsNotBudgeted(t *testing.T) {
 
 	assert.Equal(t, int64(0), api.reruns.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonAPIError)))
+		"team-a", "gpu", recoveryCauseEviction, rerunFailureReasonAPIError)))
 }
 
 // TestScaleSetBudget_ConcurrentDisruptionsOfOneAttemptMerge runs many disruptions of one
@@ -253,10 +253,10 @@ func TestScaleSetBudget_ConcurrentDisruptionsOfOneAttemptMerge(t *testing.T) {
 	assert.Equal(t, int64(1), api.reruns.Load(), "one attempt's disruptions share one re-run")
 	for _, p := range replicas {
 		assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-			"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonBudgetUnrecorded)),
+			"team-a", "gpu", recoveryCauseEviction, rerunFailureReasonBudgetUnrecorded)),
 			"a replica's burst of writes must not exhaust the other's conflict retries")
 		assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-			"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
+			"team-a", "gpu", recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
 			"every merged disruption sees the landed re-run and stops, rather than retrying into a second one")
 	}
 	l, _, err := replicas[0].readRerunLedger(context.Background(), target)
@@ -357,7 +357,7 @@ func TestScaleSetBudget_SelfCancelIsNotAUsersCancel(t *testing.T) {
 
 			assert.Equal(t, tc.wantReruns, api.reruns.Load())
 			assert.Equal(t, float64(1-tc.wantReruns), testutil.ToFloat64(p.Metrics.EvictionRerunWithheld.WithLabelValues(
-				"team-a", "gpu", evictionTierScaleSet, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
+				"team-a", "gpu", recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
 		})
 	}
 }
@@ -408,7 +408,7 @@ func TestScaleSetBudget_AbandonedArmWithholdsAUsersCancel(t *testing.T) {
 				rerunDisruption{key: "pod-a"})
 
 			withheld := testutil.ToFloat64(p.Metrics.EvictionRerunWithheld.WithLabelValues(
-				"team-a", "gpu", evictionTierScaleSet, recoveryCauseAbandoned, rerunWithheldReasonRunCancelled))
+				"team-a", "gpu", recoveryCauseAbandoned, rerunWithheldReasonRunCancelled))
 			_, registered := p.peekAbandonedRerun(abandonedRerunKey{owner: target.Key(), runID: "900"})
 			if !tc.wantWithheld {
 				assert.Equal(t, float64(0), withheld)
@@ -419,7 +419,7 @@ func TestScaleSetBudget_AbandonedArmWithholdsAUsersCancel(t *testing.T) {
 			assert.Contains(t, target.events, "EvictionRerunWithheld")
 			assert.Equal(t, int64(0), api.reruns.Load(), "no force-cancel POST for a run already cancelled")
 			assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.AbandonedRunForceCancels.WithLabelValues(
-				"team-a", "gpu", evictionTierScaleSet, "cancelled")))
+				"team-a", "gpu", "cancelled")))
 			assert.False(t, registered, "a user's cancel is not re-run once capacity returns")
 			assert.Equal(t, tc.selfCancelled, p.selfCancelledAttempt(ctx, target, "900"),
 				"the user's attempt is not recorded as GAG's cancel")
@@ -442,7 +442,7 @@ func TestScaleSetBudget_UnwritableLedgerWithholds(t *testing.T) {
 
 	assert.Equal(t, int64(0), api.reruns.Load(), "never a re-run without a recorded slot")
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunFailureReasonBudgetUnrecorded)))
+		"team-a", "gpu", recoveryCauseEviction, rerunFailureReasonBudgetUnrecorded)))
 	assert.Contains(t, target.events, "EvictionRerunFailed")
 }
 

@@ -146,7 +146,7 @@ func TestPendingRerun_WaitsForTheRunToConclude(t *testing.T) {
 	parkOOM(p, target, "pod-a")
 	require.Zero(t, api.reruns.Load(), "a parked re-run is not made while the run is running")
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRetries.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)), "the slot is taken when the class fires")
+		"team-a", "gpu", recoveryCauseOOM)), "the slot is taken when the class fires")
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	e := l.Pending[failureKey("4242", "build")]
@@ -165,9 +165,9 @@ func TestPendingRerun_WaitsForTheRunToConclude(t *testing.T) {
 
 	assert.Equal(t, int64(1), api.reruns.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRetries.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)), "the release resumes the slot rather than taking another")
+		"team-a", "gpu", recoveryCauseOOM)), "the release resumes the slot rather than taking another")
 	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 	l, _, err = p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Empty(t, l.Pending, "a released entry leaves the ledger")
@@ -195,7 +195,7 @@ func TestPendingRerun_SurvivesARestart(t *testing.T) {
 
 	assert.Equal(t, int64(1), api.reruns.Load())
 	assert.Zero(t, testutil.ToFloat64(after.Metrics.EvictionRetries.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)), "the predecessor's slot is resumed, not a second one taken")
+		"team-a", "gpu", recoveryCauseOOM)), "the predecessor's slot is resumed, not a second one taken")
 
 	sweepPendingAndWait(t, after, ctx, 0)
 	require.NoError(t, after.AdoptPendingReruns(ctx, target))
@@ -212,14 +212,14 @@ func TestPendingRerun_ExpiresAfterADay(t *testing.T) {
 	clock.advance(pendingRerunMaxWait - time.Minute)
 	sweepPendingAndWait(t, p, ctx, 0)
 	require.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 
 	clock.advance(time.Minute)
 	sweepPendingAndWait(t, p, ctx, 0)
 
 	assert.Zero(t, api.reruns.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 	assert.Contains(t, target.events, "EvictionRerunFailed")
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
@@ -242,7 +242,7 @@ func TestPendingRerun_AdoptedPastADayReadsTheRunFirst(t *testing.T) {
 
 	assert.Equal(t, int64(1), api.reruns.Load())
 	assert.Zero(t, testutil.ToFloat64(after.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 	l, _, err := after.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Empty(t, l.Pending)
@@ -268,7 +268,7 @@ func TestPendingRerun_TheFinalReadIsBounded(t *testing.T) {
 	assert.Zero(t, api.reruns.Load())
 	assert.Equal(t, int64(4), faults.gets.Load()-before, "the read at 24 h, then one every 10 minutes to 24.5 h")
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Empty(t, l.Pending, "the failed reads end the wait")
@@ -290,7 +290,7 @@ func TestPendingRerun_TheFinalReadRetriesAFailure(t *testing.T) {
 
 	assert.Equal(t, int64(1), api.reruns.Load())
 	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 }
 
 // TestPendingRerun_AnUnwritableLedgerKeepsTheCadence is the review finding on #2228: an
@@ -329,7 +329,7 @@ func TestPendingRerun_ReRunAtTheDeadlineIsDropped(t *testing.T) {
 
 	assert.Zero(t, api.reruns.Load())
 	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonNeverConcluded)))
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Empty(t, l.Pending)
@@ -393,7 +393,7 @@ func TestPendingRerun_AFailedReadRetries(t *testing.T) {
 	sweepPendingAndWait(t, p, ctx, 0)
 
 	assert.Zero(t, testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonAPIError)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonAPIError)))
 	concluded.Store(true)
 	clock.advance(time.Hour)
 	sweepPendingAndWait(t, p, ctx, 1)
@@ -413,7 +413,7 @@ func TestPendingRerun_ARunThatIsGoneEndsTheWait(t *testing.T) {
 
 	assert.Zero(t, api.reruns.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunFailures.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunFailureReasonAPIError)))
+		"team-a", "gpu", recoveryCauseOOM, rerunFailureReasonAPIError)))
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Empty(t, l.Pending)

@@ -35,16 +35,15 @@ import (
 // RecoverEvictedScaleSetWorkers. These tests pin both halves plus the properties that
 // keep the mechanism from firing twice or firing on the wrong tier.
 
-// evictionRecoveryMetrics builds unregistered counters for the eviction paths, with the
-// tier label the real ones carry.
+// evictionRecoveryMetrics builds unregistered counters for the eviction paths.
 func evictionRecoveryMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q417_eviction_recovery_identity_unknown_total",
 		}, []string{"namespace", "runner_group", "cause"}),
@@ -53,7 +52,7 @@ func evictionRecoveryMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q1177_eviction_rerun_withheld_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 		AutoRetryPaused: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "t_q1245_auto_retry_paused",
 		}, []string{"namespace", "runner_group", "cause"}),
@@ -179,12 +178,8 @@ func TestRecoverEvictedScaleSetWorkers_RerunsTheEvictedRun(t *testing.T) {
 		t.Fatal("rerun API path was not recorded")
 	}
 
-	// The recovery is attributed to the scale-set tier, so an operator can assert the
-	// mechanism works on the tier a v2beta1 tenant actually runs on.
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)))
-	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierClassic, recoveryCauseEviction)))
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseEviction)))
 
 	// The pod is claimed, which is what makes the next reconcile skip it.
 	var pod corev1.Pod
@@ -358,10 +353,10 @@ func TestRecoverEvictedScaleSetWorkers_OneAttemptIsOneRerun(t *testing.T) {
 
 	assert.Equal(t, int64(1), api.reruns.Load(), "one attempt's disruptions share one re-run")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseEviction)),
 		"one slot reserved; the other two merged")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)))
+		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", recoveryCauseEviction)))
 	assert.NotContains(t, target.events, "EvictionRetriesExhausted")
 
 	l, _, err := p.readRerunLedger(ctx, target)
@@ -943,7 +938,7 @@ func TestRecoverDisruptedScaleSetWorker_RerunsOffTheEvent(t *testing.T) {
 
 	assert.Equal(t, int64(1), rerunCount.Load(), "the drained worker's run must be re-run off the event alone")
 	assert.Contains(t, <-paths, "/runs/4242/rerun-failed-jobs", "the run comes off the pod's own annotations")
-	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseDeletion)))
+	assert.Equal(t, float64(1), testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseDeletion)))
 
 	var claimed corev1.Pod
 	require.NoError(t, p.Client.Get(ctx, client.ObjectKeyFromObject(pod), &claimed))

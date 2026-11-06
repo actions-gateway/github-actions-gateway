@@ -40,9 +40,7 @@ import (
 // owner's failure ledger (Q1182, rerun_ledger.go). The Q106 invariant, at most
 // maxEvictionRetries re-runs per run, holds per tier, and per set on this one.
 
-// Eviction-recovery tier labels for the eviction metrics, so an operator can tell a
-// classic recovery from a scale-set one — the two are detected by entirely different
-// machinery, and "eviction recovery works" was true of only one of them before Q417.
+// Eviction-recovery tiers, which select the budget and name a recovery in its log line.
 const (
 	evictionTierClassic  = "classic"
 	evictionTierScaleSet = "scaleset"

@@ -39,7 +39,7 @@ func NewMetrics() *Metrics {
 		Retries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_eviction_retries_total",
 			Help: "h, by cause (eviction, vanished, abandoned).",
-		}, []string{"namespace", "tier", "cause"}),
+		}, []string{"namespace", "cause"}),
 	}
 }
 `
@@ -57,7 +57,7 @@ const (
 )
 
 func (p *P) handleEviction(tier, cause string) {
-	p.Metrics.Retries.WithLabelValues(p.ns, tier, cause).Inc()
+	p.Metrics.Retries.WithLabelValues(p.ns, cause).Inc()
 }
 
 func (p *P) direct() {
