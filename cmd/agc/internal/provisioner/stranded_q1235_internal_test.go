@@ -177,7 +177,7 @@ func TestStrandedRecheck_Q1235_FiresOnceTheStartLands(t *testing.T) {
 			assert.Equal(t, []string{tc.want}, forceCancel, "recovered once, on the first sweep after the start")
 			assert.Empty(t, f.p.pendingStrandedRecheckKeys())
 			assert.Equal(t, 1.0, testutil.ToFloat64(
-				f.m.AbandonedRunForceCancels.WithLabelValues("team-a", "gpu", evictionTierScaleSet, "cancelled")))
+				f.m.AbandonedRunForceCancels.WithLabelValues("team-a", "gpu", "cancelled")))
 		})
 	}
 }

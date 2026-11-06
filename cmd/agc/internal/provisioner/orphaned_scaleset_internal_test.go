@@ -53,9 +53,9 @@ func TestRecoverOrphanedScaleSetWorkers_RerunsAWorkerThatIsGone(t *testing.T) {
 	// worker is exactly what the missing pod no longer says, so the counter must not
 	// claim one of them.
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseVanished)))
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseVanished)))
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCausePreemption)))
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCausePreemption)))
 	assert.Contains(t, target.events, "OrphanedWorkerRecovered",
 		"a lost worker must be visible in kubectl describe, not only in the log")
 }
@@ -102,7 +102,7 @@ func TestRecoverOrphanedScaleSetWorkers_LeavesALiveWorkerAlone(t *testing.T) {
 
 	assert.Equal(t, int64(0), rerunCount.Load(), "a worker whose pod is still there is the live path's to handle")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseVanished)))
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseVanished)))
 	assert.NotContains(t, target.events, "OrphanedWorkerRecovered")
 }
 
@@ -173,7 +173,7 @@ func TestRecoverOrphanedScaleSetWorkers_SpendsTheSharedRetryBudget(t *testing.T)
 
 	assert.Equal(t, int64(1), rerunCount.Load(), "the orphan recovery must not get a budget of its own")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseVanished)))
+		testutil.ToFloat64(m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", recoveryCauseVanished)))
 }
 
 // TestRecoverOrphanedScaleSetWorkers_EmptySetSpendsTheClaim is the dating rule (Q1064):

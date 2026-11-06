@@ -35,9 +35,6 @@ import (
 // is never held to them.
 const resolveDepth = 3
 
-// tierLabel is one-valued, so no Help string has a vocabulary to publish for it.
-const tierLabel = "tier"
-
 // openLabels carry tenant identity rather than a code vocabulary: their values
 // come from a CR name or a container name, so there is no closed set to publish
 // in Help. Nothing in the AGC's own source passes a
@@ -90,7 +87,7 @@ func deriveValues(files []srcFile, defs []metric) (valueSet, []string) {
 			continue
 		}
 		for i, arg := range c.args {
-			if i >= len(names) || names[i] == tierLabel || openLabels[names[i]] {
+			if i >= len(names) || openLabels[names[i]] {
 				continue
 			}
 			for _, v := range r.resolve(arg, c.file, c.fn, 0) {

@@ -277,7 +277,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 			msg = "the run could not be read when its re-run's wait ended; manual rerun may be required"
 		}
 		log.Error(msg, "runID", e.RunID, "job", e.Job, "cause", e.Cause, "waited", pendingRerunMaxWait, "error", err)
-		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonNeverConcluded, err)
+		p.recordRerunFailure(target, e.RunID, e.Cause, rerunFailureReasonNeverConcluded, err)
 		p.pendingSets.settle(entry, p.dropPendingRerun(ctx, target, key, e.Disruption, log))
 		return nil, false
 	}
@@ -296,7 +296,7 @@ func (p *Provisioner) sweepPendingRerun(ctx context.Context, target Target, key 
 		}
 		log.Error("a parked re-run's run is gone at GitHub; manual rerun may be required",
 			"runID", e.RunID, "cause", e.Cause, "error", err)
-		p.recordRerunFailure(target, e.RunID, tier, e.Cause, rerunFailureReasonAPIError, err)
+		p.recordRerunFailure(target, e.RunID, e.Cause, rerunFailureReasonAPIError, err)
 		p.pendingSets.settle(entry, p.dropPendingRerun(ctx, target, key, e.Disruption, log))
 		return nil, false
 	case err != nil:

@@ -536,10 +536,10 @@ func TestRecoverScaleSetWorkers_RerunsThePreemptedRun(t *testing.T) {
 	}
 
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCausePreemption)),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCausePreemption)),
 		"a preemption recovery must be attributed to the preemption cause")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseEviction)),
 		"a preemption must not be counted as node-pressure eviction; the two demand different operator responses")
 
 	// Claimed like any other recovery, so a second reconcile inside the grace period is
@@ -613,7 +613,7 @@ func TestRecoverScaleSetWorkers_RerunsTheDrainedRun(t *testing.T) {
 	}
 
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseDeletion)),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseDeletion)),
 		"a drain recovery must be attributed to the deletion cause")
 
 	// Claimed like any other recovery, so the further reconciles the teardown window

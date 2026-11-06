@@ -123,7 +123,7 @@ func TestRecoverOOMKilled_RaisesTheLimitAndReruns(t *testing.T) {
 	require.Equal(t, int64(1), rerunCount.Load(), "the killed run must be re-run exactly once")
 	assert.Equal(t, "/repos/myorg/myrepo/actions/runs/4242/rerun-failed-jobs", <-paths)
 	assert.Equal(t, float64(1), testutil.ToFloat64(
-		m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)))
+		m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseOOM)))
 	assert.Contains(t, target.events, "MemoryLimitRaisedForRetry")
 
 	l, _, err := p.readRerunLedger(ctx, target)
@@ -151,7 +151,7 @@ func TestRecoverOOMKilled_NoBudgetPromisesNoRerun(t *testing.T) {
 
 	assert.Zero(t, rerunCount.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(
-		m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)))
+		m.EvictionRetriesExhausted.WithLabelValues("team-a", "gpu", recoveryCauseOOM)))
 	assert.NotContains(t, target.events, "MemoryLimitRaisedForRetry")
 	assert.Nil(t, p.classBreakers.byKey[classBreakerKey{set: target.Key(), cause: recoveryCauseOOM}],
 		"a run that holds no slot must not count toward the breaker")
@@ -186,10 +186,10 @@ func TestRecoverOOMKilled_WithholdsWhatARerunRepeats(t *testing.T) {
 
 			assert.Zero(t, rerunCount.Load())
 			assert.Zero(t, testutil.ToFloat64(
-				m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM)),
+				m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseOOM)),
 				"a withheld re-run must spend no slot")
 			assert.Equal(t, float64(1), testutil.ToFloat64(
-				m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunWithheldReasonOwnLimit)))
+				m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunWithheldReasonOwnLimit)))
 			l, _, err := p.readRerunLedger(ctx, target)
 			require.NoError(t, err)
 			assert.Empty(t, l.MemoryFloors)
@@ -217,7 +217,7 @@ func TestRecoverOOMKilled_SecondKillIsSameClassAgain(t *testing.T) {
 
 	assert.Equal(t, int64(1), rerunCount.Load())
 	assert.Equal(t, float64(1), testutil.ToFloat64(
-		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunWithheldReasonSameClassAgain)))
+		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunWithheldReasonSameClassAgain)))
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
 	assert.Equal(t, "3Gi", l.MemoryFloors[failureKey("4242", "build")].Limit.String(),
@@ -250,7 +250,7 @@ func TestRecoverOOMKilled_BreakerPausesAStampede(t *testing.T) {
 	assert.Equal(t, int64(classBreakerRuns+1), rerunCount.Load(),
 		"the fire that opens the breaker still runs; the one after it is withheld")
 	assert.Equal(t, float64(1), testutil.ToFloat64(
-		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseOOM, rerunWithheldReasonBreakerOpen)))
+		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseOOM, rerunWithheldReasonBreakerOpen)))
 	events := 0
 	for _, e := range target.events {
 		if e == "AutoRetryPaused" {

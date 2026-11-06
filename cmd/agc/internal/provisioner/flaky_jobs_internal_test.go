@@ -29,7 +29,7 @@ import (
 func flakyMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRerunOutcomes: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "t_q555_outcomes_total"},
-			[]string{"namespace", "runner_group", "tier", "cause", "event", "result"}),
+			[]string{"namespace", "runner_group", "cause", "event", "result"}),
 		ScaleSetJobReruns: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "t_q555_reruns_total"},
 			[]string{"namespace", "runner_set", "trigger"}),
 		ScaleSetFlakyJobs: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "t_q555_flaky_total"},
@@ -72,7 +72,7 @@ func flaky(p *Provisioner, trigger string) float64 {
 }
 
 func outcome(p *Provisioner, cause, result string) float64 {
-	return testutil.ToFloat64(p.Metrics.EvictionRerunOutcomes.WithLabelValues("team-a", "gpu", evictionTierScaleSet, cause, "push", result))
+	return testutil.ToFloat64(p.Metrics.EvictionRerunOutcomes.WithLabelValues("team-a", "gpu", cause, "push", result))
 }
 
 func readFailures(t *testing.T, p *Provisioner, target Target) map[string]*failureRecord {

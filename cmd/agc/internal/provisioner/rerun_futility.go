@@ -42,30 +42,30 @@ var supersedableEvents = map[string]bool{"push": true, "pull_request": true}
 // withholds it: it logs, counts the reason on EvictionRerunWithheld and events the reason
 // with its fix. The checks run in the design's order; a field GitHub did not send skips
 // its check rather than withholding.
-func (p *Provisioner) futileRerun(ctx context.Context, target Target, owner, repo, runID, tier, cause string, run runState, log *slog.Logger) bool {
+func (p *Provisioner) futileRerun(ctx context.Context, target Target, owner, repo, runID, cause string, run runState, log *slog.Logger) bool {
 	switch {
 	case run.status == runStatusCompleted && run.conclusion == runConclusionCancelled &&
 		p.selfCancelledAttempt(ctx, target, runID) != run.attempt:
-		return p.withholdFutileRerun(target, runID, tier, cause, run.attempt, log, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
+		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonRunCancelled, runCancelledMessage(runID, cause))
 	case run.attempt > githubRerunLimit:
-		return p.withholdFutileRerun(target, runID, tier, cause, run.attempt, log, rerunWithheldReasonAttemptLimit, fmt.Sprintf("worker pod for run %s was lost to %s, but the run is at attempt %d and GitHub allows at most %d re-runs of a run, so no automatic re-run was requested; start a new run to retry the job",
+		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonAttemptLimit, fmt.Sprintf("worker pod for run %s was lost to %s, but the run is at attempt %d and GitHub allows at most %d re-runs of a run, so no automatic re-run was requested; start a new run to retry the job",
 			runID, cause, run.attempt, githubRerunLimit))
 	case !run.createdAt.IsZero() && p.nowFn().Sub(run.createdAt) > githubRerunWindow:
-		return p.withholdFutileRerun(target, runID, tier, cause, run.attempt, log, rerunWithheldReasonRunTooOld, fmt.Sprintf("worker pod for run %s was lost to %s, but the run was created %s, and GitHub re-runs only runs created in the last 30 days, so no automatic re-run was requested; start a new run to retry the job",
+		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonRunTooOld, fmt.Sprintf("worker pod for run %s was lost to %s, but the run was created %s, and GitHub re-runs only runs created in the last 30 days, so no automatic re-run was requested; start a new run to retry the job",
 			runID, cause, run.createdAt.UTC().Format(time.RFC3339)))
 	}
 	if newer, ok := p.supersedingRun(ctx, owner, repo, runID, run, log); ok {
-		return p.withholdFutileRerun(target, runID, tier, cause, run.attempt, log, rerunWithheldReasonSuperseded, fmt.Sprintf("worker pod for run %s was lost to %s, but run %d of the same workflow has since started on %s for a newer commit (%.7s), so no automatic re-run was requested; nothing to do, the newer commit is building",
+		return p.withholdFutileRerun(target, runID, cause, run.attempt, log, rerunWithheldReasonSuperseded, fmt.Sprintf("worker pod for run %s was lost to %s, but run %d of the same workflow has since started on %s for a newer commit (%.7s), so no automatic re-run was requested; nothing to do, the newer commit is building",
 			runID, cause, newer.ID, run.headBranch, newer.HeadSHA))
 	}
 	return false
 }
 
 // withholdFutileRerun logs and records one futility check's withhold, and reports true.
-func (p *Provisioner) withholdFutileRerun(target Target, runID, tier, cause string, attempt int, log *slog.Logger, reason, message string) bool {
+func (p *Provisioner) withholdFutileRerun(target Target, runID, cause string, attempt int, log *slog.Logger, reason, message string) bool {
 	log.Info("the disrupted run's re-run would be futile; no automatic re-run",
 		"runID", runID, "runAttempt", attempt, "cause", cause, "reason", reason)
-	p.recordRerunWithheld(target, runID, tier, cause, reason, message)
+	p.recordRerunWithheld(target, runID, cause, reason, message)
 	return true
 }
 

@@ -97,7 +97,7 @@ func assertWithheld(t *testing.T, p *Provisioner, target *stubTarget, api *futil
 	t.Helper()
 	assert.Equal(t, int64(0), api.reruns.Load(), "a withheld re-run makes no rerun call")
 	assert.Equal(t, float64(1), testutil.ToFloat64(p.Metrics.EvictionRerunWithheld.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, cause, reason)))
+		"team-a", "gpu", cause, reason)))
 	assert.Contains(t, target.events, "EvictionRerunWithheld")
 	l, _, err := p.readRerunLedger(context.Background(), target)
 	require.NoError(t, err)
@@ -108,7 +108,7 @@ func assertWithheld(t *testing.T, p *Provisioner, target *stubTarget, api *futil
 	}
 	assert.NotContains(t, l.Reruns, "4242", "a re-run withheld before the reservation spends no slot")
 	assert.Equal(t, float64(0), testutil.ToFloat64(p.Metrics.EvictionRetries.WithLabelValues(
-		"team-a", "gpu", evictionTierScaleSet, cause)))
+		"team-a", "gpu", cause)))
 }
 
 func TestFutileRerun_WithheldBeforeTheReservation(t *testing.T) {

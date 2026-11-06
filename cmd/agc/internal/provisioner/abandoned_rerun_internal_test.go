@@ -57,13 +57,13 @@ func abandonedRerunMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q691_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q691_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		AbandonedRunRerunWaits: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q691_abandoned_run_rerun_waits_total",
-		}, []string{"namespace", "runner_group", "tier", "outcome"}),
+		}, []string{"namespace", "runner_group", "outcome"}),
 	}
 }
 
@@ -181,7 +181,7 @@ func TestAbandonedRerun_WaitsForCapacityBeforeReRunning(t *testing.T) {
 	sweepAndWait(t, f.p, ctx, 0)
 	assert.Equal(t, 0, f.tally.for_("4242"), "no re-run while the pool cannot place a worker")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeCapacityReturned)))
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeCapacityReturned)))
 
 	// A worker binds: capacity is back.
 	bound := workerPod("bound", "g", f.clock)
@@ -191,9 +191,9 @@ func TestAbandonedRerun_WaitsForCapacityBeforeReRunning(t *testing.T) {
 	sweepAndWait(t, f.p, ctx, 1)
 	assert.Equal(t, 1, f.tally.for_("4242"), "the re-run fires once a worker pod is placed")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeCapacityReturned)))
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeCapacityReturned)))
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(f.m.EvictionRetries.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseAbandoned)),
+		testutil.ToFloat64(f.m.EvictionRetries.WithLabelValues("ns", "g", recoveryCauseAbandoned)),
 		"the recovery spends a slot of the shared per-run budget, labelled abandoned")
 
 	// The entry is consumed, so a later sweep does not re-run the same run again.
@@ -239,13 +239,13 @@ func TestAbandonedRerun_ExpiresWhenCapacityNeverReturns(t *testing.T) {
 	f.clock = f.clock.Add(9 * time.Minute)
 	sweepAndWait(t, f.p, ctx, 0)
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeExpired)),
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeExpired)),
 		"still inside the window")
 
 	f.clock = f.clock.Add(2 * time.Minute)
 	sweepAndWait(t, f.p, ctx, 0)
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", evictionTierClassic, abandonedRerunOutcomeExpired)),
+		testutil.ToFloat64(f.m.AbandonedRunRerunWaits.WithLabelValues("ns", "g", abandonedRerunOutcomeExpired)),
 		"a wait that never saw capacity is an operator-visible ending, not a silent drop")
 	assert.Equal(t, 0, f.tally.for_("555"))
 
@@ -301,7 +301,7 @@ func TestAbandonedRerun_LoopBudgetBindsPerRun(t *testing.T) {
 	// Both runs' exhaustions are visible, and the counter cannot be satisfied by one
 	// run alone: it must have counted the cycles both runs were refused.
 	exhausted := testutil.ToFloat64(
-		f.m.EvictionRetriesExhausted.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseAbandoned))
+		f.m.EvictionRetriesExhausted.WithLabelValues("ns", "g", recoveryCauseAbandoned))
 	assert.Equal(t, float64(2*(cycles-maxRetries)), exhausted,
 		"every refused recovery is counted, for both runs")
 	assert.Contains(t, target.events, "EvictionRetriesExhausted",

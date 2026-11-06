@@ -100,10 +100,10 @@ func TestRecoverEvictedScaleSetWorkers_OwnLimitIsWithheld(t *testing.T) {
 
 	assert.Zero(t, rerunCount.Load(), "an own-limit eviction must not be re-run")
 	assert.Zero(t, testutil.ToFloat64(
-		m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction)),
+		m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseEviction)),
 		"no budget slot may be reserved for a re-run that is withheld")
 	assert.Equal(t, float64(1), testutil.ToFloat64(
-		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunWithheldReasonOwnLimit)),
+		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseEviction, rerunWithheldReasonOwnLimit)),
 		"repeated reconciles of one pod must withhold once")
 	assert.Equal(t, []string{"EvictionRerunWithheld"}, target.events)
 }
@@ -121,5 +121,5 @@ func TestRecoverEvictedScaleSetWorkers_NodePressureIsStillRerun(t *testing.T) {
 
 	assert.Equal(t, int64(1), rerunCount.Load())
 	assert.Zero(t, testutil.ToFloat64(
-		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseEviction, rerunWithheldReasonOwnLimit)))
+		m.EvictionRerunWithheld.WithLabelValues("team-a", "gpu", recoveryCauseEviction, rerunWithheldReasonOwnLimit)))
 }
