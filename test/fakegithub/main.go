@@ -479,7 +479,7 @@ func (s *server) handleInstallationToken(w http.ResponseWriter, r *http.Request)
 //
 // The scale-set tier's two REST bootstrap hops share this prefix and are handed
 // off to the scale-set stub, as are the list and delete routes unless they address
-// a classic record (classicRunnerAddressed).
+// a classic record (classicRunnerNamed, classicRunnerIDed).
 func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.HasSuffix(path, "/rerun-failed-jobs") && r.Method == http.MethodPost {

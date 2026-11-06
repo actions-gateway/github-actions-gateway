@@ -2549,8 +2549,9 @@ func (l *Listener) deleteSession(ssID int, sess *scaleset.RunnerScaleSetSession)
 // mintedRunnerSuffix matches what runnerName appends to "<scale set>-": a job's UUID,
 // then a non-zero attempt. A UUID's fixed shape is what makes it unambiguous, so another
 // set's "<scale set>-<other label part>-<job UUID>" cannot match. Job UUIDs read from 56
-// job runner names on github.com, 2026-10 and 2026-11; a backend minting another format
-// fails safe, since the sweep then deletes nothing.
+// job runner names on github.com, 2026-10 and 2026-11. A backend minting another format
+// leaves this set's records unswept, and the isolation needs the other set's job ID to be
+// a UUID too (05-security.md).
 var mintedRunnerSuffix = regexp.MustCompile(`^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}(-[0-9]+)?$`)
 
 // runnerName derives a deterministic runner name from a jobID: attempt 0 is the base
