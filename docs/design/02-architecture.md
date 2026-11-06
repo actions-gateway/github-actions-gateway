@@ -616,7 +616,7 @@ Each `Reason` mirrors the corresponding metric name so the two correlate:
 
 These follow the established reaper precedent (`WorkerPodStuckPending`): they record on the owner an operator would `kubectl describe`, fire on a transition/terminal outcome (never per reconcile, so no spam), and where a status condition already captures the state the Event complements it rather than duplicating it.
 A listener/provisioner goroutine that detects the transition does not hold the live owner object, so it routes the Event back to the reconciler over a buffered channel — mirroring the existing condition-update channel — which records it on the next reconcile.
-See [kubernetes-conventions](../development/kubernetes-conventions.md#kubernetes-events-for-lifecycle-transitions) for the convention and [troubleshooting](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) for the operator catalogue.
+See [kubernetes-conventions](../development/kubernetes-conventions.md#kubernetes-events-for-lifecycle-transitions) for the convention and [troubleshooting](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnerset) for the operator catalogue.
 
 ### Distributed tracing
 

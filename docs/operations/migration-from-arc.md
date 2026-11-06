@@ -42,7 +42,7 @@ namespace: team-a                       namespace: team-a
                                           └─ per-tenant egress proxy pool
 ```
 
-Unlike GAG's deprecated v1 shape, v2 puts **no one-gateway-per-namespace limit** on you: if your ARC namespace spans two GitHub orgs, that is two `ActionsGateway`s side by side, closer to how your scale sets are laid out today.
+Unlike GAG's removed v1 shape, v2 puts **no one-gateway-per-namespace limit** on you: if your ARC namespace spans two GitHub orgs, that is two `ActionsGateway`s side by side, closer to how your scale sets are laid out today.
 
 ---
 
@@ -161,7 +161,7 @@ Differences and quirks an ARC operator should know:
 | **Critical-runner floor** | none (each scale set caps only itself) | `priorityTiers` per set | Optionally reserve preempting slots for expensive runner types. |
 | **DinD / privileged** | `containerMode: dind` | a privileged `ClusterRunnerTemplate` + privileged-eligible namespace | Platform-granted, not tenant-settable; see [Security profiles](#security-profiles). |
 | **Pod template reuse** | `template` copied into every scale set | one `RunnerTemplate` referenced by many sets | Deduplicate identical shapes; keep separate templates where they genuinely differ. |
-| **Gateways per namespace** | many scale sets per namespace | many `RunnerSet`s, and many gateways, per namespace | No restructuring needed. (GAG's deprecated v1 API had a one-gateway limit; v2 does not.) |
+| **Gateways per namespace** | many scale sets per namespace | many `RunnerSet`s, and many gateways, per namespace | No restructuring needed. (GAG's removed v1 API had a one-gateway limit; v2 does not.) |
 | **Quota / RBAC / NetworkPolicy** | hand-assembled per tenant | reconciled from the CRs | Remove your bespoke policy manifests after cutover. |
 | **Worker-pod debugging** | runner pod lingers per HRA config | finished pod kept for `completedPodTTL` (default `5m`), then deleted | Raise `completedPodTTL` if you need a longer `kubectl logs` window. |
 | **Maximum worker lifetime** | none — a wedged runner pod runs until deleted by hand | `maxWorkerLifetime` (default `12h`) as the pod's `activeDeadlineSeconds`, enforced by the kubelet | **Check this before cutover if any job runs longer than 12 hours.** ARC has no equivalent cap, so a long job that worked there is killed here unless you raise the field. GitHub's own default `timeout-minutes` is 360 (6h), so this affects only jobs that explicitly opted past twice that. |
@@ -310,4 +310,4 @@ Because both register independently with GitHub, there is no split-brain to unta
 - [Network architecture](../design/network-architecture.md) — egress proxy and NetworkPolicy detail, with isolation-validation probes.
 - [Troubleshooting](troubleshooting.md) — common first-day failures.
 - [Removal notice](v1alpha1-deprecation.md), covering what `v2.0.0` removed (`v1alpha1`, `v2alpha1`, `v2beta1`, Classic acquisition).
-  Relevant only if you are *already* on GAG's v1 API; new migrations should not start there.
+  Relevant only if you are *already* on GAG's v1 API.

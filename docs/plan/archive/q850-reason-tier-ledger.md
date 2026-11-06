@@ -79,7 +79,7 @@ The rest sit in files both protocols execute, so the tier came from where the ca
 ## 6. What the walk found
 
 **Two Events an operator can meet in `kubectl describe` had no runbook entry.** `AgentDeregistrationFailed` fires when a set being deleted cannot deregister its agent Secrets, holding the finalizer; `OrphanedWorkerRecovered` fires when a scale-set worker was already gone at AGC startup, so the disruption's cause was lost with the pod (Q844).
-Both are now in the [job-lifecycle Events table](../../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset), and the gate's reference check is what keeps the next one from shipping the same way.
+Both are now in the [job-lifecycle Events table](../../operations/troubleshooting.md#job-lifecycle-events-on-a-runnerset), and the gate's reference check is what keeps the next one from shipping the same way.
 It is the condition/Event analogue of the Q809 metric that reached the ledger and nothing else.
 
 **The first scanner was wrong in the way this repo keeps being wrong about extraction.** Keying the reason's argument index on the function name read the scale-set listener's action string `"ProvisionWorker"` as a reason, and missed `AssignmentAbandoned`, `JobProvisionStalled`, `WorkerCeilingReached` and `SessionUnauthorized`, because two methods here are called `recordEvent` and two are called `Event`, with the reason at a different index in each.

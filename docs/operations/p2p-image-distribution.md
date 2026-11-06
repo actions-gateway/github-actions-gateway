@@ -78,7 +78,7 @@ GAG does **not** set an explicit `imagePullPolicy` on worker containers, so the 
   P2P still routes that check through the mirror so it does not melt the registry, but `Always` partially defeats local caching and adds latency to every cold start.
   Digest pinning (the secure default) keeps you on `IfNotPresent` — keep it there.
 
-Because P2P intercepts at the mirror, it works the same whether the worker image is the built-in default or a per-`RunnerGroup` `workerImage` override, and whether it is served by GHCR or a private registry.
+Because P2P intercepts at the mirror, it works the same whether the worker image is the built-in default or a per-`RunnerTemplate` `workerImage` override, and whether it is served by GHCR or a private registry.
 
 ### Digest pinning and P2P are complementary
 
@@ -171,5 +171,5 @@ That fits the trusted-CI use DinD is already limited to, and it is one more reas
 - [Air-gapped install](air-gapped-install.md) — relocating images to a private registry with digests preserved; P2P sits in front of that registry.
 - [In-runner image builds](in-runner-image-builds.md) — the sibling scale/PSA companion for build workloads inside workers.
 - [Security § Supply-Chain Compromise of Worker Image](../design/05-security.md) — why worker images are digest-pinned and the `imagePullPolicy` rationale.
-- [Tenant onboarding](tenant-onboarding.md) — setting a per-`RunnerGroup` `workerImage` and its pull Secret.
+- [Tenant onboarding](tenant-onboarding.md) — setting a per-`RunnerTemplate` `workerImage` and its pull Secret.
 - Upstream: [Spegel](https://github.com/spegel-org/spegel) · [Dragonfly](https://d7y.io/).

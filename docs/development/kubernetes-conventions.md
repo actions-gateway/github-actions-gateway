@@ -336,7 +336,7 @@ Conventions that keep them consistent and non-spammy:
 - **Route deep-goroutine events back through the reconciler** — a listener or provisioner goroutine does not hold the live owner object the `EventRecorder` needs, so it pushes the event onto a buffered channel (non-blocking; drop on full) that the reconciler drains and records on the live object — mirroring the existing condition-update channel.
   The drain consumes each event once, so it is not re-emitted on later reconciles.
 - Shipped examples: `WorkerPodStuckPending` (reaper), and the Q170 job-lifecycle set (`JobAcquisitionFailed`, `RunnerVersionTooOld`, `SessionUnauthorized`, `QuotaRetriesExhausted`, `EvictionRetriesExhausted`).
-  The operator-facing catalogue lives in [troubleshooting.md](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset).
+  The operator-facing catalogue lives in [troubleshooting.md](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnerset).
 
 ## Graceful shutdown (SIGTERM)
 

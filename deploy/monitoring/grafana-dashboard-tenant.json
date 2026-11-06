@@ -850,8 +850,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=\"actions-gateway-proxy\"}",
-          "legendFormat": "{{namespace}}",
+          "expr": "kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=~\".+-proxy\"}",
+          "legendFormat": "{{namespace}}/{{deployment}}",
           "refId": "A"
         }
       ]

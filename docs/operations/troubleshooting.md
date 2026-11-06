@@ -4,13 +4,15 @@
 
 Each section below covers a specific failure mode: symptoms, likely cause, diagnostic commands, and resolution steps.
 
-**Addressing the AGC.** Under v2 every AGC control-plane object is named per gateway, as `<gateway>-agc`: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+**Addressing the AGC.** Every AGC control-plane object is named per gateway, as `<gateway>-agc`: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
 A `team-a-gateway` tenant therefore addresses `deploy/team-a-gateway-agc`, `sa/team-a-gateway-agc`, and so on.
-Under v1 there is one AGC per namespace and all of them carry the fixed name `actions-gateway-controller`.
-Commands below give both forms; substitute your own gateway name for `<gateway>`.
+Commands below use `<gateway>`; substitute your own gateway name.
 
-**Selecting AGC pods needs neither form.** The bare `app` label carries the per-gateway name under v2 and the fixed name under v1, so `-l app=actions-gateway-controller` selects nothing on a v2 tenant.
-The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` under both, so `-l app.kubernetes.io/name=actions-gateway-controller` is the selector that works on either and is what the commands below use.
+**Addressing the proxy pool.** Each `EgressProxy` names its Deployment, Service, HorizontalPodAutoscaler and NetworkPolicy `<proxy>-proxy` and its TLS Secret `<proxy>-proxy-tls`, where `<proxy>` is the `EgressProxy`'s name.
+Its pods carry the label `actions-gateway.com/egress-proxy=<proxy>`.
+
+**Selecting AGC pods.** The bare `app` label carries the per-gateway name, so selecting on it by the fixed name finds nothing.
+The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` on every gateway, so `-l app.kubernetes.io/name=actions-gateway-controller` selects them all and is what the commands below use.
 
 ---
 
@@ -20,7 +22,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Helm Render Fails: gmc.image Must Be Pinned by Digest](#helm-render-fails-gmcimage-must-be-pinned-by-digest)
 - [GMC Pods Rejected: insufficient quota to match these scopes (PriorityClass)](#gmc-pods-rejected-insufficient-quota-to-match-these-scopes-priorityclass)
 - [helm upgrade Fails With nil pointer evaluating interface {}.FIELD](#helm-upgrade-fails-with-nil-pointer-evaluating-interface-field)
-- [Every RunnerGroup / RunnerSet Write Denied: no params found for policy binding](#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding)
+- [Every RunnerSet / RunnerTemplate Write Denied: no params found for policy binding](#every-runnerset--runnertemplate-write-denied-no-params-found-for-policy-binding)
 - [GMC Exits at Startup: an Installed CRD Schema Is Older Than the GMC](#gmc-exits-at-startup-an-installed-crd-schema-is-older-than-the-gmc)
 - [GMC Not Provisioning Tenant Resources](#gmc-not-provisioning-tenant-resources)
 - [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts)
@@ -44,7 +46,6 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [AGC Exits at Startup: Proxy CA Cert Present but Unreadable](#agc-exits-at-startup-proxy-ca-cert-present-but-unreadable)
 - [Long Polls Time Out on a Black-Holed Message-Queue Connection](#long-polls-time-out-on-a-black-holed-message-queue-connection)
 - [Reconcile or Token Mint Hangs on a Slow GitHub Endpoint](#reconcile-or-token-mint-hangs-on-a-slow-github-endpoint)
-- [Orphaned RunnerGroup After Removing It From the Spec](#orphaned-runnergroup-after-removing-it-from-the-spec)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
@@ -62,7 +63,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
 - [Worker Image Runner Version](#worker-image-runner-version)
-- [Job-Lifecycle Events on a RunnerGroup / RunnerSet](#job-lifecycle-events-on-a-runnergroup--runnerset)
+- [Job-Lifecycle Events on a RunnerSet](#job-lifecycle-events-on-a-runnerset)
 - [Proxy Pool Not Scaling](#proxy-pool-not-scaling)
 - [Proxy Tunnel Closed Mid-Stream — Idle or Lifetime Cap](#proxy-tunnel-closed-mid-stream--idle-or-lifetime-cap)
 - [Proxy Tunnel Cut During a Rollout](#proxy-tunnel-cut-during-a-rollout)
@@ -87,9 +88,8 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion)
 - [Why Is My RunnerSet Not Being Offered Jobs?](#why-is-my-runnerset-not-being-offered-jobs)
 - [Worker Pod Fails to Start After Secure-by-Default SecurityContext](#worker-pod-fails-to-start-after-secure-by-default-securitycontext)
-- [securityProfile Downgrade Rejected by Admission Webhook](#securityprofile-downgrade-rejected-by-admission-webhook)
-- [Second ActionsGateway in a Namespace Rejected (Singleton Guard)](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)
-- [`proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#proxynoproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
+- [Security Profile Downgrade Rejected by Admission](#security-profile-downgrade-rejected-by-admission)
+- [`noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#noproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field](#runnertemplate-rejected-reserved-pod-field)
 - [`RunnerSet` Rejected: Duplicate First `runnerLabel`](#runnerset-rejected-duplicate-first-runnerlabel)
@@ -102,10 +102,10 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [`AGCAutoscalingUnavailable` — the VPA CRDs are not installed](#agcautoscalingunavailable--the-vpa-crds-are-not-installed)
 - [Multiple v2 gateways in one namespace: naming, scoping, prerequisites](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites)
 - [v2 Objects Not Reconciling After Installing the CRD Chart](#v2-objects-not-reconciling-after-installing-the-crd-chart)
-- [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
+- [Privileged Security Profile Rejected: Namespace Not Eligible](#privileged-security-profile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [Tracing Endpoint Rejected by Admission](#tracing-endpoint-rejected-by-admission)
-- [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
+- [ActionsGateway Rejected: Missing or Malformed `githubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout](#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout)
 - [Applying Any v2 Object Fails With no endpoints available for service "webhook-service"](#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service)
@@ -123,15 +123,11 @@ Run these checks immediately after deploying a new tenant gateway or upgrading e
 kubectl get actionsgateway -n <namespace> -o yaml | grep -A 20 status:
 
 # 2. Confirm the AGC pod is running
-# v2
 kubectl get deploy -n <namespace> <gateway>-agc
 kubectl logs -n <namespace> deploy/<gateway>-agc --tail=50
-# v1 (legacy)
-kubectl get deploy -n <namespace> actions-gateway-controller
-kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=50
 
 # 3. Confirm the proxy pool is healthy
-kubectl get deploy -n <namespace> actions-gateway-proxy
+kubectl get deploy -n <namespace> <proxy>-proxy
 kubectl get hpa -n <namespace>
 
 # 4. Confirm RunnerSet resources exist
@@ -261,12 +257,12 @@ A failed render is the safe direction, so this error is deliberate rather than a
 
 ---
 
-## Every `RunnerGroup` / `RunnerSet` Write Denied: `no params found for policy binding`
+## Every `RunnerSet` / `RunnerTemplate` Write Denied: `no params found for policy binding`
 
-**Symptoms.** Every write to a `runnergroups`, `runnersets`, or `runnertemplates` object is rejected — including ones that name no `priorityClassName` at all — while the parameter object plainly exists at the name the binding references:
+**Symptoms.** Every write to a `runnersets` or `runnertemplates` object is rejected — including ones that name no `priorityClassName` at all — while the parameter object plainly exists at the name the binding references:
 
 ```
-kubectl apply -f runnergroup.yaml
+kubectl apply -f runnerset.yaml
 # Error from server: ... ValidatingAdmissionPolicy 'gmc-priorityclass-allowlist-guard'
 # with binding 'gmc-priorityclass-allowlist-guard-binding' denied request:
 # failed to configure binding: no params found for policy binding with `Deny`
@@ -307,7 +303,7 @@ The state belongs to the process, so:
 
 **The quieter failure mode.** If the frozen cache happens to still hold the old ConfigMap, there is no error at all — the policy keeps validating against an allowlist **that no longer exists in the cluster**.
 Edits to the allowlist appear to apply and silently do nothing.
-After any event that could have tripped this, confirm the guard sees your current allowlist rather than assuming it does: change the allowlist and check that a `RunnerGroup` naming a newly removed class is actually rejected.
+After any event that could have tripped this, confirm the guard sees your current allowlist rather than assuming it does: change the allowlist and check that a `RunnerSet` naming a newly removed class is actually rejected.
 
 Observed on Kubernetes 1.35.5 and 1.36.1.
 Upstream: [kubernetes/kubernetes#130887](https://github.com/kubernetes/kubernetes/issues/130887).
@@ -380,7 +376,7 @@ The apply above is refused with a conflict on `.spec.conversion.strategy` and ch
 
 ## GMC Not Provisioning Tenant Resources
 
-**Symptoms.** An `ActionsGateway` CR was applied but nothing has been created in the tenant namespace: no AGC Deployment, no proxy Deployment, no RunnerGroup resources.
+**Symptoms.** An `ActionsGateway` CR was applied but nothing has been created in the tenant namespace: no AGC Deployment and no proxy Deployment.
 
 **Likely causes.**
 - GMC pod is not running or not the leader.
@@ -428,7 +424,7 @@ kubectl get actionsgateway -n <namespace> <name> \
 **Symptoms.** `kubectl rollout restart deploy/<agc-or-proxy> -n <namespace>` prints `deployment.apps/... restarted`, and a following `kubectl rollout status` prints `successfully rolled out` within a second.
 But the pod is unchanged: same name, same `AGE`, no new ReplicaSet in `kubectl get rs -n <namespace>`, and whatever the restart was meant to clear (a stale in-memory listener, a cached credential) is still there.
 
-**Which Deployments.** Every Deployment the GMC provisions inside a tenant namespace: the AGC control plane (`actions-gateway-controller` on v1, `<gateway>-agc` on v2) and the egress proxy pool.
+**Which Deployments.** Every Deployment the GMC provisions inside a tenant namespace: the AGC control plane (`<gateway>-agc`) and the egress proxy pool.
 The GMC's *own* Deployment (`gmc-controller-manager` in `gmc-system`) is not managed by a controller and restarts normally.
 
 **What happened.** `kubectl rollout restart` works by patching a `kubectl.kubernetes.io/restartedAt` annotation onto the Deployment's **pod template** — that changed template is what makes the Deployment controller roll a new ReplicaSet.
@@ -706,7 +702,7 @@ admission webhook "validate.kyverno.svc-fail" denied the request:
 ```
 
 **Cause.** A cluster-wide admission policy rejects the GAG pod for violating a rule it does not satisfy.
-The usual culprits: a policy requiring `drop: [ALL]` capabilities or `allowPrivilegeEscalation: false` on *all* pods (the default `baseline` worker profile sets neither — baseline CI relies on in-job `sudo`); a `readOnlyRootFilesystem` requirement (no worker profile sets it — the runner needs a writable root filesystem); a registry allowlist that omits GAG's registries; or a "require resource limits" rule (AGC v1alpha1 pods carry none).
+The usual culprits: a policy requiring `drop: [ALL]` capabilities or `allowPrivilegeEscalation: false` on *all* pods (the default `baseline` worker profile sets neither — baseline CI relies on in-job `sudo`); a `readOnlyRootFilesystem` requirement (no worker profile sets it — the runner needs a writable root filesystem); a registry allowlist that omits GAG's registries; or a "require resource limits" rule.
 
 This is distinct from [`WorkersUnschedulable`](#runnerset-reports-workersunschedulable) (scheduler can't place a *created* pod) and from `WorkerQuotaExceeded` (`ResourceQuota` blocks admission): here the policy engine blocks pod creation *before* either applies.
 
@@ -725,14 +721,14 @@ kubectl get constraints            # Gatekeeper
 **Resolution.** Reconcile the cluster policy with GAG's real pod posture — see the [admission-policies compatibility matrix](admission-policies.md), which states per policy class whether GAG complies or what to allow.
 In short:
 - Add GAG's registries to your allowlist (`ghcr.io/actions-gateway/*` for the control plane, `ghcr.io/actions/actions-runner` for the default worker).
-- For `drop-ALL` / no-privilege-escalation requirements: have tenants set `securityProfile: restricted` (which satisfies them), or apply the scoped [exception samples](examples/policies/README.md) so `baseline` workers pass.
+- For `drop-ALL` / no-privilege-escalation requirements: have tenants set the namespace label `actions-gateway.com/security-profile=restricted` (which satisfies them), or apply the scoped [exception samples](examples/policies/README.md) so `baseline` workers pass.
 - For `readOnlyRootFilesystem`: exempt worker pods (no profile can satisfy it).
 
 ---
 
 ## ActionsGateway Reports EgressRulesStale
 
-**Symptoms.** `kubectl get actionsgateway` shows an `EgressRulesStale=True` condition, or the `actions_gateway_egress_rules_stale` gauge (v1 `ActionsGateway`, `EgressProxy`) or `actions_gateway_direct_egress_rules_stale` gauge (direct-egress v2 `ActionsGateway`) is `1`.
+**Symptoms.** `kubectl get actionsgateway` shows an `EgressRulesStale=True` condition, or the `actions_gateway_egress_rules_stale` gauge (`EgressProxy`) or `actions_gateway_direct_egress_rules_stale` gauge (direct-egress `ActionsGateway`) is `1`.
 Optionally, jobs intermittently fail to reach newly-rotated GitHub endpoints.
 
 **Cause.** The GMC refreshes each managed proxy `NetworkPolicy`'s egress allowlist from `api.github.com/meta` on a ~24h cycle, and on a v2 `ActionsGateway` with no `defaultProxyRef` the GitHub allowlist on its AGC and workload `NetworkPolicies` too.
@@ -740,14 +736,14 @@ If that refresh loop stalls (GitHub meta API unreachable, persistent fetch error
 GitHub periodically rotates its published IP ranges, so a frozen allowlist eventually drops egress to the new ranges silently.
 The condition trips when the last successful refresh is older than the staleness window (just over two refresh cycles), so a single missed/slow refresh does not false-trip it.
 It is advisory and does **not** gate `Ready` — existing egress keeps working until GitHub rotates.
-It is only evaluated for gateways whose proxy `NetworkPolicy` is gateway-managed (`spec.proxy.managedNetworkPolicy` unset or `true`), on an `EgressProxy` only in `CIDR` mode, and on a v2 `ActionsGateway` only in direct egress: a proxied one reads `False` / `RefreshPending`, and its `EgressProxy` reports the allowlist.
+It is only evaluated for gateways whose proxy `NetworkPolicy` is gateway-managed (`spec.managedNetworkPolicy` unset or `true`), on an `EgressProxy` only in `CIDR` mode, and on an `ActionsGateway` only in direct egress: a proxied one reads `False` / `RefreshPending`, and its `EgressProxy` reports the allowlist.
 
 The reason says which of two states you are in:
 
 | Reason | Meaning | Where to go |
 |---|---|---|
 | `RefreshStalled` | The ranges in force are older than the staleness window. Existing egress works until GitHub rotates, unless the message says the GMC serves no ranges: then its persisted copy has expired and GitHub egress is denied, except through a direct-egress policy the message names as keeping its ranges. | The diagnostics below. |
-| `RefreshNeverSucceeded` | The GMC holds no ranges at all, from neither a fetch nor its persisted copy. On an `EgressProxy` or v1 `ActionsGateway` the policy carries no GitHub rule, so GitHub egress is denied now. On a direct-egress v2 `ActionsGateway` a policy may still carry the ranges it was last programmed with; the message says which (below). | [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start). |
+| `RefreshNeverSucceeded` | The GMC holds no ranges at all, from neither a fetch nor its persisted copy. On an `EgressProxy` the policy carries no GitHub rule, so GitHub egress is denied now. On a direct-egress `ActionsGateway` a policy may still carry the ranges it was last programmed with; the message says which (below). | [Proxy Pools Have No GitHub Egress After a GMC Start](#proxy-pools-have-no-github-egress-after-a-gmc-start). |
 
 **A direct-egress v2 gateway can still be reaching GitHub when the GMC serves no ranges.** The GMC does not blank a direct-egress `NetworkPolicy` that already carries GitHub ranges, so after a restart with no usable persisted copy, or once that copy expires, those policies keep the ranges they were last programmed with.
 The condition stays `True`, because nothing is refreshing them, and its message says which policies keep their ranges and which carry no GitHub rule.
@@ -778,7 +774,7 @@ If GitHub's meta API is down, no action is needed beyond waiting — the allowli
 **Symptoms.** After the GMC starts or restarts, tenants acquire no jobs.
 The proxy pool logs `upstream dial failed` with an `i/o timeout` to a GitHub address, and answers the AGC `502 upstream unavailable`.
 The pool's `NetworkPolicy` has a DNS egress rule and no GitHub rule.
-The `EgressProxy` (or v1 `ActionsGateway`) reports `EgressRulesStale=True` with reason `RefreshNeverSucceeded`, and `Ready` stays `True`, because `Ready` measures proxy pods rather than their egress.
+The `EgressProxy` reports `EgressRulesStale=True` with reason `RefreshNeverSucceeded`, and `Ready` stays `True`, because `Ready` measures proxy pods rather than their egress.
 The `ActionsGatewayEgressRulesStale` alert fires once the state has held for 15 minutes.
 
 **Cause.** A fresh GMC has no GitHub IP ranges to program until its first `api.github.com/meta` fetch succeeds, unless it can restore them from its own namespace.
@@ -818,7 +814,7 @@ To recover sooner, find what else spends the unauthenticated quota from that egr
 
 ## A GHES Tenant's Traffic Never Reaches the Appliance
 
-**Symptoms.** A tenant whose `spec.gitHubURL` names a GitHub Enterprise Server (GHES) host acquires no jobs.
+**Symptoms.** A tenant whose `spec.githubURL` names a GitHub Enterprise Server (GHES) host acquires no jobs.
 Depending on which of the two gaps you have hit:
 
 - **Token exchange fails.** The AGC logs a `401` from `api.github.com` — a host you never configured — when minting the installation token.
@@ -854,7 +850,7 @@ actions_gateway_github_egress_incomplete == 1
 - **Supply the ranges.** Put the appliance's CIDRs in the `EgressProxy`'s `spec.destinationCIDRs`.
   The field is gated by the platform `--allowed-egress-cidrs` allowlist, so a platform admin must allowlist them first — a tenant cannot self-serve.
   Admission rejects an entry outside the allowlist with a message naming the allowed ranges.
-- **Switch to an FQDN egress mode.** `spec.egressPolicyMode: FQDN` (with a `--fqdn-policy-backend` configured) allows by hostname, and every referring gateway's `gitHubURL` host is added to the policy and the proxy CONNECT allowlist automatically.
+- **Switch to an FQDN egress mode.** `spec.egressPolicyMode: FQDN` (with a `--fqdn-policy-backend` configured) allows by hostname, and every referring gateway's `githubURL` host is added to the policy and the proxy CONNECT allowlist automatically.
 
 The condition is advisory and does not gate `Ready`: the pool is serving exactly the policy it was asked for.
 It clears once `destinationCIDRs` is non-empty — the GMC takes your declaration at face value and does not verify the ranges actually cover the appliance, so if traffic still fails, check the ranges themselves.
@@ -865,7 +861,7 @@ The GMC takes the first that applies, so read the table top-down — only the la
 | Message | The GMC sees no gap because |
 |---|---|
 | `egress policy is operator-maintained` | `spec.managedNetworkPolicy: false` — the GMC programs no `NetworkPolicy` for this pool, so it makes no claim either way. **Not a reachability check:** your own policy still has to allow the appliance. |
-| `FQDN mode carries every referrer's GitHub host` | `spec.egressPolicyMode` is not `CIDR`, so each referring gateway's `gitHubURL` host is added to the policy automatically. |
+| `FQDN mode carries every referrer's GitHub host` | `spec.egressPolicyMode` is not `CIDR`, so each referring gateway's `githubURL` host is added to the policy automatically. |
 | `every referrer targets public GitHub, which the CIDR allowlist covers` | No referring gateway names a GHES host, so the ranges `api.github.com/meta` publishes are the whole story. |
 | `spec.destinationCIDRs supplies ranges for <host>` | You supplied ranges while a GHES referrer is bound. Taken at face value — this does **not** confirm they cover the appliance. |
 
@@ -922,9 +918,6 @@ kubectl -n team-a get actionsgateway my-gateway \
   -o jsonpath='{.status.conditions[?(@.type=="Degraded")].message}{"\n"}'
 ```
 
-`v1alpha1` has no equivalent field — it is frozen and removed at `v2.0.0`.
-A GHES tenant behind a private CA must be on the v2 API.
-
 **This does not cover the appliance's egress ranges.** Trusting the CA does not put the appliance's address space in the NetworkPolicy; that is the separate problem [above](#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
 ---
@@ -976,7 +969,7 @@ Some tenant resources (e.g. the AGC Deployment, RoleBinding, or a ServiceAccount
 If a delete keeps failing — most often an API-server error, or a `Forbidden` from an admission policy or revoked RBAC — the finalizer is retained on purpose so a live, credentialed AGC Deployment is never orphaned by a half-finished teardown.
 A NotFound is treated as success, so an already-deleted resource never blocks convergence.
 
-This applies to both API versions (Q328): the v1 (`actions-gateway.github.com`) gateway holds the `actions-gateway.github.com/gmc-cleanup` finalizer; the v2 (`actions-gateway.com`) gateway holds its own cleanup finalizer and additionally **verifies each child is actually gone** after its delete is accepted — a child held by another controller's finalizer (its `deletionTimestamp` is set but the object lingers) also keeps the teardown open, with the lingering child named in the `TeardownIncomplete` event message.
+The gateway holds its own cleanup finalizer and **verifies each child is actually gone** after its delete is accepted — a child held by another controller's finalizer (its `deletionTimestamp` is set but the object lingers) also keeps the teardown open, with the lingering child named in the `TeardownIncomplete` event message.
 The v2 per-tenant metrics Secrets are the one exception: they are removed by owner-reference garbage collection (the GMC deliberately holds no delete permission on Secrets), so they never appear in the event.
 
 **Diagnostics.**
@@ -994,11 +987,11 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager --tail=50 | grep -i "de
 The reconciler retries on its own backoff and removes the finalizer automatically once every delete is confirmed.
 **Do not** manually strip the finalizer to force the CR away — that re-introduces the orphaned-AGC failure mode the fail-closed behaviour exists to prevent; clear the real delete error instead.
 
-**If the finalizer was already stripped.** Every namespaced child the GMC applies carries a controller `OwnerReference` to its `ActionsGateway`, in both API versions, so once the CR leaves etcd the Kubernetes garbage collector reclaims the AGC and proxy `Deployment`s, both `ServiceAccount`s, the AGC `RoleBinding`, the egress `NetworkPolicy`s, the `Service`s, the `PodDisruptionBudget`, the `HorizontalPodAutoscaler`, the TLS `Secret`s, and the `RunnerGroup`s — asynchronously and unordered, so worker pods are not drained first.
+**If the finalizer was already stripped.** Every namespaced child the GMC applies carries a controller `OwnerReference` to its `ActionsGateway`, so once the CR leaves etcd the Kubernetes garbage collector reclaims the AGC and proxy `Deployment`s, both `ServiceAccount`s, the AGC `RoleBinding`, the egress `NetworkPolicy`s, the `Service`s, the `PodDisruptionBudget`, the `HorizontalPodAutoscaler`, and the TLS `Secret`s — asynchronously and unordered, so worker pods are not drained first.
 Give it a few seconds, then confirm the namespace is clean and delete anything left by hand:
 
 ```sh
-kubectl get all,sa,rolebinding,networkpolicy,pdb,hpa,secret,runnergroup -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-gmc
+kubectl get all,sa,rolebinding,networkpolicy,pdb,hpa,secret -n <namespace> -l app.kubernetes.io/managed-by=actions-gateway-gmc
 ```
 
 Two categories are **not** covered by that cascade and must be checked explicitly after a stripped finalizer: the per-gateway `ClusterRoleBinding` (cluster-scoped, so a namespaced gateway cannot own it) and any object left over from a pre-v0.X install (the per-tenant `Role`, the legacy `actions-gateway` `NetworkPolicy`), which only the finalizer's explicit deletes reach.
@@ -1016,10 +1009,10 @@ kubectl get role,networkpolicy -n <namespace>
 ## Tenant Namespace Stuck Terminating on agentpool-cleanup Finalizers
 
 **Symptoms.** `kubectl delete namespace <tenant>` never completes.
-The namespace sits in `Terminating` with nothing left in it, and the remaining objects hold `actions-gateway.com/agentpool-cleanup`, `actions-gateway.github.com/agentpool-cleanup`, or `actions-gateway.github.com/gmc-cleanup`.
+The namespace sits in `Terminating` with nothing left in it, and the remaining objects hold `actions-gateway.com/agentpool-cleanup`.
 
 **Cause.** The teardown order was inverted.
-The AGC Deployments live *inside* the tenant namespace, so deleting the namespace (or an `ActionsGateway`, which cascades its AGC) before the `RunnerGroup`s and `RunnerSet`s removes the very controllers whose finalizers have to clear.
+The AGC Deployments live *inside* the tenant namespace, so deleting the namespace (or an `ActionsGateway`, which cascades its AGC) before the `RunnerSet`s removes the very controllers whose finalizers have to clear.
 Nothing will clear them afterwards — this is structural, not a slow reconcile you can wait out.
 
 **Fix.** Delete in dependency order next time: the CRs first, then the gateways, then the namespace.
@@ -1030,7 +1023,7 @@ The same order applies to any tenant teardown, migration or not.
 
 ## Tenant Namespace Stuck Terminating After Narrowing the PriorityClass Allowlist
 
-**Symptoms.** Same surface as the entry above — the namespace sits in `Terminating` and the remaining `RunnerGroup`/`RunnerSet` objects hold their `agentpool-cleanup` finalizer — but the teardown order was correct and the AGC was still running when the CRs were deleted.
+**Symptoms.** Same surface as the entry above — the namespace sits in `Terminating` and the remaining `RunnerSet` objects hold their `agentpool-cleanup` finalizer — but the teardown order was correct and the AGC was still running when the CRs were deleted.
 The AGC logs (and its retry errors) show the finalizer update itself being denied by the allowlist guard:
 
 ```text
@@ -1043,7 +1036,7 @@ priorityClassName <class> is not in the platform PriorityClassAllowlist ...
 
 ```sh
 # The deleting objects, their finalizers, and the classes they still name
-kubectl --context "$CTX" get runnersets.actions-gateway.com,runnergroups.actions-gateway.github.com \
+kubectl --context "$CTX" get runnersets.actions-gateway.com \
   -n <TENANT_NS> -o json | jq -r '
   .items[] | select(.metadata.deletionTimestamp != null)
   | "\(.kind)/\(.metadata.name) finalizers=\(.metadata.finalizers) classes=\([(.spec.priorityTiers // [])[].priorityClassName, (.spec.podTemplate.spec.priorityClassName // empty)])"'
@@ -1258,8 +1251,8 @@ GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2 RunnerSet CRD is no
 installed, so this AGC would reconcile nothing (install the actions-gateway-crds-v2 chart)
 ```
 
-**Cause.** Each AGC serves exactly one API: the v1 singleton (no `GATEWAY_NAME`) reconciles `RunnerGroup`s, and a gateway-scoped AGC reconciles only its own gateway's `RunnerSet`s.
-With the v2 CRDs absent there is nothing for the latter to serve, so it exits rather than run a pod that passes its probes and reconciles nothing.
+**Cause.** A gateway-scoped AGC reconciles only its own gateway's `RunnerSet`s.
+With the v2 CRDs absent there is nothing for it to serve, so it exits rather than run a pod that passes its probes and reconciles nothing.
 
 Normally unreachable — the GMC stamps `GATEWAY_NAME` only when provisioning from a v2 `ActionsGateway`, which the v2 CRDs must exist to serve.
 In practice it means the opt-in `actions-gateway-crds-v2` chart was uninstalled (or rolled back) while v2 gateways were still deployed.
@@ -1301,23 +1294,16 @@ A parse error means the Secret's `tls.crt` is not a PEM certificate, which only 
 **Diagnostics.**
 
 ```bash
-kubectl get secret -n <namespace> actions-gateway-proxy-tls -o jsonpath='{.data.tls\.crt}' \
+kubectl get secret -n <namespace> <proxy>-proxy-tls -o jsonpath='{.data.tls\.crt}' \
   | base64 -d | openssl x509 -noout -subject -dates
 ```
 
 ```bash
-# v2
 kubectl get deploy -n <namespace> <gateway>-agc \
   -o jsonpath='{.spec.template.spec.volumes[?(@.name=="proxy-ca")]}'
 ```
 
-```bash
-# v1 (legacy)
-kubectl get deploy -n <namespace> actions-gateway-controller \
-  -o jsonpath='{.spec.template.spec.volumes[?(@.name=="proxy-ca")]}'
-```
-
-**Resolution.** For the parse error, delete the `actions-gateway-proxy-tls` Secret: the GMC re-issues an unparseable proxy cert on its next reconcile, and the proxy pods must be restarted to serve the new one.
+**Resolution.** For the parse error, delete the `<proxy>-proxy-tls` Secret: the GMC re-issues an unparseable proxy cert on its next reconcile, and the proxy pods must be restarted to serve the new one.
 For the read error, restore the mount as the GMC renders it — revert the manual edit, or exempt the tenant namespace from the mutating policy — then let the GMC re-render by bumping `ag.Spec`.
 Either way the AGC recovers on its next restart.
 An AGC that should egress directly must have no `proxy-ca` volume at all, rather than an empty or unreadable one.
@@ -1357,29 +1343,6 @@ The message-queue long poll is the one deliberate exception — it is bounded by
 
 ---
 
-## Orphaned RunnerGroup After Removing It From the Spec
-
-**Symptoms.** A runner group was removed from (or reordered within) `spec.runnerGroups` on an `ActionsGateway`, but a `RunnerGroup` for it still exists and keeps running listeners and worker pods.
-`kubectl get runnergroup -n <namespace>` lists more groups than the CR now declares:
-
-```sh
-# Owner-labelled RunnerGroups for a gateway vs. what the spec now declares
-kubectl get runnergroup -n <namespace> -l actions-gateway/owner-name=<gateway-name>
-kubectl get actionsgateway <gateway-name> -n <namespace> -o jsonpath='{range .spec.runnerGroups[*]}{.runnerLabels[0]}{"\n"}{end}'
-```
-
-**What happened.** On GMC versions without the Q101 fix, reconciliation only created/patched the groups currently in the spec and never deleted the ones removed — and because groups were keyed by list index, a remove or reorder could orphan a `RunnerGroup` CR that kept serving jobs until the entire `ActionsGateway` was deleted.
-
-**Resolution.**
-- Upgrade the GMC to a version with the Q101 fix.
-  Fixed versions reconcile `spec.runnerGroups` to the desired set: after applying the declared groups, the GMC prunes any owner-labelled `RunnerGroup` no longer in the spec, and keys pruning on owner labels (not list index) so a reorder never orphans a group.
-  A subsequent reconcile (edit the CR, or wait for the next resync) cleans up any pre-existing orphans automatically.
-- To remove a stranded group immediately on an affected version, delete its `RunnerGroup` directly: `kubectl delete runnergroup <name> -n <namespace>`.
-  The AGC's RunnerGroup cleanup stops its listeners and cascades to its worker pods.
-  Confirm you are deleting an orphan (its `runnerLabels` are not in the current `ActionsGateway` spec), not a live group.
-
----
-
 ## Proxy NetworkPolicy Has an Empty GitHub Allowlist
 
 **Symptoms.** On a freshly provisioned tenant, all proxy egress to GitHub is silently dropped: `curl` through the proxy times out (no `502`), the AGC cannot acquire jobs, and token refresh fails.
@@ -1397,7 +1360,7 @@ Only a **first-ever** provision with a not-yet-populated cache shows the empty a
 
 ```sh
 # Proxied gateway: inspect the proxy NetworkPolicy's GitHub ipBlock egress peers — empty means the cache never populated.
-kubectl get networkpolicy -n <namespace> actions-gateway-proxy \
+kubectl get networkpolicy -n <namespace> <proxy>-proxy \
   -o jsonpath='{.spec.egress[*].to[*].ipBlock.cidr}'
 
 # Direct-egress gateway: check the workload (and AGC) policy instead.
@@ -1412,7 +1375,7 @@ kubectl logs -n gmc-system deploy/gmc-controller-manager \
 **Resolution.**
 - Confirm the GMC pod itself can reach `api.github.com` (corporate egress firewall, DNS, or proxy in front of the cluster).
   The reconciler retries automatically; once connectivity is restored the next successful fetch patches every existing `NetworkPolicy`.
-- If the tenant manages its own egress policy (Cilium/Calico FQDN rules), set `spec.proxy.managedNetworkPolicy: false` so the reconciler leaves the policy alone.
+- If the tenant manages its own egress policy (Cilium/Calico FQDN rules), set `spec.managedNetworkPolicy: false` on the `EgressProxy` so the reconciler leaves the policy alone.
 
 ---
 
@@ -1426,18 +1389,14 @@ The message points at networking, but nothing is wrong with the network.
 The job was assigned at GitHub and no runner ever came online to run it.
 Any create rejection produces this shape: an invalid `metadata.name`, a policy-engine admission webhook, a `PodSecurity` label the pod violates, or a missing `PriorityClass`.
 
-The two most confusing instances were names the controllers derived themselves.
-Both are fixed; both are worth recognising if you are running an older release, and in both the workaround is to rename the gateway to a different length.
+The most confusing instance was a name the AGC derived itself.
+It is fixed, and worth recognising if you are running an older release, where the workaround is to rename the gateway to a different length.
 
 - **The worker pod's own name (Q467).** `runner-<owner>-<jobID>` truncated to the 63-character DNS-label limit could land the cut on one of the job UUID's hyphens, and a name ending in `-` is rejected.
   Deterministic per gateway-name length: for an affected length, *every* worker pod was rejected and *no* job ever ran.
-- **The `RunnerGroup` name used as a label value (Q473, `v1alpha1` only).** The GMC derives `<gateway>-<runner-label>`, and the AGC stamps that on every worker pod as `actions-gateway/runner-group`.
-  Object names may be 253 characters but **label values stop at 63**, so past that the `RunnerGroup` reconciles perfectly while every worker pod create fails.
-  A 15-character gateway with a 40-character runner label was enough.
-  `v2` is unaffected: it caps CR names at 52 characters precisely so derived children fit.
 
-Both now derive through one bounded helper: the budget is split across the name's segments and each truncated tail carries a hash, so a derived name is always valid and still unique.
-**On upgrade, a gateway whose derived `RunnerGroup` name exceeded 63 characters gets a renamed `RunnerGroup`** (the old one is pruned) — that tenant could not place a worker pod before the rename, so nothing working is disturbed.
+The name now derives through a bounded helper: the budget is split across the name's segments and each truncated tail carries a hash, so a derived name is always valid and still unique.
+
 
 **Diagnostics.**
 
@@ -1453,10 +1412,7 @@ kubectl get events -n <namespace> --field-selector reason=WorkerPodCreateFailed
 
 ```sh
 # The same rejection in the AGC log, with the pod name it tried to create.
-# v2
 kubectl logs -n <namespace> deploy/<gateway>-agc | grep -i "rejected worker pod"
-# v1 (legacy)
-kubectl logs -n <namespace> deploy/actions-gateway-controller | grep -i "rejected worker pod"
 ```
 
 **Resolution.**
@@ -1505,7 +1461,7 @@ kubectl describe nodes | grep -A 5 "Allocated resources"
 - If image pull is slow (first job on a cold node): this is expected.
   If it exceeds the p99 SLO (60s), consider pre-pulling the image via a DaemonSet or enabling image streaming.
 
-**Deadline.** A pod that stays Pending is not held forever: after `pendingPodDeadline` (default 10m, per-RunnerGroup) the AGC deletes it to free the concurrency-ceiling slot it was holding — see the next runbook section.
+**Deadline.** A pod that stays Pending is not held forever: after `pendingPodDeadline` (default 10m, per `RunnerSet`) the AGC deletes it to free the concurrency-ceiling slot it was holding — see the next runbook section.
 Diagnose a stuck pod (`kubectl describe pod`) *before* the deadline reaps it, or raise `pendingPodDeadline` temporarily while debugging.
 
 ---
@@ -1575,7 +1531,7 @@ kubectl describe pod -n <namespace> <worker-pod-name>
 
 **Resolution.**
 - Fix the unpullable image or unsatisfiable scheduling constraint — that is the root cause; the reap is the messenger.
-- If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the RunnerGroup (or the matching `runnerGroups[]` entry of the `ActionsGateway` CR) above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
+- If scheduling is legitimately slow (autoscaled GPU nodes), raise `spec.pendingPodDeadline` on the `RunnerSet` above the worst-case node-provisioning time, e.g. `pendingPodDeadline: "30m"`.
 - Fix the cause first, then let the automatic re-run land: it fires on the next worker pod the group places, so a fix that restores scheduling also releases the recovery.
   Re-run from the GitHub UI when the budget is already exhausted (`eviction_retries_exhausted_total{cause="abandoned"}`) or the wait expired (`abandoned_run_rerun_waits_total{outcome="expired"}`).
 
@@ -1753,7 +1709,7 @@ For the dogfood cluster, `scripts/dogfood/stop.sh` drains in-flight workers befo
 ## Worker Killed by the Lifetime Cap (WorkerPodLifetimeExceeded)
 
 **Symptoms.** A job that used to finish now fails partway through, always at roughly the same elapsed time.
-The worker pod is `Failed` with `reason: DeadlineExceeded`, a `Warning` Event with reason `WorkerPodLifetimeExceeded` appears on the `RunnerGroup`/`RunnerSet`, and `actions_gateway_worker_pods_reaped_total{reason="lifetime_exceeded"}` increments.
+The worker pod is `Failed` with `reason: DeadlineExceeded`, a `Warning` Event with reason `WorkerPodLifetimeExceeded` appears on the `RunnerSet`, and `actions_gateway_worker_pods_reaped_total{reason="lifetime_exceeded"}` increments.
 
 ```sh
 kubectl get pod <pod> -n <namespace> -o jsonpath='{.status.phase}{"\t"}{.status.reason}{"\n"}'
@@ -1775,12 +1731,6 @@ There are two possibilities, and they are worth telling apart before changing an
 
 ```sh
 kubectl patch runnerset <name> -n <namespace> --type=merge \
-  -p '{"spec":{"maxWorkerLifetime":"24h"}}'
-```
-
-```sh
-# v1: the same field on the RunnerGroup
-kubectl patch runnergroup <name> -n <namespace> --type=merge \
   -p '{"spec":{"maxWorkerLifetime":"24h"}}'
 ```
 
@@ -2008,7 +1958,7 @@ It is a backstop, not a fix — the pod is still killed rather than completing, 
 
 **Resolution.** Opt the GAG tenant namespace out of the mesh, or — if mesh membership is mandatory — switch to native sidecars (Kubernetes 1.28+) or a sidecar-less/ambient data plane.
 The full per-mesh configuration (Istio sidecar + ambient, Linkerd, Cilium, generic) is in [Running GAG Alongside a Service Mesh](service-mesh-coexistence.md).
-Note that mesh opt-out/exclusion annotations set on the RunnerGroup `podTemplate` are **not** honored — GAG strips arbitrary worker-pod-template metadata; configure the mesh at the namespace level instead.
+Note that mesh opt-out/exclusion annotations set on the `RunnerTemplate` `podTemplate` are **not** honored — GAG strips arbitrary worker-pod-template metadata; configure the mesh at the namespace level instead.
 
 A mesh sidecar is *injected* at admission, so it is not in the `RunnerTemplate` and GAG cannot warn about it ahead of time — the runtime symptom above is the only signal.
 A **build/DinD sidecar you declare in the template** is different: GAG detects it and warns proactively — see the next section.
@@ -2044,7 +1994,7 @@ kubectl get runnerset <name> -n <namespace> \
 
 ## Worker Image Runner Version
 
-**Symptoms.** A `RunnerGroup` or `RunnerSet` reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`) or `WorkerImageVersionUnknown` (`Unknown`), and a `WorkerImageBelowMinimum` Warning event names both versions.
+**Symptoms.** A `RunnerSet` reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`) or `WorkerImageVersionUnknown` (`Unknown`), and a `WorkerImageBelowMinimum` Warning event names both versions.
 Jobs may still be running normally: the condition is a prediction about GitHub's enforcement, not a report that something already broke.
 
 **What happened.** GitHub refuses to register a self-hosted runner below an enforced minimum version, `2.329.0` as of the 2026-06-12 changelog, and separately requires each new runner release be installed within 30 days of publication for the runner to keep executing jobs.
@@ -2119,9 +2069,9 @@ kubectl get runnerset <name> -n <namespace> \
 
 ---
 
-## Job-Lifecycle Events on a RunnerGroup / RunnerSet
+## Job-Lifecycle Events on a RunnerSet
 
-**What this is.** Beyond `WorkerPodStuckPending` (above), the AGC records `Warning` Kubernetes Events on the owning `RunnerGroup` (`v1alpha1`) or `RunnerSet` (`v2`) when a job-lifecycle transition fails terminally (Q170).
+**What this is.** Beyond `WorkerPodStuckPending` (above), the AGC records `Warning` Kubernetes Events on the owning `RunnerSet` when a job-lifecycle transition fails terminally (Q170).
 They are the event-based companion to the always-present metrics and status conditions — surfacing the same incident in `kubectl describe`, `kubectl get events`, and any event watcher, without a Prometheus query.
 Each `Reason` mirrors the corresponding metric name so you can correlate the two.
 
@@ -2199,10 +2149,10 @@ A metrics-server that is absent or not yet serving produces the same reason with
 
 ```sh
 # Check HPA status
-kubectl describe hpa -n <namespace> actions-gateway-proxy
+kubectl describe hpa -n <namespace> <proxy>-proxy
 
 # Check proxy pod resource requests
-kubectl get pod -n <namespace> -l app=actions-gateway-proxy -o jsonpath='{.items[0].spec.containers[0].resources}'
+kubectl get pod -n <namespace> -l actions-gateway.com/egress-proxy=<proxy> -o jsonpath='{.items[0].spec.containers[0].resources}'
 
 # Check metrics-server is running
 kubectl get pods -n kube-system -l k8s-app=metrics-server
@@ -2210,12 +2160,12 @@ kubectl get pods -n kube-system -l k8s-app=metrics-server
 
 **Resolution.**
 
-Ensure `spec.proxy.resources.requests.cpu` is set to a non-zero value in the `ActionsGateway` spec.
+Ensure `spec.resources.requests.cpu` is set to a non-zero value in the `EgressProxy` spec.
 The default is `10m`.
 If you explicitly set `resources` without including `requests.cpu`, the whole `resources` block is replaced and defaults are lost — set all four sub-fields explicitly:
 
 ```yaml
-proxy:
+spec:
   resources:
     requests:
       cpu: "10m"
@@ -2235,7 +2185,7 @@ Under load the pool wedges below its target and the rejected creates surface in 
 The **ReplicaSet** records a `Warning` Event with reason `FailedCreate`, and the **Deployment** carries the same text as `ReplicaFailure=True`, also with reason `FailedCreate`:
 
 ```text
-Error creating: pods "actions-gateway-proxy-<replicaset>-<id>" is forbidden: exceeded quota: <quota-name>, requested: limits.cpu=100m,limits.memory=64Mi,pods=1,requests.cpu=10m,requests.memory=32Mi, used: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi, limited: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi
+Error creating: pods "<proxy>-proxy-<replicaset>-<id>" is forbidden: exceeded quota: <quota-name>, requested: limits.cpu=100m,limits.memory=64Mi,pods=1,requests.cpu=10m,requests.memory=32Mi, used: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi, limited: limits.cpu=200m,limits.memory=128Mi,pods=2,requests.cpu=20m,requests.memory=64Mi
 ```
 
 Match on the reason rather than the message, as with the `<unknown>` causes above: `FailedCreate` is stable API surface and the message names every quota dimension, not only the one that bound.
@@ -2244,7 +2194,7 @@ Match on the reason rather than the message, as with the `<unknown>` causes abov
 ```sh
 # The rejected creates, and the same text on the Deployment.
 kubectl get events -n <namespace> --field-selector reason=FailedCreate
-kubectl get deploy -n <namespace> actions-gateway-proxy \
+kubectl get deploy -n <namespace> <proxy>-proxy \
   -o jsonpath='{range .status.conditions[?(@.type=="ReplicaFailure")]}{.reason}: {.message}{"\n"}{end}'
 ```
 
@@ -2262,42 +2212,8 @@ kubectl get actionsgateway -n <namespace> <name> \
 kubectl describe actionsgateway -n <namespace> <name>
 ```
 
-Resolve by **either** raising the platform-owned quota (`kubectl edit resourcequota -n <namespace> <quota-name>`) to admit the configured `maxReplicas`, **or** lowering `spec.proxy.maxReplicas` to fit.
+Resolve by **either** raising the platform-owned quota (`kubectl edit resourcequota -n <namespace> <quota-name>`) to admit the configured `maxReplicas`, **or** lowering the `EgressProxy`'s `spec.maxReplicas` to fit.
 Editing the quota's `.spec.hard` re-triggers reconciliation immediately; the conditions clear on the next reconcile.
-
-**Third likely cause (mid-migration, GMC before `v1.3.0`): two proxy pools share a selector.** In a namespace running both a v1 inline pool and a v2 `EgressProxy` pool, **neither** pool scales, and both HPAs go `ScalingActive=False` with reason `AmbiguousSelector`.
-Each names **its own** scale target's selector and lists every HPA in the conflict.
-Below, the `EgressProxy` is named `ep1`:
-
-```sh
-kubectl get hpa -n <namespace> \
-  -o custom-columns='NAME:.metadata.name,REASON:.status.conditions[?(@.type=="ScalingActive")].reason,MESSAGE:.status.conditions[?(@.type=="ScalingActive")].message'
-```
-
-```text
-NAME                    REASON              MESSAGE
-actions-gateway-proxy   AmbiguousSelector   pods by selector app=actions-gateway-proxy are controlled by multiple HPAs: [<namespace>/actions-gateway-proxy <namespace>/ep1-proxy]
-ep1-proxy               AmbiguousSelector   pods by selector actions-gateway.com/egress-proxy=ep1,app=actions-gateway-proxy are controlled by multiple HPAs: [<namespace>/ep1-proxy <namespace>/actions-gateway-proxy]
-```
-
-Key any alerting on the **reason**, never the message: the selector differs per HPA, and the bracketed HPA list is unordered, and consecutive emissions swap it.
-The controller also records `AmbiguousSelector` and `FailedComputeMetricsReplicas` Warning Events carrying the same text, so `kubectl describe hpa` shows both.
-(Measured: Kubernetes v1.35.5 and v1.36.1, metrics-server v0.8.1, 2026-08-03; two Deployments whose pods both carry `app=actions-gateway-proxy`, one HPA each.
-Identical wording on both versions.)
-
-An HPA has no selector of its own — it resolves its scale target's — and refuses to act on pods a second HPA also controls.
-The v2 pool used to stamp `app: actions-gateway-proxy`, the label v1's `Deployment` selector keys on, so each HPA saw the other's pods.
-The same overlap put each pool's pods under both `PodDisruptionBudget`s (making them unevictable, so node drains hung) and made the two pools repel each other off every node.
-
-```sh
-# Both pools' pods answer to the v1 label on an affected install; only v1's should.
-kubectl get pods -n <namespace> -l app=actions-gateway-proxy \
-  -o custom-columns='NAME:.metadata.name,PROXY:.metadata.labels.actions-gateway\.com/egress-proxy'
-```
-
-**Resolution: upgrade the GMC.** A v2 pool no longer carries the v1 label, so both HPAs recover on their own.
-The upgrade recreates that `EgressProxy`'s pool once — see [the upgrade note](upgrade.md#non-breaking-an-egressproxy-pools-pods-drop-the-app-actions-gateway-proxy-label-its-pool-is-recreated-once).
-There is no in-place workaround: `Deployment.spec.selector` is immutable, so the overlap cannot be edited away.
 
 **v2 (`EgressProxy`) note — bring-your-own autoscaler.** If the pool's `EgressProxy` sets `spec.managedAutoscaling: false`, there is **no managed HPA by design** — `kubectl get hpa` finding nothing named `<name>-proxy` is not a fault.
 Scaling is owned by whatever you attached to the `<name>-proxy` Deployment (KEDA, VPA, a custom HPA), so debug that scaler instead; `spec.maxReplicas` and `spec.targetCPUUtilizationPercentage` are inert.
@@ -2333,12 +2249,12 @@ ns=<namespace>
 # Distribution of tunnel lifetimes; a heavy tail near 21600s (6h) or
 # a spike at 300s (5m idle) indicates clients hitting the caps.
 curl -s --cert scraper.crt --key scraper.key --cacert metrics-ca.crt \
-  "https://actions-gateway-proxy.$ns.svc:8443/metrics" | \
+  "https://<proxy>-proxy.$ns.svc:8443/metrics" | \
   grep actions_gateway_proxy_tunnel_duration_seconds_bucket
 
 # Active vs. total tunnels — healthy ratio is "active << total".
 curl -s --cert scraper.crt --key scraper.key --cacert metrics-ca.crt \
-  "https://actions-gateway-proxy.$ns.svc:8443/metrics" | \
+  "https://<proxy>-proxy.$ns.svc:8443/metrics" | \
   grep -E 'actions_gateway_proxy_connections_(active|total)'
 ```
 
@@ -2398,7 +2314,7 @@ for p in $(kubectl get pods -n "$ns" -l actions-gateway/component=proxy \
 done
 
 # Confirm the pod's grace period still exceeds the drain budget.
-kubectl get deploy -n "$ns" actions-gateway-proxy \
+kubectl get deploy -n "$ns" <proxy>-proxy \
   -o jsonpath='{.spec.template.spec.terminationGracePeriodSeconds}{"\n"}'
 ```
 
@@ -2429,7 +2345,7 @@ If you are running proxy pools on aggressively reclaimed nodes and want every av
 ```sh
 # Disable the endpoint-removal linger (negative duration). Accepts the race in
 # exchange for spending the whole window on the tunnel drain.
-kubectl set env deploy/actions-gateway-proxy -n <namespace> \
+kubectl set env deploy/<proxy>-proxy -n <namespace> \
   PROXY_SHUTDOWN_LINGER=-1s
 ```
 
@@ -2463,11 +2379,11 @@ Both halves are required.
 2. Fetch the scraper client bundle the GMC publishes in each tenant namespace and point the scrape at `:8443` with `scheme: https`:
    ```sh
    ns=<tenant-namespace>
-   kubectl get secret actions-gateway-metrics-client -n "$ns" -o jsonpath='{.data.tls\.crt}' | base64 -d > scraper.crt
-   kubectl get secret actions-gateway-metrics-client -n "$ns" -o jsonpath='{.data.tls\.key}' | base64 -d > scraper.key
-   kubectl get secret actions-gateway-metrics-client -n "$ns" -o jsonpath='{.data.ca\.crt}'  | base64 -d > metrics-ca.crt
+   kubectl get secret <proxy>-metrics-client -n "$ns" -o jsonpath='{.data.tls\.crt}' | base64 -d > scraper.crt
+   kubectl get secret <proxy>-metrics-client -n "$ns" -o jsonpath='{.data.tls\.key}' | base64 -d > scraper.key
+   kubectl get secret <proxy>-metrics-client -n "$ns" -o jsonpath='{.data.ca\.crt}'  | base64 -d > metrics-ca.crt
    curl -s --cert scraper.crt --key scraper.key --cacert metrics-ca.crt \
-     "https://actions-gateway-proxy.$ns.svc:8443/metrics" | head
+     "https://<proxy>-proxy.$ns.svc:8443/metrics" | head
    ```
    Delete the extracted key file when finished.
    For a `ServiceMonitor`, mount the bundle and reference it from `tlsConfig` (`cert`/`keySecret`/`ca`).
@@ -2604,13 +2520,7 @@ kubectl get secret -n <namespace> <name> -o jsonpath='{.data.privateKey}' | base
 To trigger a rolling update on the AGC Deployment after fixing the Secret, change `spec.credentials.githubApp.name` in the `ActionsGateway` spec to reference the new Secret name (the GMC will roll the AGC Deployment automatically) or manually restart the Deployment:
 
 ```sh
-# v2
 kubectl rollout restart deploy/<gateway>-agc -n <namespace>
-```
-
-```sh
-# v1 (legacy)
-kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
 ```
 
 On a GMC older than the Q552 fix that manual restart is a silent no-op — prefer the `spec.credentials.githubApp.name` change, or see [`kubectl rollout restart` of a Managed Deployment Reports Success but Nothing Restarts](#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts).
@@ -2636,16 +2546,13 @@ GitHub App installation tokens expire after one hour; if refresh fails, new sess
 # Metric: rate(actions_gateway_token_refresh_errors_total[5m])
 
 # Check AGC logs for the error detail
-# v2
 kubectl logs -n <namespace> deploy/<gateway>-agc | grep "token refresh"
-# v1 (legacy)
-kubectl logs -n <namespace> deploy/actions-gateway-controller | grep "token refresh"
 
 # Test connectivity to GitHub via the tenant proxy (AGC is distroless — use an
 # ephemeral curl pod in the same namespace; it picks up the same NetworkPolicy egress).
 kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
   --image=curlimages/curl:latest \
-  --overrides='{"spec":{"automountServiceAccountToken":false,"containers":[{"name":"c","image":"curlimages/curl:latest","command":["sh","-c","curl -x https://actions-gateway-proxy:8080 -sI https://api.github.com/app"]}]}}'
+  --overrides='{"spec":{"automountServiceAccountToken":false,"containers":[{"name":"c","image":"curlimages/curl:latest","command":["sh","-c","curl -x https://<proxy>-proxy:8080 -sI https://api.github.com/app"]}]}}'
 ```
 
 **Resolution.**
@@ -2669,19 +2576,19 @@ Logs show `connection refused`, `dial tcp: i/o timeout`, or `proxy: no response 
 **Likely causes.**
 - The proxy pod is not running or not ready.
 - `HTTP_PROXY`/`HTTPS_PROXY` environment variables are incorrect (wrong Service name or port).
-- `actions-gateway-workload` NetworkPolicy is blocking the AGC-to-proxy egress path (e.g. proxy ClusterIP changed after a recreate and the rule wasn't reconciled).
-- `actions-gateway-proxy` NetworkPolicy is blocking the proxy's egress to GitHub (IP ranges stale or `managedNetworkPolicy: false` with no replacement rule).
-- `actions-gateway-controller` NetworkPolicy is missing — AGC can't reach the K8s API server, so token refresh and webhook health checks fail before any GitHub traffic.
+- `<gateway>-workload` NetworkPolicy is blocking the AGC-to-proxy egress path (e.g. proxy ClusterIP changed after a recreate and the rule wasn't reconciled).
+- `<proxy>-proxy` NetworkPolicy is blocking the proxy's egress to GitHub (IP ranges stale or `managedNetworkPolicy: false` with no replacement rule).
+- `<gateway>-agc` NetworkPolicy is missing — AGC can't reach the K8s API server, so token refresh and webhook health checks fail before any GitHub traffic.
 
 **Diagnostics.**
 
 ```sh
 # Check proxy pod status
-kubectl get pods -n <namespace> -l app=actions-gateway-proxy
+kubectl get pods -n <namespace> -l actions-gateway.com/egress-proxy=<proxy>
 
 # Verify the proxy Service exists and has endpoints
-kubectl get svc -n <namespace> actions-gateway-proxy
-kubectl get endpoints -n <namespace> actions-gateway-proxy
+kubectl get svc -n <namespace> <proxy>-proxy
+kubectl get endpoints -n <namespace> <proxy>-proxy
 
 # Check the AGC container's HTTPS_PROXY env var (distroless — inspect spec, not the running process)
 kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
@@ -2690,11 +2597,11 @@ kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-control
 # Test proxy connectivity using an ephemeral curl pod in the same namespace
 kubectl run nettest-$$ -n <namespace> --rm -it --restart=Never \
   --image=curlimages/curl:latest \
-  --overrides='{"spec":{"automountServiceAccountToken":false,"containers":[{"name":"c","image":"curlimages/curl:latest","command":["sh","-c","curl -v -x https://actions-gateway-proxy:8080 https://api.github.com 2>&1 | head -20"]}]}}'
+  --overrides='{"spec":{"automountServiceAccountToken":false,"containers":[{"name":"c","image":"curlimages/curl:latest","command":["sh","-c","curl -v -x https://<proxy>-proxy:8080 https://api.github.com 2>&1 | head -20"]}]}}'
 
 # Check NetworkPolicy rules — there are three: workload, agc, proxy
 kubectl get networkpolicy -n <namespace>
-# Expected: actions-gateway-workload, actions-gateway-controller, actions-gateway-proxy
+# Expected: <gateway>-workload, <gateway>-agc, <proxy>-proxy
 kubectl describe networkpolicy -n <namespace>
 
 # Check the IP range refresh metric
@@ -2703,9 +2610,9 @@ kubectl describe networkpolicy -n <namespace>
 
 **Resolution.**
 - If the proxy pod is down: check its logs and restart if necessary.
-- If the `NetworkPolicy` egress rules are stale: trigger a manual refresh by temporarily setting `spec.proxy.managedNetworkPolicy: false` and back to `true`, or wait for the 24-hour automatic refresh cycle.
+- If the `NetworkPolicy` egress rules are stale: trigger a manual refresh by temporarily setting the `EgressProxy`'s `spec.managedNetworkPolicy: false` and back to `true`, or wait for the 24-hour automatic refresh cycle.
   Check the GitHub meta API for current IP ranges: `curl https://api.github.com/meta | jq .actions`.
-- If an internal destination is being sent through the proxy: add it to `spec.proxy.noProxyCIDRs` (v1) / the `EgressProxy`'s `spec.noProxyCIDRs` (v2).
+- If an internal destination is being sent through the proxy: add it to the `EgressProxy`'s `spec.noProxyCIDRs`.
   The cluster-internal exemptions — including the API server — are appended automatically, so a missing service CIDR is not the cause; see [AGC Crash-Loops Dialling the API Server Through the Egress Proxy](#agc-crash-loops-dialling-the-api-server-through-the-egress-proxy) and the `noProxyCIDRs` field documentation in [§3.1](../design/03-api-contracts.md#31-kubernetes-crd-schemas).
 
 ---
@@ -2747,7 +2654,7 @@ kubectl get deploy -n <namespace> -l app.kubernetes.io/name=actions-gateway-cont
 
 - **Upgrade the GMC** to a release carrying the Q465 fix and let the tenant's AGC Deployment be re-reconciled (`kubectl rollout restart deploy -n <namespace> <agc>` if it does not roll on its own).
   The exemption then follows the cluster.
-- **Workaround on an older GMC**: name the API server's ClusterIP in the tenant's `noProxyCIDRs` (v1 `spec.proxy.noProxyCIDRs`, v2 `EgressProxy.spec.noProxyCIDRs`) — the single address from step 1, or that cluster's Service CIDR if you prefer (`kubectl cluster-info dump | grep -m1 service-cluster-ip-range`).
+- **Workaround on an older GMC**: name the API server's ClusterIP in the `EgressProxy`'s `spec.noProxyCIDRs` — the single address from step 1, or that cluster's Service CIDR if you prefer (`kubectl cluster-info dump | grep -m1 service-cluster-ip-range`).
   Prefer the single address: every entry bypasses the tenant's egress proxy, and a CIDR exempts hosts you did not name.
 - If `NO_PROXY` shows the literal `$(KUBERNETES_SERVICE_HOST)` unexpanded inside the **running container**, the GMC was running outside the cluster when it composed the Deployment and the kubelet did not expand it.
   Run the GMC in-cluster (the supported deployment) and re-reconcile.
@@ -2757,7 +2664,7 @@ kubectl get deploy -n <namespace> -l app.kubernetes.io/name=actions-gateway-cont
 ## AGC Cannot Reach the Kubernetes API Server (NetworkPolicy + post-DNAT port mismatch)
 
 **Symptoms.** AGC logs show `dial tcp 10.96.0.1:443: i/o timeout` (or similar) when calling the K8s API server.
-The `actions-gateway-controller` NetworkPolicy *appears* to allow port 443, yet the connection is silently dropped.
+The `<gateway>-agc` NetworkPolicy *appears* to allow port 443, yet the connection is silently dropped.
 Most often surfaces in kind, but possible on any cluster where the `kubernetes` Service backends listen on a port other than 443.
 
 **Cause.** NetworkPolicy enforcement evaluates packets *after* kube-proxy's DNAT.
@@ -2773,11 +2680,7 @@ kubectl get endpointslice -n default -l kubernetes.io/service-name=kubernetes \
   -o jsonpath='{.items[0].ports[0].port}{"\n"}'
 
 # 2. Confirm the AGC NetworkPolicy actually allows both 443 and 6443.
-# v2
 kubectl get networkpolicy -n <namespace> <gateway>-agc -o yaml \
-  | yq '.spec.egress[].ports[].port' | sort -u
-# v1 (legacy)
-kubectl get networkpolicy -n <namespace> actions-gateway-controller -o yaml \
   | yq '.spec.egress[].ports[].port' | sort -u
 
 # 3. If the cluster uses kindnet / kube-network-policies, check the verdict log
@@ -2845,7 +2748,7 @@ kubectl exec -n <tenant-ns> dnstest -- nslookup api.github.com
 kubectl delete pod dnstest -n <tenant-ns>
 ```
 
-If you are pinned to an older GAG build and cannot upgrade immediately, the same effect can be obtained by setting `spec.proxy.managedNetworkPolicy: false` and supplying your own egress policy that allows port-53 to `node-local-dns` — but prefer upgrading, since a hand-managed policy must then track GitHub IP-range rotation itself.
+If you are pinned to an older GAG build and cannot upgrade immediately, the same effect can be obtained by setting the `EgressProxy`'s `spec.managedNetworkPolicy: false` and supplying your own egress policy that allows port-53 to `node-local-dns` — but prefer upgrading, since a hand-managed policy must then track GitHub IP-range rotation itself.
 
 ---
 
@@ -2863,7 +2766,7 @@ The runner retries for ~3 minutes, then exits 1.
 **Cause.** Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the cert-manager-issued self-signed CA that signed it.
 This is the worker-side mirror of the AGC's proxy-CA pinning ([§5.2](../design/05-security.md) "Cross-Tenant Proxy CA Trust"): the AGC mounts the CA explicitly so its outbound HTTPS works; worker pods must do the same.
 
-The AGC's pod provisioner is supposed to project the per-tenant `actions-gateway-proxy-tls` Secret into every worker pod at `/etc/actions-gateway/proxy-ca/tls.crt` and set `PROXY_CA_CERT_PATH` so the worker entrypoint wrapper builds a combined `SSL_CERT_FILE` bundle before exec'ing `Runner.Worker`.
+The AGC's pod provisioner is supposed to project the `<proxy>-proxy-tls` Secret into every worker pod at `/etc/actions-gateway/proxy-ca/tls.crt` and set `PROXY_CA_CERT_PATH` so the worker entrypoint wrapper builds a combined `SSL_CERT_FILE` bundle before exec'ing `Runner.Worker`.
 UntrustedRoot means one of those steps did not happen.
 
 **Diagnostics.**
@@ -2872,13 +2775,13 @@ UntrustedRoot means one of those steps did not happen.
 # 1. Inspect a failed worker pod's spec — the Secret volume must exist.
 kubectl get pod -n <namespace> <worker-pod-name> -o yaml \
   | yq '.spec.volumes[] | select(.name=="proxy-ca")'
-# Expected: a Secret volume with secretName: actions-gateway-proxy-tls and Items: [{key: tls.crt, path: tls.crt}]
+# Expected: a Secret volume with secretName: <proxy>-proxy-tls and Items: [{key: tls.crt, path: tls.crt}]
 # If empty: the AGC was deployed without PROXY_TLS_SECRET_NAME.
 
 # 2. Confirm the AGC has the PROXY_TLS_SECRET_NAME env wired.
 kubectl get pod -n <namespace> -l app.kubernetes.io/name=actions-gateway-controller \
   -o jsonpath='{range .items[0].spec.containers[?(@.name=="agc")].env[?(@.name=="PROXY_TLS_SECRET_NAME")]}{.name}={.value}{"\n"}{end}'
-# Expected: PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls
+# Expected: PROXY_TLS_SECRET_NAME=<proxy>-proxy-tls
 # Empty means the GMC needs to roll the AGC Deployment (likely an upgrade across the 5h boundary).
 
 # 3. Confirm the worker container's PROXY_CA_CERT_PATH env.
@@ -2886,17 +2789,17 @@ kubectl get pod -n <namespace> <worker-pod-name> -o yaml \
   | yq '.spec.containers[] | select(.name=="runner") | .env[] | select(.name=="PROXY_CA_CERT_PATH")'
 
 # 4. Confirm the proxy TLS Secret exists and contains tls.crt.
-kubectl get secret -n <namespace> actions-gateway-proxy-tls \
+kubectl get secret -n <namespace> <proxy>-proxy-tls \
   -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -subject -issuer -dates
 ```
 
 **Resolution.**
-- If the worker pod has no `proxy-ca` volume: ensure the AGC was started with `PROXY_TLS_SECRET_NAME=actions-gateway-proxy-tls` (the GMC injects this automatically — if it's missing, the GMC needs to roll the AGC Deployment, e.g. by bumping `ag.Spec` or restarting the GMC).
+- If the worker pod has no `proxy-ca` volume: ensure the AGC was started with `PROXY_TLS_SECRET_NAME=<proxy>-proxy-tls` (the GMC injects this automatically — if it's missing, the GMC needs to roll the AGC Deployment, e.g. by bumping `ag.Spec` or restarting the GMC).
 - If the volume is present but the wrapper logs nothing about `proxy CA trust installed`: check that `PROXY_CA_CERT_PATH` is set on the runner container and the mounted file is non-empty.
   An empty/missing file is tolerated as a no-op, which silently leaves the runner with no proxy trust — the wrapper log line `no proxy CA cert mounted; skipping trust-store install` distinguishes this case from a wrapper that ran the install successfully.
 - If the proxy TLS Secret is missing or the cert has expired: the GMC's cert-manager integration ([§2.1](../design/02-architecture.md#21-tier-1--gateway-manager-controller-gmc) "Proxy Deployer") owns rotation; check the GMC's logs for issuer errors.
   As a fallback, deleting the Secret triggers reissuance.
-- If the issue persists after the volume and env are correct: confirm the proxy pod is presenting the cert signed by the CA in the Secret — `kubectl exec` into a curl pod in the same namespace and run `openssl s_client -connect actions-gateway-proxy:8080 -showcerts </dev/null` to inspect what the proxy actually serves.
+- If the issue persists after the volume and env are correct: confirm the proxy pod is presenting the cert signed by the CA in the Secret — `kubectl exec` into a curl pod in the same namespace and run `openssl s_client -connect <proxy>-proxy:8080 -showcerts </dev/null` to inspect what the proxy actually serves.
 
 ---
 
@@ -3036,7 +2939,7 @@ A re-run more than 7 days after the failure, or one that lands on another `Runne
 
 **Symptoms.** `actions_gateway_eviction_retries_exhausted_total` is incrementing.
 Jobs are being cancelled after eviction despite automatic retries.
-`kubectl describe` on the owning `RunnerGroup`/`RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
+`kubectl describe` on the owning `RunnerSet` shows a `Warning` event with reason `EvictionRetriesExhausted` (Q170) naming the affected run — the event-based companion to the metric.
 
 **Likely causes.**
 - Worker pod keeps being evicted on every attempt (persistent node pressure, OOM loop, or scheduling conflict that prevents the pod from completing).
@@ -3070,13 +2973,13 @@ kubectl describe runnerset -n <namespace> <name> | grep -A1 EvictionRetriesExhau
 
 **Resolution.**
 - `cause="eviction"` climbing — node memory pressure: increase the worker pod's memory requests to discourage the kubelet from evicting it, or investigate the workload's actual memory usage.
-- `cause="preemption"` climbing — a higher-priority tier is repeatedly displacing this group: reduce the priority of competing workloads, adjust `priorityTiers` to give this RunnerGroup a higher floor, or move the work to a tier that is not displaceable.
+- `cause="preemption"` climbing — a higher-priority tier is repeatedly displacing this group: reduce the priority of competing workloads, adjust `priorityTiers` to give this `RunnerSet` a higher floor, or move the work to a tier that is not displaceable.
   A long job in an opportunistic tier is the usual culprit, since every displacement restarts it from the beginning.
 - `cause="deletion"` climbing — something outside the gateway is deleting live workers: a node drain (upgrades, autoscaler consolidation), a descheduler, or hand-run `kubectl delete pod`.
   Find the deleter before raising the budget; see [Draining a Worker Auto-Re-Runs the Jobs It Interrupts](#draining-a-worker-auto-re-runs-the-jobs-it-interrupts).
 - `cause="node_shutdown"` climbing: workers are landing on nodes that go away under them, usually Spot or preemptible capacity being reclaimed.
-  Every reclamation restarts the job from the beginning, so move long jobs onto on-demand nodes with the RunnerGroup's scheduling constraints.
-- If the retry budget is simply too low for a workload that is legitimately disrupted more than twice per run: increase `maxEvictionRetries` on the RunnerGroup spec (default 2, max 10).
+  Every reclamation restarts the job from the beginning, so move long jobs onto on-demand nodes with the `RunnerTemplate`'s scheduling constraints.
+- If the retry budget is simply too low for a workload that is legitimately disrupted more than twice per run: increase `maxEvictionRetries` on the `RunnerSet` spec (default 2, max 10).
 - If the workload is consistently failing (OOM crash, not a disruption): the auto-retry is not appropriate.
   Set `maxEvictionRetries: 0` and investigate the underlying workload issue.
 
@@ -3222,7 +3125,7 @@ kubectl get pods -n <namespace> -l app.kubernetes.io/name=actions-gateway-contro
 ```
 
 **Resolution.**
-- **Raise `maxEvictionRetries`** on the `RunnerGroup`/`RunnerSet` spec (default 2, max 10) if a workload is legitimately displaced more than twice per run.
+- **Raise `maxEvictionRetries`** on the `RunnerSet` spec (default 2, max 10) if a workload is legitimately displaced more than twice per run.
 - **Fix the missing run identity** per the runbook linked above; without it no disruption of any cause can be recovered.
 - **Re-run the affected run manually** for anything lost to case 5, and keep AGC restarts (upgrades, node maintenance on the control-plane namespace) out of windows where a floor tier is actively preempting.
   Case 4 needs no manual re-run: the run is recovered under `cause="vanished"` once the AGC is back.
@@ -3457,10 +3360,7 @@ kubectl get runnerset -n <namespace> <name> \
 kubectl describe resourcequota -n <namespace>
 
 # Check AGC logs for quota errors
-# v2
 kubectl logs -n <agc-namespace> deploy/<gateway>-agc | grep "exceeded quota"
-# v1 (legacy)
-kubectl logs -n <agc-namespace> deploy/actions-gateway-controller | grep "exceeded quota"
 
 # See the retry-exhaustion event on the RunnerSet
 kubectl describe runnerset -n <namespace> <name> | grep -A1 QuotaRetriesExhausted
@@ -3550,7 +3450,7 @@ It is still a snapshot rather than a live feed: a set whose capacity is oscillat
   The **default** `ghcr.io/actions/actions-runner` image (`USER runner`) is handled automatically — the AGC gap-fills `runAsUser: 1001` so kubelet can verify it (Q115).
   You hit this only with a **custom/third-party** runner image whose named user is **not** UID 1001, so the auto-stamped 1001 doesn't match what its `USER` resolves to, or whose image has no numeric UID at all.
 - `Error: container has runAsNonRoot and image will run as root` — same stamp, but the worker image's default user is `root` (UID 0).
-- A PodSecurity admission denial naming `allowPrivilegeEscalation != false` or `unrestricted capabilities` — the namespace is on `securityProfile: restricted` and a tenant container needs `sudo` or extra capabilities.
+- A PodSecurity admission denial naming `allowPrivilegeEscalation != false` or `unrestricted capabilities` — the namespace is on the `restricted` security profile and a tenant container needs `sudo` or extra capabilities.
 
 **Likely causes.**
 - A **custom** worker image declares a **named** (non-numeric) user other than the default runner's UID 1001.
@@ -3570,15 +3470,12 @@ kubectl describe pod -n <tenant-namespace> <pod> | sed -n '/Events:/,$p'
 kubectl get ns <tenant-namespace> -o jsonpath='{.metadata.labels.pod-security\.kubernetes\.io/enforce}'; echo
 
 # Confirm the SECURITY_PROFILE the AGC is running with
-# v2
 kubectl get deploy <gateway>-agc -n <tenant-namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SECURITY_PROFILE")].value}'; echo
-# v1 (legacy)
-kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="SECURITY_PROFILE")].value}'; echo
 ```
 
 **Resolution.**
 - Default `actions-runner` image: **no action needed** — the AGC gap-fills `runAsUser: 1001` automatically (Q115).
-- Custom named-user image whose user is **not** UID 1001: declare its actual numeric UID in the RunnerGroup `podTemplate` so kubelet can verify non-root (an explicit `runAsUser` overrides the gap-filled 1001):
+- Custom named-user image whose user is **not** UID 1001: declare its actual numeric UID in the `RunnerTemplate` `podTemplate` so kubelet can verify non-root (an explicit `runAsUser` overrides the gap-filled 1001):
 
   ```yaml
   podTemplate:
@@ -3588,102 +3485,71 @@ kubectl get deploy actions-gateway-controller -n <tenant-namespace> -o jsonpath=
         runAsGroup: <image-gid>
   ```
 
-  Note: a `podTemplate` edit takes effect on the next acquired job — the AGC re-reads the RunnerGroup at pod-build time, so no AGC restart is needed (Q117).
+  Note: a `podTemplate` edit takes effect on the next acquired job — the AGC re-reads the `RunnerTemplate` at pod-build time, so no AGC restart is needed (Q117).
   Pods already running keep the template they were built with.
-- Root-based image that must run as root: the defaults are gap-fill only — set an explicit `securityContext.runAsNonRoot: false` (and `runAsUser`/`runAsGroup` as needed) on the runner container in the RunnerGroup `podTemplate`.
+- Root-based image that must run as root: the defaults are gap-fill only — set an explicit `securityContext.runAsNonRoot: false` (and `runAsUser`/`runAsGroup` as needed) on the runner container in the `RunnerTemplate` `podTemplate`.
   No profile escalation is required for `baseline`.
-- Job genuinely needs `sudo`/capabilities: move that workload to a `baseline` `ActionsGateway` (the default), which does not stamp the privilege-escalation/capability floor.
+- Job genuinely needs `sudo`/capabilities: move that workload to a `baseline` namespace (the default), which does not stamp the privilege-escalation/capability floor.
   Reserve `restricted` for workloads that can run without them.
-- Workload needs a real privileged container (DinD, kernel modules): set `securityProfile: privileged` on the `ActionsGateway` and pair it with a sandbox runtime — see [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+- Workload needs a real privileged container (DinD, kernel modules): label the namespace `actions-gateway.com/security-profile=privileged` and pair it with a sandbox runtime — see [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
 
 ---
 
-## securityProfile Downgrade Rejected by Admission Webhook
+## Security Profile Downgrade Rejected by Admission
 
-**Symptoms.** A `kubectl apply` / `kubectl edit` / GitOps sync that changes an existing `ActionsGateway`'s `spec.securityProfile` to a *less restrictive* level is rejected by the GMC validating webhook with:
+**Symptoms.** A change to a namespace's `actions-gateway.com/security-profile` label that moves it to a *less restrictive* level is rejected by the `namespace-security-profile-guard` policy:
 
 ```
-admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
-securityProfile downgrade from "restricted" to "baseline" is not permitted
-without the "actions-gateway.github.com/allow-profile-downgrade" annotation
-set to "true"; downgrading relaxes Pod Security Admission isolation and must
-be deliberate
+security profile downgrade from restricted to baseline is not permitted without
+the actions-gateway.com/allow-profile-downgrade=allowed annotation; downgrading
+relaxes Pod Security Admission isolation and must be deliberate
 ```
 
-The profiles rank `privileged` (least restrictive) < `baseline` < `restricted` (most restrictive); any move *down* that ranking is a downgrade — including `baseline → privileged`.
+The profiles rank `privileged` (least restrictive) < `baseline` < `restricted` (most restrictive); any move *down* that ranking is a downgrade, including `baseline → privileged`.
 
 **Likely causes.**
-- A deliberate relaxation — e.g. rolling back a `baseline → restricted` hardening attempt that broke the tenant's pods at PSA admission.
-- **Unintentional drift:** re-applying an older manifest, or a Helm/Kustomize render that **omits** `securityProfile` (it then re-defaults to `baseline`) while the live object is on `restricted`.
-  An empty/absent value is compared as `baseline`, so an omitted field reads as a downgrade — this is the guard working as intended, catching a silent weakening.
+- A deliberate relaxation, such as rolling back a `baseline → restricted` hardening attempt that broke the tenant's pods at Pod Security Admission.
+- **Unintentional drift:** a GitOps sync or a re-applied namespace manifest that omits the label while the live namespace is on `restricted`.
+  An absent label compares as `baseline`, so an omitted label reads as a downgrade: the guard catching a silent weakening.
 
 **Diagnostics.**
 
 ```sh
-# Current (live) profile vs what your manifest sets
-kubectl get actionsgateway -n <tenant-namespace> <name> -o jsonpath='{.spec.securityProfile}'; echo
+kubectl get namespace <tenant-namespace> -o jsonpath='{.metadata.labels.actions-gateway\.com/security-profile}'; echo
 ```
 
 **Resolution.**
-- **If the downgrade is intended:** add the opt-in annotation, then change the profile (one apply works if both are in the manifest):
+- **If the downgrade is intended:** add the opt-in annotation, then change the label:
+
   ```sh
-  kubectl annotate actionsgateway -n <tenant-namespace> <name> \
-    actions-gateway.github.com/allow-profile-downgrade=true --overwrite
+  kubectl annotate namespace <tenant-namespace> actions-gateway.com/allow-profile-downgrade=allowed
+  kubectl label namespace <tenant-namespace> actions-gateway.com/security-profile=baseline --overwrite
   ```
-  Remove the annotation afterward if you want future accidental downgrades to keep being blocked.
-  PSA enforce is namespace-scoped, so the new (looser) profile applies to *future* worker pods once the GMC re-stamps the namespace label; pods already running are not re-evaluated.
-- **If the downgrade is accidental (drift):** do **not** add the annotation — fix the manifest to match the live profile (set `securityProfile: restricted`, or stop omitting it) so GitOps stops trying to weaken the namespace.
+
+  Remove the annotation afterwards so that future accidental downgrades keep being blocked.
+  The looser profile applies to future worker pods once the GMC re-stamps the namespace's Pod Security labels; pods already running are not re-evaluated.
+- **If the downgrade is accidental (drift):** do **not** add the annotation.
+  Fix the manifest to match the live profile, so GitOps stops trying to weaken the namespace.
 
 > Note: this guard catches *silent* downgrades; it is not an absolute boundary.
-> Anyone with edit access to the CR can set the annotation, and an operator with direct namespace `patch` rights can change the PSA labels regardless.
+> Anyone who can annotate the namespace can opt in.
 > See [§5.3 — No silent profile downgrades](../design/05-security.md#no-silent-profile-downgrades).
 
 ---
 
-## Second ActionsGateway in a Namespace Rejected (Singleton Guard)
-
-**Symptoms.** Creating an `ActionsGateway` in a namespace that already has one is rejected by the GMC validating webhook with:
-
-```
-admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
-an ActionsGateway ("first-ag") already exists in namespace "team-a"; only one
-ActionsGateway per namespace is supported — a second CR contends over fixed-name
-per-tenant resources and would flap the namespace's Pod Security Admission labels
-```
-
-**Likely causes.**
-- Two manifests (or two GitOps apps) target the same tenant namespace.
-- A renamed CR applied before the old one was deleted (the guard reads live state, so the old CR still counts until its delete completes).
-
-**Why it is enforced.** Every per-tenant resource the GMC provisions — the AGC Deployment, the proxy Deployment, Services, NetworkPolicies, RoleBindings — has a fixed, namespace-scoped name.
-Two CRs fight over those objects, and because each CR's `securityProfile` drives the namespace's Pod Security Admission labels, two CRs with different profiles make the GMC flap those labels (intermittently admitting privileged pods).
-Deleting either CR then tears down the survivor's infrastructure.
-
-**Resolution.** Use one `ActionsGateway` per namespace.
-To run a second logical gateway, give it its own namespace (the guard is per-namespace, so a different namespace's first CR is admitted).
-To rename or replace an existing CR, delete the old one and wait for teardown to complete before creating the replacement.
-
-> **`v2` lifts this restriction.** The singleton guard is a `v1alpha1`-only constraint rooted in fixed per-tenant resource names.
-> The `v2` (`actions-gateway.com`) API supports **multiple `ActionsGateway`s per namespace**: every derived resource is named per gateway (`<gateway>-agc`, `<gateway>-worker`, …) and each gateway's AGC reconciles only its own `RunnerSet`s, so they never contend.
-> `securityProfile` also moved off the gateway onto the namespace, so co-located gateways share one Pod Security posture instead of flapping it.
-> See ["Multiple v2 gateways in one namespace"](#multiple-v2-gateways-in-one-namespace-naming-scoping-prerequisites) below.
-
----
-
-## `proxy.noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub
+## `noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub
 
 **Symptoms.** A `kubectl apply` is rejected by the GMC validating webhook with:
 
 ```
-admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
-proxy.noProxyCIDRs[0]: "github.com" would route GitHub traffic (github.com)
+admission webhook "vegressproxy-v2.kb.io" denied the request:
+spec.noProxyCIDRs[0]: "github.com" would route GitHub traffic (github.com)
 around the per-tenant egress proxy, defeating egress-IP attribution; remove it
 — GitHub must always traverse the proxy. noProxyCIDRs may exclude internal
 destinations (CIDRs or domain suffixes), never GitHub
 ```
 
-The v2 `EgressProxy`'s `spec.noProxyCIDRs` is gated by the same guard (webhook `vegressproxy-v2.kb.io`, field path `spec.noProxyCIDRs[N]`).
-Because the v2 proxy carries no `gitHubURL` of its own, the v2 guard also runs from the *referrer* side: a v2 `ActionsGateway` (`spec.defaultProxyRef`) or `RunnerSet` (`spec.proxyRef`) write that binds a GitHub host to a proxy whose `noProxyCIDRs` exclude it is rejected too, e.g.:
+Because the `EgressProxy` carries no `githubURL` of its own, the guard also runs from the *referrer* side: an `ActionsGateway` (`spec.defaultProxyRef`) or `RunnerSet` (`spec.proxyRef`) write that binds a GitHub host to a proxy whose `noProxyCIDRs` exclude it is rejected too, e.g.:
 
 ```
 admission webhook "vactionsgateway-v2.kb.io" denied the request:
@@ -3692,11 +3558,11 @@ spec.defaultProxyRef: EgressProxy "corp-proxy" spec.noProxyCIDRs[0]:
 per-tenant egress proxy, ...
 ```
 
-**Likely cause.** A `spec.proxy.noProxyCIDRs` (v1 `ActionsGateway`) or `spec.noProxyCIDRs` (v2 `EgressProxy`) entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `gitHubURL` host (including a GitHub Enterprise Server host — on v2 that is the `gitHubURL` of every gateway that references the proxy, directly or via a `RunnerSet`), or an over-broad suffix like `.com` that covers them.
+**Likely cause.** An `EgressProxy`'s `spec.noProxyCIDRs` entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `githubURL` host (including a GitHub Enterprise Server host, which is the `githubURL` of every gateway that references the proxy, directly or via a `RunnerSet`), or an over-broad suffix like `.com` that covers them.
 
 **Why it is enforced.** `noProxyCIDRs` is threaded into the AGC/worker `NO_PROXY` env var, where a hostname entry is a domain-suffix match.
 If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
-On v2 the check runs on **both** the proxy write and the gateway/`RunnerSet` write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting `EgressProxy` and entry.
+The check runs on **both** the proxy write and the gateway/`RunnerSet` write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting `EgressProxy` and entry.
 
 **Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy.
 `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`).
@@ -3706,25 +3572,23 @@ Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's 
 
 ## Privileged Worker Container Rejected by Admission
 
-**Symptoms.** An `ActionsGateway` whose `runnerGroups[].podTemplate` requests a privileged container or init container is rejected by the GMC validating webhook with:
+**Symptoms.** A `RunnerTemplate` whose `podTemplate` requests a privileged container or init container is rejected by the GMC validating webhook:
 
 ```
-admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
-runnerGroups[0]: privileged containers are not permitted in worker pods
-(container "runner")
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
+podTemplate.spec.containers["runner"]: privileged containers are not permitted in a
+namespaced RunnerTemplate; use a platform-owned ClusterRunnerTemplate
 ```
 
-**Likely cause.** The CR requests `securityContext.privileged: true` while `spec.securityProfile` is `baseline` (the default) or `restricted`.
-Privileged worker containers are permitted **only** under the explicit `securityProfile: privileged` opt-in, which also stamps the namespace's Pod Security Admission level to `privileged` so the pod is actually admittable.
+**Likely cause.** A tenant must not be able to author a privileged worker shape, so a namespaced `RunnerTemplate` refuses `securityContext.privileged: true` under every profile.
 
 **Resolution.**
-- If the privileged worker is intended (e.g. the Kata/DinD pattern), set `spec.securityProfile: privileged` on the same `ActionsGateway`.
-  This requires the namespace to be **eligible** for privileged — a platform admin must label it `actions-gateway.com/privileged-profile=allowed` (see [Privileged securityProfile Rejected](#privileged-securityprofile-rejected-namespace-not-eligible) below).
-  Privileged is a deliberate, audited relaxation — pair it with a sandboxed `runtimeClassName` (Kata, gVisor) per [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
-- If the privileged flag is accidental, remove `securityContext.privileged: true` from the pod template; the secure-by-default profiles reject it on purpose.
+- If the privileged worker is intended (e.g. the Kata/DinD pattern), have the platform create a `ClusterRunnerTemplate` holding it and set the `RunnerSet`'s `templateRef.kind: ClusterRunnerTemplate`.
+  The worker pod is admitted only in a namespace on the `privileged` security profile, which a platform admin must make **eligible** with the label `actions-gateway.com/privileged-profile=allowed` (see [Privileged Security Profile Rejected](#privileged-security-profile-rejected-namespace-not-eligible) below).
+  Privileged is a deliberate, audited relaxation: pair it with a sandboxed `runtimeClassName` (Kata, gVisor) per [§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in).
+- If the privileged flag is accidental, remove `securityContext.privileged: true` from the pod template.
 
-> Note: this webhook check only covers the GMC-managed `ActionsGateway` path.
-> A directly-applied `RunnerGroup` CR bypasses the webhook entirely — Pod Security Admission (stamped per the namespace's profile) is the real enforcement backstop for both paths.
+> Note: Pod Security Admission, stamped per the namespace's profile, is the runtime enforcement backstop for both kinds.
 
 ---
 
@@ -3757,7 +3621,7 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 **Resolution.**
 - Remove the reserved proxy env vars from every container and init container; the AGC sets them itself.
 - For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`.
-  Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped from the effective `securityProfile`), which remains the runtime backstop.
+  Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped from the namespace's security profile), which remains the runtime backstop.
 
 ---
 
@@ -4011,8 +3875,6 @@ Clearing the field does **not** move the scale set back to the default group: wi
 
 ## v2 `ActionsGateway` Stuck `Ready=False` (`CredentialUnavailable` / `ProxyNotFound`)
 
-> The v1 `ActionsGateway` provisioning checks are above (["GMC Not Provisioning Tenant Resources"](#gmc-not-provisioning-tenant-resources)).
-
 **Symptoms.** No AGC Deployment appears in the tenant namespace and `kubectl describe actionsgateway <name>` shows `Ready=False` with either:
 
 ```
@@ -4122,7 +3984,7 @@ Install the autoscaler first, or set `vpa.enabled=false`.
 
 ## Multiple v2 gateways in one namespace: naming, scoping, prerequisites
 
-The `v2` API supports **multiple `ActionsGateway`s per namespace** (unlike `v1alpha1` — see ["Second ActionsGateway in a Namespace Rejected"](#second-actionsgateway-in-a-namespace-rejected-singleton-guard)).
+The `v2` API supports **multiple `ActionsGateway`s per namespace**.
 A few operator-visible facts and failure modes:
 
 - **Per-gateway resource names.** Every resource a gateway derives is prefixed with the gateway name: `<gateway>-agc` (AGC Deployment / ServiceAccount / RoleBinding / Service / AGC NetworkPolicy), `<gateway>-worker` (worker ServiceAccount), `<gateway>-workload` (workload NetworkPolicy), `<gateway>-agc-metrics-tls` / `-agc-metrics-client` (metrics Secrets).
@@ -4131,10 +3993,10 @@ A few operator-visible facts and failure modes:
   The cap reserves room for the derived suffixes above so a label value / Service name stays within RFC 1123's 63-character ceiling.
   Use a shorter name.
 - **Per-gateway scoping needs Kubernetes ≥ 1.31.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, using a server-side CRD field selector (KEP-4358).
-  That selector is **alpha-off in Kubernetes 1.30**: on a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`) and the AGC pod will not become ready.
-  If a v2 AGC `CrashLoopBackOff`s with a `RunnerSet` list/watch error, check the cluster is ≥ 1.31.
+  That selector is **alpha-off in Kubernetes 1.30**: on a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`), so the AGC pod opens no session and exits about two minutes later, reading `Ready` in between.
+  If an AGC `CrashLoopBackOff`s with a `RunnerSet` list/watch error, check the cluster is ≥ 1.31.
   On a cluster at ≥ 1.31, `field label not supported: spec.gatewayRef.name` means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
-  (Single-gateway-per-namespace v2 still requires ≥ 1.31 once more than one gateway exists; for one gateway the scoping is a no-op but the selector is still applied.)
+  (A single gateway needs ≥ 1.31 too: its scoping is a no-op, but the selector is still applied.)
 - **Per-gateway garbage collection.** Deleting one gateway removes only its own children (owner-referenced, per-gateway-named); a neighbor's gateway, AGC, and `RunnerSet`s are untouched.
   The one cluster-scoped child — the `agc-clusterrunnertemplate-reader.<ns>.<gateway>` `ClusterRoleBinding` — cannot carry a namespaced owner reference, so the gateway controller deletes it explicitly during teardown.
   If a gateway's `ClusterRoleBinding` lingers after the gateway is gone (e.g. the GMC was down during the delete), it is harmless (it binds a now-absent ServiceAccount) and safe to `kubectl delete clusterrolebinding agc-clusterrunnertemplate-reader.<ns>.<gateway>`.
@@ -4179,24 +4041,19 @@ After the restart the v2 controllers pick up any v2 objects already in the clust
 
 ---
 
-## Privileged securityProfile Rejected: Namespace Not Eligible
+## Privileged Security Profile Rejected: Namespace Not Eligible
 
-**Symptoms.** An `ActionsGateway` requesting `spec.securityProfile: privileged` is rejected by the GMC validating webhook at create or update with:
+**Symptoms.** Setting a namespace's `actions-gateway.com/security-profile` label to `privileged` is rejected by the `namespace-security-profile-guard` policy:
 
 ```
-admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
-securityProfile: privileged is not eligible in namespace "team-builds": it
-requires the namespace label actions-gateway.github.com/privileged-profile=allowed,
-which only a platform administrator may apply — privileged eligibility is a
-platform decision and is deliberately not tenant-settable
+security profile privileged is not eligible in namespace team-builds: it requires
+the platform-applied label actions-gateway.com/privileged-profile=allowed; privileged
+eligibility is a platform decision and is deliberately not tenant-settable
 ```
-
-A variant names a read failure (`cannot verify privileged eligibility for namespace …`) when the webhook cannot read the namespace; the gate is fail-closed, so that too rejects.
 
 **Likely cause.** Whether a namespace may run privileged workers is a **platform** decision, not a tenant one.
-Because the tenant owns the `ActionsGateway` CR, they could otherwise self-select the cluster's least-restrictive Pod Security Admission posture simply by creating a CR.
-The webhook therefore gates `securityProfile: privileged` behind a label the platform applies to the *namespace* (which the tenant does not own): `actions-gateway.com/privileged-profile=allowed`.
-Absent the label — or with any other value — privileged is ineligible and rejected.
+The policy therefore gates the `privileged` profile behind a second label a platform administrator applies: `actions-gateway.com/privileged-profile=allowed`.
+Absent the label, or with any other value, privileged is ineligible and rejected.
 (The value is the enum keyword `allowed`, not `true`, to avoid the YAML boolean-coercion footgun.)
 
 **Resolution (platform administrator).** If this tenant is approved to run privileged workers, label the namespace:
@@ -4206,7 +4063,7 @@ kubectl label namespace <tenant-namespace> actions-gateway.com/privileged-profil
 ```
 
 From `v2.0.0` the 1.x `actions-gateway.github.com/privileged-profile` key grants nothing.
-Apply it with a trusted (administrator) identity — the GMC must never set it itself, and tenants cannot.
+Apply it with a trusted (administrator) identity: the GMC must never set it itself, and tenants cannot.
 Verify:
 
 ```bash
@@ -4215,13 +4072,13 @@ kubectl get namespace <tenant-namespace> \
 # Expected: allowed
 ```
 
-Re-apply the `ActionsGateway`; the create/update is now admitted.
-To **revoke** eligibility, remove the label (`kubectl label namespace <ns> actions-gateway.com/privileged-profile-`); existing CRs already at `privileged` keep running, but any future create or profile change to `privileged` is rejected again.
+Then set the profile label again.
+To **revoke** eligibility, remove the label (`kubectl label namespace <ns> actions-gateway.com/privileged-profile-`).
 
-> On an **update** that raises an existing CR from a stricter profile to `privileged`, the webhook also requires the `actions-gateway.github.com/allow-profile-downgrade: "true"` annotation (anything → `privileged` is a rank downgrade — see [securityProfile Downgrade Rejected](#securityprofile-downgrade-rejected-by-admission-webhook)).
-> Both gates are independent: the namespace label is the platform's eligibility decision, the annotation is the tenant's deliberate relaxation.
+> Raising a namespace from a stricter profile to `privileged` also needs the `actions-gateway.com/allow-profile-downgrade=allowed` annotation, because anything → `privileged` is a rank downgrade.
+> Both gates are independent: the label is the platform's eligibility decision, the annotation is the deliberate relaxation.
 
-If the privileged profile was **not** intended, set `spec.securityProfile` to `baseline` (the default) or `restricted`; neither consults the label.
+If the privileged profile was **not** intended, set the label to `baseline` (the default) or `restricted`; neither consults the eligibility label.
 
 ---
 
@@ -4230,7 +4087,7 @@ If the privileged profile was **not** intended, set `spec.securityProfile` to `b
 **Symptoms.** A `kubectl apply` / `kubectl edit` / GitOps sync that sets `spec.tracing.sampler` on an `ActionsGateway` is rejected at admission with a CRD validation error like:
 
 ```
-ActionsGateway.actions-gateway.github.com "<name>" is invalid:
+ActionsGateway.actions-gateway.com "<name>" is invalid:
 spec.tracing.sampler: Unsupported value: "ratio": supported values:
 "always_on", "always_off", "traceidratio", "parentbased_always_on",
 "parentbased_always_off", "parentbased_traceidratio"
@@ -4273,52 +4130,50 @@ Deleting and re-creating it, or changing `endpoint` to another value that does n
 
 ---
 
-## ActionsGateway Rejected: Missing or Malformed `gitHubURL`
+## ActionsGateway Rejected: Missing or Malformed `githubURL`
 
 **Symptoms.** A `kubectl apply` / `kubectl edit` / GitOps sync of an `ActionsGateway` is rejected at admission with either a CRD-schema error:
 
 ```
-ActionsGateway.actions-gateway.github.com "<name>" is invalid:
-spec.gitHubURL: Required value
+ActionsGateway.actions-gateway.com "<name>" is invalid:
+spec.githubURL: Required value
 ```
 
 ```
-ActionsGateway.actions-gateway.github.com "<name>" is invalid:
-spec.gitHubURL in body should match '^https://'
+ActionsGateway.actions-gateway.com "<name>" is invalid:
+spec.githubURL in body should match '^https://'
 ```
 
 or a validating-webhook error:
 
 ```
-admission webhook "vactionsgateway-v1alpha1.kb.io" denied the request:
+admission webhook "vactionsgateway-v2.kb.io" denied the request:
 gitHubURL must include an organization, enterprise, or owner/repo path segment (got "https://github.com")
 ```
 
-The v2 `ActionsGateway` (`actions-gateway.com`) enforces the same rules — the CRD-schema errors name that group instead, and the webhook error names `vactionsgateway-v2.kb.io` (a write at any served version is converted to `v2` and routes through the same validator).
-
-**Likely cause.** `spec.gitHubURL` is a **required** field — the GitHub org, enterprise, or repository URL the gateway's runners register against.
+**Likely cause.** `spec.githubURL` is a **required** field: the GitHub org, enterprise, or repository URL the gateway's runners register against.
 There is no default: a gateway with no URL has nothing to register against.
 The CRD enforces a non-empty `https://` value; the GMC validating webhook additionally requires a parseable URL with the https scheme, a host, and at least one path segment (the org/enterprise/owner).
 Common misses: the field omitted entirely, an `http://` (non-TLS) URL, or a bare host (`https://github.com`) with no org.
 
 **Resolution.**
-- Set `spec.gitHubURL` to an org URL (`https://github.com/my-org`), a single-repo URL (`https://github.com/my-org/my-repo`), or your GitHub Enterprise Server URL (`https://ghes.example.com/my-org`).
-- It must use `https://` and name the org/enterprise/owner — and must match where the App in `spec.gitHubAppRef` is installed.
-- See [tenant-onboarding — Step 2](tenant-onboarding.md#step-2-create-the-actionsgateway-resource).
+- Set `spec.githubURL` to an org URL (`https://github.com/my-org`), a single-repo URL (`https://github.com/my-org/my-repo`), or your GitHub Enterprise Server URL (`https://ghes.example.com/my-org`).
+- It must use `https://` and name the org/enterprise/owner, and must match where the App in `spec.credentials.githubApp` is installed.
+- See [tenant-onboarding — Step 2](tenant-onboarding.md#step-2-create-the-gateway-and-its-runner-set).
 
 ---
 
 ## Worker-Pod Lifecycle Duration Rejected by Admission
 
-**Symptoms.** Applying a `RunnerGroup` (or an `ActionsGateway` whose `runnerGroups[]` entry sets the field) is rejected at admission with one of:
+**Symptoms.** Applying a `RunnerSet` that sets the field is rejected at admission with one of:
 
 ```
-The RunnerGroup "..." is invalid: spec: Invalid value: ...:
+The RunnerSet "..." is invalid: spec: Invalid value: ...:
 completedPodTTL must not be negative
 ```
 
 ```
-The RunnerGroup "..." is invalid: spec: Invalid value: ...:
+The RunnerSet "..." is invalid: spec: Invalid value: ...:
 pendingPodDeadline must be at least 1s
 ```
 
@@ -4338,7 +4193,7 @@ pendingPodDeadline must be at least 1s
 
 ```
 Internal error occurred: failed calling webhook
-"vactionsgateway-v1alpha1.kb.io": failed to call webhook:
+"vactionsgateway-v2.kb.io": failed to call webhook:
 Post "https://gmc-webhook-service.gmc-system.svc:443/...?timeout=10s":
 context deadline exceeded
 ```
@@ -4445,7 +4300,7 @@ The proxy pods report `READY 1/1` and `/healthz` returns 200.
 
 ```sh
 # 1. Confirm the proxy Deployment's readinessProbe path. Should be /readyz.
-kubectl get deploy -n <tenant-namespace> actions-gateway-proxy \
+kubectl get deploy -n <tenant-namespace> <proxy>-proxy \
   -o jsonpath='{.spec.template.spec.containers[0].readinessProbe.httpGet.path}{"\n"}'
 
 # 2. Probe /readyz directly from a workload-labeled debug pod (the proxy
@@ -4454,7 +4309,7 @@ kubectl run dbg-readyz --rm -i --restart=Never --quiet \
   --labels='actions-gateway/component=workload' \
   --image=alpine --command -- \
   sh -c "apk add --no-cache curl >/dev/null 2>&1; \
-         curl -sv http://actions-gateway-proxy.<tenant-namespace>.svc:8081/readyz"
+         curl -sv http://<proxy>-proxy.<tenant-namespace>.svc:8081/readyz"
 
 # 3. From the same debug pod, confirm the CONNECT port accepts TCP. A 200 on
 #    /readyz paired with a refused TCP dial would be a Q42 regression.
@@ -4462,7 +4317,7 @@ kubectl run dbg-connect --rm -i --restart=Never --quiet \
   --labels='actions-gateway/component=workload' \
   --image=alpine --command -- \
   sh -c "apk add --no-cache busybox-extras >/dev/null 2>&1; \
-         nc -zv actions-gateway-proxy.<tenant-namespace>.svc 8080"
+         nc -zv <proxy>-proxy.<tenant-namespace>.svc 8080"
 ```
 
 **Resolution.**
@@ -4493,7 +4348,7 @@ kubectl get ns <prometheus-namespace> -o jsonpath='{.metadata.labels.metrics}{"\
 # 2. Inspect the per-tenant NP ingress rules — each should list an 8443 rule
 #    whose `from` is a namespaceSelector on metrics=enabled.
 kubectl get networkpolicy -n <tenant-namespace> \
-  actions-gateway-proxy actions-gateway-controller \
+  <proxy>-proxy <gateway>-agc \
   -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.ingress}{"\n"}{end}'
 
 # 3. Distinguish an NP drop from a missing client cert: scrape from the
@@ -4502,7 +4357,7 @@ kubectl get networkpolicy -n <tenant-namespace> \
 #    per the TLS runbook below. A timeout means the label/NP still drops you.
 kubectl run dbg-scrape --rm -i --restart=Never --quiet \
   -n <prometheus-namespace> --image=curlimages/curl --command -- \
-  curl -sS --max-time 5 -k https://actions-gateway-proxy.<tenant-namespace>.svc:8443/metrics
+  curl -sS --max-time 5 -k https://<proxy>-proxy.<tenant-namespace>.svc:8443/metrics
 ```
 
 **Resolution.**
@@ -4523,13 +4378,13 @@ The validating-webhook port (`9443`) is re-allowed from any source by design (th
 The proxy Deployment never reaches full availability.
 
 **Cause.** The proxy pool uses **required** pod anti-affinity on `kubernetes.io/hostname` so replicas land on distinct nodes (a single node failure must never drop the whole tenant's egress pool, and co-located replicas defeat the PodDisruptionBudget).
-With the default `proxy.minReplicas: 2`, the scheduler needs **at least two schedulable nodes**.
+With the default `spec.minReplicas: 2` on the `EgressProxy`, the scheduler needs **at least two schedulable nodes**.
 On a single-node dev/kind cluster (e.g.
 `test/kind-config-1worker.yaml`, where the control-plane is tainted and only one worker is schedulable) the second replica can never place.
 
 **Resolution.**
-- Production: ensure the cluster has at least `proxy.minReplicas` schedulable nodes for the proxy pods (the default kind config ships two workers).
-- Single-node dev clusters: set `spec.proxy.minReplicas: 1` on the `ActionsGateway` to run a single proxy replica.
+- Production: ensure the cluster has at least `spec.minReplicas` schedulable nodes for the proxy pods (the default kind config ships two workers).
+- Single-node dev clusters: set `spec.minReplicas: 1` on the `EgressProxy` to run a single proxy replica.
 
 ---
 
@@ -4541,7 +4396,7 @@ Scaling by hand (`kubectl scale deploy <proxy> --replicas=5`) reverts within a s
 
 **Cause.** Fixed in the release that carries this page.
 Before it, the GMC's proxy reconciler rewrote the proxy Deployment's `.spec.replicas` on every pass and re-triggered itself on the HPA's own scale write, so the pool oscillated between `minReplicas` and the HPA's target and could never stay scaled out.
-Every tenant's egress capacity was capped at `proxy.minReplicas`.
+Every tenant's egress capacity was capped at `minReplicas`.
 
 **Resolution.** Upgrade the GMC.
 On a fixed GMC, `.spec.replicas` belongs to the HPA; the reconciler only owns the *floor*:
@@ -4554,7 +4409,7 @@ On a fixed GMC, `.spec.replicas` belongs to the HPA; the reconciler only owns th
 
 Two consequences worth knowing:
 
-- **Raising `spec.proxy.minReplicas` no longer bumps the Deployment directly.** The GMC raises the HPA's `minReplicas`, and the HPA scales the pool.
+- **Raising the `EgressProxy`'s `spec.minReplicas` no longer bumps the Deployment directly.** The GMC raises the HPA's `minReplicas`, and the HPA scales the pool.
   That needs a working metrics pipeline — check `ScalingActive=True`:
 
   ```sh
@@ -4563,10 +4418,10 @@ Two consequences worth knowing:
   ```
 
   `False` with reason `FailedGetResourceMetric` means metrics-server is missing or unhealthy; install it, or the floor will not be enforced.
-- **Lowering `spec.proxy.minReplicas` no longer shrinks the pool immediately.** The HPA's downscale stabilisation window (5 minutes by default) applies.
+- **Lowering the `EgressProxy`'s `spec.minReplicas` no longer shrinks the pool immediately.** The HPA's downscale stabilisation window (5 minutes by default) applies.
 
 An out-of-band `kubectl scale` on the proxy Deployment is likewise no longer reverted — but the HPA will pull the count back toward its own bounds on its next sync, so it is not a durable way to resize a pool.
-Change `spec.proxy.minReplicas` / `spec.proxy.maxReplicas` on the `ActionsGateway` (v1) or `spec.minReplicas` / `spec.maxReplicas` on the `EgressProxy` (v2) instead.
+Change `spec.minReplicas` / `spec.maxReplicas` on the `EgressProxy` instead.
 
 ---
 

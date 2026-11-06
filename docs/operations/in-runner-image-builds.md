@@ -7,12 +7,12 @@ Building container images is the single most common heavyweight runner workload,
 It is almost never the approach you actually need.
 Rootless build tooling builds the same images under `baseline` (and sometimes `restricted`) PSA, with no privileged container and no host-kernel exposure.
 
-This page maps each build approach to the GAG `securityProfile` it requires, the configuration it needs, and its caveats, then gives a decision table.
+This page maps each build approach to the GAG security profile it requires, the configuration it needs, and its caveats, then gives a decision table.
 The profiles themselves — what each one admits, how the `privileged` opt-in is gated, and the floor invariants that apply at every profile — are defined in [Security § 5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in); read that first if the three profile names are unfamiliar.
 
 ## How the security profiles constrain a build
 
-`ActionsGateway.spec.securityProfile` stamps a PSA `enforce` level on the tenant namespace.
+The namespace label `actions-gateway.com/security-profile` stamps a PSA `enforce` level on the tenant namespace.
 Three values exist, ranked least-to-most restrictive as `privileged → baseline → restricted`:
 
 | Profile | What it admits | Relevance to builds |
@@ -23,7 +23,7 @@ Three values exist, ranked least-to-most restrictive as `privileged → baseline
 
 Two GAG behaviours shape what a build pod may do:
 
-- **Floor invariants apply at every profile.** Regardless of `securityProfile`, the AGC overwrites every worker pod with `hostPID/hostNetwork/hostIPC: false` and projects no Kubernetes API token.
+- **Floor invariants apply at every profile.** Regardless of the security profile, the AGC overwrites every worker pod with `hostPID/hostNetwork/hostIPC: false` and projects no Kubernetes API token.
   None of these block image builds, but they mean a build tool can never reach for host namespaces as an escape hatch.
   See [Security § Floor invariants](../design/05-security.md#floor-invariants-apply-at-every-profile).
 - **Secure-by-default SecurityContext gap-fills, and the tenant can opt out.** Under `baseline` the AGC stamps `runAsNonRoot: true` + `runAsUser: 1001` by default.
@@ -160,7 +160,7 @@ Prefer converting to a native sidecar over acknowledging: the acknowledgment ass
 
 Pick the topmost row that matches your build need.
 
-| Build need | Recommended approach | `securityProfile` (PSA `enforce`) | Privileged container? | Notes |
+| Build need | Recommended approach | Security profile (PSA `enforce`) | Privileged container? | Notes |
 |---|---|---|---|---|
 | Standard `docker build` / `buildx`, no host mounts | **BuildKit (rootless)** | `baseline` | No | Tightest common path; try `restricted` only after validating on your kernel. |
 | `Dockerfile` build, no daemon wanted, registry-side cache | **Kaniko** | `baseline` (set `runAsNonRoot: false`) | No | Not a sandbox — PSA is the boundary; plan a cache repo + auth. |

@@ -37,7 +37,7 @@ Both are covered in depth in the [architecture overview](../design/02-architectu
   On the ScaleSet protocol a pod still `Running` five minutes after GitHub reports its job terminal is reaped as a backstop — see [WorkerPodOrphanedRunning](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning) — but the pod is killed rather than completing, so the sidecar still has to be fixed.)
 
 - **All GitHub-bound egress is funnelled through the per-tenant proxy.** The GMC injects `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` into the AGC and every worker pod.
-  GitHub traffic `CONNECT`-tunnels through the per-tenant proxy `Service` (`actions-gateway-proxy.<namespace>.svc.cluster.local:8080` by default), which egresses on the tenant's dedicated IP(s).
+  GitHub traffic `CONNECT`-tunnels through the per-tenant proxy `Service` (`<proxy>-proxy.<namespace>.svc.cluster.local:8080`), which egresses on the tenant's dedicated IP(s).
   That per-tenant egress IP **is** the tenant-isolation boundary for outbound traffic ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)).
   The proxy does `CONNECT` tunnelling only — it never terminates TLS.
 
@@ -56,10 +56,10 @@ The instinct from mesh documentation is to disable injection or add egress exclu
 
 The AGC builds each worker pod from the tenant's `podTemplate`, but it does **not** copy arbitrary template metadata onto the pod.
 Labels are rebuilt from a fixed recommended set plus GAG's owner-identity labels, and only three node-disruption-safety annotation keys are honored from the template — every other annotation you put in `podTemplate.metadata.annotations` is dropped.
-So a mesh injection-control or egress-exclusion annotation placed on the RunnerGroup `podTemplate` never reaches the worker pod.
+So a mesh injection-control or egress-exclusion annotation placed on the `RunnerTemplate` `podTemplate` never reaches the worker pod.
 
 That leaves the **namespace** as the only reliable lever for worker pods, which is exactly why the recommended posture is namespace-scoped.
-(Tracking the option to propagate an allowlisted set of mesh annotations onto worker pods is filed as a future enhancement; until then, configure the mesh at the namespace and the mesh-install level, never on the RunnerGroup `podTemplate`.)
+(Tracking the option to propagate an allowlisted set of mesh annotations onto worker pods is filed as a future enhancement; until then, configure the mesh at the namespace and the mesh-install level, never on the `RunnerTemplate` `podTemplate`.)
 
 ---
 
@@ -94,7 +94,7 @@ A mesh's **classic** sidecar injection adds an init container (`istio-init`, `li
 `baseline` forbids those capabilities, so the apiserver **rejects the AGC, proxy, and worker pods at creation** — the Deployments sit at zero replicas with `FailedCreate` events and no pod (hence no sidecar, and none of Problem 1's stranding) ever exists:
 
 ```
-Error creating: pods "actions-gateway-controller-…" is forbidden: violates PodSecurity
+Error creating: pods "<gateway>-agc-…" is forbidden: violates PodSecurity
 "baseline:latest": non-default capabilities (container "istio-init" must not include
 "NET_ADMIN", "NET_RAW" in securityContext.capabilities.add)
 ```
@@ -227,7 +227,7 @@ Ambient is the preferred coexistence story when you want *some* mesh presence in
 
 Classic meshes offer ways to ask the sidecar to exit when the main workload finishes — Istio's `EXIT_ON_ZERO_ACTIVE_CONNECTIONS=true` plus a `POST localhost:15020/quitquitquit` at job end, or Linkerd's `linkerd-await --shutdown -- <cmd>` wrapper, or `config.alpha.linkerd.io/proxy-await`.
 **These require cooperating with the workload's entrypoint** — the main process must signal the proxy as it exits.
-GAG owns the worker entrypoint (it runs the GitHub Actions runner), and these hooks cannot be injected through the RunnerGroup `podTemplate` ([why](#why-per-pod-podtemplate-annotations-will-not-save-you)), so this path is **not** first-class for GAG.
+GAG owns the worker entrypoint (it runs the GitHub Actions runner), and these hooks cannot be injected through the `RunnerTemplate` `podTemplate` ([why](#why-per-pod-podtemplate-annotations-will-not-save-you)), so this path is **not** first-class for GAG.
 Prefer Fix A, B, or C. Documented here only so you recognize these knobs when you see them in mesh guides — they are the wrong tool for GAG worker pods.
 
 ---
@@ -376,7 +376,7 @@ After applying any of the above, confirm both problems are actually resolved.
 
 ```sh
 # Run a job, then watch its worker pod reach a terminal phase and disappear.
-kubectl get pods -n <tenant-ns> -l actions-gateway/runner-group=<name> -w
+kubectl get pods -n <tenant-ns> -l actions-gateway.com/runner-set=<name> -w
 # Expect: Running -> Succeeded/Completed -> deleted (after completedPodTTL).
 # A pod that sits at READY 1/2 STATUS Running long after the job finished
 # means a sidecar is still pinning it — revisit problem 1.
@@ -418,6 +418,6 @@ If jobs stop being picked up, the [troubleshooting guide](troubleshooting.md#wor
 | You run Linkerd and must stay in-mesh | Clear both prerequisites, then add `config.linkerd.io/skip-outbound-ports=8080` on the namespace to un-break the proxy `CONNECT` leg (Q280-confirmed: 000→200). [Prefer the opt-out](#linkerd). |
 | You run Istio **ambient** | Sidecar-less lifecycle is fine, but enrolling breaks the proxy egress leg (ztunnel HBONE) — leave the GAG namespace [out of the data plane](#istio--ambient-mode) (`dataplane-mode=none`). |
 | You run **Cilium** Service Mesh | Safe by default (Q280): sidecar-less lifecycle + proxy egress both work, and it enforces the egress deny. Just [confirm no L7 redirect](#cilium-service-mesh) captures `:8080`. |
-| You were about to set mesh annotations on the RunnerGroup `podTemplate` | Don't — [GAG strips them](#why-per-pod-podtemplate-annotations-will-not-save-you). Configure the namespace and the mesh install instead. |
+| You were about to set mesh annotations on the `RunnerTemplate` `podTemplate` | Don't — [GAG strips them](#why-per-pod-podtemplate-annotations-will-not-save-you). Configure the namespace and the mesh install instead. |
 
 See also: [security model §5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped) (per-tenant egress proxy), [tenant onboarding](tenant-onboarding.md), [troubleshooting](troubleshooting.md), and the [network architecture](../design/network-architecture.md).

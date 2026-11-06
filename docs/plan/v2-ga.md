@@ -8,7 +8,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 > **Status: Phases 1 and 2 are done.** The soak's measurable criteria were read in the `v1.8.0-rc.1` window on 2026-09-14 and both came back positive ([the readings](#soak-readings)), and Q413 then shipped Phase 2 for 1.9: `v2` served beside `v2beta1` on every kind, storage unmoved.
 > **Scoped 2026-10-09**, after `v1.9.0` tagged on 2026-10-05: the [scope ledger](#scope-ledger) is the release's record.
 > Phase 3's storage advance ships first, in its own release: Q1086 landed it for [1.10](archive/release-1.10.md), `v2` storing on every kind and `gag-migrate storage-version` rewriting what is stored, decided by the maintainer on 2026-10-09 ([why it cannot share an apply with the removals](#the-storage-advance-needs-a-state-between-two-applies)).
-> The removals follow in `v2.0.0`: Q273 removed `v1alpha1` and Q264 removed classic on `main`, and Q1167 removed `v2alpha1`, `v2beta1` and the hub; Phase 4's docs and the tag are [Q1107](../queue/Q1107.md).
+> The removals follow in `v2.0.0`: Q273 removed `v1alpha1` and Q264 removed classic on `main`, and Q1167 removed `v2alpha1`, `v2beta1` and the hub; Phase 4's docs landed, [Q1284](../queue/Q1284.md) sets one Kubernetes floor, and the tag is [Q1107](../queue/Q1107.md).
 > The Phase 2 alias decision is [taken](#decided-v2-omits-ciliumfqdncalicofqdn) (Q452, 2026-09-08).
 > The phase table below is the real state.
 
@@ -20,7 +20,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 | 1 | Beta soak: accumulate the evidence that `v2beta1`'s shape is right | M | ✅ Done 2026-09-14 — criterion 1 elapsed, criteria 2 and 3 read positive ([the readings](#soak-readings)); criterion 4's two open items are Phases 2 and 4 themselves |
 | 2 | Add `v2` to each kind and serve it beside `v2beta1`; extend conversion coverage. **Ships in 1.9, not 2.0** | M | ✅ Done in Q413: `v2` is a second conversion spoke and the hub stays at `v2beta1` ([why](#the-hub-stays-at-v2beta1)) |
 | 3 | Mark `v2` storage, migrate stored objects, then drop `v2beta1`, `v2alpha1`, `v1alpha1`, and classic | M | ❌ Open: the storage advance landed for 1.10 in Q1086, and the release gate's `storage` leg takes its dogfood reading (Q1171); Q273's `v1alpha1` removal and Q264's classic removal are on `main`, and so is Q1167's drop of the older versions; capability parity **cleared**: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the [parity table](#capability-parity-is-a-precondition-of-the-removal) |
-| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open ([Q1107](../queue/Q1107.md)) |
+| 4 | Operator docs, migration guide, and the `v2.0.0` cut | S | ❌ Open: the operator docs and the migration guide landed, and the cut remains ([Q1107](../queue/Q1107.md)) |
 
 ## Scope ledger
 
@@ -47,7 +47,8 @@ Nor is the storage advance: Q1086 gated 1.10, and [release-1.10.md](archive/rele
 | Q1283 | `spec.tracing.endpoint` rejects a value the exporter would misread | `2.0-gate` | ✅ landed: gated because tightening costs least while a major is open; an unchanged value passes the rule, so a stored one keeps working |
 | Q1290 | First-label prefix overlap lets a sweep deregister another set's runners | `2.0-gate` | ✅ landed: gated because one tenant's first label could cost another a job with no visible failure; the sweep deletes only names shaped like the ones it mints, which covers a pair already running, and what github.com does with such a job stays unmeasured ([why](../design/05-security.md#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap)) |
 | Q1291 | Drop the one-valued `tier` label from the disruption metrics | `2.0-gate` | ✅ landed: no disruption series carries `tier`, the two tenant panels group on `cause` and `outcome`, and `upgrade.md` warns that a `tier` filter now returns nothing; the `tier` log field stays |
-| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🔲 open |
+| [Q1284](../queue/Q1284.md) | Raise the Kubernetes floor to a version CI tests | `2.0-gate` | 🔲 open: gated because the charts accept versions the docs rule out and CI does not test; its PR chooses the number |
+| [Q1107](../queue/Q1107.md) | Operator docs, migration guide, and the cut (Phase 4) | `2.0-gate` | 🔲 open: the docs landed, with the upgrade and rollback order measured against a running AGC, and the cut remains, after Q1284 |
 | Q555 | Detect flaky jobs and record each failure's platform context | `2.0-gate` | ✅ landed on the scale-set tier: the failure ledger's `failures` map, the worker snapshot, the pairing and its three metrics; the dogfood readings it rests on are [Q1236](../queue/Q1236.md) |
 | Q1183 | Retry classified platform failures, starting with OOM under right-sizing | `2.0-gate` | ✅ landed on the scale-set tier: the out-of-memory class, its stampede breaker and the per-job memory floor, without R12's dogfood reproduction; the deferred wait landed in Q1244 and the misclassification alert in Q1245, neither gated |
 | Q1181 | Skip known-futile re-runs on the existing disruption arms | `2.0-gate` | ✅ landed on the scale-set tier: `run_cancelled` on every arm, `attempt_limit`, `run_too_old` and `superseded` before the budget is reserved; classic takes none, and Q264 removes it |

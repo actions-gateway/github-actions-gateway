@@ -16,7 +16,7 @@ For the full chart reference (every value, the templates it renders, offline val
 
 ## Prerequisites
 
-- **Kubernetes >= 1.30** — the GMC's `namespace-psa-guard` and `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API.
+- **Kubernetes >= 1.31** — each AGC's `RunnerSet` watch uses a server-side field selector (KEP-4358) that is alpha-off on 1.30, so an AGC there holds no session.
 - **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.
@@ -52,7 +52,7 @@ It checks four prerequisites and prints a clear `PASS`/`WARN`/`FAIL` line with a
 | Check | Severity | Meaning |
 |---|---|---|
 | **CNI NetworkPolicy enforcement** | **FAIL** (blocking) | Detects the cluster CNI. An enforcing CNI (Calico, Cilium, Antrea, Weave Net, kube-router, Canal) passes; `kindnet` **fails loudly** — it does not enforce egress, so tenant isolation would be silently void. An unrecognised CNI warns (cannot confirm enforcement). |
-| **Kubernetes >= 1.30** | **FAIL** (blocking) | The GMC's `namespace-psa-guard` / `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API. |
+| **Kubernetes >= 1.30** | **FAIL** (blocking) | The GMC's `namespace-psa-guard` / `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API. It does not check what a gateway needs, which is the prerequisite above. |
 | **cert-manager present** | WARN | Required only for the default cert path (`certManager.enabled=true`). An install with `--set certManager.enabled=false` uses the chart's self-signed fallback and does not need it. |
 | **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's [worker usage sampling](worker-rightsizing.md). Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. Checked with a [bounded retry](#preflighting-a-freshly-created-cluster) — on a brand-new cluster the addon is often still starting. |
 
@@ -247,7 +247,7 @@ Installing them:
   Detection happens once at GMC startup, so **after installing the CRDs into a running v1-only cluster, restart the GMC** (`kubectl rollout restart deploy -n gmc-system gmc-controller-manager`) to enable the v2 controllers.
   On startup the GMC logs `actions-gateway.com/v2 CRDs detected; enabling v2 controllers`.
 
-See [getting-started.md § the v2 API](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended) for what v2 adds, and [§1 Deploy the GMC](../getting-started.md#1-deploy-the-gmc) for the v2 CRD chart install and the Kubernetes version requirements.
+See [getting-started.md § the v2 API](../getting-started.md#4-create-your-gateway-and-runner-set) for what v2 adds, and [§1 Deploy the GMC](../getting-started.md#1-deploy-the-gmc) for the v2 CRD chart install and the Kubernetes version requirements.
 
 ---
 
@@ -364,7 +364,7 @@ The main chart ships no tenant CRD, so `helm uninstall` leaves every tenant's ob
 The `priorityclass-allowlist-guard` `ValidatingAdmissionPolicy` is removed by `helm uninstall` along with its binding and its parameter object; the `PriorityClassAllowlist` **CRD** is left behind, as `crds/` contents always are.
 Removing the binding used to be the trigger for a cluster-wide outage (Q444) when the parameter was a ConfigMap — a reinstall could not repair it.
 It is safe now that the parameter is a CRD, which is [why it is one](#the-policy-parameter-is-a-crd-not-a-configmap-q492); the uninstall/reinstall cycle is covered by `scripts/e2e/chart-reinstall-check.sh` in CI.
-Symptoms of the old failure, if you meet it on a pre-Q492 release: [troubleshooting.md](troubleshooting.md#every-runnergroup--runnerset-write-denied-no-params-found-for-policy-binding).
+Symptoms of the old failure, if you meet it on a pre-Q492 release: [troubleshooting.md](troubleshooting.md#every-runnerset--runnertemplate-write-denied-no-params-found-for-policy-binding).
 
 The install namespace (`gmc-system`) is left in place if you created it with `--create-namespace`; remove it with `kubectl delete namespace gmc-system` once empty.
 

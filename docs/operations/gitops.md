@@ -195,7 +195,7 @@ For the GitHub App credential Secret, use one of the two patterns below.
 [External Secrets Operator (ESO)](https://external-secrets.io) projects a Secret from your external secret manager (HashiCorp Vault, AWS Secrets Manager, GCP Secret Manager, Azure Key Vault, …) into the cluster.
 The raw private key lives in the secret manager; only the *reference* is committed to Git.
 
-The GMC consumes a per-tenant `Secret` with three keys — `appId`, `installationId`, and `privateKey` — referenced by `spec.gitHubAppRef` on the `ActionsGateway` CR (see [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret)).
+The GMC consumes a per-tenant `Secret` with three keys — `appId`, `installationId`, and `privateKey` — referenced by `spec.credentials.githubApp` on the `ActionsGateway` CR (see [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret)).
 The `ExternalSecret` below reconstructs exactly those keys.
 Replace the `ClusterSecretStore` name and `remoteRef` keys with your provider's; this example uses a Vault-backed store.
 
@@ -211,7 +211,7 @@ spec:
     kind: ClusterSecretStore
     name: vault-backend        # your provisioned store
   target:
-    name: my-github-app        # the Secret name spec.gitHubAppRef points at
+    name: my-github-app        # the Secret name spec.credentials.githubApp points at
     creationPolicy: Owner
     template:
       type: Opaque

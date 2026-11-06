@@ -14,8 +14,8 @@
 # allowPrivilegeEscalation:false, or readOnlyRootFilesystem — the default
 # `baseline` worker profile does not set those (baseline CI relies on in-job
 # sudo; the runner needs a writable root fs). See ../../../admission-policies.md
-# for the full compatibility matrix. Tenants who need the stricter floor set
-# securityProfile: restricted on their ActionsGateway.
+# for the full compatibility matrix. Tenants who need the stricter floor label
+# their namespace actions-gateway.com/security-profile=restricted.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -99,7 +99,7 @@ spec:
                 matchLabels:
                   actions-gateway.com/tenant: managed
       validate:
-        message: "Privileged containers are not allowed for GAG pods (use securityProfile: privileged + a PolicyException for DinD tenants)."
+        message: "Privileged containers are not allowed for GAG pods (label the namespace actions-gateway.com/security-profile=privileged + a PolicyException for DinD tenants)."
         pattern:
           spec:
             =(initContainers):

@@ -39,10 +39,10 @@ Two scopes matter:
 
 | Scope | What | How it is captured |
 | --- | --- | --- |
-| Cluster-wide (once per cluster) | The GAG Custom Resource Definitions (CRDs). The current v2 CRDs — `actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, `clusterrunnertemplates` — are in API group `actions-gateway.com`; a cluster still serving the legacy v1alpha1 API also carries `actionsgateways` and `runnergroups` under `actions-gateway.github.com`. | A CRD backup — or, preferably, the Helm CRD chart tracked in Git. |
-| Per-tenant namespace | The `ActionsGateway` CR, any referenced `EgressProxy` CR, the GitHub App credential `Secret`, the `Namespace` (with its security-profile label), and the `ResourceQuota`. | A namespace backup, scheduled per tenant. |
+| Cluster-wide (once per cluster) | The GAG Custom Resource Definitions (CRDs). The current v2 CRDs — `actionsgateways`, `egressproxies`, `runnersets`, `runnertemplates`, `clusterrunnertemplates` — are in API group `actions-gateway.com`. | A CRD backup — or, preferably, the Helm CRD chart tracked in Git. |
+| Per-tenant namespace | The `ActionsGateway` CR, any referenced `EgressProxy` CR, its `RunnerSet` and `RunnerTemplate` CRs, the GitHub App credential `Secret`, the `Namespace` (with its security-profile label), and the `ResourceQuota`. | A namespace backup, scheduled per tenant. |
 
-Everything else in the tenant namespace — the Actions Gateway Controller (AGC) `Deployment`, ServiceAccounts, RoleBinding, metrics `Service`, NetworkPolicies, metrics TLS `Secret`s, and the `RunnerGroup` CR — is **owned and reconciled by the GMC** and does not need to be in the restore path.
+Everything else in the tenant namespace — the Actions Gateway Controller (AGC) `Deployment`, ServiceAccounts, RoleBinding, metrics `Service`, NetworkPolicies, and metrics TLS `Secret`s — is **owned and reconciled by the GMC** and does not need to be in the restore path.
 Those objects all carry the label `app.kubernetes.io/managed-by=actions-gateway-gmc`, which is exactly the selector the restore step uses to skip them.
 
 ---
@@ -100,7 +100,7 @@ For multi-tenant clusters, drive one schedule per tenant namespace, or select ac
    If you keep CRDs in Git, apply them first and skip Velero for this step.
 
 2. **Inputs and top-level CRs, skipping owned children.** Restore the tenant namespace, but **exclude everything the GMC owns** and let the controllers rebuild it.
-   The owned children (and the GMC-provisioned `RunnerGroup`) all carry `app.kubernetes.io/managed-by=actions-gateway-gmc`; the operator inputs and the top-level CRs do not.
+   The owned children all carry `app.kubernetes.io/managed-by=actions-gateway-gmc`; the operator inputs and the top-level CRs do not.
    A single label selector expresses exactly that:
 
    ```sh

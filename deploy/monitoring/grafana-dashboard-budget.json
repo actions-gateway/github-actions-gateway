@@ -318,7 +318,7 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace) (kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=\"actions-gateway-proxy\"})",
+          "expr": "sum by (namespace) (kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=~\".+-proxy\"})",
           "legendFormat": "proxy replicas {{namespace}}",
           "refId": "B"
         }
@@ -374,7 +374,7 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 7, "w": 24, "x": 0, "y": 32 },
       "id": 35,
-      "description": "Which rung is suppressing intake, in worker slots. Stacked, and the stack total is the set's declared worker ceiling: advertised capacity is what GitHub may still fill, and each withheld band is what a rung took off it. A tall withheld band beside a ResourceQuota bar near 100% is spend held down by the cap rather than by demand. quota is namespace ResourceQuota headroom, capacity the opt-in placeability gate, scaleup the opt-in creation-rate limit; a rung added later appears as a new band with no edit here. Withheld slots are only suppressed spend where GitHub had jobs queued to fill them, so read them against actions_gateway_scaleset_jobs_available before pricing them. ScaleSet-protocol sets only, so this is empty on a classic-only deploy and the panel beside it is the one to read. $runner_group filters it on runner_set, so selecting a classic RunnerGroup empties it.",
+      "description": "Which rung is suppressing intake, in worker slots. Stacked, and the stack total is the set's declared worker ceiling: advertised capacity is what GitHub may still fill, and each withheld band is what a rung took off it. A tall withheld band beside a ResourceQuota bar near 100% is spend held down by the cap rather than by demand. quota is namespace ResourceQuota headroom, capacity the opt-in placeability gate, scaleup the opt-in creation-rate limit; a rung added later appears as a new band with no edit here. Withheld slots are only suppressed spend where GitHub had jobs queued to fill them, so read them against actions_gateway_scaleset_jobs_available before pricing them. $runner_group filters it on runner_set, which carries the same set name.",
       "fieldConfig": { "defaults": { "unit": "short", "decimals": 0, "min": 0, "custom": { "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" } } }, "overrides": [] },
       "targets": [
         {

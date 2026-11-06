@@ -214,6 +214,8 @@ Also check the release notes for the new version before upgrading, particularly:
 
 ## Migration Notes
 
+Each note is written as of its release, so one older than `v2.0.0` can name a version or a kind that has since been removed.
+
 ### Action required before `v2.0.0`: `v2` is the storage version, and stored objects need rewriting
 
 **Who is affected:** every cluster with the v2 CRDs installed.
@@ -348,16 +350,20 @@ Fix what refused the apply, then start this section again.
 A `v1.10.0` AGC lists at `v2alpha1`, and the `v1.10.0` CRD declares the field there alone; a `v2.0.0` AGC lists at `v2`, and `v2` is the only version the `v2.0.0` CRD serves.
 So neither AGC can list its `RunnerSet`s against the other release's CRDs.
 
-**What you see.** A `v2.0.0` AGC on the `v1.10.0` CRDs fails its `RunnerSet` list with this error and does not become ready:
+**What you see.** A `v2.0.0` AGC on the `v1.10.0` CRDs fails its `RunnerSet` list with this error, opens no session, and exits about two minutes later with `timed out waiting for cache to be synced`:
 
 ```text
-field label not supported: spec.gatewayRef.name
+failed to list *v2.RunnerSet: field label not supported: spec.gatewayRef.name
 ```
 
-A `v1.10.0` AGC that restarts on the `v2.0.0` CRDs exits at startup, because the version it looks for is gone (read from the `v1.10.0` source, not run):
+**That pod reads `Ready` while it holds no session, and so does the `RunnerSet`.** The rolling update therefore removes the old AGC, and neither a finished rollout nor `kubectl get runnerset` says anything here: the set stays `Ready` `True` with reason `ListenerActive`, as last written, because no AGC can update it.
+Read `actions_gateway_scaleset_session_open` instead, and treat no series the same as `0`.
+Only a listener sets that gauge, so a pod that never syncs its cache should export no series, which also leaves `ActionsGatewayScaleSetNoSession` (`== 0`) quiet; that part is read from the code, not measured.
+
+A `v1.10.0` AGC that restarts on the `v2.0.0` CRDs crash-loops at startup, because the version it looks for is gone:
 
 ```text
-GATEWAY_NAME=<gateway> is set but the actions-gateway.com/v2alpha1 RunnerSet CRD is not installed: a gateway-scoped AGC serves RunnerSets only, so it would reconcile nothing (install the actions-gateway-crds-v2 chart)
+create manager: failed to determine if *v2alpha1.RunnerSet is namespaced: failed to get restmapping: unable to retrieve the complete list of server APIs: actions-gateway.com/v2alpha1: no matches for actions-gateway.com/v2alpha1, Resource=
 ```
 
 The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.
@@ -383,9 +389,21 @@ helm show crds gag-chart-<chart-version>/actions-gateway | kubectl apply -f -
 
 Set all four digests to the new release's, because `--reset-then-reuse-values` otherwise replays the `v1.10.0` ones.
 
-During a gap, an AGC that restarts cannot start.
-One already running cannot re-establish its watch, so it is expected to stop seeing new `RunnerSet`s; that part is inferred from the code, not measured.
+**The CRDs go first because an AGC already running survives that gap, and nothing survives the other one.** A running AGC keeps its session and takes jobs on the new CRDs, while upgrading the chart first replaces it at once with one that can do neither:
+
+| In the gap | CRDs first | Chart first |
+|---|---|---|
+| The AGC | `v1.10.0` keeps running: session open, no restarts for the five minutes held | `v2.0.0` replaces it within a minute, with no session |
+| A job queued in the gap | Taken within 30 seconds | Waits until the CRDs are applied |
+| An AGC pod that restarts | Crash-loops with no session until the chart is upgraded | Already restarting, about every two minutes |
+| Creating or editing a `RunnerSet` | Refused by the `v1.10.0` webhook, `the server could not find the requested resource` | Not measured |
+
+So keep the gap short, and do not restart an AGC or a GMC pod inside it.
 A `v1.10.0` GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.
+
+Whichever way the gap went, closing it recovered the gateway: the new AGC had a session within a minute, took any job that had waited, and left every existing worker pod in place.
+Measured on kind with Kubernetes 1.36.1 against `test/fakegithub`, from the `v1.10.0` images to a `v2.0.0` candidate built from `main`, with workers held `Pending`; a job running through the gap and github.com itself were not measured.
+
 A rollback crosses the same gap in reverse, so it [puts the CRDs back first](#gmc-rollback).
 
 **The chart-root CRD goes last at this release only.** Helm builds the current release's manifest before it applies anything, that manifest names the `PriorityClassAllowlist` at `v2beta1`, and the `v2.0.0` CRD serves `v2` alone.
@@ -1567,7 +1585,7 @@ AGC versions with Q95 delete completed worker pods after `completedPodTTL` (defa
 Two operator-visible consequences:
 
 - **Behaviour change:** completed worker pods no longer linger indefinitely.
-  If your debugging workflow relied on inspecting old pods, raise `completedPodTTL` on the affected `runnerGroups[]` entries (see [tenant-onboarding](tenant-onboarding.md#step-2-create-the-actionsgateway-resource)).
+  If your debugging workflow relied on inspecting old pods, raise `completedPodTTL` on the affected `runnerGroups[]` entries (see [tenant-onboarding](tenant-onboarding.md#step-2-create-the-gateway-and-its-runner-set)).
 - **One-time sweep:** pods created by *pre-upgrade* AGC versions whose RunnerGroup still exists are reaped automatically after upgrade, but pods whose RunnerGroup was already deleted have no OwnerReference and no reconciler to reap them.
   Clean those up once per tenant namespace:
 
@@ -1941,6 +1959,12 @@ kubectl rollout status deploy/gmc-controller-manager -n gmc-system
 ```
 
 `--force-conflicts` is required after the [`v2.0.0` patch](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), because that patch owns `.spec.conversion.strategy`.
+
+**A `v2.0.0` AGC already running survives this gap too**, measured on kind against `test/fakegithub` with workers held `Pending`; a job running through the gap and github.com were not measured.
+On the restored CRDs it logged `field label not supported` on each watch retry, kept its session, and took a job queued in the gap.
+A `RunnerSet` edited in the gap was admitted and left unreconciled, with `Ready` still reporting the old generation, until the `v1.10.0` AGC took over; that AGC then reconciled it through the restored conversion webhook and had a session within 30 seconds.
+An AGC pod restarted in the gap reads `Ready`, holds no session, and exits after about two minutes, as [the upgrade note](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them) describes.
+Keep this gap short as well; the chart-first order was not measured for a rollback.
 Between the applies and the rollback, a read at `v2alpha1` or `v2beta1` fails because a `v2.0.0` GMC has no conversion endpoint, and a write at `v2beta1` is denied with `failed to convert object version`:
 
 ```text
@@ -1973,7 +1997,7 @@ The plain `kubectl apply --server-side` the log recommends is refused with a con
 The forced apply above is the recovery, and no restart is needed: the pods went Ready on their own in up to about four minutes.
 
 Going forward again by the [`v2.0.0` steps](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them) succeeded after the block above.
-None of this was measured with a tenant gateway running: the cluster held the GMC and one `RunnerTemplate`.
+The failure shapes above were measured with the GMC and one `RunnerTemplate`; the clean path, with the AGC running through it, was also measured with a tenant gateway.
 A field that only the `v2.0.0` schema declares is expected to be pruned from an object the next time it is written, as [install.md](install.md#the-v2-api-crds) warns; that part was not measured.
 
 ---
@@ -2016,16 +2040,10 @@ There is no per-namespace alternative.
 
 **Step 3: Watch the rollout**
 
-The AGC Deployment is named per gateway under v2, as `<gateway>-agc`; under v1 there is one per namespace, named `actions-gateway-controller`.
+The AGC Deployment is named per gateway, as `<gateway>-agc`.
 
 ```sh
-# v2
 kubectl rollout status deploy/<gateway>-agc -n <namespace>
-```
-
-```sh
-# v1 (legacy)
-kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 
 **Step 4: Confirm session recovery**
@@ -2052,10 +2070,7 @@ Roll the AGC image back where the GMC reads it, not on the Deployment — `kubec
 helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --version <chart-version> --namespace gmc-system --reset-then-reuse-values \
   --set agc.image.digest=sha256:<previous-agc>
-# v2
 kubectl rollout status deploy/<gateway>-agc -n <namespace>
-# v1 (legacy)
-kubectl rollout status deploy/actions-gateway-controller -n <namespace>
 ```
 
 Then confirm sessions are re-established and job acquisition resumes.
@@ -2075,10 +2090,10 @@ Pods that appear to hang for tens of seconds during a rollout are draining, not 
 
 ```sh
 # Confirm the PodDisruptionBudget is in place
-kubectl get pdb -n <namespace> actions-gateway-proxy
+kubectl get pdb -n <namespace> <proxy>-proxy
 
 # Confirm current replica count
-kubectl get deploy -n <namespace> actions-gateway-proxy
+kubectl get deploy -n <namespace> <proxy>-proxy
 
 # Confirm the HPA is healthy (TARGETS should show a percentage, not <unknown>)
 kubectl get hpa -n <namespace>
@@ -2087,14 +2102,8 @@ kubectl get hpa -n <namespace>
 ### Step 2: Update the Proxy Image
 
 The GMC manages the proxy Deployment.
-Update the proxy image via the GMC's Helm values or Kustomize overlay, then re-deploy the GMC (which will reconcile the updated image into all tenant proxy Deployments).
-To patch a single namespace:
-
-```sh
-kubectl set image deploy/actions-gateway-proxy \
-  proxy=<registry>/proxy:<new-tag> \
-  -n <namespace>
-```
+Update the proxy image via the GMC's Helm values or Kustomize overlay, then re-deploy the GMC, which reconciles the updated image into all tenant proxy Deployments.
+There is no per-namespace alternative, for the reason [the AGC's Step 2](#per-tenant-upgrade-procedure) gives: an image set on the managed Deployment is reverted on the next reconcile.
 
 ### Step 3: Watch the Rollout
 
@@ -2102,7 +2111,7 @@ The rolling update replaces one proxy pod at a time.
 Kubernetes honours the `PodDisruptionBudget` and only terminates a pod once its replacement is `Ready`.
 
 ```sh
-kubectl rollout status deploy/actions-gateway-proxy -n <namespace>
+kubectl rollout status deploy/<proxy>-proxy -n <namespace>
 ```
 
 In-flight `CONNECT` tunnels through the old proxy pod will be interrupted when that pod is terminated.
@@ -2113,7 +2122,7 @@ For high-concurrency tenants, schedule the upgrade during a low-traffic window t
 
 ```sh
 # All proxy pods on the new image
-kubectl get pods -n <namespace> -l app=actions-gateway-proxy -o wide
+kubectl get pods -n <namespace> -l actions-gateway.com/egress-proxy=<proxy> -o wide
 
 # HPA still computing utilization (not <unknown>)
 kubectl get hpa -n <namespace>
@@ -2124,9 +2133,13 @@ kubectl get hpa -n <namespace>
 
 ### Proxy rollback
 
+Roll the proxy image back where the GMC reads it, as [the AGC rollback](#agc-rollback) does, not on the Deployment:
+
 ```sh
-kubectl rollout undo deploy/actions-gateway-proxy -n <namespace>
-kubectl rollout status deploy/actions-gateway-proxy -n <namespace>
+helm upgrade gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
+  --version <chart-version> --namespace gmc-system --reset-then-reuse-values \
+  --set proxy.image.digest=sha256:<previous-proxy>
+kubectl rollout status deploy/<proxy>-proxy -n <namespace>
 ```
 
 ---
@@ -2137,14 +2150,13 @@ Worker image upgrades are non-disruptive: the new image takes effect on future j
 
 ### Upgrade Procedure
 
-Update `spec.runnerGroups[N].workerImage` in the `ActionsGateway` CR:
+Update `spec.workerImage` on the `RunnerTemplate` the `RunnerSet` references:
 
 ```sh
-kubectl edit actionsgateway -n <namespace> <name>
-# Update spec.runnerGroups[N].workerImage to the new image digest
+kubectl patch runnertemplate -n <namespace> <name> \
+  --type=merge -p '{"spec":{"workerImage":"<new-image-digest>"}}'
 ```
 
-The GMC propagates the change to the `RunnerGroup` CR.
 The AGC starts using the new image on the next job acquisition.
 No restart required.
 
@@ -2160,11 +2172,11 @@ This ensures the exact same image is used for all jobs until explicitly changed,
 
 To test a new image on a subset of jobs before rolling it out broadly:
 
-1. Add a second `RunnerGroup` with the new image and a distinct label (e.g.
+1. Add a second `RunnerTemplate` with the new image, and a `RunnerSet` that references it with a distinct label (e.g.
    `canary`).
 2. Update a subset of workflows to use `runs-on: [self-hosted, canary]`.
 3. Monitor job success rates.
-   If healthy, update the main `RunnerGroup` and remove the canary group.
+   If healthy, update the main `RunnerTemplate` and delete the canary set and template.
 
 ### Minimum Version Requirement
 
@@ -2172,7 +2184,7 @@ GitHub enforces a minimum runner version to register, and separately requires ea
 [Troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-image-runner-version) carries the current floor and where it comes from.
 
 You do not have to wait for a failure to see this.
-On both acquisition tiers, every reconcile, the AGC reads the runner version off the effective `workerImage` reference, then out of the image itself in its registry, and reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`), `WorkerImageCurrent` (`False`), or `WorkerImageVersionUnknown` (`Unknown`, while the registry read is pending or failed and the reference names no version, or when the image is not `actions/runner`-derived).
+Every reconcile, the AGC reads the runner version off the effective `workerImage` reference, then out of the image itself in its registry, and reports `RunnerVersionTooOld` with reason `WorkerImageBelowMinimum` (`True`), `WorkerImageCurrent` (`False`), or `WorkerImageVersionUnknown` (`Unknown`, while the registry read is pending or failed and the reference names no version, or when the image is not `actions/runner`-derived).
 Check it right after deploying a different worker image:
 
 ```sh
@@ -2187,9 +2199,8 @@ See [troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-i
 Set `workerImage` back to the previous digest:
 
 ```sh
-kubectl patch actionsgateway -n <namespace> <name> \
-  --type=json \
-  -p='[{"op":"replace","path":"/spec/runnerGroups/0/workerImage","value":"<previous-digest>"}]'
+kubectl patch runnertemplate -n <namespace> <name> \
+  --type=merge -p '{"spec":{"workerImage":"<previous-digest>"}}'
 ```
 
 ---
@@ -2219,16 +2230,16 @@ Investigate using a non-production environment.
 
 ## Zero-Downtime Configuration
 
-The GMC and worker image upgrades are non-disruptive.
-The AGC upgrade is the only component with a brief drain window.
+Worker image upgrades are non-disruptive.
+An AGC upgrade has a brief drain window, and a GMC upgrade [rolls every tenant's AGC](#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them), so it has the same one.
 To minimize its impact:
 
-- **Time upgrades outside peak hours** to reduce the number of in-flight jobs at risk.
-- **Rely on SIGTERM drain** — `kubectl rollout restart` (not `delete pod`) gives the AGC time to call `DELETE /sessions` before the pod exits, reducing the redelivery window from session TTL (minutes) to pod startup time (seconds).
+- **Time upgrades outside peak hours** to reduce the number of jobs waiting to start.
+- **Rely on SIGTERM drain** — `kubectl rollout restart` (not `delete pod`) gives the AGC time to delete each `RunnerSet`'s message session before the pod exits, so the next AGC can open its own without waiting for GitHub to expire the old one.
 - **Use a generous `terminationGracePeriodSeconds`** (≥ 30s).
-  The AGC's SIGTERM handler is fast (a few hundred milliseconds for most tenants) and its session drain is bounded at 10s even when the broker is unreachable, but give it headroom.
+  Each session delete is bounded at 10s even when GitHub is unreachable, but give it headroom.
 - **Accept the blackout as a known cost** rather than attempting zero-downtime tricks.
-  GitHub's 2-minute redelivery window means most jobs survive an AGC restart transparently; the risk window is only jobs whose `renewjob` lock happens to expire during the restart (unlikely in practice for a < 5-second restart).
+  Running workers keep running, jobs wait in GitHub's queue, and the new session receives any unacknowledged assignment again.
 
 ---
 

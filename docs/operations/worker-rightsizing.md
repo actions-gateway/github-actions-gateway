@@ -7,7 +7,7 @@ This guide turns the gateway's built-in usage metrics into measured values, so t
 Actions Runner Controller (ARC) has no equivalent feedback loop.
 
 **Scope:** v2 `RunnerSet` worker pods.
-The Actions Gateway Controller (AGC) samples usage per RunnerSet × container; v1 `RunnerGroup` workers are not sampled (v1 is [deprecated](v1alpha1-deprecation.md)).
+The Actions Gateway Controller (AGC) samples usage per RunnerSet × container.
 
 ## How the sampling works
 

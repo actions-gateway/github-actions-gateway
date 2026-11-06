@@ -42,7 +42,7 @@ helm install gag \
   --set proxy.image.digest=sha256:<proxy> \
   --set wrapper.image.digest=sha256:<wrapper>
 
-# v2 API (recommended): apply the signed, pre-rendered CRDs
+# Apply the signed, pre-rendered v2 CRDs
 kubectl apply --server-side -f \
   https://github.com/actions-gateway/github-actions-gateway/releases/download/v1.10.0/actions-gateway-crds-v2.yaml
 ```

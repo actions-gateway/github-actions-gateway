@@ -71,44 +71,43 @@ Unlike the GMC manager, the listener **requires a client certificate** signed by
 Three things are wired per tenant so Prometheus can scrape them:
 
 1. **Metrics Services (always created).** The GMC creates a `metrics`-named `:8443` port on the proxy `Service` and a dedicated AGC `Service`, both in the tenant namespace.
-   Under v2 the AGC Service is named for the gateway, as `<gateway>-agc`; under v1 it is the fixed `actions-gateway-controller`, and the proxy Service is `actions-gateway-proxy`.
+   The AGC Service is named for the gateway, as `<gateway>-agc`, and the proxy Service for the `EgressProxy`, as `<ep>-proxy`.
    These exist regardless of the scrape toggle.
-2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`, the GMC creates one `ServiceMonitor` per component in the tenant namespace (`actions-gateway-proxy-metrics`, `actions-gateway-controller-metrics`).
+2. **Per-tenant `ServiceMonitor`s (opt-in).** When `metrics.serviceMonitor.enabled=true`, the GMC creates one `ServiceMonitor` per component in the tenant namespace (`<ep>-proxy-metrics`, `<gateway>-agc-metrics`).
    Each selects only its own component's Service via the tenant's owner labels, so one tenant's monitor never selects another tenant's pods.
    Under v2 the monitors are named per resource instead: `<gateway>-agc-metrics` for each `ActionsGateway`'s AGC, and `<ep>-proxy-metrics` for each `EgressProxy`.
-3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the per-tenant scraper client bundle from the `actions-gateway-metrics-client` Secret in the tenant namespace — `tls.crt`/`tls.key` authenticate the scraper to the listener and `ca.crt` verifies the listener's server cert.
+3. **The scraper client bundle (mTLS).** Each `ServiceMonitor` presents the per-tenant scraper client bundle from the `<ep>-metrics-client` Secret in the tenant namespace (the AGC's is `<gateway>-agc-metrics-client`) — `tls.crt`/`tls.key` authenticate the scraper to the listener and `ca.crt` verifies the listener's server cert.
    `serverName` is the component's `<service>.<namespace>.svc` DNS name (a SAN on the server cert), so the scrape is verified end-to-end and **not** MITM-able:
 
    ```yaml
    tlsConfig:
-     serverName: actions-gateway-proxy.<tenant-namespace>.svc
-     ca:        { secret: { name: actions-gateway-metrics-client, key: ca.crt } }
-     cert:      { secret: { name: actions-gateway-metrics-client, key: tls.crt } }
-     keySecret: { name: actions-gateway-metrics-client, key: tls.key }
+     serverName: <ep>-proxy.<tenant-namespace>.svc
+     ca:        { secret: { name: <ep>-metrics-client, key: ca.crt } }
+     cert:      { secret: { name: <ep>-metrics-client, key: tls.crt } }
+     keySecret: { name: <ep>-metrics-client, key: tls.key }
    ```
 
-#### v2 `EgressProxy` proxy metrics
+#### `EgressProxy` proxy metrics
 
-The names above are the **v1** layout, where a single proxy pool per namespace uses fixed names.
-Under the **v2 API**, the egress proxy is a standalone `EgressProxy` resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the `EgressProxy` name `<ep>` instead:
+The egress proxy is a standalone `EgressProxy` resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the `EgressProxy` name `<ep>`:
 
-| Object | v1 | v2 `EgressProxy` |
-|---|---|---|
-| Proxy `Service` (metrics port `:8443`) | `actions-gateway-proxy` | `<ep>-proxy` |
-| Server bundle Secret (mounted into the proxy) | `actions-gateway-metrics-tls` | `<ep>-metrics-tls` |
-| Scraper client bundle Secret (published) | `actions-gateway-metrics-client` | `<ep>-metrics-client` |
-| `ServiceMonitor` | `actions-gateway-proxy-metrics` | `<ep>-proxy-metrics` |
+| Object | Name |
+|---|---|
+| Proxy `Service` (metrics port `:8443`) | `<ep>-proxy` |
+| Server bundle Secret (mounted into the proxy) | `<ep>-metrics-tls` |
+| Scraper client bundle Secret (published) | `<ep>-metrics-client` |
+| `ServiceMonitor` | `<ep>-proxy-metrics` |
 
 Each `EgressProxy` owns its **own** metrics CA — distinct from the AGC's and from every other `EgressProxy` — so Prometheus must read that proxy's own `<ep>-metrics-client` bundle, with `serverName: <ep>-proxy.<namespace>.svc`.
 The same toggle (`metrics.serviceMonitor.enabled` → `--enable-tenant-service-monitors`), the same `metrics: enabled` NetworkPolicy prerequisite, and the same graceful `ServiceMonitorCRDMissing` handling apply.
 
-The v2 AGC follows the same pattern keyed on the gateway name `<gateway>`, with its own CA, distinct from every `EgressProxy`'s:
+The AGC follows the same pattern keyed on the gateway name `<gateway>`, with its own CA, distinct from every `EgressProxy`'s:
 
-| Object | v1 | v2 `ActionsGateway` |
-|---|---|---|
-| AGC `Service` (metrics port `:8443`) | `actions-gateway-controller` | `<gateway>-agc` |
-| Scraper client bundle Secret (published) | `actions-gateway-metrics-client` | `<gateway>-agc-metrics-client` |
-| `ServiceMonitor` | `actions-gateway-controller-metrics` | `<gateway>-agc-metrics` |
+| Object | Name |
+|---|---|
+| AGC `Service` (metrics port `:8443`) | `<gateway>-agc` |
+| Scraper client bundle Secret (published) | `<gateway>-agc-metrics-client` |
+| `ServiceMonitor` | `<gateway>-agc-metrics` |
 
 Its `serverName` is `<gateway>-agc.<namespace>.svc`.
 
@@ -122,18 +121,14 @@ Its `serverName` is `<gateway>-agc.<namespace>.svc`.
 - **NetworkPolicy:** label the Prometheus namespace `metrics: enabled` so the per-tenant NetworkPolicy admits the scrape (the AGC and proxy policies admit the `:8443` metrics port only from `metrics=enabled` namespaces).
 
 **Ad-hoc verification** (mounting the published bundle locally).
-The Service and Secret are named per **gateway** under v2 and with a fixed name under v1, so set `svc`/`secret` for the tenant you are scraping and the rest of the block is identical:
+The Service and Secret are named per **gateway**, so set `svc`/`secret` for the tenant you are scraping:
 
 ```sh
 ns=<tenant-namespace>
 
-# v2 tenant (per ActionsGateway, e.g. gateway "dogfood" -> dogfood-agc):
+# Per ActionsGateway, e.g. gateway "dogfood" -> dogfood-agc:
 svc=<gateway>-agc
 secret=<gateway>-agc-metrics-client
-
-# v1 tenant, instead of the two lines above:
-# svc=actions-gateway-controller
-# secret=actions-gateway-metrics-client
 
 kubectl get secret "$secret" -n "$ns" \
   -o jsonpath='{.data.tls\.crt}' | base64 -d > client.crt

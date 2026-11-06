@@ -267,9 +267,9 @@ The table specifies *what to alert on* once that policy is in place.
 
 | Detection | Audit predicate | Why it matters | Response |
 |---|---|---|---|
-| **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc` under v2, `…:actions-gateway-controller` under v1) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
-| **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway/runner-group=*` or the AGC's `gitHubAppRef` | The AGC only needs its agent-pool and payload Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
-| **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `gitHubAppRef` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
+| **AGC full-body Secret list** | `verb=list resource=secrets` by the AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc`) returning object bodies | Legit AGC code lists Secret *metadata* only ([H-2 residual](../plan/security.md)). A body `list` means out-of-band enumeration of user-managed Secrets. | Treat the AGC as compromised: cordon the tenant namespace, rotate the GitHub App key (runbook.md § GitHub App Key Compromise), inspect the AGC image. |
+| **AGC Secret access outside its label scope** | `verb=get resource=secrets` by the AGC SA for Secret names not matching `actions-gateway.com/runner-set=*` or the AGC's `spec.credentials.githubApp` Secret | The AGC only needs its worker JIT-config and credential Secrets. A `get` on a developer's `ghcr-pull-token` is exfiltration. | As above. |
+| **GMC Secret reads beyond reconcile cadence** | `verb=get resource=secrets` by the GMC SA (`system:serviceaccount:gmc-system:gmc-controller-manager`) at a rate far above the reconcile/requeue cadence | The GMC reads each `spec.credentials.githubApp` Secret only during reconcile (cache-bypassed `Get`). A high `get` rate is credential harvesting. | Treat the GMC as a Tier-0 compromise: isolate the GMC pod, rotate **all** tenant GitHub App keys, audit which Secrets were read. |
 | **GMC Secret read outside tenant namespaces** | `verb` `get`/`list`/`watch` on `secrets` by the GMC SA with `responseStatus.code=403`, or a `list`/`watch` with no `objectRef.namespace` | The GMC holds Secret reads only through the `gmc-tenant-secret-reader` RoleBinding it creates in each tenant namespace (Q1188), so RBAC refuses a read anywhere else. A refusal means the binary tried a read its source never makes. | A refusal is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
 | **GMC namespace-PSA escalation attempt** | `namespace-psa-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)) blocks the GMC relabelling non-tenant namespaces (e.g. `kube-system` → `privileged`). A denial means the GMC tried. | A denial is a successful block, but a *signal* of compromise. Isolate the GMC and investigate. |
 | **GMC out-of-tenant resource write** | `gmc-tenant-resource-guard` ValidatingAdmissionPolicy `deny` events for the GMC SA | The guard blocks the GMC creating/updating/deleting Deployments, RoleBindings, Secrets, NetworkPolicies, etc. in any namespace not marked `actions-gateway.com/tenant=managed` (e.g. a Deployment or Secret into `kube-system`), and any ClusterRoleBinding whose `roleRef` is not `agc-clusterrunnertemplate-reader`, which is how a compromised GMC would grant itself Secret reads cluster-wide (Q1188). A denial means the GMC tried (Q121/Q122). One delete outside a marked namespace is admitted and expected: the GMC removing its own `gmc-tenant-secret-reader` RoleBinding once the namespace loses its marker (Q1271). | A denial is a successful block but a *signal* of compromise. Isolate the GMC and investigate. |
@@ -295,7 +295,7 @@ Logging at `RequestResponse` would copy that key material into the audit backend
 `Metadata` records the requester, verb, resource, name, namespace, timestamp, and response code — enough to detect an anomalous read without duplicating the secret.
 Keep the Secret rules at `Metadata`.
 
-**Before you install,** edit the placeholders (the file's header comment lists them): the GMC ServiceAccount user string if you overrode the install namespace or `namePrefix`, and one `users:` entry per tenant namespace for the AGC rule (the audit `users:` field is an exact match with no wildcard).
+**Before you install,** edit the placeholders (the file's header comment lists them): the GMC ServiceAccount user string if you overrode the install namespace or `namePrefix`, and one `users:` entry per gateway for the AGC rule (the audit `users:` field is an exact match with no wildcard).
 
 #### Where auto-install is — and isn't — possible
 
@@ -367,7 +367,7 @@ The provider's default policy is broader than this sample (it logs more than the
   | where e.responseStatus.code == 403 or isempty(e.objectRef.namespace)
   ```
 
-  Repeat the per-provider queries for each AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc` under v2, `…:actions-gateway-controller` under v1), alerting on `verb == "list"` or a `get` on a Secret the AGC does not own.
+  Repeat the per-provider queries for each AGC ServiceAccount (`system:serviceaccount:<tenant-ns>:<gateway>-agc`), alerting on `verb == "list"` or a `get` on a Secret the AGC does not own.
 
 **Read the events.** Audit events are one JSON object per line.
 To see GMC Secret reads (substitute your GMC user string):
@@ -380,7 +380,7 @@ jq -c 'select(.user.username == "system:serviceaccount:gmc-system:gmc-controller
   /var/log/kubernetes/audit/audit.log
 ```
 
-A baseline is one `get` per `gitHubAppRef` Secret per reconcile, plus one `list` and a long-lived `watch` per tenant namespace from its metadata-only informer, issued when the GMC starts and whenever a watch is re-established, all in tenant namespaces.
+A baseline is one `get` per `spec.credentials.githubApp` Secret per reconcile, plus one `list` and a long-lived `watch` per tenant namespace from its metadata-only informer, issued when the GMC starts and whenever a watch is re-established, all in tenant namespaces.
 Alert on: any `403` (RBAC refused a read outside the tenant namespaces); a `list`/`watch` with no namespace, which is a cluster-wide read the GMC no longer holds; or a `get` rate well above the reconcile cadence.
 For the GMC write rule, a `responseStatus.code` of `403` is a VAP block — investigate the binary that attempted it.
 For AGC reads, filter by each AGC user string and alert on `verb == "list"` (the legit path is metadata-only) or a `get` on a Secret name the AGC does not own, other than a pull secret.
@@ -418,16 +418,10 @@ The abuse-specific first moves:
 ### Suspected compromised AGC (tenant-scoped)
 
 1. **Contain.** Scale the AGC to zero so it stops acting.
-   The AGC Deployment is named per gateway under v2, as `<gateway>-agc`; under v1 there is one per namespace, named `actions-gateway-controller`.
+   The AGC Deployment is named per gateway, as `<gateway>-agc`.
 
    ```sh
-   # v2
    kubectl scale deploy/<gateway>-agc -n <namespace> --replicas=0
-   ```
-
-   ```sh
-   # v1 (legacy)
-   kubectl scale deploy/actions-gateway-controller -n <namespace> --replicas=0
    ```
 
    This does not stop worker pods that are already running, because each runner holds its own session with GitHub.
@@ -440,7 +434,7 @@ The abuse-specific first moves:
 
 1. **Contain.** Scale the GMC to zero: `kubectl scale deploy/gmc-controller-manager -n gmc-system --replicas=0`.
    Existing tenant gateways keep running (the GMC is not in the data path — see [runbook.md § GMC Total Failure](runbook.md#gmc-total-failure)); only provisioning and reconcile pause.
-2. **Rotate everything.** A compromised GMC can read every tenant's `gitHubAppRef` Secret.
+2. **Rotate everything.** A compromised GMC can read every tenant's GitHub App Secret.
    Rotate **all** tenant GitHub App keys.
 3. **Scope.** Audit GMC ServiceAccount `get secrets` and `create`/`patch` calls; reconcile provisioned resources against live `ActionsGateway` CRs to find anything created off-CR.
 4. **Verify the image.** Confirm the GMC image digest against the deployed manifest before scaling back up.
@@ -500,18 +494,18 @@ Triage the report against this operator's needs:
 - **`[FAIL]` on control-plane / kubelet hardening** (e.g.
   `--anonymous-auth=false`, `--authorization-mode` not `AlwaysAllow`, read-only etcd data dir, `--protect-kernel-defaults=true`) — fix at the cluster layer before onboarding.
   These are cluster-admin remediations, not chart settings; managed control planes (EKS/GKE/AKS) pass most of them by default and expose the rest as cluster config.
-- **NetworkPolicy / PodSecurity benchmark items** — this operator already satisfies the workload half: the chart ships GMC NetworkPolicies (`networkPolicy.enabled=true`) and the GMC stamps Pod Security Admission labels per tenant `securityProfile`.
+- **NetworkPolicy / PodSecurity benchmark items** — this operator already satisfies the workload half: the chart ships GMC NetworkPolicies (`networkPolicy.enabled=true`) and the GMC stamps Pod Security Admission labels per each namespace's security profile.
   Confirm the cluster has a NetworkPolicy-enforcing Container Network Interface (CNI) (Calico/Cilium; kindnet does **not** enforce) and the `PodSecurity` admission plugin enabled, or those controls are inert.
   To prove enforcement on a live cluster, run the negative probes in [network-architecture.md § How to Validate Network Isolation](../design/network-architecture.md#how-to-validate-network-isolation) — the "blocked" probes must actually time out (validated under Calico on a kind cluster, Q7b 2026-06-11).
 - **Cluster DNS must be labelled `k8s-app=kube-dns` in `kube-system`.** Tenant NetworkPolicies confine port-53 egress to the cluster DNS service rather than leaving DNS open to any resolver (Q105 — an open DNS path is an unattributed exfiltration side-channel).
   The selector matches the conventional CoreDNS deployment: pods labelled `k8s-app: kube-dns` in the `kube-system` namespace (matched via the immutable `kubernetes.io/metadata.name` namespace label).
   This is the default on every mainstream distribution and managed control plane.
-  If your cluster runs DNS under a different label or namespace **and** uses an enforcing CNI, tenant pods will fail to resolve any name until you either relabel the DNS pods or set `spec.proxy.managedNetworkPolicy: false` and supply your own DNS egress rule.
+  If your cluster runs DNS under a different label or namespace **and** uses an enforcing CNI, tenant pods will fail to resolve any name until you either relabel the DNS pods or set the `EgressProxy`'s `spec.managedNetworkPolicy: false` and supply your own DNS egress rule.
   Symptom: tenant workloads time out on every lookup while non-DNS connectivity is unaffected.
 - **NodeLocal DNSCache (`node-local-dns`) is supported.** With node-local-dns, pods send queries to a link-local IP (default `169.254.20.10`) served by a `hostNetwork` `node-local-dns` pod, not to a `k8s-app: kube-dns` CoreDNS pod — which the kube-dns podSelector cannot match.
   The tenant NetworkPolicies therefore allow port-53 egress to the link-local block `169.254.0.0/16` as a second peer alongside the kube-dns selector (Q136), so both topologies resolve out of the box with no operator action.
   Link-local is non-routable and node-scoped, so this preserves the no-arbitrary-resolver property of Q105 — the link-local block cannot reach an external resolver.
-  If your node-local-dns cache listens on a non-default address *outside* `169.254.0.0/16`, set `spec.proxy.managedNetworkPolicy: false` and supply your own DNS egress rule, or add an additive NetworkPolicy — see [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening).
+  If your node-local-dns cache listens on a non-default address *outside* `169.254.0.0/16`, set the `EgressProxy`'s `spec.managedNetworkPolicy: false` and supply your own DNS egress rule, or add an additive NetworkPolicy — see [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening).
 - **Findings that don't apply** (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.
 
 The goal is **zero critical (`[FAIL]`) findings that this stack depends on** before the first production tenant (per [milestone-5.md § 3](../plan/milestone-5.md#3-posture-audit-kube-bench--polaris)).
@@ -542,7 +536,7 @@ Threat-model rationale: [design 5.2](../design/05-security.md).
 
 **The secure default is controller-managed and not opt-in.** For every tenant, the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to exactly what the design requires: DNS to the cluster DNS service only, and all GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are attributable).
 Worker pods cannot reach arbitrary destinations directly — that is the per-tenant egress-IP isolation property, and it is present automatically the moment a tenant is provisioned.
-Do **not** hand-edit the GMC-managed policies (under v2 `<gateway>-workload`, `<gateway>-agc` and the `EgressProxy`'s own; under v1 the fixed `actions-gateway-workload`, `actions-gateway-controller`, `actions-gateway-proxy`): the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted or go stale.
+Do **not** hand-edit the GMC-managed policies (`<gateway>-workload`, `<gateway>-agc` and the `EgressProxy`'s own): the controller reconciles them back, and the proxy policy's GitHub-CIDR rule is refreshed from `api.github.com/meta` every 24h, so a hand-edit would be reverted or go stale.
 See [network-architecture.md](../design/network-architecture.md#networkpolicy-rules) for the full policy set.
 
 > **Running a service mesh?** A mesh sidecar transparently intercepts the worker's outbound TCP and can re-route GitHub-bound traffic through a mesh egress gateway, silently bypassing the per-tenant proxy and dropping the egress-IP attribution this isolation property rests on.
@@ -554,7 +548,7 @@ Some jobs legitimately need egress the proxy cannot carry — the CONNECT proxy 
 Worker pods carry two selectable labels, so you can target all workers or a single runner type:
 
 - `actions-gateway/component: workload` — every worker (and the AGC) in the tenant
-- `actions-gateway/runner-group: <name>` — workers of one specific RunnerGroup
+- `actions-gateway.com/runner-set: <name>` — workers of one specific `RunnerSet`
 
 ```yaml
 # Applied by a platform admin (requires NetworkPolicy write in the tenant
@@ -568,7 +562,7 @@ spec:
   podSelector:
     matchLabels:
       actions-gateway/component: workload
-      actions-gateway/runner-group: gpu-builders   # omit this line for tenant-wide
+      actions-gateway.com/runner-set: gpu-builders   # omit this line for tenant-wide
   policyTypes: [Egress]
   egress:
     - to:
@@ -595,7 +589,7 @@ If instead you want to express the **proxy's own** GitHub egress as FQDN rules u
 
 - **First-class, GMC-managed (recommended on a v2 `EgressProxy`)** — set `spec.egressPolicyMode: FQDN` and have the operator select `--fqdn-policy-backend`; the GMC emits the CNI-native FQDN policy for you, keeping it owned and reconciled.
   See [Expressing GitHub egress by FQDN](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in) below.
-- **Full hand-off** — set `spec.proxy.managedNetworkPolicy: false` (v1 `ActionsGateway`) or `spec.managedNetworkPolicy: false` (v2 `EgressProxy`): the GMC stops managing the proxy egress policy entirely and you own it.
+- **Full hand-off** — set `spec.managedNetworkPolicy: false` on the `EgressProxy`: the GMC stops managing the proxy egress policy entirely and you own it.
   Use this when you need a shape the managed FQDN mode does not emit.
 
 The managed CIDR path remains the default in all cases.
@@ -606,13 +600,13 @@ This project deliberately does **not** ship tooling to manage the *widening* pol
 What the project commits to instead is a stable **integration surface**: every worker pod carries two labels you can target from any policy engine, and these are a supported contract (they will not be renamed without a migration note):
 
 - `actions-gateway/component: workload` — all worker (and AGC) pods in the tenant
-- `actions-gateway/runner-group: <name>` — workers of one specific RunnerGroup
+- `actions-gateway.com/runner-set: <name>` — workers of one specific `RunnerSet`
 
 For anything beyond a handful of static CIDRs, prefer the ecosystem over hand-written `NetworkPolicy`:
 
 - **Your CNI's richer egress** — `CiliumNetworkPolicy` `toFQDNs` (DNS-aware, hostname allowlists), Calico `NetworkSet` (reusable CIDR groups) / DNS policy, and policy tiers.
   This is the right tool for "let `gpu-builders` reach `*.internal.corp` and a database."
-  It pairs with the `spec.proxy.managedNetworkPolicy: false` hand-off above.
+  It pairs with the `spec.managedNetworkPolicy: false` hand-off above.
 - **`AdminNetworkPolicy`** ([sig-network `network-policy-api`](https://network-policy-api.sigs.k8s.io/)) — cluster-admin-level, cross-namespace egress baselines (`AdminNetworkPolicy` / `BaselineAdminNetworkPolicy`), implemented by Cilium/Calico/OVN-Kubernetes.
   The most direct fit for "platform admin governs egress across all tenant namespaces" — maturing (alpha→beta), so confirm your CNI's support level.
 - **Kyverno / OPA Gatekeeper** — policy-as-code to *generate* per-namespace NPs (e.g. a templated default-deny or egress allowance keyed off a namespace label) and to *validate* that any admin-added egress conforms to your guardrails.
@@ -631,7 +625,7 @@ If your cluster enforces DNS-based egress, you can instead have the GMC express 
 
 The choice is split across **two roles** (Q245), so the tenant API stays stable as CNI/platform FQDN mechanisms proliferate:
 
-- **The tenant expresses intent** on the v2 `EgressProxy` — `egressPolicyMode: FQDN` means "allow my GitHub (and any `destinationFQDNs`) egress by hostname."
+- **The tenant expresses intent** on the `EgressProxy` — `egressPolicyMode: FQDN` means "allow my GitHub (and any `destinationFQDNs`) egress by hostname."
   The tenant does **not** name Cilium/Calico/GKE.
 - **The operator picks the mechanism**, once per cluster, via the GMC `--fqdn-policy-backend` flag (chart: `fqdnPolicyBackend`).
 
@@ -659,7 +653,7 @@ fqdnPolicyBackend: cilium   # none (default) | cilium | calico | gke
 | `calico` | Calico `NetworkPolicy` (`projectcalico.org/v3`) with destination `domains` | Calico with DNS-based policy enabled, and the `projectcalico.org/v3 NetworkPolicy` CRD installed |
 | `gke` | GKE `FQDNNetworkPolicy` (`networking.gke.io/v1alpha1`) | GKE Dataplane V2 with `--enable-fqdn-network-policy` |
 
-The emitted object is named `<proxy>-proxy-fqdn`, owned by the `EgressProxy` (garbage-collected with it), and covers the GitHub Actions runner endpoint families: `api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `*.actions.githubusercontent.com`, and `*.blob.core.windows.net` — **plus the `gitHubURL` host of every gateway that references this proxy**, directly via `defaultProxyRef` or through a `RunnerSet`'s `proxyRef` (Q506).
+The emitted object is named `<proxy>-proxy-fqdn`, owned by the `EgressProxy` (garbage-collected with it), and covers the GitHub Actions runner endpoint families: `api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `*.actions.githubusercontent.com`, and `*.blob.core.windows.net` — **plus the `githubURL` host of every gateway that references this proxy**, directly via `defaultProxyRef` or through a `RunnerSet`'s `proxyRef` (Q506).
 That is what makes an FQDN mode work for GitHub Enterprise Server without any extra configuration: the appliance's hostname is on the referring `ActionsGateway`, and a gateway applied after the proxy re-triggers the policy.
 A public-GitHub-only pool emits exactly what it did before.
 In an FQDN mode the standard `NetworkPolicy` drops its GitHub-CIDR rule (DNS + ingress are unchanged) and the 24h IP-range reconcile skips this proxy.
@@ -692,7 +686,7 @@ Confirm your CNI actually enforces DNS-based egress before relying on it (see th
 `egressPolicyMode` has no effect when `managedNetworkPolicy: false`.
 
 > FQDN mode is currently a v2 `EgressProxy` feature (the shared-egress surface).
-> The v1 `ActionsGateway` proxy and v2 direct-egress (proxy-less) gateways stay on the CIDR path; if you need FQDN egress there, use the `managedNetworkPolicy: false` hand-off above.
+> Direct-egress (proxy-less) gateways stay on the CIDR path; if you need FQDN egress there, use the `managedNetworkPolicy: false` hand-off above.
 
 ### Pinning a tenant's proxy pool to its egress IP: `spec.scheduling`
 
@@ -978,7 +972,7 @@ In-flight connections through the proxy end when their pods do, so drain the con
 ## Tightening AGC apiserver egress: the `apiserver-cidrs` allowlist
 
 The AGC pod holds the tenant's GitHub App private key and is the only workload that needs the Kubernetes API server.
-The GMC therefore reconciles a NetworkPolicy admitting AGC egress on the apiserver ports **443 and 6443**: `<gateway>-agc` under v2, the fixed `actions-gateway-controller` under v1.
+The GMC therefore reconciles a NetworkPolicy admitting AGC egress on the apiserver ports **443 and 6443**: `<gateway>-agc`.
 By default that rule has **no destination restriction** (any-dest): kube-proxy DNATs the `kubernetes` Service ClusterIP to a provider-specific apiserver IP *before* NetworkPolicy is evaluated, so a precise `ipBlock` is not portable and a wrong one silently severs the AGC's apiserver access (the PR #59 post-DNAT trap).
 That breadth is a documented residual ([§5.2](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)): a compromised AGC could in principle reach an arbitrary external HTTPS endpoint on 443, not just the apiserver.
 
@@ -1060,7 +1054,7 @@ The AGC mints GitHub App installation access tokens by POSTing a signed App-JWT 
 Both the JWT (signed with the tenant's private key) and the returned token are credential material, so this exchange must never traverse a plaintext channel.
 
 The endpoint host is taken from the **`GITHUB_API_BASE_URL`** environment variable, defaulting to `https://api.github.com` when unset.
-On a GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's `spec.gitHubURL` and injects it on the AGC `Deployment` — `https://api.github.com` for a `github.com` gateway, `https://<host>/api/v3` for GitHub Enterprise Server.
+On a GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's `spec.githubURL` and injects it on the AGC `Deployment` — `https://api.github.com` for a `github.com` gateway, `https://<host>/api/v3` for GitHub Enterprise Server.
 The token provider **rejects a non-HTTPS `GITHUB_API_BASE_URL` at startup** — the AGC (and the `probe`) will refuse to start with a clear error rather than leak credentials on the first token mint:
 
 ```
@@ -1071,7 +1065,7 @@ plaintext is permitted only under an explicit dev/test opt-in
 
 This is **secure-by-default**: HTTPS is required with no configuration, an HTTPS value (including a GitHub Enterprise Server base such as `https://ghe.example.com/api/v3`) and the unset default both work, and the error names the offending URL but never any token or JWT material.
 
-**Operator action:** on a GMC-provisioned gateway there is nothing to set — `spec.gitHubURL` is validated `https://` at admission, so the derived base is always HTTPS.
+**Operator action:** on a GMC-provisioned gateway there is nothing to set — `spec.githubURL` is validated `https://` at admission, so the derived base is always HTTPS.
 If you run the AGC or `probe` standalone and set `GITHUB_API_BASE_URL` yourself (e.g. for GitHub Enterprise Server), it must begin with `https://`.
 A plaintext value will block startup.
 Do not work around this by editing the deployment to inject a stub signal — the plaintext path exists only for the project's own in-cluster test fixtures.
@@ -1089,8 +1083,8 @@ A tenant can request scheduling priority for its worker pods in two places, and 
 
 | Where a tenant sets it | On which kind |
 |---|---|
-| `priorityTiers[].priorityClassName` | v1 `ActionsGateway` / `RunnerGroup`, v2 `RunnerSet` |
-| `podTemplate.spec.priorityClassName` | v1 `ActionsGateway.runnerGroups[]`, v2 `RunnerTemplate` |
+| `priorityTiers[].priorityClassName` | `RunnerSet` |
+| `podTemplate.spec.priorityClassName` | `RunnerTemplate` |
 
 `PriorityClass` is a **cluster-scoped** object carrying a priority *value* and a `preemptionPolicy` (Kubernetes default `PreemptLowerPriority`).
 Left unvalidated, a tenant could name a high-priority, preempting class and have the scheduler **evict other tenants' running worker pods — and their egress proxies** — to schedule its own: a cross-tenant isolation break (Q132, Q289).
@@ -1115,7 +1109,7 @@ The platform owns which classes a tenant may use:
    ```
 
 2. **The platform allowlists the names on the GMC.** Set the `--allowed-priority-classes` flag (comma-separated) on the GMC controller.
-   The validating webhook rejects — naming both the offending class and the permitted set — any `ActionsGateway` whose `runnerGroups[].priorityTiers[].priorityClassName` or `runnerGroups[].podTemplate.spec.priorityClassName` is off the list, any `RunnerTemplate` whose `podTemplate.spec.priorityClassName` is off the list, and any v2 `RunnerSet` whose `priorityTiers[].priorityClassName` is off the list.
+   The validating webhook rejects — naming both the offending class and the permitted set — any `RunnerTemplate` whose `podTemplate.spec.priorityClassName` is off the list, and any `RunnerSet` whose `priorityTiers[].priorityClassName` is off the list.
 
    ```yaml
    # GMC Deployment / Helm values — args on the controller-manager container
@@ -1167,19 +1161,19 @@ description: "GAG per-tenant egress proxy and AGC control-plane pods."
 
 ### Upgrading: previously ungated `priorityClassName` fields are now gated
 
-Two of the tenant-reachable routes shipped before their gate did: `podTemplate.spec.priorityClassName` was accepted unvalidated on `RunnerTemplate` and `ActionsGateway.runnerGroups[]`, and `priorityTiers[].priorityClassName` was accepted unvalidated on the v2 `RunnerSet`.
+Two of the tenant-reachable routes shipped before their gate did: `podTemplate.spec.priorityClassName` was accepted unvalidated on `RunnerTemplate`, and `priorityTiers[].priorityClassName` was accepted unvalidated on `RunnerSet`.
 Both are now rejected unless allowlisted, so **an existing CR that names an off-allowlist class will fail its next `create`/`update`** (admission webhooks do not re-validate already-stored objects, so nothing breaks until the CR is edited).
 
 Before upgrading, find the affected objects and either add their class to `--allowed-priority-classes` or remove the field:
 
 ```bash
-# v2 RunnerTemplates
+# RunnerTemplates
 kubectl --context "$CTX" get runnertemplates -A -o json | jq -r '
   .items[]
   | select(.spec.podTemplate.spec.priorityClassName != null)
   | "\(.metadata.namespace)/\(.metadata.name) -> \(.spec.podTemplate.spec.priorityClassName)"'
 
-# v2 RunnerSets (each priorityTiers[] entry names a class)
+# RunnerSets (each priorityTiers[] entry names a class)
 kubectl --context "$CTX" get runnersets.actions-gateway.com -A -o json | jq -r '
   .items[]
   | .metadata.namespace as $ns | .metadata.name as $name
@@ -1203,7 +1197,7 @@ One object carries both sets, in two lists that mirror the two flags:
 
 The chart always renders this object (named `<release>-priorityclass-allowlist`) from `allowedPriorityClasses` and `allowedInfraPriorityClasses`, and always points the GMC at it.
 The **same object is the [`priorityclass-allowlist-guard`](#defense-in-depth-the-priorityclass-allowlist-guard-policy-q289) policy's parameter**, so the webhook and the policy read one source and cannot drift — there is no superset discipline to remember.
-The policy reads only `allowedPriorityClasses`: its job is the direct-write path to `runnergroups`, which carry no infra scheduling block, and the two infra kinds have `failurePolicy: fail` webhooks of their own.
+The policy reads only `allowedPriorityClasses`: its job is the direct-write path to `runnersets` and `runnertemplates`, which carry no infra scheduling block, and the two infra kinds have `failurePolicy: fail` webhooks of their own.
 
 !!! note "This replaced a watched ConfigMap (Q492)"
     `priorityClassAllowlist.configMapName` is removed; setting it now fails the Helm render with a migration message.
@@ -1289,19 +1283,10 @@ The exemption admits nothing new: the write it admits stores a spec byte-identic
 Narrow in this order:
 
 1. **Enumerate stored references** to the class you are removing.
-   The three commands under [Upgrading](#upgrading-previously-ungated-priorityclassname-fields-are-now-gated) cover the tenant-authored kinds; also check the GMC-authored `RunnerGroup`s, which store the class too:
-
-   ```bash
-   kubectl --context "$CTX" get runnergroups.actions-gateway.github.com -A -o json | jq -r '
-     .items[]
-     | .metadata.namespace as $ns | .metadata.name as $name
-     | ((.spec.priorityTiers // [])[].priorityClassName),
-       (.spec.podTemplate.spec.priorityClassName // empty)
-     | "\($ns)/\($name) -> \(.)"'
-   ```
+   The two commands under [Upgrading](#upgrading-previously-ungated-priorityclassname-fields-are-now-gated) cover both kinds that can name one.
 
 2. **Move every referencing object off the class** — switch it to a still-allowed class or drop the field.
-   Edit the tenant-facing CR (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`) and let the GMC reconcile the `RunnerGroup`s.
+   Edit the `RunnerSet` or `RunnerTemplate`.
    Admission validates the *incoming* object, so an update that removes the reference always passes — this step also works as the un-wedge path after a premature narrowing.
    Re-run step 1 until it prints nothing.
 
@@ -1312,15 +1297,12 @@ Narrow in this order:
 
 ### Defense-in-depth: the `priorityclass-allowlist-guard` policy (Q289)
 
-The webhooks above gate every *tenant-facing* CR, but `RunnerGroup` CRs have no webhook of their own — they are normally authored only by the GMC from an already-validated `ActionsGateway`.
-A principal granted **direct `runnergroups` write RBAC** would therefore bypass the allowlist entirely.
-The chart ships a `ValidatingAdmissionPolicy` (`<release>-priorityclass-allowlist-guard`, on by default under `admissionPolicy.enabled`, Kubernetes ≥ 1.30) that rejects any `runnergroups` create/update — from **any** writer, the GMC included — whose `priorityTiers[].priorityClassName` or `podTemplate.spec.priorityClassName` is off the allowlist.
-Unlike a webhook, the policy also **re-validates every write to an existing object**, so a pre-gate stored RunnerGroup naming an off-allowlist class is caught on its next update, not just its next re-create.
+The chart ships a `ValidatingAdmissionPolicy` (`<release>-priorityclass-allowlist-guard`, on by default under `admissionPolicy.enabled`, Kubernetes ≥ 1.30) that rejects any `runnersets` or `runnertemplates` create or update, at `v2` and from **any** writer, whose `priorityTiers[].priorityClassName` or `podTemplate.spec.priorityClassName` is off the allowlist.
+Those kinds are also gated by `failurePolicy: Fail` GMC webhooks, so the policy is defense-in-depth: coverage while the webhook is unavailable or bypassed.
+Unlike a webhook, the policy also **re-validates every write to an existing object**, so a stored object naming an off-allowlist class is caught on its next update, not just its next re-create.
 The flip side: removing a class that stored objects still name freezes every later spec-changing write to them.
 Deletion-only updates (deletionTimestamp set, spec unchanged — the finalizer-removal write teardown depends on) are exempt via the policy's `exclude-deletion-only-updates` match condition (Q518), so narrowing can freeze a live object but can no longer wedge its deletion — see [Narrowing the allowlist](#narrowing-the-allowlist-drain-stored-references-first).
 
-The policy matches the v2 kinds too (Q323): `runnersets` (`priorityTiers[].priorityClassName`) and `runnertemplates` (`podTemplate.spec.priorityClassName`), at `v2`.
-Those kinds are already gated by `failurePolicy: Fail` GMC webhooks, so for them the policy is defense-in-depth — coverage while the webhook is unavailable or bypassed, plus the stored-object re-validation a webhook cannot provide.
 `ClusterRunnerTemplate` is exempt (cluster-scoped, platform-authored — its writers can create `PriorityClass` objects anyway).
 
 The policy reads its allowlist from the cluster-scoped **`PriorityClassAllowlist` CR** `<release>-priorityclass-allowlist` (the apiserver cannot read the GMC flag).
@@ -1330,7 +1312,7 @@ See [Self-service additions](#self-service-additions-via-the-priorityclassallowl
 **Why a CRD and not a ConfigMap (Q492).** A `paramKind` on a *core* type is destroyed by a kube-apiserver defect the moment the set of bindings naming it goes empty — which `helm uninstall` does.
 See [below](#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492).
 
-**Failure mode.** The binding uses `parameterNotFoundAction: Deny`: if the parameter object is **deleted**, every matched write — `runnergroups`, `runnersets`, and `runnertemplates` alike — is denied (`no params found for policy binding`) until it is recreated — loud and fail-closed rather than silently off.
+**Failure mode.** The binding uses `parameterNotFoundAction: Deny`: if the parameter object is **deleted**, every matched write, to `runnersets` and `runnertemplates` alike, is denied (`no params found for policy binding`) until it is recreated — loud and fail-closed rather than silently off.
 The GMC surfaces this as provisioning errors on affected gateways; recreate the object (or re-run the chart upgrade) to recover.
 Deleting it does not affect running workloads.
 

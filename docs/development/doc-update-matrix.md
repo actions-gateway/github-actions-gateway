@@ -39,7 +39,7 @@ Two places it costs the most:
   Say which tier emits it, and name the signal that substitutes.
   This is the one place the convention is enforced rather than remembered: `make metric-reference-check` fails an `actions_gateway_*` series the AGC defines with no entry in the [metrics reference](../operations/observability-metrics.md#full-metrics-reference), and one with no emission site (Q776).
   It also reaches inside a series (Q851): a new label value must appear in the metric's `Help` text, which is what an operator reads off `/metrics` with no docs open.
-- **Event reasons.** An Event reason the AGC emits needs a [runbook](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnergroup--runnerset) entry, because an operator meets it in `kubectl describe` and needs the remedy, and `make event-runbook-check` fails one that has none (Q850).
+- **Event reasons.** An Event reason the AGC emits needs a [runbook](../operations/troubleshooting.md#job-lifecycle-events-on-a-runnerset) entry, because an operator meets it in `kubectl describe` and needs the remedy, and `make event-runbook-check` fails one that has none (Q850).
 - **Positioning copy** (`README.md`, `why-gag.md`, `features.md`, `roadmap.md`).
   A capability claimed for the system but implemented only on the deprecated tier is scheduled for deletion, not shipped — it belongs in the parity table in [v2-ga.md](../plan/v2-ga.md#capability-parity-is-a-precondition-of-the-removal), which gates the `v2.0.0` removal on closing exactly this gap.
 

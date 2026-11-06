@@ -8,7 +8,7 @@
 #     its working tree, tool cache, and temp dirs on the root filesystem.
 #   * drop-ALL-capabilities / allowPrivilegeEscalation:false — the DEFAULT
 #     `baseline` worker profile does not set these, because baseline CI relies
-#     on in-job sudo. (Tenants on securityProfile: restricted DO satisfy them
+#     on in-job sudo. (Tenants on the `restricted` profile DO satisfy them
 #     and need no exception.)
 #
 # See ../../../admission-policies.md for the full compatibility matrix.
@@ -50,7 +50,7 @@ spec:
         - autogen-validate-readOnlyRootFilesystem
     # Exempt DEFAULT (baseline-profile) worker pods from the strict
     # capability-drop / no-privilege-escalation rules. Remove this block if all
-    # your tenants run securityProfile: restricted (those workers comply).
+    # your tenants run the `restricted` profile (those workers comply).
     - policyName: disallow-capabilities-strict
       ruleNames:
         - require-drop-all

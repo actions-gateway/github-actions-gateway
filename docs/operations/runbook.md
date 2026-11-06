@@ -5,13 +5,12 @@
 For initial setup steps see [Getting Started](../getting-started.md).
 For detailed symptom → diagnosis steps see [Troubleshooting](troubleshooting.md).
 
-**Addressing the AGC.** Under v2 every AGC control-plane object is named per gateway, as `<gateway>-agc`: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
+**Addressing the AGC.** Every AGC control-plane object is named per gateway, as `<gateway>-agc`: the Deployment, the ServiceAccount, the Service, the RoleBinding and the AGC NetworkPolicy.
 A `team-a-gateway` tenant therefore addresses `deploy/team-a-gateway-agc`, `sa/team-a-gateway-agc`, and so on.
-Under v1 there is one AGC per namespace and all of them carry the fixed name `actions-gateway-controller`.
-Commands below give both forms; substitute your own gateway name for `<gateway>`.
+Commands below use `<gateway>`; substitute your own gateway name.
 
-**Selecting AGC pods needs neither form.** The bare `app` label carries the per-gateway name under v2 and the fixed name under v1, so `-l app=actions-gateway-controller` selects nothing on a v2 tenant.
-The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` under both, so `-l app.kubernetes.io/name=actions-gateway-controller` is the selector that works on either and is what the commands below use.
+**Selecting AGC pods.** The bare `app` label carries the per-gateway name, so selecting on it by the fixed name finds nothing.
+The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` on every gateway, so `-l app.kubernetes.io/name=actions-gateway-controller` selects them all and is what the commands below use.
 
 ---
 
@@ -22,8 +21,8 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 1. Ensure the tenant namespace exists: `kubectl get namespace <namespace>`.
 2. Have the tenant create the GitHub App Secret in their namespace.
    See [Getting Started §3](../getting-started.md#3-create-a-github-app-credential-secret).
-3. Have the tenant create the gateway CR(s) — the recommended v2 `ActionsGateway` + `RunnerSet`, or the legacy v1 `ActionsGateway`.
-   See [Getting Started §4](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
+3. Have the tenant create the gateway CRs: an `ActionsGateway` and its `RunnerSet`s.
+   See [Getting Started §4](../getting-started.md#4-create-your-gateway-and-runner-set).
 4. Confirm the GMC has provisioned resources within ~30 seconds:
    ```sh
    kubectl get actionsgateway -n <namespace>
@@ -70,7 +69,7 @@ Raise the namespace `ResourceQuota` with it, or the extra slots are withheld as 
 
 See [Getting Started — Rotating GitHub App Credentials](../getting-started.md#rotating-github-app-credentials) for the full procedure.
 
-In brief: create a new Secret with the new private key, then change `spec.gitHubAppRef.name` in the `ActionsGateway` CR to reference the new Secret.
+In brief: create a new Secret with the new private key, then change `spec.credentials.githubApp.name` in the `ActionsGateway` CR to reference the new Secret.
 The GMC detects the Secret reference change and rolls the AGC Deployment.
 Do not update the existing Secret in-place; the GMC does not watch Secret contents, only the reference.
 
@@ -161,7 +160,7 @@ Raise the quota or lower `maxWorkers` — see [Jobs Failing Due to Namespace Res
 ### ActionsGatewayProxyQuotaExceeded
 
 **Page.** The `ResourceQuota` is holding the egress proxy pool below the HPA's target.
-Raise the quota or lower `proxy.maxReplicas` — see [Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling).
+Raise the quota or lower the `EgressProxy`'s `spec.maxReplicas` — see [Proxy Pool Not Scaling](troubleshooting.md#proxy-pool-not-scaling).
 
 ### ActionsGatewayQuotaPressure
 
@@ -322,13 +321,7 @@ A wedge shows up as `scaleset_jobs_assigned_total` climbing while `scaleset_jobs
    A non-zero rate points at JIT-config mint or pod-create failures — inspect the AGC logs for `generate-jitconfig` errors and worker-pod create rejections.
 
    ```sh
-   # v2
    kubectl logs -n <namespace> deploy/<gateway>-agc --tail=100
-   ```
-
-   ```sh
-   # v1 (legacy)
-   kubectl logs -n <namespace> deploy/actions-gateway-controller --tail=100
    ```
 
 3. Check the worker-pod `ResourceQuota` (see [Adjusting Tenant Quota](#adjusting-tenant-quota)) and the `WorkerQuotaExceeded` / `WorkersUnschedulable` conditions — a full quota or an unschedulable pod stalls provisioning with no provision *error*.
@@ -364,17 +357,11 @@ The CR is the source of truth; deleting it cascades to the resources the GMC own
 5. Update the `ActionsGateway` CR to reference the new Secret:
    ```sh
    kubectl patch actionsgateway -n <namespace> <name> \
-     --type=merge -p '{"spec":{"gitHubAppRef":{"name":"<new-secret-name>"}}}'
+     --type=merge -p '{"spec":{"credentials":{"githubApp":{"name":"<new-secret-name>"}}}}'
    ```
 6. Confirm the AGC Deployment has rolled and the new pod is healthy:
    ```sh
-   # v2
    kubectl rollout status deploy/<gateway>-agc -n <namespace>
-   ```
-
-   ```sh
-   # v1 (legacy)
-   kubectl rollout status deploy/actions-gateway-controller -n <namespace>
    ```
 7. Confirm `actions_gateway_token_refresh_errors_total` is no longer incrementing.
 8. Delete the old Secret once confirmed healthy, and delete the downloaded `.pem` file from disk (`shred -u <path>` on Linux, `rm -P <path>` on macOS) — the key now lives only in the Kubernetes Secret.
@@ -399,13 +386,7 @@ If the AGC pod is destroyed and cannot restart (e.g. node failure without resche
 3. **To force restart:**
 
    ```sh
-   # v2
    kubectl rollout restart deploy/<gateway>-agc -n <namespace>
-   ```
-
-   ```sh
-   # v1 (legacy)
-   kubectl rollout restart deploy/actions-gateway-controller -n <namespace>
    ```
 
 4. Monitor `actions_gateway_scaleset_session_open` — it should read `1` for every `runner_set` within a few seconds of the pod starting.
@@ -420,7 +401,7 @@ Each worker pod is the restart-safe record of its job, carrying the run identity
 If the GMC pod is unavailable:
 
 1. **Existing tenant gateways continue operating normally.** The GMC is not in the data plane; it only responds to `ActionsGateway` CR changes.
-   Provisioned AGCs, proxies, and RunnerGroups are not affected.
+   Provisioned AGCs, proxies, and worker pods are not affected.
 2. **New `ActionsGateway` CRs will not be provisioned** until the GMC recovers.
 3. **Spec changes to existing `ActionsGateway` CRs will not be reconciled** until the GMC recovers.
 4. To restore: `kubectl rollout restart deploy/gmc-controller-manager -n gmc-system`.

@@ -23,9 +23,9 @@ A release is a `vX.Y.Z` git tag plus its outputs:
 - The **Helm chart**, packaged and pushed as an OCI artifact to `oci://ghcr.io/actions-gateway/charts/actions-gateway`, with its `version` and `appVersion` set to the release tag and a keyless **cosign signature** from the same Fulcio/Rekor flow as the images.
   Operators install it straight from the registry (`helm install … oci://…`) with the published image **digests** pinned — no `git clone` of the chart.
   OCI (over a `gh-pages` chart repo) is chosen so the chart reuses the images' registry, login, and keyless-signing path; Artifact Hub (see [`Chart.yaml`](../../charts/actions-gateway/Chart.yaml) annotations) indexes the OCI ref for discoverability.
-- The **opt-in v2 CRD chart**, packaged and pushed alongside the main chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same version derivation and keyless signature.
+- The **v2 CRD chart**, packaged and pushed alongside the main chart to `oci://ghcr.io/actions-gateway/charts/actions-gateway-crds-v2`, with the same version derivation and keyless signature.
   It ships only the `actions-gateway.com` CRDs — separated from the main chart because the large pod-template CRDs would otherwise push the main chart's Helm release Secret past its 1 MiB limit (Q149).
-  Operators install it only when adopting the v2 API.
+  Every install needs it, because `v2` is the only API served.
   Both chart packages are produced by the same `chart-publish` job.
 - The **signed v2 CRD manifest** (Q276), a pre-rendered `actions-gateway-crds-v2.yaml` (rendered for the default `gmc-system` namespace) attached to the tag's **GitHub Release** with a keyless **cosign blob signature** (`sign-blob` → a Sigstore bundle, `actions-gateway-crds-v2.yaml.cosign.bundle`).
   This is the helm-free manual install path — the v2 CRD chart is too large to `helm install`, so operators `kubectl apply --server-side -f …/releases/download/<tag>/actions-gateway-crds-v2.yaml`.
@@ -580,7 +580,7 @@ From a detached checkout of the RC tag (`git switch --detach vX.Y.Z-rc.N`):
 
    | `sizingProfileState` | What it means | Fix |
    |---|---|---|
-   | *empty* | `spec.sizing` is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through `setup.sh`'s `apply_cr` or a direct patch; `scripts/dogfood/start.sh` resizes the pool and routes CI but **never applies CRs**, so no start can deploy it. | Re-run `scripts/dogfood/setup.sh`, or `kubectl patch` `runnersets.v2alpha1.actions-gateway.com/ci` in `gag-dogfood`. |
+   | *empty* | `spec.sizing` is not on the live RunnerSet — a deploy gap, not a sample gap. A CR edit reaches the cluster only through `setup.sh`'s `apply_cr` or a direct patch; `scripts/dogfood/start.sh` resizes the pool and routes CI but **never applies CRs**, so no start can deploy it. | Re-run `scripts/dogfood/setup.sh`, or `kubectl patch` `runnersets.actions-gateway.com/ci` in `gag-dogfood`. |
    | `AwaitingSamples` | The profile is deployed but a template container is below the threshold. Check the `sampleCounts` the leg prints for which one. | Let ordinary CI traffic run ~20 jobs per container. |
 
    Sample history needs no advance planning: the sampler tracks every worker pod regardless of `spec.sizing`, and the aggregate re-seeds from the persisted `status.sizingRecommendation` — so samples accrue without the profile configured and survive a stop/start rather than being re-earned.
@@ -1420,7 +1420,7 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
   Opted into per tenant via `workerImage` like `build-runner`, and only together with `ACTIONS_RESULTS_URL` set on the runner container: without it, jobs lose both cache and artifacts.
 
 Only `wrapper` is digest-pinned in the chart (`wrapper.image.digest`, like `agc`/`proxy`), so a release must publish the `wrapper` image and pin its digest for the default install to run jobs.
-The `worker` image has no chart `image` block — it is the optional batteries-included image a tenant opts into via its per-RunnerGroup `workerImage`, not a chart-provisioned one — so nothing in the chart pins it.
+The `worker` image has no chart `image` block — it is the optional batteries-included image a tenant opts into via its per-`RunnerTemplate` `workerImage`, not a chart-provisioned one — so nothing in the chart pins it.
 
 ## PR CI vs publish — what runs where
 
