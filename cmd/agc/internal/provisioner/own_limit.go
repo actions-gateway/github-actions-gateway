@@ -82,6 +82,6 @@ const rerunWithheldReasonOwnLimit = "own_limit"
 func (p *Provisioner) withholdOwnLimitRerun(target Target, runID, tier string, log *slog.Logger, kubeletMessage string) {
 	log.Info("worker pod evicted for exceeding its own limit; no automatic re-run",
 		"runID", runID, "tier", tier, "kubeletMessage", kubeletMessage)
-	p.recordRerunWithheld(target, runID, tier, recoveryCauseEviction, rerunWithheldReasonOwnLimit,
+	p.recordRerunWithheld(target, runID, recoveryCauseEviction, rerunWithheldReasonOwnLimit,
 		fmt.Sprintf("worker pod for run %s was evicted for exceeding its own limit (%s), so no automatic re-run was requested: a re-run gets the same limit. Raise the runner's ephemeral-storage limit or emptyDir sizeLimit, or reduce what the job writes, then re-run it by hand", runID, strings.TrimSpace(kubeletMessage)))
 }

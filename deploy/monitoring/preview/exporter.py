@@ -167,12 +167,12 @@ def render():
     for ns, rg in TENANTS:
         # job duration: center idx 6 (~64-128s)
         L += hist_lines("actions_gateway_job_duration_seconds", f'namespace="{ns}",runner_group="{rg}"', JOB_BUCKETS, 0.3, 6, elapsed)
-        # Disruption recoveries carry tier and cause (Q417, Q497); the tenant
-        # dashboard groups on both and the security dashboard selects
-        # cause="eviction", so the synthetic series carry the same four labels.
-        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="scaleset",cause="eviction"}} {counter_total(0.02, elapsed)}')
-        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",tier="scaleset",cause="preemption"}} {counter_total(0.01, elapsed)}')
-        L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}",tier="scaleset",cause="eviction"}} 0')
+        # Disruption recoveries carry cause (Q497); the tenant dashboard groups on
+        # it and the security dashboard selects cause="eviction", so the synthetic
+        # series carry the same three labels.
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",cause="eviction"}} {counter_total(0.02, elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_total{{namespace="{ns}",runner_group="{rg}",cause="preemption"}} {counter_total(0.01, elapsed)}')
+        L.append(f'actions_gateway_eviction_retries_exhausted_total{{namespace="{ns}",runner_group="{rg}",cause="eviction"}} 0')
         # The out-of-memory class's breaker is closed in a healthy fleet (Q1245).
         L.append(f'actions_gateway_auto_retry_paused{{namespace="{ns}",runner_group="{rg}",cause="oom"}} 0')
         L.append(f'actions_gateway_quota_retries_total{{namespace="{ns}",runner_group="{rg}"}} {counter_total(0.01, elapsed)}')

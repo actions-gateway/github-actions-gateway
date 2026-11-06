@@ -576,8 +576,7 @@ func (p *Provisioner) reportRerunJob(target Target, runID, jobName, result strin
 			p.Metrics.ScaleSetJobReruns.WithLabelValues(key.Namespace, key.Name, o.trigger).Inc()
 		}
 		if o.trigger == rerunTriggerGAG && p.Metrics.EvictionRerunOutcomes != nil {
-			p.Metrics.EvictionRerunOutcomes.WithLabelValues(key.Namespace, key.Name, evictionTierScaleSet,
-				o.cause, rerunOutcomeEvent(o.event), outcome).Inc()
+			p.Metrics.EvictionRerunOutcomes.WithLabelValues(key.Namespace, key.Name, o.cause, rerunOutcomeEvent(o.event), outcome).Inc()
 		}
 		if o.flaky && p.Metrics.ScaleSetFlakyJobs != nil {
 			p.Metrics.ScaleSetFlakyJobs.WithLabelValues(key.Namespace, key.Name, o.trigger).Inc()

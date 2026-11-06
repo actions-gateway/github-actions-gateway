@@ -61,25 +61,25 @@ func (g *githubCalls) snapshot() (forceCancel, rerun []string) {
 	return append([]string(nil), g.forceCancel...), append([]string(nil), g.rerun...)
 }
 
-// abandonedScaleSetMetrics carries the tier label Q766 added to both abandoned-run
-// counters, alongside the eviction counters the re-run continues on.
+// abandonedScaleSetMetrics carries both abandoned-run counters, alongside the eviction
+// counters the re-run continues on.
 func abandonedScaleSetMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q766_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q766_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q766_eviction_recovery_identity_unknown_total",
 		}, []string{"namespace", "runner_group", "cause"}),
 		AbandonedRunForceCancels: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q766_abandoned_run_force_cancels_total",
-		}, []string{"namespace", "runner_group", "tier", "outcome"}),
+		}, []string{"namespace", "runner_group", "outcome"}),
 		AbandonedRunRerunWaits: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q766_abandoned_run_rerun_waits_total",
-		}, []string{"namespace", "runner_group", "tier", "outcome"}),
+		}, []string{"namespace", "runner_group", "outcome"}),
 	}
 }
 
@@ -155,7 +155,7 @@ func TestQ766_ReapedPendingScaleSetWorker_ForceCancelsThenRerunsOnCapacity(t *te
 	assert.Empty(t, rerun, "the re-run must wait for capacity, not fire alongside the cancel")
 
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		f.m.AbandonedRunForceCancels.WithLabelValues("team-a", "gpu", evictionTierScaleSet, "cancelled")),
+		f.m.AbandonedRunForceCancels.WithLabelValues("team-a", "gpu", "cancelled")),
 		"the force-cancel is attributed to the scale-set tier, so an operator can tell the two apart")
 
 	// Capacity returns: a worker pod of the same owner binds after the abandonment.
@@ -173,10 +173,10 @@ func TestQ766_ReapedPendingScaleSetWorker_ForceCancelsThenRerunsOnCapacity(t *te
 	require.Len(t, rerun, 1, "the cancelled run is re-run once the owner can place a worker again")
 	assert.Equal(t, "/repos/myorg/myrepo/actions/runs/4242/rerun-failed-jobs", rerun[0])
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		f.m.AbandonedRunRerunWaits.WithLabelValues("team-a", "gpu", evictionTierScaleSet, abandonedRerunOutcomeCapacityReturned)))
+		f.m.AbandonedRunRerunWaits.WithLabelValues("team-a", "gpu", abandonedRerunOutcomeCapacityReturned)))
 	assert.Equal(t, 1.0, testutil.ToFloat64(
-		f.m.EvictionRetries.WithLabelValues("team-a", "gpu", evictionTierScaleSet, recoveryCauseAbandoned)),
-		"the re-run spends a slot of the shared per-run budget, labelled by the tier that detected it")
+		f.m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseAbandoned)),
+		"the re-run spends a slot of the shared per-run budget")
 }
 
 // TestQ766_ClassicWorkerIsNotRecoveredTwice keeps the port from double-spending the
@@ -218,7 +218,7 @@ func TestQ766_IdentityUnknownIsSurfaced(t *testing.T) {
 	assert.Equal(t, 1.0, testutil.ToFloat64(
 		f.m.EvictionRecoveryIdentityUnknown.WithLabelValues("team-a", "gpu", recoveryCauseAbandoned)))
 	assert.Equal(t, 0.0, testutil.ToFloat64(
-		f.m.AbandonedRunForceCancels.WithLabelValues("team-a", "gpu", evictionTierScaleSet, "identity_unknown")),
+		f.m.AbandonedRunForceCancels.WithLabelValues("team-a", "gpu", "identity_unknown")),
 		"the two identity-unknown series must not both count the same pod")
 	assert.Contains(t, f.target.events, "EvictionRecoveryIdentityUnknown",
 		"an operator seeing abandoned jobs stay cancelled must be told why, not left to infer it")
@@ -424,7 +424,7 @@ func TestQ1198_ScanSendsNodeLostBeforeStartToForceCancel(t *testing.T) {
 		"a worker its node took before it started ran no job, so its run is concluded first")
 	assert.Equal(t, []string{"/repos/myorg/myrepo/actions/runs/222/rerun-failed-jobs"}, rerun,
 		"a worker its node took mid-job keeps the Q1179 re-run")
-	assert.Equal(t, float64(1), testutil.ToFloat64(f.m.EvictionRetries.WithLabelValues("team-a", "gpu", "scaleset", "node_shutdown")))
+	assert.Equal(t, float64(1), testutil.ToFloat64(f.m.EvictionRetries.WithLabelValues("team-a", "gpu", "node_shutdown")))
 
 	keys := f.p.pendingAbandonedRerunKeys()
 	require.Len(t, keys, 1)

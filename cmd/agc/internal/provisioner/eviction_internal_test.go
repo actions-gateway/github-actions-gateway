@@ -2,6 +2,7 @@ package provisioner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -18,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 // TestHandleEviction_ConcurrentSameRunRespectsBudget is the Q106 regression
@@ -50,10 +52,10 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	m := &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "test_q106_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 	}
 
 	p := &Provisioner{
@@ -97,7 +99,7 @@ func TestHandleEviction_ConcurrentSameRunRespectsBudget(t *testing.T) {
 	// reporting without splitting the budget.
 	var total float64
 	for _, cause := range []string{recoveryCauseEviction, recoveryCausePreemption} {
-		total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "s", evictionTierClassic, cause))
+		total += testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "s", cause))
 	}
 	assert.Equal(t, float64(got), total)
 }
@@ -211,13 +213,13 @@ func rerunLoopMetrics() *runnercore.Metrics {
 	return &runnercore.Metrics{
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q503_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q503_eviction_rerun_failures_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_q811_eviction_rerun_withheld_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 	}
 }
 
@@ -261,7 +263,7 @@ func TestHandleEviction_RetriesUntilTheRunConcludes(t *testing.T) {
 
 	assert.Equal(t, int64(3), calls.Load(), "two refusals then the accepted call")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction)),
+		testutil.ToFloat64(m.EvictionRetries.WithLabelValues("ns", "g", recoveryCauseEviction)),
 		"the whole refusal-spanning recovery must cost one budget slot, not one per call")
 	assert.Empty(t, target.events, "an eventually-accepted re-run is not an operator incident")
 
@@ -343,7 +345,7 @@ func TestHandleEviction_RunNeverConcludingIsSurfaced(t *testing.T) {
 
 	assert.Equal(t, int64(refusals), calls.Load(), "the window spans every refused attempt the handler makes, then closes")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", recoveryCauseEviction, rerunFailureReasonNeverConcluded)))
 	assert.Contains(t, target.events, "EvictionRerunFailed",
 		"a re-run that never landed needs an owner-visible Event, not just a log line")
 }
@@ -379,7 +381,7 @@ func TestHandleEviction_TheUnseamedWindowCloses(t *testing.T) {
 	<-p.handleEviction(context.Background(), target, "owner", "repo", "1089", log, 2, 0, evictionTierClassic, recoveryCauseEviction, rerunDisruption{})
 
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", recoveryCauseEviction, rerunFailureReasonNeverConcluded)),
 		"a real timer must end the loop; the never-concluded reason pins it to the window branch")
 }
 
@@ -421,7 +423,7 @@ func TestHandleEviction_TerminalFailuresDoNotRetry(t *testing.T) {
 
 			assert.Equal(t, int64(1), calls.Load(), "a terminal failure must not be retried")
 			assert.Equal(t, float64(1),
-				testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseEviction, rerunFailureReasonAPIError)))
+				testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", recoveryCauseEviction, rerunFailureReasonAPIError)))
 			assert.Contains(t, target.events, "EvictionRerunFailed")
 		})
 	}
@@ -500,10 +502,10 @@ func TestHandleEviction_CancelledRunIsNotReRun(t *testing.T) {
 
 	assert.Equal(t, int64(0), stub.reruns.Load(), "a cancelled run must never be asked to re-run")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)),
+		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", recoveryCauseDeletion, rerunWithheldReasonRunCancelled)),
 		"a withheld re-run is counted, so it is not indistinguishable from a recovery that never armed")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonAPIError)),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", recoveryCauseDeletion, rerunFailureReasonAPIError)),
 		"honouring a cancel is the correct outcome, not a failure")
 	assert.Contains(t, target.events, "EvictionRerunWithheld",
 		"the operator sees why no re-run happened, rather than a silent no-op")
@@ -538,7 +540,7 @@ func TestHandleEviction_DrainedRunStillReRuns(t *testing.T) {
 
 	assert.GreaterOrEqual(t, stub.reruns.Load(), int64(1), "a drained worker's job must still be re-run")
 	assert.Equal(t, float64(0),
-		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
+		testutil.ToFloat64(m.EvictionRerunWithheld.WithLabelValues("ns", "g", recoveryCauseDeletion, rerunWithheldReasonRunCancelled)))
 	assert.Empty(t, target.events, "an accepted re-run is not an operator incident")
 }
 
@@ -611,7 +613,7 @@ func TestHandleEviction_UnreadableConclusionWithholdsThenSurfaces(t *testing.T) 
 	assert.Equal(t, int64(0), reruns.Load(), "an unreadable conclusion must not be read as 'not cancelled'")
 	assert.Equal(t, int64(rereads), gets.Load(), "the window spans every re-read the handler makes, not just the first error")
 	assert.Equal(t, float64(1),
-		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonConclusionUnknown)),
+		testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", recoveryCauseDeletion, rerunFailureReasonConclusionUnknown)),
 		"a recovery that never re-ran needs its own reason, not the still-running one")
 	assert.Contains(t, target.events, "EvictionRerunFailed")
 }
@@ -661,7 +663,7 @@ func TestHandleEviction_UnanswerableConclusionIsTerminal(t *testing.T) {
 			assert.Equal(t, int64(1), gets.Load(), "a verdict that cannot change must not be re-asked")
 			assert.Equal(t, int64(0), reruns.Load(), "an unanswerable conclusion is not a licence to re-run")
 			assert.Equal(t, float64(1),
-				testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", evictionTierClassic, recoveryCauseDeletion, rerunFailureReasonAPIError)))
+				testutil.ToFloat64(m.EvictionRerunFailures.WithLabelValues("ns", "g", recoveryCauseDeletion, rerunFailureReasonAPIError)))
 			assert.Contains(t, target.events, "EvictionRerunFailed")
 		})
 	}
@@ -724,4 +726,47 @@ func TestRerunFailedJobs_UsesTheConfiguredBaseURL(t *testing.T) {
 	default:
 		t.Fatal("the rerun call never reached the configured endpoint")
 	}
+}
+
+// realMetrics shares one NewMetrics across -count reruns, because it registers globally.
+var realMetrics = sync.OnceValue(runnercore.NewMetrics)
+
+// TestDisruptionSeriesFitTheirRealLabelLists drives each disruption series through
+// NewMetrics, which every other test here replaces with its own counters. A
+// WithLabelValues whose arity drifts from the label list panics here, not in a running AGC.
+func TestDisruptionSeriesFitTheirRealLabelLists(t *testing.T) {
+	p := &Provisioner{Metrics: realMetrics()}
+	target := &rungTarget{}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	p.recordRetryStarted(target, "1", log, 1, evictionTierScaleSet, recoveryCauseEviction)
+	p.recordRetriesExhausted(target, "1", log, 2, recoveryCauseEviction)
+	p.recordRerunWithheld(target, "1", recoveryCauseEviction, rerunWithheldReasonRunCancelled, "withheld")
+	p.recordRerunFailure(target, "1", recoveryCauseEviction, rerunFailureReasonAPIError, errors.New("refused"))
+	p.countAbandonedRerunWait(target, abandonedRerunOutcomeExpired)
+	p.forceCancelAbandonedRun(context.Background(), target, "", "", "", evictionTierScaleSet, log, rerunDisruption{})
+	p.reportRerunJob(target, "1", "job", jobResultSucceeded,
+		completionPairing{trigger: rerunTriggerGAG, cause: recoveryCauseEviction, event: "push"}, log)
+
+	want := map[string][]string{
+		"actions_gateway_eviction_retries_total":            {"cause", "namespace", "runner_group"},
+		"actions_gateway_eviction_retries_exhausted_total":  {"cause", "namespace", "runner_group"},
+		"actions_gateway_eviction_rerun_withheld_total":     {"cause", "namespace", "reason", "runner_group"},
+		"actions_gateway_eviction_rerun_failures_total":     {"cause", "namespace", "reason", "runner_group"},
+		"actions_gateway_abandoned_run_rerun_waits_total":   {"namespace", "outcome", "runner_group"},
+		"actions_gateway_abandoned_run_force_cancels_total": {"namespace", "outcome", "runner_group"},
+		"actions_gateway_eviction_rerun_outcomes_total":     {"cause", "event", "namespace", "result", "runner_group"},
+	}
+	families, err := metrics.Registry.Gather()
+	require.NoError(t, err)
+	got := map[string][]string{}
+	for _, family := range families {
+		if _, ok := want[family.GetName()]; !ok {
+			continue
+		}
+		for _, label := range family.GetMetric()[0].GetLabel() {
+			got[family.GetName()] = append(got[family.GetName()], label.GetName())
+		}
+	}
+	assert.Equal(t, want, got)
 }

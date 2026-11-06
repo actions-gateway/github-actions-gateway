@@ -37,16 +37,16 @@ func newTestMetrics() *runnercore.Metrics {
 		}, []string{"namespace", "runner_group"}),
 		EvictionRetries: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRetriesExhausted: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_retries_exhausted_total",
-		}, []string{"namespace", "runner_group", "tier", "cause"}),
+		}, []string{"namespace", "runner_group", "cause"}),
 		EvictionRerunFailures: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_rerun_failures_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 		EvictionRerunWithheld: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_rerun_withheld_total",
-		}, []string{"namespace", "runner_group", "tier", "cause", "reason"}),
+		}, []string{"namespace", "runner_group", "cause", "reason"}),
 		EvictionRecoveryIdentityUnknown: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "t_prov_eviction_recovery_identity_unknown_total",
 		}, []string{"namespace", "runner_group", "cause"}),

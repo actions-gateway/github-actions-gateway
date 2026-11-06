@@ -35,7 +35,7 @@ const abandonedForceCancelTimeout = 30 * time.Second
 // worker pod again (Q691) — not immediately, because the job was abandoned for want of
 // capacity and re-queueing it into the same starved pool is how a shortage compounds.
 //
-// tier labels the metric; both acquisition tiers run the identical call (Q766). On the
+// Both acquisition tiers run the identical call (Q766). On the
 // scale-set tier the run's attempt is read and recorded in the owner's failure ledger
 // as GAG's own cancel before cancelling, so the cancelled conclusion it produces is not
 // taken for a user's (Q1182), and the re-run it registers is judged against that
@@ -63,7 +63,7 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 				// Recording this attempt as GAG's would turn that cancel into one the
 				// run_cancelled check re-runs (Q1232). No force-cancel, no re-run, and no
 				// force-cancel outcome: the withhold is counted instead.
-				p.recordRerunWithheld(target, runID, tier, recoveryCauseAbandoned, rerunWithheldReasonRunCancelled,
+				p.recordRerunWithheld(target, runID, recoveryCauseAbandoned, rerunWithheldReasonRunCancelled,
 					runCancelledMessage(runID, recoveryCauseAbandoned))
 				log.Info("the abandoned job's run was already cancelled, and not by GAG; not force-cancelling or re-running it",
 					"runID", runID, "runAttempt", attempt)
@@ -89,7 +89,7 @@ func (p *Provisioner) forceCancelAbandonedRun(ctx context.Context, target Target
 	}
 	if p.Metrics != nil {
 		key := target.Key()
-		p.Metrics.AbandonedRunForceCancels.WithLabelValues(key.Namespace, key.Name, tier, outcome).Inc()
+		p.Metrics.AbandonedRunForceCancels.WithLabelValues(key.Namespace, key.Name, outcome).Inc()
 	}
 }
 
