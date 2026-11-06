@@ -176,7 +176,7 @@ func TestQ766_ReapedPendingScaleSetWorker_ForceCancelsThenRerunsOnCapacity(t *te
 		f.m.AbandonedRunRerunWaits.WithLabelValues("team-a", "gpu", abandonedRerunOutcomeCapacityReturned)))
 	assert.Equal(t, 1.0, testutil.ToFloat64(
 		f.m.EvictionRetries.WithLabelValues("team-a", "gpu", recoveryCauseAbandoned)),
-		"the re-run spends a slot of the shared per-run budget, labelled by the tier that detected it")
+		"the re-run spends a slot of the shared per-run budget")
 }
 
 // TestQ766_ClassicWorkerIsNotRecoveredTwice keeps the port from double-spending the

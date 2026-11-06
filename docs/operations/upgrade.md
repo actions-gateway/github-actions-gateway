@@ -464,14 +464,15 @@ A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and `s
 **Who is affected:** anyone whose own alerts, recording rules or dashboards filter or group on `tier` on a disruption series, including copies of the tenant Grafana dashboard taken before `v2.0.0`.
 The reference [`PrometheusRule`](../../deploy/monitoring/prometheusrule.yaml) never read it.
 
-**What changed.** [Seven series](observability-metrics.md#breaking-observability-changes-q1291) no longer carry `tier`, whose only value was `scaleset`.
-A query filtering `{tier="scaleset"}` returns nothing and raises no error, so a rule reading it never fires again and a panel reading it shows `No data`.
+**What changed.** [Six series](observability-metrics.md#breaking-observability-changes-q1291) no longer carry `tier`, whose values were `classic` and `scaleset`, because the classic tier is gone.
+A query filtering on either value, such as `{tier="scaleset"}`, returns nothing and raises no error, so a rule reading it never fires again and a panel reading it shows `No data`.
 `by (tier)` keeps working, with one group and an empty `tier` value.
 Series recorded before the upgrade keep the label, so an `increase()` across the upgrade spans two series.
 
 **Before you upgrade,** remove `tier` from those queries and legends, and re-import the tenant dashboard if you run a copy.
 
-**Rolling back** to a `1.x` AGC brings the label back on new samples, so a query with the filter removed keeps working.
+**Rolling back** to a `1.x` AGC brings the label back on those six series, so a query with the filter removed keeps working.
+It also stops `actions_gateway_eviction_rerun_outcomes_total`, which `1.x` does not export.
 
 ### Action required if `spec.tracing.endpoint` does not parse as a URL: the value is now rejected
 
