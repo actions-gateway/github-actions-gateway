@@ -3,6 +3,7 @@ package scalesetlistener_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -18,6 +19,14 @@ import (
 // record; the tests here pin what must and must not be left behind at GitHub, because
 // a leftover record holds the deterministic {scaleSet}-{jobID} name that the job's own
 // retries need.
+
+// Job IDs for leftovers no assignment names, in the shape runnerName appends.
+const (
+	staleJobA   = "11111111-2222-5333-8444-555555555555"
+	staleJobB   = "66666666-7777-5888-9999-aaaaaaaaaaaa"
+	inflightJob = "bbbbbbbb-cccc-5ddd-aeee-ffffffffffff"
+	runningJob  = "01234567-89ab-5cde-8f01-23456789abcd"
+)
 
 // flakyProvisioner fails the first n provision calls, then succeeds — the shape of any
 // transient provisioning failure (quota, stockout, admission) that makes the listener
@@ -141,17 +150,17 @@ func TestListener_SweepsUnclaimedRecordsOnStart(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	// Leftovers under this scale set's prefix, in the shapes the sweep must tell apart.
-	srv.FailJITConfigName("linux-stale-1")   // offline, unclaimed  -> swept
-	srv.FailJITConfigName("linux-stale-2")   // offline, unclaimed  -> swept
-	srv.FailJITConfigName("linux-inflight")  // claimed by a pod    -> kept
-	srv.FailJITConfigName("linux-running")   // online              -> kept
-	srv.FailJITConfigName("other-set-stale") // another scale set   -> kept
-	srv.SetRunnerOnline("linux-running")
+	srv.FailJITConfigName("linux-" + staleJobA)        // offline, unclaimed  -> swept
+	srv.FailJITConfigName("linux-" + staleJobB + "-2") // suffixed retry      -> swept
+	srv.FailJITConfigName("linux-" + inflightJob)      // claimed by a pod    -> kept
+	srv.FailJITConfigName("linux-" + runningJob)       // online              -> kept
+	srv.FailJITConfigName("other-set-stale")           // another scale set   -> kept
+	srv.SetRunnerOnline("linux-" + runningJob)
 
 	prov := &recordingProvisioner{srv: srv}
 	_, ssID := startListener(t, srv, fixedCapacity(1), prov, nil, func(cfg *scalesetlistener.Config) {
 		cfg.ClaimedRunnerNames = func(context.Context) (map[string]struct{}, error) {
-			return map[string]struct{}{"linux-inflight": {}}, nil
+			return map[string]struct{}{"linux-" + inflightJob: {}}, nil
 		}
 	})
 	_ = ssID
@@ -160,9 +169,48 @@ func TestListener_SweepsUnclaimedRecordsOnStart(t *testing.T) {
 		return len(srv.RegisteredRunners()) == 3
 	}, 5*time.Second, 10*time.Millisecond, "the two unclaimed offline records must be swept")
 
-	assert.Equal(t, []string{"linux-inflight", "linux-running", "other-set-stale"},
+	assert.ElementsMatch(t, []string{"linux-" + inflightJob, "linux-" + runningJob, "other-set-stale"},
 		srv.RegisteredRunners(),
 		"a claimed, an online, and another scale set's record must all survive the sweep")
+}
+
+// TestListener_SweepLeavesAnExtendingSetsRecords is Q1290: a set whose first label extends
+// this one's has offline, unclaimed records under this set's prefix, and the claim set
+// cannot protect them because it reads this set's pods only. Each name below is what a
+// real set would mint, so the only thing separating them from a stale record of this set
+// is the rest of the name. The stale record beside them proves the sweep ran.
+func TestListener_SweepLeavesAnExtendingSetsRecords(t *testing.T) {
+	srv := scalesettest.New()
+	t.Cleanup(srv.Close)
+
+	foreign := []string{
+		"linux-arm-" + staleJobA,               // set "linux-arm"
+		"linux-arm-" + staleJobA + "-1",        // set "linux-arm", suffixed retry
+		"linux-" + staleJobA + "-" + staleJobB, // set "linux-<uuid>"
+		"linux-" + staleJobA + "x",             // not a UUID
+		"linux-job-1",                          // not a UUID
+		"linux-" + staleJobA + "-",             // empty attempt
+		"linux-" + staleJobA + "-1-2",          // not a single attempt
+	}
+	for _, name := range foreign {
+		srv.FailJITConfigName(name)
+	}
+	srv.FailJITConfigName("linux-" + staleJobB)
+
+	prov := &recordingProvisioner{srv: srv}
+	startListener(t, srv, fixedCapacity(1), prov, nil, func(cfg *scalesetlistener.Config) {
+		cfg.ClaimedRunnerNames = func(context.Context) (map[string]struct{}, error) {
+			return map[string]struct{}{}, nil
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		return !slices.Contains(srv.RegisteredRunners(), "linux-"+staleJobB)
+	}, 5*time.Second, 10*time.Millisecond, "the sweep must collect this set's own stale record")
+
+	assert.ElementsMatch(t, foreign, srv.RegisteredRunners(),
+		"a record this set did not mint must survive however stale it looks")
+	assert.Equal(t, 1, srv.DeleteRunnerCalls(), "the sweep must delete only its own record")
 }
 
 // TestListener_SweepKeepsRecordsWhenClaimsAreUnknown is the safety property: if the
@@ -173,8 +221,8 @@ func TestListener_SweepKeepsRecordsWhenClaimsAreUnknown(t *testing.T) {
 	srv := scalesettest.New()
 	t.Cleanup(srv.Close)
 
-	srv.FailJITConfigName("linux-stale-1")
-	srv.FailJITConfigName("linux-stale-2")
+	srv.FailJITConfigName("linux-" + staleJobA)
+	srv.FailJITConfigName("linux-" + staleJobB)
 
 	prov := &recordingProvisioner{srv: srv}
 	startListener(t, srv, fixedCapacity(1), prov, nil, func(cfg *scalesetlistener.Config) {

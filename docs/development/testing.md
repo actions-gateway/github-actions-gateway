@@ -3213,6 +3213,7 @@ Two doubles wrap it, and neither carries protocol logic of its own:
 - [`scaleset/scalesettest`](../../scaleset/scalesettest/) serves it over an `httptest.Server`, for the scale-set listener's unit tests, the `cmd/agc` v2 RunnerSet integration suite, and `cmd/probe`'s Investigation E and F scenarios (Q389).
 - [`test/fakegithub`](../../test/fakegithub/) mounts it into the deployed fake-GitHub e2e image, next to the classic broker protocol (Q528).
   That is what lets the scale-set tier's acquisition half run on kind at all — see `E2E_AGC_ScaleSetAcquisition`.
+  Its REST runner list and delete routes answer from the stub's registry too, so `E2E_AGC_ScaleSetSweep` reaches a scale-set record.
 
 The split exists because `httptest` cannot be linked into fakegithub (see the `package main` rule below), which is the same reason `broker/brokerstub` is separate from `broker/brokertest`.
 The one thing the wrapper supplies is the base for the protocol's self-referential URLs — the admin connection's tenant URL, a session's `messageQueueUrl`, a `JobAvailable`'s `acquireJobUrl` — fixed for httptest, request-derived for a deployed pod.

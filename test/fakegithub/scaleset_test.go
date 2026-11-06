@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -280,5 +281,50 @@ func TestScaleSetControlAPIRejectsUnknownScaleSet(t *testing.T) {
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("enqueue with no name: status %d, want 400", resp.StatusCode)
+	}
+}
+
+// TestScaleSetRunnerRecordsAreReachableOverREST pins the route the listener's sweep and
+// the reaper depend on: a scale-set record minted on the Actions Service is listed and
+// deleted through the /api/v3 REST prefix (Q1290). A classic-only listing would leave
+// every sweep with nothing to examine.
+func TestScaleSetRunnerRecordsAreReachableOverREST(t *testing.T) {
+	c, _, control := scaleSetHarness(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ss, err := c.CreateRunnerScaleSet(ctx, scaleset.RunnerScaleSet{Name: "linux", RunnerGroupID: 7})
+	if err != nil {
+		t.Fatalf("create scale set: %v", err)
+	}
+	if _, err := c.GenerateJITConfig(ctx, ss.ID, "linux-minted", "_work"); err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	resp, err := http.Post(control.URL+"/control/scaleset/seedrunner?name=linux-seeded", "", nil)
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("seed: status %d", resp.StatusCode)
+	}
+
+	records, err := c.ListRunnersWithPrefix(ctx, "linux-")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(records) != 2 || records[0].Name != "linux-minted" || records[1].Name != "linux-seeded" {
+		t.Fatalf("list: want the minted and seeded records, got %+v", records)
+	}
+	if records[0].Online() {
+		t.Fatalf("a record no runner has connected under must read offline: %+v", records[0])
+	}
+
+	if err := c.DeregisterRunnerByID(ctx, records[0].ID, records[0].Name); err != nil {
+		t.Fatalf("deregister: %v", err)
+	}
+	got := controlState(t, control.URL, "linux")["registered"]
+	if fmt.Sprint(got) != "[linux-seeded]" {
+		t.Fatalf("registered after the delete: want [linux-seeded], got %v", got)
 	}
 }

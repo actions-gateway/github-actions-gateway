@@ -396,6 +396,7 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   Nothing in the AGC remembers the name: the listener goroutine that minted it is long gone by the time the reaper runs, possibly in a different process.
   So the name goes on the pod as `actions-gateway.com/runner-name`, for the same reason the run identity and the reap deadline do, and the pod becomes the registry — the reaper deregisters the record it names, and the listener's start-up sweep treats a name stamped on a live pod as claimed.
   That claim check is what makes the sweep safe: a worker still `Pending` has an offline record indistinguishable from a stale one, and the REST runner object carries no timestamp to age records by, so pod-claimed-or-not is the only sound test available.
+  It reads this set's pods only, and a set whose first label extends this one's has records under this set's prefix, so the sweep first requires the rest of the name to be what this set mints: a job UUID and an optional attempt ([why](05-security.md#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap)).
 
   A deletion whose worker never ran its container stays out of scope on both tiers: the job never ran to a reportable end, so there is no failed job for `rerun-failed-jobs` to act on.
   For a running worker, Q385's SIGTERM relay hands the signal to the runner, which reports its own outcome — but the relay makes the job *conclude* (as `failure`), not succeed, so the Q502 re-run is the repair rather than a double report.

@@ -1859,8 +1859,11 @@ Every later re-provision of the same `jobID` derives the same name and `409`s.
    This is what stops the records accumulating in the first place.
    A record still running a job (`422`) is kept, and a failed deregistration never blocks the reap.
 2. **Reclaim on conflict.** On a base-name `409` the listener deletes the colliding record and re-registers under the same name, so a job that races its own leftover still provisions under its deterministic name.
-3. **Sweep at listener start.** When a listener starts it lists the records named `<scaleSet>-*` and deletes those that are offline, not busy, and not claimed by any live worker pod.
+3. **Sweep at listener start.** When a listener starts it lists the records named `<scaleSet>-*` and deletes those whose remaining name is a job UUID with an optional attempt, and that are offline, not busy, and not claimed by any live worker pod.
    This collects what the first two cannot: records whose pod is already gone (an AGC that crashed between deregistering and deleting), and the suffixed `-1`/`-2`/`-3` names the conflict path mints and never revisits.
+   It leaves every other name under the prefix alone and logs `scaleset: sweep left records under this set's prefix whose names it did not mint` with the count.
+   That line is expected when another set's first label extends this one's, such as `ci` and `ci-linux` under one org.
+   With no such set, read the names in the runner list: a job ID that is not a UUID means the sweep collects nothing here, so use the cleanup below.
 
 A record whose worker pod still exists is never swept, in any phase — a `Pending` worker's record is legitimately offline, and deleting it would strand exactly the job the sweep exists to protect.
 
@@ -1868,6 +1871,9 @@ A record whose worker pod still exists is never swept, in any phase — a `Pendi
 > Records it could not resolve, and every suffixed retry name, accumulated unbounded — 22 stale records under one scale set wedged the `v1.3.0-rc.2` validation window this way.
 > If you see `scaleset: runner name is taken but no record resolves under it` in the AGC logs, mechanism 2 is failing and the sweep is what will collect the leftovers.
 > On such a version, use the manual cleanup below.
+
+> **Before `v2.0.0`, the sweep matched on the prefix alone**, so a listener named `ci` could delete the offline record of a set named `ci-linux`, including one whose worker was still `Pending`.
+> That job's runner has no record to connect under, so a worker can end `Completed` without running it ([why](../design/05-security.md#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap)).
 
 **If the conflict does not clear.** A name no attempt can register — a live runner holding it, or a record the AGC's credentials cannot delete — leaves that one job unprovisionable.
 It is not dropped: the listener holds it and re-offers it on a backoff (30s, doubling to 5 minutes) until it provisions, so the run still starts whenever the conflict clears.
