@@ -603,7 +603,9 @@ func (r Runner) Online() bool { return r.Status == "online" }
 // forever.
 const maxRunnerListPages = 20
 
-// ListRunnersWithPrefix returns every registered runner whose name starts with prefix.
+// ListRunnersWithPrefix returns every registered runner whose name starts with prefix,
+// which can include another scale set's when its name extends this one's, so a caller
+// deleting from the result checks the rest of the name (Q1290).
 // The REST API filters only by exact name, so this pages through the owner's full
 // runner listing and filters client-side — the sweep's cost is one listing per listener
 // start, not per job.

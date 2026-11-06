@@ -587,7 +587,8 @@ func (s *Stub) newQueuedJobLocked() *job {
 	s.nextJobSeq++
 	return &job{
 		reqID: s.nextReqID,
-		jobID: fmt.Sprintf("job-%d", s.nextJobSeq),
+		// UUID-shaped like the real backend's: the listener's start-up sweep reads it.
+		jobID: fmt.Sprintf("00000000-0000-5000-8000-%012d", s.nextJobSeq),
 		state: jobQueued,
 		owner: DefaultJobOwner,
 		repo:  DefaultJobRepository,

@@ -72,6 +72,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -1017,6 +1018,10 @@ func (l *Listener) recordRegisteredLabels(ss *scaleset.RunnerScaleSet) {
 // operator prunes them by hand — which is what happened to the 22 stale `gag-ci-e2e`
 // records in the 2026-07-31 RC window.
 //
+// A name under the prefix may be another set's, so a record is examined only when what
+// follows the prefix is exactly what runnerName appends (Q1290). One set's first label
+// extending another's is admissible, and a pair may already be running.
+//
 // Three tests keep a record: claimed by a live worker pod, busy, or online. Claimed is
 // the load-bearing one — a pod that has not started yet has an offline, unclaimed-looking
 // record that is nonetheless about to be used, and deleting it would strand exactly the
@@ -1047,8 +1052,12 @@ func (l *Listener) sweepUnclaimedRunners(ctx context.Context) {
 		return
 	}
 
-	swept := 0
+	swept, foreign := 0, 0
 	for _, rec := range records {
+		if !mintedRunnerSuffix.MatchString(strings.TrimPrefix(rec.Name, prefix)) {
+			foreign++
+			continue
+		}
 		if _, ok := claimed[rec.Name]; ok {
 			continue
 		}
@@ -1067,6 +1076,10 @@ func (l *Listener) sweepUnclaimedRunners(ctx context.Context) {
 	if swept > 0 {
 		l.log.Info("scaleset: swept stale runner records left by workers that never ran their job",
 			"scaleSet", l.cfg.ScaleSetName, "swept", swept, "examined", len(records))
+	}
+	if foreign > 0 {
+		l.log.Info("scaleset: sweep left records under this set's prefix whose names it did not mint",
+			"scaleSet", l.cfg.ScaleSetName, "left", foreign)
 	}
 }
 
@@ -2532,6 +2545,13 @@ func (l *Listener) deleteSession(ssID int, sess *scaleset.RunnerScaleSetSession)
 		l.log.Debug("scaleset: delete session on shutdown", "scaleSet", l.cfg.ScaleSetName, "err", err)
 	}
 }
+
+// mintedRunnerSuffix matches what runnerName appends to "<scale set>-": a job's UUID,
+// then a non-zero attempt. A UUID's fixed shape is what makes it unambiguous, so another
+// set's "<scale set>-<other label part>-<job UUID>" cannot match. Job UUIDs read from 56
+// job runner names on github.com, 2026-10 and 2026-11; a backend minting another format
+// fails safe, since the sweep then deletes nothing.
+var mintedRunnerSuffix = regexp.MustCompile(`^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}(-[0-9]+)?$`)
 
 // runnerName derives a deterministic runner name from a jobID: attempt 0 is the base
 // name, so a replay of the same job (attempt 0 again) names the same runner and stays
