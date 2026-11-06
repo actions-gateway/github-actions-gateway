@@ -3309,7 +3309,8 @@ The default is <code>atomic</code>: one applier replaces the whole list, and no 
 </ul>
 <h3 id="put-a-constraint-on-the-narrowest-field-that-expresses-it">Put a constraint on the narrowest field that expresses it<a class="headerlink" href="#put-a-constraint-on-the-narrowest-field-that-expresses-it" title="Permanent link">&para;</a></h3>
 <p>CRD validation ratcheting (KEP-4008, default-on from Kubernetes 1.30) suppresses a rule only while <em>the value it sits on</em> is unchanged.
-A rule on the spec therefore re-fires on every write to any field.</p>
+A rule on the spec therefore re-fires on every write to any field.
+Ratcheting also missed the status subresource on 1.31.0 and 1.32.0, where a tightened rule refused the GMC's status write on a stored value, and an <code>oldSelf</code> clause passing an unchanged value is the measured answer (<code>spec.tracing.endpoint</code>, 1.31 through 1.35).</p>
 <p>Q398 is the worked example: a <code>RunnerSetSpec</code>-level rule requiring exactly one <code>runnerLabel</code> re-evaluated on every unqualified <code>kubectl edit</code>, so editing an unrelated field on a stored-but-noncompliant object failed on labels.
 Moving the rule onto <code>spec.runnerLabels</code> kept the constraint exactly where it matters and let ratcheting suppress it everywhere else.</p>
 <p>Related: pick the right enforcement point at all.

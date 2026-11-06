@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1281/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1282/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>spec.tracing needs an operator-named collector peer and a CA path - GitHub Actions Gateway</title>
+        <title>A tracing endpoint that parses but cannot deliver needs a signal - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#spectracing-needs-an-operator-named-collector-peer-and-a-ca-path" class="md-skip">
+        <a href="#a-tracing-endpoint-that-parses-but-cannot-deliver-needs-a-signal" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              spec.tracing needs an operator-named collector peer and a CA path
+              A tracing endpoint that parses but cannot deliver needs a signal
             
           </span>
         </div>
@@ -2657,104 +2657,23 @@
   
 
 
-<h1 id="spectracing-needs-an-operator-named-collector-peer-and-a-ca-path">spec.tracing needs an operator-named collector peer and a CA path<a class="headerlink" href="#spectracing-needs-an-operator-named-collector-peer-and-a-ca-path" title="Permanent link">&para;</a></h1>
-<p>An <code>ActionsGateway</code> with <code>spec.tracing</code> set delivers no spans on a CNI that enforces NetworkPolicy until an operator adds a policy by hand, and a proxied tenant must also spell the endpoint as the full <code>.svc.cluster.local</code> name.
-Q1278 documented that in <a href="../../operations/observability-logging/#reaching-the-collector">Reaching the collector</a> rather than changing it, because opening the path widens a default-deny egress policy, which needs sign-off under the secure-by-default principle.</p>
-<p><strong>Karl made two separate decisions on 2026-11-03, and each gates <code>v2.0.0</code>.</strong></p>
-<ol>
-<li><strong>"Karl gates v2.0.0 on a peer field".</strong> An operator-named <code>spec.tracing</code> peer, which the GMC turns into an AGC-only egress rule.
-   The GMC does not open the path by deriving a peer from the endpoint's host, so egress stays closed until an operator names one, and a tenant with <code>spec.tracing</code> unset keeps the policy it has today.</li>
-<li><strong>"Karl gates v2.0.0 on a CA path"</strong>, asked in a later prompt after the plaintext finding below.
-   A CA reference alongside the peer field, so a proxied tenant can use TLS at 2.0 and the plaintext gap closes before the tag.</li>
-</ol>
-<p>Measured on 2026-11-03 against 5c46c1b with a real <code>otel/opentelemetry-collector:0.120.0</code> over plaintext gRPC, on a two-node kind cluster with Calico and one job per setup:</p>
-<table>
-<thead>
-<tr>
-<th>Tenant</th>
-<th><code>endpoint</code> host</th>
-<th>Operator policy, AGC to collector</th>
-<th>Root spans received</th>
-<th>AGC log</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>Proxied</td>
-<td><code>otel-collector.observability:4317</code></td>
-<td>No</td>
-<td>0</td>
-<td><code>traces export: ... reading server HTTP response: unexpected EOF</code></td>
-</tr>
-<tr>
-<td>Proxied</td>
-<td><code>otel-collector.observability.svc:4317</code></td>
-<td>No</td>
-<td>0</td>
-<td>same</td>
-</tr>
-<tr>
-<td>Proxied</td>
-<td><code>otel-collector.observability.svc.cluster.local:4317</code></td>
-<td>No</td>
-<td>0</td>
-<td><code>traces export: ... DeadlineExceeded</code></td>
-</tr>
-<tr>
-<td>Proxied</td>
-<td><code>otel-collector.observability.svc.cluster.local:4317</code></td>
-<td>Yes</td>
-<td>1</td>
-<td>no new line</td>
-</tr>
-<tr>
-<td>Proxied</td>
-<td><code>otel-collector.observability:4317</code></td>
-<td>Yes</td>
-<td>0</td>
-<td><code>unexpected EOF</code></td>
-</tr>
-<tr>
-<td>Direct</td>
-<td><code>otel-collector.observability:4317</code></td>
-<td>No</td>
-<td>0</td>
-<td><code>DeadlineExceeded</code></td>
-</tr>
-<tr>
-<td>Direct</td>
-<td><code>otel-collector.observability:4317</code></td>
-<td>Yes</td>
-<td>1</td>
-<td>no new line</td>
-</tr>
-<tr>
-<td>Direct</td>
-<td><code>otel-collector.observability.svc.cluster.local:4317</code></td>
-<td>Yes</td>
-<td>4, from one enqueued job after the AGC restarted</td>
-<td>none</td>
-</tr>
-</tbody>
-</table>
-<p>Each provisioning attempt opens a root span, so replays after that restart may be the extra three; that was not checked.
-Every row is plaintext.
-The AGC's <code>traces export:</code> line at <code>info</code> is the only signal: the shutdown flush returns nil, and no metric or status condition reports a failed export.
-The measurement was a throwaway Ginkgo spec and is not committed, so nothing in CI covers delivery on a real cluster; an in-process test does cover <code>tracing.Init</code> to an OTLP server.</p>
-<p>The precedent is the Vault signer.
-<code>signer.vault.networkPolicy</code> has the operator name a peer, and <code>vaultEgressRule</code> turns it into a scoped AGC-only egress rule, so a <code>spec.tracing</code> peer could reuse <code>egressPeerTo</code>, whose comment already names telemetry as a future consumer.
-That covers the direct dial and leaves the proxied short-name case to the docs, or to validating the endpoint's host against <code>NO_PROXY</code> at admission.</p>
-<p>The plaintext finding: <code>spec.tracing</code> has no CA field and <code>configureTrustPool</code> patches only <code>http.DefaultTransport</code>, so the gRPC exporter verifies against the AGC image's public roots, which cannot validate a <code>.svc.cluster.local</code> name.
-A proxied tenant must use that name, so its export can only be plaintext.
-Measured in-process on 2026-11-03: <code>https://</code> to a self-signed server gives 0 spans and <code>x509: certificate signed by unknown authority</code>, and delivers once <code>OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE</code> names the CA, an SDK variable <code>spec.tracing</code> cannot set and that has no volume mounted behind it.
-The SDK reads that file once, when the exporter is built, and on a read failure logs the error and falls back to the system roots (<code>WithCertPool</code>, read and not run), so rotation and a missing file both need an answer.
-The precedent for the reference is <code>githubCABundleRef</code>, a ConfigMap the GMC mounts and reports as <code>CABundleNotFound</code> or <code>CABundleInvalid</code>.
-Q536 built that in #1137 at 29 files and +1347/-216 outside docs, which is why this row is <code>L</code> with the peer field and the e2e beside it, though the size is an estimate rather than a measurement.
-Read how <code>signer.vault</code> handles its own CA, and <code>api-review.md</code> on whose fact the CA is, before choosing the shape.
-The doc examples stay <code>http://</code> with <code>insecure: true</code> until this ships, and move to TLS in the same change.</p>
-<p>Done when both fields ship, an e2e spec on the Calico lane proves a tenant's spans reach a collector and that a worker pod still cannot, and a real run shows a proxied tenant exporting over TLS to a collector with a private CA.</p>
-<p>Neither decision covers the proxied short-name case or the two gaps below, so they do not gate <code>v2.0.0</code> unless one blocks that Done when.
-<code>spec.tracing.endpoint</code> has no admission check, so a bare IP is admitted and silently exports to <code>127.0.0.1:4317</code>, and routing the export through an <code>EgressProxy</code> with <code>destinationFQDNs</code> is unmeasured, including what it costs in worker egress.</p>
+<h1 id="a-tracing-endpoint-that-parses-but-cannot-deliver-needs-a-signal">A tracing endpoint that parses but cannot deliver needs a signal<a class="headerlink" href="#a-tracing-endpoint-that-parses-but-cannot-deliver-needs-a-signal" title="Permanent link">&para;</a></h1>
+<p>Admission now rejects an endpoint the exporter would misread, which was the part Karl gated on <code>v2.0.0</code>.
+These parse, so that check admits them, and an operator finds out only by reading the AGC's log or the policy.
+<a href="../../operations/observability-logging/#reaching-the-collector">Reaching the collector</a> documents the first.</p>
+<ul>
+<li><strong>A proxied tenant's short name.</strong> <code>otel-collector.observability:4317</code> and <code>otel-collector.observability.svc:4317</code> are sent through the egress proxy, whose own NetworkPolicy blocks them, so no spans arrive whatever <code>spec.tracing.networkPolicy</code> says.
+  Measured 2026-11-03 against 5c46c1b on kind with Calico.
+  A CEL rule on the <code>ActionsGateway</code> cannot see the pool's <code>NO_PROXY</code>, so this is a status condition or a webhook warning, and neither breaks a stored object.</li>
+<li><strong>An out-of-range port.</strong> <code>https://c:70000</code> parses, and the export fails with <code>name resolver error: produced zero addresses</code> (<code>otlptracegrpc</code> v1.47.0, measured in-process).
+  <code>tracingEgressPort</code> falls back to 443 for it, so the reconcile is unharmed.</li>
+<li><strong>A <code>dns:///</code> target.</strong> <code>tracingEgressPort</code> finds no port in <code>dns:///collector:4317</code> and opens 443 unless <code>networkPolicy.port</code> says otherwise.
+  The exporter delivers to it in-process, so on an enforcing CNI the rule opens the wrong port.</li>
+<li><strong>A stale collector rule.</strong> While the IP cache serves no ranges, <code>preserveExistingEgress</code> keeps a policy's rules, and <code>servedGitHubRules</code> excludes only the spec's current collector rule, so an old CIDR rule on 443 can read as the GitHub rule in that status message.
+  Read, not run.</li>
+</ul>
+<p>Routing the export through an <code>EgressProxy</code> with <code>destinationFQDNs</code>, rather than exempting the collector with <code>NO_PROXY</code>, is a third answer to the short name that nobody has measured, including what it costs in worker egress.</p>
+<p>Done when a proxied gateway naming a collector the proxy would carry gets a signal an operator sees without reading the AGC's log, and a measurement of the <code>EgressProxy</code> route either adopts it or records why not in <a href="../../operations/observability-logging/#reaching-the-collector">Reaching the collector</a>.</p>
 
 
 

@@ -3554,20 +3554,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Q264 removed classic acquisition, its alerts, recording rule and dashboard panels, and left four things an operator can still see or hit …</td>
 </tr>
 <tr>
-<td><a href="Q1281/">Q1281</a></td>
-<td>spec.tracing needs an operator-named collector peer and a CA path</td>
-<td><code>feature</code> <code>security</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>L</td>
-<td>An <code>ActionsGateway</code> with <code>spec.tracing</code> set delivers no spans on a CNI that enforces NetworkPolicy until an operator adds a policy by hand …</td>
-</tr>
-<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">Operator docs, migration guide, and the <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🚫</td>
 <td>S</td>
 <td>Blocked on the rows below: Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is …</td>
+</tr>
+<tr>
+<td><a href="Q1282/">Q1282</a></td>
+<td>A tracing endpoint that parses but cannot deliver needs a signal</td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Admission now rejects an endpoint the exporter would misread, which was the part Karl gated on <code>v2.0.0</code>.</td>
 </tr>
 <tr>
 <td><a href="Q1260/">Q1260</a></td>
@@ -3584,6 +3584,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>The only measurement of the shipped acquisition tier is <code>TestScaleSetPerListenerMemory</code> (<code>make scaleset-mem-profile</code>): 200 parked scale-set …</td>
+</tr>
+<tr>
+<td><a href="Q1284/">Q1284</a></td>
+<td>Raise the Kubernetes floor to a version CI tests</td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 …</td>
 </tr>
 <tr>
 <td><a href="Q275/">Q275</a></td>

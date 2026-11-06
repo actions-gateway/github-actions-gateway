@@ -3365,10 +3365,10 @@ The entries below are the other egress holes we can foresee wanting, the governa
 <td>The metadata/credential path varies by provider: <strong>GKE Workload Identity</strong> and <strong>EC2 IMDS / EKS Pod Identity</strong> reach a link-local address (<code>169.254.169.254</code> / <code>169.254.170.23</code>) on :80 — a <em>new</em> hole distinct from the existing :53-only <code>169.254/16</code> rule; <strong>AWS IRSA</strong> and <strong>Azure Workload Identity</strong> instead call a <em>public</em> STS/AAD host (the same opaque-URL problem the Vault rule already solves).</td>
 </tr>
 <tr>
-<td><strong>AGC telemetry</strong> (<code>spec.tracing.endpoint</code>, and any future metrics/log push)</td>
+<td><strong>AGC telemetry push beyond traces</strong> (any future metrics or log push)</td>
 <td>AGC</td>
 <td>Tenant-delegated, AGC-only</td>
-<td>A scoped rule is derivable from the <em>already-existing</em> <code>tracing.endpoint</code>; today that endpoint is not auto-permitted on a policy-enforcing CNI.</td>
+<td>Traces shipped this way as <code>spec.tracing.networkPolicy</code>: an operator-named <code>EgressPeer</code>, deliberately not derived from <code>tracing.endpoint</code>, so egress stays closed until a peer is named.</td>
 </tr>
 <tr>
 <td><strong>Worker job dependencies</strong> (container/package registries, build caches, internal services the CI job legitimately calls)</td>
@@ -3391,7 +3391,7 @@ The Vault <code>signer.vault.networkPolicy</code> is the canonical tenant-delega
 <p><strong>Pre-v2 API-compatibility analysis (no breaking change required).</strong> Every hole above is reachable additively under the frozen v2 shape:</p>
 <ul>
 <li>Cloud KMS signers join as <strong>new <code>signer.provider</code> union members</strong>, each carrying its <em>own</em> optional peer descriptor — exactly the additive contract the union was built for; existing members are untouched.</li>
-<li>AGC telemetry and worker-direct egress would be <strong>new optional fields</strong> on existing structs (<code>ActionsGateway</code> / <code>RunnerSet</code> / <code>RunnerTemplate</code>) or new GMC flags.
+<li>Further AGC telemetry and worker-direct egress would be <strong>new optional fields</strong> on existing structs (<code>ActionsGateway</code> / <code>RunnerSet</code> / <code>RunnerTemplate</code>) or new GMC flags.
   Optional CRD fields don't prune and old clients ignore them, so adding them later is non-breaking.</li>
 <li>The worker-through-proxy case extends the proxy allowlist (<a href="#g1-proxy-enforced-destination-allowlist">G.1</a>), not the CRD egress shape.</li>
 </ul>
@@ -3400,7 +3400,7 @@ If KMS, telemetry, and worker-egress had each grown their own near-duplicate des
 <strong>Resolved (Q204):</strong> the descriptor is now the shared <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/actionsgateway_types.go"><code>EgressPeer</code></a> type (selector | CIDR
 + an optional explicit port), and <code>signer.vault.networkPolicy</code> references it.
   The extraction is serialization-compatible — the field keys (<code>podSelector</code>, <code>namespaceSelector</code>, <code>cidr</code>) are unchanged, so the shape already shipped is preserved; only the additive optional <code>port</code> is new, with the Vault builder still deriving the port from the address when <code>port</code> is unset.
-  Future consumers (KMS, telemetry) now reference the same type instead of forking it — the shape that is far cheaper to settle before the v2 graduation (<a href="../../queue/">Q74</a>) than after.</p>
+  Later consumers (<code>spec.tracing.networkPolicy</code>, then KMS) reference the same type instead of forking it — the shape that is far cheaper to settle before the v2 graduation (<a href="../../queue/">Q74</a>) than after.</p>
 <p><strong>What would trigger building any of it.</strong> A concrete signer provider beyond Vault (KMS), a policy-CNI operator who needs their tracing endpoint or a job dependency reachable, or the graduation review deciding to consolidate the peer descriptor.</p>
 <p><strong>Related.</strong> <a href="../05-security/">05-security.md</a> (the per-tenant NetworkPolicy isolation model); <a href="#g1-proxy-enforced-destination-allowlist">G.1 Proxy-Enforced Destination Allowlist</a>; <a href="#g8-optional-disable-able-egress-proxy">G.8 Optional Egress Proxy</a>; <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a>.</p>
 <hr />

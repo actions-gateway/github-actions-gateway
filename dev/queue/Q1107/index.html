@@ -2659,8 +2659,7 @@
 
 <h1 id="operator-docs-migration-guide-and-the-v200-cut">Operator docs, migration guide, and the <code>v2.0.0</code> cut<a class="headerlink" href="#operator-docs-migration-guide-and-the-v200-cut" title="Permanent link">&para;</a></h1>
 <p>Blocked on the rows below: Q1167 landed the coupled removals, after Q1086's storage migration in 1.10, so the surface the docs describe is the one <code>v2.0.0</code> ships.
-The tag also waits on <a href="../Q1273/">Q1273</a>, which retires the classic tier ledgers, runbook sections and AGC env vars Q264 left visible to operators.
-It waits on <a href="../Q1281/">Q1281</a> as well, because on a CNI that enforces NetworkPolicy the AGC's spans reach no collector until <code>spec.tracing</code> can name one, and a proxied tenant exports them in plaintext until it can name the collector's CA.</p>
+The tag also waits on <a href="../Q1273/">Q1273</a>, which retires the classic tier ledgers, runbook sections and AGC env vars Q264 left visible to operators.</p>
 <p>Split out of Q413 on 2026-09-14, which held <a href="../../plan/v2-ga/">v2-ga.md</a>'s Phases 2 and 4 in one <code>1.9-gate</code> row.
 Phase 2 ships in 1.9 and Phase 4 in <code>v2.0.0</code>, so a single row could only carry one of the two labels and misreported what blocks 1.9 for whichever release it named.
 Q413 keeps Phase 2; this is the rest.</p>
