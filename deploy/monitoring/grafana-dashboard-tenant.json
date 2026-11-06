@@ -851,7 +851,7 @@
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
           "expr": "kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=~\".+-proxy\"}",
-          "legendFormat": "{{namespace}}",
+          "legendFormat": "{{namespace}}/{{deployment}}",
           "refId": "A"
         }
       ]

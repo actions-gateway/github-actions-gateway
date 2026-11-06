@@ -105,7 +105,7 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Proxy replicas ready | `kube_deployment_status_replicas_ready{deployment=~".+-proxy"}` | Time series |
+| Proxy replicas ready | `kube_deployment_status_replicas_ready{deployment=~".+-proxy"}` | Time series, one line per `<proxy>-proxy` pool. A tenant's own Deployment named `*-proxy` matches too |
 | HPA desired vs. current | `kube_horizontalpodautoscaler_status_*_replicas` | Time series |
 | ResourceQuota usage | `kube_resourcequota{type="used"}` filtered by namespace | Bar gauge |
 
@@ -236,7 +236,7 @@ The rungs are gauges of worker slots, because the set declares its capacity to G
 
 | Panel | Query | Visualization |
 |-------|-------|---------------|
-| Withheld capacity by rung | `sum by (namespace) (actions_gateway_scaleset_advertised_capacity)` stacked under `sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)` | Time series, stacked. The stack total is the set's declared worker ceiling, because [every evaluated rung publishes a value each poll including an explicit `0`](observability-metrics.md#scale-set-acquisition-tier-q264) and the entries sum to `ceiling − advertised`. `quota` is namespace-`ResourceQuota` headroom, `capacity` the opt-in placeability gate, `scaleup` the opt-in creation-rate limit; grouping by `reason` rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on `runner_set`, so a `$runner_group` holding a `RunnerGroup` name empties it |
+| Withheld capacity by rung | `sum by (namespace) (actions_gateway_scaleset_advertised_capacity)` stacked under `sum by (namespace, reason) (actions_gateway_scaleset_capacity_withheld)` | Time series, stacked. The stack total is the set's declared worker ceiling, because [every evaluated rung publishes a value each poll including an explicit `0`](observability-metrics.md#scale-set-acquisition-tier-q264) and the entries sum to `ceiling − advertised`. `quota` is namespace-`ResourceQuota` headroom, `capacity` the opt-in placeability gate, `scaleup` the opt-in creation-rate limit; grouping by `reason` rather than naming the three means a rung added later arrives as a new band with no edit here. Filtered on `runner_set`, which carries the same set name as `$runner_group` |
 
 **Withheld capacity is not the same thing as suppressed spend, which is why no panel here prices it with `$rate`.** A slot a rung held back is money you did not spend only if GitHub had a job queued to fill it; on an idle set the same band is a ceiling nobody was reaching for.
 The demand signal that settles it is [`actions_gateway_scaleset_jobs_available`](observability-metrics.md#scale-set-acquisition-tier-q264), which no dashboard plots today.
