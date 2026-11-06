@@ -4289,6 +4289,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>On a kind cluster reused across <code>make e2e</code> runs, a later run failed <code>BeforeAll</code> with `unable to create new content in namespace …</td>
 </tr>
+<tr>
+<td><a href="Q1296/">Q1296</a></td>
+<td><a href="../design/05-security/#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap">The sweep's format check assumes UUID job IDs on every backend</a></td>
+<td><code>security</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> a job ID read from GitHub Enterprise Server or another non-github.com backend is not a UUID.</td>
+</tr>
 </tbody>
 </table>
 

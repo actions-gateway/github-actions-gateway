@@ -3006,7 +3006,7 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>Q1290</td>
 <td>First-label prefix overlap lets a sweep deregister another set's runners</td>
 <td><code>2.0-gate</code></td>
-<td>✅ landed: gated because one tenant's first label could cost another a job with no visible failure; the sweep deletes only names it minted, which covers a pair already running, and what github.com does with such a job stays unmeasured (<a href="../../design/05-security/#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap">why</a>)</td>
+<td>✅ landed: gated because one tenant's first label could cost another a job with no visible failure; the sweep deletes only names shaped like the ones it mints, which covers a pair already running, and what github.com does with such a job stays unmeasured (<a href="../../design/05-security/#cross-tenant-deletion-of-a-runner-record-by-first-label-overlap">why</a>)</td>
 </tr>
 <tr>
 <td>Q1291</td>

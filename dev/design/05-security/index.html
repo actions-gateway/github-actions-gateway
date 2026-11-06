@@ -4476,8 +4476,10 @@ On kind, a worker that exited 0 without a job drew no re-run, new Event or condi
 The sweep now requires the name after <code>&lt;scale set&gt;-</code> to be exactly what the listener mints: a job UUID and an optional attempt number.
 A UUID's fixed shape makes that unambiguous, since another set's name always leaves its own label text in front of the UUID.
 A record that fails the test is left alone and counted in the log line.</p>
-<p><strong>The format is measured on github.com and is a safe dependency.</strong> All 56 self-hosted job runner names in 149 recent CI runs of this repository, read 2026-11-06 from October and November 2026 across two scale sets, were <code>&lt;scale set&gt;-&lt;UUID&gt;</code>.
-A backend minting another format makes the sweep delete nothing, so records then wait for the per-name reclaim or the <a href="../../operations/troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">manual cleanup</a> rather than another tenant losing one.</p>
+<p><strong>The format is measured on github.com, and the isolation depends on it.</strong> All 56 self-hosted job runner names in 149 recent CI runs of this repository, read 2026-11-06 from October and November 2026 across two scale sets, were <code>&lt;scale set&gt;-&lt;UUID&gt;</code>.
+A backend minting another format leaves a set's own records unswept, so they wait for the per-name reclaim or the <a href="../../operations/troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">manual cleanup</a>.
+Another format can still cross sets, whenever a job ID completes the pattern after a label's text: with all-digit job IDs, a set labelled <code>ci-&lt;UUID&gt;</code> mints <code>ci-&lt;UUID&gt;-123</code>, which the <code>ci</code> sweep reads as a job UUID and an attempt.
+No backend with non-UUID job IDs has been measured, and <a href="../../queue/Q1296/">Q1296</a> holds the fix for when one is.</p>
 <p><code>TestListener_SweepLeavesAnExtendingSetsRecords</code> and <code>E2E_AGC_ScaleSetSweep</code> pin this, the second with a seeded stale record that proves the sweep ran.
 Neither reaches GitHub.
 No run has shown how github.com answers a runner whose never-connected record was deleted, what it does with that runner's assigned job, or whether an owner's listing returns another tenant's records whatever their runner group.
