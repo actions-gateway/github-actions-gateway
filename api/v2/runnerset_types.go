@@ -422,11 +422,9 @@ type NodeShareSizing struct {
 // ScaleUpRateLimit configures the opt-in per-RunnerSet worker-pod creation-rate
 // limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
 // Burst is the bucket depth (the largest instantaneous batch before throttling
-// engages). An empty bucket withholds intake rather than delaying an acquired job:
-// on the classic acquisition tier the AGC declines to claim the next job, leaving it
-// queued at GitHub for redelivery, and on the ScaleSet tier it advertises less
-// capacity so GitHub assigns less. A ScaleSet worker can still wait briefly at pod
-// creation when an advertisement was stale; the classic tier never waits at all.
+// engages). An empty bucket withholds intake rather than delaying an assigned job:
+// the AGC advertises less capacity so GitHub assigns less. A worker can still wait
+// briefly at pod creation when an advertisement was stale.
 type ScaleUpRateLimit struct {
 	// MaxPerSecond is the sustained rate, in worker pods created per second, once
 	// the initial burst is spent. Required when scaleUp is set.
@@ -492,9 +490,8 @@ type RunnerSetStatus struct {
 	// metrics access cannot read (Q721).
 	//
 	// A pointer because zero is a meaningful advertisement (intake fully withheld) and
-	// has to be distinguishable from "no advertisement": nil on a classic-tier set,
-	// which decides per delivered job and never states a capacity, and on a scale-set
-	// set whose listener has not polled yet.
+	// has to be distinguishable from "no advertisement": nil on a set whose listener
+	// has not polled yet.
 	//
 	// Lags the live value by up to one reconcile, because the advertisement is
 	// recomputed per poll and published per reconcile. It is an observation of intake,
@@ -511,8 +508,7 @@ type RunnerSetStatus struct {
 	// nothing, so a reason absent from the list was not evaluated rather than not
 	// binding. That is the same explicit-zero contract the withheld gauge carries.
 	//
-	// Empty on a classic-tier set and before the first poll, alongside a nil
-	// AdvertisedCapacity.
+	// Empty before the first poll, alongside a nil AdvertisedCapacity.
 	//
 	// +optional
 	// +listType=map

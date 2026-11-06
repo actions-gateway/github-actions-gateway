@@ -1402,7 +1402,7 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
 
 ## The worker images: `wrapper`, `worker`, `build-runner` and `cache-runner`
 
-`publish.yml` builds and signs **four** worker-related images, all holding the same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
+`publish.yml` builds and signs **four** worker-related images, all holding the same `cmd/worker` wrapper that installs the per-tenant CA trust and starts the runner with `run.sh --jitconfig`:
 
 - **`ghcr.io/actions-gateway/wrapper`** — a ~2 MB `FROM scratch` image with just the wrapper binary.
   The GMC forwards it to every AGC (`WRAPPER_IMAGE`), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the **unmodified upstream `ghcr.io/actions/actions-runner`** (or any tenant `workerImage`).

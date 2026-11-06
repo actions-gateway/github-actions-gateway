@@ -234,7 +234,7 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.title="worker" \
-      org.opencontainers.image.description="Ephemeral GitHub Actions runner worker — wraps Runner.Worker with a job-payload entrypoint" \
+      org.opencontainers.image.description="Ephemeral GitHub Actions runner worker — wraps run.sh with a single-use JIT config entrypoint" \
       org.opencontainers.image.licenses="Apache-2.0"
 # Bundle the license attribution this image redistributes for the wrapper binary
 # we add on top of the runner base. The upstream actions-runner base carries its

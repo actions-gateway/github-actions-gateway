@@ -24,19 +24,17 @@ See [tenant onboarding — per-tenant log level](tenant-onboarding.md#per-tenant
 
 ### Debug diagnostics for otherwise-silent paths
 
-Several paths that can stall a tenant or a session emit **debug**-level diagnostics (suppressed at the default info level).
+Several paths that can stall a tenant or a job emit **debug**-level diagnostics (suppressed at the default info level).
 Raise the component to debug to surface them — for a GMC-managed tenant, set `spec.logLevel: debug` on the `ActionsGateway` (the GMC threads it to the AGC and proxy); for a standalone controller, `--zap-log-level=debug`; for a standalone proxy/worker, `LOG_LEVEL=debug`.
 Useful `grep` anchors:
 
 | Path | Component | Log message substring |
 |---|---|---|
-| Session waiting on a worker pod that never reaches a terminal phase (top "stuck session" cause) | AGC | `pod already terminal at registration`, `registered for pod completion`, `pod completion observed`, `pod wait cancelled before completion` |
-| Permanent baseline listener crash/restart backoff (otherwise only the `exited with error` warning is visible) | AGC | `restarting after backoff`, `restart aborted` |
 | Which of the ~12 per-tenant provisioning steps a stalled reconcile is on | GMC | `reconcileResources step` |
-| Per-tenant TLS cert issuance / renewal | GMC | `issuing proxy TLS cert`, `generating metrics mTLS bundle` |
-| Per-session / per-job lifecycle (one line per listener spawn, job pickup, heal, and worker pod) | AGC | `listener goroutine started`, `job message received`, `idle shutdown`, `healing stale session`, `job finished; recycling single-use JIT agent`, `job Secret created`, `worker pod created`, `worker pod completed` |
+| Per-tenant TLS cert issuance / renewal | GMC | `issuing EgressProxy TLS cert`, `generating EgressProxy metrics mTLS bundle` |
+| One job's path through a scale set (replayed assignment, capacity hold, worker pod, start, and completion) | AGC | `scaleset: skipping replayed assignment`, `job admission deferred`, `scale-set worker pod created`, `recorded job start on worker pod`, `stamped job completion on worker pod`, `scale-set job Secret reclaimed` |
 
-These per-session/per-job lines are at **debug** by design: at thousands of concurrent sessions they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
+These per-job lines are at **debug** by design: on a busy gateway they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
 Raise the AGC to debug — `spec.logLevel: debug` for a GMC-managed tenant, or `--zap-log-level=debug` standalone — to follow an individual job.
 
 **Correlation fields.** AGC log lines carry structured fields that let you follow one job to its pod through a log pipeline.
