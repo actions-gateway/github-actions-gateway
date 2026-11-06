@@ -295,7 +295,7 @@ Logging at `RequestResponse` would copy that key material into the audit backend
 `Metadata` records the requester, verb, resource, name, namespace, timestamp, and response code — enough to detect an anomalous read without duplicating the secret.
 Keep the Secret rules at `Metadata`.
 
-**Before you install,** edit the placeholders (the file's header comment lists them): the GMC ServiceAccount user string if you overrode the install namespace or `namePrefix`, and one `users:` entry per tenant namespace for the AGC rule (the audit `users:` field is an exact match with no wildcard).
+**Before you install,** edit the placeholders (the file's header comment lists them): the GMC ServiceAccount user string if you overrode the install namespace or `namePrefix`, and one `users:` entry per gateway for the AGC rule (the audit `users:` field is an exact match with no wildcard).
 
 #### Where auto-install is — and isn't — possible
 
