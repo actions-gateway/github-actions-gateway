@@ -5,8 +5,8 @@
 A service mesh (Istio, Linkerd, Cilium Service Mesh, Kuma) is the single most common source of *silent* breakage for GitHub Actions Gateway (GAG).
 The mesh and GAG both make assumptions about the worker pod's lifecycle and its outbound network path, and those assumptions collide in two ways:
 
-1. **An injected sidecar stops a run-to-completion worker pod from ever terminating** — the job finishes, but the mesh proxy keeps the pod `Running`, so the worker slot is never released.
-   Capacity leaks one slot per job until the RunnerGroup wedges at `maxWorkers`.
+1. **An injected sidecar stops a run-to-completion worker pod from ever terminating** — the job finishes, but the mesh proxy keeps the pod `Running`, so the worker slot is not released until the AGC reaps the pod five minutes later.
+   A busy set can reach `maxWorkers` with no job executing.
 2. **Mesh egress interception fights GAG's per-tenant egress proxy** — double-proxying, mutual-TLS (mTLS) handshake confusion, and a loss of the per-tenant egress-IP attribution that isolates one tenant's GitHub traffic from another's.
 
 Both failures are quiet: pods schedule, the mesh reports healthy, and the first symptom is "jobs stop getting picked up after a while" or "GitHub sees the wrong egress IP."
@@ -175,7 +175,7 @@ This is the top silent-breakage mesh users hit.
 
 > **Why the reaper does not save you.** `completedPodTTL` only deletes pods that reached a *terminal* phase, and `pendingPodDeadline` only deletes pods stuck `Pending`.
 > A sidecar-pinned pod is neither — it is `Running` — so it falls through both phase-based reaper paths.
-> ScaleSet sets get a backstop ([`WorkerPodOrphanedRunning`](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning): a pod still `Running` five minutes after GitHub reports the job terminal is deleted), which stops the slots leaking — but it kills the pod instead of letting it complete, and Classic sets have no equivalent.
+> There is a backstop ([`WorkerPodOrphanedRunning`](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning): a pod still `Running` five minutes after GitHub reports the job terminal is deleted), which stops the slots leaking, but it kills the pod instead of letting it complete.
 > The fix still has to make the pod actually terminate.
 
 ### Fix A — opt out (recommended)
@@ -405,7 +405,7 @@ kubectl get pod -n <tenant-ns> <worker-pod> \
 **Egress — GitHub sees the per-tenant proxy IP:** follow the egress-isolation check in the [network architecture validation](../design/network-architecture.md#how-to-validate-network-isolation) — GitHub-bound traffic must exit through the tenant proxy `Service`, and no direct or mesh-egress-gateway egress to GitHub should be observed from a worker pod.
 If the observed source IP is the mesh egress gateway's, the per-tenant attribution is broken — revisit [problem 2](#problem-2-mesh-egress-interception-vs-the-per-tenant-proxy).
 
-If jobs stop being picked up, the [troubleshooting guide](troubleshooting.md) covers the wedged-RunnerGroup symptom; a namespace in a mesh with classic sidecars is the first thing to rule out.
+If jobs stop being picked up, the [troubleshooting guide](troubleshooting.md#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar) covers the symptom; a namespace in a mesh with classic sidecars is the first thing to rule out.
 
 ---
 

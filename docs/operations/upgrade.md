@@ -27,6 +27,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
+  - [Non-breaking: two `RunnerSet`s may share a name across namespaces](#non-breaking-two-runnersets-may-share-a-name-across-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
   - [Non-breaking: `EgressRulesStale` now fires when no GitHub ranges have loaded](#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded)
   - [Non-breaking: a direct-egress v2 gateway reports `EgressRulesStale` and pages on it](#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it)
@@ -305,6 +306,7 @@ CustomResourceDefinition.apiextensions.k8s.io "runnersets.actions-gateway.com" i
 
 **What to do.** Run [the `storedVersions` check](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2) first, and stop unless every line reads `[v2]`.
 The patch below changes the cluster and the apply can still refuse, so anything that would refuse it has to be settled while the webhook is still there.
+Pull the chart at this point too, [as the next section says](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them), so a wrong chart version also fails with nothing changed.
 
 Then download the release, so a wrong tag fails with nothing changed, remove the webhook from each CRD, and apply straight away, in the same shell:
 
@@ -524,6 +526,22 @@ From 1.9 on, neither could see a denial by the five `actions-gateway.com` webhoo
 Both now name the webhooks the chart ships (Q1267): five from `v2.0.0`, whose chart no longer ships the `v1alpha1` one.
 
 **What to do.** Replace the `name=~` selector in your copy of the alert with the one in [security-operations.md](security-operations.md#prometheus-abuse-alerts), and re-import `deploy/monitoring/grafana-dashboard-security.json`.
+
+### Non-breaking: two `RunnerSet`s may share a name across namespaces
+
+**Who is affected:** nobody has to change anything.
+A platform that picked distinct `RunnerSet` names only to get past the `agent-identity stem … is already claimed` rejection may stop.
+
+**What changed.** Admission no longer rejects a `RunnerSet` because another namespace holds its name under the same GitHub org, enterprise, or repo.
+That rule protected the runner names the classic agent pool derived from the CR name, and that pool no longer exists.
+A set's name now reaches only objects in its own namespace and the scale-set session owner, which is `<namespace>/<name>`.
+
+**What still has to be unique.** A set's first `runnerLabel` names its scale set at GitHub, so [admission still refuses a duplicate](troubleshooting.md#runnerset-rejected-duplicate-first-runnerlabel) across the whole scope.
+
+**How far this is tested.** The end-to-end suite runs such a pair against its fake GitHub server: each job lands in its own namespace, and deleting one set leaves the other serving.
+No run has tested the pair against github.com or GitHub Enterprise Server.
+
+**Rolling back** to a `1.x` GMC restores the rejection, which lands on the next write to either object, so rename one of a pair first.
 
 ### Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run
 
@@ -1049,6 +1067,8 @@ Runbook: [troubleshooting.md § a GHES appliance's certificate is not trusted](t
 
 ### Agent-identity collisions are now rejected at admission (`RunnerSet` name, and derived `RunnerGroup` name)
 
+This section describes the `1.x` releases; [`v2.0.0` removes the guard](#non-breaking-two-runnersets-may-share-a-name-across-namespaces).
+
 **Who is affected:** a platform where two runner pools derive the same **agent-identity stem**, the string that `agentpool-<stem>-N` and the GitHub runner name `<stem>-N` are both built from.
 Two shapes reach it, and everyone else is unaffected with no configuration change:
 
@@ -1057,7 +1077,7 @@ Two shapes reach it, and everyone else is unaffected with no configuration chang
 
 That second shape is the one most likely to be in a running cluster, and it was accepted before this release.
 It was never safe: the runner name is unique per GitHub scope, so both pools register `<stem>-N` and each 409 is resolved by deleting the incumbent's record.
-The loser reports `agent identity is owned by another pool` on every reconcile and never recovers ([runbook](troubleshooting.md#agent-pool-blocked-another-tenant-owns-the-agent-secret)).
+The loser reports `agent identity is owned by another pool` on every reconcile and never recovers.
 
 **Nothing is re-validated at upgrade time**, because admission runs on create and update.
 An existing colliding pair keeps running exactly as it did; the rejection lands whenever someone next re-applies either object, which may be long after the upgrade and on a tenant who changed nothing.
@@ -1605,16 +1625,15 @@ The GMC renders each tenant's AGC `Deployment` from its own configuration, so wh
 **Restart, failover, eviction, node drain — no tenant impact.** A replacement leader re-derives every AGC pod template identically and writes nothing, so no new `pod-template-hash` and no new `ReplicaSet` appear and no AGC pod is replaced.
 This holds for any restart of an unchanged GMC.
 
-**Upgrade — every tenant's AGC rolls, all at once.** These GMC-side values are part of the AGC pod template, and a release normally changes at least the first two:
+**Upgrade — every tenant's AGC rolls, all at once.** These GMC-side values are part of the AGC pod template, and a release normally changes at least the first:
 
 | Value in the AGC pod template | Where the GMC gets it |
 |---|---|
 | AGC container image | `AGC_IMAGE` on the GMC pod (chart value `agc.image`) |
-| `GITHUB_RUNNER_VERSION` | compiled into the GMC binary |
 | `WRAPPER_IMAGE`, `WRAPPER_DELIVERY` | GMC pod environment |
 | `AGC_EXTRA_*` (testing only) | GMC pod environment, behind `--allow-agc-extra-env` |
 
-Every tenant whose template changes rolls, so a GMC upgrade fans out into one [AGC drain window](#agc-upgrade) per tenant, concurrently and unstaged — dropped long polls and abandoned RenewJob loops across the whole fleet rather than in one namespace.
+Every tenant whose template changes rolls, so a GMC upgrade fans out into one [AGC drain window](#agc-upgrade) per tenant, concurrently and unstaged — closed sessions and no job acquisition across the whole fleet rather than in one namespace.
 Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, and validate with the [AGC post-upgrade checks](#agc-upgrade) as well as the GMC ones.
 
 **Do not hand-edit a GMC-managed AGC `Deployment`.** The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a `kubectl set image` — or any other direct edit — is reverted within seconds.
@@ -1946,42 +1965,31 @@ A field that only the `v2.0.0` schema declares is expected to be pruned from an 
 ## AGC Upgrade
 
 The AGC runs `replicas: 1`.
-**Every AGC upgrade incurs a brief drain window** — the period between the old pod terminating and the new pod acquiring sessions.
+**Every AGC upgrade incurs a brief drain window** — the period between the old pod terminating and the new pod opening its sessions.
 During this window:
 
-- **In-flight long polls** are dropped.
-  GitHub redelivers these jobs within ~2 minutes (GitHub's redelivery window).
-- **Per-job RenewJob loops** are abandoned.
-  Any job whose lock window (~10 minutes per renewal) expires before the new AGC starts will be cancelled by GitHub.
-  These require manual re-run.
-- **Queued but unacquired jobs** are redelivered after the session TTL expires (typically < 2 minutes).
+- **No job is acquired.** Each `RunnerSet`'s message session is closed, so jobs wait in GitHub's queue for that scale set.
+- **Unacknowledged assignments replay.** The new session receives them again, and the AGC skips any it already provisioned a worker for.
+- **Running worker pods are unaffected.** They are separate from the AGC and keep running their jobs.
 
-**Scheduling guidance.** Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends) when in-flight job count is minimal.
-If zero-downtime is required, accept that GitHub redelivery provides effective recovery for most jobs.
+**Scheduling guidance.** Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends), when the fewest jobs are waiting to start.
 
 ### Per-Tenant Upgrade Procedure
 
 The image change itself is fleet-wide (Step 2), so the per-tenant work is the drain that precedes it and the validation that follows: run Step 1 for each tenant you want drained cleanly, then Steps 3–5 per namespace.
 
-**Step 1: Drain the AGC before upgrading (optional, reduces blackout window)**
+**Step 1: Let the AGC drain (optional, reduces blackout window)**
 
-The AGC's SIGTERM handler calls `DELETE /sessions` for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL.
-The shutdown **blocks until every listener goroutine has issued its session DELETE** — the process does not exit while sessions are still open.
+The AGC's SIGTERM handler deletes each `RunnerSet`'s message session before exiting.
+A scale set allows one session at a time, so the next AGC cannot open its session until the previous one is gone.
 To rely on this:
 
 - Ensure `terminationGracePeriodSeconds` on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default).
-  The session drain is bounded at 10 seconds and runs concurrently across RunnerGroups, so it does not scale with listener count.
+  Each session delete is bounded at 10 seconds.
 - Do not use `kubectl delete pod` directly — it sends SIGKILL without a grace period.
   Use `kubectl rollout restart`, which the reconciler honours on a managed Deployment.
 
-If a session cannot be deleted (the broker is unreachable during the drain), the AGC retries within its budget and then logs a Warn naming the session before exiting:
-
-```
-DeleteSession failed; the broker session is leaked until it expires server-side sessionId=... attempts=3 error=...
-```
-
-That session's runner stays online on GitHub until the server-side session TTL expires.
-It is harmless but wastes a runner slot for the TTL; a burst of these lines during a rollout points at broker or egress-path reachability, not at the AGC.
+If a session cannot be deleted (GitHub is unreachable during the drain), the new AGC's session is refused until GitHub expires the old one: see [`ScaleSetListenerStartFailed`](troubleshooting.md#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap).
 
 **Step 2: Update the AGC image**
 
@@ -2156,7 +2164,6 @@ kubectl get runnerset <name> -n <namespace> \
   -o jsonpath='{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'
 ```
 
-On the classic tier the session goroutine additionally surfaces GitHub's own rejection, a `400 Bad Request` under reason `VersionTooOld`, once the version has already stopped working.
 See [troubleshooting § Worker Image Runner Version](troubleshooting.md#worker-image-runner-version) for reading the version a running worker actually shipped.
 
 ### Worker image rollback

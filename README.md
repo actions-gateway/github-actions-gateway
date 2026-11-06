@@ -14,7 +14,7 @@ GitHub Actions Gateway (GAG) closes them:
 
 | Gap at multi-tenant scale | How GAG closes it | Detail |
 | --- | --- | --- |
-| A worker the cluster takes away leaves its job needing a **manual rerun** | The run concludes and **re-runs itself**, with a per-run retry budget, on both acquisition tiers | [flow](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry) |
+| A worker the cluster takes away leaves its job needing a **manual rerun** | The run concludes and **re-runs itself**, with a per-run retry budget | [flow](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry) |
 | Tenants **can't be given isolated GitHub egress IPs** | A per-tenant proxy pool as the choke point, over a specified and live-validated path to a distinct, stable per-tenant source IP | [mechanism](docs/design/network-architecture.md#per-tenant-egress-ip-the-source-ip-mechanism) |
 | **Idle runner and listener compute** stays provisioned between jobs | Workers scale to zero. Every listener is a goroutine in one shared pod, not an always-on pod per scale set | [capacity](docs/design/appendix-a-capacity-slos.md) |
 
@@ -85,7 +85,7 @@ Four marks qualify a disruption:
 **The scope is drawn on purpose.** A job that ran and **failed on its own merits**, a run you **cancelled**, workers the gateway's own cleanup reaped as stuck, and a worker evicted for exceeding its own storage limit are never re-run; the reaper stamps `actions-gateway.com/deletion-reason` on a pod before deleting it, which is what keeps those out.
 A configurable retry budget, one per workflow run in each runner set and shared across every cause, prevents loops on persistently failing workloads.
 
-On the scale-set tier the runner owns job-lock renewal, so the AGC records the workflow run on the worker pod and detects the disruption from the owning reconciler.
+The runner owns job-lock renewal, so the AGC records the workflow run on the worker pod and detects the disruption from the owning reconciler.
 [The full boundary, with detection marks and metrics](docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do) · [design detail](docs/design/04-operational-flows.md#worker-pod-eviction-and-auto-retry)
 
 ### Quotas are safe to enforce, because admission happens before the assignment
@@ -98,7 +98,7 @@ The scale-set protocol folds both limits into the single capacity integer it adv
 An opt-in `capacityGate.mode` adds a third rung, *placeability*, for the case where quota has room but the cluster does not: a worker shape that no node can take and the node autoscaler will not grow for.
 Without it, a set with a drained node pool or vanished spot capacity keeps claiming, and each job spends a single-use runner registration and ends as a cancelled run.
 With it, those jobs stay queued at GitHub.
-`Off` by default ([runbook](docs/operations/troubleshooting.md#jobs-not-being-acquired-despite-queued-work-capacity-gate-saturated)).
+`Off` by default ([runbook](docs/operations/troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs)).
 
 A Kubernetes job-queue manager such as Kueue operates one layer below this, on pod creation *after* the job is already claimed, and structurally cannot make that call ([Appendix D.5](docs/design/appendix-d-alternatives-considered.md#d5-kueue-and-kubernetes-job-queue--quota-managers)).
 
@@ -183,8 +183,8 @@ A four-tier system:
 It watches namespace-scoped `ActionsGateway` CRs across all namespaces and provisions a fully isolated gateway instance for each tenant (RBAC, network policies, resource quotas, egress proxy, and AGC) entirely within the tenant's existing namespace.
 
 **Tier 2: AGC.** A Go-based operator deployed once per tenant.
-Instead of one pod per runner slot, it multiplexes virtual runner sessions as goroutines, designed to scale to thousands per AGC pod.
-It provisions compute only when a job is acquired and releases it on completion (the finished pod object is deleted after a short configurable TTL).
+Instead of one pod per runner slot, it long-polls GitHub's message queue with one session per `RunnerSet`.
+It provisions compute only when GitHub assigns a job and releases it on completion (the finished pod object is deleted after a short configurable TTL).
 
 **Tier 3: Egress Proxy Pool.** A Horizontal Pod Autoscaler (HPA)-managed pool of stateless HTTPS CONNECT proxy pods, one pool per tenant.
 Every GitHub request from the AGC and from worker pods leaves the cluster through it, on IPs dedicated to that tenant.
@@ -243,7 +243,7 @@ For day-2 operations (`helm upgrade` and rollback, per-component upgrades, runbo
 
 See [docs/getting-started.md](docs/getting-started.md) for the full walkthrough: GMC deployment, GitHub App Secret, and your first tenant.
 
-**New tenants should onboard on `actions-gateway.com/v2`**, the GA, ScaleSet-only version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
+**New tenants should onboard on `actions-gateway.com/v2`**, the GA version of the decomposed v2 API (`ActionsGateway` + `RunnerSet` + `RunnerTemplate`, with an optional standalone `EgressProxy`).
 It is the only version `v2.0.0` serves.
 
 | API version | Status |

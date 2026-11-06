@@ -2,7 +2,7 @@
 
 A four-tier system for running GitHub Actions self-hosted runners in a shared Kubernetes cluster with zero idle compute.
 The Gateway Manager Controller (GMC) provisions isolated per-tenant gateway instances from a single `ActionsGateway` CR.
-Each instance is an Actions Gateway Controller (AGC) that multiplexes thousands of virtual runner sessions as goroutines — provisioning ephemeral worker pods only when a job is acquired and releasing them immediately on completion.
+Each instance is an Actions Gateway Controller (AGC) that holds one GitHub scale-set listener per `RunnerSet`, provisioning ephemeral worker pods only when a job is assigned and releasing them immediately on completion.
 Per-tenant egress proxy pools give each tenant isolated egress IPs for GitHub traffic.
 See `DESIGN.md` and `docs/design/` for full design context.
 

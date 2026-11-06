@@ -430,7 +430,8 @@ The abuse-specific first moves:
    kubectl scale deploy/actions-gateway-controller -n <namespace> --replicas=0
    ```
 
-   In-flight jobs will be cancelled by GitHub when `renewjob` lapses; this is acceptable during a suspected breach.
+   This does not stop worker pods that are already running, because each runner holds its own session with GitHub.
+   Delete those pods as well if their jobs must stop.
 2. **Rotate.** Rotate the tenant's GitHub App key ([runbook.md § GitHub App Key Compromise](runbook.md#github-app-key-compromise)) — the AGC held it in memory.
 3. **Scope.** Check the API-server audit log for Secret `get`/`list` calls by the AGC ServiceAccount; enumerate which tenant Secrets may have been read.
 4. **Verify the image.** Confirm the running AGC image digest matches the GMC-pinned `AGC_IMAGE` (digest pinning is enforced — see [§5.2 Supply-Chain](../design/05-security.md#52-agc--proxy-level-threats-namespace-scoped)).

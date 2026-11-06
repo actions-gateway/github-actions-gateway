@@ -11,8 +11,7 @@
 #
 # It drifted for real. 04-operational-flows.md listed Rate before Ceiling from
 # Q717 until Q972 happened to edit that paragraph, and nothing reported it —
-# prose and evaluation order are the two halves metrictiers and reasontiers pair
-# for a metric's tier and a reason's tier, and nobody paired for this one.
+# prose and evaluation order are two halves nobody paired.
 #
 # What the checker asserts, and why the code side is read from the AST rather
 # than grepped, are in the package comment beside devtools/docs/rungorder.

@@ -63,14 +63,13 @@ Cross-compilation does not affect reproducibility: `-trimpath -ldflags=-buildid=
 ### Runner-version pin (lockstep)
 
 The actions/runner version is pinned in **one** place — `RunnerVersion` (plus `WorkerImageDigest`) in [`cmd/agc/names/names.go`](../../cmd/agc/names/names.go).
-That single constant drives, and must stay in lockstep with, three consumers:
+That single constant drives, and must stay in lockstep with, two consumers:
 
-- the AGC's `DefaultWorkerImage` (the worker pod's runner binary),
-- the `GITHUB_RUNNER_VERSION` the GMC injects into the AGC Deployment — forwarded as `agent.version` on `CreateSession`, which **GitHub validates** at session creation (an empty or wrong value risks rejection), and
+- the AGC's `DefaultWorkerImage` (the worker pod's runner binary), and
 - the `FROM` tag on the root [`Dockerfile`](../../Dockerfile)'s `worker` stage.
 
 Dependabot bumps only the Dockerfile, so the lockstep test [`cmd/agc/names/runner_version_test.go`](../../cmd/agc/names/runner_version_test.go) fails CI (in the unit tier) when the `FROM` tag/digest and the constants disagree.
-To bump the version, follow the procedure in the Dockerfile header: update the `FROM` line **and** `RunnerVersion` + `WorkerImageDigest` together; `DefaultWorkerImage` and `GITHUB_RUNNER_VERSION` then follow automatically.
+To bump the version, follow the procedure in the Dockerfile header: update the `FROM` line **and** `RunnerVersion` + `WorkerImageDigest` together; `DefaultWorkerImage` then follows automatically.
 
 GitHub also stops queueing jobs to a runner that has not updated within 30 days of a newer release, without refusing its connection, so a pin that sits unbumped looks like jobs lapsing rather than an error.
 The scheduled [`runner-window-watch.yml`](../../.github/workflows/runner-window-watch.yml) counts the days from the first newer *stable* release's `publishedAt` and goes red at day 21; when it does, bump the pin by the procedure above.

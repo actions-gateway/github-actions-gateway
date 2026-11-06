@@ -558,9 +558,8 @@ spec:
                   metrics access cannot read (Q721).
 
                   A pointer because zero is a meaningful advertisement (intake fully withheld) and
-                  has to be distinguishable from "no advertisement": nil on a classic-tier set,
-                  which decides per delivered job and never states a capacity, and on a scale-set
-                  set whose listener has not polled yet.
+                  has to be distinguishable from "no advertisement": nil on a set whose listener
+                  has not polled yet.
 
                   Lags the live value by up to one reconcile, because the advertisement is
                   recomputed per poll and published per reconcile. It is an observation of intake,
@@ -811,8 +810,7 @@ spec:
                   nothing, so a reason absent from the list was not evaluated rather than not
                   binding. That is the same explicit-zero contract the withheld gauge carries.
 
-                  Empty on a classic-tier set and before the first poll, alongside a nil
-                  AdvertisedCapacity.
+                  Empty before the first poll, alongside a nil AdvertisedCapacity.
                 items:
                   description: |-
                     WithheldCapacity is one admission-ladder rung's contribution to the gap between a

@@ -122,14 +122,11 @@ type ActionsGatewaySpec struct {
     // gateway's runners register against — e.g. "https://github.com/my-org",
     // "https://github.com/my-org/my-repo", or, for GitHub Enterprise Server,
     // "https://ghes.example.com/my-org". It is REQUIRED: a gateway with no URL
-    // has nothing to register against. The GMC threads it to the AGC Deployment
-    // as the GITHUB_ORG_URL environment variable, which the AGC's GithubRegistrar
-    // reads to derive its org-scoped vs repo-scoped REST endpoints. It pairs with
-    // gitHubAppRef — the App installation must cover the same org/enterprise.
+    // has nothing to register against. The AGC reads it to derive its org-scoped
+    // vs repo-scoped REST endpoints. It pairs with gitHubAppRef — the App
+    // installation must cover the same org/enterprise.
     //
-    // This field is the production-supported replacement for the testing-only
-    // --allow-agc-extra-env=AGC_EXTRA_GITHUB_ORG_URL injection path (that flag
-    // remains, gated, for genuinely-extra env only). Structural validation (https
+    // Structural validation (https
     // scheme, host present, an org/owner path segment) is performed by the GMC
     // validating webhook so the error can name the offending component; the CRD
     // carries a Pattern (^https://) as a cheap scheme guard.
@@ -569,9 +566,8 @@ type RunnerGroupSpec struct {
     // cmd/agc/internal/provisioner/provisioner.go supplies the baseline value
     // (currently the digest-pinned "ghcr.io/actions/actions-runner:2.338.2@sha256:…",
     // aligned with the ARC gha-runner-scale-set chart default). Its runner
-    // version is the single source of truth in cmd/agc/names (RunnerVersion),
-    // which also drives the GITHUB_RUNNER_VERSION the GMC injects so the AGC's
-    // agent.version matches the running runner binary. Operators override it via
+    // version is the single source of truth in cmd/agc/names (RunnerVersion).
+    // Operators override it via
     // the WORKER_IMAGE environment variable (set by the GMC on the AGC
     // Deployment); tenants can then override further per-RunnerGroup with this
     // field without affecting other groups.

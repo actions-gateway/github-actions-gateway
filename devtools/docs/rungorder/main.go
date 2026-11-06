@@ -10,8 +10,7 @@
 //
 // It drifted undetected: 04-operational-flows.md listed Rate before Ceiling from
 // Q717 until Q972 happened to edit that paragraph. Prose and code are the two
-// halves nothing paired, which is the gap metrictiers and reasontiers already
-// close for a metric's tier and a reason's tier.
+// halves nothing paired.
 //
 // The code side is read from the AST rather than by grepping for the constants:
 // order is the whole question here, and a grep reports file order for a

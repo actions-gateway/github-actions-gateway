@@ -204,18 +204,10 @@ Under the per-cell stamp an aging claim degrades to unverified instead of to wro
 
 <!-- The canonical fires/doesn't-fire matrix is
      docs/operations/troubleshooting.md § Which Disruptions Auto-Re-Run a Job.
-     When a case is added or removed there, update this paragraph too — and when
-     a case changes which acquisition tier it reaches, which is the same drift
-     and is what this paragraph missed for a whole release: the Pending-reap
-     re-run read "classic tier" from Q691 until Q766 had made it both, in
-     v1.4.0. Neither added nor removed a case, so the instruction above did not
-     fire. The stamp below is what makes that second case a gate rather than a
-     request: `make tier-claims-check` digests the tier-bearing lines of the
-     section named in it, so a tier move there goes red here. -->
-<!-- tier-source: docs/operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do sha=81c15971 -->
-**Auto-re-run covers disruption, never failure.** Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray `kubectl delete pod` all come back, on both acquisition tiers, and so does a dead node once an admin taints it `out-of-service`.
+     When a case is added or removed there, update this paragraph too. -->
+**Auto-re-run covers disruption, never failure.** Eviction, preemption, a Spot node reclaimed, a drain, a node shutdown and a stray `kubectl delete pod` all come back, and so does a dead node once an admin taints it `out-of-service`.
 A job that *failed* and a run you *cancelled* never do, and neither does a worker evicted for exceeding its own storage limit, since a re-run gets the same limit.
-Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run on both tiers once capacity returns.
+Nor do workers the reaper took, with one exception: a worker reaped while still `Pending` is re-run once capacity returns.
 [The full boundary](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do).
 
 **Right-sizing is structural, not a feature race.** An ephemeral pod runs one job and lives minutes, so stock Vertical Pod Autoscaler cannot size it.

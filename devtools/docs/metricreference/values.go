@@ -25,29 +25,22 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 // resolveDepth bounds the walk away from the Prometheus call. Three steps reach
 // every value in this tree, and the poll-error seam is what sets the bound: the
 // counter is written in runnercore's IncPollError, the scale-set listener wraps
 // that in metricsIncPollError, and the wrapper is handed a classifier's return
-// value (pollErrorReason). Stopping short leaves the scale-set arm underived and
-// every poll reason reading classic-only.
-//
-// Walking further is safe in the direction that matters — a wrongly pooled
-// same-named function can only add origins, and extra origins make a value look
-// less tier-exclusive, never more.
+// value (pollErrorReason). Stopping short leaves those values underived, so Help
+// is never held to them.
 const resolveDepth = 3
 
-// tierLabel is the acquisition tier's own axis. Its values are the tier names,
-// so asking which tier emits one is tautological and the ledger's tier column
-// has already answered it.
+// tierLabel is one-valued, so no Help string has a vocabulary to publish for it.
 const tierLabel = "tier"
 
 // openLabels carry tenant identity rather than a code vocabulary: their values
 // come from a CR name or a container name, so there is no closed set to publish
-// in Help and no tier to attribute. Nothing in the AGC's own source passes a
+// in Help. Nothing in the AGC's own source passes a
 // literal in one of these positions, so this set changes no finding today — it
 // keeps a future one that does from being read as a vocabulary.
 //
@@ -63,8 +56,8 @@ var openLabels = map[string]bool{
 }
 
 // labelValue is one value of one label, with the files that name it. The
-// origins are what the tier classification reads: the file holding the literal,
-// not the file holding the Prometheus call.
+// origins name the file holding the literal, not the file holding the Prometheus
+// call, which is what a finding has to point at.
 type labelValue struct {
 	value   string
 	origins []string
@@ -180,8 +173,7 @@ type resolver struct {
 	emitCalls []emitCall
 	// unplaceable names a callee whose call sites could not be attributed while
 	// resolving a label position. Under-derivation is the silent failure here: a
-	// value that stops being derived stops being demanded, and the ledger loses a
-	// true row with nothing saying so.
+	// value that stops being derived stops being demanded, with nothing saying so.
 	unplaceable map[string]bool
 }
 
@@ -342,8 +334,7 @@ func (r *resolver) resolve(e ast.Expr, f srcFile, fn *ast.FuncDecl, depth int) [
 
 // resolveReturns reports the values a classifier function returns. The scale-set
 // listener reaches the shared poll-error counter through one — IncPollError(
-// pollErrorReason(err)) — so without this the classic tier's literals would be
-// the only ones derived and every reason would read classic-only.
+// pollErrorReason(err)) — so without this none of its reasons would be derived.
 func (r *resolver) resolveReturns(name, fromDir string, depth int) []labelValue {
 	d := r.place(name, fromDir)
 	if d == nil {
@@ -455,42 +446,4 @@ func stringLit(e ast.Expr) (string, bool) {
 		return "", false
 	}
 	return s, true
-}
-
-// derivedTier reports the tier a value's origins prove it exclusive to, or ""
-// when they do not agree. A value named only in scale-set-only files cannot
-// reach the classic tier; a value named in a shared file says nothing.
-func derivedTier(origins []string) string {
-	if len(origins) == 0 {
-		return ""
-	}
-	classic, scaleSet := true, true
-	for _, o := range origins {
-		if !isClassicOnly(o) {
-			classic = false
-		}
-		if !isScaleSetOnly(o) {
-			scaleSet = false
-		}
-	}
-	switch {
-	case classic:
-		return tierClassic
-	case scaleSet:
-		return tierScaleSet
-	}
-	return ""
-}
-
-// citesGoFile pulls the source citations out of a value row's note. A row whose
-// tier the file layout cannot derive has to point at the guard that makes the
-// claim true, so the claim stays anchored to code a reviewer can open.
-func citesGoFile(note string) []string {
-	var out []string
-	for _, part := range strings.Split(note, "`") {
-		if strings.HasSuffix(part, ".go") && !strings.Contains(part, " ") {
-			out = append(out, part)
-		}
-	}
-	return out
 }

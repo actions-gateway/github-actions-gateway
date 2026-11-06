@@ -182,7 +182,6 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 	assert.Equal(t, v2.SecurityProfileRestricted, envValue(&dep, "SECURITY_PROFILE"))
 	assert.Equal(t, "gw", envValue(&dep, "GATEWAY_NAME"), "AGC must be scoped to its gateway")
 	assert.Equal(t, gwWorkerSA, envValue(&dep, "WORKER_SERVICE_ACCOUNT"), "per-gateway worker SA")
-	assert.Equal(t, "https://github.com/example-org", envValue(&dep, "GITHUB_ORG_URL"))
 	for _, e := range container.Env {
 		assert.NotContains(t, []string{"appId", "privateKey", "installationId"}, e.Name, "credentials must never be passed via env")
 	}

@@ -106,8 +106,10 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 		By("verifying no other live-GitHub run holds the fixture repo")
 		preflightFixtureRepoIdle(creds.org+"/"+creds.repo, agName)
 
+		tenant.GitHubURL = fmt.Sprintf("https://github.com/%s/%s", creds.org, creds.repo)
+		siblingTenant.GitHubURL = tenant.GitHubURL
+
 		By("swapping fakegithub overrides for real GitHub on the GMC so AGC talks to real GitHub")
-		orgURL := fmt.Sprintf("https://github.com/%s/%s", creds.org, creds.repo)
 		cmd := exec.Command("kubectl", "set", "env",
 			"deployment/gmc-controller-manager",
 			"-c", "manager",
@@ -116,7 +118,6 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			"AGC_EXTRA_GITHUB_BROKER_URL-",
 			"AGC_EXTRA_STUB_AUTH_URL-",
 			"AGC_EXTRA_STUB_BROKER_URL-",
-			"AGC_EXTRA_GITHUB_ORG_URL="+orgURL,
 		)
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "set GMC env vars for real GitHub")
@@ -178,7 +179,6 @@ var _ = Describe("E2E_GitHub_RealDispatch", Ordered, Label("github-real", realGi
 			"deployment/gmc-controller-manager",
 			"-c", "manager",
 			"-n", gmcNamespace,
-			"AGC_EXTRA_GITHUB_ORG_URL-",
 			fmt.Sprintf("AGC_EXTRA_GITHUB_API_BASE_URL=%s", fakegithubBaseURL),
 			fmt.Sprintf("AGC_EXTRA_GITHUB_BROKER_URL=%s", fakegithubBaseURL),
 			fmt.Sprintf("AGC_EXTRA_STUB_AUTH_URL=%s/token", fakegithubBaseURL),

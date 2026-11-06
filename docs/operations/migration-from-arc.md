@@ -72,9 +72,9 @@ Unlike GAG's deprecated v1 shape, v2 puts **no one-gateway-per-namespace limit**
 ### Your runner image works unchanged
 
 Point `workerImage` at your **existing ARC runner image** — no rebuild — or leave it unset to use the upstream `ghcr.io/actions/actions-runner` default.
-GAG's AGC **pre-acquires** each job from the GitHub broker and hands it to the pod (rather than letting the pod's runner register and poll), so the worker needs GAG's small **wrapper** to feed the job payload into `Runner.Worker`.
+GAG's AGC creates one pod per assigned job and stages a single-use just-in-time (JIT) runner configuration for it, so the worker needs GAG's small **wrapper** to install the per-tenant egress-proxy CA and start the runner with `run.sh --jitconfig`.
 Rather than make you bake that wrapper into your image, the AGC **injects** it into every worker pod at runtime — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — and runs it in place of the image entrypoint.
-The only requirement is that the image be `actions/runner`-derived (it must contain `Runner.Worker`) — the same agent requirement ARC has, so **any image that works on ARC qualifies**, with its tools and userland intact.
+The only requirement is that the image be `actions/runner`-derived (it must contain `run.sh`) — the same agent requirement ARC has, so **any image that works on ARC qualifies**, with its tools and userland intact.
 
 > **Docker-in-Docker:** because the injected wrapper runs in place of the image entrypoint, an `actions-runner-dind` image's bundled `dockerd` startup is **skipped**.
 > Run DinD as a **sidecar** container in a privileged `ClusterRunnerTemplate` instead (see [Security profiles](#security-profiles)) — GAG's DinD model regardless of the worker image.

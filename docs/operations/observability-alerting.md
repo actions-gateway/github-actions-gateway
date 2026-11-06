@@ -10,9 +10,9 @@ For SLO targets, see [Appendix A — Capacity Targets & SLOs](../design/appendix
 
 | Symptom | Metric(s) to check | Notes |
 | --- | --- | --- |
-| Jobs are slow to start | `pod_creation_latency_seconds` p95/p99 | SLO: p95 ≤ 15s, p99 ≤ 60s. Emitted on both acquisition tiers; observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it |
+| Jobs are slow to start | `pod_creation_latency_seconds` p95/p99 | SLO: p95 ≤ 15s, p99 ≤ 60s. Observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it |
 | Jobs are not being acquired | `scaleset_session_open` (should be 1 per RunnerSet), `message_poll_errors_total` | `0` = the listener holds no session, so GitHub delivers it nothing; a rising poll-error rate = a session whose polls fail |
-| Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Tier wedged; check `scaleset_provision_errors_total` and worker-pod quota |
+| Scale-set jobs assigned but not starting | `scaleset_jobs_assigned_total` rising vs `scaleset_jobs_provisioned_total` flat | Provisioning wedged; check `scaleset_provision_errors_total` and worker-pod quota |
 | One scale-set job never starts, the rest do | `scaleset_jobs_deferred{reason="name_conflict"}` > 0 | Its runner name will not register; the listener re-offers it on a backoff. Read the `RunnerSet`'s `JobProvisionStalled` condition for the job ids; see the [runbook](troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | Scale-set assignments give up without running | `rate(scaleset_jobs_abandoned_total[15m])` > 0 | GitHub stopped holding jobs the listener was still trying to place, so those runs will not start. Expected in a burst around a mass cancellation or a drain; investigate a sustained rate. See the [runbook](troubleshooting.md#scale-set-assignments-abandoned-assignmentabandoned) |
 | Scale-set jobs queue while its workers all run | `scaleset_jobs_deferred{reason="ceiling"}` > 0 | Expected: the set is at the worker ceiling its spec declares, and the held jobs start as workers finish. Alert only on it being sustained; see the [runbook](troubleshooting.md#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |

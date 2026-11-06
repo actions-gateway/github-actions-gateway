@@ -19,7 +19,7 @@ import (
 // apiserver. Production wires mgr.GetAPIReader().
 //
 // Every kind the validator reads is registered, not only the RunnerSet: the
-// agent-identity guard (Q1011) lists the gateways too and is fail-closed, so a
+// label-uniqueness guard (Q791) lists the gateways too and is fail-closed, so a
 // scheme missing one fails every admission with a List error rather than
 // exercising the check under test.
 func runnerSetValidatorWith(t *testing.T, existing ...client.Object) *RunnerSetCustomValidator {
@@ -380,6 +380,20 @@ func TestRunnerSetWebhook_DeletionOnlyUpdateExemption(t *testing.T) {
 		_, err := v.ValidateUpdate(context.Background(), deleting("actions-gateway.com/agentpool-cleanup"), changed)
 		require.Error(t, err, "the exemption must not admit spec changes on a deleting object")
 	})
+}
+
+func TestRunnerSetWebhook_SameNameAcrossNamespacesInOneScope(t *testing.T) {
+	v := runnerSetValidatorWith(t,
+		v2Gateway("team-a", "gw", "https://github.com/acme", ""),
+		v2Gateway("team-b", "gw", "https://github.com/acme", ""),
+		scaleSetRS("build", "team-a", "gw", "linux-a"),
+	)
+
+	_, err := v.ValidateCreate(context.Background(), scaleSetRS("build", "team-b", "gw", "linux-b"))
+	require.NoError(t, err, "a set's name is not unique per GitHub scope; only its first label is")
+
+	_, err = v.ValidateCreate(context.Background(), scaleSetRS("build", "team-b", "gw", "linux-a"))
+	require.ErrorContains(t, err, `"linux-a"`)
 }
 
 func TestRunnerSetWebhook_NoTiersNeedsNoAllowlist(t *testing.T) {

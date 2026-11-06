@@ -393,7 +393,7 @@ Related but distinct from [Naming a trap and applying it are different acts](#na
 ## Prose that counts a set goes stale on an insertion nothing checks
 
 A sentence asserting a property of a set is falsified by an insertion that never touches that sentence.
-Nothing here reads prose adjacency: `metric-tiers` reads the ledger, `promql-check` reads expressions, `queue-gates` reads the store, and `observability-dashboards.md` is read by no semantic gate at all.
+Nothing here reads prose adjacency: `metric-reference` reads the metric names, `promql-check` reads expressions, `queue-gates` reads the store, and `observability-dashboards.md` is read by no semantic gate at all.
 
 Q906 produced three instances in one change, none of them reachable by any gate:
 

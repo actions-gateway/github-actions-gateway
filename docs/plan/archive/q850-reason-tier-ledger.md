@@ -3,7 +3,7 @@
 > **Status (2026-08-14): done.** 71 reasons walked and given a tier: 45 condition reasons (34 Both, 5 classic-only, 6 scale-set-only) and 26 Event reasons (12 Both, 6 classic-only, 8 scale-set-only), with `make reason-tiers-check` holding both tables to the source.
 > What the walk found is in [§6](#6-what-the-walk-found).
 
-Q776 made the AGC's *metric* surface derive itself: every `actions_gateway_*` series carries a tier in the [acquisition-tier ledger](../../operations/observability-metrics.md#acquisition-tier-reach), and `make metric-tiers-check` fails a series added without one.
+Q776 made the AGC's *metric* surface derive itself: every `actions_gateway_*` series carries a tier in the acquisition-tier ledger, and `make metric-tiers-check` fails a series added without one.
 Condition reasons and Event reasons are the other two signals an operator sees, they are enumerable the same way, and neither is gated.
 A capability that reaches only the classic tier is therefore still invisible if it surfaces as a condition or an Event rather than as a counter.
 That is the failure mode Q683, Q691, Q713 and Q844 each demonstrated after parity had been declared.
@@ -20,7 +20,7 @@ Both get a ledger row naming the tier, and a gate that fails a missing row, a ba
 
 **Out.** The GMC and proxy binaries: neither acquires jobs, so neither has a tier.
 That is the exclusion the metric ledger already states.
-Label values were Q851, a separate row, since shipped as [Label-value reach](../../operations/observability-metrics.md#label-value-reach); prose surfaces were Q848, shipped as the [prose tier-claim gate](../../development/testing.md#the-prose-tier-claim-gate).
+Label values were Q851, a separate row, since shipped as Label-value reach; prose surfaces were Q848, shipped as the [prose tier-claim gate](../../development/testing.md#the-prose-tier-claim-gate).
 
 ## 2. Decisions
 

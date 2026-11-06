@@ -51,9 +51,9 @@ Uses the [SLO recording rules](observability-alerting.md#slo-recording-rules) as
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Job duration p50/p95 | `actions_gateway:job_duration_seconds:p50/p95` | Time series. Worker pod lifetime, so it excludes the pre-creation staging a `spec.scaleUp` throttle adds |
-| AGC / proxy version | `actions_gateway_build_info{component=~"agc\|proxy"}` | Stat showing the series name, not its value (the value is always `1`). Sits under the job-duration panel because it says which span that panel is measuring: the classic tier's was longer before v1.5.0 and nothing was renamed ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)). The metric carries no `namespace` label, so `$namespace` does not filter it |
-| Disruption retries | `sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by cause (`eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `node_shutdown` rising means Spot or preemptible nodes are being reclaimed under running jobs, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
-| Abandoned runs awaiting capacity | `sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart, split by acquisition tier since Q766 ported the recovery to `scaleset`. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
+| AGC / proxy version | `actions_gateway_build_info{component=~"agc\|proxy"}` | Stat showing the series name, not its value (the value is always `1`). The metric carries no `namespace` label, so `$namespace` does not filter it |
+| Disruption retries | `sum by (namespace, runner_group, cause) (increase(actions_gateway_eviction_retries_total[1h]))` | Bar chart, split by cause (`eviction`, `preemption`, `node_shutdown`, `deletion`, `abandoned`, `vanished`). Keep the causes visually distinct: `eviction` rising means node pressure, `preemption` rising means a `priorityTiers` floor is displacing opportunistic work, `node_shutdown` rising means Spot or preemptible nodes are being reclaimed under running jobs, `abandoned` rising means workers are not being scheduled at all before `pendingPodDeadline` reaps them, `vanished` rising means the AGC itself keeps missing worker teardowns — different investigations entirely |
+| Abandoned runs awaiting capacity | `sum by (namespace, runner_group, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))` | Stat or bar chart. `expired` is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand |
 | Disruption budget exhausted | `increase(actions_gateway_eviction_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
 | Quota retries | `increase(actions_gateway_quota_retries_total[1h])` | Bar chart |
 | Quota retry budget exhausted | `increase(actions_gateway_quota_retries_exhausted_total[1h])` | Stat (threshold: >0 = red) |
@@ -114,7 +114,7 @@ Panel titles here drop the `Worker`/`Workers` prefix the row header already supp
 | Panel | Query | Visualization |
 |-------|-------|---------------|
 | Message poll errors/s (by reason) | `sum by (namespace, reason) (rate(actions_gateway_message_poll_errors_total[5m]))` | Time series |
-| Worker pods reaped/s (by reason) | `sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
+| Worker pods reaped/s (by reason) | `sum by (namespace, runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))` | Time series |
 
 ## Platform dashboard
 
@@ -160,20 +160,20 @@ Fleet-wide; `$namespace` filters the cross-tenant rows.
 |-------|-------|---------------|
 | Running versions by component | `count by (component, version) (actions_gateway_build_info)` | Stat, one tile per component and version with the instance count |
 
-The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: `job_duration_seconds` changed span at v1.5.0 without a rename ([upgrade note](upgrade.md#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks)).
+The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change.
 The GMC comes from this dashboard's own scrape; `agc` and `proxy` need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
 `actions_gateway_build_info` carries no `namespace` label, so `$namespace` does not filter this row.
 
 ## Budget dashboard
 
-![The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity and refused classic jobs by the admission rung that took them.](../assets/grafana-dashboard-budget.png)
+![The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity by the admission rung that took it.](../assets/grafana-dashboard-budget.png)
 
 For the [budget owner](personas.md#budget-owner), who owns the spend and usually cannot read the cluster at all.
 Filtered by `$namespace` and `$runner_group`, and priced by a `$rate` textbox.
 It ships with auto-refresh **off**, where the other two use `30s`: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.
 
 Every spend panel reads one metric: `actions_gateway_job_duration_seconds`.
-That series is worker pod wall time (creation to the last container finishing) on **both** acquisition tiers, which is the span [Appendix F §F.1](../design/appendix-f-cost-model.md#worker-pod-dominant-cost) bills against.
+That series is worker pod wall time (creation to the last container finishing), which is the span [Appendix F §F.1](../design/appendix-f-cost-model.md#worker-pod-dominant-cost) bills against.
 A pod that never started a container is not observed, because it occupied no node time.
 Row 5 is the exception, and reads the admission ladder instead: spend a throttle is holding down leaves no duration to bill, so the metric that answers what was spent cannot answer what was suppressed.
 
@@ -312,7 +312,7 @@ The dashboards ship with these template variables already wired:
 
 - `$namespace` (`label_values({__name__=~"actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total"}, namespace)`) filters to a single tenant, on the tenant and platform dashboards.
   The session gauge lists a tenant whose listener is up but has been assigned nothing yet, which the assignment counter alone would miss.
-- `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) filters the `runner_group`-labelled panels of the tenant dashboard, which on the scale-set tier carry the `RunnerSet` name.
+- `$runner_group` (`label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)`) filters the `runner_group`-labelled panels of the tenant dashboard, which carry the `RunnerSet` name.
   The `runner_set`-labelled panels are not filtered by it; `$runner_set` is their variable.
 - `$runner_set` (`label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)`) filters to a specific `RunnerSet` on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges, which are emitted for every `RunnerSet`.

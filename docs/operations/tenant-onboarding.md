@@ -10,7 +10,7 @@ For day-2 operations after onboarding, see the [Runbook](runbook.md).
 !!! tip "New tenants: onboard on the v2 API"
     Steps 0–3 (GitHub App, Secret, `ResourceQuota`) are the same for every tenant.
     At the gateway step, the recommended shape for a **new** tenant is the **v2 API** at `actions-gateway.com/v2` — see [v2 API](#v2-api-multiple-gateways-per-namespace) below and the [getting-started v2 walkthrough](../getting-started.md#4-create-your-gateway-and-runner-set-v2-recommended).
-    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**, along with the Classic protocol; already on v1?
+    The single-CR `v1alpha1` flow in [Step 2](#step-2-create-the-actionsgateway-resource) is still fully supported but **[deprecated and removed at `v2.0.0`](v1alpha1-deprecation.md)**; already on v1?
     [`gag-migrate`](migration-v1-to-v2.md) moves you across.
 
 ---
@@ -366,13 +366,8 @@ spec:
   # Step 1b — it is not a field on this CR.
   # A runner group has no `name` field — the RunnerGroup CR name is derived from
   # the gateway name + the group's first runnerLabel (here "linux").
-  # That derived name is the group's agent-identity stem, which must be unique in
-  # the namespace AND across every pool bound to this GitHub org, so admission
-  # rejects an entry whose derived name is already claimed. See
-  # troubleshooting.md#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed
   runnerGroups:
     - runnerLabels: ["linux", "self-hosted"]
-      maxListeners: 10
       maxWorkers: 20
       podTemplate:
         spec:
@@ -399,7 +394,7 @@ kubectl apply -f actionsgateway.yaml
       pendingPodDeadline: "30m"   # GPU node provisioning can exceed the 10m default
 ```
 
-A third cleanup arm has no knob: on the ScaleSet protocol, a worker pod still `Running` five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing.
+A third cleanup arm has no knob: a worker pod still `Running` five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing.
 It emits a `WorkerPodOrphanedRunning` Warning Event — see the [runbook](troubleshooting.md#worker-pod-reaped-while-running-workerpodorphanedrunning).
 A pod whose job is still assigned is never touched, however long it runs.
 
@@ -410,39 +405,36 @@ It is deleted as soon as the job finishes — independent of `completedPodTTL`, 
 Both objects also carry an `OwnerReference` to their RunnerGroup/RunnerSet as a backstop, so deleting the owner cascade-deletes anything still present.
 If you do see `job-` or `job-ss-` Secrets outliving their pods, check the AGC log for `reclaim completed job's worker Secret` warnings — a persistently failing delete (usually an RBAC regression on `secrets`) falls back to that cascade-GC and leaves credentials in the namespace until the owner is deleted.
 
-**Up to three small ConfigMaps per ScaleSet RunnerSet is normal.** All are labelled `actions-gateway.com/runner-set=<name>`, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
+**Up to three small ConfigMaps per `RunnerSet` is normal.** All are labelled `actions-gateway.com/runner-set=<name>`, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
 `scaleset-guards-<runnerset>` is the AGC's durable record of jobs it has concluded whose queue messages are not yet deleted, which is what stops a hard-killed AGC from re-running a finished job's assignment (Q606); a hand-edited one fails the listener start, see [troubleshooting](troubleshooting.md#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap).
 `scaleset-recovery-claims-<runnerset>` appears only once a worker of that set has been disrupted: it records which disruptions have already been recovered, so a drained or preempted worker's run is re-run exactly once even though the pod that used to hold that record is gone (Q1108).
 It holds claims rather than work, so deleting it re-opens the at-most-once window for whatever is in flight at that instant and costs nothing else.
 `scaleset-failures-<runnerset>` appears beside it on the same occasion: it holds each run's `maxEvictionRetries` budget and what each automatic re-run covered, so an AGC restart does not refill a budget (Q1182).
 Deleting it resets every run's budget for that set.
 
-**Optional — worker scale-up rate limit (`scaleUp`, opt-in, default-off).** Each `runnerGroups[]` entry accepts an optional `scaleUp` token bucket that caps the **rate** at which the AGC *creates* new worker pods.
+**Optional — worker scale-up rate limit (`scaleUp`, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.scaleUp` token bucket that caps the **rate** at which the AGC *creates* new worker pods.
 It is **off by default** — omit it and provisioning stays immediate (GAG's zero-idle default).
 It is **not** the same as `maxWorkers`: `maxWorkers` caps how *many* worker pods run at once (a ceiling), while `scaleUp` caps how *fast* they start (a ramp).
-Reach for it only when a burst of simultaneously-acquired jobs stampedes a shared, rate-sensitive **egress** path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the *onset* of connections (not the steady-state count) is what causes damage.
+Reach for it only when a burst of simultaneously assigned jobs stampedes a shared, rate-sensitive **egress** path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the *onset* of connections (not the steady-state count) is what causes damage.
 It deliberately defers work, trading time-to-pickup for a gentler ramp.
 
 ```yaml
-  runnerGroups:
-    - runnerLabels: ["self-hosted", "linux"]
-      maxWorkers: 200            # ceiling: at most 200 concurrent worker pods
-      scaleUp:
-        maxPerSecond: 10         # ramp: sustained ≤10 new worker pods/second…
-        burst: 20                # …after an initial instantaneous batch of 20
+spec:
+  runnerLabels: ["self-hosted", "linux"]
+  maxWorkers: 200            # ceiling: at most 200 concurrent worker pods
+  scaleUp:
+    maxPerSecond: 10         # ramp: sustained ≤10 new worker pods/second…
+    burst: 20                # …after an initial instantaneous batch of 20
 ```
 
 - `maxPerSecond` (required, ≥1): the sustained pod-creation rate once the burst is spent.
 - `burst` (optional, ≥1): the largest instantaneous batch before throttling engages; **defaults to `maxPerSecond`** (one second's worth) when omitted.
 
-When the bucket is empty the AGC **withholds intake** rather than delaying a job it has already taken on: it declines to claim the next job, leaving it queued at GitHub for redelivery, and no job ever waits for a token while holding a GitHub job lock (Q717).
-That is what makes a low `maxPerSecond` safe against a large burst — the ramp defers *unclaimed* jobs, so nothing sits on a lock for the ramp's duration and no job is cancelled by a lock lapsing part-way through.
-Each withheld job increments `actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}`; a sustained non-zero rate means the ramp is actively smoothing a burst (see [observability: metrics](observability.md)).
-Set `maxPerSecond` high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is now time-to-pickup rather than a held lock.
-
-A token is charged per worker pod, not per delivered job.
-GitHub fans one queued job out to several sibling sessions at once and only one of them provisions, so the duplicates hand their tokens back and the ramp you configure is the ramp you get (Q972).
-A failed `acquirejob` returns its token on the same rule; a job that reaches pod creation keeps it.
+When the bucket is low the AGC **advertises less capacity** on its next long poll rather than delaying a job it has already taken on, so GitHub does not assign the jobs the bucket cannot absorb and they stay queued.
+That is what makes a low `maxPerSecond` safe against a large burst: the ramp defers *unassigned* jobs.
+The withheld slots read as `actions_gateway_scaleset_capacity_withheld{reason="scaleup"}`; a sustained non-zero reading means the ramp is actively smoothing a burst (see [observability: metrics](observability.md)).
+`actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}` counts only a pod creation that still had to wait for a token, which means the advertisement was stale.
+Set `maxPerSecond` high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is time-to-pickup.
 
 **Pick the right tool for the stampede.** A scale-up rate limit is the wrong fix for some bursts:
 
@@ -455,11 +447,8 @@ A failed `acquirejob` returns its token on the same rule; a job that reaches pod
 
 It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate eases the node-scale-up burst they react to, and they keep their own independent rate controls.
 
-> **v2 (`RunnerSet`)** carries the same `spec.scaleUp` field with identical semantics.
-> A `ScaleSet`-protocol set expresses it as a smaller advertised capacity per long-poll rather than as a per-job refusal, so GitHub never assigns the jobs in the first place; the ramp is the same and the accounting appears as `actions_gateway_scaleset_capacity_withheld{reason="scaleup"}`.
-
-**Optional — refuse jobs the cluster can't place (`capacityGate`, v2 only, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.capacityGate` that adds a *placeability* rung to the pre-claim admission gate.
-Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, holds the GitHub job lock until `pendingPodDeadline`, and ends as a **cancelled** workflow run.
+**Optional — refuse jobs the cluster can't place (`capacityGate`, v2 only, opt-in, default-off).** A `RunnerSet` accepts an optional `spec.capacityGate` that adds a *placeability* rung to the capacity the AGC advertises.
+Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, leaves a worker pod `Pending` until `pendingPodDeadline`, and ends as a **cancelled** workflow run.
 With it, those jobs stay queued at GitHub instead.
 
 ```yaml
@@ -511,17 +500,17 @@ Two things to expect once a set turns it on:
 
 - **It throttles, it does not seal.** The signal comes from a stuck worker pod, so the reaper deleting that pod at `pendingPodDeadline` reopens intake for one job; if the shape is still unplaceable, that job's pod closes the gate again.
   Budget for roughly one wasted claim per `pendingPodDeadline` window, not zero.
-- **A gated set says so.** It reports `WorkerCapacityDeclined=True` with a Warning event, and either `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` (default tier) or `actions_gateway_jobs_admission_rejected_total{reason="capacity"}` (classic) moves.
+- **A gated set says so.** It reports `WorkerCapacityDeclined=True` with a Warning event, and `actions_gateway_scaleset_capacity_withheld{reason="capacity"}` moves.
   Diagnosis and the one-line rollback: [troubleshooting](troubleshooting.md#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs).
 
 Everything about it fails **open**: an unreadable set, an unresolved gateway or template, an unreadable pod list, an unreadable Event list, an unset `clusterCapacity`, and a mode this AGC does not implement all leave intake exactly as it is today. v1 `RunnerGroup` has no equivalent field and never will — v1 is terminal.
 
 **Changing `runnerGroups` later.** Editing `spec.runnerGroups` on an existing `ActionsGateway` reconciles to the desired set: added entries create new `RunnerGroup` CRs, and **removing an entry deletes its `RunnerGroup`** (which stops its listeners and cascades to its worker pods).
 Reordering entries is safe — the GMC keys pruning on owner labels, not list position, so a reorder never deletes or recreates a group.
-Removing an entry is the way to retire a runner group; `maxListeners` has a minimum of `1`, so there is no in-place scale-to-zero.
+Removing an entry is the way to retire a runner group.
 
 **Worker image — the default works out of the box.** A plain install runs jobs with no `workerImage` set: the AGC **injects** GAG's wrapper into every worker pod — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — so the runner image itself can be the unmodified upstream `ghcr.io/actions/actions-runner` (the default) or **any `actions/runner`-derived image**.
-The wrapper is what feeds the mounted job payload + JIT config into `Runner.Worker`; injecting it means the runner image no longer has to carry it.
+The wrapper is what hands the mounted JIT config to the runner's `run.sh`; injecting it means the runner image does not have to carry it.
 Set `workerImage` only to use a **custom** image (your own tools, a pinned digest) — the wrapper is injected into that too.
 The upstream `actions-runner` (and GAG's images built on it) run as UID 1001, so on every profile except `privileged` the AGC stamps `runAsNonRoot: true` and gap-fills `runAsUser: 1001` automatically.
 If you point `workerImage` at a **custom** image whose user is **not** UID 1001 — a different named user, or one that runs as root — set `securityContext.runAsUser` (or `runAsNonRoot: false` for a root-based image) on the runner container in the `podTemplate`; otherwise kubelet rejects the pod with `CreateContainerConfigError`.
@@ -606,10 +595,10 @@ kubectl patch actionsgateway -n <tenant-namespace> <name> \
 ```
 
 - **The default is `info`, never `debug`.** A CR that omits the field — or sets it back to `info` — runs at `info`.
-  At thousands of concurrent sessions the per-session/per-job `debug` lines dominate log volume, so `debug` is a deliberate, temporary opt-in, not a steady state.
+  At high job volume the per-job `debug` lines dominate log volume, so `debug` is a deliberate, temporary opt-in, not a steady state.
 - **Changing it is a rolling restart, not a hot reload.** The new level takes effect once the AGC and proxy pods roll (the value is part of their pod templates).
-  Expect the AGC's listener pool to drain and re-establish; in-flight jobs finish on the old pod within its termination grace period.
-- `debug` surfaces the AGC's per-session → per-job → per-pod lifecycle lines (the listener/multiplexer/provisioner traces, each carrying `namespace`/`group`/`sessionId`/`podName` correlation fields) and the proxy's per-CONNECT detail.
+  Expect the AGC's listener sessions to close and re-open; jobs already running in worker pods are unaffected, because each runner holds its own session with GitHub.
+- `debug` surfaces the AGC's per-job and per-pod lifecycle lines (the listener and provisioner traces; [observability: logging](observability-logging.md) lists their correlation fields) and the proxy's per-CONNECT detail.
   The grep anchors are in [observability — debug diagnostics](observability-logging.md#debug-diagnostics-for-otherwise-silent-paths).
 - Only `info` and `debug` are accepted; admission rejects any other value.
 - **v2 splits the knob per kind.** On the v2 (`actions-gateway.com`) API, `ActionsGateway.spec.logLevel` covers the AGC only; a proxy pool carries its own `EgressProxy.spec.logLevel` (same `info` | `debug` values and default, same rolling-restart semantics), so a shared pool can be flipped to `debug` without touching any gateway:
@@ -770,7 +759,7 @@ Onboarding is complete when:
 
 ## v2 API: multiple gateways per namespace
 
-> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2`** — the General Availability (GA) version, ScaleSet-only, the storage version since 1.10, and the version every **new** tenant should use.
+> **Audience:** Platform engineer onboarding a tenant on the **`actions-gateway.com`** API, at **`v2`** — the General Availability (GA) version, the storage version since 1.10, and the version every **new** tenant should use.
 > It is served *beside* `v1alpha1`, so everything above (the deprecated `actions-gateway.github.com/v1alpha1` flow) keeps working while you adopt it.
 > Install the opt-in `actions-gateway-crds-v2` chart first; see [Getting Started — Deploy the GMC](../getting-started.md#1-deploy-the-gmc).
 
@@ -887,7 +876,6 @@ The namespace `ResourceQuota` now has to hold both pools at their `maxReplicas`,
 ### Job acquisition, and how labels route
 
 On `v2` there is nothing to choose: every `RunnerSet` acquires jobs with the **runner-scale-set message-queue protocol** — one listener session per set, capacity-gated assignment, and a full-runner worker.
-It is the only protocol `v2` serves, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).
 
 The rules that follow from it, and the ones most likely to bite when you author a set by hand:
 
@@ -897,7 +885,7 @@ The rules that follow from it, and the ones most likely to bite when you author 
   Reordering the list renames the scale set and orphans the old one, so append rather than prepend.
 - **The first label is unique per GitHub org, enterprise, or repo.** Two sets claiming the same `runnerLabels[0]` would register the same scale-set name at GitHub; the second is rejected.
   The boundary is the `githubURL` the set's gateway names, **not the namespace**: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
-  Later labels may overlap freely.
+  Later labels may overlap freely, and so may the `RunnerSet` names: two sets named `build` in different namespaces are fine with distinct first labels.
 - **Declare the full list up front.** A scale set's labels are fixed when it is created and cannot be changed afterwards, so a label added to a live set never reaches GitHub — the set reports [`RunnerLabelsIncomplete`](troubleshooting.md#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete) rather than failing silently.
   Adding one later means replacing the scale set, which costs the jobs queued against it.
   On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because `DistributedTask.AllowRunnerScaleSetCustomLabels` is off.
@@ -998,12 +986,11 @@ Most tenants never set it — the AGC ships with a sensible platform default siz
 | request | `500m` | `2Gi` |
 | limit | `2` | `4Gi` |
 
-This is the [Appendix A](../design/appendix-a-capacity-slos.md) capacity sizing: the `2Gi` memory request is a generous reservation for the ~1,000-goroutine peak burst with headroom for Go runtime overhead; the `4Gi` memory limit sits well above the working set so transient bursts don't trigger an OOMKill; the `2`-core CPU limit absorbs reconcile/token-refresh spikes on an otherwise I/O-bound (long-poll-blocked) workload.
+This is the [Appendix A](../design/appendix-a-capacity-slos.md) capacity sizing: the `2Gi` memory request is a generous reservation with headroom for Go runtime overhead; the `4Gi` memory limit sits well above the working set so transient bursts don't trigger an OOMKill; the `2`-core CPU limit absorbs reconcile/token-refresh spikes on an otherwise I/O-bound (long-poll-blocked) workload.
 
 **When to tune.** Override only on real signal:
 
-- **Memory** — raise `requests.memory` and `limits.memory` if you run many RunnerGroups with high `maxListeners` and observe `container OOMKilled` events or high GC pressure (`go_gc_duration_seconds`).
-  Budget roughly `sum(maxListeners) × 60 KiB` of working set plus the default headroom.
+- **Memory** — raise `requests.memory` and `limits.memory` if you observe `container OOMKilled` events or high GC pressure (`go_gc_duration_seconds`).
 - **CPU** — raise `limits.cpu` only if `container_cpu_throttled_seconds_total` shows sustained throttling during peak reconcile churn.
 
 The override is **per key**: set only the request/limit entries you want to change and every other entry keeps its platform default.
@@ -1026,7 +1013,7 @@ spec:
       memory: 8Gi   # CPU request/limit and memory request stay at the platform default
 ```
 
-Changing `agcResources` rolls the AGC Deployment (a rolling restart, not a hot reload); in-flight listener sessions deregister and re-register within GitHub's redelivery window.
+Changing `agcResources` rolls the AGC Deployment (a rolling restart, not a hot reload); the old pod deletes its listener sessions on SIGTERM, and the new pod re-creates them and replays any unacknowledged messages.
 
 **Recommended floor / footguns.** The AGC is a single pod holding all listener state in memory — size it generously rather than tight:
 
@@ -1056,7 +1043,7 @@ spec:
 | --- | --- |
 | `Off` (default) | Publishes a recommendation on the `VerticalPodAutoscaler`'s own status and changes nothing. Start here: run it for a few days and read `kubectl describe vpa <gateway>-agc`. |
 | `Initial` | Applies the recommendation only when a new AGC pod is created. Never evicts a running AGC. |
-| `Recreate` | Lets the autoscaler evict the AGC pod to resize it. Safe — in-flight listener sessions deregister on SIGTERM and re-register within GitHub's redelivery window — but it *is* a control-plane restart. |
+| `Recreate` | Lets the autoscaler evict the AGC pod to resize it. Safe, because the old pod deletes its listener sessions on SIGTERM and the new pod re-creates them and replays any unacknowledged messages, but it *is* a control-plane restart. |
 
 Upstream's `Auto` mode is not offered: it is an alias whose actuation mechanism changes between autoscaler releases, so this API names `Recreate` explicitly instead.
 
@@ -1268,4 +1255,4 @@ Once onboarding is complete, share with the tenant team:
 - A link to [Observability](observability.md) for the metrics they can watch.
 - The on-call contact for platform-level issues (AGC crashes, GMC failures).
 
-Tenants can manage their own RunnerGroup configuration, credential rotation, and `maxListeners` tuning without platform team involvement after this handoff.
+Tenants can manage their own RunnerGroup configuration, credential rotation, and `maxWorkers` tuning without platform team involvement after this handoff.

@@ -54,7 +54,7 @@ Migrating first makes that choice explicit instead of leaving it to the upgrade.
 - **Standalone / shareable egress proxy.** The inline proxy becomes an `EgressProxy` kind any number of `RunnerSet`s can point at.
 - **Namespace-scoped Pod Security profile.** `securityProfile` moves off the per-gateway spec onto the namespace, matching how Pod Security Admission actually works.
 - **Single-acquirer job acquisition.** `ScaleSet` holds one listener per runner set, so GitHub never assigns beyond advertised capacity.
-  Classic's many-acquirers model can mark a job `in_progress` and then fail to provision a worker for it; measured on this project's own dogfood tenant, that orphaned 81% of acquired jobs ([troubleshooting](troubleshooting.md#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition)).
+  Classic's many-acquirers model can mark a job `in_progress` and then fail to provision a worker for it; measured on this project's own dogfood tenant, that orphaned 81% of acquired jobs.
 
 Full rationale: [Appendix H](../design/appendix-h-v2-api-decomposition.md).
 

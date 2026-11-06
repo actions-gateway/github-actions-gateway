@@ -57,8 +57,8 @@ Restore planning hinges on one distinction: **GMC-generated children reconcile b
 | The cluster-scoped `ClusterRoleBinding` granting the AGC read of `ClusterRunnerTemplate` | Cluster-scoped objects cannot carry an owner reference to a namespaced CR, so the GMC deletes it explicitly via its cleanup finalizer and recreates it on reconcile. | Reconciles automatically from the CR — no action needed. |
 | `RunnerSet` CRs that target the gateway | Reference the gateway but are **not** owned by it; they are never deleted by gateway teardown — they degrade to `Ready=False`/`GatewayNotFound` and recover when the gateway returns. Their **worker pods** are deleted, though: the AGC is their only reaper and goes with the gateway, so it reaps them first (`Ready=False`/`GatewayTerminating`, `reason="gateway_deleted"`) and any job they were running is lost. | No action needed; the sets re-bind automatically. Drain before deleting a gateway if you need in-flight jobs to finish. |
 
-> **In-flight jobs are not recoverable.** Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run.
-> Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes.
+> **An AGC outage does not stop a running job, but deleting the gateway does.** Worker pods keep running while the AGC is down, and gateway teardown deletes them (see the `RunnerSet` row above), so any job they were running needs a manual re-run.
+> Queued jobs stay queued at GitHub until the AGC returns and advertises capacity.
 > This matches [Runbook — AGC Total Failure](runbook.md#agc-total-failure).
 
 ---

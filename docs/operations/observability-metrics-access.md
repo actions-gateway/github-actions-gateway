@@ -89,10 +89,10 @@ Three things are wired per tenant so Prometheus can scrape them:
 
 #### v2 `EgressProxy` proxy metrics
 
-The names above are the **classic/v1** layout, where a single proxy pool per namespace uses fixed names.
+The names above are the **v1** layout, where a single proxy pool per namespace uses fixed names.
 Under the **v2 API**, the egress proxy is a standalone `EgressProxy` resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the `EgressProxy` name `<ep>` instead:
 
-| Object | Classic/v1 | v2 `EgressProxy` |
+| Object | v1 | v2 `EgressProxy` |
 |---|---|---|
 | Proxy `Service` (metrics port `:8443`) | `actions-gateway-proxy` | `<ep>-proxy` |
 | Server bundle Secret (mounted into the proxy) | `actions-gateway-metrics-tls` | `<ep>-metrics-tls` |
@@ -104,7 +104,7 @@ The same toggle (`metrics.serviceMonitor.enabled` → `--enable-tenant-service-m
 
 The v2 AGC follows the same pattern keyed on the gateway name `<gateway>`, with its own CA, distinct from every `EgressProxy`'s:
 
-| Object | Classic/v1 | v2 `ActionsGateway` |
+| Object | v1 | v2 `ActionsGateway` |
 |---|---|---|
 | AGC `Service` (metrics port `:8443`) | `actions-gateway-controller` | `<gateway>-agc` |
 | Scraper client bundle Secret (published) | `actions-gateway-metrics-client` | `<gateway>-agc-metrics-client` |

@@ -276,11 +276,10 @@ kubectl get runnerset <NAME> -n <NAMESPACE> -o jsonpath='{range .status.conditio
 ## What the gateway's own quota conditions count
 
 The gateway computes a worker's footprint with the same arithmetic this page uses: the four-part compute sum (regular containers, native sidecars, the plain-init `max()` floor, and `RuntimeClass` overhead) **plus** the storage keys from [Step 3](#step-3--the-storage-keys) — `ephemeral-storage` on both sides, and the PVC count and storage ask of every generic ephemeral volume, class-scoped keys included.
-One calculation feeds all three surfaces, so they cannot disagree:
+One calculation feeds both surfaces, so they cannot disagree:
 
 - the `WorkerQuotaPressure` / `WorkerQuotaExceeded` conditions;
-- the pre-claim quota gate on the classic acquisition tier;
-- the capacity integer a scale-set runner set advertises to GitHub, which folds in live quota headroom on the default tier.
+- the capacity integer a runner set advertises to GitHub, which folds in live quota headroom.
 
 So a `False` `WorkerQuotaPressure` means the quota admits scaling to `maxWorkers` at the pod's **full** cost — sidecar, overhead, and per-worker PVCs included.
 
@@ -353,5 +352,5 @@ A declared `overhead` always wins over the read, and cannot drift — the `Runti
 - [Tenant onboarding Step 1b](tenant-onboarding.md#step-1b-set-the-platform-owned-resourcequota) — where the quota is applied in the onboarding flow.
 - [Worker right-sizing](worker-rightsizing.md) — derive the per-container `requests`/`limits` this page multiplies, from measured usage.
 - [Kata DinD workloads](kata-dind-workloads.md) — the Kata worker shape, its `RuntimeClass`, and the nested-virtualization node prerequisites.
-- [Appendix E — capacity planning](../design/appendix-e-capacity-planning.md) — runner group topology, `maxListeners`, and the rate-limit ceiling.
+- [Appendix E — capacity planning](../design/appendix-e-capacity-planning.md) — runner group topology, `maxWorkers`, and the rate-limit ceiling.
 - [Troubleshooting: quota exhaustion](troubleshooting.md#jobs-failing-due-to-namespace-resourcequota-exhaustion) — diagnosing a quota that is already too small.

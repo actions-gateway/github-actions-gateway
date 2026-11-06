@@ -190,7 +190,7 @@ The point of doing it here rather than at the tag is that the answers are free b
   scripts/release/api-surface-since.sh
   ```
 
-  It needs Go on `PATH`: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds `devtools/docs/reasontiers` first.
+  It needs Go on `PATH`: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds `devtools/docs/eventreasons` first.
   Apply the checklist in [api-review.md](../development/api-review.md#step-2--ask-these-of-each-addition) to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
   **"Ship as-is, deliberately" is a valid and common outcome** — the point is that the shape is chosen rather than frozen by default.
 
@@ -1402,7 +1402,7 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
 
 ## The worker images: `wrapper`, `worker`, `build-runner` and `cache-runner`
 
-`publish.yml` builds and signs **four** worker-related images, all holding the same `cmd/worker` wrapper that feeds the job payload into `Runner.Worker`:
+`publish.yml` builds and signs **four** worker-related images, all holding the same `cmd/worker` wrapper that installs the per-tenant CA trust and starts the runner with `run.sh --jitconfig`:
 
 - **`ghcr.io/actions-gateway/wrapper`** — a ~2 MB `FROM scratch` image with just the wrapper binary.
   The GMC forwards it to every AGC (`WRAPPER_IMAGE`), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the **unmodified upstream `ghcr.io/actions/actions-runner`** (or any tenant `workerImage`).
