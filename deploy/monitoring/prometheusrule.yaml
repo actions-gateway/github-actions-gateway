@@ -131,7 +131,7 @@ spec:
           annotations:
             runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewayproxyquotaexceeded"
             summary: "Proxy replica creation rejected by ResourceQuota for {{ $labels.name }} in {{ $labels.namespace }}"
-            description: "The proxy pool is being held below the HPA's target by the namespace ResourceQuota. Raise the quota or lower proxy.maxReplicas."
+            description: "The proxy pool is being held below the HPA's target by the namespace ResourceQuota. Raise the quota or lower the EgressProxy's spec.maxReplicas."
 
         # Ticket: capacity can't reach the configured ceiling within quota headroom (Q82)
         - alert: ActionsGatewayQuotaPressure

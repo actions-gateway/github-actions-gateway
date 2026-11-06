@@ -318,7 +318,7 @@
         },
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "sum by (namespace) (kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=\"actions-gateway-proxy\"})",
+          "expr": "sum by (namespace) (kube_deployment_status_replicas_ready{namespace=~\"$namespace\", deployment=~\".+-proxy\"})",
           "legendFormat": "proxy replicas {{namespace}}",
           "refId": "B"
         }

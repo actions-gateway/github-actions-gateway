@@ -72,7 +72,7 @@ spec:
       honorLabels: true
 ---
 # Dummy proxy Deployment/HPA/ResourceQuota so the kube-state-metrics
-# Proxy & Quota panels populate (the panels query deployment="actions-gateway-proxy").
+# Proxy & Quota panels populate (the panels query deployment=~".+-proxy").
 apiVersion: apps/v1
 kind: Deployment
 metadata:
