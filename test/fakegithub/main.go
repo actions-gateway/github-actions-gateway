@@ -34,7 +34,8 @@
 //	POST /control/runstate?run=<id>&concluded=false — refuse re-runs for the run
 //	POST /control/scaleset/enqueue?name=<set>      — queue a scale-set job
 //	POST /control/scaleset/acquireflow?ghes=<bool> — pick the acquire flow
-//	GET  /control/scaleset/state?name=<set>        — session/assignment/call state
+//	GET  /control/scaleset/state?name=<set>        — session/assignment/call state, registered runners
+//	POST /control/scaleset/seedrunner?name=<runner> — register a stale, offline runner record
 //
 // # The scale-set protocol (Q528)
 //
@@ -47,9 +48,9 @@
 // The two tiers share the process and nothing else. In particular they keep
 // separate runner registries: the classic tier registers through
 // /api/v3/.../generate-jitconfig, the scale-set tier through generatejitconfig on
-// the Actions Service. They never have to agree, because the scale-set tier reaches
-// the REST list/delete routes only on a runner-name 409, which this venue does not
-// produce.
+// the Actions Service. The REST list and delete routes answer for the scale-set
+// registry, which the AGC reads through them to sweep and to reap, except for a
+// classic record they are addressed to by its own name or id.
 //
 // # Eviction auto-retry observability (Q421)
 //
@@ -440,6 +441,7 @@ func (s *server) controlMux() http.Handler {
 	mux.HandleFunc("/control/scaleset/enqueue", s.handleScaleSetEnqueue)
 	mux.HandleFunc("/control/scaleset/acquireflow", s.handleSetScaleSetAcquireFlow)
 	mux.HandleFunc("/control/scaleset/state", s.handleScaleSetState)
+	mux.HandleFunc("/control/scaleset/seedrunner", s.handleScaleSetSeedRunner)
 	return mux
 }
 
@@ -476,10 +478,8 @@ func (s *server) handleInstallationToken(w http.ResponseWriter, r *http.Request)
 // not validated — any org/repo works.
 //
 // The scale-set tier's two REST bootstrap hops share this prefix and are handed
-// off to the scale-set stub. They address distinct paths, so the two tiers'
-// runner registries never have to agree: the scale-set tier mints its runners
-// through generatejitconfig on the Actions Service, and reaches the REST
-// list/delete routes below only on a runner-name 409 this venue does not produce.
+// off to the scale-set stub, as are the list and delete routes unless they address
+// a classic record (classicRunnerAddressed).
 func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 	if strings.HasSuffix(path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
@@ -514,9 +514,18 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	case rest == "/generate-jitconfig" && r.Method == http.MethodPost:
 		s.handleGenerateJITConfig(w, r)
 	case rest == "" && r.Method == http.MethodGet:
-		s.handleListRunners(w, r)
+		if s.classicRunnerNamed(r.URL.Query().Get("name")) {
+			s.handleListRunners(w, r)
+			return
+		}
+		s.scaleSetAPIV3().ServeHTTP(w, r)
 	case strings.HasPrefix(rest, "/") && r.Method == http.MethodDelete:
-		s.handleDeleteRunner(w, r, strings.TrimPrefix(rest, "/"))
+		id := strings.TrimPrefix(rest, "/")
+		if s.classicRunnerIDed(id) {
+			s.handleDeleteRunner(w, r, id)
+			return
+		}
+		s.scaleSetAPIV3().ServeHTTP(w, r)
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -563,6 +572,26 @@ func (s *server) handleGenerateJITConfig(w http.ResponseWriter, r *http.Request)
 		"runner":             map[string]any{"id": id, "name": reqBody.Name},
 		"encoded_jit_config": blob,
 	})
+}
+
+// classicRunnerNamed reports whether a classic record holds name.
+func (s *server) classicRunnerNamed(name string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.runnerNames[name]
+	return ok
+}
+
+// classicRunnerIDed reports whether a classic record holds the decimal id.
+func (s *server) classicRunnerIDed(id string) bool {
+	n, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.runners[n]
+	return ok
 }
 
 // handleListRunners serves the list endpoint with the optional name filter
@@ -1333,7 +1362,25 @@ func (s *server) handleScaleSetState(w http.ResponseWriter, r *http.Request) {
 		"acquireJobsCalls": s.scaleSet.AcquireJobsCalls(),
 		"generateJITCalls": s.scaleSet.GenerateJITCalls(),
 		"calls":            s.scaleSet.Calls(),
+		"registered":       s.scaleSet.RegisteredRunners(),
 	})
+}
+
+// handleScaleSetSeedRunner is the control API: POST /control/scaleset/seedrunner?name=<runner>
+// leaves an offline runner record no worker claims, the shape the listener's start-up
+// sweep collects.
+func (s *server) handleScaleSetSeedRunner(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+	s.scaleSet.FailJITConfigName(name)
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleJobStats is the control API: GET /control/jobstats?requestId=<id>
