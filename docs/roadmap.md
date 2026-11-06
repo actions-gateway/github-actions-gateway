@@ -28,8 +28,6 @@ No pill means no release is decided for that item yet.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
 
-- **[Name the trace collector in `spec.tracing`](operations/observability-logging.md#reaching-the-collector)** <!-- q:Q1281 --> The AGC's default-deny egress has no path to a collector, so today an operator adds a NetworkPolicy by hand.
-  Naming the collector will have the GMC add a rule for the AGC alone, leaving worker pods closed, and naming its CA lets a proxied tenant export over TLS.
 
 ## Exploring / longer-term
 

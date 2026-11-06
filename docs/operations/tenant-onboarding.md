@@ -567,16 +567,24 @@ kubectl logs -n <namespace> <worker-pod> -c runner | grep "runner version"
 `runner version detected version=2.335.1` is the real answer for a custom image; `runner version not detected` means the image is not `actions/runner`-derived in the expected layout.
 
 **Optional — distributed tracing.** To send the AGC's OpenTelemetry traces to a collector, add a `spec.tracing` block; [Distributed Tracing](observability-logging.md#distributed-tracing-agc) lists the spans the AGC emits.
-On a CNI that enforces NetworkPolicy the spans reach the collector only once you add a policy allowing it, and a proxied tenant must also use the full `.svc.cluster.local` name.
-The example is plaintext because `spec.tracing` cannot supply a CA for an in-cluster collector's certificate ([Reaching the collector](observability-logging.md#reaching-the-collector)).
+On a CNI that enforces NetworkPolicy the spans reach the collector only once `networkPolicy` names it, and a proxied tenant must also use the full `.svc.cluster.local` name.
+`caBundleRef` names a ConfigMap holding the collector's CA under `ca.crt`, which any in-cluster TLS collector needs ([Reaching the collector](observability-logging.md#reaching-the-collector)).
 Setting `endpoint` is what turns tracing on; leave the block out to keep it off (the default).
 `sampler` is a fixed enum — an unrecognized value is rejected by admission (see [troubleshooting: tracing sampler rejected](troubleshooting.md#tracing-sampler-rejected-by-admission)).
 
 ```yaml
 spec:
   tracing:
-    endpoint: http://otel-collector.observability.svc.cluster.local:4317
-    insecure: true                      # plaintext; the link above says why
+    endpoint: https://otel-collector.observability.svc.cluster.local:4317
+    caBundleRef:
+      name: otel-collector-ca
+    networkPolicy:
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+      podSelector:
+        matchLabels:
+          app: otel-collector
     sampler: parentbased_traceidratio   # optional
     samplerArg: "0.1"                    # optional — sample 10% of traces
     resourceAttributes:                  # optional
@@ -1243,7 +1251,7 @@ Operator prerequisites in Vault (configured out of band, once per gateway):
 > The GMC then opens a **scoped** AGC→Vault egress rule (that peer, on the Vault API port from `address`) on the AGC NetworkPolicy automatically — you no longer add it by hand.
 > If you leave `networkPolicy` unset on a policy-enforcing CNI (Calico/Cilium — the production recommendation), the AGC's Vault login will be dropped, so set it; on a non-enforcing CNI (kindnet) it is inert and may be omitted.
 > As with all egress rules, it is enforced only by a policy-aware CNI.
-> The field is a shared `EgressPeer` type (Q204) — the optional `port` overrides the address-derived port and is normally left unset; the same type will back future egress peers (cloud KMS, telemetry) so the example shape stays stable.
+> The field is a shared `EgressPeer` type (Q204) — the optional `port` overrides the address-derived port and is normally left unset; `spec.tracing.networkPolicy` is the same type, and future egress peers such as a cloud KMS will be too, so the example shape stays stable.
 
 The GMC provisions the workload-identity AGC the same as a `GitHubApp` gateway — minus the credential `Secret` mount (there is none), plus the projected Vault-audience ServiceAccount token and the signer config env.
 A `WorkloadIdentity` gateway reaches `Ready=True` once its AGC mints its first installation token through Vault.

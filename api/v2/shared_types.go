@@ -237,15 +237,25 @@ type ProxySharing struct {
 }
 
 // TracingConfig configures opt-in OpenTelemetry distributed tracing for this
-// tenant's AGC. Tracing stays off unless Endpoint is set. Unchanged from v1alpha1.
+// tenant's AGC. Tracing stays off unless Endpoint is set.
 //
 // Authentication headers are intentionally not exposed: they can carry bearer
 // tokens, and this project keeps secrets out of environment variables. Authenticate
 // the collector at the network layer instead. See docs/operations/observability.md.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.caBundleRef) || (has(self.endpoint) && self.endpoint.startsWith('https://') && !(has(self.insecure) && self.insecure))",message="caBundleRef needs an https:// endpoint with insecure unset or false; a plaintext export never reads the bundle"
+// +kubebuilder:validation:XValidation:rule="!has(self.networkPolicy) || (has(self.endpoint) && size(self.endpoint) > 0)",message="networkPolicy needs an endpoint; with tracing off the AGC has no collector to reach"
 type TracingConfig struct {
 	// Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the
 	// AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.
 	//
+	// A value the exporter cannot parse as a URL is rejected, because the exporter ignores
+	// it and sends spans to 127.0.0.1:4317 with no error (otlptracegrpc v1.47.0). A bare IP
+	// with a port is the common case, so write https://10.0.0.5:4317. A name with a port
+	// parses and needs no scheme, and the exporter trims surrounding whitespace. A value
+	// already stored is not re-checked until it changes.
+	//
+	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || (self.trim().size() == 0 ? self.size() == 0 : (self.trim().startsWith('//') ? isURL('http:' + self.trim()) : (self.trim().contains(':') ? isURL(self.trim()) : !self.trim().matches('[[:cntrl:]%]'))))",optionalOldSelf=true,message="endpoint does not parse as a URL, so the exporter would ignore it and send spans to 127.0.0.1:4317; a bare IP needs a scheme, as in https://10.0.0.5:4317"
 	// +optional
 	Endpoint string `json:"endpoint,omitempty"`
 
@@ -254,6 +264,44 @@ type TracingConfig struct {
 	//
 	// +optional
 	Insecure *bool `json:"insecure,omitempty"`
+
+	// CABundleRef names a ConfigMap in this namespace holding, under the key "ca.crt", the
+	// PEM certificate bundle the AGC verifies the collector against. Set it for a collector
+	// behind a private certificate authority, which is any collector addressed by a
+	// .svc.cluster.local name, since public authorities do not issue for those. Maps to
+	// OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.
+	//
+	// The bundle replaces the system roots for this connection and touches no other: it is
+	// not added to the trust the AGC uses for GitHub. Certificates are public material, which
+	// is why the carrier is a ConfigMap rather than a Secret.
+	//
+	// Resolved at runtime, not at admission (§H.7), and advisory, because traces are
+	// telemetry and a lost bundle must not stop CI: a ref naming a ConfigMap that is missing,
+	// or whose ca.crt holds no parseable certificate, sets the TracingCABundleUnresolved
+	// condition (reason CABundleNotFound / CABundleInvalid) and the gateway keeps
+	// reconciling. The exporter then verifies against the system roots, so a private-CA
+	// collector receives nothing rather than an unverified connection. The AGC reads the
+	// file once at startup, so a new or rotated bundle takes effect when the AGC restarts.
+	//
+	// Unset (the default) verifies the collector against the system roots.
+	//
+	// +optional
+	CABundleRef *LocalConfigMapReference `json:"caBundleRef,omitempty"`
+
+	// NetworkPolicy optionally tells the GMC how to reach the collector as a NetworkPolicy
+	// egress peer. On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies
+	// egress, and Endpoint is an opaque URL the GMC does not derive a peer from, so tracing
+	// delivers nothing until this names one. Set it and the GMC emits a scoped AGC→collector
+	// egress rule on the port parsed from Endpoint. Worker pods gain nothing: the rule is on
+	// the AGC-only policy. Leave it unset on a non-enforcing CNI (e.g. kindnet) or when the
+	// egress rule is managed out of band.
+	//
+	// Port is normally left unset, since it is derived from Endpoint; set it to override that
+	// port. A proxied gateway also needs Endpoint to use the collector's full
+	// .svc.cluster.local name, the only in-cluster form NO_PROXY exempts from the egress proxy.
+	//
+	// +optional
+	NetworkPolicy *EgressPeer `json:"networkPolicy,omitempty"`
 
 	// Sampler selects the trace sampler. When empty the SDK default applies. Maps to
 	// OTEL_TRACES_SAMPLER.

@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,7 +55,7 @@ func (r *ActionsGatewayV2Reconciler) evalDirectEgressRulesStale(ctx context.Cont
 // while the cache serves no ranges: the GitHub rule they were last programmed with, or
 // none, in which case GitHub egress through that policy is denied.
 func (r *ActionsGatewayV2Reconciler) servedGitHubRules(ctx context.Context, ag *gmcv2.ActionsGateway) string {
-	vault, hasVault := vaultEgressRule(ag)
+	named := operatorEgressRules(ag)
 	var denied []string
 	for _, p := range []struct{ name, who string }{
 		{agcNameV2(ag), "the AGC"},
@@ -62,7 +63,7 @@ func (r *ActionsGatewayV2Reconciler) servedGitHubRules(ctx context.Context, ag *
 	} {
 		var np networkingv1.NetworkPolicy
 		if err := r.Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: p.name}, &np); err == nil &&
-			hasGitHubCIDREgressRule(np.Spec.Egress, vault, hasVault) {
+			hasGitHubCIDREgressRule(np.Spec.Egress, named) {
 			continue
 		}
 		denied = append(denied, fmt.Sprintf("NetworkPolicy %q carries no GitHub rule, so GitHub egress from %s is denied", p.name, p.who))
@@ -73,12 +74,28 @@ func (r *ActionsGatewayV2Reconciler) servedGitHubRules(ctx context.Context, ag *
 	return strings.Join(denied, "; ")
 }
 
+// operatorEgressRules returns the rules the gateway's spec names a peer for: the Vault
+// signer's and the trace collector's.
+func operatorEgressRules(ag *gmcv2.ActionsGateway) []networkingv1.NetworkPolicyEgressRule {
+	var named []networkingv1.NetworkPolicyEgressRule
+	if rule, ok := vaultEgressRule(ag); ok {
+		named = append(named, rule)
+	}
+	if rule, ok := tracingEgressRule(ag); ok {
+		named = append(named, rule)
+	}
+	return named
+}
+
 // hasGitHubCIDREgressRule reports whether rules hold the shape githubCIDREgressRule
-// builds: TCP/443 alone, to IPBlock peers only. The Vault rule is the one other rule
-// on these policies that can take that shape, so it is excluded by value.
-func hasGitHubCIDREgressRule(rules []networkingv1.NetworkPolicyEgressRule, vault networkingv1.NetworkPolicyEgressRule, hasVault bool) bool {
+// builds: TCP/443 alone, to IPBlock peers only. An operator-named rule (operatorEgressRules)
+// is the one other rule on these policies that can take that shape, so those are excluded
+// by value.
+func hasGitHubCIDREgressRule(rules, named []networkingv1.NetworkPolicyEgressRule) bool {
 	for _, rule := range rules {
-		if hasVault && equality.Semantic.DeepEqual(rule, vault) {
+		if slices.ContainsFunc(named, func(n networkingv1.NetworkPolicyEgressRule) bool {
+			return equality.Semantic.DeepEqual(rule, n)
+		}) {
 			continue
 		}
 		if len(rule.Ports) != 1 || rule.Ports[0].Port == nil || rule.Ports[0].Port.IntValue() != 443 ||

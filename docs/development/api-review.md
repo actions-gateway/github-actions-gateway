@@ -204,6 +204,7 @@ The default is `atomic`: one applier replaces the whole list, and no item within
 
 CRD validation ratcheting (KEP-4008, default-on from Kubernetes 1.30) suppresses a rule only while *the value it sits on* is unchanged.
 A rule on the spec therefore re-fires on every write to any field.
+Ratcheting also missed the status subresource on 1.31.0 and 1.32.0, where a tightened rule refused the GMC's status write on a stored value, and an `oldSelf` clause passing an unchanged value is the measured answer (`spec.tracing.endpoint`, 1.31 through 1.35).
 
 Q398 is the worked example: a `RunnerSetSpec`-level rule requiring exactly one `runnerLabel` re-evaluated on every unqualified `kubectl edit`, so editing an unrelated field on a stored-but-noncompliant object failed on labels.
 Moving the rule onto `spec.runnerLabels` kept the constraint exactly where it matters and let ratcheting suppress it everywhere else.

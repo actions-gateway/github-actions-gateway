@@ -75,7 +75,7 @@ func TestActionsGatewayV2Reconcile_GHESCABundleMounted(t *testing.T) {
 	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "github-app", Namespace: "team-a"}}
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: "ghes-ca", Namespace: "team-a"},
-		Data:       map[string]string{githubCABundleKey: caBundlePEM(t)},
+		Data:       map[string]string{caBundleKey: caBundlePEM(t)},
 	}
 	ag := ghesGatewayWithCABundle("gw", "team-a", "ghes-ca")
 
@@ -158,7 +158,7 @@ func TestActionsGatewayV2Reconcile_CABundleFailsClosed(t *testing.T) {
 			name: "ca.crt is not a certificate",
 			cm: &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{Name: "ghes-ca", Namespace: "team-a"},
-				Data:       map[string]string{githubCABundleKey: "-----BEGIN CERTIFICATE-----\nnope\n"},
+				Data:       map[string]string{caBundleKey: "-----BEGIN CERTIFICATE-----\nnope\n"},
 			},
 			reason: gmcv2.ReasonCABundleInvalid,
 		},
@@ -178,7 +178,7 @@ func TestActionsGatewayV2Reconcile_CABundleFailsClosed(t *testing.T) {
 			r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme, AGCImage: "agc:test"}
 			res := reconcileV2Gateway(t, r, "team-a", "gw")
 
-			assert.Equal(t, githubCABundleReprobeInterval, res.RequeueAfter,
+			assert.Equal(t, caBundleReprobeInterval, res.RequeueAfter,
 				"an unresolved bundle must be re-read; nothing watches tenant ConfigMaps")
 
 			conds := gatewayConditions(t, c, ag)
@@ -214,7 +214,7 @@ func TestActionsGatewayV2Reconcile_CABundleRecovers(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, c.Create(ctx, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{Name: "ghes-ca", Namespace: "team-a"},
-		Data:       map[string]string{githubCABundleKey: caBundlePEM(t)},
+		Data:       map[string]string{caBundleKey: caBundlePEM(t)},
 	}))
 	reconcileV2Gateway(t, r, "team-a", "gw")
 

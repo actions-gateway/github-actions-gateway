@@ -114,6 +114,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` u
 - [v2 Objects Not Reconciling After Installing the CRD Chart](#v2-objects-not-reconciling-after-installing-the-crd-chart)
 - [Privileged securityProfile Rejected: Namespace Not Eligible](#privileged-securityprofile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
+- [Tracing Endpoint Rejected by Admission](#tracing-endpoint-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `gitHubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [Worker Pod Crashes With configuredSettings ArgumentNullException](#worker-pod-crashes-with-configuredsettings-argumentnullexception)
@@ -947,6 +948,8 @@ In-flight jobs are unaffected — worker pods are separate.
 |---|---|---|
 | `CABundleNotFound` | No ConfigMap of that name in the gateway's namespace | Create it, or fix the name. The gateway recovers on its own within about a minute — no edit needed |
 | `CABundleInvalid` | The ConfigMap exists but has no `ca.crt` key, or that key holds no PEM certificate | Re-create it with `--from-file=ca.crt=...` and a PEM-encoded (not DER) certificate |
+
+`spec.tracing.caBundleRef` reports the same two reasons on the advisory `TracingCABundleUnresolved` condition instead, and the gateway stays `Ready`: see [Reaching the collector](observability-logging.md#reaching-the-collector).
 
 ```bash
 kubectl -n team-a get actionsgateway my-gateway \
@@ -4780,6 +4783,30 @@ A value outside that set — a typo, or one of the SDK's externally-configured s
 - To *disable* tracing entirely, remove `spec.tracing.endpoint` (an empty endpoint emits no `OTEL_*` env and the AGC keeps its no-op tracer) — the sampler value is irrelevant when no endpoint is set.
 
 See [observability — enabling tracing on GMC-managed AGCs](observability-logging.md#enabling-tracing-on-gmc-managed-agcs) for the full field list.
+
+---
+
+## Tracing Endpoint Rejected by Admission
+
+**Symptoms.** A create or an edit that sets `spec.tracing.endpoint` on an `ActionsGateway` is rejected at admission:
+
+```
+The ActionsGateway "<name>" is invalid: spec.tracing.endpoint: Invalid value:
+"10.0.0.5:4317": endpoint does not parse as a URL, so the exporter would ignore it
+and send spans to 127.0.0.1:4317; a bare IP needs a scheme, as in https://10.0.0.5:4317
+```
+
+**Likely cause.** The exporter ignores a value it cannot parse as a URL and sends spans to `127.0.0.1:4317` with no error, so the schema refuses it.
+The usual case is a host with a port and no scheme that starts with a digit or a bracket, or holds an underscore: `10.0.0.5:4317`, `[fd00::5]:4317`, `3collector:4317`, `my_collector:4317`.
+A non-numeric port, a bad percent escape and a value of only whitespace are rejected too.
+The check is close to the exporter's parser rather than identical, so a URL with a `#fragment` is rejected although it would deliver; drop the fragment.
+
+**Resolution.** Add the scheme, as in `https://10.0.0.5:4317`, or `http://` for a plaintext collector with `insecure: true`.
+That includes a collector on the AGC pod's own loopback: `127.0.0.1:4317` is rejected, and `http://127.0.0.1:4317` is accepted.
+To turn tracing off, remove the field.
+
+A gateway stored before this check keeps working: an edit that leaves `endpoint` alone is accepted, and it goes on exporting to `127.0.0.1:4317` until the value is corrected.
+Deleting and re-creating it, or changing `endpoint` to another value that does not parse, is rejected.
 
 ---
 

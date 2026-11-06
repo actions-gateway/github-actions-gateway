@@ -237,9 +237,17 @@ spec:
       name: team-a-github-app
   githubURL: https://github.com/team-a-org
   tracing:
-    endpoint: http://otel-collector.observability.svc.cluster.local:4317  # enables tracing
-    insecure: true                                       # plaintext; see Reaching the collector
-    sampler: parentbased_traceidratio                    # optional
+    endpoint: https://otel-collector.observability.svc.cluster.local:4317  # enables tracing
+    caBundleRef:                                          # the collector's private CA
+      name: otel-collector-ca
+    networkPolicy:                                        # lets the AGC reach the collector
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: observability
+      podSelector:
+        matchLabels:
+          app: otel-collector
+    sampler: parentbased_traceidratio                     # optional
     samplerArg: "0.1"                                     # optional — 10% of traces
     resourceAttributes:                                   # optional
       deployment.environment: prod
@@ -249,6 +257,8 @@ spec:
 |---|---|---|
 | `endpoint` | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | **Setting it is what enables tracing.** Empty → no `OTEL_*` env, tracing stays off. |
 | `insecure` | `OTEL_EXPORTER_OTLP_TRACES_INSECURE` | Defaults to `false` (TLS). Set `true` only for a plaintext collector; it wins over an `https://` scheme. |
+| `caBundleRef` | `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE` | A ConfigMap in this namespace with the collector's CA under `ca.crt`. Admission requires an `https://` endpoint with `insecure` unset or `false`. |
+| `networkPolicy` | None; a NetworkPolicy rule | The collector as an egress peer, which the GMC opens for the AGC alone. Admission requires an `endpoint`. |
 | `sampler` | `OTEL_TRACES_SAMPLER` | One of `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio` (CRD-enforced enum). |
 | `samplerArg` | `OTEL_TRACES_SAMPLER_ARG` | Ratio in `[0,1]` for the ratio-based samplers. |
 | `resourceAttributes` | `OTEL_RESOURCE_ATTRIBUTES` | Rendered as a sorted `key=value` list. The AGC's own `service.name`/`service.version` take precedence. |
@@ -262,11 +272,14 @@ spec:
 
 ### Reaching the collector
 
-**Setting `spec.tracing` does not open a network path to the collector.** The GMC's default-deny egress policy has no rule for it, so on a CNI that enforces NetworkPolicy the AGC's spans go nowhere until you add one.
-The name you give the collector matters as much: its **full name** is `otel-collector.observability.svc.cluster.local:4317`, and its **short name** is `otel-collector.observability:4317`.
-Measured with a real collector over plaintext gRPC on kind with Calico, at one job per setup:
+**Setting `endpoint` does not open a network path to the collector.** The GMC does not derive a peer from the endpoint's host, so the AGC's default-deny egress policy stays closed, and on a CNI that enforces NetworkPolicy the spans go nowhere until `spec.tracing.networkPolicy` names the collector.
+The GMC then adds one rule to the AGC's policy, to that peer on the endpoint's port, and worker pods gain nothing.
+An endpoint with no port is dialled on 443, gRPC's default rather than OTLP's 4317, and that is the port the rule opens; set `networkPolicy.port` to override it.
 
-| Tenant | Name | NetworkPolicy below | Spans at the collector |
+The name you give the collector matters as much: its **full name** is `otel-collector.observability.svc.cluster.local:4317`, and its **short name** is `otel-collector.observability:4317`.
+Measured with a real collector over plaintext gRPC on kind with Calico, at one job per setup, with a hand-written NetworkPolicy allowing the same peer and port:
+
+| Tenant | Name | Peer allowed | Spans at the collector |
 | --- | --- | --- | --- |
 | Proxied | Full | Yes | Delivered |
 | Proxied | Full | No | None |
@@ -275,41 +288,38 @@ Measured with a real collector over plaintext gRPC on kind with Calico, at one j
 | Direct | Either | Yes | Delivered |
 | Direct | Short | No | None |
 
-A proxied tenant needs both: the full `.svc.cluster.local` name, which is what `NO_PROXY` exempts from the egress proxy, and a policy allowing the AGC to reach the collector directly.
-Anything shorter is sent through the proxy, including `otel-collector.observability.svc:4317`, and the proxy's own NetworkPolicy blocks it, so no policy on the AGC changes that.
+A proxied tenant needs both: the full `.svc.cluster.local` name, which is what `NO_PROXY` exempts from the egress proxy, and a peer that lets the AGC reach the collector directly.
+Anything shorter is sent through the proxy, including `otel-collector.observability.svc:4317`, and the proxy's own NetworkPolicy blocks it, so no rule on the AGC changes that.
 
-**An in-cluster collector has to be plaintext**, and every delivered row above is.
-`spec.tracing` has no CA field, so the AGC verifies a TLS collector only against the public roots in its image, and public CAs do not issue certificates for `.svc.cluster.local` names.
-An `https://` endpoint with a private-CA certificate therefore delivers nothing, and a proxied tenant, which must use the full name, has no TLS option.
-That is why the examples here use `http://` with `insecure: true`.
+**A collector with a private CA needs that CA named.** Public CAs do not issue certificates for `.svc.cluster.local` names, so the AGC's image cannot validate an in-cluster collector on its own.
+Publish the CA in the gateway's namespace and name it in `caBundleRef`:
+
+```bash
+kubectl -n team-a create configmap otel-collector-ca --from-file=ca.crt=/path/to/collector-ca.pem
+```
+
+The GMC mounts the ConfigMap on the AGC and points the exporter at it.
+The bundle replaces the system roots for the export connection and touches nothing else, so it is not added to the trust the AGC uses for GitHub, and it never reaches a worker pod.
+Measured with a real collector over TLS on kind with Calico, on a proxied tenant: without `caBundleRef` the AGC logs `x509: certificate signed by unknown authority` and the collector receives nothing, and naming the bundle delivers the spans.
+**A bundle that does not resolve stops the traces and nothing else**, because a lost telemetry bundle should not stop CI.
+A ConfigMap that is missing, or whose `ca.crt` holds no PEM certificate, sets the advisory `TracingCABundleUnresolved` condition with reason `CABundleNotFound` or `CABundleInvalid`, and the gateway stays `Ready` and keeps reconciling.
+The AGC starts without the file and its exporter verifies against the system roots, so a private-CA collector receives nothing and the AGC logs `x509: certificate signed by unknown authority`; no span crosses an unverified connection.
+Fix the ConfigMap and restart the AGC, because the condition clears within about a minute but the exporter only reads the file when it starts:
+
+```bash
+kubectl -n team-a rollout restart deploy/team-a-agc
+```
+
+**To rotate the collector's CA, restart the AGC at both ends of the overlap**, so it trusts both CAs before the certificate changes:
+
+1. Publish the new CA beside the old one in `ca.crt`.
+2. Restart the AGC with the command above, so it reads both.
+3. Swap the collector's certificate.
+4. Remove the old CA from `ca.crt` and restart the AGC again.
+
+Plaintext still works, with `http://` and `insecure: true`, for a collector that does not serve TLS.
 The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, any `resourceAttributes` you set, and the error text of a failed attempt.
 None of those attributes is a credential; the error text names the Secret or Pod and quotes the API server's message, which has not been audited for what it can echo.
-
-Add the policy in the tenant's namespace, naming your gateway and collector:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: team-a-agc-to-collector
-  namespace: team-a
-spec:
-  podSelector:
-    matchLabels:
-      app: team-a-agc   # <gateway>-agc, so it opens nothing for worker pods
-  policyTypes: [Egress]
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: observability
-      podSelector:
-        matchLabels:
-          app: otel-collector
-    ports:
-    - port: 4317
-      protocol: TCP
-```
 
 **An export that fails is reported only in the AGC's log**, as a `traces export:` line at `info`, with no metric or status condition.
 Check for it after a job has run:
@@ -319,17 +329,18 @@ kubectl logs -n team-a deploy/team-a-agc | grep 'traces export'
 ```
 
 `reading server HTTP response: unexpected EOF` means the export went through the egress proxy, so the name is too short; a pool with a destination allowlist refuses it with `failed to do connect handshake` instead.
-`DeadlineExceeded` means the direct connection never opened, so the NetworkPolicy is missing or wrong.
+`DeadlineExceeded` means the direct connection never opened, so `spec.tracing.networkPolicy` is missing or wrong, or a policy of your own blocks the path.
 
 Three more come from the TLS settings, measured against an in-process OTLP server:
 
 | Log text | Meaning |
 | --- | --- |
-| `x509: certificate signed by unknown authority` | `https://` to a collector whose certificate the AGC does not trust |
+| `x509: certificate signed by unknown authority` | `https://` to a collector whose certificate the AGC does not trust; `caBundleRef` is unset, or names the wrong CA |
 | `first record does not look like a TLS handshake` | `https://` to a plaintext collector, without `insecure: true` |
 | `error reading server preface: EOF` | Plaintext to a collector serving TLS |
 
-**Always include the scheme in `endpoint`.** Admission does not check the value, and a bare IP such as `10.0.0.5:4317` fails the SDK's URL parse, so the AGC exports to `127.0.0.1:4317` instead.
+**Include the scheme in `endpoint`.** A bare IP needs one: admission rejects `10.0.0.5:4317` because it does not parse as a URL, and the exporter would send spans to `127.0.0.1:4317` with no error ([Tracing Endpoint Rejected by Admission](troubleshooting.md#tracing-endpoint-rejected-by-admission)).
+Admission accepts a name without a scheme, since `otel-collector.observability:4317` parses and dials that name.
 
 ---
 

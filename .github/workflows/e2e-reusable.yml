@@ -108,6 +108,10 @@ jobs:
       # Docker Hub (429 flakes). Bump the pinned upstream and mirror tags together.
       E2E_VAULT_UPSTREAM: hashicorp/vault:1.18.3
       E2E_VAULT_IMAGE: 127.0.0.1:5000/hashicorp/vault:1.18.3
+      # E2E_Tracing_CollectorOverTLS exports to a real OpenTelemetry Collector.
+      # Mirrored like curl and Vault. Bump the pinned upstream and mirror tags together.
+      E2E_OTEL_COLLECTOR_UPSTREAM: otel/opentelemetry-collector:0.120.0
+      E2E_OTEL_COLLECTOR_IMAGE: 127.0.0.1:5000/otel/opentelemetry-collector:0.120.0
       # CALICO_VERSION (the egress-enforcing profile's Calico release, keying the
       # image cache and pinning `make e2e-cluster`), KIND_VERSION +
       # KIND_BINARY_SHA256, and BUILDKIT_IMAGE (the digest-pinned buildx builder)
@@ -360,6 +364,33 @@ jobs:
           fi
           docker tag "${E2E_VAULT_UPSTREAM}" "${E2E_VAULT_IMAGE}"
           docker push "${E2E_VAULT_IMAGE}"
+
+      - name: Cache OpenTelemetry Collector test image
+        # Keyed on the pinned upstream tag so a bump invalidates it.
+        # Hosted-only — see the kind node cache step (Q408).
+        if: runner.environment == 'github-hosted'
+        id: otel-collector-image-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/otel-collector-image
+          key: otel-collector-image-${{ env.E2E_OTEL_COLLECTOR_UPSTREAM }}
+
+      - name: Mirror OpenTelemetry Collector test image into local registry
+        run: |
+          set -euo pipefail
+          tar=/tmp/otel-collector-image/otel-collector.tar
+          if [[ -f "$tar" ]]; then
+            echo "==> loading collector image from cache"
+            docker load -i "$tar"
+          else
+            echo "==> pulling ${E2E_OTEL_COLLECTOR_UPSTREAM}"
+            PULL_RETRY_ATTEMPTS=3 PULL_RETRY_DELAY=15 \
+              scripts/fetch/pull-image-with-retry.sh "${E2E_OTEL_COLLECTOR_UPSTREAM}"
+            mkdir -p /tmp/otel-collector-image
+            docker save -o "$tar" "${E2E_OTEL_COLLECTOR_UPSTREAM}"
+          fi
+          docker tag "${E2E_OTEL_COLLECTOR_UPSTREAM}" "${E2E_OTEL_COLLECTOR_IMAGE}"
+          docker push "${E2E_OTEL_COLLECTOR_IMAGE}"
 
       - name: Cache registry-mirror images
         # Calico-only: mirror_np_test.go is the only consumer and it skips on

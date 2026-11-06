@@ -306,10 +306,11 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		proxy = &p
 	}
 
-	// GHES private-CA trust (Q536): provisioning an AGC with a mount it cannot read
-	// wedges the pod at ContainerCreating with no explanation, so an unresolvable
-	// githubCABundleRef fails closed here instead.
-	if caReason, caMsg, caErr := r.checkGitHubCABundle(ctx, &ag); caErr != nil {
+	// GHES private-CA trust (Q536): provisioning an AGC with a mount it cannot read wedges
+	// the pod at ContainerCreating with no explanation, so an unresolvable
+	// githubCABundleRef fails closed here instead. spec.tracing.caBundleRef does not: its
+	// mount is optional and updateStatus reports it, because traces are telemetry.
+	if caReason, caMsg, caErr := r.checkCABundle(ctx, ag.Namespace, "githubCABundleRef", ag.Spec.GitHubCABundleRef); caErr != nil {
 		return ctrl.Result{}, caErr
 	} else if caReason != "" {
 		res, err := r.setNotReady(ctx, &ag, gmcv2.ConditionDegraded, caReason, caMsg)
@@ -320,7 +321,7 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// object in its own namespace (buildCacheOptions), so watching a tenant
 		// ConfigMap would mean a cluster-wide ConfigMap cache and the broad read grant
 		// that scoping exists to avoid.
-		res.RequeueAfter = githubCABundleReprobeInterval
+		res.RequeueAfter = caBundleReprobeInterval
 		return res, nil
 	}
 
@@ -364,6 +365,11 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 	if d := r.directEgressRecheckRequeue(proxy); d > 0 && (res.RequeueAfter == 0 || d < res.RequeueAfter) {
 		res.RequeueAfter = d
+	}
+	// Polled for the reason the GitHub bundle is: nothing watches tenant ConfigMaps.
+	if meta.IsStatusConditionTrue(ag.Status.Conditions, gmcv2.ConditionTracingCABundleUnresolved) &&
+		(res.RequeueAfter == 0 || caBundleReprobeInterval < res.RequeueAfter) {
+		res.RequeueAfter = caBundleReprobeInterval
 	}
 	return res, nil
 }
@@ -483,11 +489,11 @@ func (r *ActionsGatewayV2Reconciler) namespaceSecurityProfile(ctx context.Contex
 	return gmcv2.EffectiveSecurityProfile(ns.Labels[gmcv2.SecurityProfileLabel]), nil
 }
 
-// githubCABundleReprobeInterval is how often a gateway whose githubCABundleRef does
-// not resolve re-reads the ConfigMap. Short enough that applying the missing
+// caBundleReprobeInterval is how often a gateway whose CA bundle ref does not
+// resolve re-reads the ConfigMap. Short enough that applying the missing
 // ConfigMap converges while the operator is still watching, and it only runs while
 // the gateway is failed closed.
-const githubCABundleReprobeInterval = time.Minute
+const caBundleReprobeInterval = time.Minute
 
 // proxyShareReprobeInterval is how often a gateway waiting on a cross-namespace
 // pool's share projection re-reads it. The projection is a tenant ConfigMap the
@@ -496,7 +502,7 @@ const githubCABundleReprobeInterval = time.Minute
 const proxyShareReprobeInterval = 10 * time.Second
 
 // proxyShareProjected reports whether ep's share ConfigMap is in ns carrying a CA,
-// read uncached for the same reason as checkGitHubCABundle.
+// read uncached for the same reason as checkCABundle.
 func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns string, ep *gmcv2.EgressProxy) (bool, error) {
 	var cm corev1.ConfigMap
 	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyShareConfigMapName(ep.Namespace, ep.Name)}, &cm)
@@ -509,40 +515,39 @@ func (r *ActionsGatewayV2Reconciler) proxyShareProjected(ctx context.Context, ns
 	return cm.Data[shareCACertKey] != "", nil
 }
 
-// checkGitHubCABundle resolves spec.githubCABundleRef. It returns a Degraded reason
-// and message when the reference does not resolve, ("", "", nil) when it resolves or
-// is unset, and an error only for an apiserver failure.
+// checkCABundle resolves one CA bundle ref. It returns a condition reason and message
+// when the reference does not resolve, ("", "", nil) when it resolves or is unset, and
+// an error only for an apiserver failure.
 //
 // The read is uncached: the GMC's ConfigMap informer is pinned to a single object in
 // its own namespace, so it cannot serve a tenant ConfigMap.
 //
-// Parsing here rather than letting the AGC fail at startup is deliberate — a Degraded
+// Parsing here rather than letting the AGC fail at startup is deliberate — a
 // condition naming the ConfigMap is a better operator signal than a CrashLoopBackOff.
-func (r *ActionsGatewayV2Reconciler) checkGitHubCABundle(ctx context.Context, ag *gmcv2.ActionsGateway) (string, string, error) {
-	ref := ag.Spec.GitHubCABundleRef
+func (r *ActionsGatewayV2Reconciler) checkCABundle(ctx context.Context, namespace, field string, ref *gmcv2.LocalConfigMapReference) (string, string, error) {
 	if ref == nil {
 		return "", "", nil
 	}
 	var cm corev1.ConfigMap
-	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: ag.Namespace, Name: ref.Name}, &cm)
+	err := r.uncachedReader().Get(ctx, types.NamespacedName{Namespace: namespace, Name: ref.Name}, &cm)
 	if apierrors.IsNotFound(err) {
 		return gmcv2.ReasonCABundleNotFound,
-			fmt.Sprintf("ConfigMap %q (githubCABundleRef) not found in namespace %q", ref.Name, ag.Namespace), nil
+			fmt.Sprintf("ConfigMap %q (%s) not found in namespace %q", ref.Name, field, namespace), nil
 	}
 	if err != nil {
 		return "", "", err
 	}
-	bundle := cm.Data[githubCABundleKey]
+	bundle := cm.Data[caBundleKey]
 	if bundle == "" {
-		bundle = string(cm.BinaryData[githubCABundleKey])
+		bundle = string(cm.BinaryData[caBundleKey])
 	}
 	if bundle == "" {
 		return gmcv2.ReasonCABundleInvalid,
-			fmt.Sprintf("ConfigMap %q (githubCABundleRef) has no %q key", ref.Name, githubCABundleKey), nil
+			fmt.Sprintf("ConfigMap %q (%s) has no %q key", ref.Name, field, caBundleKey), nil
 	}
 	if !x509.NewCertPool().AppendCertsFromPEM([]byte(bundle)) {
 		return gmcv2.ReasonCABundleInvalid,
-			fmt.Sprintf("ConfigMap %q key %q holds no PEM-encoded certificate", ref.Name, githubCABundleKey), nil
+			fmt.Sprintf("ConfigMap %q (%s) key %q holds no PEM-encoded certificate", ref.Name, field, caBundleKey), nil
 	}
 	return "", "", nil
 }
@@ -817,6 +822,19 @@ func (r *ActionsGatewayV2Reconciler) updateStatus(ctx context.Context, ag *gmcv2
 	auditReason, auditMsg := egressAuditAttribution(ag, proxy)
 	set(gmcv2.ConditionEgressAuditUnattributed, auditReason != gmcv2.ReasonEgressAuditJoined,
 		auditReason, auditMsg)
+
+	// The collector's CA bundle (Q1281), advisory: it does not gate Ready, since the AGC
+	// runs without it and only its traces stop.
+	tracingCAReason, tracingCAMsg, err := r.checkCABundle(ctx, ag.Namespace, "tracing.caBundleRef", ag.Spec.Tracing.CABundleRef)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if tracingCAReason == "" {
+		set(gmcv2.ConditionTracingCABundleUnresolved, false, gmcv2.ReasonTracingCABundleResolved,
+			"spec.tracing.caBundleRef is unset or resolves")
+	} else {
+		set(gmcv2.ConditionTracingCABundleUnresolved, true, tracingCAReason, tracingCAMsg)
+	}
 
 	// EgressRulesStale (Q1249), advisory: it does not gate Ready.
 	es := r.evalDirectEgressRulesStale(ctx, ag, proxy, now.Time)

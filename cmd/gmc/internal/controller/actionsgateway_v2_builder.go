@@ -52,7 +52,14 @@ const gatewayComponentLabel = "actions-gateway.com/gateway"
 const (
 	githubCAVolumeName = "github-ca"
 	githubCAMountPath  = "/etc/actions-gateway/github-ca"
-	githubCABundleKey  = "ca.crt"
+	caBundleKey        = "ca.crt"
+)
+
+// The operator-supplied collector CA bundle: spec.tracing.caBundleRef names a tenant
+// ConfigMap, read through OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE rather than by AGC code.
+const (
+	tracingCAVolumeName = "tracing-ca"
+	tracingCAMountPath  = "/etc/actions-gateway/tracing-ca"
 )
 
 // AGCResourceSuffix is the AGC's per-gateway resource-name suffix. Exported so
@@ -321,6 +328,9 @@ func buildAGCNetworkPolicyV2(ag *gmcv2.ActionsGateway, apiServerCIDRs []string, 
 	if rule, ok := vaultEgressRule(ag); ok {
 		np.Spec.Egress = append(np.Spec.Egress, rule)
 	}
+	if rule, ok := tracingEgressRule(ag); ok {
+		np.Spec.Egress = append(np.Spec.Egress, rule)
+	}
 	return np
 }
 
@@ -387,10 +397,47 @@ func vaultEgressRule(ag *gmcv2.ActionsGateway) (networkingv1.NetworkPolicyEgress
 	}, true
 }
 
+// tracingEgressRule returns the scoped AGC→collector egress rule for a gateway whose
+// spec.tracing names a peer, and false otherwise. Scoped like vaultEgressRule: one peer on
+// one port, on the AGC-only policy, so worker pods do not reach the collector. The GMC never
+// derives the peer from the endpoint's host, so egress stays closed until an operator names one.
+func tracingEgressRule(ag *gmcv2.ActionsGateway) (networkingv1.NetworkPolicyEgressRule, bool) {
+	npc := ag.Spec.Tracing.NetworkPolicy
+	if ag.Spec.Tracing.Endpoint == "" || npc == nil {
+		return networkingv1.NetworkPolicyEgressRule{}, false
+	}
+	port := tracingEgressPort(ag.Spec.Tracing.Endpoint)
+	if npc.Port != nil {
+		port = *npc.Port
+	}
+	return networkingv1.NetworkPolicyEgressRule{
+		Ports: []networkingv1.NetworkPolicyPort{{Port: ptr(intstr.FromInt32(port))}},
+		To:    []networkingv1.NetworkPolicyPeer{egressPeerTo(npc)},
+	}, true
+}
+
+// tracingEgressPort parses the collector port from spec.tracing.endpoint the way the OTLP
+// exporter dials it: an http(s) URL's host, otherwise the value as a host:port target. A
+// target with no port dials gRPC's default of 443, not OTLP's conventional 4317 (grpc v1.83.2).
+func tracingEgressPort(endpoint string) int32 {
+	target := endpoint
+	if u, err := url.Parse(endpoint); err == nil && (u.Scheme == "http" || u.Scheme == "https") {
+		target = u.Host
+	}
+	if _, p, err := net.SplitHostPort(target); err == nil {
+		// An out-of-range port is unusable either way, and the apiserver would reject a rule
+		// naming it, failing the whole reconcile over telemetry.
+		if n, convErr := strconv.Atoi(p); convErr == nil && n >= 1 && n <= 65535 {
+			return int32(n)
+		}
+	}
+	return 443
+}
+
 // egressPeerTo converts a shared EgressPeer descriptor (Q204) to a NetworkPolicy peer: a CIDR
 // IPBlock for an external peer, otherwise the pod/namespace selector for an in-cluster one. The
 // EgressPeer CEL validation guarantees exactly one form is set, so the branch is unambiguous.
-// Shared so future egress-peer consumers (cloud KMS signers, telemetry) emit peers identically.
+// Shared so every egress-peer consumer (the Vault signer, the trace collector) emits peers identically.
 func egressPeerTo(p *gmcv2.EgressPeer) networkingv1.NetworkPolicyPeer {
 	if p.CIDR != "" {
 		return networkingv1.NetworkPolicyPeer{IPBlock: &networkingv1.IPBlock{CIDR: p.CIDR}}
@@ -545,7 +592,7 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 		env = append(env, corev1.EnvVar{Name: "AGC_AUDIT_LOGGING", Value: ag.Spec.AuditLogging})
 	}
 
-	// GHES private-CA trust (Q536): names the ConfigMap applyGitHubCABundleV2 mounts,
+	// GHES private-CA trust (Q536): names the ConfigMap applyCABundleV2 mounts,
 	// so the AGC knows it was opted in and its pod provisioner can project the same
 	// bundle into worker pods. Precedes extraEnv for the same reason GITHUB_API_BASE_URL
 	// does.
@@ -578,36 +625,46 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 	// GHES private-CA trust (Q536), applied here for the same reason as scheduling:
 	// spec.githubCABundleRef is v2-only, and the mount composes with nothing the
 	// shared builder already stamps.
-	applyGitHubCABundleV2(&dep.Spec.Template.Spec, ag.Spec.GitHubCABundleRef)
+	applyCABundleV2(&dep.Spec.Template.Spec, githubCAVolumeName, githubCAMountPath, ag.Spec.GitHubCABundleRef, false)
+	applyCABundleV2(&dep.Spec.Template.Spec, tracingCAVolumeName, tracingCAMountPath, ag.Spec.Tracing.CABundleRef, true)
 	return dep
 }
 
-// applyGitHubCABundleV2 mounts the operator-supplied GitHub CA bundle into the AGC
-// container. A nil ref leaves the pod spec untouched, so a gateway that sets none
-// produces a byte-for-byte unchanged Deployment.
+// applyCABundleV2 mounts an operator-supplied CA bundle into the AGC container. A nil
+// ref leaves the pod spec untouched, so a gateway that sets none produces a
+// byte-for-byte unchanged Deployment.
 //
-// The bundle is a ConfigMap, not a Secret: a CA certificate is public material, and
-// the AGC's trust pool keeps the system roots alongside it, so this widens trust for
-// githubURL without narrowing it anywhere else. The matching GITHUB_CA_CONFIGMAP_NAME
-// env is stamped with the rest of the env list, before extraEnv.
-func applyGitHubCABundleV2(pod *corev1.PodSpec, ref *gmcv2.LocalConfigMapReference) {
+// The bundle is a ConfigMap, not a Secret: a CA certificate is public material. What
+// the AGC trusts it for is the env's business, stamped with the rest of the env list
+// before extraEnv: GITHUB_CA_CONFIGMAP_NAME adds the GitHub bundle to the system roots
+// for githubURL, and OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE makes the tracing bundle the
+// exporter's only roots.
+//
+// optional lets the pod start without the ConfigMap. The tracing bundle sets it, since a
+// replacement AGC wedged at ContainerCreating over a telemetry bundle would stop CI. With
+// no file the exporter keeps the system roots and still verifies (cmd/agc/internal/tracing,
+// TestInit_UnusableCertificateFileKeepsVerifying). The GitHub bundle does not: the AGC cannot
+// reach the appliance without it, so that ref fails closed in the reconcile instead.
+func applyCABundleV2(pod *corev1.PodSpec, volumeName, mountPath string, ref *gmcv2.LocalConfigMapReference, optional bool) {
 	if ref == nil {
 		return
 	}
 	caMode := int32(0o444)
+	source := &corev1.ConfigMapVolumeSource{
+		LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
+		Items:                []corev1.KeyToPath{{Key: caBundleKey, Path: caBundleKey}},
+		DefaultMode:          &caMode,
+	}
+	if optional {
+		source.Optional = &optional
+	}
 	pod.Volumes = append(pod.Volumes, corev1.Volume{
-		Name: githubCAVolumeName,
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: ref.Name},
-				Items:                []corev1.KeyToPath{{Key: githubCABundleKey, Path: githubCABundleKey}},
-				DefaultMode:          &caMode,
-			},
-		},
+		Name:         volumeName,
+		VolumeSource: corev1.VolumeSource{ConfigMap: source},
 	})
 	for i := range pod.Containers {
 		pod.Containers[i].VolumeMounts = append(pod.Containers[i].VolumeMounts, corev1.VolumeMount{
-			Name: githubCAVolumeName, MountPath: githubCAMountPath, ReadOnly: true,
+			Name: volumeName, MountPath: mountPath, ReadOnly: true,
 		})
 	}
 }
@@ -687,8 +744,7 @@ func credentialEnvV2(ag *gmcv2.ActionsGateway) []corev1.EnvVar {
 }
 
 // tracingEnvV2 translates the v2 spec.tracing into the OTEL_* environment the AGC
-// reads. Mirrors v1's tracingEnv (the field set is identical); auth headers are
-// deliberately not mapped (this project keeps secrets out of env vars).
+// reads. Auth headers are deliberately not mapped (this project keeps secrets out of env vars).
 func tracingEnvV2(t gmcv2.TracingConfig) []corev1.EnvVar {
 	if t.Endpoint == "" {
 		return nil
@@ -696,6 +752,9 @@ func tracingEnvV2(t gmcv2.TracingConfig) []corev1.EnvVar {
 	env := []corev1.EnvVar{{Name: "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", Value: t.Endpoint}}
 	if t.Insecure != nil && *t.Insecure {
 		env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_TRACES_INSECURE", Value: "true"})
+	}
+	if t.CABundleRef != nil {
+		env = append(env, corev1.EnvVar{Name: "OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE", Value: tracingCAMountPath + "/" + caBundleKey})
 	}
 	if t.Sampler != "" {
 		env = append(env, corev1.EnvVar{Name: "OTEL_TRACES_SAMPLER", Value: t.Sampler})

@@ -158,7 +158,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta) array_ | Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, AGCAutoscalingUnavailable, CredentialUnavailable, Degraded, EgressAuditUnattributed, EgressRulesStale, EgressUnattributed, RunnerSetsDegraded, ScaleSetNameCollision. |  | Optional: \{\} |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta) array_ | Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, AGCAutoscalingUnavailable, CredentialUnavailable, Degraded, EgressAuditUnattributed, EgressRulesStale, EgressUnattributed, TracingCABundleUnresolved, RunnerSetsDegraded, ScaleSetNameCollision. |  | Optional: \{\} |
 | `proxyMode` _string_ | ProxyMode records how this gateway's AGC control-plane egress reaches GitHub: "Proxied" (through the EgressProxy named by defaultProxyRef, with stable per-tenant egress IPs) or "Direct" (no defaultProxyRef, still NetworkPolicy- restricted to GitHub + DNS + kube API but without per-tenant IP attribution). Explicit so "no proxy" is an auditable state, not an inferred absence (§H.10). |  | Enum: [Proxied Direct]<br />Optional: \{\} |
 | `observedGeneration` _integer_ | ObservedGeneration is the .metadata.generation the most recent reconcile acted on. |  | Optional: \{\} |
 
@@ -304,13 +304,14 @@ versa — so the rule the GMC emits is always scoped to one peer, never a broade
 
 This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
 reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
-(Q204). Today the Vault signer (VaultSigner.NetworkPolicy) is its only consumer; foreseen
-future consumers — cloud KMS signers, AGC telemetry endpoints — reuse it additively. See
-docs/design/appendix-g-future-enhancements.md §G.9.
+(Q204). Today the Vault signer (VaultSigner.NetworkPolicy) and the trace collector
+(TracingConfig.NetworkPolicy) consume it; foreseen future consumers such as cloud KMS
+signers reuse it additively. See docs/design/appendix-g-future-enhancements.md §G.9.
 
 
 
 _Appears in:_
+- [TracingConfig](#tracingconfig)
 - [VaultSigner](#vaultsigner)
 
 | Field | Description | Default | Validation |
@@ -495,6 +496,7 @@ rather than the 52-character v2 object budget (§H.6).
 
 _Appears in:_
 - [ActionsGatewaySpec](#actionsgatewayspec)
+- [TracingConfig](#tracingconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -987,7 +989,7 @@ _Appears in:_
 
 
 TracingConfig configures opt-in OpenTelemetry distributed tracing for this
-tenant's AGC. Tracing stays off unless Endpoint is set. Unchanged from v1alpha1.
+tenant's AGC. Tracing stays off unless Endpoint is set.
 
 Authentication headers are intentionally not exposed: they can carry bearer
 tokens, and this project keeps secrets out of environment variables. Authenticate
@@ -1000,8 +1002,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `endpoint` _string_ | Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT. |  | Optional: \{\} |
+| `endpoint` _string_ | Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.<br />A value the exporter cannot parse as a URL is rejected, because the exporter ignores it and sends spans to 127.0.0.1:4317 with no error (otlptracegrpc v1.47.0). A bare IP with a port is the common case, so write https://10.0.0.5:4317. A name with a port parses and needs no scheme, and the exporter trims surrounding whitespace. A value already stored is not re-checked until it changes. |  | Optional: \{\} |
 | `insecure` _boolean_ | Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE. |  | Optional: \{\} |
+| `caBundleRef` _[LocalConfigMapReference](#localconfigmapreference)_ | CABundleRef names a ConfigMap in this namespace holding, under the key "ca.crt", the PEM certificate bundle the AGC verifies the collector against. Set it for a collector behind a private certificate authority, which is any collector addressed by a .svc.cluster.local name, since public authorities do not issue for those. Maps to OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.<br />The bundle replaces the system roots for this connection and touches no other: it is not added to the trust the AGC uses for GitHub. Certificates are public material, which is why the carrier is a ConfigMap rather than a Secret.<br />Resolved at runtime, not at admission (§H.7), and advisory, because traces are telemetry and a lost bundle must not stop CI: a ref naming a ConfigMap that is missing, or whose ca.crt holds no parseable certificate, sets the TracingCABundleUnresolved condition (reason CABundleNotFound / CABundleInvalid) and the gateway keeps reconciling. The exporter then verifies against the system roots, so a private-CA collector receives nothing rather than an unverified connection. The AGC reads the file once at startup, so a new or rotated bundle takes effect when the AGC restarts.<br />Unset (the default) verifies the collector against the system roots. |  | Optional: \{\} |
+| `networkPolicy` _[EgressPeer](#egresspeer)_ | NetworkPolicy optionally tells the GMC how to reach the collector as a NetworkPolicy egress peer. On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies egress, and Endpoint is an opaque URL the GMC does not derive a peer from, so tracing delivers nothing until this names one. Set it and the GMC emits a scoped AGC→collector egress rule on the port parsed from Endpoint. Worker pods gain nothing: the rule is on the AGC-only policy. Leave it unset on a non-enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band.<br />Port is normally left unset, since it is derived from Endpoint; set it to override that port. A proxied gateway also needs Endpoint to use the collector's full .svc.cluster.local name, the only in-cluster form NO_PROXY exempts from the egress proxy. |  | Optional: \{\} |
 | `sampler` _string_ | Sampler selects the trace sampler. When empty the SDK default applies. Maps to OTEL_TRACES_SAMPLER. |  | Enum: [always_on always_off traceidratio parentbased_always_on parentbased_always_off parentbased_traceidratio]<br />Optional: \{\} |
 | `samplerArg` _string_ | SamplerArg is the argument for the chosen Sampler — for ratio-based samplers the sampling probability in [0,1]. Maps to OTEL_TRACES_SAMPLER_ARG. |  | Optional: \{\} |
 | `resourceAttributes` _object (keys:string, values:string)_ | ResourceAttributes are extra OpenTelemetry resource attributes merged onto every AGC span. Maps to OTEL_RESOURCE_ATTRIBUTES. |  | Optional: \{\} |
