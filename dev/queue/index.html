@@ -2778,6 +2778,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Twice on 2026-11-03 an …</td>
 </tr>
 <tr>
+<td><a href="Q1286/">Q1286</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/doc-links.yml">release-links job outruns its 10-minute limit provisioning the docs venv</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> On 2026-11-05 the <code>release-links</code> job …</td>
+</tr>
+<tr>
 <td><a href="Q1270/">Q1270</a></td>
 <td>EgressProxy envtests wait on a NetworkPolicy no longer applied last</td>
 <td><code>flake</code> <code>tests</code></td>
@@ -3546,12 +3554,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
-<td><a href="Q1273/">Q1273</a></td>
-<td>Retire the classic tier ledgers, runbooks and unread AGC env vars</td>
-<td><code>debt</code> <code>docs</code> <code>2.0-gate</code> <code>open-question</code></td>
+<td><a href="Q1291/">Q1291</a></td>
+<td>Drop the one-valued tier label from the disruption metrics</td>
+<td><code>debt</code> <code>2.0-gate</code></td>
 <td>🔲</td>
-<td>M</td>
-<td>Q264 removed classic acquisition, its alerts, recording rule and dashboard panels, and left four things an operator can still see or hit …</td>
+<td>S</td>
+<td>Seven disruption and re-run series carry a <code>tier</code> label whose only value is now <code>scaleset</code> (<code>cmd/agc/internal/runnercore/metrics.go</code>, the …</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>
@@ -3608,6 +3616,46 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Q264 removed classic acquisition from the AGC and the GMC, and left code only classic called.</td>
+</tr>
+<tr>
+<td><a href="Q1292/">Q1292</a></td>
+<td>Rewrite the design docs that still describe the classic tier</td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Q1273 rewrote the operator pages and left <code>docs/design/</code> beyond the passages its row named, so these pages still describe classic sessions …</td>
+</tr>
+<tr>
+<td><a href="Q1293/">Q1293</a></td>
+<td>Verify operator-doc claims the classic rewrite carried forward unchecked</td>
+<td><code>debt</code> <code>docs</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q1273 kept these claims while rewriting the sections around them, and nobody has measured them against the scale-set path, so each is one …</td>
+</tr>
+<tr>
+<td><a href="Q1289/">Q1289</a></td>
+<td>E2E_V2_PerGatewayJobIsolation can pass in under a second</td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>During the Q1167 work on 2026-11-04, <code>E2E_V2_PerGatewayJobIsolation</code> passed in 0.09 s, because the pod list was already non-empty 47 ms …</td>
+</tr>
+<tr>
+<td><a href="Q1290/">Q1290</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/scalesetlistener/listener.go">First-label prefix overlap lets a sweep deregister another set's runners</a></td>
+<td><code>debt</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Two <code>RunnerSet</code>s with first labels <code>ci</code> and <code>ci-linux</code> pass the Q791 guard, because it compares first labels as exact strings.</td>
+</tr>
+<tr>
+<td><a href="Q1294/">Q1294</a></td>
+<td>Drop the AGC's Secret list and update grants the agent pool justified</td>
+<td><code>debt</code> <code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The AGC's tenant Role grants Secret <code>list</code>, <code>update</code> and <code>patch</code>, and the comments justifying all three name the classic agent pool that …</td>
 </tr>
 <tr>
 <td><a href="Q310/">Q310</a></td>
@@ -4232,6 +4280,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>A pipe inside a table cell is written <code>\\|</code> in Markdown, and GitHub drops the backslash inside a code span, but the MkDocs build does not …</td>
+</tr>
+<tr>
+<td><a href="Q1287/">Q1287</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/fetch/pull-image-with-retry.sh">pull-image-with-retry.sh has no time bound on a hung docker pull</a></td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The script's header says a registry that is down fails "on a bounded schedule", "never hanging", and that holds only for a pull that returns.</td>
+</tr>
+<tr>
+<td><a href="Q1288/">Q1288</a></td>
+<td>e2e suite drain leaves namespaces stuck on a reused kind cluster</td>
+<td><code>debt</code> <code>tests</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>On a kind cluster reused across <code>make e2e</code> runs, a later run failed <code>BeforeAll</code> with `unable to create new content in namespace …</td>
 </tr>
 </tbody>
 </table>

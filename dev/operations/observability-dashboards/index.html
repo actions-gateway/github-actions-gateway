@@ -2957,17 +2957,17 @@ Uses the <a href="../observability-alerting/#slo-recording-rules">SLO recording 
 <tr>
 <td>AGC / proxy version</td>
 <td><code>actions_gateway_build_info{component=~"agc\|proxy"}</code></td>
-<td>Stat showing the series name, not its value (the value is always <code>1</code>). Sits under the job-duration panel because it says which span that panel is measuring: the classic tier's was longer before v1.5.0 and nothing was renamed (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>). The metric carries no <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
+<td>Stat showing the series name, not its value (the value is always <code>1</code>). The metric carries no <code>namespace</code> label, so <code>$namespace</code> does not filter it</td>
 </tr>
 <tr>
 <td>Disruption retries</td>
-<td><code>sum by (runner_group, tier, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
+<td><code>sum by (namespace, runner_group, cause) (increase(actions_gateway_eviction_retries_total[1h]))</code></td>
 <td>Bar chart, split by cause (<code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code>). Keep the causes visually distinct: <code>eviction</code> rising means node pressure, <code>preemption</code> rising means a <code>priorityTiers</code> floor is displacing opportunistic work, <code>node_shutdown</code> rising means Spot or preemptible nodes are being reclaimed under running jobs, <code>abandoned</code> rising means workers are not being scheduled at all before <code>pendingPodDeadline</code> reaps them, <code>vanished</code> rising means the AGC itself keeps missing worker teardowns — different investigations entirely</td>
 </tr>
 <tr>
 <td>Abandoned runs awaiting capacity</td>
-<td><code>sum by (runner_group, tier, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))</code></td>
-<td>Stat or bar chart, split by acquisition tier since Q766 ported the recovery to <code>scaleset</code>. <code>expired</code> is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand</td>
+<td><code>sum by (namespace, runner_group, outcome) (increase(actions_gateway_abandoned_run_rerun_waits_total[1h]))</code></td>
+<td>Stat or bar chart. <code>expired</code> is the one to watch: a job whose run was force-cancelled and whose capacity never came back inside the wait window is a job silently lost until someone re-runs it by hand</td>
 </tr>
 <tr>
 <td>Disruption budget exhausted</td>
@@ -3160,7 +3160,7 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 <tr>
 <td>Worker pods reaped/s (by reason)</td>
-<td><code>sum by (runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))</code></td>
+<td><code>sum by (namespace, runner_group, reason) (rate(actions_gateway_worker_pods_reaped_total[5m]))</code></td>
 <td>Time series</td>
 </tr>
 </tbody>
@@ -3293,16 +3293,16 @@ The <code>1</code> is orange rather than red on purpose: a latched gate is <a hr
 </tr>
 </tbody>
 </table>
-<p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change: <code>job_duration_seconds</code> changed span at v1.5.0 without a rename (<a href="../upgrade/#non-breaking-job_duration_seconds-now-measures-worker-pod-lifetime-the-classic-tier-span-shrinks">upgrade note</a>).
+<p>The fleet's version spread during a staggered upgrade, and the answer to which tenants have crossed a semantics change.
 The GMC comes from this dashboard's own scrape; <code>agc</code> and <code>proxy</code> need the per-tenant scrapes, so a platform-only Prometheus shows one bar.
 <code>actions_gateway_build_info</code> carries no <code>namespace</code> label, so <code>$namespace</code> does not filter this row.</p>
 <h2 id="budget-dashboard">Budget dashboard<a class="headerlink" href="#budget-dashboard" title="Permanent link">&para;</a></h2>
-<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity and refused classic jobs by the admission rung that took them." src="../../assets/grafana-dashboard-budget.png" /></p>
+<p><img alt="The budget-owner Grafana dashboard rendered against a live Prometheus: a spend-summary stat row, spend-by-tenant bars and burn rate, pod-hours and job counts by runner shape, the zero-idle-compute row contrasting worker consumption with the always-on proxy floor, and a throttled-intake row stacking withheld scale-set capacity by the admission rung that took it." src="../../assets/grafana-dashboard-budget.png" /></p>
 <p>For the <a href="../personas/#budget-owner">budget owner</a>, who owns the spend and usually cannot read the cluster at all.
 Filtered by <code>$namespace</code> and <code>$runner_group</code>, and priced by a <code>$rate</code> textbox.
 It ships with auto-refresh <strong>off</strong>, where the other two use <code>30s</code>: the default window is seven days, and a spend figure over that range does not change meaningfully between two thirty-second polls.</p>
 <p>Every spend panel reads one metric: <code>actions_gateway_job_duration_seconds</code>.
-That series is worker pod wall time (creation to the last container finishing) on <strong>both</strong> acquisition tiers, which is the span <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">Appendix F §F.1</a> bills against.
+That series is worker pod wall time (creation to the last container finishing), which is the span <a href="../../design/appendix-f-cost-model/#worker-pod-dominant-cost">Appendix F §F.1</a> bills against.
 A pod that never started a container is not observed, because it occupied no node time.
 Row 5 is the exception, and reads the admission ladder instead: spend a throttle is holding down leaves no duration to bill, so the metric that answers what was spent cannot answer what was suppressed.</p>
 <p><strong>The rate is the operator's, not ours.</strong> Appendix F's formula is <code>(job_duration_seconds / 3600) × hourly_node_rate × resource_fraction</code>, and <code>$rate</code> is that trailing pair collapsed into one number: the effective hourly cost of <strong>one worker slot</strong>. The shipped default, <code>0.096</code>, is §F.1's own CPU example: an <code>m6i.4xlarge</code> at $0.768/hr with the pod requesting an eighth of it.
@@ -3604,7 +3604,7 @@ It can also outlive its pool: a set whose <code>EgressProxy</code> is deleted ke
 <ul>
 <li><code>$namespace</code> (<code>label_values({__name__=~"actions_gateway_scaleset_session_open|actions_gateway_scaleset_jobs_assigned_total"}, namespace)</code>) filters to a single tenant, on the tenant and platform dashboards.
   The session gauge lists a tenant whose listener is up but has been assigned nothing yet, which the assignment counter alone would miss.</li>
-<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) filters the <code>runner_group</code>-labelled panels of the tenant dashboard, which on the scale-set tier carry the <code>RunnerSet</code> name.
+<li><code>$runner_group</code> (<code>label_values(actions_gateway_job_duration_seconds_count{namespace=~"$namespace"}, runner_group)</code>) filters the <code>runner_group</code>-labelled panels of the tenant dashboard, which carry the <code>RunnerSet</code> name.
   The <code>runner_set</code>-labelled panels are not filtered by it; <code>$runner_set</code> is their variable.</li>
 <li><code>$runner_set</code> (<code>label_values(actions_gateway_runnerset_worker_quota_pressure{namespace="$namespace"}, runner_set)</code>) filters to a specific <code>RunnerSet</code> on the scale-set and v2 capacity panels of the tenant dashboard.
   It reads its label values from the Q319 capacity gauges, which are emitted for every <code>RunnerSet</code>.</li>

@@ -2736,7 +2736,7 @@
 <p><strong>Status (2026-08-14): done.</strong> 71 reasons walked and given a tier: 45 condition reasons (34 Both, 5 classic-only, 6 scale-set-only) and 26 Event reasons (12 Both, 6 classic-only, 8 scale-set-only), with <code>make reason-tiers-check</code> holding both tables to the source.
 What the walk found is in <a href="#6-what-the-walk-found">§6</a>.</p>
 </blockquote>
-<p>Q776 made the AGC's <em>metric</em> surface derive itself: every <code>actions_gateway_*</code> series carries a tier in the <a href="../../../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a>, and <code>make metric-tiers-check</code> fails a series added without one.
+<p>Q776 made the AGC's <em>metric</em> surface derive itself: every <code>actions_gateway_*</code> series carries a tier in the acquisition-tier ledger, and <code>make metric-tiers-check</code> fails a series added without one.
 Condition reasons and Event reasons are the other two signals an operator sees, they are enumerable the same way, and neither is gated.
 A capability that reaches only the classic tier is therefore still invisible if it surfaces as a condition or an Event rather than as a counter.
 That is the failure mode Q683, Q691, Q713 and Q844 each demonstrated after parity had been declared.</p>
@@ -2748,7 +2748,7 @@ That is the precondition <a href="../release-1.5/#scope-reopened-2026-08-14-what
 Both get a ledger row naming the tier, and a gate that fails a missing row, a bad tier value, and a single-tier row the source refutes.</p>
 <p><strong>Out.</strong> The GMC and proxy binaries: neither acquires jobs, so neither has a tier.
 That is the exclusion the metric ledger already states.
-Label values were Q851, a separate row, since shipped as <a href="../../../operations/observability-metrics/#label-value-reach">Label-value reach</a>; prose surfaces were Q848, shipped as the <a href="../../../development/testing/#the-prose-tier-claim-gate">prose tier-claim gate</a>.</p>
+Label values were Q851, a separate row, since shipped as Label-value reach; prose surfaces were Q848, shipped as the <a href="../../../development/testing/#the-prose-tier-claim-gate">prose tier-claim gate</a>.</p>
 <h2 id="2-decisions">2. Decisions<a class="headerlink" href="#2-decisions" title="Permanent link">&para;</a></h2>
 <p><strong>A second tool, not a rename.</strong> The metric gate ships as <code>make metric-tiers-check</code>, and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/releases/v1.5.0.md"><code>docs/releases/v1.5.0.md</code></a> records it under that name.
 A shipped release note is a historical record, so renaming <code>metrictiers</code> would either falsify it or leave the two out of step.

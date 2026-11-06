@@ -3144,8 +3144,8 @@ For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.m
 </tbody>
 </table>
 <blockquote>
-<p><strong>In-flight jobs are not recoverable.</strong> Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run.
-Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes.
+<p><strong>An AGC outage does not stop a running job, but deleting the gateway does.</strong> Worker pods keep running while the AGC is down, and gateway teardown deletes them (see the <code>RunnerSet</code> row above), so any job they were running needs a manual re-run.
+Queued jobs stay queued at GitHub until the AGC returns and advertises capacity.
 This matches <a href="../runbook/#agc-total-failure">Runbook — AGC Total Failure</a>.</p>
 </blockquote>
 <hr />

@@ -2945,7 +2945,7 @@ Migrating first makes that choice explicit instead of leaving it to the upgrade.
 <li><strong>Standalone / shareable egress proxy.</strong> The inline proxy becomes an <code>EgressProxy</code> kind any number of <code>RunnerSet</code>s can point at.</li>
 <li><strong>Namespace-scoped Pod Security profile.</strong> <code>securityProfile</code> moves off the per-gateway spec onto the namespace, matching how Pod Security Admission actually works.</li>
 <li><strong>Single-acquirer job acquisition.</strong> <code>ScaleSet</code> holds one listener per runner set, so GitHub never assigns beyond advertised capacity.
-  Classic's many-acquirers model can mark a job <code>in_progress</code> and then fail to provision a worker for it; measured on this project's own dogfood tenant, that orphaned 81% of acquired jobs (<a href="../troubleshooting/#concurrent-job-burst-serializes-to-1-worker-duplicate-job-acquisition">troubleshooting</a>).</li>
+  Classic's many-acquirers model can mark a job <code>in_progress</code> and then fail to provision a worker for it; measured on this project's own dogfood tenant, that orphaned 81% of acquired jobs.</li>
 </ul>
 <p>Full rationale: <a href="../../design/appendix-h-v2-api-decomposition/">Appendix H</a>.</p>
 <h2 id="the-dual-read-window-closed-at-v200">The dual-read window closed at <code>v2.0.0</code><a class="headerlink" href="#the-dual-read-window-closed-at-v200" title="Permanent link">&para;</a></h2>

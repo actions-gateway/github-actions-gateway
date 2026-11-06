@@ -3390,7 +3390,7 @@ For day-2 operations after onboarding, see the <a href="../runbook/">Runbook</a>
 <p class="admonition-title">New tenants: onboard on the v2 API</p>
 <p>Steps 0–3 (GitHub App, Secret, <code>ResourceQuota</code>) are the same for every tenant.
 At the gateway step, the recommended shape for a <strong>new</strong> tenant is the <strong>v2 API</strong> at <code>actions-gateway.com/v2</code> — see <a href="#v2-api-multiple-gateways-per-namespace">v2 API</a> below and the <a href="../../getting-started/#4-create-your-gateway-and-runner-set-v2-recommended">getting-started v2 walkthrough</a>.
-The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsgateway-resource">Step 2</a> is still fully supported but <strong><a href="../v1alpha1-deprecation/">deprecated and removed at <code>v2.0.0</code></a></strong>, along with the Classic protocol; already on v1?
+The single-CR <code>v1alpha1</code> flow in <a href="#step-2-create-the-actionsgateway-resource">Step 2</a> is still fully supported but <strong><a href="../v1alpha1-deprecation/">deprecated and removed at <code>v2.0.0</code></a></strong>; already on v1?
 <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> moves you across.</p>
 </div>
 <hr />
@@ -3720,22 +3720,17 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 <a id="__codelineno-9-49" name="__codelineno-9-49" href="#__codelineno-9-49"></a><span class="w">  </span><span class="c1"># Step 1b — it is not a field on this CR.</span>
 <a id="__codelineno-9-50" name="__codelineno-9-50" href="#__codelineno-9-50"></a><span class="w">  </span><span class="c1"># A runner group has no `name` field — the RunnerGroup CR name is derived from</span>
 <a id="__codelineno-9-51" name="__codelineno-9-51" href="#__codelineno-9-51"></a><span class="w">  </span><span class="c1"># the gateway name + the group's first runnerLabel (here "linux").</span>
-<a id="__codelineno-9-52" name="__codelineno-9-52" href="#__codelineno-9-52"></a><span class="w">  </span><span class="c1"># That derived name is the group's agent-identity stem, which must be unique in</span>
-<a id="__codelineno-9-53" name="__codelineno-9-53" href="#__codelineno-9-53"></a><span class="w">  </span><span class="c1"># the namespace AND across every pool bound to this GitHub org, so admission</span>
-<a id="__codelineno-9-54" name="__codelineno-9-54" href="#__codelineno-9-54"></a><span class="w">  </span><span class="c1"># rejects an entry whose derived name is already claimed. See</span>
-<a id="__codelineno-9-55" name="__codelineno-9-55" href="#__codelineno-9-55"></a><span class="w">  </span><span class="c1"># troubleshooting.md#runnerset-or-actionsgateway-rejected-agent-identity-already-claimed</span>
-<a id="__codelineno-9-56" name="__codelineno-9-56" href="#__codelineno-9-56"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
-<a id="__codelineno-9-57" name="__codelineno-9-57" href="#__codelineno-9-57"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"self-hosted"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-9-58" name="__codelineno-9-58" href="#__codelineno-9-58"></a><span class="w">      </span><span class="nt">maxListeners</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<a id="__codelineno-9-59" name="__codelineno-9-59" href="#__codelineno-9-59"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
-<a id="__codelineno-9-60" name="__codelineno-9-60" href="#__codelineno-9-60"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
-<a id="__codelineno-9-61" name="__codelineno-9-61" href="#__codelineno-9-61"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-9-62" name="__codelineno-9-62" href="#__codelineno-9-62"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
-<a id="__codelineno-9-63" name="__codelineno-9-63" href="#__codelineno-9-63"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
-<a id="__codelineno-9-64" name="__codelineno-9-64" href="#__codelineno-9-64"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
-<a id="__codelineno-9-65" name="__codelineno-9-65" href="#__codelineno-9-65"></a><span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
-<a id="__codelineno-9-66" name="__codelineno-9-66" href="#__codelineno-9-66"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span>
-<a id="__codelineno-9-67" name="__codelineno-9-67" href="#__codelineno-9-67"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"2Gi"</span>
+<a id="__codelineno-9-52" name="__codelineno-9-52" href="#__codelineno-9-52"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
+<a id="__codelineno-9-53" name="__codelineno-9-53" href="#__codelineno-9-53"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"linux"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"self-hosted"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-9-54" name="__codelineno-9-54" href="#__codelineno-9-54"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<a id="__codelineno-9-55" name="__codelineno-9-55" href="#__codelineno-9-55"></a><span class="w">      </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-9-56" name="__codelineno-9-56" href="#__codelineno-9-56"></a><span class="w">        </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-9-57" name="__codelineno-9-57" href="#__codelineno-9-57"></a><span class="w">          </span><span class="nt">containers</span><span class="p">:</span>
+<a id="__codelineno-9-58" name="__codelineno-9-58" href="#__codelineno-9-58"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner</span>
+<a id="__codelineno-9-59" name="__codelineno-9-59" href="#__codelineno-9-59"></a><span class="w">              </span><span class="nt">resources</span><span class="p">:</span>
+<a id="__codelineno-9-60" name="__codelineno-9-60" href="#__codelineno-9-60"></a><span class="w">                </span><span class="nt">requests</span><span class="p">:</span>
+<a id="__codelineno-9-61" name="__codelineno-9-61" href="#__codelineno-9-61"></a><span class="w">                  </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="s">"1"</span>
+<a id="__codelineno-9-62" name="__codelineno-9-62" href="#__codelineno-9-62"></a><span class="w">                  </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="s">"2Gi"</span>
 </code></pre></div>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>actionsgateway.yaml
 </code></pre></div>
@@ -3747,7 +3742,7 @@ See <a href="../troubleshooting/#second-actionsgateway-in-a-namespace-rejected-s
 <a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">      </span><span class="nt">completedPodTTL</span><span class="p">:</span><span class="w"> </span><span class="s">"30m"</span><span class="w">      </span><span class="c1"># longer debugging window for failed jobs</span>
 <a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="nt">pendingPodDeadline</span><span class="p">:</span><span class="w"> </span><span class="s">"30m"</span><span class="w">   </span><span class="c1"># GPU node provisioning can exceed the 10m default</span>
 </code></pre></div>
-<p>A third cleanup arm has no knob: on the ScaleSet protocol, a worker pod still <code>Running</code> five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing.
+<p>A third cleanup arm has no knob: a worker pod still <code>Running</code> five minutes after GitHub reports its job terminal is deleted, because it is a worker that never received its job (or one held open by a container that outlived the runner) and it is holding a slot for nothing.
 It emits a <code>WorkerPodOrphanedRunning</code> Warning Event — see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>.
 A pod whose job is still assigned is never touched, however long it runs.</p>
 <p>A reaped Pending pod emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup and cancels the job (it never started); see <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">troubleshooting: worker pod reaped while Pending</a>.</p>
@@ -3755,35 +3750,33 @@ A pod whose job is still assigned is never touched, however long it runs.</p>
 It is deleted as soon as the job finishes — independent of <code>completedPodTTL</code>, which retains only the pod — so <code>kubectl get secrets -n &lt;tenant-ns&gt;</code> shows Secrets for in-flight jobs only, never a backlog proportional to jobs run.
 Both objects also carry an <code>OwnerReference</code> to their RunnerGroup/RunnerSet as a backstop, so deleting the owner cascade-deletes anything still present.
 If you do see <code>job-</code> or <code>job-ss-</code> Secrets outliving their pods, check the AGC log for <code>reclaim completed job's worker Secret</code> warnings — a persistently failing delete (usually an RBAC regression on <code>secrets</code>) falls back to that cascade-GC and leaves credentials in the namespace until the owner is deleted.</p>
-<p><strong>Up to three small ConfigMaps per ScaleSet RunnerSet is normal.</strong> All are labelled <code>actions-gateway.com/runner-set=&lt;name&gt;</code>, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
+<p><strong>Up to three small ConfigMaps per <code>RunnerSet</code> is normal.</strong> All are labelled <code>actions-gateway.com/runner-set=&lt;name&gt;</code>, bounded rather than accumulating, owner-ref'd to their RunnerSet so they are garbage-collected with it, and neither is something to edit.
 <code>scaleset-guards-&lt;runnerset&gt;</code> is the AGC's durable record of jobs it has concluded whose queue messages are not yet deleted, which is what stops a hard-killed AGC from re-running a finished job's assignment (Q606); a hand-edited one fails the listener start, see <a href="../troubleshooting/#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap">troubleshooting</a>.
 <code>scaleset-recovery-claims-&lt;runnerset&gt;</code> appears only once a worker of that set has been disrupted: it records which disruptions have already been recovered, so a drained or preempted worker's run is re-run exactly once even though the pod that used to hold that record is gone (Q1108).
 It holds claims rather than work, so deleting it re-opens the at-most-once window for whatever is in flight at that instant and costs nothing else.
 <code>scaleset-failures-&lt;runnerset&gt;</code> appears beside it on the same occasion: it holds each run's <code>maxEvictionRetries</code> budget and what each automatic re-run covered, so an AGC restart does not refill a budget (Q1182).
 Deleting it resets every run's budget for that set.</p>
-<p><strong>Optional — worker scale-up rate limit (<code>scaleUp</code>, opt-in, default-off).</strong> Each <code>runnerGroups[]</code> entry accepts an optional <code>scaleUp</code> token bucket that caps the <strong>rate</strong> at which the AGC <em>creates</em> new worker pods.
+<p><strong>Optional — worker scale-up rate limit (<code>scaleUp</code>, opt-in, default-off).</strong> A <code>RunnerSet</code> accepts an optional <code>spec.scaleUp</code> token bucket that caps the <strong>rate</strong> at which the AGC <em>creates</em> new worker pods.
 It is <strong>off by default</strong> — omit it and provisioning stays immediate (GAG's zero-idle default).
 It is <strong>not</strong> the same as <code>maxWorkers</code>: <code>maxWorkers</code> caps how <em>many</em> worker pods run at once (a ceiling), while <code>scaleUp</code> caps how <em>fast</em> they start (a ramp).
-Reach for it only when a burst of simultaneously-acquired jobs stampedes a shared, rate-sensitive <strong>egress</strong> path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the <em>onset</em> of connections (not the steady-state count) is what causes damage.
+Reach for it only when a burst of simultaneously assigned jobs stampedes a shared, rate-sensitive <strong>egress</strong> path — a NAT/SNAT gateway, a stateful firewall's connection-tracking table, or a site-to-site VPN — where the <em>onset</em> of connections (not the steady-state count) is what causes damage.
 It deliberately defers work, trading time-to-pickup for a gentler ramp.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="w">  </span><span class="nt">runnerGroups</span><span class="p">:</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"self-hosted"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"linux"</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">      </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w">            </span><span class="c1"># ceiling: at most 200 concurrent worker pods</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">      </span><span class="nt">scaleUp</span><span class="p">:</span>
-<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">        </span><span class="nt">maxPerSecond</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">         </span><span class="c1"># ramp: sustained ≤10 new worker pods/second…</span>
-<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">        </span><span class="nt">burst</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w">                </span><span class="c1"># …after an initial instantaneous batch of 20</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">runnerLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"self-hosted"</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"linux"</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">maxWorkers</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w">            </span><span class="c1"># ceiling: at most 200 concurrent worker pods</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">scaleUp</span><span class="p">:</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">maxPerSecond</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">         </span><span class="c1"># ramp: sustained ≤10 new worker pods/second…</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">burst</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span><span class="w">                </span><span class="c1"># …after an initial instantaneous batch of 20</span>
 </code></pre></div>
 <ul>
 <li><code>maxPerSecond</code> (required, ≥1): the sustained pod-creation rate once the burst is spent.</li>
 <li><code>burst</code> (optional, ≥1): the largest instantaneous batch before throttling engages; <strong>defaults to <code>maxPerSecond</code></strong> (one second's worth) when omitted.</li>
 </ul>
-<p>When the bucket is empty the AGC <strong>withholds intake</strong> rather than delaying a job it has already taken on: it declines to claim the next job, leaving it queued at GitHub for redelivery, and no job ever waits for a token while holding a GitHub job lock (Q717).
-That is what makes a low <code>maxPerSecond</code> safe against a large burst — the ramp defers <em>unclaimed</em> jobs, so nothing sits on a lock for the ramp's duration and no job is cancelled by a lock lapsing part-way through.
-Each withheld job increments <code>actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}</code>; a sustained non-zero rate means the ramp is actively smoothing a burst (see <a href="../observability/">observability: metrics</a>).
-Set <code>maxPerSecond</code> high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is now time-to-pickup rather than a held lock.</p>
-<p>A token is charged per worker pod, not per delivered job.
-GitHub fans one queued job out to several sibling sessions at once and only one of them provisions, so the duplicates hand their tokens back and the ramp you configure is the ramp you get (Q972).
-A failed <code>acquirejob</code> returns its token on the same rule; a job that reaches pod creation keeps it.</p>
+<p>When the bucket is low the AGC <strong>advertises less capacity</strong> on its next long poll rather than delaying a job it has already taken on, so GitHub does not assign the jobs the bucket cannot absorb and they stay queued.
+That is what makes a low <code>maxPerSecond</code> safe against a large burst: the ramp defers <em>unassigned</em> jobs.
+The withheld slots read as <code>actions_gateway_scaleset_capacity_withheld{reason="scaleup"}</code>; a sustained non-zero reading means the ramp is actively smoothing a burst (see <a href="../observability/">observability: metrics</a>).
+<code>actions_gateway_worker_scaleup_throttled_total{namespace, runner_group}</code> counts only a pod creation that still had to wait for a token, which means the advertisement was stale.
+Set <code>maxPerSecond</code> high enough that jobs are picked up promptly once the burst passes: the cost of a low rate is time-to-pickup.</p>
 <p><strong>Pick the right tool for the stampede.</strong> A scale-up rate limit is the wrong fix for some bursts:</p>
 <table>
 <thead>
@@ -3812,12 +3805,8 @@ A failed <code>acquirejob</code> returns its token on the same rule; a job that 
 </tbody>
 </table>
 <p>It coexists with the cluster autoscaler / Karpenter: bounding pod-admission rate eases the node-scale-up burst they react to, and they keep their own independent rate controls.</p>
-<blockquote>
-<p><strong>v2 (<code>RunnerSet</code>)</strong> carries the same <code>spec.scaleUp</code> field with identical semantics.
-A <code>ScaleSet</code>-protocol set expresses it as a smaller advertised capacity per long-poll rather than as a per-job refusal, so GitHub never assigns the jobs in the first place; the ramp is the same and the accounting appears as <code>actions_gateway_scaleset_capacity_withheld{reason="scaleup"}</code>.</p>
-</blockquote>
-<p><strong>Optional — refuse jobs the cluster can't place (<code>capacityGate</code>, v2 only, opt-in, default-off).</strong> A <code>RunnerSet</code> accepts an optional <code>spec.capacityGate</code> that adds a <em>placeability</em> rung to the pre-claim admission gate.
-Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, holds the GitHub job lock until <code>pendingPodDeadline</code>, and ends as a <strong>cancelled</strong> workflow run.
+<p><strong>Optional — refuse jobs the cluster can't place (<code>capacityGate</code>, v2 only, opt-in, default-off).</strong> A <code>RunnerSet</code> accepts an optional <code>spec.capacityGate</code> that adds a <em>placeability</em> rung to the capacity the AGC advertises.
+Without it, a set whose worker shape has become unplaceable — a drained node pool, a changed taint, spot capacity gone — keeps taking on jobs, and each one spends a single-use runner registration, leaves a worker pod <code>Pending</code> until <code>pendingPodDeadline</code>, and ends as a <strong>cancelled</strong> workflow run.
 With it, those jobs stay queued at GitHub instead.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">spec</span><span class="p">:</span>
 <a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">capacityGate</span><span class="p">:</span>
@@ -3892,15 +3881,15 @@ So the gate takes one input from each party, and a runner set cannot choose a si
 <ul>
 <li><strong>It throttles, it does not seal.</strong> The signal comes from a stuck worker pod, so the reaper deleting that pod at <code>pendingPodDeadline</code> reopens intake for one job; if the shape is still unplaceable, that job's pod closes the gate again.
   Budget for roughly one wasted claim per <code>pendingPodDeadline</code> window, not zero.</li>
-<li><strong>A gated set says so.</strong> It reports <code>WorkerCapacityDeclined=True</code> with a Warning event, and either <code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code> (default tier) or <code>actions_gateway_jobs_admission_rejected_total{reason="capacity"}</code> (classic) moves.
+<li><strong>A gated set says so.</strong> It reports <code>WorkerCapacityDeclined=True</code> with a Warning event, and <code>actions_gateway_scaleset_capacity_withheld{reason="capacity"}</code> moves.
   Diagnosis and the one-line rollback: <a href="../troubleshooting/#runnerset-reports-workercapacitydeclined-the-gateway-stopped-claiming-jobs">troubleshooting</a>.</li>
 </ul>
 <p>Everything about it fails <strong>open</strong>: an unreadable set, an unresolved gateway or template, an unreadable pod list, an unreadable Event list, an unset <code>clusterCapacity</code>, and a mode this AGC does not implement all leave intake exactly as it is today. v1 <code>RunnerGroup</code> has no equivalent field and never will — v1 is terminal.</p>
 <p><strong>Changing <code>runnerGroups</code> later.</strong> Editing <code>spec.runnerGroups</code> on an existing <code>ActionsGateway</code> reconciles to the desired set: added entries create new <code>RunnerGroup</code> CRs, and <strong>removing an entry deletes its <code>RunnerGroup</code></strong> (which stops its listeners and cascades to its worker pods).
 Reordering entries is safe — the GMC keys pruning on owner labels, not list position, so a reorder never deletes or recreates a group.
-Removing an entry is the way to retire a runner group; <code>maxListeners</code> has a minimum of <code>1</code>, so there is no in-place scale-to-zero.</p>
+Removing an entry is the way to retire a runner group.</p>
 <p><strong>Worker image — the default works out of the box.</strong> A plain install runs jobs with no <code>workerImage</code> set: the AGC <strong>injects</strong> GAG's wrapper into every worker pod — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — so the runner image itself can be the unmodified upstream <code>ghcr.io/actions/actions-runner</code> (the default) or <strong>any <code>actions/runner</code>-derived image</strong>.
-The wrapper is what feeds the mounted job payload + JIT config into <code>Runner.Worker</code>; injecting it means the runner image no longer has to carry it.
+The wrapper is what hands the mounted JIT config to the runner's <code>run.sh</code>; injecting it means the runner image does not have to carry it.
 Set <code>workerImage</code> only to use a <strong>custom</strong> image (your own tools, a pinned digest) — the wrapper is injected into that too.
 The upstream <code>actions-runner</code> (and GAG's images built on it) run as UID 1001, so on every profile except <code>privileged</code> the AGC stamps <code>runAsNonRoot: true</code> and gap-fills <code>runAsUser: 1001</code> automatically.
 If you point <code>workerImage</code> at a <strong>custom</strong> image whose user is <strong>not</strong> UID 1001 — a different named user, or one that runs as root — set <code>securityContext.runAsUser</code> (or <code>runAsNonRoot: false</code> for a root-based image) on the runner container in the <code>podTemplate</code>; otherwise kubelet rejects the pod with <code>CreateContainerConfigError</code>.
@@ -3988,10 +3977,10 @@ The GMC threads it to both workloads as the <code>LOG_LEVEL</code> environment v
 </code></pre></div>
 <ul>
 <li><strong>The default is <code>info</code>, never <code>debug</code>.</strong> A CR that omits the field — or sets it back to <code>info</code> — runs at <code>info</code>.
-  At thousands of concurrent sessions the per-session/per-job <code>debug</code> lines dominate log volume, so <code>debug</code> is a deliberate, temporary opt-in, not a steady state.</li>
+  At high job volume the per-job <code>debug</code> lines dominate log volume, so <code>debug</code> is a deliberate, temporary opt-in, not a steady state.</li>
 <li><strong>Changing it is a rolling restart, not a hot reload.</strong> The new level takes effect once the AGC and proxy pods roll (the value is part of their pod templates).
-  Expect the AGC's listener pool to drain and re-establish; in-flight jobs finish on the old pod within its termination grace period.</li>
-<li><code>debug</code> surfaces the AGC's per-session → per-job → per-pod lifecycle lines (the listener/multiplexer/provisioner traces, each carrying <code>namespace</code>/<code>group</code>/<code>sessionId</code>/<code>podName</code> correlation fields) and the proxy's per-CONNECT detail.
+  Expect the AGC's listener sessions to close and re-open; jobs already running in worker pods are unaffected, because each runner holds its own session with GitHub.</li>
+<li><code>debug</code> surfaces the AGC's per-job and per-pod lifecycle lines (the listener and provisioner traces; <a href="../observability-logging/">observability: logging</a> lists their correlation fields) and the proxy's per-CONNECT detail.
   The grep anchors are in <a href="../observability-logging/#debug-diagnostics-for-otherwise-silent-paths">observability — debug diagnostics</a>.</li>
 <li>Only <code>info</code> and <code>debug</code> are accepted; admission rejects any other value.</li>
 <li><strong>v2 splits the knob per kind.</strong> On the v2 (<code>actions-gateway.com</code>) API, <code>ActionsGateway.spec.logLevel</code> covers the AGC only; a proxy pool carries its own <code>EgressProxy.spec.logLevel</code> (same <code>info</code> | <code>debug</code> values and default, same rolling-restart semantics), so a shared pool can be flipped to <code>debug</code> without touching any gateway:</li>
@@ -4173,7 +4162,7 @@ See <a href="../troubleshooting/#proxy-pool-not-scaling">Troubleshooting — Pro
 <hr />
 <h2 id="v2-api-multiple-gateways-per-namespace">v2 API: multiple gateways per namespace<a class="headerlink" href="#v2-api-multiple-gateways-per-namespace" title="Permanent link">&para;</a></h2>
 <blockquote>
-<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2</code></strong> — the General Availability (GA) version, ScaleSet-only, the storage version since 1.10, and the version every <strong>new</strong> tenant should use.
+<p><strong>Audience:</strong> Platform engineer onboarding a tenant on the <strong><code>actions-gateway.com</code></strong> API, at <strong><code>v2</code></strong> — the General Availability (GA) version, the storage version since 1.10, and the version every <strong>new</strong> tenant should use.
 It is served <em>beside</em> <code>v1alpha1</code>, so everything above (the deprecated <code>actions-gateway.github.com/v1alpha1</code> flow) keeps working while you adopt it.
 Install the opt-in <code>actions-gateway-crds-v2</code> chart first; see <a href="../../getting-started/#1-deploy-the-gmc">Getting Started — Deploy the GMC</a>.</p>
 </blockquote>
@@ -4276,8 +4265,7 @@ Unset, the pool serves its own namespace only.</p>
 <p>The set's <code>proxyRef</code> takes precedence over the gateway's <code>defaultProxyRef</code>, so only <code>gpu</code>'s workers move; their <code>HTTPS_PROXY</code> and mounted proxy CA both switch to <code>heavy</code>.
 The namespace <code>ResourceQuota</code> now has to hold both pools at their <code>maxReplicas</code>, so add the second pool's term when <a href="#step-1b-set-the-platform-owned-resourcequota">sizing it</a>.</p>
 <h3 id="job-acquisition-and-how-labels-route">Job acquisition, and how labels route<a class="headerlink" href="#job-acquisition-and-how-labels-route" title="Permanent link">&para;</a></h3>
-<p>On <code>v2</code> there is nothing to choose: every <code>RunnerSet</code> acquires jobs with the <strong>runner-scale-set message-queue protocol</strong> — one listener session per set, capacity-gated assignment, and a full-runner worker.
-It is the only protocol <code>v2</code> serves, because it removes a many-acquirers job-assignment race the older classic protocol was subject to under high burst (validated end-to-end before the default flip, Q264).</p>
+<p>On <code>v2</code> there is nothing to choose: every <code>RunnerSet</code> acquires jobs with the <strong>runner-scale-set message-queue protocol</strong> — one listener session per set, capacity-gated assignment, and a full-runner worker.</p>
 <p>The rules that follow from it, and the ones most likely to bite when you author a set by hand:</p>
 <ul>
 <li><strong>Every <code>runnerLabel</code> is a <code>runs-on</code> match target</strong>, so a workflow may name the set with a single label or with an array (<code>runs-on: [linux, gpu]</code>).
@@ -4286,7 +4274,7 @@ It is the only protocol <code>v2</code> serves, because it removes a many-acquir
   Reordering the list renames the scale set and orphans the old one, so append rather than prepend.</li>
 <li><strong>The first label is unique per GitHub org, enterprise, or repo.</strong> Two sets claiming the same <code>runnerLabels[0]</code> would register the same scale-set name at GitHub; the second is rejected.
   The boundary is the <code>githubURL</code> the set's gateway names, <strong>not the namespace</strong>: two sets in different namespaces whose gateways point at the same org still collide, so a shard of one org across namespaces needs distinct first labels per shard.
-  Later labels may overlap freely.</li>
+  Later labels may overlap freely, and so may the <code>RunnerSet</code> names: two sets named <code>build</code> in different namespaces are fine with distinct first labels.</li>
 <li><strong>Declare the full list up front.</strong> A scale set's labels are fixed when it is created and cannot be changed afterwards, so a label added to a live set never reaches GitHub — the set reports <a href="../troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete"><code>RunnerLabelsIncomplete</code></a> rather than failing silently.
   Adding one later means replacing the scale set, which costs the jobs queued against it.
   On GitHub Enterprise Server below 3.21 the same condition covers an appliance that dropped the extra labels because <code>DistributedTask.AllowRunnerScaleSetCustomLabels</code> is off.</li>
@@ -4382,11 +4370,10 @@ Most tenants never set it — the AGC ships with a sensible platform default siz
 </tr>
 </tbody>
 </table>
-<p>This is the <a href="../../design/appendix-a-capacity-slos/">Appendix A</a> capacity sizing: the <code>2Gi</code> memory request is a generous reservation for the ~1,000-goroutine peak burst with headroom for Go runtime overhead; the <code>4Gi</code> memory limit sits well above the working set so transient bursts don't trigger an OOMKill; the <code>2</code>-core CPU limit absorbs reconcile/token-refresh spikes on an otherwise I/O-bound (long-poll-blocked) workload.</p>
+<p>This is the <a href="../../design/appendix-a-capacity-slos/">Appendix A</a> capacity sizing: the <code>2Gi</code> memory request is a generous reservation with headroom for Go runtime overhead; the <code>4Gi</code> memory limit sits well above the working set so transient bursts don't trigger an OOMKill; the <code>2</code>-core CPU limit absorbs reconcile/token-refresh spikes on an otherwise I/O-bound (long-poll-blocked) workload.</p>
 <p><strong>When to tune.</strong> Override only on real signal:</p>
 <ul>
-<li><strong>Memory</strong> — raise <code>requests.memory</code> and <code>limits.memory</code> if you run many RunnerGroups with high <code>maxListeners</code> and observe <code>container OOMKilled</code> events or high GC pressure (<code>go_gc_duration_seconds</code>).
-  Budget roughly <code>sum(maxListeners) × 60 KiB</code> of working set plus the default headroom.</li>
+<li><strong>Memory</strong> — raise <code>requests.memory</code> and <code>limits.memory</code> if you observe <code>container OOMKilled</code> events or high GC pressure (<code>go_gc_duration_seconds</code>).</li>
 <li><strong>CPU</strong> — raise <code>limits.cpu</code> only if <code>container_cpu_throttled_seconds_total</code> shows sustained throttling during peak reconcile churn.</li>
 </ul>
 <p>The override is <strong>per key</strong>: set only the request/limit entries you want to change and every other entry keeps its platform default.
@@ -4406,7 +4393,7 @@ For example, raising just the memory limit leaves the CPU request/limit and memo
 <a id="__codelineno-31-13" name="__codelineno-31-13" href="#__codelineno-31-13"></a><span class="w">    </span><span class="nt">limits</span><span class="p">:</span>
 <a id="__codelineno-31-14" name="__codelineno-31-14" href="#__codelineno-31-14"></a><span class="w">      </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">8Gi</span><span class="w">   </span><span class="c1"># CPU request/limit and memory request stay at the platform default</span>
 </code></pre></div>
-<p>Changing <code>agcResources</code> rolls the AGC Deployment (a rolling restart, not a hot reload); in-flight listener sessions deregister and re-register within GitHub's redelivery window.</p>
+<p>Changing <code>agcResources</code> rolls the AGC Deployment (a rolling restart, not a hot reload); the old pod deletes its listener sessions on SIGTERM, and the new pod re-creates them and replays any unacknowledged messages.</p>
 <p><strong>Recommended floor / footguns.</strong> The AGC is a single pod holding all listener state in memory — size it generously rather than tight:</p>
 <ul>
 <li>Do <strong>not</strong> set <code>limits.memory</code> below ~<code>512Mi</code>, and keep it above your observed working set; a limit under the working set OOMKills the control plane (a <code>CrashLoopBackOff</code>, not a clear error).
@@ -4442,7 +4429,7 @@ Setting the field without it does <strong>not</strong> break the gateway — see
 </tr>
 <tr>
 <td><code>Recreate</code></td>
-<td>Lets the autoscaler evict the AGC pod to resize it. Safe — in-flight listener sessions deregister on SIGTERM and re-register within GitHub's redelivery window — but it <em>is</em> a control-plane restart.</td>
+<td>Lets the autoscaler evict the AGC pod to resize it. Safe, because the old pod deletes its listener sessions on SIGTERM and the new pod re-creates them and replays any unacknowledged messages, but it <em>is</em> a control-plane restart.</td>
 </tr>
 </tbody>
 </table>
@@ -4610,7 +4597,7 @@ A <code>WorkloadIdentity</code> gateway reaches <code>Ready=True</code> once its
 <li>A link to <a href="../observability/">Observability</a> for the metrics they can watch.</li>
 <li>The on-call contact for platform-level issues (AGC crashes, GMC failures).</li>
 </ul>
-<p>Tenants can manage their own RunnerGroup configuration, credential rotation, and <code>maxListeners</code> tuning without platform team involvement after this handoff.</p>
+<p>Tenants can manage their own RunnerGroup configuration, credential rotation, and <code>maxWorkers</code> tuning without platform team involvement after this handoff.</p>
 
 
 

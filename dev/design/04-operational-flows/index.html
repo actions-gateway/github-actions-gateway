@@ -3563,8 +3563,7 @@ The poll loop classifies the two live-observed stale signatures (<a href="../../
 Only when <em>fresh</em> credentials are still rejected (step 5) is the agent re-registered (steps 6–8, <code>actions_gateway_agent_recycles_total{trigger="stale_session"}</code>).</p>
 <p>If the heal itself fails — e.g. GitHub is down — the goroutine exits with a retriable error and the multiplexer's restart backoff paces further attempts; an agent marked consumed is parked in the pool and repaired by the next reconcile rather than being handed to another listener.</p>
 <p>If instead the baseline exits <em>non-retriably</em> (version-too-old, or a credential GitHub treats as permanently dead), the multiplexer deliberately does not restart it — but the RunnerGroup reconciler requeues itself on a bounded interval while the live listener count is below the desired ceiling, so its zero-listener recovery revives the baseline within seconds rather than leaving <code>status.activeSessions</code>/<code>Ready</code> stale until the next watch event or the 10-hour resync (Q137).</p>
-<p><strong>What the tenant observes (pre-fix versions):</strong> runner list emptying after each job, <code>ActiveSessions</code> decaying, jobs queueing forever once ~<code>maxListeners</code> jobs have run.
-See <a href="../../operations/troubleshooting/#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">Troubleshooting — Sessions stuck in 401/EOF GetMessage loops</a>.</p>
+<p><strong>What the tenant observes (pre-fix versions):</strong> runner list emptying after each job, <code>ActiveSessions</code> decaying, jobs queueing forever once ~<code>maxListeners</code> jobs have run.</p>
 <hr />
 <h3 id="worker-pod-eviction-and-auto-retry">Worker Pod Eviction and Auto-Retry<a class="headerlink" href="#worker-pod-eviction-and-auto-retry" title="Permanent link">&para;</a></h3>
 <blockquote>

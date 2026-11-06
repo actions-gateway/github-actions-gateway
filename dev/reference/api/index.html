@@ -5176,13 +5176,13 @@ missing object.</p>
 </tr>
 <tr>
 <td><code>advertisedCapacity</code> <em>integer</em></td>
-<td>AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from <code>kubectl describe</code> alone: the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a classic-tier set, which decides per delivered job and never states a capacity, and on a scale-set set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises.</td>
+<td>AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from <code>kubectl describe</code> alone: the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>withheldCapacity</code> <em><a href="#withheldcapacity">WithheldCapacity</a> array</em></td>
-<td>WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding. That is the same explicit-zero contract the withheld gauge carries.<br />Empty on a classic-tier set and before the first poll, alongside a nil AdvertisedCapacity.</td>
+<td>WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding. That is the same explicit-zero contract the withheld gauge carries.<br />Empty before the first poll, alongside a nil AdvertisedCapacity.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -5346,11 +5346,9 @@ no condition type is set on a template today (Q309).</p>
 <p>ScaleUpRateLimit configures the opt-in per-RunnerSet worker-pod creation-rate
 limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
 Burst is the bucket depth (the largest instantaneous batch before throttling
-engages). An empty bucket withholds intake rather than delaying an acquired job:
-on the classic acquisition tier the AGC declines to claim the next job, leaving it
-queued at GitHub for redelivery, and on the ScaleSet tier it advertises less
-capacity so GitHub assigns less. A ScaleSet worker can still wait briefly at pod
-creation when an advertisement was stale; the classic tier never waits at all.</p>
+engages). An empty bucket withholds intake rather than delaying an assigned job:
+the AGC advertises less capacity so GitHub assigns less. A worker can still wait
+briefly at pod creation when an advertisement was stale.</p>
 <p><em>Appears in:</em>
 - <a href="#runnersetspec">RunnerSetSpec</a></p>
 <table>

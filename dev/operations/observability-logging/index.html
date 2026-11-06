@@ -2969,7 +2969,7 @@ Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not
 On the v2 (<code>actions-gateway.com</code>) API the knob is split per kind: <code>ActionsGateway.spec.logLevel</code> covers the AGC, and each proxy pool carries its own <code>EgressProxy.spec.logLevel</code> (same values, default, and rolling-restart semantics).
 See <a href="../tenant-onboarding/#per-tenant-log-level">tenant onboarding — per-tenant log level</a>.</p>
 <h3 id="debug-diagnostics-for-otherwise-silent-paths">Debug diagnostics for otherwise-silent paths<a class="headerlink" href="#debug-diagnostics-for-otherwise-silent-paths" title="Permanent link">&para;</a></h3>
-<p>Several paths that can stall a tenant or a session emit <strong>debug</strong>-level diagnostics (suppressed at the default info level).
+<p>Several paths that can stall a tenant or a job emit <strong>debug</strong>-level diagnostics (suppressed at the default info level).
 Raise the component to debug to surface them — for a GMC-managed tenant, set <code>spec.logLevel: debug</code> on the <code>ActionsGateway</code> (the GMC threads it to the AGC and proxy); for a standalone controller, <code>--zap-log-level=debug</code>; for a standalone proxy/worker, <code>LOG_LEVEL=debug</code>.
 Useful <code>grep</code> anchors:</p>
 <table>
@@ -2982,16 +2982,6 @@ Useful <code>grep</code> anchors:</p>
 </thead>
 <tbody>
 <tr>
-<td>Session waiting on a worker pod that never reaches a terminal phase (top "stuck session" cause)</td>
-<td>AGC</td>
-<td><code>pod already terminal at registration</code>, <code>registered for pod completion</code>, <code>pod completion observed</code>, <code>pod wait cancelled before completion</code></td>
-</tr>
-<tr>
-<td>Permanent baseline listener crash/restart backoff (otherwise only the <code>exited with error</code> warning is visible)</td>
-<td>AGC</td>
-<td><code>restarting after backoff</code>, <code>restart aborted</code></td>
-</tr>
-<tr>
 <td>Which of the ~12 per-tenant provisioning steps a stalled reconcile is on</td>
 <td>GMC</td>
 <td><code>reconcileResources step</code></td>
@@ -2999,20 +2989,20 @@ Useful <code>grep</code> anchors:</p>
 <tr>
 <td>Per-tenant TLS cert issuance / renewal</td>
 <td>GMC</td>
-<td><code>issuing proxy TLS cert</code>, <code>generating metrics mTLS bundle</code></td>
+<td><code>issuing EgressProxy TLS cert</code>, <code>generating EgressProxy metrics mTLS bundle</code></td>
 </tr>
 <tr>
-<td>Per-session / per-job lifecycle (one line per listener spawn, job pickup, heal, and worker pod)</td>
+<td>One job's path through a scale set (replayed assignment, capacity hold, worker pod, start, and completion)</td>
 <td>AGC</td>
-<td><code>listener goroutine started</code>, <code>job message received</code>, <code>idle shutdown</code>, <code>healing stale session</code>, <code>job finished; recycling single-use JIT agent</code>, <code>job Secret created</code>, <code>worker pod created</code>, <code>worker pod completed</code></td>
+<td><code>scaleset: skipping replayed assignment</code>, <code>job admission deferred</code>, <code>scale-set worker pod created</code>, <code>recorded job start on worker pod</code>, <code>stamped job completion on worker pod</code>, <code>scale-set job Secret reclaimed</code></td>
 </tr>
 </tbody>
 </table>
-<p>These per-session/per-job lines are at <strong>debug</strong> by design: at thousands of concurrent sessions they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
+<p>These per-job lines are at <strong>debug</strong> by design: on a busy gateway they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
 Raise the AGC to debug — <code>spec.logLevel: debug</code> for a GMC-managed tenant, or <code>--zap-log-level=debug</code> standalone — to follow an individual job.</p>
-<p><strong>Correlation fields.</strong> AGC log lines carry structured fields that let you follow one session→job→pod through a log pipeline.
-Filter on <code>namespace</code> and <code>group</code> (RunnerGroup name) to scope to a tenant's RunnerGroup; <code>agentIndex</code> and <code>sessionId</code> identify a single listener goroutine and its current broker session (the <code>sessionId</code> is rebound when a session is healed or an agent recycled, so it always names the live session); <code>podName</code> appears on the provisioner lines for an acquired job's worker pod.
-On the scale-set tier those lines also carry <code>jobID</code> and <code>runID</code>: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.</p>
+<p><strong>Correlation fields.</strong> AGC log lines carry structured fields that let you follow one job to its pod through a log pipeline.
+Filter provisioner lines on <code>namespace</code> and <code>owner</code> (the <code>RunnerSet</code> name) to scope to one set; listener lines name their scale set in <code>scaleSet</code>; <code>podName</code> appears on the provisioner lines for an assigned job's worker pod.
+Those lines also carry <code>jobID</code> and <code>runID</code>: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.</p>
 <p>Admission <strong>rejections</strong> (reserved-namespace, cross-namespace <code>gitHubAppRef</code>, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at <strong>info</strong> — they need no debug flag — as <code>ActionsGateway admission denied</code> with the <code>operation</code>, <code>namespace</code>, <code>name</code>, and <code>reason</code> fields, giving an audit trail of denied attempts.</p>
 <p><strong>API server warnings</strong> (for example, the deprecation warning the apiserver attaches to a deprecated API version) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers.
 The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.</p>
@@ -3147,7 +3137,7 @@ Closing both takes two records, from two processes, joined on the source address
 </tr>
 <tr>
 <td><code>runID</code> / <code>repository</code></td>
-<td>The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose payload carried no run identity</td>
+<td>The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose assignment carried no run identity</td>
 </tr>
 </tbody>
 </table>
@@ -3167,7 +3157,7 @@ The window matters because addresses are reused: a worker pod is deleted when it
 </ul>
 <h3 id="what-never-appears-in-logs">What never appears in logs<a class="headerlink" href="#what-never-appears-in-logs" title="Permanent link">&para;</a></h3>
 <p>Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: <strong>credential material is redacted before a log line is emitted</strong>, not by the log stack afterward.</p>
-<p>Every GitHub response body — broker and runner-scale-set protocol alike — passes through a single redaction path before it can reach a log line or an error message.
+<p>Every GitHub response body passes through a single redaction path before it can reach a log line or an error message.
 It replaces:</p>
 <ul>
 <li>JSON credential fields (<code>access_token</code>, <code>refresh_token</code>, <code>token</code>, <code>encoded_jit_config</code>, <code>client_secret</code>, <code>private_key</code>, <code>password</code>, <code>secret</code>);</li>

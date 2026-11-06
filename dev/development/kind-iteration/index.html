@@ -3067,16 +3067,14 @@ The suite uses this to point AGC at fakegithub:</p>
 <a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nv">AGC_EXTRA_STUB_AUTH_URL</span><span class="o">=</span>http://fakegithub.e2e-infra.svc.cluster.local:8080/token<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nv">AGC_EXTRA_STUB_BROKER_URL</span><span class="o">=</span>http://fakegithub.e2e-infra.svc.cluster.local:8080
 </code></pre></div>
-<p>To swap to real GitHub, unset those (suffix <code>-</code>) and set <code>AGC_EXTRA_GITHUB_ORG_URL</code>:</p>
+<p>To swap to real GitHub, unset those (suffix <code>-</code>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>env<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span>AGC_EXTRA_GITHUB_API_BASE_URL-<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span>AGC_EXTRA_GITHUB_BROKER_URL-<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span>AGC_EXTRA_STUB_AUTH_URL-<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>AGC_EXTRA_STUB_BROKER_URL-<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nv">AGC_EXTRA_GITHUB_ORG_URL</span><span class="o">=</span>https://github.com/&lt;org&gt;/&lt;repo&gt;
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span>AGC_EXTRA_STUB_BROKER_URL-
 </code></pre></div>
-<p>Since the <code>gitHubURL</code> field became required, a GMC-provisioned AGC always carries <code>GITHUB_ORG_URL</code> (threaded from <code>spec.gitHubURL</code>).
-The AGC therefore selects its registrar <strong>stub-first</strong>: when both <code>STUB_AUTH_URL</code> and <code>STUB_BROKER_URL</code> are set it uses the stub registrar regardless of <code>GITHUB_ORG_URL</code>, so the fakegithub overrides above win; unsetting the stub pair (as the real-GitHub swap does) falls through to the GitHub registrar.</p>
+<p>The AGC reads the GitHub URL from the gateway's <code>spec.gitHubURL</code>, so a real-GitHub run points that field at <code>https://github.com/&lt;org&gt;/&lt;repo&gt;</code>.</p>
 <p>The GMC rolls itself after env changes; tenant AGC pods pick up the new env on their next reconcile (force with <code>kubectl annotate actionsgateway &lt;name&gt; -n &lt;ns&gt; poke=$(date +%s) --overwrite</code>).</p>
 <h3 id="a-new-github-rest-call-has-to-reach-the-fake-too">A new GitHub REST call has to reach the fake too<a class="headerlink" href="#a-new-github-rest-call-has-to-reach-the-fake-too" title="Permanent link">&para;</a></h3>
 <p>fakegithub serves the endpoints the AGC calls and 404s everything else, so a call added without a matching handler fails only in the e2e tier, and only for whichever spec happens to exercise it.

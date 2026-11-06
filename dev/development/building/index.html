@@ -2802,14 +2802,13 @@ To cross-build one image explicitly:</p>
 (The <em>index</em> digest depends on both child manifests plus BuildKit's provenance attestation — the reproducibility claim is about the binaries and layers, not registry manifest bytes.)</p>
 <h3 id="runner-version-pin-lockstep">Runner-version pin (lockstep)<a class="headerlink" href="#runner-version-pin-lockstep" title="Permanent link">&para;</a></h3>
 <p>The actions/runner version is pinned in <strong>one</strong> place — <code>RunnerVersion</code> (plus <code>WorkerImageDigest</code>) in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go"><code>cmd/agc/names/names.go</code></a>.
-That single constant drives, and must stay in lockstep with, three consumers:</p>
+That single constant drives, and must stay in lockstep with, two consumers:</p>
 <ul>
-<li>the AGC's <code>DefaultWorkerImage</code> (the worker pod's runner binary),</li>
-<li>the <code>GITHUB_RUNNER_VERSION</code> the GMC injects into the AGC Deployment — forwarded as <code>agent.version</code> on <code>CreateSession</code>, which <strong>GitHub validates</strong> at session creation (an empty or wrong value risks rejection), and</li>
+<li>the AGC's <code>DefaultWorkerImage</code> (the worker pod's runner binary), and</li>
 <li>the <code>FROM</code> tag on the root <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/Dockerfile"><code>Dockerfile</code></a>'s <code>worker</code> stage.</li>
 </ul>
 <p>Dependabot bumps only the Dockerfile, so the lockstep test <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/runner_version_test.go"><code>cmd/agc/names/runner_version_test.go</code></a> fails CI (in the unit tier) when the <code>FROM</code> tag/digest and the constants disagree.
-To bump the version, follow the procedure in the Dockerfile header: update the <code>FROM</code> line <strong>and</strong> <code>RunnerVersion</code> + <code>WorkerImageDigest</code> together; <code>DefaultWorkerImage</code> and <code>GITHUB_RUNNER_VERSION</code> then follow automatically.</p>
+To bump the version, follow the procedure in the Dockerfile header: update the <code>FROM</code> line <strong>and</strong> <code>RunnerVersion</code> + <code>WorkerImageDigest</code> together; <code>DefaultWorkerImage</code> then follows automatically.</p>
 <p>GitHub also stops queueing jobs to a runner that has not updated within 30 days of a newer release, without refusing its connection, so a pin that sits unbumped looks like jobs lapsing rather than an error.
 The scheduled <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/runner-window-watch.yml"><code>runner-window-watch.yml</code></a> counts the days from the first newer <em>stable</em> release's <code>publishedAt</code> and goes red at day 21; when it does, bump the pin by the procedure above.
 It is a scheduled run and not a <code>make check</code> gate because it reads GitHub's release feed and the date, so it would redden unrelated branches.</p>

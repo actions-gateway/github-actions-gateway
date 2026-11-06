@@ -2660,8 +2660,7 @@
 <h1 id="remove-the-classic-code-nothing-can-reach">Remove the classic code nothing can reach<a class="headerlink" href="#remove-the-classic-code-nothing-can-reach" title="Permanent link">&para;</a></h1>
 <p>Q264 removed classic acquisition from the AGC and the GMC, and left code only classic called.
 None of it can run in a supported install, which is why it is not a <code>v2.0.0</code> gate: each item below says where it lives and why nothing reaches it.
-It is dead weight that keeps a second protocol dialect compiling and tested.
-What an operator can still see of the classic tier is <a href="../Q1273/">Q1273</a>, not this row.</p>
+It is dead weight that keeps a second protocol dialect compiling and tested.</p>
 <p><strong>What is left, measured 2026-11-02 by <code>git grep</code> on the Q264 branch and re-checked 2026-11-03:</strong></p>
 <ul>
 <li><strong>The classic broker client</strong>, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/broker/client.go"><code>broker/client.go</code></a> and its tests: <code>CreateSession</code>/<code>GetMessage</code>/<code>AcquireJob</code>/<code>RenewJob</code>/<code>CompleteJob</code>/<code>DeleteSession</code>.
@@ -2679,8 +2678,11 @@ What an operator can still see of the classic tier is <a href="../Q1273/">Q1273<
 <li><strong>The provisioner's classic admission and eviction paths.</strong> <code>Provisioner.Admit</code> and the <code>runnercore.AdmitFunc</code> / <code>AdmitOutcome</code> types it returns have no non-test caller; the <code>AdmitReason*</code> constants stay, because the scale-set capacity advertiser labels its withhold metric with them.
   <code>handleEviction</code>'s classic branch, the in-process <code>evictionCounts</code> budget, runs only when <code>tier</code> is not <code>evictionTierScaleSet</code>, and all four non-test callers (<code>eviction_scaleset.go</code>, <code>oom_class.go</code>, <code>orphaned_scaleset.go</code>, and <code>abandoned_rerun.go</code> via <code>stranded_recheck.go</code>) pass <code>evictionTierScaleSet</code>; the same holds for <code>forceCancelAbandonedRun</code>'s classic branch.
   <code>evictionTierClassic</code> appears on 36 lines of <code>eviction_internal_test.go</code> and <code>abandoned_rerun_internal_test.go</code>.</li>
+<li><strong>The pod waiter's blocking path.</strong> <code>InformerPodWaiter.WaitForCompletion</code> in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/podwaiter.go"><code>podwaiter.go</code></a> has no non-test caller (<code>git grep</code>, 2026-11-06), because the scale-set tier provisions without waiting.
+  The informer handler the waiter also carries still sets <code>PodCreationLatency</code> and <code>JobDuration</code>, so only the wait goes.</li>
 <li><strong>Comment narration.</strong> 209 comment and code lines across 51 AGC files still mention the classic tier (<code>git grep -c -i -w -E 'classic|AcquireJob' -- 'cmd/agc/*.go'</code>, excluding <code>vendor</code> and <code>test/load</code>).
   Q264 fixed the ones that stated something false; most of the rest compare the scale-set path against code that no longer exists ("identical to the classic path", "classic parity"), which the comment standard's no-history rule rules out.
+  Some still state something false, read 2026-11-05: <code>api/apiconditions/conditions.go</code> around lines 556 and 578 says <code>RunnerVersionTooOld</code> has two producers and that the classic listener publishes <code>VersionAccepted</code>, and no non-test code publishes either session reason.
   <code>listener.go</code>, <code>metrics.go</code>, <code>runnerset_scaleset.go</code>, <code>provisioner.go</code> and <code>eviction_scaleset.go</code> hold the most.</li>
 <li><strong>The live-GitHub e2e suite's classic specs</strong> in <code>cmd/gmc/test/e2e/github_e2e_test.go</code>.
   Test-only, and credential-gated: no workflow sets <code>GITHUB_E2E_*</code>, so CI never runs it.

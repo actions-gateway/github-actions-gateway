@@ -1838,6 +1838,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-two-runnersets-may-share-a-name-across-namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: two RunnerSets may share a name across namespaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3933,6 +3944,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-two-runnersets-may-share-a-name-across-namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: two RunnerSets may share a name across namespaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4816,6 +4838,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
 <li><a href="#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks">Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks</a></li>
+<li><a href="#non-breaking-two-runnersets-may-share-a-name-across-namespaces">Non-breaking: two <code>RunnerSet</code>s may share a name across namespaces</a></li>
 <li><a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run">Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run</a></li>
 <li><a href="#non-breaking-egressrulesstale-now-fires-when-no-github-ranges-have-loaded">Non-breaking: <code>EgressRulesStale</code> now fires when no GitHub ranges have loaded</a></li>
 <li><a href="#non-breaking-a-direct-egress-v2-gateway-reports-egressrulesstale-and-pages-on-it">Non-breaking: a direct-egress v2 gateway reports <code>EgressRulesStale</code> and pages on it</a></li>
@@ -5045,7 +5068,8 @@ Server-side apply removes only the fields its own field manager owns, and the <c
 <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>CustomResourceDefinition.apiextensions.k8s.io "runnersets.actions-gateway.com" is invalid: [spec.conversion.strategy: Required value, spec.conversion.webhookClientConfig: Forbidden: should not be set when strategy is not set to Webhook]
 </code></pre></div>
 <p><strong>What to do.</strong> Run <a href="#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2">the <code>storedVersions</code> check</a> first, and stop unless every line reads <code>[v2]</code>.
-The patch below changes the cluster and the apply can still refuse, so anything that would refuse it has to be settled while the webhook is still there.</p>
+The patch below changes the cluster and the apply can still refuse, so anything that would refuse it has to be settled while the webhook is still there.
+Pull the chart at this point too, <a href="#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">as the next section says</a>, so a wrong chart version also fails with nothing changed.</p>
 <p>Then download the release, so a wrong tag fails with nothing changed, remove the webhook from each CRD, and apply straight away, in the same shell:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>curl<span class="w"> </span>-fsSLo<span class="w"> </span>actions-gateway-crds-v2.yaml<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/vX.Y.Z/actions-gateway-crds-v2.yaml
@@ -5215,6 +5239,16 @@ From <code>v2.0.0</code> the GMC deletes the binding itself when the marker goes
 From 1.9 on, neither could see a denial by the five <code>actions-gateway.com</code> webhooks: the alert could fire only for <code>vactionsgateway-v1alpha1.kb.io</code>, and the dashboard's <strong>total denied</strong> series counted that webhook alone.
 Both now name the webhooks the chart ships (Q1267): five from <code>v2.0.0</code>, whose chart no longer ships the <code>v1alpha1</code> one.</p>
 <p><strong>What to do.</strong> Replace the <code>name=~</code> selector in your copy of the alert with the one in <a href="../security-operations/#prometheus-abuse-alerts">security-operations.md</a>, and re-import <code>deploy/monitoring/grafana-dashboard-security.json</code>.</p>
+<h3 id="non-breaking-two-runnersets-may-share-a-name-across-namespaces">Non-breaking: two <code>RunnerSet</code>s may share a name across namespaces<a class="headerlink" href="#non-breaking-two-runnersets-may-share-a-name-across-namespaces" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> nobody has to change anything.
+A platform that picked distinct <code>RunnerSet</code> names only to get past the <code>agent-identity stem … is already claimed</code> rejection may stop.</p>
+<p><strong>What changed.</strong> Admission no longer rejects a <code>RunnerSet</code> because another namespace holds its name under the same GitHub org, enterprise, or repo.
+That rule protected the runner names the classic agent pool derived from the CR name, and that pool no longer exists.
+A set's name now reaches only objects in its own namespace and the scale-set session owner, which is <code>&lt;namespace&gt;/&lt;name&gt;</code>.</p>
+<p><strong>What still has to be unique.</strong> A set's first <code>runnerLabel</code> names its scale set at GitHub, so <a href="../troubleshooting/#runnerset-rejected-duplicate-first-runnerlabel">admission still refuses a duplicate</a> across the whole scope.</p>
+<p><strong>How far this is tested.</strong> The end-to-end suite runs such a pair against its fake GitHub server: each job lands in its own namespace, and deleting one set leaves the other serving.
+No run has tested the pair against github.com or GitHub Enterprise Server.</p>
+<p><strong>Rolling back</strong> to a <code>1.x</code> GMC restores the rejection, which lands on the next write to either object, so rename one of a pair first.</p>
 <h3 id="non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run">Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run<a class="headerlink" href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone whose workers can be reaped by <code>pendingPodDeadline</code> or drained while scheduled but still <code>Pending</code>, typically pulling a large or unpullable image.
 Nothing to do.</p>
@@ -5676,6 +5710,7 @@ Runbook: <a href="../troubleshooting/#a-ghes-appliances-certificate-is-not-trust
 <p><strong>Rolling back</strong> restores the defect for these tenants.
 <code>v1alpha1</code> has no equivalent field and never will — it is frozen and removed at <code>v2.0.0</code>.</p>
 <h3 id="agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name">Agent-identity collisions are now rejected at admission (<code>RunnerSet</code> name, and derived <code>RunnerGroup</code> name)<a class="headerlink" href="#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name" title="Permanent link">&para;</a></h3>
+<p>This section describes the <code>1.x</code> releases; <a href="#non-breaking-two-runnersets-may-share-a-name-across-namespaces"><code>v2.0.0</code> removes the guard</a>.</p>
 <p><strong>Who is affected:</strong> a platform where two runner pools derive the same <strong>agent-identity stem</strong>, the string that <code>agentpool-&lt;stem&gt;-N</code> and the GitHub runner name <code>&lt;stem&gt;-N</code> are both built from.
 Two shapes reach it, and everyone else is unaffected with no configuration change:</p>
 <ul>
@@ -5684,7 +5719,7 @@ Two shapes reach it, and everyone else is unaffected with no configuration chang
 </ul>
 <p>That second shape is the one most likely to be in a running cluster, and it was accepted before this release.
 It was never safe: the runner name is unique per GitHub scope, so both pools register <code>&lt;stem&gt;-N</code> and each 409 is resolved by deleting the incumbent's record.
-The loser reports <code>agent identity is owned by another pool</code> on every reconcile and never recovers (<a href="../troubleshooting/#agent-pool-blocked-another-tenant-owns-the-agent-secret">runbook</a>).</p>
+The loser reports <code>agent identity is owned by another pool</code> on every reconcile and never recovers.</p>
 <p><strong>Nothing is re-validated at upgrade time</strong>, because admission runs on create and update.
 An existing colliding pair keeps running exactly as it did; the rejection lands whenever someone next re-applies either object, which may be long after the upgrade and on a tenant who changed nothing.
 Unlike the scale-set guard above, there is <strong>no</strong> status condition or gauge reporting a pair carried in from an older release: the AGC's existing <code>AgentPoolError</code> Event is the only signal, and it fires only once a pool is actually blocked.</p>
@@ -6201,7 +6236,7 @@ If you run on a slow or heavily loaded API server and see spurious leader-lease 
 <p>The GMC renders each tenant's AGC <code>Deployment</code> from its own configuration, so what a GMC replacement costs tenants turns entirely on whether that configuration changed.</p>
 <p><strong>Restart, failover, eviction, node drain — no tenant impact.</strong> A replacement leader re-derives every AGC pod template identically and writes nothing, so no new <code>pod-template-hash</code> and no new <code>ReplicaSet</code> appear and no AGC pod is replaced.
 This holds for any restart of an unchanged GMC.</p>
-<p><strong>Upgrade — every tenant's AGC rolls, all at once.</strong> These GMC-side values are part of the AGC pod template, and a release normally changes at least the first two:</p>
+<p><strong>Upgrade — every tenant's AGC rolls, all at once.</strong> These GMC-side values are part of the AGC pod template, and a release normally changes at least the first:</p>
 <table>
 <thead>
 <tr>
@@ -6215,10 +6250,6 @@ This holds for any restart of an unchanged GMC.</p>
 <td><code>AGC_IMAGE</code> on the GMC pod (chart value <code>agc.image</code>)</td>
 </tr>
 <tr>
-<td><code>GITHUB_RUNNER_VERSION</code></td>
-<td>compiled into the GMC binary</td>
-</tr>
-<tr>
 <td><code>WRAPPER_IMAGE</code>, <code>WRAPPER_DELIVERY</code></td>
 <td>GMC pod environment</td>
 </tr>
@@ -6228,7 +6259,7 @@ This holds for any restart of an unchanged GMC.</p>
 </tr>
 </tbody>
 </table>
-<p>Every tenant whose template changes rolls, so a GMC upgrade fans out into one <a href="#agc-upgrade">AGC drain window</a> per tenant, concurrently and unstaged — dropped long polls and abandoned RenewJob loops across the whole fleet rather than in one namespace.
+<p>Every tenant whose template changes rolls, so a GMC upgrade fans out into one <a href="#agc-upgrade">AGC drain window</a> per tenant, concurrently and unstaged — closed sessions and no job acquisition across the whole fleet rather than in one namespace.
 Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, and validate with the <a href="#agc-upgrade">AGC post-upgrade checks</a> as well as the GMC ones.</p>
 <p><strong>Do not hand-edit a GMC-managed AGC <code>Deployment</code>.</strong> The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a <code>kubectl set image</code> — or any other direct edit — is reverted within seconds.
 <code>kubectl rollout restart</code> is the one exception, and its history is a trap of its own: see <a href="../troubleshooting/#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts"><code>kubectl rollout restart</code> of a Managed Deployment Reports Success but Nothing Restarts</a>.</p>
@@ -6485,67 +6516,59 @@ A field that only the <code>v2.0.0</code> schema declares is expected to be prun
 <hr />
 <h2 id="agc-upgrade">AGC Upgrade<a class="headerlink" href="#agc-upgrade" title="Permanent link">&para;</a></h2>
 <p>The AGC runs <code>replicas: 1</code>.
-<strong>Every AGC upgrade incurs a brief drain window</strong> — the period between the old pod terminating and the new pod acquiring sessions.
+<strong>Every AGC upgrade incurs a brief drain window</strong> — the period between the old pod terminating and the new pod opening its sessions.
 During this window:</p>
 <ul>
-<li><strong>In-flight long polls</strong> are dropped.
-  GitHub redelivers these jobs within ~2 minutes (GitHub's redelivery window).</li>
-<li><strong>Per-job RenewJob loops</strong> are abandoned.
-  Any job whose lock window (~10 minutes per renewal) expires before the new AGC starts will be cancelled by GitHub.
-  These require manual re-run.</li>
-<li><strong>Queued but unacquired jobs</strong> are redelivered after the session TTL expires (typically &lt; 2 minutes).</li>
+<li><strong>No job is acquired.</strong> Each <code>RunnerSet</code>'s message session is closed, so jobs wait in GitHub's queue for that scale set.</li>
+<li><strong>Unacknowledged assignments replay.</strong> The new session receives them again, and the AGC skips any it already provisioned a worker for.</li>
+<li><strong>Running worker pods are unaffected.</strong> They are separate from the AGC and keep running their jobs.</li>
 </ul>
-<p><strong>Scheduling guidance.</strong> Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends) when in-flight job count is minimal.
-If zero-downtime is required, accept that GitHub redelivery provides effective recovery for most jobs.</p>
+<p><strong>Scheduling guidance.</strong> Schedule AGC upgrades during low-traffic periods (off-peak hours, weekends), when the fewest jobs are waiting to start.</p>
 <h3 id="per-tenant-upgrade-procedure">Per-Tenant Upgrade Procedure<a class="headerlink" href="#per-tenant-upgrade-procedure" title="Permanent link">&para;</a></h3>
 <p>The image change itself is fleet-wide (Step 2), so the per-tenant work is the drain that precedes it and the validation that follows: run Step 1 for each tenant you want drained cleanly, then Steps 3–5 per namespace.</p>
-<p><strong>Step 1: Drain the AGC before upgrading (optional, reduces blackout window)</strong></p>
-<p>The AGC's SIGTERM handler calls <code>DELETE /sessions</code> for all open sessions before exiting, causing GitHub to immediately re-queue unacquired jobs rather than waiting for session TTL.
-The shutdown <strong>blocks until every listener goroutine has issued its session DELETE</strong> — the process does not exit while sessions are still open.
+<p><strong>Step 1: Let the AGC drain (optional, reduces blackout window)</strong></p>
+<p>The AGC's SIGTERM handler deletes each <code>RunnerSet</code>'s message session before exiting.
+A scale set allows one session at a time, so the next AGC cannot open its session until the previous one is gone.
 To rely on this:</p>
 <ul>
 <li>Ensure <code>terminationGracePeriodSeconds</code> on the AGC Deployment is ≥ 30 seconds (the GMC stamps the AGC Deployment with 60s by default).
-  The session drain is bounded at 10 seconds and runs concurrently across RunnerGroups, so it does not scale with listener count.</li>
+  Each session delete is bounded at 10 seconds.</li>
 <li>Do not use <code>kubectl delete pod</code> directly — it sends SIGKILL without a grace period.
   Use <code>kubectl rollout restart</code>, which the reconciler honours on a managed Deployment.</li>
 </ul>
-<p>If a session cannot be deleted (the broker is unreachable during the drain), the AGC retries within its budget and then logs a Warn naming the session before exiting:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>DeleteSession failed; the broker session is leaked until it expires server-side sessionId=... attempts=3 error=...
-</code></pre></div>
-<p>That session's runner stays online on GitHub until the server-side session TTL expires.
-It is harmless but wastes a runner slot for the TTL; a burst of these lines during a rollout points at broker or egress-path reachability, not at the AGC.</p>
+<p>If a session cannot be deleted (GitHub is unreachable during the drain), the new AGC's session is refused until GitHub expires the old one: see <a href="../troubleshooting/#scaleset-runnerset-stuck-not-ready-scalesetlistenerstartfailed-naming-the-guard-configmap"><code>ScaleSetListenerStartFailed</code></a>.</p>
 <p><strong>Step 2: Update the AGC image</strong></p>
 <p>The GMC manages the AGC Deployment, so the AGC image is a GMC-level setting, not a per-namespace one: update the GMC's Helm values with the new AGC image and upgrade the GMC, which then rolls <strong>every</strong> tenant's AGC Deployment at once — see <a href="#a-gmc-restart-costs-tenants-nothing-a-gmc-upgrade-rolls-every-one-of-them">A GMC restart costs tenants nothing; a GMC upgrade rolls every one of them</a> before you schedule it.</p>
 <p>There is no per-namespace alternative.
 <code>kubectl set image</code> on the AGC Deployment appears to work and is reverted on the next reconcile, because the reconciler replaces the managed Deployment's whole spec from its own render.</p>
 <p><strong>Step 3: Watch the rollout</strong></p>
 <p>The AGC Deployment is named per gateway under v2, as <code>&lt;gateway&gt;-agc</code>; under v1 there is one per namespace, named <code>actions-gateway-controller</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a><span class="c1"># v2</span>
-<a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a><span class="c1"># v2</span>
+<a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <p><strong>Step 4: Confirm session recovery</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="c1"># every RunnerSet's listener session should be open again within a few seconds of pod startup</span>
-<a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open{namespace="&lt;namespace&gt;"} == 1 per runner_set</span>
-<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a>
-<a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a><span class="c1"># No new message poll errors</span>
-<a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a><span class="c1"># Metric: rate(actions_gateway_message_poll_errors_total{namespace="&lt;namespace&gt;"}[5m])</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a><span class="c1"># every RunnerSet's listener session should be open again within a few seconds of pod startup</span>
+<a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open{namespace="&lt;namespace&gt;"} == 1 per runner_set</span>
+<a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a>
+<a id="__codelineno-67-4" name="__codelineno-67-4" href="#__codelineno-67-4"></a><span class="c1"># No new message poll errors</span>
+<a id="__codelineno-67-5" name="__codelineno-67-5" href="#__codelineno-67-5"></a><span class="c1"># Metric: rate(actions_gateway_message_poll_errors_total{namespace="&lt;namespace&gt;"}[5m])</span>
 </code></pre></div>
 <p><strong>Step 5: Check for cancelled jobs</strong></p>
 <p>After the rollout, verify that jobs active during the restart have either completed or been redelivered.
 Check the GitHub Actions UI for any unexpectedly cancelled runs.</p>
 <h3 id="agc-rollback">AGC rollback<a class="headerlink" href="#agc-rollback" title="Permanent link">&para;</a></h3>
 <p>Roll the AGC image back where the GMC reads it, not on the Deployment — <code>kubectl rollout undo</code> on a managed AGC Deployment is reverted on the next reconcile, same as <code>kubectl set image</code>:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a><span class="c1"># Re-run the GMC upgrade pinning the previous AGC digest, then watch the AGCs converge</span>
-<a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-69-3" name="__codelineno-69-3" href="#__codelineno-69-3"></a><span class="w">  </span>--version<span class="w"> </span>&lt;chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-69-4" name="__codelineno-69-4" href="#__codelineno-69-4"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;previous-agc&gt;
-<a id="__codelineno-69-5" name="__codelineno-69-5" href="#__codelineno-69-5"></a><span class="c1"># v2</span>
-<a id="__codelineno-69-6" name="__codelineno-69-6" href="#__codelineno-69-6"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-69-7" name="__codelineno-69-7" href="#__codelineno-69-7"></a><span class="c1"># v1 (legacy)</span>
-<a id="__codelineno-69-8" name="__codelineno-69-8" href="#__codelineno-69-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="c1"># Re-run the GMC upgrade pinning the previous AGC digest, then watch the AGCs converge</span>
+<a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>helm<span class="w"> </span>upgrade<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a><span class="w">  </span>--version<span class="w"> </span>&lt;chart-version&gt;<span class="w"> </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--reset-then-reuse-values<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;previous-agc&gt;
+<a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a><span class="c1"># v2</span>
+<a id="__codelineno-68-6" name="__codelineno-68-6" href="#__codelineno-68-6"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/&lt;gateway&gt;-agc<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-68-7" name="__codelineno-68-7" href="#__codelineno-68-7"></a><span class="c1"># v1 (legacy)</span>
+<a id="__codelineno-68-8" name="__codelineno-68-8" href="#__codelineno-68-8"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <p>Then confirm sessions are re-established and job acquisition resumes.</p>
 <hr />
@@ -6556,58 +6579,58 @@ Rolling updates are non-disruptive as long as the <code>PodDisruptionBudget</cod
 Both stages share one 45s budget inside a 60s <code>terminationGracePeriodSeconds</code>, so a pod with quiet traffic typically terminates in a few seconds and a busy one takes longer.
 Pods that appear to hang for tens of seconds during a rollout are draining, not stuck — see <a href="../troubleshooting/#proxy-tunnel-cut-during-a-rollout">Proxy Tunnel Cut During a Rollout</a> for the budget breakdown, and the spot/preemptible note beneath it if your nodes reclaim on a short notice.</p>
 <h3 id="step-1-pre-upgrade-checks">Step 1: Pre-Upgrade Checks<a class="headerlink" href="#step-1-pre-upgrade-checks" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a><span class="c1"># Confirm the PodDisruptionBudget is in place</span>
-<a id="__codelineno-70-2" name="__codelineno-70-2" href="#__codelineno-70-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pdb<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
-<a id="__codelineno-70-3" name="__codelineno-70-3" href="#__codelineno-70-3"></a>
-<a id="__codelineno-70-4" name="__codelineno-70-4" href="#__codelineno-70-4"></a><span class="c1"># Confirm current replica count</span>
-<a id="__codelineno-70-5" name="__codelineno-70-5" href="#__codelineno-70-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
-<a id="__codelineno-70-6" name="__codelineno-70-6" href="#__codelineno-70-6"></a>
-<a id="__codelineno-70-7" name="__codelineno-70-7" href="#__codelineno-70-7"></a><span class="c1"># Confirm the HPA is healthy (TARGETS should show a percentage, not &lt;unknown&gt;)</span>
-<a id="__codelineno-70-8" name="__codelineno-70-8" href="#__codelineno-70-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a><span class="c1"># Confirm the PodDisruptionBudget is in place</span>
+<a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pdb<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-69-3" name="__codelineno-69-3" href="#__codelineno-69-3"></a>
+<a id="__codelineno-69-4" name="__codelineno-69-4" href="#__codelineno-69-4"></a><span class="c1"># Confirm current replica count</span>
+<a id="__codelineno-69-5" name="__codelineno-69-5" href="#__codelineno-69-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>actions-gateway-proxy
+<a id="__codelineno-69-6" name="__codelineno-69-6" href="#__codelineno-69-6"></a>
+<a id="__codelineno-69-7" name="__codelineno-69-7" href="#__codelineno-69-7"></a><span class="c1"># Confirm the HPA is healthy (TARGETS should show a percentage, not &lt;unknown&gt;)</span>
+<a id="__codelineno-69-8" name="__codelineno-69-8" href="#__codelineno-69-8"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <h3 id="step-2-update-the-proxy-image">Step 2: Update the Proxy Image<a class="headerlink" href="#step-2-update-the-proxy-image" title="Permanent link">&para;</a></h3>
 <p>The GMC manages the proxy Deployment.
 Update the proxy image via the GMC's Helm values or Kustomize overlay, then re-deploy the GMC (which will reconcile the updated image into all tenant proxy Deployments).
 To patch a single namespace:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-71-2" name="__codelineno-71-2" href="#__codelineno-71-2"></a><span class="w">  </span><span class="nv">proxy</span><span class="o">=</span>&lt;registry&gt;/proxy:&lt;new-tag&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-71-3" name="__codelineno-71-3" href="#__codelineno-71-3"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>kubectl<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-70-2" name="__codelineno-70-2" href="#__codelineno-70-2"></a><span class="w">  </span><span class="nv">proxy</span><span class="o">=</span>&lt;registry&gt;/proxy:&lt;new-tag&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-70-3" name="__codelineno-70-3" href="#__codelineno-70-3"></a><span class="w">  </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <h3 id="step-3-watch-the-rollout">Step 3: Watch the Rollout<a class="headerlink" href="#step-3-watch-the-rollout" title="Permanent link">&para;</a></h3>
 <p>The rolling update replaces one proxy pod at a time.
 Kubernetes honours the <code>PodDisruptionBudget</code> and only terminates a pod once its replacement is <code>Ready</code>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <p>In-flight <code>CONNECT</code> tunnels through the old proxy pod will be interrupted when that pod is terminated.
 The AGC and worker pods will reconnect through the remaining proxy pods automatically.
 For high-concurrency tenants, schedule the upgrade during a low-traffic window to minimise connection resets.</p>
 <h3 id="step-4-post-upgrade-validation">Step 4: Post-Upgrade Validation<a class="headerlink" href="#step-4-post-upgrade-validation" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a><span class="c1"># All proxy pods on the new image</span>
-<a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w"> </span>-o<span class="w"> </span>wide
-<a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>
-<a id="__codelineno-73-4" name="__codelineno-73-4" href="#__codelineno-73-4"></a><span class="c1"># HPA still computing utilization (not &lt;unknown&gt;)</span>
-<a id="__codelineno-73-5" name="__codelineno-73-5" href="#__codelineno-73-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-73-6" name="__codelineno-73-6" href="#__codelineno-73-6"></a>
-<a id="__codelineno-73-7" name="__codelineno-73-7" href="#__codelineno-73-7"></a><span class="c1"># No spike in token or message poll errors after the rollout</span>
-<a id="__codelineno-73-8" name="__codelineno-73-8" href="#__codelineno-73-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a><span class="c1"># All proxy pods on the new image</span>
+<a id="__codelineno-72-2" name="__codelineno-72-2" href="#__codelineno-72-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>actions-gateway-proxy<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-72-3" name="__codelineno-72-3" href="#__codelineno-72-3"></a>
+<a id="__codelineno-72-4" name="__codelineno-72-4" href="#__codelineno-72-4"></a><span class="c1"># HPA still computing utilization (not &lt;unknown&gt;)</span>
+<a id="__codelineno-72-5" name="__codelineno-72-5" href="#__codelineno-72-5"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-72-6" name="__codelineno-72-6" href="#__codelineno-72-6"></a>
+<a id="__codelineno-72-7" name="__codelineno-72-7" href="#__codelineno-72-7"></a><span class="c1"># No spike in token or message poll errors after the rollout</span>
+<a id="__codelineno-72-8" name="__codelineno-72-8" href="#__codelineno-72-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total</span>
 </code></pre></div>
 <h3 id="proxy-rollback">Proxy rollback<a class="headerlink" href="#proxy-rollback" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
-<a id="__codelineno-74-2" name="__codelineno-74-2" href="#__codelineno-74-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
+<a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deploy/actions-gateway-proxy<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
 <hr />
 <h2 id="worker-image-upgrade">Worker Image Upgrade<a class="headerlink" href="#worker-image-upgrade" title="Permanent link">&para;</a></h2>
 <p>Worker image upgrades are non-disruptive: the new image takes effect on future jobs; running pods complete on the old image.</p>
 <h3 id="upgrade-procedure">Upgrade Procedure<a class="headerlink" href="#upgrade-procedure" title="Permanent link">&para;</a></h3>
 <p>Update <code>spec.runnerGroups[N].workerImage</code> in the <code>ActionsGateway</code> CR:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
-<a id="__codelineno-75-2" name="__codelineno-75-2" href="#__codelineno-75-2"></a><span class="c1"># Update spec.runnerGroups[N].workerImage to the new image digest</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
+<a id="__codelineno-74-2" name="__codelineno-74-2" href="#__codelineno-74-2"></a><span class="c1"># Update spec.runnerGroups[N].workerImage to the new image digest</span>
 </code></pre></div>
 <p>The GMC propagates the change to the <code>RunnerGroup</code> CR.
 The AGC starts using the new image on the next job acquisition.
 No restart required.</p>
 <p><strong>Production recommendation:</strong> pin to a digest, not a tag:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/my-org/actions-runner-worker@sha256:abc123...</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a><span class="nt">workerImage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/my-org/actions-runner-worker@sha256:abc123...</span>
 </code></pre></div>
 <p>This ensures the exact same image is used for all jobs until explicitly changed, and enables unambiguous rollback.</p>
 <h3 id="canary-testing-a-new-worker-image">Canary Testing a New Worker Image<a class="headerlink" href="#canary-testing-a-new-worker-image" title="Permanent link">&para;</a></h3>
@@ -6625,31 +6648,30 @@ No restart required.</p>
 <p>You do not have to wait for a failure to see this.
 On both acquisition tiers, every reconcile, the AGC reads the runner version off the effective <code>workerImage</code> reference, then out of the image itself in its registry, and reports <code>RunnerVersionTooOld</code> with reason <code>WorkerImageBelowMinimum</code> (<code>True</code>), <code>WorkerImageCurrent</code> (<code>False</code>), or <code>WorkerImageVersionUnknown</code> (<code>Unknown</code>, while the registry read is pending or failed and the reference names no version, or when the image is not <code>actions/runner</code>-derived).
 Check it right after deploying a different worker image:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-77-2" name="__codelineno-77-2" href="#__codelineno-77-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-76-1" name="__codelineno-76-1" href="#__codelineno-76-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>runnerset<span class="w"> </span>&lt;name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-76-2" name="__codelineno-76-2" href="#__codelineno-76-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="RunnerVersionTooOld")]}'</span>
 </code></pre></div>
-<p>On the classic tier the session goroutine additionally surfaces GitHub's own rejection, a <code>400 Bad Request</code> under reason <code>VersionTooOld</code>, once the version has already stopped working.
-See <a href="../troubleshooting/#worker-image-runner-version">troubleshooting § Worker Image Runner Version</a> for reading the version a running worker actually shipped.</p>
+<p>See <a href="../troubleshooting/#worker-image-runner-version">troubleshooting § Worker Image Runner Version</a> for reading the version a running worker actually shipped.</p>
 <h3 id="worker-image-rollback">Worker image rollback<a class="headerlink" href="#worker-image-rollback" title="Permanent link">&para;</a></h3>
 <p>Set <code>workerImage</code> back to the previous digest:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-78-2" name="__codelineno-78-2" href="#__codelineno-78-2"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-78-3" name="__codelineno-78-3" href="#__codelineno-78-3"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">'[{"op":"replace","path":"/spec/runnerGroups/0/workerImage","value":"&lt;previous-digest&gt;"}]'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-77-2" name="__codelineno-77-2" href="#__codelineno-77-2"></a><span class="w">  </span>--type<span class="o">=</span>json<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-77-3" name="__codelineno-77-3" href="#__codelineno-77-3"></a><span class="w">  </span>-p<span class="o">=</span><span class="s1">'[{"op":"replace","path":"/spec/runnerGroups/0/workerImage","value":"&lt;previous-digest&gt;"}]'</span>
 </code></pre></div>
 <hr />
 <h2 id="post-upgrade-validation">Post-Upgrade Validation<a class="headerlink" href="#post-upgrade-validation" title="Permanent link">&para;</a></h2>
 <p>After any component upgrade:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a><span class="c1"># All ActionsGateway CRs healthy</span>
-<a id="__codelineno-79-2" name="__codelineno-79-2" href="#__codelineno-79-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
-<a id="__codelineno-79-3" name="__codelineno-79-3" href="#__codelineno-79-3"></a>
-<a id="__codelineno-79-4" name="__codelineno-79-4" href="#__codelineno-79-4"></a><span class="c1"># Listener sessions restored</span>
-<a id="__codelineno-79-5" name="__codelineno-79-5" href="#__codelineno-79-5"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open per namespace and runner_set</span>
-<a id="__codelineno-79-6" name="__codelineno-79-6" href="#__codelineno-79-6"></a>
-<a id="__codelineno-79-7" name="__codelineno-79-7" href="#__codelineno-79-7"></a><span class="c1"># No spike in errors</span>
-<a id="__codelineno-79-8" name="__codelineno-79-8" href="#__codelineno-79-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total, controller_runtime_reconcile_errors_total</span>
-<a id="__codelineno-79-9" name="__codelineno-79-9" href="#__codelineno-79-9"></a>
-<a id="__codelineno-79-10" name="__codelineno-79-10" href="#__codelineno-79-10"></a><span class="c1"># Pod creation latency within SLO</span>
-<a id="__codelineno-79-11" name="__codelineno-79-11" href="#__codelineno-79-11"></a><span class="c1"># Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a><span class="c1"># All ActionsGateway CRs healthy</span>
+<a id="__codelineno-78-2" name="__codelineno-78-2" href="#__codelineno-78-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>--all-namespaces
+<a id="__codelineno-78-3" name="__codelineno-78-3" href="#__codelineno-78-3"></a>
+<a id="__codelineno-78-4" name="__codelineno-78-4" href="#__codelineno-78-4"></a><span class="c1"># Listener sessions restored</span>
+<a id="__codelineno-78-5" name="__codelineno-78-5" href="#__codelineno-78-5"></a><span class="c1"># Metric: actions_gateway_scaleset_session_open per namespace and runner_set</span>
+<a id="__codelineno-78-6" name="__codelineno-78-6" href="#__codelineno-78-6"></a>
+<a id="__codelineno-78-7" name="__codelineno-78-7" href="#__codelineno-78-7"></a><span class="c1"># No spike in errors</span>
+<a id="__codelineno-78-8" name="__codelineno-78-8" href="#__codelineno-78-8"></a><span class="c1"># Metrics: actions_gateway_token_refresh_errors_total, actions_gateway_message_poll_errors_total, controller_runtime_reconcile_errors_total</span>
+<a id="__codelineno-78-9" name="__codelineno-78-9" href="#__codelineno-78-9"></a>
+<a id="__codelineno-78-10" name="__codelineno-78-10" href="#__codelineno-78-10"></a><span class="c1"># Pod creation latency within SLO</span>
+<a id="__codelineno-78-11" name="__codelineno-78-11" href="#__codelineno-78-11"></a><span class="c1"># Metric: histogram_quantile(0.95, rate(actions_gateway_pod_creation_latency_seconds_bucket[5m]))</span>
 </code></pre></div>
 <p>If a regression is detected within the first 15 minutes after an upgrade, roll back immediately rather than investigating in production.
 Investigate using a non-production environment.</p>

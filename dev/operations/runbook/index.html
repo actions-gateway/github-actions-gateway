@@ -2399,10 +2399,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scaling-maxlisteners" class="md-nav__link">
+  <a href="#scaling-a-sets-worker-ceiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scaling maxListeners
+        Scaling a set's worker ceiling
       
     </span>
   </a>
@@ -3222,10 +3222,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#scaling-maxlisteners" class="md-nav__link">
+  <a href="#scaling-a-sets-worker-ceiling" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Scaling maxListeners
+        Scaling a set's worker ceiling
       
     </span>
   </a>
@@ -3726,17 +3726,16 @@ Edit the <code>ResourceQuota</code> object on the tenant namespace directly (or 
 <p>The change takes effect immediately.
 Running jobs are not interrupted; the new quota applies on the next pod creation attempt.
 The gateway reads remaining quota and reacts to exhaustion but never writes the quota itself.
-On the <strong>classic</strong> acquisition tier it declines to claim a job the quota can't place, leaving it queued at GitHub for a sibling with capacity; if headroom is lost after the claim, the pod create is retried in place (<code>maxQuotaRetries</code> × <code>quotaRetryDelay</code>) and the job is abandoned if the budget runs out.
-On a <code>ScaleSet</code> set — the default — there is no pre-claim quota rung: the set advertises its configured worker ceiling to GitHub, so a quota-blocked job is assigned and goes straight to that same in-place retry.
-Either way, watch <code>actions_gateway_quota_retries_exhausted_total</code>.</p>
+A set folds live quota headroom into the capacity it advertises to GitHub on every long poll, so a job the quota can't place stays queued at GitHub rather than being assigned.
+If headroom is lost after assignment, the pod create is retried in place (<code>maxQuotaRetries</code> × <code>quotaRetryDelay</code>), and once that budget runs out the listener retries the job on a later poll.
+Watch <code>actions_gateway_scaleset_capacity_withheld{reason="quota"}</code> and <code>actions_gateway_quota_retries_exhausted_total</code>.</p>
 <hr />
-<h3 id="scaling-maxlisteners">Scaling maxListeners<a class="headerlink" href="#scaling-maxlisteners" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;
-<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Update spec.runnerGroups[N].maxListeners</span>
+<h3 id="scaling-a-sets-worker-ceiling">Scaling a set's worker ceiling<a class="headerlink" href="#scaling-a-sets-worker-ceiling" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>patch<span class="w"> </span>runnerset<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;name&gt;<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>-p<span class="w"> </span><span class="s1">'{"spec":{"maxWorkers":&lt;count&gt;}}'</span>
 </code></pre></div>
-<p>The GMC propagates the change to the <code>RunnerGroup</code> CR.
-The AGC reconciles the new ceiling on its next reconcile cycle (a few seconds).
-No restart needed.</p>
+<p>With <code>spec.priorityTiers</code> set, the last threshold is the ceiling instead of <code>maxWorkers</code>.
+The AGC reads the ceiling on the next long poll, so no restart is needed.
+Raise the namespace <code>ResourceQuota</code> with it, or the extra slots are withheld as <code>quota</code> (<a href="../resourcequota-sizing/">sizing</a>).</p>
 <hr />
 <h3 id="rotating-github-app-credentials">Rotating GitHub App Credentials<a class="headerlink" href="#rotating-github-app-credentials" title="Permanent link">&para;</a></h3>
 <p>See <a href="../../getting-started/#rotating-github-app-credentials">Getting Started — Rotating GitHub App Credentials</a> for the full procedure.</p>
@@ -3906,7 +3905,7 @@ Admission rejects every new such pair, so this one predates the guard (an upgrad
 It will not self-heal, and the condition names only the alerting gateway's own runner sets: the other holder is in the GMC log, because gateway status is tenant-readable.
 See <a href="../troubleshooting/#actionsgateway-reports-scalesetnamecollision"><code>ActionsGateway</code> Reports <code>ScaleSetNameCollision</code></a>.</p>
 <h3 id="actionsgatewayscalesetprovisioningstalled">ActionsGatewayScaleSetProvisioningStalled<a class="headerlink" href="#actionsgatewayscalesetprovisioningstalled" title="Permanent link">&para;</a></h3>
-<p><strong>Page.</strong> The scale-set acquisition tier (the default protocol) is receiving <code>JobAssigned</code> messages but has provisioned no worker pods — the tier is wedged and acquired jobs will not start.
+<p><strong>Page.</strong> A listener is receiving <code>JobAssigned</code> messages but has provisioned no worker pods, so assigned jobs will not start.
 It needs jobs to be assigned, so a listener whose poll keeps failing is covered by <a href="#actionsgatewaymessagepollfailing">ActionsGatewayMessagePollFailing</a> instead, and one that holds no session at all by <a href="#actionsgatewayscalesetnosession">ActionsGatewayScaleSetNoSession</a>.
 Respond with <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
 <h3 id="actionsgatewayscalesetnosession">ActionsGatewayScaleSetNoSession<a class="headerlink" href="#actionsgatewayscalesetnosession" title="Permanent link">&para;</a></h3>
@@ -3935,7 +3934,7 @@ A listener whose polls fail is delivered nothing, so jobs queue at GitHub, and o
 Nor is a listener that cannot open its session at all: that is <a href="#actionsgatewayscalesetnosession">ActionsGatewayScaleSetNoSession</a>.
 The threshold sums every set in the namespace, so a namespace with several sets reaches it sooner than one listener failing alone would.</p>
 <h3 id="actionsgatewayscalesetprovisionerrors">ActionsGatewayScaleSetProvisionErrors<a class="headerlink" href="#actionsgatewayscalesetprovisionerrors" title="Permanent link">&para;</a></h3>
-<p><strong>Ticket.</strong> The scale-set tier is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate.
+<p><strong>Ticket.</strong> A listener is failing to provision worker pods (JIT-config mint or pod create) at a sustained rate.
 A transient failure retries on a later poll; a sustained rate means provisioning is degraded.
 Check the run service's <code>generate-jitconfig</code> responses and namespace quota headroom, then triage as for <a href="#scale-set-provisioning-stalled">Scale-set provisioning stalled</a>.</p>
 <h3 id="actionsgatewayscalesetjobsdeferred">ActionsGatewayScaleSetJobsDeferred<a class="headerlink" href="#actionsgatewayscalesetjobsdeferred" title="Permanent link">&para;</a></h3>
@@ -4048,9 +4047,10 @@ Check GitHub's audit log for unusual API activity from the App installation: Set
 <h3 id="agc-total-failure">AGC Total Failure<a class="headerlink" href="#agc-total-failure" title="Permanent link">&para;</a></h3>
 <p>If the AGC pod is destroyed and cannot restart (e.g. node failure without rescheduling, OOM loop):</p>
 <ol>
-<li><strong>In-flight jobs</strong> whose <code>renewjob</code> loop has lapsed will be cancelled by GitHub.
-   There is no automatic recovery for these — they require manual re-run.</li>
-<li><strong>Queued jobs</strong> (not yet acquired) will be redelivered by GitHub to the next healthy session within ~2 minutes of the AGC restarting.</li>
+<li><strong>In-flight jobs</strong> keep running: each runner pulls and completes its own job through its own session with GitHub, so a worker pod does not depend on the AGC.
+   Worker pods that finish during the outage stay in place until the AGC returns, because it is their only reaper.</li>
+<li><strong>Queued jobs</strong> stay queued at GitHub until the AGC returns, re-creates its listener sessions, and advertises capacity again.
+   It also replays any unacknowledged messages; a replayed job that already has a worker pod adopts that pod.</li>
 <li><strong>To force restart:</strong></li>
 </ol>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># v2</span>
@@ -4062,9 +4062,8 @@ Check GitHub's audit log for unusual API activity from the App installation: Set
 <ol>
 <li>Monitor <code>actions_gateway_scaleset_session_open</code> — it should read <code>1</code> for every <code>runner_set</code> within a few seconds of the pod starting.</li>
 </ol>
-<p><strong>State that persists:</strong> All RunnerGroup CRs, Secrets, and Kubernetes resources are durable.
-The AGC reconstructs all in-memory state (session registry, per-job renewers) from scratch on restart.
-The only non-recoverable state is in-flight job locks that expire during the blackout window.</p>
+<p><strong>State that persists:</strong> All <code>RunnerSet</code> CRs, Secrets, and Kubernetes resources are durable.
+Each worker pod is the restart-safe record of its job, carrying the run identity and reap deadline as annotations, so a restart does not lose which run to recover.</p>
 <hr />
 <h3 id="gmc-total-failure">GMC Total Failure<a class="headerlink" href="#gmc-total-failure" title="Permanent link">&para;</a></h3>
 <p>If the GMC pod is unavailable:</p>

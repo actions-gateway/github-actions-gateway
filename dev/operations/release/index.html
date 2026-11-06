@@ -3823,7 +3823,7 @@ The point of doing it here rather than at the tag is that the answers are free b
   Nothing lints this — it is judgement, not a gate that can pass or fail mechanically.</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>scripts/release/api-surface-since.sh
 </code></pre></div>
-<p>It needs Go on <code>PATH</code>: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds <code>devtools/docs/reasontiers</code> first.
+<p>It needs Go on <code>PATH</code>: the Event reasons are scanned out of the source at each end rather than pattern-matched, so a window carrying AGC changes builds <code>devtools/docs/eventreasons</code> first.
   Apply the checklist in <a href="../../development/api-review/#step-2--ask-these-of-each-addition">api-review.md</a> to each addition it lists, record the verdict in the release's plan doc, and file anything deferred as a Queue row carrying this release's gate label.
   <strong>"Ship as-is, deliberately" is a valid and common outcome</strong> — the point is that the shape is chosen rather than frozen by default.</p>
 <p>This step exists because it nearly did not happen: Q476 renamed <code>capacityGate.mode: On</code> days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.</p>
@@ -4900,7 +4900,7 @@ No docs-specific branch is ever required beyond what the release itself needs.</
 To roll an <em>installed</em> release back, re-pin the previous digests and <code>helm rollback</code>/<code>helm upgrade</code>; the procedure and post-rollback validation are in <a href="../upgrade/">upgrade.md</a>.
 A bad tag can be superseded by a higher patch release; do not retag an existing <code>vX.Y.Z</code> (it would break the digest↔tag binding consumers rely on).</p>
 <h2 id="the-worker-images-wrapper-worker-build-runner-and-cache-runner">The worker images: <code>wrapper</code>, <code>worker</code>, <code>build-runner</code> and <code>cache-runner</code><a class="headerlink" href="#the-worker-images-wrapper-worker-build-runner-and-cache-runner" title="Permanent link">&para;</a></h2>
-<p><code>publish.yml</code> builds and signs <strong>four</strong> worker-related images, all holding the same <code>cmd/worker</code> wrapper that feeds the job payload into <code>Runner.Worker</code>:</p>
+<p><code>publish.yml</code> builds and signs <strong>four</strong> worker-related images, all holding the same <code>cmd/worker</code> wrapper that installs the per-tenant CA trust and starts the runner with <code>run.sh --jitconfig</code>:</p>
 <ul>
 <li><strong><code>ghcr.io/actions-gateway/wrapper</code></strong> — a ~2 MB <code>FROM scratch</code> image with just the wrapper binary.
   The GMC forwards it to every AGC (<code>WRAPPER_IMAGE</code>), whose provisioner injects it into each worker pod — as a read-only OCI image volume (K8s ≥ 1.33) or via an initContainer below that — so the runner container can be the <strong>unmodified upstream <code>ghcr.io/actions/actions-runner</code></strong> (or any tenant <code>workerImage</code>).

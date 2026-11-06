@@ -4473,7 +4473,8 @@ The abuse-specific first moves:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># v1 (legacy)</span>
 <a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>kubectl<span class="w"> </span>scale<span class="w"> </span>deploy/actions-gateway-controller<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--replicas<span class="o">=</span><span class="m">0</span>
 </code></pre></div>
-<p>In-flight jobs will be cancelled by GitHub when <code>renewjob</code> lapses; this is acceptable during a suspected breach.
+<p>This does not stop worker pods that are already running, because each runner holds its own session with GitHub.
+   Delete those pods as well if their jobs must stop.
 2. <strong>Rotate.</strong> Rotate the tenant's GitHub App key (<a href="../runbook/#github-app-key-compromise">runbook.md § GitHub App Key Compromise</a>) — the AGC held it in memory.
 3. <strong>Scope.</strong> Check the API-server audit log for Secret <code>get</code>/<code>list</code> calls by the AGC ServiceAccount; enumerate which tenant Secrets may have been read.
 4. <strong>Verify the image.</strong> Confirm the running AGC image digest matches the GMC-pinned <code>AGC_IMAGE</code> (digest pinning is enforced — see <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2 Supply-Chain</a>).</p>

@@ -3516,28 +3516,22 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 </thead>
 <tbody>
 <tr>
-<td><code>actions_gateway_active_sessions</code></td>
+<td><code>actions_gateway_scaleset_session_open</code></td>
 <td>Gauge</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Currently open long-poll sessions</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>1 while the set's listener holds an open message session, 0 once opening one has failed</td>
 </tr>
 <tr>
-<td><code>actions_gateway_jobs_acquired_total</code></td>
+<td><code>actions_gateway_scaleset_jobs_assigned_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Jobs successfully acquired</td>
+<td><code>namespace</code>, <code>runner_set</code></td>
+<td>Jobs the scale set's queue delivered as <code>JobAssigned</code></td>
 </tr>
 <tr>
-<td><code>actions_gateway_jobs_admission_rejected_total</code></td>
-<td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>reason</code></td>
-<td>Jobs left queued at GitHub because the pre-acquisition capacity gate refused (acquire skipped for redelivery). <code>reason="ceiling"</code>: at the configured worker ceiling. <code>reason="quota"</code>: the namespace <code>ResourceQuota</code> cannot admit another worker pod</td>
-</tr>
-<tr>
-<td><code>actions_gateway_job_acquisition_errors_total</code></td>
-<td>Counter</td>
-<td><code>namespace</code>, <code>reason</code></td>
-<td>Acquisition failures (404/409/422/other)</td>
+<td><code>actions_gateway_scaleset_capacity_withheld</code></td>
+<td>Gauge</td>
+<td><code>namespace</code>, <code>runner_set</code>, <code>reason</code></td>
+<td>Slots each admission rung removed from the declared worker ceiling on the most recent poll (<code>quota</code>, <code>capacity</code>, <code>scaleup</code>)</td>
 </tr>
 <tr>
 <td><code>actions_gateway_job_duration_seconds</code></td>
@@ -3564,28 +3558,22 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td>Failed token refreshes</td>
 </tr>
 <tr>
-<td><code>actions_gateway_renew_job_errors_total</code></td>
-<td>Counter</td>
-<td><code>namespace</code></td>
-<td>RenewJob call failures (leading indicator for cancelled jobs)</td>
-</tr>
-<tr>
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Jobs automatically re-queued after a worker pod disruption, by acquisition tier (<code>classic</code>, <code>scaleset</code>) and cause (<code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>); <code>cause="oom"</code>, scale-set only, is a runner killed at its own memory limit and re-run with a higher one under a <code>Binpack</code> or <code>Throughput</code> sizing profile (Q1183)</td>
+<td>Jobs automatically re-queued after a worker pod disruption, by cause (<code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code>); <code>cause="oom"</code> is a runner killed at its own memory limit and re-run with a higher one under a <code>Binpack</code> or <code>Throughput</code> sizing profile (Q1183)</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Disrupted jobs where retry budget was exhausted; requires manual re-run. The budget is shared across causes and kept per tier</td>
+<td>Disrupted jobs where retry budget was exhausted; requires manual re-run. The budget is shared across causes</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code> (<code>cause="deletion"</code>): the externally deleted worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811); the retry slot is spent, but no manual re-run is wanted. <code>reason="own_limit"</code> (<code>cause="eviction"</code>): the kubelet evicted the worker for exceeding its own storage limit, which a re-run repeats; no slot is spent (Q1177). On <code>tier="scaleset"</code>, <code>run_cancelled</code> is checked on every cause and GAG's own force-cancel is told apart by the failure ledger, and three futility reasons are withheld before any slot is spent: <code>attempt_limit</code> (past GitHub's 50 re-runs), <code>run_too_old</code> (outside its 30-day re-run window) and <code>superseded</code> (a newer commit's run of the same workflow, event and branch) (Q1181). With <code>cause="oom"</code> (scale-set, Q1183), <code>own_limit</code> is a runner killed at a memory limit no sizing profile can raise, <code>same_class_again</code> a job killed again after a retry raised its limit, and <code>breaker_open</code> a kill while more than 10 runs re-run for memory within 10 minutes have paused the class</td>
+<td>Disruption recoveries that deliberately made no re-run call. <code>reason="run_cancelled"</code>: the worker's run had concluded <code>cancelled</code>, so re-running it would undo a human's cancel (Q811); checked on every cause, with GAG's own force-cancel told apart by the failure ledger. <code>reason="own_limit"</code> (<code>cause="eviction"</code>): the kubelet evicted the worker for exceeding its own storage limit, which a re-run repeats; no slot is spent (Q1177). Three futility reasons are withheld before any slot is spent: <code>attempt_limit</code> (past GitHub's 50 re-runs), <code>run_too_old</code> (outside its 30-day re-run window) and <code>superseded</code> (a newer commit's run of the same workflow, event and branch) (Q1181). With <code>cause="oom"</code> (Q1183), <code>own_limit</code> is a runner killed at a memory limit no sizing profile can raise, <code>same_class_again</code> a job killed again after a retry raised its limit, and <code>breaker_open</code> a kill while more than 10 runs re-run for memory within 10 minutes have paused the class</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
@@ -3608,14 +3596,14 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <tr>
 <td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
 <td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Evicted scale-set workers carrying no workflow-run identity, so no automatic re-run was possible</td>
+<td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
+<td>Disrupted workers carrying no workflow-run identity, so no automatic re-run was possible</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
-<td>Disrupted scale-set workers whose pod was deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later; the pod is the disruption's only record (Q809). The <code>preemption</code>, <code>node_shutdown</code> and <code>deletion</code> arms are the exposed ones, since each can act on a pod that is already terminating</td>
+<td>Disrupted workers whose pod was deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later; the pod is the disruption's only record (Q809). The <code>preemption</code>, <code>node_shutdown</code> and <code>deletion</code> arms are the exposed ones, since each can act on a pod that is already terminating</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -3633,7 +3621,7 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td><code>actions_gateway_worker_pods_reaped_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
-<td>Worker pods deleted by the reaper (<code>completed_ttl</code>, <code>pending_deadline</code>, <code>completed_pending</code>, <code>orphaned_running</code>, <code>lifetime_exceeded</code>, or <code>gateway_deleted</code>). <code>runner_group</code> carries the owning CR's name on both tiers; <code>runner_set</code> additionally carries it on scale-set reaps (empty on classic) so the series join the <code>runner_set</code>-labelled <code>scaleset_*</code> gauges (Q514)</td>
+<td>Worker pods deleted by the reaper (<code>completed_ttl</code>, <code>pending_deadline</code>, <code>completed_pending</code>, <code>orphaned_running</code>, <code>lifetime_exceeded</code>, or <code>gateway_deleted</code>). <code>runner_group</code> and <code>runner_set</code> both carry the owning <code>RunnerSet</code>'s name, so the series join the <code>runner_set</code>-labelled <code>scaleset_*</code> gauges (Q514)</td>
 </tr>
 <tr>
 <td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
@@ -3642,28 +3630,10 @@ Kubelet probes are unaffected by that rule: node-sourced traffic is exempt from 
 <td>Regular (non-native) sidecar containers in a <code>RunnerSet</code>'s resolved worker template that may block pod reaping (Q249); pairs with the advisory <code>PossibleReapBlockingSidecar</code> condition</td>
 </tr>
 <tr>
-<td><code>actions_gateway_agent_recycles_total</code></td>
-<td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code>, <code>trigger</code></td>
-<td>Single-use JIT agents re-registered (<code>post_job</code>, <code>stale_session</code>, <code>startup</code>, <code>reconcile_repair</code>)</td>
-</tr>
-<tr>
-<td><code>actions_gateway_agent_recycle_errors_total</code></td>
-<td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Failed attempts to re-register a single-use JIT agent</td>
-</tr>
-<tr>
-<td><code>actions_gateway_broker_session_leaks_total</code></td>
-<td>Counter</td>
-<td><code>namespace</code>, <code>runner_group</code></td>
-<td>Broker sessions abandoned after every <code>DELETE /sessions</code> attempt failed; each survives until GitHub expires it server-side (Q436)</td>
-</tr>
-<tr>
 <td><code>actions_gateway_message_poll_errors_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>reason</code></td>
-<td>GetMessage errors on either acquisition tier (non-empty-poll, non-session-expired, non-unauthorized — the last two are heal paths): <code>rate_limited</code>, <code>timeout</code>, <code>other</code></td>
+<td>GetMessage errors (non-empty-poll, non-session-expired, non-unauthorized — the last two are heal paths): <code>rate_limited</code>, <code>timeout</code>, <code>other</code></td>
 </tr>
 <tr>
 <td><code>controller_runtime_reconcile_errors_total</code></td>
@@ -3847,27 +3817,12 @@ Each upgrades on its own cadence.</p>
   Roll-back is symmetrical — revert the field.
   Because the field is per-RunnerGroup, blue/green or canary worker images can be tested by adding a second RunnerGroup with the new image and a distinct label selector before flipping the default.</li>
 </ul>
-<p>GitHub enforces a minimum runner version at session creation; tenants who let <code>workerImage</code> drift will start receiving <code>400 Bad Request</code> from <code>POST /sessions</code>.
-The session goroutine surfaces this as a <code>RunnerGroup</code> condition (see <a href="../07-test-plan/#71-unit-tests">§7.1</a>) so operators can detect the staleness without scraping pod logs.</p>
-<p>That rejection is classic-only, since the scale-set protocol carries no runner version at session creation, and it arrives only once the version has already stopped working.
-So both reconcilers independently read the runner version off the effective worker image reference each reconcile and publish the same <code>RunnerVersionTooOld</code> condition from it, with the <code>WorkerImage*</code> reasons: <code>True</code> below the enforced minimum, <code>False</code> at or above it, <code>Unknown</code> when the reference names no version and nothing has been checked.
-Two versions are in play and they answer different questions.
-<code>agent.version</code>, sent at session creation, is the AGC's own listener protocol version, and stays pinned to the version GAG implements: the AGC is the registered agent on the classic path, whatever image a worker pod runs.
-The worker image's runner version is what will execute the job, and is the one this condition reports.
-The injected wrapper logs it from the runner's own dependency manifest at worker startup, which is the only reading that holds for an image whose tag says nothing.</p>
-<p>The two producers therefore report different facts through one condition type, keyed by reason, and only the clear is arbitrated.
-A healthy image reading does not refute a live session rejection, so it defers to a <code>True</code> carrying <code>VersionTooOld</code>.
-That deference is not reciprocated: a session-sourced <code>True</code> writes over an image verdict, because an observed rejection outranks a prediction.
-That leaves the clear.
-The classic listener publishes <code>False</code>/<code>VersionAccepted</code> as its session-start baseline: <code>agent.version</code> is the AGC's own compile-time pin, so the operator's fix for a rejection is a gateway upgrade, and that restarts the process while the condition survives in status with nothing else to clear it.
-The reconciler drops that baseline when a live condition stands whose reason is not one of the listener's own two.
-With no condition of the type at all there is nothing to defer to, so the baseline lands.
-Enumerating the session half rather than the <code>WorkerImage*</code> half is what makes a reason added later fail safe <em>at the drain</em>: an unrecognized one counts as the reconciler's, so the clear is dropped and the condition stays stale.
-It drops it at the drain rather than relying on the image reading to overwrite it, and drops a retained copy the image reading has already superseded.
-A reconcile that reaches the image reading overwrites a merged clear in memory before writing status, so it never surfaces; the reconcile paths that write status earlier do surface it, and one of those is the unresolved-references branch a tenant reaches by deleting a <code>RunnerTemplate</code>, where the clear would replace the image verdict.
-The second drop is what makes that bounded: the reconciler's retry for an unpersisted listener push assumes a condition it never re-derives, and this one it re-derives every reconcile, so a push merged before the set's first image reading would otherwise be re-applied for the set's lifetime.
-The other consumer is the image reading's own deference, and there the same omission is a wipe rather than staleness: a listener reason nobody enumerated reads as the reconciler's, nothing defers, and a rejection GitHub made is overwritten.
-So the set is gated rather than argued (Q994): both consumers ask <code>IsSessionSourcedRunnerVersion</code>, and <code>reason-tiers-check</code> reconciles it against every reason <code>internal/listener</code> publishes on this type and refuses any other package that compares a reason against an entry instead of calling it.</p>
+<p>The scale-set protocol carries no runner version at session creation, because the per-job JIT config is minted server-side, so GitHub has no session rejection to report for a tenant whose <code>workerImage</code> has drifted.
+So the RunnerSet reconciler reads the runner version off the effective worker image reference each reconcile and publishes a <code>RunnerVersionTooOld</code> condition from it, with the <code>WorkerImage*</code> reasons: <code>True</code> below the enforced minimum, <code>False</code> at or above it, <code>Unknown</code> when the reference names no version and nothing has been checked.
+Once the registry has been read, what the image actually ships overrides the tag; a registry that cannot be reached leaves the tag verdict standing.
+The injected wrapper also logs the version from the runner's own dependency manifest at worker startup.
+The condition is advisory and never gates <code>Ready</code>.
+A <code>VersionTooOld</code> left in status by an AGC that ran the classic listener is overwritten by the first image reading, since nothing publishes that reason now.</p>
 <hr />
 <p>← <a href="../01-executive-summary/">Executive Summary</a> | <a href="../">Back to index</a> | Next: <a href="../03-api-contracts/">API &amp; Data Contracts →</a></p>
 

@@ -2946,7 +2946,7 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>Q264</td>
 <td>Remove the classic acquisition machinery (Phase 3)</td>
 <td><code>2.0-gate</code></td>
-<td>✅ landed: no AGC or GMC code reads <code>acquisitionProtocol</code> or <code>maxListeners</code>, and no shipped alert or dashboard panel reads a series it removed; what operators can still see of the tier is <a href="../../queue/Q1273/">Q1273</a>, and the classic code nothing can reach is <a href="../../queue/Q1272/">Q1272</a>, not a gate</td>
+<td>✅ landed: no AGC or GMC code reads <code>acquisitionProtocol</code> or <code>maxListeners</code>, and no shipped alert or dashboard panel reads a series it removed; what operators could still see of the tier went with Q1273, and the classic code nothing can reach is <a href="../../queue/Q1272/">Q1272</a>, not a gate</td>
 </tr>
 <tr>
 <td>Q1262</td>
@@ -2973,10 +2973,10 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: the GMC deletes its own binding once a namespace loses the tenant marker, through a delete-only exception in <code>gmc-tenant-resource-guard</code></td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1273/">Q1273</a></td>
+<td>Q1273</td>
 <td>Retire the classic tier ledgers, runbooks and unread AGC env vars</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open</td>
+<td>✅ landed: the tier ledgers are gone and their tier-free checks stay as <code>metric-reference-check</code> and <code>event-runbook-check</code>, the GMC no longer injects <code>GITHUB_ORG_URL</code> or <code>GITHUB_RUNNER_VERSION</code>, the operator pages describe the scale-set tier, and the Q1011 agent-identity guard is removed, so <code>RunnerSet</code> names may repeat across namespaces</td>
 </tr>
 <tr>
 <td>Q1285</td>
@@ -3003,10 +3003,16 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: gated because tightening costs least while a major is open; an unchanged value passes the rule, so a stored one keeps working</td>
 </tr>
 <tr>
+<td><a href="../../queue/Q1291/">Q1291</a></td>
+<td>Drop the one-valued <code>tier</code> label from the disruption metrics</td>
+<td><code>2.0-gate</code></td>
+<td>🔲 open, after Q1273</td>
+</tr>
+<tr>
 <td><a href="../../queue/Q1107/">Q1107</a></td>
 <td>Operator docs, migration guide, and the cut (Phase 4)</td>
 <td><code>2.0-gate</code></td>
-<td>🚫 blocked on Q1273</td>
+<td>🚫 blocked on Q1291</td>
 </tr>
 <tr>
 <td>Q555</td>
@@ -3323,7 +3329,6 @@ Method: walk the tier seams — the <code>ScaleSet</code> early return in <code>
 <p><strong>Correctly absent from the scale-set tier</strong> — artifacts of the many-acquirers and JIT-agent models that <code>ScaleSet</code> removes by construction, so they should disappear <em>with</em> classic rather than be ported: <code>jobs_duplicate_delivery_total</code>, <code>abandoned_delivery_completions_total</code>, <code>fanout_loser_recycle_deferred_total</code>, <code>agent_recycles_total</code>, <code>agent_recycle_errors_total</code>, <code>broker_token_propagation_retries_total</code>, <code>broker_session_leaks_total</code>, <code>renew_job_errors_total</code>, and <code>renew_job_teardowns_total</code>.
 Each measures a race or a repair that only exists because many sessions acquire against one pool, or a call the AGC only makes on the classic tier: a scale-set runner renews and completes its own job, so there is no <code>renewjob</code> for the gateway to fail at.</p>
 <p>The last two joined the list from the Q776 re-walk below.
-That list is prose and this section is archived at the cut, so the machine-readable form is the <a href="../../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a>, which carries every <code>actions_gateway_*</code> series rather than only the omissions, and which <code>make metric-tiers-check</code> holds to the source.
 The two are reconciled by that gate in both directions, so a name here that the ledger does not call classic-only fails.</p>
 <p><strong>Alerting has its analog:</strong> <code>job_acquisition_errors_total</code> is classic-only, and <a href="../../operations/observability-alerting/">observability-alerting.md</a> ships <code>actions_gateway:scaleset_provision_success_rate:rate5m</code> in place of the classic <code>job_acquisition_success_rate</code>, which Q264 removed with the series it read.
 <code>active_sessions</code> is likewise classic-only, and <code>ActionsGatewayScaleSetNoSession</code> reads its substitute, <code>scaleset_session_open</code> (Q1275).</p>
@@ -3342,8 +3347,7 @@ Read the table, not this section's history, for the state of the gate.</p>
 <p>The audit's method has a known blind spot both instances share.
 It walked the tier seams once, in July, and a capability added to <code>provision()</code> afterwards is classic-only from birth without anything re-walking them.
 Q683, Q691 and Q713 all arrived that way, and Q844 made four on 2026-08-14, found by hand rather than by any gate.</p>
-<p><strong>The metric surface now re-walks itself.</strong> Q776 closed that half: every <code>actions_gateway_*</code> series the AGC defines carries a tier in the <a href="../../operations/observability-metrics/#acquisition-tier-reach">acquisition-tier ledger</a>, and <code>make metric-tiers-check</code> fails a series added without one, a ledger row the source refutes, and a name on the absent-by-design list above that the ledger does not call classic-only.
-Q851 took the same obligation inside the series, to the label values a <code>Both</code> row hides: the checker resolves the values each series emits out of the AGC source, and the <a href="../../operations/observability-metrics/#label-value-reach">Label-value reach</a> table records the seven that reach one tier only.
+<p><strong>The metric surface re-walked itself until classic left.</strong> Q776 closed that half with a ledger giving every <code>actions_gateway_*</code> series a tier, and Q851 took it inside the series to the label values; Q1273 retired both once one tier remained.
 The re-walk it required found two: <code>renew_job_errors_total</code> and <code>renew_job_teardowns_total</code> were classic-only by construction and on no list, and <code>eviction_recovery_evidence_lost_total</code> reached no operator doc at all.</p>
 <p>That gate covers metrics, not capabilities, so the manual step survives for anything with no series behind it: Q844 had one only because the recovery it ported reports through a counter that already spanned both tiers.
 Q774 now gates scope statements mechanically as <code>make design-scope-check</code>, which fires on an admission rejection or a changed default added under <code>docs/design/</code> with no operator doc touched; adding a row to the table above is still a manual step in the change that creates the asymmetry, and the <a href="../../development/doc-update-matrix/">doc-update matrix</a> is where that obligation is written down.</p>

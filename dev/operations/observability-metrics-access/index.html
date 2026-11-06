@@ -2937,13 +2937,13 @@ Three things are wired per tenant so Prometheus can scrape them:</p>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">actions-gateway-metrics-client</span><span class="p p-Indicator">,</span><span class="nt"> key</span><span class="p">:</span><span class="w"> </span><span class="nv">tls.key</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <h4 id="v2-egressproxy-proxy-metrics">v2 <code>EgressProxy</code> proxy metrics<a class="headerlink" href="#v2-egressproxy-proxy-metrics" title="Permanent link">&para;</a></h4>
-<p>The names above are the <strong>classic/v1</strong> layout, where a single proxy pool per namespace uses fixed names.
+<p>The names above are the <strong>v1</strong> layout, where a single proxy pool per namespace uses fixed names.
 Under the <strong>v2 API</strong>, the egress proxy is a standalone <code>EgressProxy</code> resource (multiple per namespace are allowed), so its proxy-metrics objects are keyed on the <code>EgressProxy</code> name <code>&lt;ep&gt;</code> instead:</p>
 <table>
 <thead>
 <tr>
 <th>Object</th>
-<th>Classic/v1</th>
+<th>v1</th>
 <th>v2 <code>EgressProxy</code></th>
 </tr>
 </thead>
@@ -2977,7 +2977,7 @@ The same toggle (<code>metrics.serviceMonitor.enabled</code> → <code>--enable-
 <thead>
 <tr>
 <th>Object</th>
-<th>Classic/v1</th>
+<th>v1</th>
 <th>v2 <code>ActionsGateway</code></th>
 </tr>
 </thead>

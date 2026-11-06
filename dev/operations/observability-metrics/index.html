@@ -2196,73 +2196,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#acquisition-tier-reach" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Acquisition-tier reach
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Acquisition-tier reach">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#label-value-reach" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Label-value reach
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#condition-and-event-tier-reach" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Condition and Event tier reach
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Condition and Event tier reach">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#condition-reasons" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Condition reasons
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#event-reasons" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Event reasons
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#crd-status-fields-kubectl-columns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2981,73 +2914,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#acquisition-tier-reach" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Acquisition-tier reach
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Acquisition-tier reach">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#label-value-reach" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Label-value reach
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#condition-and-event-tier-reach" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Condition and Event tier reach
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Condition and Event tier reach">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#condition-reasons" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Condition reasons
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#event-reasons" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Event reasons
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#crd-status-fields-kubectl-columns" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3172,7 +3038,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_job_duration_seconds</code></td>
 <td>Histogram</td>
 <td><code>namespace</code>, <code>runner_group</code></td>
-<td>Worker pod wall time: creation to the last container finishing, or to the deletion request for a worker removed mid-run. <strong>Both acquisition tiers</strong>, observed off the shared pod informer (Q713). This is the span the <a href="../../design/appendix-f-cost-model/">cost model</a> bills against: a pod is charged from creation, not from the acquisition that preceded it, so the pre-creation staging and any <code>spec.scaleUp</code> throttle wait are deliberately outside it. A pod that never started a container is not observed: it ran no job and occupied no node time.</td>
+<td>Worker pod wall time: creation to the last container finishing, or to the deletion request for a worker removed mid-run. Observed off the pod informer (Q713). This is the span the <a href="../../design/appendix-f-cost-model/">cost model</a> bills against: a pod is charged from creation, not from the acquisition that preceded it, so the pre-creation staging and any <code>spec.scaleUp</code> throttle wait are deliberately outside it. A pod that never started a container is not observed: it ran no job and occupied no node time.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_pod_creation_latency_seconds</code></td>
@@ -3196,7 +3062,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_retries_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code></td>
-<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the re-run call (on <code>tier="scaleset"</code>, after the run read that names the attempt the job failed in, Q1182). A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is the honest recovery count on the classic tier, and a floor on the scale-set tier, where several disruptions sharing one slot can each count a failure. <code>tier="classic"</code> is the classic acquisition path, where the goroutine that acquired the job watches its own worker pod; <code>tier="scaleset"</code> is the scale-set path, where the owning reconciler detects the disruption from the worker pod itself (Q417). <code>cause="eviction"</code> is the kubelet's node-pressure eviction (an eviction for the pod's own storage limit reserves no slot and is counted only by <code>…_rerun_withheld_total{reason="own_limit"}</code>, Q1177); <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="node_shutdown"</code> is a worker whose node shut down under it or whose Node object was deleted (Spot or preemptible reclamation), read off a <code>DisruptionTarget</code> condition with reason <code>TerminationByKubelet</code> or <code>DeletionByPodGC</code> (Q1179), or whose dead node an admin tainted <code>node.kubernetes.io/out-of-service</code>, read off reason <code>DeletionByTaintManager</code> with the runner container still recorded <code>Running</code> (Q1207); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts); <code>cause="abandoned"</code> is a worker reaped while still Pending, whose run was force-cancelled and is re-run once the owner places a worker pod again (Q691, both tiers since Q766, and unlike the others its re-run is deferred until that placement rather than fired at once). <code>cause="vanished"</code> is a scale-set worker that was already gone when the AGC started, with its job never concluded: the shape preemption and drain leave behind when the controller was down for the pod's teardown, recovered off the run identity the listener persisted rather than off the pod (Q844); it names what was observed rather than what happened, because which disruption took the worker went with the pod. The retry budget is <strong>shared across causes</strong> — <code>maxEvictionRetries</code> bounds re-runs per run across all causes together, not once per cause. It is counted per tier: a scale-set <code>RunnerSet</code> keeps its count in its <code>scaleset-failures-&lt;set&gt;</code> ConfigMap, so it survives an AGC restart, and a classic <code>RunnerGroup</code> keeps its in memory (Q1182). On the scale-set tier several disruptions of one run attempt share one re-run, so they increment this counter once. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
+<td>Recoveries <strong>started</strong> after a worker pod disruption — one per reserved retry-budget slot, incremented before the re-run call, after the run read that names the attempt the job failed in (Q1182). A recovery now outlasts GitHub's refusal window: the re-run is retried while GitHub answers <code>403 This workflow is already running</code> (which after an ungraceful eviction lasts until the job lock's TTL lapses, ~10 minutes — Q503), so in steady state each increment corresponds to a re-run that eventually lands. The recoveries that instead never landed are counted by <code>actions_gateway_eviction_rerun_failures_total</code> below — read the two together: <code>retries_total − rerun_failures_total</code> is a floor on the honest recovery count, because several disruptions sharing one slot can each count a failure. The owning reconciler detects the disruption from the worker pod itself (Q417), and <code>tier</code> is always <code>scaleset</code>. <code>cause="eviction"</code> is the kubelet's node-pressure eviction (an eviction for the pod's own storage limit reserves no slot and is counted only by <code>…_rerun_withheld_total{reason="own_limit"}</code>, Q1177); <code>cause="preemption"</code> is kube-scheduler displacing the worker for a higher <code>priorityTiers</code> tier (Q497); <code>cause="node_shutdown"</code> is a worker whose node shut down under it or whose Node object was deleted (Spot or preemptible reclamation), read off a <code>DisruptionTarget</code> condition with reason <code>TerminationByKubelet</code> or <code>DeletionByPodGC</code> (Q1179), or whose dead node an admin tainted <code>node.kubernetes.io/out-of-service</code>, read off reason <code>DeletionByTaintManager</code> with the runner container still recorded <code>Running</code> (Q1207); <code>cause="deletion"</code> is an external graceful deletion — a drain or a <code>kubectl delete pod</code> — whose worker published a terminal phase carrying the deletion mark (Q502; graceful too, with a measured 15–26s conclusion latency, so the retry loop lands it within a few paced attempts); <code>cause="abandoned"</code> is a worker reaped while still Pending, whose run was force-cancelled and is re-run once the owner places a worker pod again (Q691, both tiers since Q766, and unlike the others its re-run is deferred until that placement rather than fired at once). <code>cause="vanished"</code> is a scale-set worker that was already gone when the AGC started, with its job never concluded: the shape preemption and drain leave behind when the controller was down for the pod's teardown, recovered off the run identity the listener persisted rather than off the pod (Q844); it names what was observed rather than what happened, because which disruption took the worker went with the pod. The retry budget is <strong>shared across causes</strong> — <code>maxEvictionRetries</code> bounds re-runs per run across all causes together, not once per cause. A <code>RunnerSet</code> keeps its count in its <code>scaleset-failures-&lt;set&gt;</code> ConfigMap, so it survives an AGC restart (Q1182). Several disruptions of one run attempt share one re-run, so they increment this counter once. Labels added in Q417 (<code>tier</code>) and Q497 (<code>cause</code>); see <a href="#breaking-observability-changes-q417">Breaking observability changes</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
@@ -3208,19 +3074,19 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_rerun_failures_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries whose re-run was <strong>never accepted</strong> by GitHub, so the budget slot is spent but the job was not re-run and needs a manual <code>gh run rerun</code> (Q503). <code>reason="run_never_concluded"</code>: GitHub was still answering <code>403 This workflow is already running</code> when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. With <code>cause="oom"</code> it means the run was still in progress 24 hours after the job was killed, or it could not be read for the half hour after that: that class waits for the run to conclude before calling, since the job's siblings can run long (Q1244), and reads the run once more before giving up, so a run that concluded while the AGC was down is re-run rather than counted here (Q1254). <code>reason="api_error"</code>: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). <code>reason="conclusion_unknown"</code>: the window closed with the deletion arm's cancel check (Q811, next row) still unable to reach the run for fifteen minutes (the request never completed, or GitHub answered 5xx), so no verdict was taken and no re-run was fired, because a run whose conclusion cannot be read is not assumed to be uncancelled. A 4xx, or a 2xx carrying something that is not a run, is <code>api_error</code> instead: neither becomes a verdict inside the window. On <code>tier="scaleset"</code> the same two reasons also cover the run read before the budget is reserved, which every cause takes there (Q1182). <code>reason="budget_unrecorded"</code> (scale-set only): the run's budget decision could not be written to the set's <code>scaleset-failures-&lt;set&gt;</code> ConfigMap (the write failed, the ConfigMap is at its size cap, or a newer AGC wrote it with a <code>minWriterVersion</code> this one may not write), so the re-run was withheld rather than made without a slot. On the scale-set tier several disruptions of one run attempt share one reserved slot but each runs its own re-run loop, so when that attempt's re-run never lands, each of them counts here: one spent slot can read as several failures. Each occurrence also emits an <code>EvictionRerunFailed</code> Warning Event naming the run. <strong>Expected to be zero</strong>; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</td>
+<td>Disruption recoveries whose re-run was <strong>never accepted</strong> by GitHub, so the budget slot is spent but the job was not re-run and needs a manual <code>gh run rerun</code> (Q503). <code>reason="run_never_concluded"</code>: GitHub was still answering <code>403 This workflow is already running</code> when the 15-minute re-run window closed — the original run outlived the job lock's ~10-minute TTL bound, which is itself worth investigating. With <code>cause="oom"</code> it means the run was still in progress 24 hours after the job was killed, or it could not be read for the half hour after that: that class waits for the run to conclude before calling, since the job's siblings can run long (Q1244), and reads the run once more before giving up, so a run that concluded while the AGC was down is re-run rather than counted here (Q1254). <code>reason="api_error"</code>: a terminal API failure (a non-403 error, or a 403 that is a permissions problem rather than the still-running refusal). <code>reason="conclusion_unknown"</code>: the window closed with the deletion arm's cancel check (Q811, next row) still unable to reach the run for fifteen minutes (the request never completed, or GitHub answered 5xx), so no verdict was taken and no re-run was fired, because a run whose conclusion cannot be read is not assumed to be uncancelled. A 4xx, or a 2xx carrying something that is not a run, is <code>api_error</code> instead: neither becomes a verdict inside the window. The same two reasons also cover the run read before the budget is reserved, which every cause takes (Q1182). <code>reason="budget_unrecorded"</code> (scale-set only): the run's budget decision could not be written to the set's <code>scaleset-failures-&lt;set&gt;</code> ConfigMap (the write failed, the ConfigMap is at its size cap, or a newer AGC wrote it with a <code>minWriterVersion</code> this one may not write), so the re-run was withheld rather than made without a slot. Several disruptions of one run attempt share one reserved slot but each runs its own re-run loop, so when that attempt's re-run never lands, each of them counts here: one spent slot can read as several failures. Each occurrence also emits an <code>EvictionRerunFailed</code> Warning Event naming the run. <strong>Expected to be zero</strong>; see the <a href="../troubleshooting/#evicted-worker-pods-exhausting-retry-budget">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>reason</code></td>
-<td>Disruption recoveries that deliberately made <strong>no</strong> re-run call. <code>reason="own_limit"</code> with <code>cause="eviction"</code> (Q1177): the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, which a re-run with the same limit repeats; it is decided at detection, so <strong>no</strong> retry slot is spent and <code>eviction_retries_total</code> does not move, and the <code>EvictionRerunWithheld</code> Event quotes the kubelet's message. The fix is the limit, not the cluster. <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> (Q811): the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. On this shape the retry slot is usually spent, since it is reserved at detection, minutes before GitHub concludes the run, so read it alongside <code>eviction_retries_total</code>, whose increment it explains. On <code>tier="scaleset"</code> <code>run_cancelled</code> is checked on every <code>cause</code>, and a cancel the failure ledger records as GAG's own force-cancel of an abandoned run is re-run rather than withheld (Q1181). With <code>cause="abandoned"</code> it is decided before the force-cancel: the run was already cancelled by someone else, so it is neither cancelled again nor re-run, and <code>abandoned_run_force_cancels_total</code> does not move (Q1232). "Someone else" includes GitHub's ~15-minute unstarted-job timeout, which lands first when <code>pendingPodDeadline</code> is set past it, so on such a set this series also counts jobs that need a manual re-run. Three more reasons are scale-set only and decided on the run read before the budget is reserved, so <strong>no</strong> slot is spent (Q1181): <code>reason="attempt_limit"</code>, the run is past GitHub's 50 re-runs; <code>reason="run_too_old"</code>, it was created more than 30 days ago, outside GitHub's re-run window; <code>reason="superseded"</code>, a <code>push</code> or <code>pull_request</code> run whose workflow has a newer run on the same branch, event and head repository from a different commit. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted, except for the <code>cause="abandoned"</code> timeout case above. A climbing <code>own_limit</code> rate, by contrast, is tenants outgrowing their own limits. <code>cause="oom"</code> (scale-set only, Q1183) is a runner killed at its memory limit, re-run with a higher one under a right-sizing profile (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">how</a>), and is withheld before any slot is spent as <code>reason="own_limit"</code> where no sizing profile can raise the limit, <code>reason="same_class_again"</code> where the job was killed again after a retry raised it, and <code>reason="breaker_open"</code> while more than 10 runs re-run for memory within 10 minutes have paused the class for 30.</td>
+<td>Disruption recoveries that deliberately made <strong>no</strong> re-run call. <code>reason="own_limit"</code> with <code>cause="eviction"</code> (Q1177): the kubelet evicted the worker for exceeding its own <code>ephemeral-storage</code> limit, one container's limit, or an <code>emptyDir</code> <code>sizeLimit</code>, which a re-run with the same limit repeats; it is decided at detection, so <strong>no</strong> retry slot is spent and <code>eviction_retries_total</code> does not move, and the <code>EvictionRerunWithheld</code> Event quotes the kubelet's message. The fix is the limit, not the cluster. <code>reason="run_cancelled"</code> with <code>cause="deletion"</code> (Q811): the run concluded <code>cancelled</code>, and <code>rerun-failed-jobs</code> accepts a cancelled run (measured live 2026-08-05) where a <code>success</code> conclusion refuses it. Without the check, the <a href="../troubleshooting/#cancelling-a-run-does-not-stop-its-worker-pod">cancel runbook</a>'s own remedy for a worker that will not stop (delete its pod, which supplies the deletion mark the recovery keys on) re-queued the job the operator had just stopped. Each occurrence also emits a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the run. On this shape the retry slot is usually spent, since it is reserved at detection, minutes before GitHub concludes the run, so read it alongside <code>eviction_retries_total</code>, whose increment it explains. <code>run_cancelled</code> is checked on every <code>cause</code>, and a cancel the failure ledger records as GAG's own force-cancel of an abandoned run is re-run rather than withheld (Q1181). With <code>cause="abandoned"</code> it is decided before the force-cancel: the run was already cancelled by someone else, so it is neither cancelled again nor re-run, and <code>abandoned_run_force_cancels_total</code> does not move (Q1232). "Someone else" includes GitHub's ~15-minute unstarted-job timeout, which lands first when <code>pendingPodDeadline</code> is set past it, so on such a set this series also counts jobs that need a manual re-run. Three more reasons are scale-set only and decided on the run read before the budget is reserved, so <strong>no</strong> slot is spent (Q1181): <code>reason="attempt_limit"</code>, the run is past GitHub's 50 re-runs; <code>reason="run_too_old"</code>, it was created more than 30 days ago, outside GitHub's re-run window; <code>reason="superseded"</code>, a <code>push</code> or <code>pull_request</code> run whose workflow has a newer run on the same branch, event and head repository from a different commit. <strong>Not</strong> a failure and <strong>not</strong> something to alert on: no manual re-run is wanted, except for the <code>cause="abandoned"</code> timeout case above. A climbing <code>own_limit</code> rate, by contrast, is tenants outgrowing their own limits. <code>cause="oom"</code> (scale-set only, Q1183) is a runner killed at its memory limit, re-run with a higher one under a right-sizing profile (<a href="../../design/04-operational-flows/#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">how</a>), and is withheld before any slot is spent as <code>reason="own_limit"</code> where no sizing profile can raise the limit, <code>reason="same_class_again"</code> where the job was killed again after a retry raised it, and <code>reason="breaker_open"</code> while more than 10 runs re-run for memory within 10 minutes have paused the class for 30.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>cause</code>, <code>event</code>, <code>result</code></td>
-<td>The result of the later attempt of each job GAG re-ran for a disruption, by the <code>cause</code> it re-ran for, the run's triggering <code>event</code> (<code>push</code>, <code>pull_request</code>, <code>pull_request_target</code>, <code>merge_group</code>, <code>schedule</code>, <code>workflow_dispatch</code>, <code>workflow_run</code>, <code>repository_dispatch</code>, <code>release</code>; anything else is <code>other</code>, and a completion that named none is <code>unknown</code>), and <code>result</code> (<code>succeeded</code>, <code>failed</code>). <code>result="failed"</code> over the total is a cause's failure rate: a re-run that fails again was not a recovery, and the shipped <code>ActionsGatewayRetryCauseMisclassified</code> alert fires when that share passes 50% over 7 days with at least 5 re-runs (Q1245). Counted when the job's next attempt completes, from the failure ledger (Q555); a pairing lost to a ledger write that failed, or to another replica's write this process has not read, is not counted. Scale-set tier only.</td>
+<td>The result of the later attempt of each job GAG re-ran for a disruption, by the <code>cause</code> it re-ran for, the run's triggering <code>event</code> (<code>push</code>, <code>pull_request</code>, <code>pull_request_target</code>, <code>merge_group</code>, <code>schedule</code>, <code>workflow_dispatch</code>, <code>workflow_run</code>, <code>repository_dispatch</code>, <code>release</code>; anything else is <code>other</code>, and a completion that named none is <code>unknown</code>), and <code>result</code> (<code>succeeded</code>, <code>failed</code>). <code>result="failed"</code> over the total is a cause's failure rate: a re-run that fails again was not a recovery, and the shipped <code>ActionsGatewayRetryCauseMisclassified</code> alert fires when that share passes 50% over 7 days with at least 5 re-runs (Q1245). Counted when the job's next attempt completes, from the failure ledger (Q555); a pairing lost to a ledger write that failed, or to another replica's write this process has not read, is not counted.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_auto_retry_paused</code></td>
@@ -3238,19 +3104,19 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>cause</code></td>
-<td>Disrupted <strong>scale-set</strong> worker pods deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later: on that tier the pod is the disruption's only record, and it is gone (Q809). Each occurrence also emits an <code>EvictionRecoveryEvidenceLost</code> Warning Event on the owning <code>RunnerSet</code>. <code>cause="preemption"</code>, <code>cause="node_shutdown"</code> and <code>cause="deletion"</code> are the exposed arms, since each can act on a pod that is already terminating; recovery reads the pod off the informer (the watch event, or the per-reconcile scan's cached List) and claims it through the live API, so a pod removed in between yields a claim that finds nothing. The two readers are routinely concurrent claimants, and the loser of a claim conflict re-reads the pod to confirm the winner's stamp; a pod removed between the conflict and that re-read is reported here although the winner recovered its run, so the counter can read high by one per such race. <strong>Expected to be zero</strong>, and distinct from <code>…_identity_unknown_total</code>, which means the pod was there and carried no run identity. See the <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">runbook</a>.</td>
+<td>Disrupted worker pods deleted before the recovery could be claimed, so no automatic re-run was attempted and none can be attempted later: the pod is the disruption's only record, and it is gone (Q809). Each occurrence also emits an <code>EvictionRecoveryEvidenceLost</code> Warning Event on the owning <code>RunnerSet</code>. <code>cause="preemption"</code>, <code>cause="node_shutdown"</code> and <code>cause="deletion"</code> are the exposed arms, since each can act on a pod that is already terminating; recovery reads the pod off the informer (the watch event, or the per-reconcile scan's cached List) and claims it through the live API, so a pod removed in between yields a claim that finds nothing. The two readers are routinely concurrent claimants, and the loser of a claim conflict re-reads the pod to confirm the winner's stamp; a pod removed between the conflict and that re-read is reported here although the winner recovered its run, so the counter can read high by one per such race. <strong>Expected to be zero</strong>, and distinct from <code>…_identity_unknown_total</code>, which means the pod was there and carried no run identity. See the <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>outcome</code></td>
-<td>REST <code>force-cancel</code>s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No <code>completejob</code> value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same <strong><code>cancelled</code></strong> conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts <code>rerun-failed-jobs</code> where the false-green ending refused it. <code>outcome="cancelled"</code>: accepted. <code>outcome="identity_unknown"</code>: the acquire payload carried no <code>owner/repo/run_id</code>, so there was no endpoint to address. <code>outcome="error"</code>: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. <code>tier="classic"</code> is the acquiring goroutine, woken by its own worker pod's deletion; <code>tier="scaleset"</code> is the owning reconciler, which reads the run identity off the pod as the reaper deletes it (Q766), so on that tier <code>outcome="identity_unknown"</code> is unreachable, and the same failure is counted as <code>eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. Increments alongside <code>worker_pods_reaped_total{reason="pending_deadline"}</code>; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a>. An <code>outcome="cancelled"</code> run is then queued for automatic re-run, tracked by the next row.</td>
+<td>REST <code>force-cancel</code>s of the workflow run behind a worker pod removed before it ran: the fast honest ending for a job nothing will ever report (Q683). No <code>completejob</code> value ends such a job honestly (Q645/Q676), and told nothing GitHub cancels run and job at its ~15-minute unstarted-job timeout; the standalone force-cancel reaches the same <strong><code>cancelled</code></strong> conclusion in about a second (measured live 2026-08-05), and the cancelled run accepts <code>rerun-failed-jobs</code> where the false-green ending refused it. <code>outcome="cancelled"</code>: accepted. <code>outcome="error"</code>: GitHub refused the call or the API failed. On the latter two the unstarted-job timeout remains the honest backstop, so they cost latency, not correctness; a sustained non-zero rate on either is worth investigating. The owning reconciler reads the run identity off the pod as the reaper deletes it (Q766), so <code>outcome="identity_unknown"</code> is unreachable, and the same failure is counted as <code>eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. Increments alongside <code>worker_pods_reaped_total{reason="pending_deadline"}</code>; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">runbook</a>. An <code>outcome="cancelled"</code> run is then queued for automatic re-run, tracked by the next row.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>tier</code>, <code>outcome</code></td>
-<td>How the wait for capacity ended for a force-cancelled abandoned run queued for automatic re-run (Q691). The re-run is deliberately <strong>deferred</strong>: the job was abandoned because its worker could not be scheduled, so re-queueing it at once would put it back into the pool that was starved, and a shortage would compound into a re-run storm. It fires when a worker pod of the same owner <strong>binds to a node</strong> (<code>PodScheduled=True</code>) after the abandonment, the same evidence-of-capacity test the Q512 capacity-gate latch uses. <code>outcome="capacity_returned"</code>: a worker was placed and the re-run was handed to the shared per-run retry budget, where it continues as <code>eviction_retries_total{cause="abandoned"}</code> (and <code>eviction_retries_exhausted_total{cause="abandoned"}</code> once <code>maxEvictionRetries</code> re-runs are spent, which is the loop bound). <code>outcome="expired"</code>: nothing was placed within the 30-minute wait window, so the run stays cancelled and needs a manual re-run. A sustained <code>expired</code> rate means jobs are being lost silently to a pool that never recovers, and is worth alerting on. <code>tier</code> carries the acquisition tier the abandonment was detected on, matching the force-cancel it recovers (both tiers since Q766); the wait, the evidence, and the retry budget are identical on each.</td>
+<td>How the wait for capacity ended for a force-cancelled abandoned run queued for automatic re-run (Q691). The re-run is deliberately <strong>deferred</strong>: the job was abandoned because its worker could not be scheduled, so re-queueing it at once would put it back into the pool that was starved, and a shortage would compound into a re-run storm. It fires when a worker pod of the same owner <strong>binds to a node</strong> (<code>PodScheduled=True</code>) after the abandonment, the same evidence-of-capacity test the Q512 capacity-gate latch uses. <code>outcome="capacity_returned"</code>: a worker was placed and the re-run was handed to the shared per-run retry budget, where it continues as <code>eviction_retries_total{cause="abandoned"}</code> (and <code>eviction_retries_exhausted_total{cause="abandoned"}</code> once <code>maxEvictionRetries</code> re-runs are spent, which is the loop bound). <code>outcome="expired"</code>: nothing was placed within the 30-minute wait window, so the run stays cancelled and needs a manual re-run. A sustained <code>expired</code> rate means jobs are being lost silently to a pool that never recovers, and is worth alerting on.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_quota_retries_total</code></td>
@@ -3268,7 +3134,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_worker_pods_reaped_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_group</code>, <code>runner_set</code>, <code>reason</code></td>
-<td>Worker pods the AGC deleted, by the lifecycle reaper's reasons. <code>runner_group</code> carries the owning CR's name on <strong>both</strong> acquisition tiers (a <code>RunnerSet</code>'s reaps land there too, unchanged, so existing <code>runner_group</code>-keyed queries keep working); <code>runner_set</code> additionally carries the set name on every v2 <code>RunnerSet</code>'s reaps and is empty for a v1 <code>RunnerGroup</code> (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the v2 view. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and (on the scale-set tier) no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>. <code>reason="job_abandoned"</code> is the one non-reaper source: the classic-tier provisioner reclaiming the worker of a job whose lock was definitively lost, immediately after the matching <code>renew_job_teardowns_total</code> increment — it should track that counter, and see the <a href="../troubleshooting/#renewjob-failures-rising">runbook</a>.</td>
+<td>Worker pods the AGC deleted, by the lifecycle reaper's reasons. <code>runner_group</code> carries the owning CR's name, so <code>runner_group</code>-keyed queries work; <code>runner_set</code> carries the same set name (added in Q514), so the reap series join the <a href="#scale-set-acquisition-tier-q264"><code>runner_set</code>-labelled <code>scaleset_*</code> gauges</a> on <code>(namespace, runner_set)</code> — filter with <code>{runner_set!=""}</code> for the v2 view. <code>reason="completed_ttl"</code> is routine cleanup after <code>completedPodTTL</code>; <code>reason="pending_deadline"</code> means a pod was stuck Pending past <code>pendingPodDeadline</code> and its job was cancelled — each such reap also emits a <code>WorkerPodStuckPending</code> Warning Event on the RunnerGroup. <code>reason="completed_pending"</code> means a pod was still Pending thirty seconds after GitHub reported its job terminal — the job ended before the pod could start, so the pod had nothing to run and no longer has the JIT-config Secret it mounts — and emits a <code>WorkerPodCompletedPending</code> Warning Event; it is deliberately distinct from <code>pending_deadline</code>, which would send you after a scheduling problem that does not exist; see the <a href="../troubleshooting/#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending">runbook</a>. <code>reason="orphaned_running"</code> means a pod was still Running five minutes after GitHub reported its job terminal — a ScaleSet worker that registered but never received its job, or a pod held open by a container that outlived the runner — and emits a <code>WorkerPodOrphanedRunning</code> Warning Event; see the <a href="../troubleshooting/#worker-pod-reaped-while-running-workerpodorphanedrunning">runbook</a>. <code>reason="lifetime_exceeded"</code> means the kubelet killed the pod for outliving <code>maxWorkerLifetime</code> (default 12h, the pod's <code>activeDeadlineSeconds</code>) and emits a <code>WorkerPodLifetimeExceeded</code> Warning Event — the unconditional backstop for a worker orphaned while the AGC was down, and the one reap reason that fires with no AGC running; see the <a href="../troubleshooting/#worker-killed-by-the-lifetime-cap-workerpodlifetimeexceeded">runbook</a>. <code>reason="gateway_deleted"</code> means the pod's <code>ActionsGateway</code> is being deleted: the AGC is the pods' only reaper and is torn down with the gateway, so it stops acquiring and deletes them itself rather than strand them — any job they were running is lost, and a single <code>WorkerPodsReapedOnGatewayTeardown</code> Warning Event names the count; see the <a href="../troubleshooting/#worker-pods-reaped-on-gateway-teardown-workerpodsreapedongatewayteardown">runbook</a>.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
@@ -3280,7 +3146,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <td><code>actions_gateway_message_poll_errors_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>reason</code></td>
-<td><code>GetMessage</code> errors (excludes empty polls and session expiry — those are normal). <code>reason="rate_limited"</code> is a 429; <code>reason="timeout"</code> is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see <a href="../troubleshooting/#listener-stalls-for-minutes-after-a-black-holed-broker-connection">Listener Stalls After a Black-Holed Broker Connection</a>); <code>reason="other"</code> is any remaining transport/decode error. <strong>Both acquisition tiers</strong> — a <code>ScaleSet</code> set writes the same <code>namespace</code>/<code>reason</code> series as a Classic group (Q446), so one query covers a mixed fleet and keeps working after Classic is removed. Credential rejection (401/403) and session expiry (404/410) are <em>not</em> counted on either tier: both are heal paths, not poll failures. On a <code>ScaleSet</code> set the counter is the rate-able half of a picture the conditions complete — <code>Degraded</code>/<code>Unauthorized</code> on a rejected session refresh, and <code>RateLimited</code> once a 429 episode outlasts ten minutes — so a stream of brief episodes shows up here even though no condition trips.</td>
+<td><code>GetMessage</code> errors (excludes empty polls and session expiry — those are normal). <code>reason="rate_limited"</code> is a 429; <code>reason="timeout"</code> is a black-holed long-poll the broker accepted but never answered, bounded by the client response-header deadline and retried (see <a href="../troubleshooting/#long-polls-time-out-on-a-black-holed-message-queue-connection">Long Polls Time Out on a Black-Holed Message-Queue Connection</a>); <code>reason="other"</code> is any remaining transport/decode error. Credential rejection (401/403) and session expiry (404/410) are <em>not</em> counted: both are heal paths, not poll failures. On a <code>ScaleSet</code> set the counter is the rate-able half of a picture the conditions complete — <code>Degraded</code>/<code>Unauthorized</code> on a rejected session refresh, and <code>RateLimited</code> once a 429 episode outlasts ten minutes — so a stream of brief episodes shows up here even though no condition trips.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_runnerset_worker_quota_pressure</code></td>
@@ -3417,9 +3283,9 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 </tbody>
 </table>
 <blockquote>
-<p><strong>Reading the eviction metrics across tiers and causes.</strong> Both <code>eviction_retries_total</code> and <code>eviction_retries_exhausted_total</code> are emitted on <strong>both</strong> acquisition tiers, split by the <code>tier</code> label (Q417), and for the <strong>four</strong> recovered disruptions, split by the <code>cause</code> label (Q497, Q502, Q691).
-Detection differs across every combination — an inline pod wait on classic, the owning reconciler's recovery pass on scale-set; a <code>PodFailed</code>/<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption, the pod's <code>deletionTimestamp</code> at terminal publish for an external deletion, a force-cancelled run plus a later worker placement for an abandonment — but each tier keeps one budget per workflow run across every cause, so <code>maxEvictionRetries</code> caps re-runs per run rather than once per cause.
-A run whose workers span a classic <code>RunnerGroup</code> and a scale-set <code>RunnerSet</code>, or two <code>RunnerSet</code>s, has a budget in each (Q1182).</p>
+<p><strong>Reading the eviction metrics across causes.</strong> <code>eviction_retries_total</code> and <code>eviction_retries_exhausted_total</code> are split by the <code>cause</code> label for the <strong>four</strong> recovered disruptions (Q497, Q502, Q691).
+Detection differs by cause: a <code>PodFailed</code>/<code>Evicted</code> phase for an eviction, a <code>DisruptionTarget</code> condition for a preemption, the pod's <code>deletionTimestamp</code> at terminal publish for an external deletion, a force-cancelled run plus a later worker placement for an abandonment but a set keeps one budget per workflow run across every cause, so <code>maxEvictionRetries</code> caps re-runs per run rather than once per cause.
+A run whose workers span two <code>RunnerSet</code>s has a budget in each (Q1182).</p>
 <p><strong>The <code>cause</code> split is a diagnosis, not decoration.</strong> A climbing <code>cause="eviction"</code> rate means node pressure: memory or disk exhaustion on the nodes, and the fix is capacity or worker sizing.
 A worker evicted for its own storage limit never reaches it; it shows as <code>eviction_rerun_withheld_total{reason="own_limit"}</code> instead (Q1177).
 A climbing <code>cause="preemption"</code> rate means a <code>priorityTiers</code> floor is displacing more opportunistic work than the tenant sized for, and the fix is tier thresholds or where the work is placed.
@@ -3427,7 +3293,7 @@ A climbing <code>cause="deletion"</code> rate means something outside the gatewa
 A climbing <code>cause="abandoned"</code> rate means workers are not being placed at all before <code>pendingPodDeadline</code> reaps them (Q691), and the fix is whatever is blocking scheduling: cluster capacity, an unpullable image, or constraints no node satisfies.
 A climbing <code>cause="vanished"</code> rate means the AGC is missing worker teardowns entirely, and the fix is its own availability: restarts, OOM kills, or evictions of the controller pod, not anything about the workers.
 Reading one as another sends an operator hunting in entirely the wrong place.</p>
-<p>A flat zero on <code>tier="scaleset"</code> while workers are visibly being disrupted means the recovery is not firing, not that nothing happened.
+<p>A flat zero while workers are visibly being disrupted means the recovery is not firing, not that nothing happened.
 Check <code>kubectl get pods --field-selector=status.phase=Failed</code> for <code>Evicted</code> pods, then <code>actions_gateway_eviction_recovery_identity_unknown_total</code> and the <a href="../troubleshooting/#evicted-scale-set-jobs-are-not-re-run-automatically">runbook</a>.
 For preemption specifically, see <a href="../troubleshooting/#a-preempted-workers-job-is-not-re-run">A Preempted Worker's Job Is Not Re-Run</a> — its scale-set path has a time limit the eviction path does not.</p>
 <p><strong>Proxy conditions.</strong> The <code>EgressProxy</code> reconciler sets the proxy conditions on each pool — a namespace-<code>ResourceQuota</code>-bounded, HPA-scaled pool whose default CIDR-mode <code>NetworkPolicy</code> is refreshed from the shared GitHub IP-range cache — and the GMC reflects them in <code>proxy_quota_pressure</code>, <code>proxy_quota_exceeded</code>, <code>egress_rules_stale</code>, and <code>github_egress_incomplete</code>, keyed by the pool's <code>namespace</code>/<code>name</code> (Q320, Q537).</p>
@@ -3437,8 +3303,8 @@ Each has its own gauge — the <code>actions_gateway_runnerset_*</code> set abov
 <p><strong><code>WorkerCapacityDeclined</code> is gauged too, and differs in two ways</strong> (Q643).
 It carries a <code>reason</code> label, because the value alone cannot separate a live decline from the latched <code>AwaitingProbe</code> state, and those call for different actions — one has stuck pods to inspect, the other has none and means intake is throttled to one probe job per <code>pendingPodDeadline</code> window.
 And it is emitted only for a set whose gate is on, because the reconciler <em>removes</em> the condition for an ungated set rather than publishing it <code>False</code>; the family follows the condition, so absence means "no gate here".
-The per-consequence series stay as they are: <code>jobs_admission_rejected_total{reason="capacity"}</code> counts jobs the classic tier left queued and <code>scaleset_capacity_withheld{reason="capacity"}</code> counts slots the scale-set tier withheld.
-Those answer "how much did the gate cost this tenant"; this gauge answers "is the gate closed right now, and on what evidence".</p>
+<code>scaleset_capacity_withheld{reason="capacity"}</code> counts the slots the gate withheld.
+That answers "how much did the gate cost this tenant"; this gauge answers "is the gate closed right now, and on what evidence".</p>
 <p><strong><code>RunnerSetsDegraded</code> on a v2 <code>ActionsGateway</code>.</strong> The v2 <code>ActionsGateway</code> carries a <code>RunnerSetsDegraded</code> condition (Q304), a child-health rollup.
 It is <code>True</code> when one or more of the <code>RunnerSet</code>s bound to the gateway (<code>spec.gatewayRef</code>) are impaired — not serving jobs: a non-transient <code>Ready=False</code> (a reference did not resolve or a provisioning step failed) <strong>or</strong> any abnormal-is-True impairing condition — <code>Degraded</code> (revoked/invalid credentials, pushed by the listener independently of <code>Ready</code>, Q330), <code>CredentialUnavailable</code>, <code>RunnerVersionTooOld</code>, or <code>WorkersUnschedulable</code>.
 The advisory conditions (<code>RateLimited</code>, the <code>WorkerQuota</code> ladder, <code>EgressUnattributed</code>, <code>EgressAuditUnattributed</code>, <code>PossibleReapBlockingSidecar</code>, <code>JobProvisionStalled</code>) are excluded so the rollup does not flap on normal load.
@@ -3466,7 +3332,7 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td><code>actions_gateway_scaleset_jobs_assigned_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td>Jobs the scale set's queue delivered as <code>JobAssigned</code> to the listener. Because the scale-set protocol assigns each job exactly once (no sibling fan-out), this tracks demand 1:1 — unlike the classic <code>jobs_acquired_total</code>, there is no duplicate-delivery series to correlate against.</td>
+<td>Jobs the scale set's queue delivered as <code>JobAssigned</code> to the listener. Because the scale-set protocol assigns each job exactly once (no sibling fan-out), this tracks demand 1:1.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_jobs_provisioned_total</code></td>
@@ -3484,7 +3350,7 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td><code>actions_gateway_scaleset_jobs_completed_total</code></td>
 <td>Counter</td>
 <td><code>namespace</code>, <code>runner_set</code>, <code>result</code></td>
-<td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>). This is the completion signal the classic many-acquirers protocol never delivered, so it is unique to the scale-set tier. Counted at most once per job even if a re-created session replays the message.</td>
+<td>Terminal <code>JobCompleted</code> messages the queue delivered, by GitHub-reported <code>result</code> (e.g. <code>succeeded</code>, <code>failed</code>, <code>canceled</code>).  Counted at most once per job even if a re-created session replays the message.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_job_reruns_total</code></td>
@@ -3514,7 +3380,7 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td><code>actions_gateway_scaleset_advertised_capacity</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td>The <code>X-ScaleSetMaxCapacity</code> most recently advertised for the set: the total jobs GitHub may keep assigned to it at once. This is the scale-set tier's whole admission decision — the minimum of the declared worker ceiling, live namespace-<code>ResourceQuota</code> headroom (Q443), and — when the set opts in — its capacity gate (Q405). A value below the set's <code>maxWorkers</code> means a rung is binding; <strong><code>0</code> means GitHub will assign nothing at all</strong> until it recovers. Dropped when the <code>RunnerSet</code> is deleted, so a stale series does not outlive the set.</td>
+<td>The <code>X-ScaleSetMaxCapacity</code> most recently advertised for the set: the total jobs GitHub may keep assigned to it at once. This is the set's whole admission decision — the minimum of the declared worker ceiling, live namespace-<code>ResourceQuota</code> headroom (Q443), and — when the set opts in — its capacity gate (Q405). A value below the set's <code>maxWorkers</code> means a rung is binding; <strong><code>0</code> means GitHub will assign nothing at all</strong> until it recovers. Dropped when the <code>RunnerSet</code> is deleted, so a stale series does not outlive the set.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_capacity_withheld</code></td>
@@ -3526,19 +3392,18 @@ During the P4 dogfood validation (the Q224 fan-out acceptance gate) the counters
 <td><code>actions_gateway_scaleset_jobs_available</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td>Jobs GitHub is holding queued for the scale set and has assigned to nobody: the demand signal every other series on this tier is blind to, because they all begin at assignment. Read it against <code>…_advertised_capacity</code> to answer <em>why is this job still queued</em>: demand with a ceiling to spare means GitHub has not delivered yet, demand against a <code>0</code> ceiling means the AGC is withholding and <code>…_capacity_withheld</code> says which rung. <strong>It is a last-reading gauge, not a per-poll one.</strong> Statistics ride on queue messages and session responses; an empty poll (HTTP 202) carries none, so the value holds until the next reading rather than tracking continuously. The readings are every session open, every delivered message, the once-a-minute assignment check while jobs are deferred, and a five-minute refresh on the empty-poll path for a set advertising <code>0</code> capacity, which is delivered nothing and would otherwise take no reading at all (Q960). <strong>So the value can lag GitHub by up to five minutes</strong> while a set is withholding, which is the state you are most likely to be reading it in: it is alertable, but give any rule a window several times that interval rather than firing on a single scrape (Q720). Dropped when the <code>RunnerSet</code> is deleted.</td>
+<td>Jobs GitHub is holding queued for the scale set and has assigned to nobody: the demand signal every other series here is blind to, because they all begin at assignment. Read it against <code>…_advertised_capacity</code> to answer <em>why is this job still queued</em>: demand with a ceiling to spare means GitHub has not delivered yet, demand against a <code>0</code> ceiling means the AGC is withholding and <code>…_capacity_withheld</code> says which rung. <strong>It is a last-reading gauge, not a per-poll one.</strong> Statistics ride on queue messages and session responses; an empty poll (HTTP 202) carries none, so the value holds until the next reading rather than tracking continuously. The readings are every session open, every delivered message, the once-a-minute assignment check while jobs are deferred, and a five-minute refresh on the empty-poll path for a set advertising <code>0</code> capacity, which is delivered nothing and would otherwise take no reading at all (Q960). <strong>So the value can lag GitHub by up to five minutes</strong> while a set is withholding, which is the state you are most likely to be reading it in: it is alertable, but give any rule a window several times that interval rather than firing on a single scrape (Q720). Dropped when the <code>RunnerSet</code> is deleted.</td>
 </tr>
 <tr>
 <td><code>actions_gateway_scaleset_session_open</code></td>
 <td>Gauge</td>
 <td><code>namespace</code>, <code>runner_set</code></td>
-<td><code>1</code> while the set's listener holds an open message session, <code>0</code> once opening one has failed: the listener's start, or the re-create after the session expired inside the poll loop. A set at <code>0</code> is delivered no jobs, and it counts no poll error and is assigned nothing, so this is the only series that shows it. The tier's analogue of the classic <code>actions_gateway_active_sessions</code>, and what <code>ActionsGatewayScaleSetNoSession</code> reads (Q1275). Dropped when the <code>RunnerSet</code> is deleted.</td>
+<td><code>1</code> while the set's listener holds an open message session, <code>0</code> once opening one has failed: the listener's start, or the re-create after the session expired inside the poll loop. A set at <code>0</code> is delivered no jobs, and it counts no poll error and is assigned nothing, so this is the only series that shows it. This is what <code>ActionsGatewayScaleSetNoSession</code> reads (Q1275). Dropped when the <code>RunnerSet</code> is deleted.</td>
 </tr>
 </tbody>
 </table>
 <blockquote>
-<p><strong>Why gauges and not a rejection counter.</strong> On the classic tier a declined job is a delivered job, counted by <code>actions_gateway_jobs_admission_rejected_total{reason}</code>.
-On the scale-set tier the equivalent job is never assigned in the first place, so there is nothing to count — which is why that counter reads a flat zero here, and why these two gauges are its counterpart.
+<p><strong>Why gauges and not a rejection counter.</strong> A job the set has no capacity for is never assigned in the first place, so there is nothing to count.
 Pair them with the set's <code>WorkerQuotaPressure</code>/<code>WorkerQuotaExceeded</code> conditions, which name the binding resource in their message.</p>
 </blockquote>
 <h3 id="worker-usage--right-sizing-metrics-q359">Worker usage / right-sizing metrics (Q359)<a class="headerlink" href="#worker-usage--right-sizing-metrics-q359" title="Permanent link">&para;</a></h3>
@@ -3693,822 +3558,6 @@ If you scrape the proxy with a hand-written scrape config instead of the generat
 Absent if you scrape without that relabeling.</p>
 <p>For abuse/compromise detection built on these metrics (slowloris, eviction-retry loops, credential-harvesting), see <a href="../security-operations/">security-operations.md</a>.</p>
 <hr />
-<h2 id="acquisition-tier-reach">Acquisition-tier reach<a class="headerlink" href="#acquisition-tier-reach" title="Permanent link">&para;</a></h2>
-<p>Which acquisition tier emits each AGC series, so a flat zero can be read as <em>this tier does not emit it</em> rather than <em>nothing happened</em>.
-Every <code>actions_gateway_*</code> metric the AGC defines is listed; the <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> fails when one is added without a row here, and when a row calls a series single-tier that the source emits from the tier it excludes.</p>
-<p>Four values, and no others:</p>
-<ul>
-<li><strong>Both</strong> is the parity claim: the series populates on a <code>Classic</code> and a <code>ScaleSet</code> set alike.</li>
-<li><strong>Classic only</strong> and <strong>Scale-set only</strong> mean the other tier reads a permanent zero, and the row says why, and what to read there instead.</li>
-<li><strong>Tier-neutral</strong> is a series with no acquisition tier at all.</li>
-</ul>
-<p>A <strong>Classic only</strong> series is not a gap by itself.
-Most are artifacts of the many-acquirers and JIT-agent models the scale-set protocol removes, so they disappear <em>with</em> classic at <code>v2.0.0</code> rather than being ported; <a href="../../plan/v2-ga/#capability-parity-is-a-precondition-of-the-removal">v2-ga.md</a> is where that judgement is recorded and where the removal is gated on it.
-What the row must never be is silent: a capability that reaches only the tier every new tenant is <em>not</em> on is the failure this table exists to make visible.</p>
-<p>The GMC and proxy series above are not listed.
-Neither binary acquires jobs, so neither has a tier.</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Tier</th>
-<th>Why, and what to read on the other tier</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>actions_gateway_eviction_recovery_identity_unknown_total</code></td>
-<td>Scale-set only</td>
-<td>The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it. That tier counts the same failure as <code>actions_gateway_abandoned_run_force_cancels_total{outcome="identity_unknown"}</code>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_recovery_evidence_lost_total</code></td>
-<td>Scale-set only</td>
-<td>On this tier the disrupted pod is the disruption's only record (Q809). The classic tier holds it in process, so there is no evidence to lose.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_jobs_assigned_total</code></td>
-<td>Scale-set only</td>
-<td>The scale-set queue's own delivery signal. <code>actions_gateway_jobs_acquired_total</code> is the classic counterpart.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_jobs_provisioned_total</code></td>
-<td>Scale-set only</td>
-<td>Worker pods provisioned per assigned job. A classic set provisions inline after <code>acquirejob</code>, so the two are one event there.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_provision_errors_total</code></td>
-<td>Scale-set only</td>
-<td>Provision failures on a fire-and-forget path. <code>actions_gateway_job_acquisition_errors_total</code> is the classic counterpart.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_jobs_completed_total</code></td>
-<td>Scale-set only</td>
-<td>The terminal <code>JobCompleted</code> message the classic many-acquirers protocol never delivered, so there is nothing to count on that tier.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_job_reruns_total</code></td>
-<td>Scale-set only</td>
-<td>Pairs <code>JobCompleted</code> messages, which the classic protocol never delivers.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_flaky_jobs_total</code></td>
-<td>Scale-set only</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_jobs_deferred</code></td>
-<td>Scale-set only</td>
-<td>Assignments held for a later re-offer, which requires a queue cursor the classic protocol does not have.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_jobs_abandoned_total</code></td>
-<td>Scale-set only</td>
-<td>Assignments the set stopped counting, likewise a property of the queue.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_advertised_capacity</code></td>
-<td>Scale-set only</td>
-<td>The capacity integer this tier advertises in place of a per-job admission decision; <code>actions_gateway_jobs_admission_rejected_total</code> is the classic form (Q443).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_capacity_withheld</code></td>
-<td>Scale-set only</td>
-<td>The per-rung breakdown behind that integer, same reason.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_jobs_available</code></td>
-<td>Scale-set only</td>
-<td>GitHub reports it in the runner-scale-set session statistics, a payload the classic many-acquirers protocol has no equivalent of; a Classic set learns of a job only when one is delivered to it.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_scaleset_session_open</code></td>
-<td>Scale-set only</td>
-<td>One session per scale set is this tier's model; the classic tier reports its many sessions as <code>actions_gateway_active_sessions</code>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_token_refreshes_total</code></td>
-<td>Both</td>
-<td>One installation-token manager serves both listeners.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_token_refresh_errors_total</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_message_poll_errors_total</code></td>
-<td>Scale-set only</td>
-<td>The classic listener wrote the same <code>namespace</code>/<code>reason</code> series until Q264 removed it, so a query written against either tier keeps working.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_pod_creation_latency_seconds</code></td>
-<td>Both</td>
-<td>Observed off the shared pod informer since Q713, which sees a scale-set worker pod and a classic one identically.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_job_duration_seconds</code></td>
-<td>Both</td>
-<td>As above (Q713).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_retries_total</code></td>
-<td>Both</td>
-<td>Ported by Q417; split by the <code>tier</code> label.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
-<td>Both</td>
-<td>As above (Q417).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
-<td>Both</td>
-<td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td>Both</td>
-<td>As above: the cancel check sits in that shared path, and both tiers detect the graceful deletion that arms it (Q811); both tiers withhold an own-limit eviction (Q1177). The futility reasons are scale-set only (Q1181), listed under <a href="#label-value-reach">Label-value reach</a>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_outcomes_total</code></td>
-<td>Scale-set only</td>
-<td>Read from the same <code>JobCompleted</code> pairing, which only the scale-set listener reports. The classic tier's re-runs are counted by <code>eviction_retries_total</code> with no outcome.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_auto_retry_paused</code></td>
-<td>Scale-set only</td>
-<td>Set only by the out-of-memory class's stampede breaker in <code>cmd/agc/internal/provisioner/oom_class.go</code>, which only the scale-set judge reaches (Q1245).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
-<td>Both</td>
-<td>Ported by Q766; split by the <code>tier</code> label.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_abandoned_run_rerun_waits_total</code></td>
-<td>Both</td>
-<td>As above (Q766).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_quota_retries_total</code></td>
-<td>Both</td>
-<td>Both provisioning paths create the worker pod through the same quota-retry helper.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_quota_retries_exhausted_total</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_scaleup_throttled_total</code></td>
-<td>Both</td>
-<td>The opt-in <code>spec.scaleUp</code> limiter is a rung of the admission ladder on both tiers, but each tier states the rung in its own form: classic as a refused claim (<code>jobs_admission_rejected_total{reason="scaleup"}</code>), scale-set as withheld capacity (<code>scaleset_capacity_withheld{reason="scaleup"}</code>). This counter is the pod-creation backstop behind both, so it is near-zero on the scale-set tier by design.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_pods_reaped_total</code></td>
-<td>Both</td>
-<td>The reaper is protocol-agnostic; <code>runner_set</code> is additionally set on scale-set reaps (Q514).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_reap_blocking_sidecar_templates</code></td>
-<td>Both</td>
-<td>Set from the resolved worker template before the reconciler routes by protocol.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnerset_worker_quota_pressure</code></td>
-<td>Both</td>
-<td>A v2 <code>RunnerSet</code> condition gauge, and the condition is written on either protocol.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnerset_worker_quota_exceeded</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnerset_workers_unschedulable</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnerset_workers_not_starting</code></td>
-<td>Both</td>
-<td>As above: the kubelet's startup verdict, read from the same shared capacity call on both tiers.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnerset_worker_capacity_declined</code></td>
-<td>Both</td>
-<td>As above; emitted only for a set whose capacity gate is enabled.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_runnerset_egress_audit_unattributed</code></td>
-<td>Both</td>
-<td>Set by the <code>RunnerSet</code> reconciler from the set's resolved references, before the tier routes.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_job_cpu_peak_cores</code></td>
-<td>Both</td>
-<td>Sampled from every v2 <code>RunnerSet</code> worker pod, which both protocols label identically.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_job_memory_peak_bytes</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_cpu_peak_cores</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_memory_peak_bytes</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_jobs_sampled_total</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_jobs_unsampled_total</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_usage_poll_errors_total</code></td>
-<td>Both</td>
-<td>Counts <code>metrics.k8s.io</code> list failures, which are per-namespace rather than per-tier.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_proxy_failure_records_total</code></td>
-<td>Both</td>
-<td>Joined on worker pods, which both protocols label identically.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_proxy_failure_reads_total</code></td>
-<td>Both</td>
-<td>Per pool replica, not per tier.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_build_info</code></td>
-<td>Tier-neutral</td>
-<td>Build metadata of the running binary.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="label-value-reach">Label-value reach<a class="headerlink" href="#label-value-reach" title="Permanent link">&para;</a></h3>
-<p>A series can be <strong>Both</strong> while one of its label values is not.
-<code>actions_gateway_eviction_retries_total</code> populates on either tier, and <code>cause="vanished"</code> only ever comes from a scale-set set, so a query filtered to that value reads a permanent zero on classic, and the row above says the opposite.</p>
-<p>Each row here records one such exception.
-The <a href="../../development/testing/#the-make-check-pre-review-gate">gate</a> derives the values each series emits from the AGC source and fails when one it can prove single-tier has no row, when a row is refuted by where the source names its value, and when the <code>Help</code> text an operator scrapes off <code>/metrics</code> has fallen behind the vocabulary the code emits.</p>
-<p>Only the two single-tier answers appear here: a value that reaches both tiers needs no row, and the <code>tier</code> label is the axis itself rather than a value on it.
-Where the file layout cannot prove the claim, because the value is named in a file both tiers run and a guard is what keeps one of them away from it, the row cites the guard, and the gate holds that citation to a real source file.</p>
-<table>
-<thead>
-<tr>
-<th>Metric</th>
-<th>Label</th>
-<th>Value</th>
-<th>Tier</th>
-<th>Why, and what the other tier counts instead</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>actions_gateway_eviction_retries_total</code></td>
-<td><code>cause</code></td>
-<td><code>vanished</code></td>
-<td>Scale-set only</td>
-<td>Names a worker already gone when the AGC started, recovered off the run identity the listener persisted rather than off the pod (Q844). The classic tier's acquiring goroutine holds the payload in process, so it never loses the worker unobserved and has no such recovery to count.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
-<td><code>cause</code></td>
-<td><code>vanished</code></td>
-<td>Scale-set only</td>
-<td>As above: the exhausted arm of the same recovery.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
-<td><code>cause</code></td>
-<td><code>vanished</code></td>
-<td>Scale-set only</td>
-<td>As above: the re-run-refused arm of the same recovery.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>cause</code></td>
-<td><code>vanished</code></td>
-<td>Scale-set only</td>
-<td>As above: the withheld arm of the same recovery, a cancelled run or a futile re-run (Q1181).</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_retries_total</code></td>
-<td><code>cause</code></td>
-<td><code>oom</code></td>
-<td>Scale-set only</td>
-<td>A retry class (Q1183, <code>cmd/agc/internal/provisioner/oom_class.go</code>), recognised only by <code>judgeScaleSetDisruption</code> in <code>cmd/agc/internal/provisioner/eviction_scaleset.go</code>, the scale-set judge. The classic tier's acquiring goroutine re-runs only the disruptions it watches its pod for, so a runner killed for memory there is not re-run and counts nothing.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_retries_exhausted_total</code></td>
-<td><code>cause</code></td>
-<td><code>oom</code></td>
-<td>Scale-set only</td>
-<td>As above: the exhausted arm of the same class, and the scale-set judge <code>judgeScaleSetDisruption</code> in <code>cmd/agc/internal/provisioner/eviction_scaleset.go</code> is the class's only entry.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_failures_total</code></td>
-<td><code>cause</code></td>
-<td><code>oom</code></td>
-<td>Scale-set only</td>
-<td>As above: the re-run-refused arm of the same class, and the scale-set judge <code>judgeScaleSetDisruption</code> in <code>cmd/agc/internal/provisioner/eviction_scaleset.go</code> is the class's only entry.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>cause</code></td>
-<td><code>oom</code></td>
-<td>Scale-set only</td>
-<td>As above: the withheld arm of the same class, and the scale-set judge <code>judgeScaleSetDisruption</code> in <code>cmd/agc/internal/provisioner/eviction_scaleset.go</code> is the class's only entry.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>reason</code></td>
-<td><code>same_class_again</code></td>
-<td>Scale-set only</td>
-<td>Recorded only by the out-of-memory class in <code>cmd/agc/internal/provisioner/oom_class.go</code>, which only the scale-set judge reaches.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>reason</code></td>
-<td><code>breaker_open</code></td>
-<td>Scale-set only</td>
-<td>As above: the class's stampede breaker, in <code>cmd/agc/internal/provisioner/oom_class.go</code>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>reason</code></td>
-<td><code>attempt_limit</code></td>
-<td>Scale-set only</td>
-<td>The futility checks (<code>cmd/agc/internal/provisioner/rerun_futility.go</code>, Q1181) are called only from <code>handleScaleSetEviction</code> in <code>cmd/agc/internal/provisioner/eviction.go</code>, on the run read the scale-set tier takes before reserving a budget slot. The classic tier reserves from process memory with no read first and takes none of these checks, so a futile classic re-run is attempted.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>reason</code></td>
-<td><code>run_too_old</code></td>
-<td>Scale-set only</td>
-<td>As above: <code>rerun_futility.go</code>, called only from <code>handleScaleSetEviction</code> in <code>cmd/agc/internal/provisioner/eviction.go</code>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_eviction_rerun_withheld_total</code></td>
-<td><code>reason</code></td>
-<td><code>superseded</code></td>
-<td>Scale-set only</td>
-<td>As above: <code>rerun_futility.go</code>, called only from <code>handleScaleSetEviction</code> in <code>cmd/agc/internal/provisioner/eviction.go</code>. A superseded classic run is re-run, which GitHub accepts.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_abandoned_run_force_cancels_total</code></td>
-<td><code>outcome</code></td>
-<td><code>identity_unknown</code></td>
-<td>Classic only</td>
-<td>The scale-set arm resolves the run identity off the worker pod <em>before</em> it force-cancels, and returns early when the pod carries none (<code>cmd/agc/internal/provisioner/abandoned_scaleset.go</code>), counting <code>actions_gateway_eviction_recovery_identity_unknown_total{cause="abandoned"}</code> instead. The two counters stay disjoint, so read that series for this failure on a scale-set set.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_pods_reaped_total</code></td>
-<td><code>reason</code></td>
-<td><code>completed_pending</code></td>
-<td>Scale-set only</td>
-<td>The arm reads the job-completion annotation the reaper tests in <code>cmd/agc/internal/controller/runner_shared.go</code>, and only the scale-set cleanup path stamps it; the classic tier's <code>provision()</code> goroutine owns its pod through to a terminal phase (Q420). An unstamped classic pod falls to <code>pending_deadline</code>.</td>
-</tr>
-<tr>
-<td><code>actions_gateway_worker_pods_reaped_total</code></td>
-<td><code>reason</code></td>
-<td><code>orphaned_running</code></td>
-<td>Scale-set only</td>
-<td>Same annotation, same guard in <code>cmd/agc/internal/controller/runner_shared.go</code>: a classic pod is never stamped, so it is never found still Running past its job's end. The classic tier reclaims that shape through the renew loop as <code>job_abandoned</code>.</td>
-</tr>
-</tbody>
-</table>
-<hr />
-<h2 id="condition-and-event-tier-reach">Condition and Event tier reach<a class="headerlink" href="#condition-and-event-tier-reach" title="Permanent link">&para;</a></h2>
-<p>The same question as <a href="#acquisition-tier-reach">Acquisition-tier reach</a> above, asked of the other two signals an operator reads: the <code>reason</code> on a <code>.status.conditions[]</code> entry, and the <code>Reason</code> on a Kubernetes Event.
-A capability that reaches only one tier is as invisible in a condition as it is in a counter, so the same four values apply and the same gate holds these tables to the source.
-<code>make reason-tiers-check</code> fails a reason the AGC emits without a row here, a row the source refutes, and an Event reason that has no <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook</a> entry.</p>
-<p>Two things follow from how the AGC records these, and both are worth knowing before reading the tables:</p>
-<ul>
-<li><strong>A condition reason is often an Event reason too.</strong> Several reconcile paths record an Event on a genuine condition transition, reusing the condition's own reason string.
-  Those reasons appear in the condition table only; the Event table lists the reasons that are decided at the recording site.</li>
-<li><strong>The reasons are the AGC's.</strong> The GMC's own conditions are not listed, for the reason the metric ledger gives: the GMC acquires no jobs, so it has no tier.</li>
-</ul>
-<h3 id="condition-reasons">Condition reasons<a class="headerlink" href="#condition-reasons" title="Permanent link">&para;</a></h3>
-<p>The <code>reason</code> field of a <code>.status.conditions[]</code> entry on a <code>RunnerSet</code>.</p>
-<table>
-<thead>
-<tr>
-<th>Reason</th>
-<th>Tier</th>
-<th>Why, and what to read on the other tier</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>AmbiguousDefault</code></td>
-<td>Both</td>
-<td>Reference resolution runs before the reconciler routes by protocol.</td>
-</tr>
-<tr>
-<td><code>AwaitingProbe</code></td>
-<td>Both</td>
-<td>The capacity gate's latched state; <code>applyWorkerCapacityConditions</code> is called from both arms.</td>
-</tr>
-<tr>
-<td><code>AwaitingWorkerPods</code></td>
-<td>Both</td>
-<td>The sizing-profile override reads worker pods, which both tiers label identically.</td>
-</tr>
-<tr>
-<td><code>CPULimitInjected</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>CapacityAvailable</code></td>
-<td>Both</td>
-<td>The capacity gate's cleared state, from the same shared call.</td>
-</tr>
-<tr>
-<td><code>DirectEgress</code></td>
-<td>Both</td>
-<td>Egress mode is recorded before the protocol routing.</td>
-</tr>
-<tr>
-<td><code>EgressAuditDisabled</code></td>
-<td>Both</td>
-<td>The per-set egress-audit verdict, read off the resolved references before the routing.</td>
-</tr>
-<tr>
-<td><code>EgressAuditJoined</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>GateModeUnsupported</code></td>
-<td>Both</td>
-<td>The capacity gate refusing an unsupported mode, from the same shared call.</td>
-</tr>
-<tr>
-<td><code>GatewayNotFound</code></td>
-<td>Both</td>
-<td>Reference resolution, before the routing.</td>
-</tr>
-<tr>
-<td><code>GatewayTerminating</code></td>
-<td>Both</td>
-<td>Gateway teardown stops both tiers before deleting worker pods.</td>
-</tr>
-<tr>
-<td><code>InsufficientSamples</code></td>
-<td>Both</td>
-<td>The sizing verdict is computed from worker-pod usage, before the routing.</td>
-</tr>
-<tr>
-<td><code>JobsProvisioning</code></td>
-<td>Scale-set only</td>
-<td>Clears <code>JobProvisionStalled</code>, which only the scale-set queue can raise: it is the state of assignments held for re-offer. The classic tier acquires or does not, with nothing held in between.</td>
-</tr>
-<tr>
-<td><code>LabelsNotRegistered</code></td>
-<td>Scale-set only</td>
-<td>GitHub registers a scale set's labels at the set, and only that protocol can find them missing. A classic set carries its labels on each session.</td>
-</tr>
-<tr>
-<td><code>LabelsRegistered</code></td>
-<td>Scale-set only</td>
-<td>As above, cleared.</td>
-</tr>
-<tr>
-<td><code>ListenerActive</code></td>
-<td>Both</td>
-<td>The <code>Ready=True</code> reason on both arms: one multiplexer's goroutines on classic, one scale-set session on the other.</td>
-</tr>
-<tr>
-<td><code>NoActiveSessions</code></td>
-<td>Both</td>
-<td>The benign <code>Ready=False</code> reason on both arms.</td>
-</tr>
-<tr>
-<td><code>NoCPULimitInjected</code></td>
-<td>Both</td>
-<td>The sizing-profile override, before the routing.</td>
-</tr>
-<tr>
-<td><code>NoReapBlockingSidecar</code></td>
-<td>Both</td>
-<td>Read off the resolved worker template, before the routing.</td>
-</tr>
-<tr>
-<td><code>PodsNotStarting</code></td>
-<td>Both</td>
-<td>The kubelet's verdict on a worker pod that bound and could not start, from the same shared capacity call.</td>
-</tr>
-<tr>
-<td><code>PodsUnschedulable</code></td>
-<td>Both</td>
-<td>The scheduler's verdict on worker pods, evaluated on both tiers alike.</td>
-</tr>
-<tr>
-<td><code>PollingHealthy</code></td>
-<td>Both</td>
-<td>Both listeners publish the rate-limit baseline and clear on recovery (Q332).</td>
-</tr>
-<tr>
-<td><code>ProxiedEgress</code></td>
-<td>Both</td>
-<td>Egress mode, before the routing.</td>
-</tr>
-<tr>
-<td><code>ProxyDeleted</code></td>
-<td>Both</td>
-<td>Reference resolution, before the routing.</td>
-</tr>
-<tr>
-<td><code>ProxyNotFound</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>ProxyShareNotGranted</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>ProxySourceAuditDisabled</code></td>
-<td>Both</td>
-<td>The per-set egress-audit verdict, before the routing.</td>
-</tr>
-<tr>
-<td><code>ReapBlockingSidecar</code></td>
-<td>Both</td>
-<td>Read off the resolved worker template, before the routing.</td>
-</tr>
-<tr>
-<td><code>RunnerGroupNotFound</code></td>
-<td>Scale-set only</td>
-<td><code>spec.runnerGroup</code> binds a scale set to a GitHub runner group (Q712); the classic tier has no such binding to fail.</td>
-</tr>
-<tr>
-<td><code>RunnerNameConflict</code></td>
-<td>Scale-set only</td>
-<td>A <code>generate-jitconfig</code> 409 no retry cleared. The classic tier registers through the agent pool and meets no runner-name collision.</td>
-</tr>
-<tr>
-<td><code>ScaleUpDeclined</code></td>
-<td>Both</td>
-<td>The cluster autoscaler's own declination, from the shared capacity call.</td>
-</tr>
-<tr>
-<td><code>SessionAuthorized</code></td>
-<td>Both</td>
-<td>Both listeners publish the healthy <code>Degraded=False</code> baseline (Q332).</td>
-</tr>
-<tr>
-<td><code>SizingDriftDetected</code></td>
-<td>Both</td>
-<td>The sizing verdict, before the routing.</td>
-</tr>
-<tr>
-<td><code>SizingProfileActive</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>SizingWithinRange</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>SustainedRateLimit</code></td>
-<td>Both</td>
-<td>Both listeners publish it after ten minutes of 429s.</td>
-</tr>
-<tr>
-<td><code>TemplateDeleted</code></td>
-<td>Both</td>
-<td>Reference resolution, before the routing.</td>
-</tr>
-<tr>
-<td><code>TemplateNotFound</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>Unauthorized</code></td>
-<td>Both</td>
-<td>The <code>Degraded=True</code> reason both listeners push when session creation is rejected as unauthorized.</td>
-</tr>
-<tr>
-<td><code>WorkerAuditDisabled</code></td>
-<td>Both</td>
-<td>The per-set egress-audit verdict, before the routing.</td>
-</tr>
-<tr>
-<td><code>WorkerAuditWithoutProxy</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>WorkerCeilingReached</code></td>
-<td>Scale-set only</td>
-<td>Assignments waiting because the set is at its worker ceiling. The classic tier refuses the claim instead, counted by <code>actions_gateway_jobs_admission_rejected_total{reason="ceiling"}</code>.</td>
-</tr>
-<tr>
-<td><code>WorkerImageBelowMinimum</code></td>
-<td>Both</td>
-<td>The reconciler's own reading of the effective worker image, which asks GitHub nothing and so reports on both tiers (Q715).</td>
-</tr>
-<tr>
-<td><code>WorkerImageCurrent</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>WorkerImageVersionUnknown</code></td>
-<td>Both</td>
-<td>As above.</td>
-</tr>
-<tr>
-<td><code>WorkerTerminating</code></td>
-<td>Scale-set only</td>
-<td>An assignment replayed while its previous worker pod, which holds the pod name, is still terminating (Q1199). The classic tier names no pod after the job.</td>
-</tr>
-<tr>
-<td><code>WorkersSchedulable</code></td>
-<td>Both</td>
-<td>The cleared form of <code>PodsUnschedulable</code>, evaluated on both.</td>
-</tr>
-<tr>
-<td><code>WorkersStarting</code></td>
-<td>Both</td>
-<td>The cleared form of <code>PodsNotStarting</code>, evaluated on both from the same shared capacity call.</td>
-</tr>
-</tbody>
-</table>
-<h3 id="event-reasons">Event reasons<a class="headerlink" href="#event-reasons" title="Permanent link">&para;</a></h3>
-<p>The <code>Reason</code> on a Kubernetes Event the AGC records on the owning <code>RunnerSet</code>, listed by the reason string <code>kubectl get events --field-selector reason=…</code> matches.
-Each also has a <a href="../troubleshooting/#job-lifecycle-events-on-a-runnergroup--runnerset">runbook entry</a> naming the remedy, which the gate holds it to.</p>
-<table>
-<thead>
-<tr>
-<th>Reason</th>
-<th>Tier</th>
-<th>Why, and what to read on the other tier</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>AssignmentAbandoned</code></td>
-<td>Scale-set only</td>
-<td>The listener giving up on assignments the queue stopped reporting. The classic protocol delivers no assignment to abandon.</td>
-</tr>
-<tr>
-<td><code>AutoRetryPaused</code></td>
-<td>Scale-set only</td>
-<td>The out-of-memory retry class's stampede breaker opening (Q1183), which only the scale-set judge reaches.</td>
-</tr>
-<tr>
-<td><code>EgressDestinationDenied</code></td>
-<td>Both</td>
-<td>The failure-attribution reader joins records to worker pods off the shared pod informer, which watches both tiers' workers (Q1210).</td>
-</tr>
-<tr>
-<td><code>EvictionRecoveryEvidenceLost</code></td>
-<td>Scale-set only</td>
-<td>On this tier the disrupted pod is the disruption's only record (Q809); the classic tier holds it in process.</td>
-</tr>
-<tr>
-<td><code>EvictionRecoveryIdentityUnknown</code></td>
-<td>Scale-set only</td>
-<td>The classic tier reads the run identity from the payload its acquiring goroutine still holds, so it cannot lose it.</td>
-</tr>
-<tr>
-<td><code>EvictionRerunFailed</code></td>
-<td>Both</td>
-<td>Recorded by the shared re-run path both tiers hand recoveries to (Q503).</td>
-</tr>
-<tr>
-<td><code>EvictionRerunWithheld</code></td>
-<td>Both</td>
-<td>Recorded on the same shared re-run path, from the graceful-deletion arm both tiers detect (Q811), and for an own-limit eviction on either tier (Q1177). The futility checks that also record it are scale-set only (Q1181).</td>
-</tr>
-<tr>
-<td><code>EvictionRetriesExhausted</code></td>
-<td>Both</td>
-<td>Both tiers spend a per-run retry budget, each its own (Q417, Q1182).</td>
-</tr>
-<tr>
-<td><code>FlakyJobDetected</code></td>
-<td>Scale-set only</td>
-<td>Flaky-job detection pairs <code>JobCompleted</code> messages, which only the scale-set protocol delivers (Q555).</td>
-</tr>
-<tr>
-<td><code>JobProvisionStalled</code></td>
-<td>Scale-set only</td>
-<td>Assigned jobs that cannot register a runner name, held and re-offered. The classic tier has no held assignment.</td>
-</tr>
-<tr>
-<td><code>MemoryLimitRaisedForRetry</code></td>
-<td>Scale-set only</td>
-<td>As <code>AutoRetryPaused</code>: the out-of-memory class raising a job's limit for its re-run (Q1183).</td>
-</tr>
-<tr>
-<td><code>OrphanedWorkerRecovered</code></td>
-<td>Scale-set only</td>
-<td>Recovery of a worker already gone at process start, read from the in-flight set the scale-set listener persists (Q844). The classic tier holds that state in process and loses it with the process.</td>
-</tr>
-<tr>
-<td><code>PlatformFaultOnFailedJob</code></td>
-<td>Scale-set only</td>
-<td>As <code>FlakyJobDetected</code>: recorded when a failed <code>JobCompleted</code>'s worker snapshot shows a platform fault (Q555).</td>
-</tr>
-<tr>
-<td><code>QuotaRetriesExhausted</code></td>
-<td>Both</td>
-<td>Both provisioning paths create the worker pod through the same quota-retry helper.</td>
-</tr>
-<tr>
-<td><code>RunnerLabelsNotRegistered</code></td>
-<td>Scale-set only</td>
-<td>GitHub registers a scale set's labels at the set; a classic set carries them per session.</td>
-</tr>
-<tr>
-<td><code>ScaleSetListenerStartFailed</code></td>
-<td>Scale-set only</td>
-<td>A scale-set session that could not start; <code>ListenerStartFailed</code> is the classic counterpart.</td>
-</tr>
-<tr>
-<td><code>SessionUnauthorized</code></td>
-<td>Both</td>
-<td>Both listeners record it when session creation is rejected as unauthorized.</td>
-</tr>
-<tr>
-<td><code>WorkerCapacityDeclined</code></td>
-<td>Both</td>
-<td>The opt-in capacity gate refusing intake, from the shared capacity call.</td>
-</tr>
-<tr>
-<td><code>WorkerCeilingReached</code></td>
-<td>Scale-set only</td>
-<td>Expected backpressure while assignments wait for capacity, so <code>Normal</code> rather than <code>Warning</code>. The classic tier declines the claim instead.</td>
-</tr>
-<tr>
-<td><code>WorkerPodCompletedPending</code></td>
-<td>Both</td>
-<td>The reaper is protocol-agnostic and runs before the routing.</td>
-</tr>
-<tr>
-<td><code>WorkerPodCreateFailed</code></td>
-<td>Both</td>
-<td>The API server refusing a worker pod, on the shared provisioning path.</td>
-</tr>
-<tr>
-<td><code>WorkerPodLifetimeExceeded</code></td>
-<td>Both</td>
-<td>The reaper, as above.</td>
-</tr>
-<tr>
-<td><code>WorkerPodOrphanedRunning</code></td>
-<td>Both</td>
-<td>The reaper, as above.</td>
-</tr>
-<tr>
-<td><code>WorkerPodStuckPending</code></td>
-<td>Both</td>
-<td>The reaper, as above.</td>
-</tr>
-<tr>
-<td><code>WorkerPodsReapedOnGatewayTeardown</code></td>
-<td>Both</td>
-<td>Teardown stops both tiers before deleting their worker pods.</td>
-</tr>
-<tr>
-<td><code>WorkerTerminating</code></td>
-<td>Scale-set only</td>
-<td>An assignment waiting for its previous worker pod to finish terminating, normally a grace period, so <code>Normal</code> rather than <code>Warning</code> (Q1199).</td>
-</tr>
-<tr>
-<td><code>WorkersNotStarting</code></td>
-<td>Both</td>
-<td>The kubelet's startup verdict, recorded from the same shared capacity call and on every set, gated or not (Q906).</td>
-</tr>
-<tr>
-<td><code>WorkersUnschedulable</code></td>
-<td>Both</td>
-<td>The scheduler's verdict, recorded on both tiers alike.</td>
-</tr>
-</tbody>
-</table>
-<hr />
 <h2 id="crd-status-fields-kubectl-columns">CRD Status Fields (kubectl columns)<a class="headerlink" href="#crd-status-fields-kubectl-columns" title="Permanent link">&para;</a></h2>
 <p><code>kubectl get runnergroup</code> and <code>kubectl get runnerset</code> print a subset of each CR's <code>.status</code> as additional columns.
 These give an at-a-glance view of live job state without opening Grafana:</p>
@@ -4528,7 +3577,7 @@ These give an at-a-glance view of live job state without opening Grafana:</p>
 <td><code>.status.activeSessions</code></td>
 <td>✓</td>
 <td>✓</td>
-<td>Currently open long-poll sessions. Rises toward <code>maxListeners</code> during bursts; <code>0</code> means the group is not polling for work.</td>
+<td><code>1</code> while the set holds its message session; <code>0</code> means it is not polling for work.</td>
 </tr>
 <tr>
 <td><code>ACTIVEJOBS</code></td>
@@ -4549,7 +3598,7 @@ These give an at-a-glance view of live job state without opening Grafana:</p>
 <td><code>.status.conditions[Ready].status</code></td>
 <td>✓</td>
 <td>✓</td>
-<td><code>True</code> when at least one listener goroutine is running.</td>
+<td><code>True</code> when the listener is running.</td>
 </tr>
 <tr>
 <td><code>EGRESS</code></td>
@@ -4618,7 +3667,7 @@ Do not remove or overwrite them by hand.</p>
 <tr>
 <td><code>actions-gateway.com/acquisition-protocol</code> (label)</td>
 <td><code>ScaleSet</code></td>
-<td>Marks the pod as provisioned by the scale-set tier. Present only on that tier, so <code>-l actions-gateway.com/acquisition-protocol=ScaleSet</code> selects exactly the scale-set workers</td>
+<td>Marks the pod as provisioned by the scale-set listener, so <code>-l actions-gateway.com/acquisition-protocol=ScaleSet</code> selects worker pods</td>
 </tr>
 <tr>
 <td><code>actions-gateway.com/runner-name</code> (annotation)</td>
@@ -4649,7 +3698,7 @@ Do not remove or overwrite them by hand.</p>
 </table>
 <p>All five are controller-set: never set them by hand.
 Editing or removing <code>runner-name</code> in particular makes the pod's runner record uncollectable, which is what leaves stale registrations behind — see <a href="../troubleshooting/#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409">Scale-Set Job Stranded by a Stale Runner Record</a>.</p>
-<p>Worker pods on <strong>either</strong> tier gain one more annotation at end of life: <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
+<p>Worker pods gain one more annotation at end of life: <code>actions-gateway.com/deletion-reason</code>, stamped with the reap reason (e.g.
 <code>completed_ttl</code>, <code>pending_deadline</code>) immediately before the AGC's reaper deletes the pod (Q502).
 It marks the deletion as the AGC's own, which is what excludes reaper cleanup from the graceful-deletion recovery that a drain or a manual delete triggers.
 Controller-set; never set it by hand — a hand-set stamp suppresses automatic recovery for that pod.</p>
@@ -4660,7 +3709,7 @@ Controller-set; never set it by hand — a hand-set stamp suppresses automatic r
 <p>Or inspect a single pod in full:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>&lt;pod-name&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div>
-<p>The annotations are absent if the job's identity did not reach the AGC: on the classic tier, an AcquireJob payload without the corresponding <code>system.github.*</code> variables (older GitHub runners or stub/test jobs); on the scale-set tier, an assignment message without <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>.</p>
+<p>The annotations are absent if the job's identity did not reach the AGC: an assignment message without <code>ownerName</code>/<code>repositoryName</code>/<code>workflowRunId</code>.</p>
 <h3 id="selecting-gag-objects-with-the-recommended-labels">Selecting GAG objects with the recommended labels<a class="headerlink" href="#selecting-gag-objects-with-the-recommended-labels" title="Permanent link">&para;</a></h3>
 <p>Every object GAG creates — AGC/proxy/worker pods, Deployments, Services, NetworkPolicies, ServiceAccounts, RBAC, Secrets, PDBs, HPAs, and the per-tenant CRs — carries the Kubernetes <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/common-labels/">recommended (<code>app.kubernetes.io/*</code>) labels</a>, so Lens / k9s / Argo CD grouping, Prometheus relabel rules, and OpenCost/Kubecost cost attribution work without learning the project-specific keys.
 They are <strong>additive metadata</strong> — the functional selectors the controllers rely on (<code>app:</code>, <code>actions-gateway/component: workload</code>, the per-gateway/runner-set identity labels) are untouched, so never build a controller's pod selector on the <code>app.kubernetes.io/*</code> labels.</p>

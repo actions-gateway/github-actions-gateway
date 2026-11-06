@@ -4521,7 +4521,7 @@ The prose one exists because those gates run at the very <em>end</em> of <code>m
 <code>gate-lists-check</code> holds both lists to that claim in both directions: a member outside <code>CHECK_FAST_GATES</code> makes the target a second opinion, and a fast gate the list omits makes it report a green <code>make check</code> would not.
 <code>DOCS_GATES</code> was never passed in, and it had been failing the first half for the life of the list: <code>make docs-gates</code> ran <code>release-notes-check</code>, which was in neither gate list, so it tested something <code>make check</code> did not (Q920).
 It was failing the second half too, and by more: the completeness rule read only the pathspecs a gate hands git, and every page-scoped gate here names its page as a constant instead, so seven were invisible at once and <code>make docs-gates</code> was green on prose edits to nine pages <code>make check</code> can fail (Q930).
-<code>roadmap-check</code>, <code>comparison-stamps-check</code>, <code>promql-check</code>, <code>metric-tiers-check</code>, <code>reason-tiers-check</code>, <code>api-reference-check</code> and <code>gate-lists-check</code> joined the list when the rule learned to read a hardcoded subject, and <code>rung-order-check</code> with it (Q972).
+<code>roadmap-check</code>, <code>comparison-stamps-check</code>, <code>promql-check</code>, <code>metric-reference-check</code>, <code>event-runbook-check</code>, <code>api-reference-check</code> and <code>gate-lists-check</code> joined the list when the rule learned to read a hardcoded subject, and <code>rung-order-check</code> with it (Q972).
 The three store gates joined last, held there by a rule of their own rather than by a derivation, because a gate that hands its store path to a Python entry point shows neither a pathspec nor a hardcoded subject (Q1040); the target runs 23 gates in about 9 seconds.</p>
 <p><strong>A shell edit needs <code>make shellcheck</code> on its own.</strong> Neither subset target includes it.
 The gate is 37 s over all 210 scripts, against a whole fast fan-out to learn the same thing from <code>make check</code> (measured 2026-08-15, Q870).
@@ -5378,7 +5378,7 @@ Without the second, a gate that had degenerated into "this branch touched <code>
 <p>The failure it exists to catch is measured (Q848).
 <code>docs/why-gag.md</code> called the Pending-reap re-run classic-only for the whole <code>v1.4.0</code> cycle after Q766 had made it reach both tiers.
 The paragraph carried an upkeep comment, and that comment asked for a re-read when a case was <em>added or removed</em>, which Q766 did neither of, so nothing fired.
-The metric half of the same drift has a gate (<code>make metric-tiers-check</code>, Q776) and the <code>gag-tier-badge</code> has the roadmap checker's rule 10, but that rule is one-directional by construction: it fails a badge that outlived its gap, never a gap nobody badged.
+The <code>gag-tier-badge</code> has the roadmap checker's rule 10, but that rule is one-directional by construction: it fails a badge that outlived its gap, never a gap nobody badged.
 Prose had nothing at all.</p>
 <p><strong>The rule is a stamp, not a semantic judgement.</strong> A paragraph making a tier claim carries <code>&lt;!-- tier-source: &lt;path&gt;#&lt;anchor&gt; sha=&lt;8 hex&gt; --&gt;</code>, and the gate recomputes that digest over the <strong>tier-bearing lines</strong> of the section the annotation names.
 A tier move upstream changes those lines, the digest changes, and the gate says to re-read the paraphrase.</p>
@@ -5604,7 +5604,7 @@ Three shapes are registered today:</p>
 <li><strong>A push trigger and a <code>changes</code> filter</strong> — <code>doc-links.yml</code>, <code>e2e-calico.yml</code>, <code>plan-hygiene.yml</code>, <code>status-lint.yml</code>.
   The PR leg triggers on every <code>pull_request</code> with no path filter, so its <code>gate</code> job always reports its required check, and is scoped by the <code>changes</code> filter; the post-merge leg is scoped by <code>on.push.paths</code>.
   Q571 shipped this regression and merged green: it rewrote <code>e2e-calico.yml</code>'s filter to <code>scripts/{e2e,fetch,lib}/**</code> and left the push list naming the two now-moved files it had always enumerated.</li>
-<li><strong>A <code>pull_request</code> trigger and a push trigger</strong> — <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code>, <code>metric-tiers.yml</code>, <code>reason-tiers.yml</code>, <code>rung-order.yml</code>.
+<li><strong>A <code>pull_request</code> trigger and a push trigger</strong> — <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code>, <code>metric-reference.yml</code>, <code>event-runbook.yml</code>, <code>rung-order.yml</code>.
   Both legs are scoped by their own <code>paths:</code> list.
   Ungated until Q574, by which time the shape had grown from one workflow to five; all five pairs agreed when the gate landed.</li>
 <li><strong>Two lanes over one reusable workflow</strong> — <code>e2e-test.yml</code>'s <code>e2e</code> filter and <code>e2e-calico.yml</code>'s <code>calico</code>, compared only under <code>scripts/</code>, since the rest of each filter is what makes the Calico lane narrower.
@@ -5682,7 +5682,7 @@ It fails when:</p>
   A gate that is deliberately local-only declares <code># ci-scope: none</code> with its reason directly above its <code>.PHONY</code>, the same shape the rule above uses;</li>
 <li>a gate runs in CI but in no workflow the merge queue evaluates, so the candidate merge is never held to it (Q942).
   The rule above stops at <em>some workflow runs it</em>, which a <code>pull_request</code>-only workflow satisfies while the queue builds and merges a commit that gate never saw.
-  Four gates sat that way when this was written, each alone in a workflow declaring no <code>merge_group</code>: <code>conflict-markers-check</code>, <code>metric-tiers-check</code>, <code>reason-tiers-check</code> and <code>endpoint-parity-check</code>.
+  Four gates sat that way when this was written, each alone in a workflow declaring no <code>merge_group</code>: <code>conflict-markers-check</code>, <code>metric-reference-check</code>, <code>event-runbook-check</code> and <code>endpoint-parity-check</code>.
   The derivation is the one above, re-asked of the workflows whose <code>on:</code> block declares <code>merge_group</code>, with comments stripped for the same reason.
   Only a gate that passed the rule above is asked: a gate no workflow runs at all has one defect, not two.
   Whether the check a queue-evaluated workflow reports is <em>required</em>, and so blocking rather than advisory, is a repo-settings question this cannot read.
@@ -6167,7 +6167,7 @@ Each is a claim about state, and each has a cheap way of being wrong:</p>
 </li>
 <li>
 <p><strong>A derived gate's green is bounded by what it can still resolve, and a derivation that shrinks says nothing.</strong> A rename introduces a second function of the same name, the resolver can no longer place a call, and a value it used to derive stops being demanded; nothing turns red, because the check that would have fired is the one that went missing.
-  Two scanners built in the 1.5 cycle each grew a fail-on-unplaceable rule independently: <code>metrictiers</code>' <code>values-derivation</code> (Q851) and <code>reasontiers</code>' <code>resolution</code> (Q850).
+  Two scanners built in the 1.5 cycle each grew a fail-on-unplaceable rule independently: <code>metricreference</code>'s <code>values-derivation</code> (Q851) and <code>eventreasons</code>' <code>resolution</code> (Q850).
   Converging twice in one cycle is the signal that a derived inventory needs this by construction, not as an afterthought.
   <code>endpointparity</code> is the third (Q871), and there the rule is the gate rather than a guard on it: the parity half can only demand endpoints the fold resolved, so a call shape the walk stops recognising stops being checked with nothing going red.</p>
 </li>
@@ -6639,11 +6639,11 @@ The failure is silent in both directions at once: the scan reports a neighbourin
 <ul>
 <li>The v1.4.0 release pre-flight matched <code>Event(obj, type, reason)</code> only, missed the <code>recordEvent(type, reason, action)</code> shape, and returned a false no-change (Q780).</li>
 <li>The 2026-08-14 pre-flight keyed on <code>recordEvent(</code> and missed the two additions recording through <code>RecordEvent(</code>.</li>
-<li><code>reasontiers</code>' first version keyed the reason's index on the function name, read the scale-set listener's <em>action</em> string <code>"ProvisionWorker"</code> as a reason, and missed four reasons entirely.
+<li><code>eventreasons</code>' first version keyed the reason's index on the function name, read the scale-set listener's <em>action</em> string <code>"ProvisionWorker"</code> as a reason, and missed four reasons entirely.
   The AGC has two methods named <code>recordEvent</code> and two named <code>Event</code>, with the reason at a different index in each.</li>
 </ul>
 <p><strong>Read the index off the callee's own declaration.</strong> Parse the function and interface declarations, find the parameter by name, and use its position; state by hand only the signatures declared outside the repo.
-Then fail loudly on a call you cannot place, so a new wrapper cannot be added silently: <code>reasontiers</code> treats a call carrying <code>corev1.EventTypeWarning</code>/<code>EventTypeNormal</code> that matches no signature as a finding.
+Then fail loudly on a call you cannot place, so a new wrapper cannot be added silently: <code>eventreasons</code> treats a call carrying <code>corev1.EventTypeWarning</code>/<code>EventTypeNormal</code> that matches no signature as a finding.
 Two further traps sit under that: a variadic declaration's arity counts the trailing parameter, so a call omitting the varargs matches nothing unless you subtract it; and a parameter of the enclosing function is a <em>forwarder</em>, not the site that decides the value.</p>
 <p>None of the three was caught by the scan reporting a problem.
 Each was caught by comparing its output against values already documented elsewhere, which is <a href="#a-throwaway-probe-needs-a-positive-control-before-its-silence-means-anything">the positive control</a> applied to an inventory: pick a handful the docs already name, and require the scan to find them before believing what it says is absent.</p>
@@ -7414,9 +7414,9 @@ That is safe, and it is worth knowing <em>why</em> before writing a suite that r
 The package var is safe because each process has its own copy and each suite writes a distinct base port before use — not because Ginkgo serialises anything.
 <code>Ordered</code> orders specs within a container; it does not order containers against each other.
 A resource that is genuinely shared <em>outside</em> the process — a cluster object, a fixed host port, a GitHub session — gets no protection from <code>Ordered</code> and needs <code>Serial</code>, an owner-scoped filter, or a per-process derivation such as <code>GinkgoParallelProcess()</code>.</p>
-<p>A RunnerSet's agent identity is one of those, and a namespace does not scope it.
-The webhook derives the stem <code>rs-&lt;RunnerSet name&gt;</code> and rejects a second claim on it under the same GitHub scope from any namespace (<code>agent-identity stem "rs-set-alpha" is already claimed by another runner pool registered against GitHub scope …</code>), so a new suite that reuses another suite's set name and org fails in <code>BeforeAll</code> on whichever runs second.
-Give each suite its own org (fakegithub accepts any name, e.g. <code>example-org-&lt;suite&gt;</code>) and set names prefixed by the suite; check with <code>git grep -n 'name: set-' cmd/gmc/test/e2e/</code> before choosing one.</p>
+<p>A RunnerSet's scale-set name is one of those, and a namespace does not scope it.
+The webhook rejects a second claim on a first <code>runnerLabel</code> under the same GitHub scope from any namespace (<code>runnerLabels[0] "e2e-alpha" is already claimed by another RunnerSet registered against GitHub scope …</code>), so a new suite that reuses another suite's first label and org fails in <code>BeforeAll</code> on whichever runs second.
+Give each suite its own org (fakegithub accepts any name, e.g. <code>example-org-&lt;suite&gt;</code>) and first labels prefixed by the suite; check with <code>git grep -n 'runnerLabels' cmd/gmc/test/e2e/</code> before choosing one.</p>
 <p>Dropping <code>Serial</code> from a suite is therefore a claim about <em>external</em> isolation, never about package state.
 Worked example, including the owner-prefix filter that made one such drop safe: <a href="../../plan/archive/e2e-ci-speed-round-2/#5-de-serialize-e2e_agc_workerpodlifecycle-">e2e-ci-speed-round-2.md</a>.</p>
 <h3 id="every-e2e-suite-dumps-cluster-state-before-it-tears-down">Every e2e suite dumps cluster state before it tears down<a class="headerlink" href="#every-e2e-suite-dumps-cluster-state-before-it-tears-down" title="Permanent link">&para;</a></h3>
@@ -7868,7 +7868,7 @@ Adding a job to one of these workflows means adding it to the gate's <code>needs
 Triggering on every PR and gating internally means the <code>gate</code> context always reports — green (all jobs skipped) on an unrelated PR, red when a real job fails — so it is safe to require.</p>
 <p><strong>The same pattern serves the merge queue's <code>merge_group</code> event.</strong> The workflows behind required checks also trigger on <code>merge_group</code>, so their gate contexts report on the queue's candidate merge commit.
 <code>doc-links.yml</code> is the tenth and most recent: Q743 gave it the trigger and the <code>doc-links-gate</code> job, and 2026-09-09 registered that context in the ruleset.
-Q942 added the trigger to the four remaining workflows behind a <code>make check</code> gate — <code>conflict-markers.yml</code>, <code>metric-tiers.yml</code>, <code>reason-tiers.yml</code> and <code>endpoint-parity.yml</code> — bringing the count to 14 of 29, and <code>gate-lists-check</code> now fails a new gate that lands outside that set.
+Q942 added the trigger to the four remaining workflows behind a <code>make check</code> gate — <code>conflict-markers.yml</code>, <code>metric-reference.yml</code>, <code>event-runbook.yml</code> and <code>endpoint-parity.yml</code> — bringing the count to 14 of 29, and <code>gate-lists-check</code> now fails a new gate that lands outside that set.
 Those four carry no <code>changes</code> job: <code>merge_group</code> takes no path filter, so each runs on every candidate rather than on the path subset its PR leg uses, which is the conservative side of a job that is a checkout plus one script.
 Those four do not <strong>block</strong> it: the queue arbitrates on the ruleset's required checks alone and none of them sits behind one, so their verdict on a candidate merge is visible and not binding.
 <code>doc-links-gate</code> was the same shape until 2026-09-09, when it was registered under the ordering constraint <a href="../../plan/archive/merge-queue/">merge-queue.md</a> gives: the workflow onto <code>main</code> first, the required check second.

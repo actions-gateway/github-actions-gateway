@@ -3490,11 +3490,10 @@ Both controllers publish advisory conditions when the remaining headroom cannot 
 <p><code>False</code> on both means the quota admits scaling to <code>maxReplicas</code> and <code>maxWorkers</code>.</p>
 <h2 id="what-the-gateways-own-quota-conditions-count">What the gateway's own quota conditions count<a class="headerlink" href="#what-the-gateways-own-quota-conditions-count" title="Permanent link">&para;</a></h2>
 <p>The gateway computes a worker's footprint with the same arithmetic this page uses: the four-part compute sum (regular containers, native sidecars, the plain-init <code>max()</code> floor, and <code>RuntimeClass</code> overhead) <strong>plus</strong> the storage keys from <a href="#step-3--the-storage-keys">Step 3</a> — <code>ephemeral-storage</code> on both sides, and the PVC count and storage ask of every generic ephemeral volume, class-scoped keys included.
-One calculation feeds all three surfaces, so they cannot disagree:</p>
+One calculation feeds both surfaces, so they cannot disagree:</p>
 <ul>
 <li>the <code>WorkerQuotaPressure</code> / <code>WorkerQuotaExceeded</code> conditions;</li>
-<li>the pre-claim quota gate on the classic acquisition tier;</li>
-<li>the capacity integer a scale-set runner set advertises to GitHub, which folds in live quota headroom on the default tier.</li>
+<li>the capacity integer a runner set advertises to GitHub, which folds in live quota headroom.</li>
 </ul>
 <p>So a <code>False</code> <code>WorkerQuotaPressure</code> means the quota admits scaling to <code>maxWorkers</code> at the pod's <strong>full</strong> cost — sidecar, overhead, and per-worker PVCs included.</p>
 <p>A worker shape that declares no <code>ephemeral-storage</code> and no ephemeral volumes is charged nothing on the storage keys, so a namespace already at its <code>persistentvolumeclaims</code> ceiling for unrelated reasons does not hold such a set back.</p>
@@ -3566,7 +3565,7 @@ A declared <code>overhead</code> always wins over the read, and cannot drift —
 <li><a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">Tenant onboarding Step 1b</a> — where the quota is applied in the onboarding flow.</li>
 <li><a href="../worker-rightsizing/">Worker right-sizing</a> — derive the per-container <code>requests</code>/<code>limits</code> this page multiplies, from measured usage.</li>
 <li><a href="../kata-dind-workloads/">Kata DinD workloads</a> — the Kata worker shape, its <code>RuntimeClass</code>, and the nested-virtualization node prerequisites.</li>
-<li><a href="../../design/appendix-e-capacity-planning/">Appendix E — capacity planning</a> — runner group topology, <code>maxListeners</code>, and the rate-limit ceiling.</li>
+<li><a href="../../design/appendix-e-capacity-planning/">Appendix E — capacity planning</a> — runner group topology, <code>maxWorkers</code>, and the rate-limit ceiling.</li>
 <li><a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Troubleshooting: quota exhaustion</a> — diagnosing a quota that is already too small.</li>
 </ul>
 

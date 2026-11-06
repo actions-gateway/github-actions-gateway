@@ -3277,9 +3277,9 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 </table>
 <h3 id="your-runner-image-works-unchanged">Your runner image works unchanged<a class="headerlink" href="#your-runner-image-works-unchanged" title="Permanent link">&para;</a></h3>
 <p>Point <code>workerImage</code> at your <strong>existing ARC runner image</strong> — no rebuild — or leave it unset to use the upstream <code>ghcr.io/actions/actions-runner</code> default.
-GAG's AGC <strong>pre-acquires</strong> each job from the GitHub broker and hands it to the pod (rather than letting the pod's runner register and poll), so the worker needs GAG's small <strong>wrapper</strong> to feed the job payload into <code>Runner.Worker</code>.
+GAG's AGC creates one pod per assigned job and stages a single-use just-in-time (JIT) runner configuration for it, so the worker needs GAG's small <strong>wrapper</strong> to install the per-tenant egress-proxy CA and start the runner with <code>run.sh --jitconfig</code>.
 Rather than make you bake that wrapper into your image, the AGC <strong>injects</strong> it into every worker pod at runtime — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — and runs it in place of the image entrypoint.
-The only requirement is that the image be <code>actions/runner</code>-derived (it must contain <code>Runner.Worker</code>) — the same agent requirement ARC has, so <strong>any image that works on ARC qualifies</strong>, with its tools and userland intact.</p>
+The only requirement is that the image be <code>actions/runner</code>-derived (it must contain <code>run.sh</code>) — the same agent requirement ARC has, so <strong>any image that works on ARC qualifies</strong>, with its tools and userland intact.</p>
 <blockquote>
 <p><strong>Docker-in-Docker:</strong> because the injected wrapper runs in place of the image entrypoint, an <code>actions-runner-dind</code> image's bundled <code>dockerd</code> startup is <strong>skipped</strong>.
 Run DinD as a <strong>sidecar</strong> container in a privileged <code>ClusterRunnerTemplate</code> instead (see <a href="#security-profiles">Security profiles</a>) — GAG's DinD model regardless of the worker image.</p>

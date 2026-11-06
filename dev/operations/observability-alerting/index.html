@@ -2814,7 +2814,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <tr>
 <td>Jobs are slow to start</td>
 <td><code>pod_creation_latency_seconds</code> p95/p99</td>
-<td>SLO: p95 ≤ 15s, p99 ≤ 60s. Emitted on both acquisition tiers; observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it</td>
+<td>SLO: p95 ≤ 15s, p99 ≤ 60s. Observed when a pod's lifetime ends, so a burst of long jobs delays the signal rather than hiding it</td>
 </tr>
 <tr>
 <td>Jobs are not being acquired</td>
@@ -2824,7 +2824,7 @@ For SLO targets, see <a href="../../design/appendix-a-capacity-slos/">Appendix A
 <tr>
 <td>Scale-set jobs assigned but not starting</td>
 <td><code>scaleset_jobs_assigned_total</code> rising vs <code>scaleset_jobs_provisioned_total</code> flat</td>
-<td>Tier wedged; check <code>scaleset_provision_errors_total</code> and worker-pod quota</td>
+<td>Provisioning wedged; check <code>scaleset_provision_errors_total</code> and worker-pod quota</td>
 </tr>
 <tr>
 <td>One scale-set job never starts, the rest do</td>

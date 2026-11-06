@@ -1291,10 +1291,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#e4-sizing-maxlisteners" class="md-nav__link">
+  <a href="#e4-sizing-maxworkers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        E.4. Sizing maxListeners
+        E.4. Sizing maxWorkers
       
     </span>
   </a>
@@ -2925,10 +2925,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#e4-sizing-maxlisteners" class="md-nav__link">
+  <a href="#e4-sizing-maxworkers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        E.4. Sizing maxListeners
+        E.4. Sizing maxWorkers
       
     </span>
   </a>
@@ -3193,21 +3193,19 @@ At very high RunnerGroup counts this becomes a maintenance surface.</p>
 <p><strong>The practical guidance:</strong> per-workflow RunnerGroups are a reasonable default for teams with meaningfully different resource requirements between workflows.
 Consolidate by pod shape only when workflows are resource-identical — there is no longer a strong rate-limit reason to force consolidation.</p>
 <hr />
-<h2 id="e4-sizing-maxlisteners">E.4. Sizing <code>maxListeners</code><a class="headerlink" href="#e4-sizing-maxlisteners" title="Permanent link">&para;</a></h2>
-<p><code>RunnerGroup.maxListeners</code> caps the number of listener goroutines that can run concurrently during a burst.
-The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.</p>
-<p>This field is a <strong>burst ceiling, not a steady-state count.</strong> Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist.
-The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and <code>maxListeners</code> is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.</p>
+<h2 id="e4-sizing-maxworkers">E.4. Sizing <code>maxWorkers</code><a class="headerlink" href="#e4-sizing-maxworkers" title="Permanent link">&para;</a></h2>
+<p><code>maxWorkers</code> caps the worker pods a <code>RunnerSet</code> runs at once, and it is the ceiling the set advertises to GitHub on every long poll as <code>X-ScaleSetMaxCapacity</code>, the total number of jobs GitHub may keep assigned to the set.
+With <code>priorityTiers</code> set, the last threshold is the ceiling instead.
+A set declaring neither advertises <code>defaultScaleSetMaxCapacity</code> from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go</code></a>.</p>
+<p>The advertisement can only fall below that ceiling: namespace <code>ResourceQuota</code> headroom, the opt-in capacity gate and the opt-in scale-up limit each lower it (<a href="../../operations/troubleshooting/#why-is-my-runnerset-not-being-offered-jobs">why a set is not being offered jobs</a>).</p>
+<p>This field is a <strong>soft, in-process ceiling.</strong> Pair it with a namespace <code>ResourceQuota</code> for a hard limit.
+The cost of setting it too low is queueing rather than lost work: GitHub assigns nothing beyond the advertisement, so surplus jobs stay queued at GitHub until a slot frees.</p>
 <p>A practical starting approach:</p>
 <ol>
-<li><strong>Estimate peak simultaneous job arrivals</strong> for this RunnerGroup.
-   A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.</li>
-<li><strong>Set <code>maxListeners</code> to cover that peak</strong> with a small margin (e.g. peak + 2–3).</li>
-<li><strong>Monitor <code>actions_gateway_active_sessions</code></strong> relative to <code>maxListeners</code>.
-   If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it.
-   If it never exceeds 3–4, the default of 10 is more than sufficient.</li>
+<li><strong>Estimate peak concurrent jobs</strong> for this <code>RunnerSet</code>.</li>
+<li><strong>Set <code>maxWorkers</code> to cover that peak</strong>, and <a href="../../operations/resourcequota-sizing/">size the namespace <code>ResourceQuota</code></a> to admit that many workers at full cost.</li>
+<li><strong>Compare <code>actions_gateway_scaleset_jobs_available</code> with <code>actions_gateway_scaleset_advertised_capacity</code>.</strong> Jobs waiting while <code>actions_gateway_scaleset_capacity_withheld</code> reads zero on every rung mean the ceiling is what binds, so raise it if the cluster has room.</li>
 </ol>
-<p>For most RunnerGroups the default of 10 is the right starting point and requires no tuning.</p>
 <hr />
 <h2 id="e5-multi-repo-usage">E.5. Multi-Repo Usage<a class="headerlink" href="#e5-multi-repo-usage" title="Permanent link">&para;</a></h2>
 <p>A GitHub App installation is scoped to an organization or a specific set of repositories.

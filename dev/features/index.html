@@ -2875,8 +2875,7 @@
 <h1 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h1>
 <p>Everything GitHub Actions Gateway (GAG) does today, with a link to the doc that explains each one.
 For the argument against Actions Runner Controller (ARC), see <a href="../why-gag/">Why GAG?</a>; for what is not here yet, see the <a href="../roadmap/">roadmap</a>.</p>
-<p>Four badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed <code>actions-gateway.com</code> API (<code>v2</code>); <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; <span class="gag-new-badge">new in 1.10</span> marks one a recent release added; and <span class="gag-tier-badge">partly classic-only</span> marks one that does not reach the ScaleSet acquisition tier every new tenant runs.
-No tier badge means both tiers, and a gate removes the badge when the gap closes.</p>
+<p>Three badges appear below. <span class="gag-v2-badge">v2</span> marks a capability available only in the decomposed <code>actions-gateway.com</code> API (<code>v2</code>); <span class="gag-maturity-badge">beta</span> marks one whose API shape is still under its first stability contract; and <span class="gag-new-badge">new in 1.10</span> marks one a recent release added.</p>
 <div class="admonition tip">
 <p class="admonition-title">Check the version you're running</p>
 <p>Use the <strong>version selector</strong> at the top of the page to switch between the latest stable <a href="https://github.com/actions-gateway/github-actions-gateway/releases">release</a> (the default) and <strong><code>dev</code></strong>, the unreleased <code>main</code> branch.
@@ -2884,8 +2883,7 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 </div>
 <h2 id="job-intake-and-recovery">Job intake and recovery<a class="headerlink" href="#job-intake-and-recovery" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses, with no many-acquirers fan-out.
-  The default in v2.</li>
+<li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Runner-scale-set acquisition</a></strong>: the same single-acquirer protocol ARC uses: one listener session per set.</li>
 <li><strong><a href="../design/04-operational-flows/#42-job-execution-flow-agc">Quota-aware intake</a></strong>: a job the namespace <code>ResourceQuota</code> has no room for is never taken on, so it stays queued at GitHub until there is capacity.</li>
 <li><strong><a href="../operations/troubleshooting/#jobs-targeting-one-of-a-runner-sets-labels-never-start-runnerlabelsincomplete">Multi-label runner sets</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: every <code>runnerLabel</code> is registered at GitHub, so a job asking for any of them matches and a <code>runs-on</code> array migrates unedited.</li>
 <li><strong><a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">Auto re-run for disrupted jobs</a></strong>: a worker lost to preemption, Spot reclamation, a node drain or shutdown, most evictions, or a bare <code>kubectl delete pod</code> has its run re-run automatically, under a per-run budget.</li>
@@ -2922,8 +2920,6 @@ A capability listed under <code>dev</code> but not under a numbered release has 
   An unknown group fails the set closed.</li>
 <li><strong><a href="../operations/troubleshooting/#actionsgateway-reports-scalesetnamecollision">Cross-tenant scale-set name guard</a></strong>: a set's first <code>runnerLabel</code> names its scale set at GitHub, so two tenants claiming one name can acquire each other's jobs.
   Admission refuses the pair GitHub-wide; one carried in from an older release is reported on the gateway.</li>
-<li><strong><a href="../operations/upgrade/#agent-identity-collisions-are-now-rejected-at-admission-runnerset-name-and-derived-runnergroup-name">Agent-identity collision guard</a></strong>: two pools reaching one agent identity both register the same GitHub runner name.
-  Admission now rejects the second, so the pair never forms; the holder is named only when the tenant owns both.</li>
 <li><strong><a href="../design/network-architecture/">Per-tenant egress IPs</a></strong>: a dedicated proxy pool per tenant gives each team its own GitHub egress IPs to allow-list, with a contained blast radius.</li>
 <li><strong><a href="../operations/migration-v1-to-v2/">Standalone <code>EgressProxy</code></a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: the proxy becomes its own object, optionally shared, or omitted entirely for direct egress, which stays <code>NetworkPolicy</code>-restricted.</li>
 <li><strong><a href="../operations/security-operations/#sharing-an-egress-proxy-across-namespaces">Cross-namespace proxy sharing</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-maturity-badge">beta</span>: one pool can serve several namespaces, but only those its owner names in <code>sharing.allowedNamespaces</code>.
