@@ -727,8 +727,8 @@ A record that fails the test is left alone and counted in the log line.
 
 **The format is measured on github.com, and the isolation depends on it.** All 56 self-hosted job runner names in 149 recent CI runs of this repository, read 2026-11-06 from October and November 2026 across two scale sets, were `<scale set>-<UUID>`.
 A backend minting another format leaves a set's own records unswept, so they wait for the per-name reclaim or the [manual cleanup](../operations/troubleshooting.md#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409).
-One case on such a backend still crosses sets: with all-digit job IDs, a set labelled `ci-<UUID>` mints `ci-<UUID>-123`, which the `ci` sweep reads as a job UUID and an attempt.
-No backend with non-UUID job IDs has been measured.
+Another format can still cross sets, whenever a job ID completes the pattern after a label's text: with all-digit job IDs, a set labelled `ci-<UUID>` mints `ci-<UUID>-123`, which the `ci` sweep reads as a job UUID and an attempt.
+No backend with non-UUID job IDs has been measured, and [Q1296](../queue/Q1296.md) holds the fix for when one is.
 
 `TestListener_SweepLeavesAnExtendingSetsRecords` and `E2E_AGC_ScaleSetSweep` pin this, the second with a seeded stale record that proves the sweep ran.
 Neither reaches GitHub.
