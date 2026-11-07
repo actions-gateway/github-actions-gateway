@@ -123,6 +123,9 @@ jobs:
               - '.github/workflows/unit-test.yml'
             scripts:
               - 'scripts/**'
+              # validate-cluster-test.sh holds the charts' kubeVersion to the
+              # preflight's floor, so a floor edit must start the job reading it.
+              - 'charts/*/Chart.yaml'
               # shellcheck and the errexit-prologue gate read every *.sh in the
               # tree, not only scripts/ (Q1088), so a script edited anywhere
               # must start the job that reads it.

@@ -230,7 +230,7 @@ check_k8s_version() {
 	else
 		report fail "K8s version" \
 			"server is $raw — below the required ${MIN_K8S_MAJOR}.${MIN_K8S_MINOR}" \
-			"The charts refuse anything older and CI tests nothing older. Upgrade the cluster."
+			"helm install and helm upgrade refuse anything older, and CI tests nothing older. Upgrade the cluster."
 	fi
 }
 

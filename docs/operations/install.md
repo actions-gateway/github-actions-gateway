@@ -16,7 +16,7 @@ For the full chart reference (every value, the templates it renders, offline val
 
 ## Prerequisites
 
-- **Kubernetes >= 1.35**, the version CI tests, and the charts refuse anything older.
+- **Kubernetes >= 1.35**, the version CI tests, and `helm install` and `helm upgrade` refuse anything older.
 - **Helm 3.20 or later on 3.x, 4.1 or later on 4.x, to render a chart with `helm template`.** With no cluster to ask, Helm checks the chart's floor against the version it was built for, so an older one refuses on any cluster with `chart requires kubeVersion`, as Helm 3.16 did when measured.
   To keep an older Helm, pass `--kube-version <your cluster's version>`, which Helm 3.16 accepted.
   The minimum is read from each release's `k8s.io/client-go` pin, and only Helm 3.16 and 4.2 were run.

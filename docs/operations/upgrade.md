@@ -131,7 +131,27 @@ kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -
 kubectl version
 ```
 
-The `v1.10.0` chart's floor is 1.30, so `v1.10.0` stays in range while the cluster moves, and the `v1.10.0` to `v2.0.0` walk below was measured on Kubernetes 1.36.
+The `v1.10.0` chart's floor is 1.30, so Helm accepts it while the cluster moves, and the `v1.10.0` to `v2.0.0` walk below was measured on Kubernetes 1.36.
+
+**If the cluster will pass through 1.33 or 1.34, or is on one now, set this first, or `v1.10.0` workers fail to start:**
+
+```sh
+kubectl -n gmc-system set env deployment/gmc-controller-manager WRAPPER_DELIVERY=init
+```
+
+A `v1.10.0` AGC delivers the worker wrapper through an image volume on any server from 1.33, but upstream leaves the `ImageVolume` feature gate off until 1.35.
+With the gate off, the apiserver drops the volume with no error, and the runner's command then points at a file that is not there.
+The variable has the GMC tell each AGC to use an initContainer instead, and the AGCs restart to pick it up.
+The chart has no value for it and `helm upgrade` leaves it set, so remove it once the cluster is at 1.35 or later:
+
+```sh
+kubectl -n gmc-system set env deployment/gmc-controller-manager WRAPPER_DELIVERY-
+```
+
+Measured on kind with Kubernetes 1.34.11 and the `v1.10.0` charts: the AGC logged `imageVolume: true`, a Pod with its worker's volume, mount and command stored neither the volume nor the mount and failed with exit 128, and the initContainer form reached the wrapper.
+The variable reached the AGC Deployment and rolled it, and a `helm upgrade` kept it.
+Measured on kind with Kubernetes 1.35.5, the gate was on and the same Pod kept its volume and reached the wrapper.
+No job ran through a worker the AGC created, and neither 1.33 nor a managed provider's gate setting was measured.
 
 Below the floor the upgrade stops part-way, which is why this comes first.
 Measured on kind with Kubernetes 1.34.11 and Helm 4.2.3:
