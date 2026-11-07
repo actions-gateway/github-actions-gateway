@@ -2976,8 +2976,9 @@ Each cell there carries the chart version and the date it was read at, so read t
 </div>
 <div class="gag-section-intro">
 <h2 id="who-gag-is-for">Who GAG is for<a class="headerlink" href="#who-gag-is-for" title="Permanent link">&para;</a></h2>
-<p>GAG targets a specific audience: teams that <strong>must</strong> self-host runners and run them for <strong>many tenants on one cluster</strong>.
-If that's you, here's the value per segment.</p>
+<p>GAG is built for a <strong>Kubernetes cluster that several teams share</strong>: a platform team that sets the caps, tenant teams that self-serve under them, and contributors whose code nobody trusts.
+The capabilities above are what that boundary needs: a cap a tenant cannot raise, intake that respects it, a job that survives sharing, isolation reconciled per tenant.
+A single team on its own cluster gets the same behaviour; what it trades is named in the note under the cards.</p>
 </div>
 <div class="gag-pillars">
 <div class="grid cards">
@@ -3016,14 +3017,16 @@ If that's you, here's the value per segment.</p>
 </div>
 </div>
 <div class="gag-fit-note">
-<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/></svg></span> <strong>Not your setup?</strong> Three cases where something else wins, and we would rather say so.</p>
+<p><span class="twemoji"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/></svg></span> <strong>Where something else wins.</strong> Three cases, and the honest list is short.</p>
 <ul>
-<li><strong>A vendor can run your jobs</strong> → a managed runner service, on speed and setup</li>
-<li><strong>Managed Kubernetes is cheap, CI fits one cloud</strong> → a cluster per team isolates harder</li>
-<li><strong>One team owns the cluster and the runners</strong> → <a href="https://github.com/actions/actions-runner-controller">ARC</a>, whose protocol GAG is built on</li>
+<li><strong>You need GitHub Support, <code>containerMode: kubernetes</code>, or tested GHES</strong> → <a href="https://github.com/actions/actions-runner-controller">ARC</a> has all three, GAG none.
+  Team count is not the line</li>
+<li><strong>Your jobs can leave the clusters you operate</strong> → a managed or bring-your-own-cloud runner.
+  Per-build speed: unmeasured, not claimed</li>
+<li><strong>Compute is cheap and elastic, nothing expensive is shared</strong> → a cluster per team, or a VM per job.
+  A project boundary isolates harder</li>
 </ul>
-<p>GAG is for big, expensive nodes that several teams must share, safely.
-<a href="alternatives/">Compare the options →</a></p>
+<p><a href="alternatives/#no-offering-is-perfect-yet">Where GAG loses, and to whom →</a></p>
 </div>
 <div class="gag-section-intro">
 <h2 id="how-it-fits-together">How it fits together<a class="headerlink" href="#how-it-fits-together" title="Permanent link">&para;</a></h2>
