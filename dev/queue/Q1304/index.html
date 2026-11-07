@@ -2662,7 +2662,7 @@
 Read from the code on 2026-11-06, not run.</p>
 <p>The AGC's <code>useImageVolume</code> (<code>cmd/agc/main.go:754</code>) compares the server version against 1.33 and uses an initContainer below it, and that comparison now always picks the image volume.
 The initContainer path itself stays reachable, through <code>WRAPPER_DELIVERY=init</code> and when the server version cannot be read, so whether it goes too is open.
-<code>release.md</code>, <code>migration-from-arc.md</code>, <code>tenant-onboarding.md</code> and <code>features.md</code> describe the 1.33 split and move with the answer.</p>
+<code>release.md</code>, <code>migration-from-arc.md</code> and <code>tenant-onboarding.md</code> describe the 1.33 split and move with the answer.</p>
 <p>The comment on that function calls the feature "beta and on by default" from 1.33, which is false before 1.35: on kind at 1.34.11 on 2026-11-06, <code>kubernetes_feature_enabled{name="ImageVolume"}</code> read 0 and the volume was dropped from a stored Pod.
 So <code>v1.10.0</code> workers fail on 1.33 and 1.34 unless <code>WRAPPER_DELIVERY=init</code> is set, which <code>upgrade.md</code> tells operators to do; the 1.35 floor makes the comparison correct from <code>v2.0.0</code>.</p>
 <p>The <code>t.Skipf</code> guards on a server below 1.31 in <code>v2_crd_test.go</code> and <code>v2_multigateway_test.go</code> can never skip while <code>ENVTEST_K8S_VERSION</code> is 1.35.</p>

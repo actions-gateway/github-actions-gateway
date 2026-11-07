@@ -2680,6 +2680,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#the-maturity-badge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The maturity badge
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-release-chip" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3182,7 +3193,7 @@ To see what the bar will name without building the site:</p>
 </code></pre></div>
 <p>The tag-selection rules (numeric ordering, prerelease exclusion, the <code>$GAG_DOCS_RELEASE</code> override, degrading to <code>""</code> outside a repository) are asserted by <code>scripts/docs/release-version-hook-test.sh</code>, which <code>make check</code> runs via <code>make scripts-test</code>.</p>
 <h2 id="marketing-badges">Marketing badges<a class="headerlink" href="#marketing-badges" title="Permanent link">&para;</a></h2>
-<p>Five small pills annotate the capability index and the roadmap.
+<p>Five small pills annotate the capability index and the roadmap, four of them in use.
 They share one geometry rule in <a href="../../stylesheets/extra.css"><code>extra.css</code></a> and differ only by hue, because each answers a different question about a capability and a reader has to tell them apart at a glance.</p>
 <table>
 <thead>
@@ -3200,7 +3211,7 @@ They share one geometry rule in <a href="../../stylesheets/extra.css"><code>extr
 </tr>
 <tr>
 <td><code>gag-maturity-badge</code></td>
-<td>the API shape is still under its first stability contract</td>
+<td>the API shape is still under its first stability contract; unused since <code>v2</code> went GA</td>
 <td>the bullet, hand-written</td>
 </tr>
 <tr>
@@ -3222,6 +3233,10 @@ They share one geometry rule in <a href="../../stylesheets/extra.css"><code>extr
 </table>
 <p>Two of them expire on their own, which is what makes them safe to write.
 Rules 9-11 of <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/devtools/docs/roadmapcheck/badges.go"><code>devtools/docs/roadmapcheck</code></a> enforce it, and <code>scripts/docs/check-roadmap-test.sh</code> pins every removal case.</p>
+<h3 id="the-maturity-badge">The maturity badge<a class="headerlink" href="#the-maturity-badge" title="Permanent link">&para;</a></h3>
+<p>At <code>v2</code> GA the whole API is under the GA contract (backward-compatible, effectively frozen; <a href="../../plan/v2-api/#api-maturity--graduation-v2alpha1--v2beta1--v2">the ladder</a>), so no <code>v2</code> field has a shape still under a first stability contract and no bullet carries the badge.
+A field that is young on a GA API is not that: say so with <code>gag-new-badge</code>, or in the bullet's own words.
+The class stays defined for the graduation of a later API version, which would be the next time the sentence in the table is true of something.</p>
 <h3 id="the-release-chip">The release chip<a class="headerlink" href="#the-release-chip" title="Permanent link">&para;</a></h3>
 <p>A roadmap bullet's release commitment is <strong>derived, never typed</strong>.
 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/hooks/release_gates.py"><code>hooks/release_gates.py</code></a> reads the <code>X.Y-gate</code> labels out of each item's frontmatter in <code>docs/queue/</code>, follows each bullet's existing <code>&lt;!-- q:QN --&gt;</code> annotation, and injects the pill:</p>
