@@ -2712,6 +2712,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#why-there-is-no-111-rung" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why there is no 1.11 rung
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-is-punted-past-v200" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2873,6 +2884,14 @@ The apiserver will not drop a version from a CRD's <code>spec.versions</code> wh
 Rule 4b was satisfied by <code>v1.9.0</code>, and <code>semver-floor.sh v1.9.0</code> read <code>FLOOR: NONE</code> on 2026-10-09 over two commits.
 So the rung is justified by sequencing rather than by content, which is new on this ladder, and the maintainer gave it content in the same decision: three scale-set correctness fixes and the per-set egress-audit flag gate it beside the storage advance, and three more items ride (<a href="../archive/release-1.10/#scope-ledger">release-1.10.md</a>).</p>
 <p>For the backlog it means the removals wait for the <code>1.10</code> tag: once a served version is gone from <code>main</code>, the next tag cut from it is <code>v2.0.0</code>.</p>
+<h2 id="why-there-is-no-111-rung">Why there is no 1.11 rung<a class="headerlink" href="#why-there-is-no-111-rung" title="Permanent link">&para;</a></h2>
+<p><strong>Decided 2026-11-01 by the maintainer, when the post-1.10 window was ready to cut.</strong> <code>semver-floor.sh v1.10.0</code> read <code>FLOOR: MINOR</code> that day over 23 commits reaching the released surface, among them the automatic-recovery rows 2.0 was widened to gate on (Q555, Q1181, Q1183, Q1178) and the opt-in in-cluster cache server (Q215).
+The window rides into <code>v2.0.0</code> rather than shipping as <code>v1.11.0</code>.
+The removal rows (Q1167, Q273, Q264, Q1107) had not started, and their blocker, the <code>1.10</code> tag, had cleared on 2026-10-27.</p>
+<p><strong>The hold has a deadline that is not the ladder's.</strong> <code>v1.10.0</code>'s default worker image runs <code>actions/runner</code> 2.338.1, and <code>check-runner-window.sh</code> measured on 2026-11-01 that 2.338.2, published 2026-10-26, leaves it 24 days of GitHub's update window: about 2026-11-25, after which GitHub stops queueing jobs to those runners with no error.
+So <code>v1.10.1</code> is cut from a <code>release-1.10</code> branch whatever <code>v2.0.0</code> does, per <a href="../../operations/release/#patch-releases-and-backports">Patch releases and backports</a>, with the runner bump (#2170) and a fix for the worker wrapper on Kubernetes 1.33 and 1.34; <a href="../../queue/Q1261/">Q1261</a> holds it.
+Decided 2026-11-06 by the maintainer: Q1284 raised <code>v2.0.0</code>'s floor to 1.35, so an operator below it has to upgrade the cluster before taking <code>v2.0.0</code>, and the patch is the path past that date without one.
+<code>v2.0.0</code>'s notes therefore enumerate from <code>v1.10.0</code>, so their <strong>Everything since</strong> section carries this window as well as the removals.</p>
 <h2 id="what-is-punted-past-v200">What is punted past <code>v2.0.0</code><a class="headerlink" href="#what-is-punted-past-v200" title="Permanent link">&para;</a></h2>
 <p>Not scheduled, and that is a decision rather than an oversight.
 Each waits on a real signal, and each carries a revive trigger on the backlog rather than a release:</p>

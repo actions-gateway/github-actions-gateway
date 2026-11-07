@@ -2786,12 +2786,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Top of queue per <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> On 2026-11-05 the <code>release-links</code> job …</td>
 </tr>
 <tr>
+<td><a href="Q1261/">Q1261</a></td>
+<td><a href="../plan/release-ladder/">Cut v1.10.1 with the runner bump and a wrapper fix, whatever v2.0.0 does</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong><code>v1.10.1</code> has to reach operators before about 2026-11-25, and <code>v2.0.0</code> cannot do that for a cluster below its Kubernetes floor.</strong> Q1284 …</td>
+</tr>
+<tr>
 <td><a href="Q1270/">Q1270</a></td>
 <td>EgressProxy envtests wait on a NetworkPolicy no longer applied last</td>
 <td><code>flake</code> <code>tests</code></td>
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a test in <code>cmd/gmc/internal/controller/integration/v2_egressproxy_test.go</code> fails on <code>main</code> with a <code>not found</code> read of a proxy …</td>
+</tr>
+<tr>
+<td><a href="Q1307/">Q1307</a></td>
+<td>Bump the e2e runner image off 2.338.1 before its update window closes</td>
+<td><code>dogfood</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The self-hosted e2e image still runs <code>actions/runner</code> 2.338.1, so a release candidate's e2e jobs on <code>gag-ci-e2e</code> should stop being queued …</td>
 </tr>
 <tr>
 <td><a href="Q1252/">Q1252</a></td>

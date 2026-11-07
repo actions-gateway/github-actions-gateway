@@ -2664,6 +2664,7 @@
 So a job running through the gap, and the same walk against github.com, are unmeasured until the candidate reaches dogfood.
 <code>scripts/dogfood/setup.sh</code> applies the CRDs and then the chart, so a candidate's run crosses the gap and can give both readings; neither <code>release.md</code> nor the release-candidate skill has a step for taking them, so this row is what binds them.
 A chart-first rollback was not measured either, and no candidate run measures it, so <code>upgrade.md</code> says so and it stays unmeasured.</p>
+<p><strong>A candidate on or after about 2026-11-25 needs a newer e2e runner image first</strong> (<a href="../Q1307/">Q1307</a>): <code>scripts/dogfood/e2e-runner/Dockerfile</code> builds <code>dogfood-e2e-runner:2.338.1-2</code> on <code>dogfood-runner:2.338.1</code>, so its self-hosted e2e jobs should stop being queued then, which is read from the Dockerfile, not run.</p>
 <p><strong>The label outlives the candidate on purpose.</strong> The release-candidate skill's gating-row check lists this row until the tag closes it, so it is the one hit that check should return.</p>
 <p><strong>Done when</strong> the candidate's run has been read for a job running through the gap and for the walk against github.com, <code>upgrade.md</code> says what came back, and the tag is cut.</p>
 
