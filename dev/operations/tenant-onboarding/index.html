@@ -4160,10 +4160,8 @@ What that changes when onboarding:</p>
 <li><strong>52-character name cap.</strong> Any CR (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>, <code>EgressProxy</code>) whose <code>metadata.name</code> exceeds <strong>52 characters</strong> is rejected at admission.
   The cap reserves room for the derived <code>&lt;name&gt;-&lt;suffix&gt;</code> so a label value / Service name stays under RFC 1123's 63-character ceiling (appendix-h §H.6).
   Pick short gateway names.</li>
-<li><strong>Kubernetes ≥ 1.31 required.</strong> Each AGC reconciles only the <code>RunnerSet</code>s whose <code>spec.gatewayRef.name</code> targets it, via a server-side CRD field selector (KEP-4358) that is alpha-off on 1.30.
-  On a 1.30 cluster an AGC's <code>RunnerSet</code> informer fails to sync (<code>field label not supported</code>), so the pod opens no session and exits about two minutes later, reading <code>Ready</code> in between.
-  Confirm the cluster is ≥ 1.31 before onboarding any gateway.
-  The same error on ≥ 1.31 means the AGC and the CRDs come from releases that declare the field on different API versions: <a href="../upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">re-apply the CRDs for the AGC's release</a>.</li>
+<li><strong>Each AGC watches only its own <code>RunnerSet</code>s.</strong> It reconciles the ones whose <code>spec.gatewayRef.name</code> targets it, via a server-side CRD field selector (KEP-4358).
+  <code>field label not supported: spec.gatewayRef.name</code> means the AGC and the CRDs come from releases that declare the field on different API versions: <a href="../upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">re-apply the CRDs for the AGC's release</a>.</li>
 <li><strong>Co-located gateways share one namespace security profile.</strong> The Pod Security level is a property of the <strong>namespace</strong>, not the gateway (see <a href="#pre-conditions">Pre-Conditions</a>) — so all gateways in a namespace run under the same <code>actions-gateway.com/security-profile</code> label.
   Tenants needing different postures (e.g.
   <code>baseline</code> vs <code>privileged</code>) use separate namespaces.</li>

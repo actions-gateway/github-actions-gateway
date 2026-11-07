@@ -2864,7 +2864,8 @@ Migrate with a 1.x <a href="../operations/migration-v1-to-v2/"><code>gag-migrate
 </div>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li>Kubernetes <strong>1.31+</strong> (each AGC's <code>RunnerSet</code> watch uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)</li>
+<li>Kubernetes <strong>1.35+</strong>, the version CI tests</li>
+<li>Helm 3.20+ on 3.x or 4.1+ on 4.x to render a chart with <code>helm template</code> (<a href="../operations/install/#prerequisites">why</a>)</li>
 <li>A CNI that enforces <code>NetworkPolicy</code> (Calico/Cilium) for the isolation controls to take effect</li>
 <li><a href="https://cert-manager.io">cert-manager</a> installed, <em>or</em> install with <code>--set certManager.enabled=false</code> to use the chart's self-signed webhook cert</li>
 <li>A GitHub App with a private key and installation ID</li>

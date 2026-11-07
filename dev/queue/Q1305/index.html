@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1284/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1305/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Raise the Kubernetes floor to a version CI tests - GitHub Actions Gateway</title>
+        <title>Build the dogfood runner images in CI - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#raise-the-kubernetes-floor-to-a-version-ci-tests" class="md-skip">
+        <a href="#build-the-dogfood-runner-images-in-ci" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Raise the Kubernetes floor to a version CI tests
+              Build the dogfood runner images in CI
             
           </span>
         </div>
@@ -2657,18 +2657,13 @@
   
 
 
-<h1 id="raise-the-kubernetes-floor-to-a-version-ci-tests">Raise the Kubernetes floor to a version CI tests<a class="headerlink" href="#raise-the-kubernetes-floor-to-a-version-ci-tests" title="Permanent link">&para;</a></h1>
-<p>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 cannot sync its <code>RunnerSet</code> informer, while <code>ENVTEST_K8S_VERSION</code> and the e2e node image are both 1.35.
-So the charts promise versions nothing here tests.
-<code>scripts/e2e/validate-cluster.sh:234</code> passes 1.30 too, and <code>install.md</code>'s preflight row and <code>charts/actions-gateway/README.md:45</code> state it.</p>
-<p><strong>Why it gates <code>v2.0.0</code>:</strong> the charts accept versions the docs rule out and CI does not test, and at <code>v2.0.0</code> every tenant is on the API the docs rule 1.30 out for.
-1.30 itself has not been run, so that failure is the docs' reading of the field selector's feature state unless this row runs it.</p>
-<p>Karl's reason for a higher floor, on 2026-11-04: "1.33 is end of life now".
-That date is his statement and is not checked against upstream's schedule here, and the dogfood cluster's version is not read either, so read both before choosing the number.</p>
-<p>The status-write refusal that raised the question is not a reason for this row.
-On 1.31.0 and 1.32.0 ratcheting misses the status subresource, which the <code>spec.tracing.endpoint</code> rule handles itself with <code>optionalOldSelf</code>.
-Another rule tightened without that clause would meet the same refusal on those versions, and no gate here would see it.</p>
-<p>Done when the charts, the preflight, <code>migration-from-arc.md</code> and the rest of <code>docs/operations/</code> state one floor that CI covers, and <code>upgrade.md</code> tells an operator below it what they get.</p>
+<h1 id="build-the-dogfood-runner-images-in-ci">Build the dogfood runner images in CI<a class="headerlink" href="#build-the-dogfood-runner-images-in-ci" title="Permanent link">&para;</a></h1>
+<p><code>dogfood-e2e-runner</code> and <code>dogfood-runner</code> are built by hand and pushed to GHCR, so a Dockerfile edit changes nothing until someone runs that push and bumps the overlay pins.
+Q1284 needed exactly that: the pinned image's Helm refused the new Kubernetes floor, and the fix took a manual <code>2.338.1-2</code> push.</p>
+<p>No workflow names either image (<code>git grep</code> over <code>.github/workflows</code>, 2026-11-06).
+Both GHCR packages read <code>repository: null</code> where <code>gmc</code> reads this repo (<code>gh api orgs/actions-gateway/packages/container/&lt;name&gt;</code>), so a workflow's token probably needs the repo granted Actions access to each package first.
+That access rule is recalled from GitHub's documentation and has not been tested here.</p>
+<p>Done when a workflow builds and publishes both images from their Dockerfiles, without overwriting an existing tag, and <code>scripts/dogfood/e2e-runner/Dockerfile</code>'s header and <code>runner-build.sh</code> describe that instead of a manual push.</p>
 
 
 

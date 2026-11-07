@@ -2990,7 +2990,8 @@ Through 1.x both consumers of these values, the <code>ValidatingAdmissionPolicy<
 <p>The 1.x migration tool relabels these in one pass (additively: it adds the v2 keys and keeps the v1 keys).
 <code>v2.0.0</code> drops the legacy <code>"true"</code> arms and the <code>actions-gateway.github.com/*</code> keys from the policies and the webhook, so only the aligned spellings are honored.</p>
 <h2 id="before-you-upgrade-from-1x">Before you upgrade from 1.x<a class="headerlink" href="#before-you-upgrade-from-1x" title="Permanent link">&para;</a></h2>
-<p>Do these on the 1.x controllers; none of them can be done afterwards.</p>
+<p>Do these on the 1.x controllers; none of them can be done afterwards.
+The cluster has to reach Kubernetes 1.35 before the upgrade too (<a href="../upgrade/#before-upgrading-to-v200-the-cluster-runs-kubernetes-135-or-later">why</a>).</p>
 <ol>
 <li><strong>Migrate off <code>v1alpha1</code>.</strong> Run <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> from a 1.x release, which also relabels the namespace markers and annotations onto the <code>actions-gateway.com/</code> spellings.
    <a href="../migration-v1-to-v2/#step-4--decommission-v1-when-ready">Decommission v1</a> while the 1.x controllers still run: nothing in <code>v2.0.0</code> reconciles a remaining <code>v1alpha1</code> object.

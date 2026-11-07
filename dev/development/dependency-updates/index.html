@@ -2831,7 +2831,7 @@ This doc is the map of those channels: what is automated, by what, and where the
 <tr>
 <td>kind node image</td>
 <td><code>KIND_NODE_IMAGE</code> in <code>e2e-reusable.yml</code></td>
-<td><strong>manual</strong> (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor)</td>
+<td><strong>manual</strong> (changes the tested Kubernetes version — a deliberate choice; keep the envtest version above on the same Kubernetes minor, and raise the charts' <code>kubeVersion</code> floor with it unless another lane tests the old one, which <code>scripts/e2e/validate-cluster-test.sh</code> asserts)</td>
 </tr>
 <tr>
 <td>cluster-autoscaler <strong>patch</strong> (drift harness)</td>

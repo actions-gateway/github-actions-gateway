@@ -3554,20 +3554,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
-<td><a href="Q1284/">Q1284</a></td>
-<td>Raise the Kubernetes floor to a version CI tests</td>
-<td><code>debt</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>Both charts declare <code>kubeVersion: "&gt;=1.30.0-0"</code>, <code>migration-from-arc.md</code> states 1.31 for v2, and <code>troubleshooting.md</code> says an AGC on 1.30 …</td>
-</tr>
-<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">The <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
-<td>🚫</td>
+<td>🔲</td>
 <td>S</td>
-<td>Blocked on <a href="Q1284/">Q1284</a>, one Kubernetes floor across the charts and docs, because the charts accept versions the docs rule out and CI …</td>
+<td>Everything else under <code>v2.0.0</code> has landed but the tag: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), and the …</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>
@@ -4344,6 +4336,30 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>`.claude/skills/release-candidate/SKILL.md:52:grep -rlE '^[[:space:]]<em>-[[:space:]]</em><X\.Y>-gate[[:space:]]<em>$' docs/queue/Q</em>.md # want no …</td>
+</tr>
+<tr>
+<td><a href="Q1304/">Q1304</a></td>
+<td>Drop the code paths below the 1.35 floor</td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The charts now refuse a cluster below Kubernetes 1.35, so version checks written for older clusters no longer choose anything on a …</td>
+</tr>
+<tr>
+<td><a href="Q1305/">Q1305</a></td>
+<td>Build the dogfood runner images in CI</td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>dogfood-e2e-runner</code> and <code>dogfood-runner</code> are built by hand and pushed to GHCR, so a Dockerfile edit changes nothing until someone runs …</td>
+</tr>
+<tr>
+<td><a href="Q1306/">Q1306</a></td>
+<td>Tie the Helm version to the Kubernetes floor</td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>helm template</code> checks <code>kubeVersion</code> against the version Helm was built for, so each floor raise also raises the Helm that can render the …</td>
 </tr>
 </tbody>
 </table>

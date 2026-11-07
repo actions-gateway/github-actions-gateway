@@ -2658,14 +2658,13 @@
 
 
 <h1 id="the-v200-cut">The <code>v2.0.0</code> cut<a class="headerlink" href="#the-v200-cut" title="Permanent link">&para;</a></h1>
-<p>Blocked on <a href="../Q1284/">Q1284</a>, one Kubernetes floor across the charts and docs, because the charts accept versions the docs rule out and CI does not test.</p>
 <p>Everything else under <code>v2.0.0</code> has landed but the tag: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), and the operator docs and migration guide, which describe the surface <code>v2.0.0</code> ships with no served version it removes.</p>
 <p><strong>What is left</strong> is the release itself, run from <code>docs/operations/release.md</code>: the release candidate, its dogfood validation, and the tag.</p>
 <p><strong>What the candidate has to confirm.</strong> <a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">upgrade.md</a> states the upgrade and rollback order from a run on kind against <code>test/fakegithub</code> with workers held <code>Pending</code>, on 2026-11-06.
 So a job running through the gap, and the same walk against github.com, are unmeasured until the candidate reaches dogfood.
 <code>scripts/dogfood/setup.sh</code> applies the CRDs and then the chart, so a candidate's run crosses the gap and can give both readings; neither <code>release.md</code> nor the release-candidate skill has a step for taking them, so this row is what binds them.
 A chart-first rollback was not measured either, and no candidate run measures it, so <code>upgrade.md</code> says so and it stays unmeasured.</p>
-<p><strong>The label outlives the candidate on purpose.</strong> The release-candidate skill's gating-row check lists this row until the tag closes it, so once Q1284 closes it is the one hit that check should return.</p>
+<p><strong>The label outlives the candidate on purpose.</strong> The release-candidate skill's gating-row check lists this row until the tag closes it, so it is the one hit that check should return.</p>
 <p><strong>Done when</strong> the candidate's run has been read for a job running through the gap and for the walk against github.com, <code>upgrade.md</code> says what came back, and the tag is cut.</p>
 
 

@@ -2856,7 +2856,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 <p><strong>Status: Phases 1 and 2 are done.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), and Q413 then shipped Phase 2 for 1.9: <code>v2</code> served beside <code>v2beta1</code> on every kind, storage unmoved.
 <strong>Scoped 2026-10-09</strong>, after <code>v1.9.0</code> tagged on 2026-10-05: the <a href="#scope-ledger">scope ledger</a> is the release's record.
 Phase 3's storage advance ships first, in its own release: Q1086 landed it for <a href="../archive/release-1.10/">1.10</a>, <code>v2</code> storing on every kind and <code>gag-migrate storage-version</code> rewriting what is stored, decided by the maintainer on 2026-10-09 (<a href="#the-storage-advance-needs-a-state-between-two-applies">why it cannot share an apply with the removals</a>).
-The removals follow in <code>v2.0.0</code>: Q273 removed <code>v1alpha1</code> and Q264 removed classic on <code>main</code>, and Q1167 removed <code>v2alpha1</code>, <code>v2beta1</code> and the hub; Phase 4's docs landed, <a href="../../queue/Q1284/">Q1284</a> sets one Kubernetes floor, and the tag is <a href="../../queue/Q1107/">Q1107</a>.
+The removals follow in <code>v2.0.0</code>: Q273 removed <code>v1alpha1</code> and Q264 removed classic on <code>main</code>, and Q1167 removed <code>v2alpha1</code>, <code>v2beta1</code> and the hub; Phase 4's docs landed, Q1284 set one Kubernetes floor at 1.35, and the tag is <a href="../../queue/Q1107/">Q1107</a>.
 The Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The phase table below is the real state.</p>
 </blockquote>
@@ -3015,16 +3015,16 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: no disruption series carries <code>tier</code>, the two tenant panels group on <code>cause</code> and <code>outcome</code>, and <code>upgrade.md</code> warns that a <code>tier</code> filter now returns nothing; the <code>tier</code> log field stays</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1284/">Q1284</a></td>
+<td>Q1284</td>
 <td>Raise the Kubernetes floor to a version CI tests</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open: gated because the charts accept versions the docs rule out and CI does not test; its PR chooses the number</td>
+<td>✅ landed: gated because the charts accepted versions the docs ruled out and CI did not test; the charts, the preflight and the docs state 1.35, a test holds them to the e2e node image, and <code>upgrade.md</code> puts the cluster upgrade first</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1107/">Q1107</a></td>
 <td>Operator docs, migration guide, and the cut (Phase 4)</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open: the docs landed, with the upgrade and rollback order measured against a running AGC, and the cut remains, after Q1284</td>
+<td>🔲 open: the docs landed, with the upgrade and rollback order measured against a running AGC, and the cut remains</td>
 </tr>
 <tr>
 <td>Q555</td>

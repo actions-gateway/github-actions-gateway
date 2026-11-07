@@ -3107,7 +3107,10 @@ For the full chart reference (every value, the templates it renders, offline val
 <hr />
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Kubernetes &gt;= 1.31</strong> — each AGC's <code>RunnerSet</code> watch uses a server-side field selector (KEP-4358) that is alpha-off on 1.30, so an AGC there holds no session.</li>
+<li><strong>Kubernetes &gt;= 1.35</strong>, the version CI tests, and <code>helm install</code> and <code>helm upgrade</code> refuse anything older.</li>
+<li><strong>Helm 3.20 or later on 3.x, 4.1 or later on 4.x, to render a chart with <code>helm template</code>.</strong> With no cluster to ask, Helm checks the chart's floor against the version it was built for, so an older one refuses on any cluster with <code>chart requires kubeVersion</code>, as Helm 3.16 did when measured.
+  To keep an older Helm, pass <code>--kube-version &lt;your cluster's version&gt;</code>, which Helm 3.16 accepted.
+  The minimum is read from each release's <code>k8s.io/client-go</code> pin, and only Helm 3.16 and 4.2 were run.</li>
 <li><strong>Node architecture: <code>linux/amd64</code> or <code>linux/arm64</code>.</strong> Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.</li>
@@ -3149,9 +3152,9 @@ Run the preflight from a <a href="#install">source checkout</a> first:</p>
 <td>Detects the cluster CNI. An enforcing CNI (Calico, Cilium, Antrea, Weave Net, kube-router, Canal) passes; <code>kindnet</code> <strong>fails loudly</strong> — it does not enforce egress, so tenant isolation would be silently void. An unrecognised CNI warns (cannot confirm enforcement).</td>
 </tr>
 <tr>
-<td><strong>Kubernetes &gt;= 1.30</strong></td>
+<td><strong>Kubernetes &gt;= 1.35</strong></td>
 <td><strong>FAIL</strong> (blocking)</td>
-<td>The GMC's <code>namespace-psa-guard</code> / <code>gmc-tenant-resource-guard</code> policies need the GA <code>ValidatingAdmissionPolicy</code> API. It does not check what a gateway needs, which is the prerequisite above.</td>
+<td>The charts' floor, and the version CI tests.</td>
 </tr>
 <tr>
 <td><strong>cert-manager present</strong></td>
