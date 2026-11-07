@@ -11,7 +11,7 @@
 # gmc-tenant-secret-reader RoleBinding, so an ex-tenant namespace stops granting
 # the GMC Secret reads (Q1271).
 # Secret reads are not gated: admission never runs on get/list/watch (see
-# docs/design/05-security.md §5.1). Requires Kubernetes >= 1.30.
+# docs/design/05-security.md §5.1).
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:

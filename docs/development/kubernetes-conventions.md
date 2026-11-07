@@ -444,7 +444,7 @@ The egress proxy is the worked example (Q386): `lingerForEndpointRemoval` in [cm
 Worst case is `max(linger, drain)` rather than their sum, so `terminationGracePeriodSeconds` did not have to grow to accommodate it.
 
 **Use the native `sleep` handler if you do need `preStop`.** Our images are distroless: there is no shell and no `sleep` binary, so `exec: ["sleep", …]` fails at runtime and the pod proceeds straight to SIGTERM — reintroducing the race, but silently.
-The native handler (KEP-3960) is beta and on by default from Kubernetes 1.30, the project's blocking install floor.
+The native handler (KEP-3960) is beta and on by default from Kubernetes 1.30, older than the project's blocking install floor.
 
 **7.
 State the budget in the manifest comment, and keep the code inside it.** `terminationGracePeriodSeconds` is a claim about how long shutdown takes; if the code's drain is unbounded, or the comment describes a drain the code doesn't perform, the two silently diverge.

@@ -4,7 +4,7 @@
 # (Q289 / Appendix G §G.7). The runnersets/runnertemplates rules (Q323) are
 # defense-in-depth for the webhook-gated v2 kinds: webhook-outage/bypass coverage
 # for ANY writer, plus re-validation of every write to existing objects (narrowing
-# the stored-object residual a webhook cannot reach). Requires Kubernetes >= 1.30. See
+# the stored-object residual a webhook cannot reach). See
 # docs/operations/security-operations.md § Priority classes.
 #
 # The paramKind is the cluster-scoped PriorityClassAllowlist CR, NOT a ConfigMap

@@ -15,7 +15,7 @@
 #
 # Env:
 #   MANIFEST_K8S_VERSION   Kubernetes version kubeconform validates against
-#                          (default 1.30.0 — the chart's kubeVersion floor in
+#                          (default 1.35.0 — the chart's kubeVersion floor in
 #                          Chart.yaml: validating against the oldest supported
 #                          version catches a field that does not exist there).
 #   KUBECONFORM_CACHE      Directory persisting kubeconform's downloaded JSON
@@ -36,7 +36,7 @@ require_cmd yamllint "https://yamllint.readthedocs.io/en/stable/quickstart.html"
 require_cmd kubeconform "https://github.com/yannh/kubeconform#installation"
 require_cmd helm "https://helm.sh/docs/intro/install/"
 
-MANIFEST_K8S_VERSION="${MANIFEST_K8S_VERSION:-1.30.0}"
+MANIFEST_K8S_VERSION="${MANIFEST_K8S_VERSION:-1.35.0}"
 KUBECONFORM_CACHE="${KUBECONFORM_CACHE:-}"
 
 chart="$REPO_ROOT/charts/actions-gateway"

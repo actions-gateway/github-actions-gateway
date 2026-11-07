@@ -760,10 +760,8 @@ What that changes when onboarding:
 - **52-character name cap.** Any CR (`ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, `EgressProxy`) whose `metadata.name` exceeds **52 characters** is rejected at admission.
   The cap reserves room for the derived `<name>-<suffix>` so a label value / Service name stays under RFC 1123's 63-character ceiling (appendix-h §H.6).
   Pick short gateway names.
-- **Kubernetes ≥ 1.31 required.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, via a server-side CRD field selector (KEP-4358) that is alpha-off on 1.30.
-  On a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`), so the pod opens no session and exits about two minutes later, reading `Ready` in between.
-  Confirm the cluster is ≥ 1.31 before onboarding any gateway.
-  The same error on ≥ 1.31 means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
+- **Each AGC watches only its own `RunnerSet`s.** It reconciles the ones whose `spec.gatewayRef.name` targets it, via a server-side CRD field selector (KEP-4358).
+  `field label not supported: spec.gatewayRef.name` means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
 - **Co-located gateways share one namespace security profile.** The Pod Security level is a property of the **namespace**, not the gateway (see [Pre-Conditions](#pre-conditions)) — so all gateways in a namespace run under the same `actions-gateway.com/security-profile` label.
   Tenants needing different postures (e.g.
   `baseline` vs `privileged`) use separate namespaces.

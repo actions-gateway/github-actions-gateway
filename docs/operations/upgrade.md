@@ -12,6 +12,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
 ## Table of Contents
 
 - [Pre-Upgrade Validation Checklist](#pre-upgrade-validation-checklist)
+  - [Before upgrading to v2.0.0: the cluster runs Kubernetes 1.35 or later](#before-upgrading-to-v200-the-cluster-runs-kubernetes-135-or-later)
   - [Before upgrading to v2.0.0: no EgressProxy still names a deprecated FQDN alias](#before-upgrading-to-v200-no-egressproxy-still-names-a-deprecated-fqdn-alias)
   - [Before upgrading to v2.0.0: every actions-gateway.com CRD stores only v2](#before-upgrading-to-v200-every-actions-gatewaycom-crd-stores-only-v2)
   - [Before upgrading to v2.0.0: no v1alpha1 object is left](#before-upgrading-to-v200-no-v1alpha1-object-is-left)
@@ -120,6 +121,31 @@ kubectl get pods --all-namespaces | grep -v Running | grep -v Completed | grep -
 # 5. No recent reconcile errors
 # Metric: rate(controller_runtime_reconcile_errors_total[5m]) == 0
 ```
+
+### Before upgrading to `v2.0.0`: the cluster runs Kubernetes 1.35 or later
+
+`v2.0.0` raises both charts' floor from 1.30 to 1.35, the version CI tests.
+**Upgrade the cluster first**, before any other step in this guide:
+
+```sh
+kubectl version
+```
+
+The `v1.10.0` chart's floor is 1.30, so `v1.10.0` stays in range while the cluster moves, and the `v1.10.0` to `v2.0.0` walk below was measured on Kubernetes 1.36.
+
+Below the floor the upgrade stops part-way, which is why this comes first.
+Measured on kind with Kubernetes 1.34.11 and Helm 4.2.3:
+
+| Step | Result |
+|---|---|
+| `make validate-cluster` | Fails, naming the server version and the floor |
+| `helm upgrade` | Fails with `UPGRADE FAILED: chart requires kubeVersion`, and the release stays at its current revision |
+| `helm install` | Fails the same way |
+| `helm template` of the CRD chart, applied with `kubectl` | **Succeeds** |
+
+The last row is the trap.
+`helm template` checks the floor against the version Helm was built for rather than your cluster, and `kubectl apply` of the release asset has no floor to check, so the CRDs go on and `helm upgrade` then refuses.
+That leaves a `v1.10.0` control plane on `v2.0.0` CRDs in [the gap the upgrade order keeps short](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them), for as long as the cluster upgrade takes.
 
 ### Before upgrading to `v2.0.0`: no `EgressProxy` still names a deprecated FQDN alias
 
@@ -368,7 +394,8 @@ create manager: failed to determine if *v2alpha1.RunnerSet is namespaced: failed
 
 The GMC's startup schema check does not catch either, because it probes fields rather than selectable fields.
 
-**What to do.** Pull the chart before [the webhook removal](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), so a wrong version fails with nothing changed.
+**What to do.** Confirm [the cluster is at the floor](#before-upgrading-to-v200-the-cluster-runs-kubernetes-135-or-later), because `helm upgrade` refuses below it and the CRDs would already be on.
+Pull the chart before [the webhook removal](#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them), so a wrong version fails with nothing changed.
 Then apply the five CRDs in `actions-gateway-crds-v2.yaml`, upgrade the chart, and apply the chart-root CRD, with no gap between them:
 
 ```sh

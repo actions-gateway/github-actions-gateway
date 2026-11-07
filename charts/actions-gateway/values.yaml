@@ -273,8 +273,7 @@ certManager:
 # allowlist on runnersets/runnertemplates writes that bypass the GMC webhooks (Q289 /
 # design Appendix G §G.7) — its allowlist parameter is the PriorityClassAllowlist
 # CR rendered from allowedPriorityClasses above (see priorityClassAllowlist). ON by
-# default (secure-by-default). Requires Kubernetes >= 1.30 (GA
-# ValidatingAdmissionPolicy).
+# default (secure-by-default).
 admissionPolicy:
   enabled: true
 

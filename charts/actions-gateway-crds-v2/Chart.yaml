@@ -12,9 +12,8 @@ type: application
 version: 0.1.0
 # appVersion tracks the v2 API maturity, not an image (this chart ships no images).
 appVersion: "v2"
-# selectableFields on RunnerSet (KEP-4358) are queryable only on k8s >= 1.31, but
-# the CRDs install and validate from 1.30; match the main chart's floor.
-kubeVersion: ">=1.30.0-0"
+# Matches the main chart's floor.
+kubeVersion: ">=1.35.0-0"
 keywords:
   - github-actions
   - self-hosted-runners

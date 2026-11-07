@@ -11,7 +11,8 @@
 
 ## Prerequisites
 
-- Kubernetes **1.31+** (each AGC's `RunnerSet` watch uses a server-side field selector, KEP-4358, that is alpha-off on 1.30)
+- Kubernetes **1.35+**, the version CI tests
+- Helm 3.20+ on 3.x or 4.1+ on 4.x to render a chart with `helm template` ([why](operations/install.md#prerequisites))
 - A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the isolation controls to take effect
 - [cert-manager](https://cert-manager.io) installed, *or* install with `--set certManager.enabled=false` to use the chart's self-signed webhook cert
 - A GitHub App with a private key and installation ID

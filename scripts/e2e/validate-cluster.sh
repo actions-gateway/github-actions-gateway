@@ -8,9 +8,8 @@
 #      (kindnet's kube-network-policies does not drop egress) silently voids
 #      tenant isolation: every NetworkPolicy the chart installs is inert, so
 #      tenants are NOT confined. This is a HARD FAIL — the loudest check.
-#   2. Kubernetes server version >= 1.30 (the GA ValidatingAdmissionPolicy API
-#      the GMC's namespace-psa-guard / tenant-resource-guard policies need).
-#      HARD FAIL below 1.30.
+#   2. Kubernetes server version >= 1.35 (the charts' floor, and the version CI
+#      tests). HARD FAIL below 1.35.
 #   3. cert-manager present (issues the webhook serving cert under the default
 #      certManager.enabled=true). WARN — an install with certManager.enabled=false
 #      uses the chart's self-signed fallback and does not need it.
@@ -143,7 +142,7 @@ retry_until() {
 # --- reporting ---------------------------------------------------------------
 
 MIN_K8S_MAJOR=1
-MIN_K8S_MINOR=30
+MIN_K8S_MINOR=35
 
 # metrics-server convergence budget (Q397). A from-zero cluster registers the
 # metrics.k8s.io APIService with the addon's manifests but needs longer for the
@@ -212,7 +211,7 @@ check_cni() {
 	esac
 }
 
-# check_k8s_version — assert the server is >= 1.30 (GA ValidatingAdmissionPolicy).
+# check_k8s_version — assert the server meets the charts' floor.
 check_k8s_version() {
 	local raw parsed maj min
 	if ! raw="$("$KUBECTL" version -o json 2>/dev/null | jq -r '.serverVersion.gitVersion // empty')" || [[ -z "$raw" ]]; then
@@ -231,7 +230,7 @@ check_k8s_version() {
 	else
 		report fail "K8s version" \
 			"server is $raw — below the required ${MIN_K8S_MAJOR}.${MIN_K8S_MINOR}" \
-			"The GMC admission policies need the GA ValidatingAdmissionPolicy API (1.30+). Upgrade the cluster."
+			"The charts refuse anything older and CI tests nothing older. Upgrade the cluster."
 	fi
 }
 
