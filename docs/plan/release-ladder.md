@@ -91,6 +91,17 @@ So the rung is justified by sequencing rather than by content, which is new on t
 
 For the backlog it means the removals wait for the `1.10` tag: once a served version is gone from `main`, the next tag cut from it is `v2.0.0`.
 
+## Why there is no 1.11 rung
+
+**Decided 2026-11-01 by the maintainer, when the post-1.10 window was ready to cut.** `semver-floor.sh v1.10.0` read `FLOOR: MINOR` that day over 23 commits reaching the released surface, among them the automatic-recovery rows 2.0 was widened to gate on (Q555, Q1181, Q1183, Q1178) and the opt-in in-cluster cache server (Q215).
+The window rides into `v2.0.0` rather than shipping as `v1.11.0`.
+The removal rows (Q1167, Q273, Q264, Q1107) had not started, and their blocker, the `1.10` tag, had cleared on 2026-10-27.
+
+**The hold has a deadline that is not the ladder's.** `v1.10.0`'s default worker image runs `actions/runner` 2.338.1, and `check-runner-window.sh` measured on 2026-11-01 that 2.338.2, published 2026-10-26, leaves it 24 days of GitHub's update window: about 2026-11-25, after which GitHub stops queueing jobs to those runners with no error.
+So `v1.10.1` is cut from a `release-1.10` branch whatever `v2.0.0` does, per [Patch releases and backports](../operations/release.md#patch-releases-and-backports), with the runner bump (#2170) and a fix for the worker wrapper on Kubernetes 1.33 and 1.34; [Q1261](../queue/Q1261.md) holds it.
+Decided 2026-11-06 by the maintainer: Q1284 raised `v2.0.0`'s floor to 1.35, so an operator below it has to upgrade the cluster before taking `v2.0.0`, and the patch is the path past that date without one.
+`v2.0.0`'s notes therefore enumerate from `v1.10.0`, so their **Everything since** section carries this window as well as the removals.
+
 ## What is punted past `v2.0.0`
 
 Not scheduled, and that is a decision rather than an oversight.
