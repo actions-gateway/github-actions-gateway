@@ -57,19 +57,25 @@ The tag-selection rules (numeric ordering, prerelease exclusion, the `$GAG_DOCS_
 
 ## Marketing badges
 
-Five small pills annotate the capability index and the roadmap.
+Five small pills annotate the capability index and the roadmap, four of them in use.
 They share one geometry rule in [`extra.css`](../stylesheets/extra.css) and differ only by hue, because each answers a different question about a capability and a reader has to tell them apart at a glance.
 
 | Badge | Says | Where the fact lives |
 |---|---|---|
 | `gag-v2-badge` | needs the `v2` API | the bullet, hand-written |
-| `gag-maturity-badge` | the API shape is still under its first stability contract | the bullet, hand-written |
+| `gag-maturity-badge` | the API shape is still under its first stability contract; unused since `v2` went GA | the bullet, hand-written |
 | `gag-release-chip` | the release this roadmap item blocks | `docs/queue/`, injected at build time |
 | `gag-tier-badge` | reaches only one acquisition tier | the bullet, bound to a backlog row |
 | `gag-new-badge` | arrived in a named release | the bullet, expired by a gate |
 
 Two of them expire on their own, which is what makes them safe to write.
 Rules 9-11 of [`devtools/docs/roadmapcheck`](../../devtools/docs/roadmapcheck/badges.go) enforce it, and `scripts/docs/check-roadmap-test.sh` pins every removal case.
+
+### The maturity badge
+
+At `v2` GA the whole API is under the GA contract (backward-compatible, effectively frozen; [the ladder](../plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2)), so no `v2` field has a shape still under a first stability contract and no bullet carries the badge.
+A field that is young on a GA API is not that: say so with `gag-new-badge`, or in the bullet's own words.
+The class stays defined for the graduation of a later API version, which would be the next time the sentence in the table is true of something.
 
 ### The release chip
 
