@@ -43,7 +43,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # helm (static release tarball; no pipe, to satisfy hadolint DL4006).
-ARG HELM_VERSION=v3.16.3
+ARG HELM_VERSION=v4.3.1
 RUN set -eux; \
     curl -fsSL -o /tmp/helm.tgz "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"; \
     tar -xzf /tmp/helm.tgz -C /tmp; \

@@ -13,7 +13,7 @@ version: 0.1.0
 # appVersion tracks the released GMC/AGC/proxy image tag. The actual image
 # references operators run live in values.yaml (pinned by digest in production).
 appVersion: "0.1.0"
-kubeVersion: ">=1.30.0-0"
+kubeVersion: ">=1.35.0-0"
 keywords:
   - github-actions
   - self-hosted-runners

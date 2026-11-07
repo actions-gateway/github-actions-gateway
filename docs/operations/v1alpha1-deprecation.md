@@ -77,6 +77,7 @@ The 1.x migration tool relabels these in one pass (additively: it adds the v2 ke
 ## Before you upgrade from 1.x
 
 Do these on the 1.x controllers; none of them can be done afterwards.
+The cluster has to reach Kubernetes 1.35 before the upgrade too ([why](upgrade.md#before-upgrading-to-v200-the-cluster-runs-kubernetes-135-or-later)).
 
 1. **Migrate off `v1alpha1`.** Run [`gag-migrate`](migration-v1-to-v2.md) from a 1.x release, which also relabels the namespace markers and annotations onto the `actions-gateway.com/` spellings.
    [Decommission v1](migration-v1-to-v2.md#step-4--decommission-v1-when-ready) while the 1.x controllers still run: nothing in `v2.0.0` reconciles a remaining `v1alpha1` object.

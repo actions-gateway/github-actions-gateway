@@ -16,7 +16,10 @@ For the full chart reference (every value, the templates it renders, offline val
 
 ## Prerequisites
 
-- **Kubernetes >= 1.31** — each AGC's `RunnerSet` watch uses a server-side field selector (KEP-4358) that is alpha-off on 1.30, so an AGC there holds no session.
+- **Kubernetes >= 1.35**, the version CI tests, and `helm install` and `helm upgrade` refuse anything older.
+- **Helm 3.20 or later on 3.x, 4.1 or later on 4.x, to render a chart with `helm template`.** With no cluster to ask, Helm checks the chart's floor against the version it was built for, so an older one refuses on any cluster with `chart requires kubeVersion`, as Helm 3.16 did when measured.
+  To keep an older Helm, pass `--kube-version <your cluster's version>`, which Helm 3.16 accepted.
+  The minimum is read from each release's `k8s.io/client-go` pin, and only Helm 3.16 and 4.2 were run.
 - **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.
@@ -52,7 +55,7 @@ It checks four prerequisites and prints a clear `PASS`/`WARN`/`FAIL` line with a
 | Check | Severity | Meaning |
 |---|---|---|
 | **CNI NetworkPolicy enforcement** | **FAIL** (blocking) | Detects the cluster CNI. An enforcing CNI (Calico, Cilium, Antrea, Weave Net, kube-router, Canal) passes; `kindnet` **fails loudly** — it does not enforce egress, so tenant isolation would be silently void. An unrecognised CNI warns (cannot confirm enforcement). |
-| **Kubernetes >= 1.30** | **FAIL** (blocking) | The GMC's `namespace-psa-guard` / `gmc-tenant-resource-guard` policies need the GA `ValidatingAdmissionPolicy` API. It does not check what a gateway needs, which is the prerequisite above. |
+| **Kubernetes >= 1.35** | **FAIL** (blocking) | The charts' floor, and the version CI tests. |
 | **cert-manager present** | WARN | Required only for the default cert path (`certManager.enabled=true`). An install with `--set certManager.enabled=false` uses the chart's self-signed fallback and does not need it. |
 | **metrics-server present** | WARN | The resource metrics the GMC/AGC HorizontalPodAutoscalers consume, and the source for the AGC's [worker usage sampling](worker-rightsizing.md). Install succeeds without it; autoscaling and usage sampling stay degraded until it is present. Checked with a [bounded retry](#preflighting-a-freshly-created-cluster) — on a brand-new cluster the addon is often still starting. |
 

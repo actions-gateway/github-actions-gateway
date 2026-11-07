@@ -993,7 +993,7 @@ deps-sync: ## Re-sync vendoring AND regenerate everything derived from it (the d
 # and CI verdicts match. Parameters, defaults, and rationale live in each
 # script's header; all are env-overridable, and make exports command-line
 # variables, so e.g. `make trivy-scan TRIVY_SEVERITY=CRITICAL` or
-# `make manifest-validate MANIFEST_K8S_VERSION=1.31.0` reach the script.
+# `make manifest-validate MANIFEST_K8S_VERSION=1.36.0` reach the script.
 
 .PHONY: vulncheck
 vulncheck: $(GOVULNCHECK) ## Run govulncheck across all workspace modules (matches the CI govulncheck gate)
@@ -1042,7 +1042,7 @@ manifest-validate: ## Validate the static install manifests + Helm chart (yamlli
 
 # Pre-install cluster preflight (Q184). Validates the target cluster can uphold
 # tenant isolation BEFORE `helm install`: CNI NetworkPolicy enforcement (the
-# critical one — kindnet silently voids it = hard fail), Kubernetes >= 1.30,
+# critical one — kindnet silently voids it = hard fail), Kubernetes >= 1.35,
 # cert-manager, and metrics-server. Detection-based (no workloads scheduled), so
 # it is safe to run against a fresh cluster — the metrics-server check retries
 # within a bounded budget, since a just-created cluster's addon is still
@@ -1051,7 +1051,7 @@ manifest-validate: ## Validate the static install manifests + Helm chart (yamlli
 # script header). Operators run this as the required first install step
 # (docs/operations/install.md).
 .PHONY: validate-cluster
-validate-cluster: ## Preflight the target cluster before install (CNI enforcement, K8s>=1.30, cert-manager, metrics-server)
+validate-cluster: ## Preflight the target cluster before install (CNI enforcement, K8s>=1.35, cert-manager, metrics-server)
 	scripts/e2e/validate-cluster.sh
 
 ##@ e2e

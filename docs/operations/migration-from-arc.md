@@ -165,7 +165,7 @@ Differences and quirks an ARC operator should know:
 | **Quota / RBAC / NetworkPolicy** | hand-assembled per tenant | reconciled from the CRs | Remove your bespoke policy manifests after cutover. |
 | **Worker-pod debugging** | runner pod lingers per HRA config | finished pod kept for `completedPodTTL` (default `5m`), then deleted | Raise `completedPodTTL` if you need a longer `kubectl logs` window. |
 | **Maximum worker lifetime** | none — a wedged runner pod runs until deleted by hand | `maxWorkerLifetime` (default `12h`) as the pod's `activeDeadlineSeconds`, enforced by the kubelet | **Check this before cutover if any job runs longer than 12 hours.** ARC has no equivalent cap, so a long job that worked there is killed here unless you raise the field. GitHub's own default `timeout-minutes` is 360 (6h), so this affects only jobs that explicitly opted past twice that. |
-| **Cluster version** | ARC supports older clusters | **Kubernetes ≥ 1.31** for v2 | The AGC selects its `RunnerSet`s with a server-side CRD field selector that is alpha-off on 1.30. Confirm before you start. |
+| **Cluster version** | ARC supports older clusters | **Kubernetes ≥ 1.35** for v2 | `helm install` and `helm upgrade` refuse anything older, and it is the version CI tests. Confirm before you start. |
 
 ### Quotas and scheduling
 
@@ -198,7 +198,7 @@ Worked example: an ARC scale set named **`gpu-large`** in namespace **`team-a`**
 
 ### 0. Confirm prerequisites
 
-The GMC is installed **with the v2 CRD chart** ([Install](install.md#the-v2-api-crds)), the cluster is **Kubernetes ≥ 1.31**, and its CNI enforces egress NetworkPolicy ([Egress isolation](#egress-isolation-the-big-difference)).
+The GMC is installed **with the v2 CRD chart** ([Install](install.md#the-v2-api-crds)), the cluster is **Kubernetes ≥ 1.35**, and its CNI enforces egress NetworkPolicy ([Egress isolation](#egress-isolation-the-big-difference)).
 Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned `ResourceQuota` — see the [tenant-onboarding Pre-Conditions](tenant-onboarding.md#pre-conditions).
 **Leave the ARC scale set running** throughout.
 

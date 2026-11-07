@@ -3992,11 +3992,9 @@ A few operator-visible facts and failure modes:
 - **52-character name cap.** An `ActionsGateway`, `RunnerSet`, `RunnerTemplate`, `ClusterRunnerTemplate`, or `EgressProxy` whose `metadata.name` exceeds **52 characters** is rejected at admission (`metadata.name must be at most 52 characters`).
   The cap reserves room for the derived suffixes above so a label value / Service name stays within RFC 1123's 63-character ceiling.
   Use a shorter name.
-- **Per-gateway scoping needs Kubernetes ≥ 1.31.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, using a server-side CRD field selector (KEP-4358).
-  That selector is **alpha-off in Kubernetes 1.30**: on a 1.30 cluster an AGC's `RunnerSet` informer fails to sync (`field label not supported`), so the AGC pod opens no session and exits about two minutes later, reading `Ready` in between.
-  If an AGC `CrashLoopBackOff`s with a `RunnerSet` list/watch error, check the cluster is ≥ 1.31.
-  On a cluster at ≥ 1.31, `field label not supported: spec.gatewayRef.name` means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
-  (A single gateway needs ≥ 1.31 too: its scoping is a no-op, but the selector is still applied.)
+- **Per-gateway scoping uses a field selector.** Each AGC reconciles only the `RunnerSet`s whose `spec.gatewayRef.name` targets it, using a server-side CRD field selector (KEP-4358).
+  `field label not supported: spec.gatewayRef.name` means the AGC and the CRDs come from releases that declare the field on different API versions: [re-apply the CRDs for the AGC's release](upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them).
+  (A single gateway applies the selector too, though its scoping is a no-op.)
 - **Per-gateway garbage collection.** Deleting one gateway removes only its own children (owner-referenced, per-gateway-named); a neighbor's gateway, AGC, and `RunnerSet`s are untouched.
   The one cluster-scoped child — the `agc-clusterrunnertemplate-reader.<ns>.<gateway>` `ClusterRoleBinding` — cannot carry a namespaced owner reference, so the gateway controller deletes it explicitly during teardown.
   If a gateway's `ClusterRoleBinding` lingers after the gateway is gone (e.g. the GMC was down during the delete), it is harmless (it binds a now-absent ServiceAccount) and safe to `kubectl delete clusterrolebinding agc-clusterrunnertemplate-reader.<ns>.<gateway>`.

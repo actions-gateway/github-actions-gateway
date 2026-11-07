@@ -4,7 +4,7 @@
 # (v2 API; Q175 / appendix-h §H.16 #7). Unlike the sibling guard policies this one is
 # scoped to managed tenant namespaces (not the GMC ServiceAccount), since the profile
 # label is operator-set. Three invariants, none weaker than the v1 webhook: enum,
-# no-silent-downgrade, and privileged eligibility. Requires Kubernetes >= 1.30.
+# no-silent-downgrade, and privileged eligibility.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:

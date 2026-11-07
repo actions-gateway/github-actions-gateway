@@ -42,7 +42,8 @@ Per-tenant Actions Gateway Controller (AGC) instances and egress proxy pools are
 
 ## Prerequisites
 
-- Kubernetes **>= 1.30** (GA `ValidatingAdmissionPolicy`).
+- Kubernetes **>= 1.35**, the version CI tests.
+- Helm 3.20 or later on 3.x and 4.1 or later on 4.x to render the chart with `helm template`, or pass `--kube-version <your cluster's version>`.
 - A CNI that enforces `NetworkPolicy` (Calico/Cilium) for the egress/ingress controls to take effect.
   `kindnet` does not enforce egress.
 - **cert-manager** *if* `certManager.enabled=true` (the default).
@@ -116,7 +117,7 @@ Relabel before upgrading, as [upgrade](../../docs/operations/upgrade.md#before-u
 | `metrics.tls.certManager.enabled` | `true` | Issue a cert-manager metrics serving cert that the ServiceMonitor verifies (secure default). `false`/`certManager.enabled=false` falls back to the self-signed cert scraped with `insecureSkipVerify` (MITM trade-off). |
 | `networkPolicy.enabled` | `true` | Ship the GMC ingress NetworkPolicies (needs an enforcing CNI). |
 | `podDisruptionBudget.enabled` | `true` | Ship the `minAvailable: 1` PDB. |
-| `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard`, `tenant-resource-guard`, and `priorityclass-allowlist-guard` VAPs + bindings (needs k8s ≥ 1.30). |
+| `admissionPolicy.enabled` | `true` | Ship the `namespace-psa-guard`, `tenant-resource-guard`, and `priorityclass-allowlist-guard` VAPs + bindings. |
 | `certManager.enabled` | `true` | Issue the webhook cert via cert-manager; `false` uses the self-signed fallback. |
 | `certManager.selfSignedCertDurationDays` | `3650` | Validity of the self-signed cert when cert-manager is disabled. |
 | `resources` | cpu 10m–500m / mem 64–128Mi | GMC container resources. |
@@ -142,7 +143,7 @@ PINS="--set-string gmc.image.digest=$DIGEST --set-string agc.image.digest=$DIGES
 PINS="$PINS --set-string proxy.image.digest=$DIGEST --set-string wrapper.image.digest=$DIGEST"
 helm lint charts/actions-gateway $PINS
 helm template gag charts/actions-gateway --namespace gmc-system $PINS | \
-  kubeconform -strict -summary -kubernetes-version 1.30.0 \
+  kubeconform -strict -summary -kubernetes-version 1.35.0 \
     -skip CustomResourceDefinition,PriorityClassAllowlist,Certificate,Issuer,ServiceMonitor
 ```
 

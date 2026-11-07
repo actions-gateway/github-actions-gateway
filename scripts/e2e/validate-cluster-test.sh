@@ -40,14 +40,14 @@ expect_cni() {
 }
 
 # expect_version VERSION EXPECT — parse VERSION and assert it does/does-not meet
-# the 1.30 floor; EXPECT is meet|below|unparseable.
+# the script's floor; EXPECT is meet|below|unparseable.
 expect_version() {
 	local version="$1" expect="$2" parsed maj min got
 	if ! parsed="$(parse_k8s_minor "$version")"; then
 		got=unparseable
 	else
 		read -r maj min <<<"$parsed"
-		if k8s_meets_min "$maj" "$min" 1 30; then got=meet; else got=below; fi
+		if k8s_meets_min "$maj" "$min" "$MIN_K8S_MAJOR" "$MIN_K8S_MINOR"; then got=meet; else got=below; fi
 	fi
 	if [[ "$got" == "$expect" ]]; then
 		printf 'ok   ver  %-11s %s\n' "$expect" "$version"
@@ -81,14 +81,14 @@ expect_cni "my-kind-of-agent" warn
 # enforce NetworkPolicy via Calico, detected separately; netd alone → warn.
 expect_cni "netd"$'\n'"kube-proxy" warn
 
-# Version: 1.30+ meets, below 1.30 fails, junk is unparseable.
-expect_version "v1.30.0" meet
-expect_version "v1.30.2" meet
-expect_version "v1.31.0+rke2r1" meet
-expect_version "v1.29.4-gke.1043000" below
-expect_version "v1.29.15" below
+# Version: 1.35+ meets, below 1.35 fails, junk is unparseable.
+expect_version "v1.35.0" meet
+expect_version "v1.35.8-gke.1796000" meet
+expect_version "v1.36.4+rke2r1" meet
+expect_version "v1.34.13-gke.1043000" below
+expect_version "v1.34.13" below
 expect_version "v2.0.0" meet
-expect_version "1.30.0" meet
+expect_version "1.35.0" meet
 expect_version "v0.99.0" below
 expect_version "notaversion" unparseable
 expect_version "v1" unparseable
@@ -200,6 +200,30 @@ expect_metrics "never Available within budget" 99 yes warn 2 3
 # Nothing registered metrics.k8s.io at all: genuinely absent, so WARN after the
 # short registration grace instead of paying the full convergence budget.
 expect_metrics "absent — no APIService registered" 99 no warn 1 1
+
+# --- one floor -----------------------------------------------------------------
+
+# expect_floor SOURCE MINOR — assert SOURCE states the floor this script enforces.
+# A KIND_NODE_IMAGE bump reddens here on purpose: CI then tests nothing at the
+# floor, so raise the floor with it or keep a lane on the old minor.
+expect_floor() {
+	local source="$1" got="$2" want="${MIN_K8S_MAJOR}.${MIN_K8S_MINOR}"
+	if [[ "$got" == "$want" ]]; then
+		printf 'ok   floor %s %s\n' "$want" "$source"
+	else
+		printf 'FAIL floor want=%s got=%s  %s\n' "$want" "${got:-<none>}" "$source" >&2
+		fails=$((fails + 1))
+	fi
+}
+
+for chart in charts/actions-gateway/Chart.yaml charts/actions-gateway-crds-v2/Chart.yaml; do
+	expect_floor "$chart" "$(sed -n 's/^kubeVersion: ">=\([0-9]*\.[0-9]*\)\..*/\1/p' "$chart")"
+done
+# shellcheck disable=SC2016 # the pattern matches a literal `${` in the script.
+expect_floor scripts/manifest/manifest-validate.sh \
+	"$(sed -n 's/^MANIFEST_K8S_VERSION="${MANIFEST_K8S_VERSION:-\([0-9]*\.[0-9]*\)\..*/\1/p' scripts/manifest/manifest-validate.sh)"
+expect_floor "KIND_NODE_IMAGE in e2e-reusable.yml" \
+	"$(sed -n 's/^ *KIND_NODE_IMAGE: kindest\/node:v\([0-9]*\.[0-9]*\)\..*/\1/p' .github/workflows/e2e-reusable.yml)"
 
 if ((fails > 0)); then
 	echo "validate-cluster-test: ${fails} assertion(s) failed" >&2

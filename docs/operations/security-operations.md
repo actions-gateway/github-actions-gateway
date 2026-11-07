@@ -1297,7 +1297,7 @@ Narrow in this order:
 
 ### Defense-in-depth: the `priorityclass-allowlist-guard` policy (Q289)
 
-The chart ships a `ValidatingAdmissionPolicy` (`<release>-priorityclass-allowlist-guard`, on by default under `admissionPolicy.enabled`, Kubernetes ≥ 1.30) that rejects any `runnersets` or `runnertemplates` create or update, at `v2` and from **any** writer, whose `priorityTiers[].priorityClassName` or `podTemplate.spec.priorityClassName` is off the allowlist.
+The chart ships a `ValidatingAdmissionPolicy` (`<release>-priorityclass-allowlist-guard`, on by default under `admissionPolicy.enabled`) that rejects any `runnersets` or `runnertemplates` create or update, at `v2` and from **any** writer, whose `priorityTiers[].priorityClassName` or `podTemplate.spec.priorityClassName` is off the allowlist.
 Those kinds are also gated by `failurePolicy: Fail` GMC webhooks, so the policy is defense-in-depth: coverage while the webhook is unavailable or bypassed.
 Unlike a webhook, the policy also **re-validates every write to an existing object**, so a stored object naming an off-allowlist class is caught on its next update, not just its next re-create.
 The flip side: removing a class that stored objects still name freezes every later spec-changing write to them.

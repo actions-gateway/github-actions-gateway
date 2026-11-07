@@ -46,8 +46,8 @@ helm template actions-gateway-crds-v2 oci://ghcr.io/actions-gateway/charts/actio
   | kubectl apply --server-side -f -
 ```
 
-The CRDs install and validate on Kubernetes ≥ 1.30.
-The `RunnerSet` `spec.gatewayRef.name` selectable field (KEP-4358) is queryable only on ≥ 1.31; the declaration is inert on 1.30.
+The chart requires Kubernetes ≥ 1.35, the version CI tests.
+`helm template` has no cluster to ask, so it checks that against the version Helm was built for: use Helm 3.20 or later on 3.x and 4.1 or later on 4.x, or pass `--kube-version <your cluster's version>`.
 
 **Upgrading from 1.x.** The apply is refused while a CRD still carries its 1.x conversion webhook, so [remove the webhook first](https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/operations/upgrade.md#action-required-at-v200-remove-the-crds-conversion-webhook-before-applying-them).
 

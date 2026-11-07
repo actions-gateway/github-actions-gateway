@@ -99,8 +99,10 @@ shopt -s inherit_errexit
 #   - shellcheck, yamllint, kubeconform, polaris: a linter older than CI's finds
 #     less, so local goes green and CI goes red
 #   - kind: node-image and config compatibility with what e2e actually runs
-#   - helm: both charts are apiVersion v2, which Helm 2 cannot read
-# kubectl carries no floor on purpose: the charts' `kubeVersion: ">=1.30.0-0"`
+#   - helm: `helm template` checks the charts' kubeVersion against the version
+#     Helm was built for, so 3.x below 3.20 refuses a 1.35 floor. v4.0.x refuses
+#     too and passes this probe: it builds against client-go 0.34
+# kubectl carries no floor on purpose: the charts' `kubeVersion: ">=1.35.0-0"`
 # constrains the CLUSTER, and kubectl's own skew policy is relative to whatever
 # server it talks to, so neither yields a client floor this project depends on.
 # make carries none on purpose either, and the reason is the brew column rather
@@ -122,7 +124,7 @@ shellcheck|required|shellcheck|shellcheck|https://github.com/koalaman/shellcheck
 docker|e2e|||https://docs.docker.com/get-docker/|||
 kind|e2e|kind||https://kind.sigs.k8s.io/docs/user/quick-start/#installation||@ci:KIND_VERSION|
 kubectl|e2e|kubernetes-cli||https://kubernetes.io/docs/tasks/tools/|||version --client
-helm|e2e|helm||https://helm.sh/docs/intro/install/||3.0|version --short
+helm|e2e|helm||https://helm.sh/docs/intro/install/||3.20|version --short
 yamllint|extended|yamllint|yamllint|https://yamllint.readthedocs.io/en/stable/quickstart.html||@ci:YAMLLINT_VERSION|
 kubeconform|extended|kubeconform||https://github.com/yannh/kubeconform#installation||@ci:KUBECONFORM_VERSION|-v
 trivy|extended|trivy||https://trivy.dev/latest/getting-started/installation/|||

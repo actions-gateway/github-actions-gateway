@@ -1,7 +1,7 @@
 {{- if .Values.admissionPolicy.enabled }}
 # ValidatingAdmissionPolicy that constrains the GMC ServiceAccount's
 # cluster-wide `namespaces: patch/update` grant to PSA labels on marked tenant
-# namespaces only — the gate RBAC cannot express. Requires Kubernetes >= 1.30.
+# namespaces only — the gate RBAC cannot express.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
