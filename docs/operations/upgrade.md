@@ -509,6 +509,8 @@ An object whose owner still exists needs nothing, except the agent Secrets of a 
 **What changed.** With the classic tier gone (Q264), the AGC no longer exports `actions_gateway_active_sessions`, `jobs_acquired_total`, `job_acquisition_errors_total`, `jobs_admission_rejected_total`, `jobs_duplicate_delivery_total`, `abandoned_delivery_completions_total`, `fanout_loser_recycle_deferred_total`, `renew_job_errors_total`, `renew_job_teardowns_total`, `agent_recycles_total`, `agent_recycle_errors_total`, `broker_token_propagation_retries_total` or `broker_session_leaks_total`.
 A rule reading one of them never fires again, and a panel reading one shows `No data`, without any error to say why.
 
+The `RunnerGroup` removal (Q273) took four more the same way, each with a twin to read instead: `actions_gateway_worker_quota_exceeded`, `worker_quota_pressure` and `workers_unschedulable` have `actions_gateway_runnerset_worker_quota_exceeded`, `runnerset_worker_quota_pressure` and `runnerset_workers_unschedulable`, and `actions_gateway_runnergroups_degraded` has `actions_gateway_runnersets_degraded`.
+
 The reference rules drop the alerts and the recording rule that read them:
 
 | Removed | Use instead |
