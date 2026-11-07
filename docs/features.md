@@ -97,7 +97,7 @@ Two badges appear below. <span class="gag-v2-badge">v2</span> marks a capability
   Name a collector and its private CA in `spec.tracing` and the AGC exports over TLS, through an egress rule worker pods never get.
 - **[Per-pool egress audit record](operations/observability-logging.md#proxy-egress-audit-record)** <span class="gag-v2-badge">v2</span>: one structured line per accepted CONNECT (namespace, destination, bytes each way, duration), off by default, since retaining where a tenant went is a decision.
 - **[Which host each job reached](operations/observability-logging.md#attributing-a-record-to-a-tenant-and-a-job)** <span class="gag-v2-badge">v2</span>: a second opt-in on each side attributes an egress record to the consuming tenant and the job, on a shared pool too.
-- **[Which job a proxy refused](operations/tenant-onboarding.md#proxy-failure-attribution)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.10</span>: opt-in on both the pool and the gateway.
+- **[Which job a proxy refused](operations/tenant-onboarding.md#proxy-failure-attribution)** <span class="gag-v2-badge">v2</span>: opt-in on both the pool and the gateway.
   A refused or failed CONNECT is tied to the worker pod that made it, and a denial raises an `EgressDestinationDenied` Event on the `RunnerSet` naming the blocked host.
 
 ## Install and day-2 operations
@@ -121,7 +121,7 @@ Two badges appear below. <span class="gag-v2-badge">v2</span> marks a capability
 ## API surface and migration
 
 - **[The v2 API](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span>: a decomposed `ActionsGateway` + `RunnerSet` + `RunnerTemplate`, served at `v2` alone.
-- **[`v2` stored, and a sweep to rewrite the rest](operations/upgrade.md#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 1.10</span>: every kind stores `v2`, and `gag-migrate storage-version` rewrites objects already stored at an older version, so a 1.x cluster can take `v2.0.0`, which serves `v2` alone, in one CRD apply.
+- **[`v2` stored, and a sweep to rewrite the rest](operations/upgrade.md#action-required-before-v200-v2-is-the-storage-version-and-stored-objects-need-rewriting)** <span class="gag-v2-badge">v2</span>: every kind stores `v2`, and `gag-migrate storage-version` rewrites objects already stored at an older version, so a 1.x cluster can take `v2.0.0`, which serves `v2` alone, in one CRD apply.
 - **[Reusable runner templates](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span>: one `RunnerTemplate` referenced by many runner sets, or a cluster-wide `ClusterRunnerTemplate` shared across namespaces.
 - **[Multiple gateways per namespace](operations/migration-v1-to-v2.md)** <span class="gag-v2-badge">v2</span>: scoped gateways coexist, each with its own GitHub binding and runner sets.
 - **[GitHub Enterprise Server gateways](operations/troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance)**: a gateway whose `githubURL` names a GHES appliance addresses that appliance on every GitHub surface, with a `GitHubEgressIncomplete` condition flagging an incomplete CIDR allow-list.
