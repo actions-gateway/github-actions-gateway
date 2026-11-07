@@ -194,8 +194,9 @@ Each cell there carries the chart version and the date it was read at, so read t
 
 ## Who GAG is for
 
-GAG targets a specific audience: teams that **must** self-host runners and run them for **many tenants on one cluster**.
-If that's you, here's the value per segment.
+GAG is built for a **Kubernetes cluster that several teams share**: a platform team that sets the caps, tenant teams that self-serve under them, and contributors whose code nobody trusts.
+The capabilities above are what that boundary needs: a cap a tenant cannot raise, intake that respects it, a job that survives sharing, isolation reconciled per tenant.
+A single team on its own cluster gets the same behaviour; what it trades is named in the note under the cards.
 
 </div>
 
@@ -237,14 +238,16 @@ If that's you, here's the value per segment.
 
 <div class="gag-fit-note" markdown>
 
-:material-information-outline: **Not your setup?** Three cases where something else wins, and we would rather say so.
+:material-information-outline: **Where something else wins.** Three cases, and the honest list is short.
 
-- **A vendor can run your jobs** → a managed runner service, on speed and setup
-- **Managed Kubernetes is cheap, CI fits one cloud** → a cluster per team isolates harder
-- **One team owns the cluster and the runners** → [ARC](https://github.com/actions/actions-runner-controller), whose protocol GAG is built on
+- **You need GitHub Support, `containerMode: kubernetes`, or tested GHES** → [ARC](https://github.com/actions/actions-runner-controller) has all three, GAG none.
+  Team count is not the line
+- **Your jobs can leave the clusters you operate** → a managed or bring-your-own-cloud runner.
+  Per-build speed: unmeasured, not claimed
+- **Compute is cheap and elastic, nothing expensive is shared** → a cluster per team, or a VM per job.
+  A project boundary isolates harder
 
-GAG is for big, expensive nodes that several teams must share, safely.
-[Compare the options →](alternatives.md)
+[Where GAG loses, and to whom →](alternatives.md#no-offering-is-perfect-yet)
 
 </div>
 

@@ -25,14 +25,14 @@ GitHub provides managed compute for running workflow jobs, with no cluster infra
 **Disadvantages**
 
 * No access to private network resources (internal APIs, private registries, on-premises databases) without additional tunneling infrastructure, which reintroduces operational complexity.
-* No GPU support on standard plans.
-  GitHub's larger runners offer some GPU options, but availability is limited, the hardware selection is fixed, and cost per minute is significantly higher than self-managed GPU nodes.
+  Larger runners narrow this: GitHub's docs list static IP ranges for firewall allow-lists and Azure private networking on Linux and Windows larger runners, and GPU-powered runners (read 2026-11-07), so the gaps below are about hardware you own rather than about reachability.
+* The hardware is GitHub's, so GPUs already bought, reserved capacity, and on-premises or air-gapped networks are out of reach whatever the plan.
 * Cannot use custom base images or pre-warmed dependency caches without workarounds (artifact caching, container layer caching), which add latency and complexity.
 * Per-minute billing at scale makes GitHub-hosted runners substantially more expensive than self-managed compute for teams with high job volume or long-running build pipelines.
-* No control over egress IPs, making IP-based allowlisting on internal services or GitHub App integrations impractical.
+* No platform/tenant boundary: a runner group is a routing rule, not a cap one team sets and another cannot raise.
 
-**Verdict:** Appropriate for teams without private network requirements, GPU workloads, or strict egress control needs.
-Does not satisfy the multi-tenant, GPU-capable cluster requirements driving this design.
+**Verdict:** Appropriate for teams whose jobs can leave the clusters they operate and who do not need a boundary between a platform team and its tenants.
+Does not satisfy the owned-hardware, multi-tenant cluster requirements driving this design.
 
 ---
 
@@ -74,8 +74,9 @@ It is the most mature and widely-deployed alternative and the most relevant comp
 
 * Official GitHub support: ARC is maintained by GitHub, has a large community, and is well-documented.
   API compatibility with the GitHub broker protocol is kept current by the maintainers.
-* No broker protocol re-implementation required.
-  ARC uses the official `actions/runner` binary and registration flow; this design re-implements a significant portion of the broker API (see [§3.3](03-api-contracts.md#33-re-implemented-broker-api-endpoints)), which carries ongoing maintenance risk.
+* The same protocol dependency, since `v2.0.0`.
+  Both acquire jobs through the official `actions/scaleset` client library.
+  Until `v2.0.0` this design also carried a classic tier that re-implemented part of the broker API ([§3.3](03-api-contracts.md#33-re-implemented-broker-api-endpoints)); that tier was [removed at `v2.0.0`](03-api-contracts.md#31-kubernetes-crd-schemas), so the maintenance risk it carried is no longer a difference between the two.
 * `RunnerScaleSet` mode (introduced in ARC v0.5+) supports ephemeral runners that are provisioned on-demand and terminated after each job, eliminating the idle-pod problem for teams that adopt this mode.
 * Integrates with Kubernetes-native autoscaling.
   The `RunnerScaleSet` controller publishes a custom metric that KEDA or the built-in autoscaler can act on.
@@ -87,7 +88,7 @@ It is the most mature and widely-deployed alternative and the most relevant comp
 **Disadvantages**
 
 * **Listener packaging.** In `RunnerScaleSet` mode, ARC uses one listener per scale set (not one per slot) — a Go binary (`cmd/ghalistener`, built on the same official `github.com/actions/scaleset` client library this design tracks) — so its steady-state long-poll connection count is similar to this design's adaptive listener model.
-  The difference is packaging: ARC deploys each listener as its own always-on pod with its own cluster IP, while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~12.2 KiB of AGC state per session ([Appendix A](appendix-a-capacity-slos.md)).
+  The difference is packaging: ARC deploys each listener as its own always-on pod with its own cluster IP, while the Actions Gateway Controller (AGC) runs every listener as a goroutine in one shared pod, at a measured ~7.7 KiB of AGC state per scale set ([Appendix A](appendix-a-capacity-slos.md)).
   At a tenant operating 10 RunnerScaleSets, that is 10 always-on listener pods and 10 cluster IPs for ARC versus 1 AGC pod and 1 cluster IP here.
   (No per-listener memory ratio is published: the `gha-runner-scale-set` chart ships no default listener resource requests, so there is no measured ARC-side figure to compare against — see [Appendix A](appendix-a-capacity-slos.md) for why the earlier ~4,000× claim was retired.)
 * **Multi-tenant isolation.** ARC does not provide a self-service multi-tenancy model.
@@ -96,9 +97,8 @@ It is the most mature and widely-deployed alternative and the most relevant comp
 * **Egress IP isolation.** ARC provides no per-tenant egress IP control.
   All runner traffic exits from shared node IPs unless the operator independently layers a proxy or NAT gateway, which is not part of ARC's feature set.
   This design's per-tenant `EgressProxyPool` (Tier 3) provides this natively.
-* **GPU idle cost.** ARC's `RunnerScaleSet` can scale to zero runners between bursts, which eliminates idle GPU pod allocations during quiet periods.
-  However, the scale-down latency is governed by the autoscaler's reaction time (typically 30–60 seconds after queue depth drops), whereas this design's ephemeral worker pods release their compute immediately on job completion.
-  For GPU workloads where node hours are expensive, the difference in idle time per job cycle accumulates.
+* **GPU idle cost is not a difference in scale-set mode.** Both delete the runner pod when its job completes and run no worker at rest ([comparison row](../why-gag.md#gag-vs-arc-scale-set-mode), ARC 0.15.0 read 2026-10-04).
+  Where the two part is what happens when the cluster takes a running GPU worker away: this design re-runs the job, and ARC gives it up.
 * **AGC node placement.** ARC's controller runs on whatever nodes are available and does not distinguish between CPU-only and GPU node pools.
   The AGC in this design is explicitly designed to run on CPU-only nodes, keeping GPU capacity entirely free for worker pods.
   This distinction requires intentional `nodeSelector` or `taints/tolerations` configuration in ARC but is enforced structurally in this design.
@@ -110,12 +110,13 @@ It is the most mature and widely-deployed alternative and the most relevant comp
   A team with three sets each capped at 50 can theoretically schedule 150 concurrent runners, exceeding the namespace's actual resource capacity, and there is no native way to say "all sets combined may use at most 100 concurrent jobs" without external tooling or manual coordination of per-set caps.
   This design bounds all worker pods from all `RunnerGroup`s against the same Kubernetes `ResourceQuota` for the shared ceiling, and adds a `priorityTiers` field on each `RunnerGroup` for the floor: the first N pods of a high-priority group are assigned a preempting `PriorityClass` that displaces lower-priority pods when the namespace is contended, while additional pods above the preemption threshold schedule opportunistically.
   Both are expressed declaratively in the `ActionsGateway` CR and enforced by the Kubernetes scheduler, with no external tooling or manual cap coordination.
-* **Broker protocol opacity.** Because ARC wraps the official runner binary, it inherits any breaking changes GitHub makes to the broker protocol without exposing them as first-class API contracts.
-  This design's explicit broker API documentation ([§3.3](03-api-contracts.md#33-re-implemented-broker-api-endpoints)) makes compatibility requirements visible and testable.
+* **The protocol dependency is shared and undocumented upstream.** Both ride the Public-Preview runner-scale-set protocol through the same client library, so a breaking change there reaches both.
+  This design records each GitHub-facing protocol, its source of truth and a stability tier in the [protocol dependency register](github-protocol-dependencies.md); a search of ARC's repository for "stability tier" and "protocol dependency" found no equivalent (0 code hits and one unrelated closed issue, 2026-11-07).
 
-**Verdict:** ARC is the right choice for most teams that need Kubernetes-native self-hosted runners.
-It is mature, officially supported, and avoids the maintenance burden of re-implementing the broker protocol.
-This design is the right choice when the requirements include listener consolidation at scale (one shared AGC pod instead of an always-on listener pod and cluster IP per scale set), per-tenant egress IP isolation without additional infrastructure, or self-service multi-tenant onboarding with per-tenant namespace isolation, a `priorityTiers` reservation floor under a shared quota ceiling, and declarative `ActionsGateway` provisioning — none of which ARC provides natively.
+**Verdict:** ARC is the right choice where its GitHub Support entitlement, `containerMode: kubernetes`, GHES tested on a real appliance, or install base decides the evaluation.
+Those four are real, this design has none of them, and a capability list does not offset them.
+This design is the right choice for a cluster several teams share: a platform-owned quota the tenant controller has no verb to write, intake that reads that quota before claiming, a `priorityTiers` floor under the shared ceiling, re-run of a job the cluster disrupts, isolation reconciled per tenant, per-tenant egress identity, and self-service from namespaced objects, none of which ARC provides natively.
+A single team on its own cluster gets the same behaviour, and the cost of running this design for one team against ARC is unmeasured.
 
 ---
 
@@ -354,6 +355,7 @@ For an adopter whose only requirement is that jobs not run on a vendor's shared 
 **The differentiator.** A VM per job gives isolation without a namespace argument, but the unit of allocation is an instance rather than a pod, so bin-packing several tenants onto one large machine is not the model.
 There is no `ResourceQuota` to arbitrate, no per-tenant capacity floor, and no shared-cluster utilization argument to make.
 The two AWS-based options are also cloud-locked, which rules them out for on-premises and reserved-hardware adopters.
+Disruption recovery is not the differentiator here: RunsOn retries a job interrupted mid-run once on an on-demand instance by default (its site, read 2026-11-07), a comparable outcome to this design's auto re-run on a pool, so the comparison is about who owns the pool and not about who re-runs the job.
 
 **Verdict:** the right choice when the constraint is "not on a vendor's infrastructure" and the compute is elastic cloud capacity.
 This design targets the case where the compute is a fixed, expensive pool that several teams must share.
@@ -396,18 +398,20 @@ No per-tenant egress identity or `ResourceQuota`-aware intake appears in its con
 ## D.14. Managed Runner Services: An Explicit Non-Competitor
 
 Blacksmith, Namespace, Depot, WarpBuild, Cirrus Runners, Ubicloud and others sell faster GitHub Actions runners on infrastructure they operate.
-Several offer a bring-your-own-cloud mode in which compute runs in the customer's account while the control plane stays with the vendor.
+Two of those read on 2026-11-07 also run the compute in the customer's own cloud account under the vendor's control plane: Depot in AWS, with VPC peering as an option, and WarpBuild in AWS, GCP or Azure, with static IPs on that mode.
+Depot lists GPU-enabled runners on its Business plan; none of the five pages read describes running on a Kubernetes cluster the customer operates, or a boundary between a platform team and its tenants.
 
-**Why they are not compared feature-by-feature.** They compete on build speed and price per minute.
-This design competes on governance and isolation for compute the adopter already owns.
-An adopter who can run jobs on a vendor's infrastructure should evaluate that lane on its own terms, and will usually find it faster to adopt and quicker per build.
+**Why they are not compared feature-by-feature.** They compete on build speed and price per minute, and this design has measured neither, so a row on that axis would carry a verdict nobody took.
+What this design competes on is governance and isolation inside a cluster the adopter operates, and no vendor page read describes it.
+A feature this design ships can be moot against a vendor: automatic re-run matters where a job runs on a pool the adopter owns and the cluster can take a worker away, and on a vendor's pool that problem is the vendor's.
 
-**The routing question is a single one:** must the compute be yours?
-If no, a managed service is very likely the better answer and this design is unnecessary overhead.
-If yes, because of compliance, data residency, an IP allow-list, an air-gapped network, or hardware already paid for, then the managed lane is unavailable regardless of its merits, and the real question becomes how many teams share that hardware and how safely.
+**The routing question is where the jobs run, not whose compute it is.** Bring-your-own-cloud modes made *must the compute be yours* stop sorting the field, since a vendor can now answer yes.
+What still sorts it: must the jobs run on a Kubernetes cluster you operate, because the hardware is on-premises or air-gapped, the GPUs are already bought, or CI has to sit beside cluster-internal services?
+If no, a managed or bring-your-own-cloud service is in the lane, and what this design offers against it is the tenancy model, not the build time.
+If yes, every vendor read is unavailable regardless of its merits, and the question becomes how many teams share that cluster and how safely.
 
-**Verdict:** a different market.
-Comparisons that place them on one axis mislead in both directions.
+**Verdict:** a different axis, overlapping where a vendor runs in the adopter's cloud.
+Comparisons that place them on one speed-and-price axis mislead in both directions.
 
 ## D.15. Pod-per-Step Container Execution (ARC's `containerMode: kubernetes`)
 

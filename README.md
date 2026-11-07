@@ -34,16 +34,16 @@ ARC-side claims were re-read on 2026-10-04, against the `gha-runner-scale-set` c
 
 ## Is this for you?
 
-**GAG is for the case where the nodes are big and expensive, several teams have to share them, and that sharing has to be safe.** If that is not the shape of your problem, something simpler wins, and we would rather say so:
+**GAG is built for a Kubernetes cluster that several teams share, and that sharing has to be safe.** A single team on its own cluster gets the same behaviour.
+Where something else wins, it wins on a named capability, and the list is short:
 
 | If | Use instead |
 | --- | --- |
-| A vendor can run your jobs | a managed runner service (Blacksmith, Namespace, Depot, WarpBuild, Ubicloud) |
-| Managed Kubernetes is cheap and your CI fits one cloud | a cluster per team, in its own project. A project boundary isolates harder than any shared cluster can |
-| One team owns the cluster and the runners | [ARC](https://github.com/actions/actions-runner-controller). GAG speaks the same protocol through the same client library, so this is not a protocol argument |
-| Your compute is elastic cloud capacity and you want no cluster | [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com) |
+| You need a GitHub Support entitlement, `containerMode: kubernetes`, or GHES tested on a real appliance | [ARC](https://github.com/actions/actions-runner-controller) has all three; GAG has none. Team count is not the line, and what running GAG costs one team against ARC is unmeasured |
+| Your jobs can leave the clusters you operate | a managed runner service (Blacksmith, Namespace, Ubicloud), or one that runs in your cloud account under the vendor's control plane (Depot on AWS; WarpBuild on AWS, GCP, Azure). They sell per-build speed; GAG has measured none and claims none |
+| Compute is cheap and elastic, and no expensive node is shared | a cluster per team in its own project, or a VM per job: [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com). A project boundary isolates harder than any shared cluster can |
 
-[Choosing how to run self-hosted CI](docs/alternatives.md) argues each one, and states where GAG loses and to whom.
+[Choosing how to run self-hosted CI](docs/alternatives.md) argues each one with dated reads, and states where GAG loses and to whom.
 
 ## The problem
 
