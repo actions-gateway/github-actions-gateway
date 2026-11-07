@@ -99,7 +99,7 @@ The removal rows (Q1167, Q273, Q264, Q1107) had not started, and their blocker, 
 
 **The hold has a deadline that is not the ladder's.** `v1.10.0`'s default worker image runs `actions/runner` 2.338.1, and `check-runner-window.sh` measured on 2026-11-01 that 2.338.2, published 2026-10-26, leaves it 24 days of GitHub's update window: about 2026-11-25, after which GitHub stops queueing jobs to those runners with no error.
 So `v1.10.1` is cut from a `release-1.10` branch whatever `v2.0.0` does, per [Patch releases and backports](../operations/release.md#patch-releases-and-backports), with the runner bump (#2170) and a fix for the worker wrapper on Kubernetes 1.33 and 1.34; [Q1261](../queue/Q1261.md) holds it.
-Decided 2026-11-06 by the maintainer: Q1284 raises `v2.0.0`'s floor to 1.35, so an operator below it has to upgrade the cluster before taking `v2.0.0`, and the patch is the path past that date without one.
+Decided 2026-11-06 by the maintainer: Q1284 raised `v2.0.0`'s floor to 1.35, so an operator below it has to upgrade the cluster before taking `v2.0.0`, and the patch is the path past that date without one.
 `v2.0.0`'s notes therefore enumerate from `v1.10.0`, so their **Everything since** section carries this window as well as the removals.
 
 ## What is punted past `v2.0.0`
