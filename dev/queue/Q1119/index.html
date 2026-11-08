@@ -2679,10 +2679,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#why-it-is-parked-rather-than-closed" class="md-nav__link">
+  <a href="#measured-2026-11-07-the-gmcs-meta-fetch-was-rate-limited" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why it is parked rather than closed
+        Measured 2026-11-07: the GMC's /meta fetch was rate-limited
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-answers-left" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The answers left
       
     </span>
   </a>
@@ -2721,8 +2732,8 @@
 
 
 <h1 id="both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes<a class="headerlink" href="#both-proxyconnectworks-specs-502-the-connect-tunnel-in-both-cni-lanes" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> either proxy-CONNECT spec fails again on <code>curl: (56) CONNECT tunnel failed, response 502</code>, in either CNI lane, on a PR, a merge-group entry or a push to <code>main</code>.
-Read the <code>EGRESSPROXY CONNECT ATTRIBUTION</code> banner in that run's failure output first: it names the refusing hop, which is the fact the three occurrences below could not supply and which both remaining answers need.</p>
+<p><strong>Top of queue per the <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Both proxy-CONNECT specs failed together again on 2026-11-07, and this time the banner and the GMC log point at one cause: the GMC's GitHub <code>/meta</code> fetch was rate-limited from a runner address whose GitHub API quota was already spent, and the proxy's upstream dial timed out in the same window (<a href="#measured-2026-11-07-the-gmcs-meta-fetch-was-rate-limited">Measured 2026-11-07</a>).
+That points the fix at the e2e GMC's IP-range source, which must not depend on the runner address's API quota, rather than at the spec's retry window.</p>
 <p><code>E2E_V2_ProxyConnectWorks: a workload pod reaches GitHub through the v2 EgressProxy</code> (<code>[real-github-egress]</code>) failed in the merge group and the queue evicted the PR.
 It is the e2e lane's only failure: <code>70 Passed | 1 Failed | 0 Pending | 7 Skipped</code>.</p>
 <h2 id="measured-2026-09-16">Measured 2026-09-16<a class="headerlink" href="#measured-2026-09-16" title="Permanent link">&para;</a></h2>
@@ -2762,21 +2773,25 @@ Its pod selector is read off the Deployment's own <code>.spec.selector.matchLabe
 Scoring is a pure function over log text, so every verdict is driven by a unit test, including the two that say the banner attributes nothing.
 A classifier returning one verdict always reddens four of the seven arms.
 The rule is in <a href="../../development/testing/#egressproxy-connect-attribution-q1119">testing.md § EgressProxy CONNECT attribution</a>.</p>
-<h2 id="why-it-is-parked-rather-than-closed">Why it is parked rather than closed<a class="headerlink" href="#why-it-is-parked-rather-than-closed" title="Permanent link">&para;</a></h2>
-<p>A merge-group-only test that fails on external network reachability spends a full queue cycle per occurrence and evicts a PR whose own gates were all green, and <code>[real-github-egress]</code> says the dependency is real GitHub rather than the fake.
-Three occurrences have now spent a queue cycle, a <code>main</code> build and a second <code>main</code> spec between them.</p>
-<p>The two answers left both need the same fact, and the diagnostic is what produces it rather than what settles it.
-Eight attempts already happen inside the test and all eight failed the same way inside the window, so a retry budget is a wider race rather than a fix.
-The row ruled that out and it stays ruled out.
-Demotion out of the merge-group gate is the expensive answer: <code>[real-github-egress]</code> says the dependency is real GitHub, which is exactly the coverage a merge-group gate is there to hold, so it is worth paying only against evidence that the refusing hop is one this repo does not own.
-The next occurrence carries that evidence in its banner.</p>
-<p><strong>Corrected 2026-09-17.</strong> An earlier revision argued demotion down on the ground that one eviction does not buy it, which read the occurrence as isolated.
-The count is three across both CNI lanes and both trigger events, and the July pair was already triaged in the tree.</p>
+<h2 id="measured-2026-11-07-the-gmcs-meta-fetch-was-rate-limited">Measured 2026-11-07: the GMC's <code>/meta</code> fetch was rate-limited<a class="headerlink" href="#measured-2026-11-07-the-gmcs-meta-fetch-was-rate-limited" title="Permanent link">&para;</a></h2>
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/pull/2273">#2273</a> (a <code>golang.org/x/net</code> bump) was evicted from the merge queue when run <a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/42404162369">42404162369</a>, the <code>e2e / e2e</code> kindnet lane, failed both specs on the usual signature: 29 <code>CONNECT tunnel failed, response 502</code> lines and <code>HTTP_CODE=000</code>.
+Every other check in the merge group passed.</p>
+<p>Both banners read <code>UPSTREAM-DIAL-FAILED</code> with no <code>destination-denied</code>: the v2 <code>shared-proxy</code> replica logged 9 dial failures, and the two v1 <code>test-ag-egress-proxy</code> replicas logged 3 and 6, every one <code>dial tcp 140.82.114.5:443</code> or <code>140.82.113.6:443: i/o timeout</code>.
+The GMC's <code>ipranges</code> logger logged <code>GitHub meta returned 403</code> at 19:07:34Z and 19:14:32Z, each followed by <code>GitHub IP-range fetch rate limited; waiting before retry</code> with a 28m and a 21m wait, so no fresh ranges could arrive inside either spec's window.
+The runner-host preflight read <code>BLOCKED (HTTP 403; x-ratelimit-remaining=0)</code> for runner address 52.161.59.0 at both failures.</p>
+<p>That is the 2026-10-24 mechanism in the Notes below, observed in CI for the first time: the fetch failure and the dial timeout share one window.
+This run does not show the NetworkPolicy's contents at dial time, so "the policy had no <code>443</code> rule" is the kind measurement's finding, not this run's.</p>
+<h2 id="the-answers-left">The answers left<a class="headerlink" href="#the-answers-left" title="Permanent link">&para;</a></h2>
+<p>A merge-group-only test that fails on external network reachability spends a full queue cycle per occurrence and evicts a PR whose own gates were all green.
+Four occurrences have now spent two queue cycles, a <code>main</code> build and a second <code>main</code> spec between them.</p>
+<p>Eight attempts already happen inside the test and all eight failed the same way inside the window, so a retry budget is a wider race rather than a fix, and it stays ruled out.
+Demotion out of the merge-group gate is still the expensive answer, because <code>[real-github-egress]</code> is coverage of real GitHub that the gate exists to hold.
+The cheaper answer the 2026-11-07 evidence points at is the GMC's IP-range input in e2e: a source that does not spend the runner address's GitHub API quota, so a quota exhausted by other tenants of that address cannot empty the proxy's egress policy.</p>
 <h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
 <p><code>i/o timeout</code> on a dial to a GitHub address is where the existing evidence stops, and it is consistent with the SYN being dropped before it left the node and with it being lost past the node.
 <code>UPSTREAM-DIAL-FAILED</code> names that as the open question rather than answering it; separating the two needs something outside the proxy's egress NetworkPolicy reaching the same address in the same window, which nothing captures today.</p>
 <p>A 2026-10-24 kind measurement found a mechanism that produces this exact signature: a GMC whose <code>/meta</code> fetch is rate-limited leaves the proxy NetworkPolicy with no <code>443</code> rule, so the dial times out while every other path to the same address answers.
-Read the GMC log for <code>GitHub meta returned 403</code> or <code>GitHub IP-range fetch rate limited</code> on the next occurrence.</p>
+The GMC log lines that show it are <code>GitHub meta returned 403</code> and <code>GitHub IP-range fetch rate limited</code>.</p>
 
 
 

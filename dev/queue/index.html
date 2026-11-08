@@ -2762,6 +2762,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1119/">Q1119</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Top of queue per the <a href="../development/maintaining-backlog/#flake-fixes-go-first">flakes-first rule</a>.</strong> Both proxy-CONNECT specs failed …</td>
+</tr>
+<tr>
 <td><a href="Q1277/">Q1277</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/rbac_e2e_test.go">E2E_GMC_RBAC reads the AGC RoleBinding once, racing the GMC</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -2912,14 +2920,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> the <code>Pre-pull cert-manager images</code> step (or the Calico or metrics-server pre-pull through the same script) fails on <code>main</code> or in …</td>
-</tr>
-<tr>
-<td><a href="Q1119/">Q1119</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>M</td>
-<td><strong>Event:</strong> either proxy-CONNECT spec fails again on <code>curl: (56) CONNECT tunnel failed, response 502</code>, in either CNI lane, on a PR, a …</td>
 </tr>
 <tr>
 <td><a href="Q1106/">Q1106</a></td>
