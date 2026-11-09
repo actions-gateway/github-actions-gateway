@@ -4202,6 +4202,7 @@ The AGC gives each new worker the first tier whose threshold the active-pod coun
 **Resolution.** List the tiers from the lowest threshold to the highest, each above the one before it.
 The first workers get the first tier's class, so put first the class the set should use while it is lightly loaded.
 Set `maxWorkers` to the last threshold, or leave it unset.
+Sorting a set that already runs with such a list changes which classes its workers get; to keep what it does today, delete every tier whose threshold is not above all the thresholds before it instead.
 
 A set stored before this check keeps working: an edit that leaves `priorityTiers` alone is accepted.
 Deleting and re-creating it, or changing the list to another order that does not ascend, is rejected ([finding the affected sets](upgrade.md#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected)).
