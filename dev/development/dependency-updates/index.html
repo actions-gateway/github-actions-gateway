@@ -2771,7 +2771,7 @@ This doc is the map of those channels: what is automated, by what, and where the
 <tr>
 <td>Go module deps (10 modules)</td>
 <td><code>*/go.mod</code>, vendored in <code>vendor/</code> + <code>tools/vendor/</code></td>
-<td><strong>Dependabot</strong> (<code>gomod</code>, weekly, grouped) → auto-repaired by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-go-sync.yml"><code>dependabot-go-sync.yml</code></a>, and auto-rebased when stale by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-rebase-stale.yml"><code>dependabot-rebase-stale.yml</code></a></td>
+<td><strong>Dependabot</strong> (<code>gomod</code>, weekly, one group across every module directory, so a shared bump opens one PR rather than one per module) → auto-repaired by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-go-sync.yml"><code>dependabot-go-sync.yml</code></a>, and auto-rebased when stale by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/dependabot-rebase-stale.yml"><code>dependabot-rebase-stale.yml</code></a></td>
 </tr>
 <tr>
 <td>GitHub Actions (<code>uses:</code> SHAs)</td>

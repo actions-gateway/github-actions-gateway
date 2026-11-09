@@ -4385,6 +4385,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>Appendix D dates every third-party claim from D.9 on ("Every claim about a third-party system is dated, because they move"), and …</td>
 </tr>
+<tr>
+<td><a href="Q1310/">Q1310</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/vendor-sync.sh">deps-sync can leave go.sum untidy after go work sync moves an indirect</a></td>
+<td><code>debt</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>make deps-sync</code> is the documented remedy for a dependency change, and once it left a tree that <code>make tidy-check</code> rejects.</td>
+</tr>
 </tbody>
 </table>
 
