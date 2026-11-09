@@ -270,7 +270,9 @@ type TracingConfig struct {
     Endpoint string `json:"endpoint,omitempty"`
 
     // Insecure disables TLS for the OTLP/gRPC connection. Defaults to false
-    // (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.
+    // (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE. Rejected with an
+    // https:// Endpoint, where the exporter would let it override the scheme; an
+    // unchanged stored pair still passes.
     // +optional
     Insecure *bool `json:"insecure,omitempty"`
 

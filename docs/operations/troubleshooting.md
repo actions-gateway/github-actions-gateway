@@ -105,6 +105,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Privileged Security Profile Rejected: Namespace Not Eligible](#privileged-security-profile-rejected-namespace-not-eligible)
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [Tracing Endpoint Rejected by Admission](#tracing-endpoint-rejected-by-admission)
+- [Tracing Rejected by Admission: insecure With an https Endpoint](#tracing-rejected-by-admission-insecure-with-an-https-endpoint)
 - [ActionsGateway Rejected: Missing or Malformed `githubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [Priority Tiers Rejected by Admission: Thresholds Not Ascending](#priority-tiers-rejected-by-admission-thresholds-not-ascending)
@@ -4126,6 +4127,26 @@ To turn tracing off, remove the field.
 
 A gateway stored before this check keeps working: an edit that leaves `endpoint` alone is accepted, and it goes on exporting to `127.0.0.1:4317` until the value is corrected.
 Deleting and re-creating it, or changing `endpoint` to another value that does not parse, is rejected.
+
+---
+
+## Tracing Rejected by Admission: `insecure` With an `https` Endpoint
+
+**Symptoms.** A create or an edit of `spec.tracing` on an `ActionsGateway` is rejected at admission:
+
+```
+ActionsGateway.actions-gateway.com "<name>" is invalid: spec.tracing: Invalid value:
+insecure: true overrides an https:// endpoint and the AGC exports in plaintext;
+drop insecure to keep TLS, or write http:// to mean plaintext
+```
+
+**Likely cause.** `insecure` is `true` and `endpoint` starts with `https://`, in any letter case.
+The exporter applies `insecure` after the scheme, so the pair would export in plaintext while the endpoint says TLS, and the schema refuses it.
+
+**Resolution.** Write `http://` for a collector that does not serve TLS, or remove `insecure` for one that does.
+
+A gateway stored before this check keeps working, still in plaintext: an edit that leaves `endpoint` and `insecure` alone is accepted.
+Deleting and re-creating it, or changing `endpoint` to another `https://` value while `insecure` stays true, is rejected ([finding the affected gateways](upgrade.md#action-required-if-spectracing-sets-insecure-true-with-an-https-endpoint-the-pair-is-now-rejected)).
 
 ---
 
