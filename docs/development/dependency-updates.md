@@ -8,7 +8,7 @@ This doc is the map of those channels: what is automated, by what, and where the
 
 | Surface | Where it's pinned | Update channel |
 |---|---|---|
-| Go module deps (10 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, grouped) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml), and auto-rebased when stale by [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) |
+| Go module deps (10 modules) | `*/go.mod`, vendored in `vendor/` + `tools/vendor/` | **Dependabot** (`gomod`, weekly, one group across every module directory, so a shared bump opens one PR rather than one per module) → auto-repaired by [`dependabot-go-sync.yml`](../../.github/workflows/dependabot-go-sync.yml), and auto-rebased when stale by [`dependabot-rebase-stale.yml`](../../.github/workflows/dependabot-rebase-stale.yml) |
 | GitHub Actions (`uses:` SHAs) | `.github/workflows/*.yml` | **Dependabot** (`github-actions`, weekly, grouped) |
 | Docker base images (`FROM` digests) | `Dockerfile` (all image stages), `scripts/dogfood/*/Dockerfile` | **Dependabot** (`docker`, weekly, grouped) |
 | Python packages (3 files) | `requirements-docs.txt`, `requirements-docs-check.txt`, `claude-usage/requirements.txt` | **Dependabot** (`pip`, weekly, grouped; `mkdocs` majors ignored because Material 9.x requires `mkdocs < 2`). A bump to `requirements-docs.txt` runs the `pages` site build, and a bump to either docs file runs `doc-links`, which includes the render-overflow browser check. No CI job installs `claude-usage/requirements.txt`, so a bump there is unvalidated until someone runs its charts |
