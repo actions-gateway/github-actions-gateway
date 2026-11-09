@@ -1170,7 +1170,7 @@ License file: github.com/go-logr/zapr/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/jsonpointer (v1.0.0)
+Module: github.com/go-openapi/jsonpointer (v1.0.1)
 License file: github.com/go-openapi/jsonpointer/LICENSE
 ================================================================================
 
@@ -1377,7 +1377,7 @@ License file: github.com/go-openapi/jsonpointer/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/jsonpointer (v1.0.0)
+Module: github.com/go-openapi/jsonpointer (v1.0.1)
 License file: github.com/go-openapi/jsonpointer/NOTICE
 ================================================================================
 
@@ -1422,7 +1422,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/jsonreference (v1.0.0)
+Module: github.com/go-openapi/jsonreference (v1.0.1)
 License file: github.com/go-openapi/jsonreference/LICENSE
 ================================================================================
 
@@ -1630,7 +1630,7 @@ License file: github.com/go-openapi/jsonreference/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/jsonreference (v1.0.0)
+Module: github.com/go-openapi/jsonreference (v1.0.1)
 License file: github.com/go-openapi/jsonreference/NOTICE
 ================================================================================
 
@@ -1675,7 +1675,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag (v0.28.0)
+Module: github.com/go-openapi/swag (v0.29.2)
 License file: github.com/go-openapi/swag/LICENSE
 ================================================================================
 
@@ -1883,7 +1883,7 @@ License file: github.com/go-openapi/swag/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/cmdutils (v0.28.0)
+Module: github.com/go-openapi/swag/cmdutils (v0.29.2)
 License file: github.com/go-openapi/swag/cmdutils/LICENSE
 ================================================================================
 
@@ -2091,7 +2091,7 @@ License file: github.com/go-openapi/swag/cmdutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/conv (v0.28.0)
+Module: github.com/go-openapi/swag/conv (v0.29.2)
 License file: github.com/go-openapi/swag/conv/LICENSE
 ================================================================================
 
@@ -2299,7 +2299,7 @@ License file: github.com/go-openapi/swag/conv/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/fileutils (v0.28.0)
+Module: github.com/go-openapi/swag/fileutils (v0.29.2)
 License file: github.com/go-openapi/swag/fileutils/LICENSE
 ================================================================================
 
@@ -2507,7 +2507,7 @@ License file: github.com/go-openapi/swag/fileutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/jsonutils (v0.28.0)
+Module: github.com/go-openapi/swag/jsonutils (v0.29.2)
 License file: github.com/go-openapi/swag/jsonutils/LICENSE
 ================================================================================
 
@@ -2715,7 +2715,7 @@ License file: github.com/go-openapi/swag/jsonutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/loading (v0.28.0)
+Module: github.com/go-openapi/swag/loading (v0.29.2)
 License file: github.com/go-openapi/swag/loading/LICENSE
 ================================================================================
 
@@ -2923,7 +2923,7 @@ License file: github.com/go-openapi/swag/loading/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/mangling (v0.28.0)
+Module: github.com/go-openapi/swag/mangling (v0.29.2)
 License file: github.com/go-openapi/swag/mangling/LICENSE
 ================================================================================
 
@@ -3131,7 +3131,7 @@ License file: github.com/go-openapi/swag/mangling/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/netutils (v0.28.0)
+Module: github.com/go-openapi/swag/netutils (v0.29.2)
 License file: github.com/go-openapi/swag/netutils/LICENSE
 ================================================================================
 
@@ -3339,7 +3339,7 @@ License file: github.com/go-openapi/swag/netutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/pools (v0.28.0)
+Module: github.com/go-openapi/swag/pools (v0.29.2)
 License file: github.com/go-openapi/swag/pools/LICENSE
 ================================================================================
 
@@ -3547,7 +3547,7 @@ License file: github.com/go-openapi/swag/pools/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/stringutils (v0.28.0)
+Module: github.com/go-openapi/swag/stringutils (v0.29.2)
 License file: github.com/go-openapi/swag/stringutils/LICENSE
 ================================================================================
 
@@ -3755,7 +3755,7 @@ License file: github.com/go-openapi/swag/stringutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/typeutils (v0.28.0)
+Module: github.com/go-openapi/swag/typeutils (v0.29.2)
 License file: github.com/go-openapi/swag/typeutils/LICENSE
 ================================================================================
 
@@ -3963,7 +3963,7 @@ License file: github.com/go-openapi/swag/typeutils/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: github.com/go-openapi/swag/yamlutils (v0.28.0)
+Module: github.com/go-openapi/swag/yamlutils (v0.29.2)
 License file: github.com/go-openapi/swag/yamlutils/LICENSE
 ================================================================================
 
@@ -4933,7 +4933,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/grpc-ecosystem/grpc-gateway/v2 (v2.30.0)
+Module: github.com/grpc-ecosystem/grpc-gateway/v2 (v2.31.0)
 License file: github.com/grpc-ecosystem/grpc-gateway/v2/LICENSE
 ================================================================================
 
@@ -5859,7 +5859,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ================================================================================
-Module: github.com/onsi/ginkgo/v2 (v2.33.1)
+Module: github.com/onsi/ginkgo/v2 (v2.34.0)
 License file: github.com/onsi/ginkgo/v2/LICENSE
 ================================================================================
 
@@ -7393,7 +7393,7 @@ License file: go.opentelemetry.io/auto/sdk/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp (v0.70.0)
+Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp (v0.71.0)
 License file: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp/LICENSE
 ================================================================================
 
@@ -9281,7 +9281,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ================================================================================
-Module: go.opentelemetry.io/proto/otlp (v1.11.0)
+Module: go.opentelemetry.io/proto/otlp (v1.11.1)
 License file: go.opentelemetry.io/proto/otlp/LICENSE
 ================================================================================
 
@@ -9903,7 +9903,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ================================================================================
-Module: golang.org/x/exp (v0.0.0-20260410095643-746e56fc9e2f)
+Module: golang.org/x/exp (v0.0.0-20260908205506-85c1c2202aba)
 License file: golang.org/x/exp/LICENSE
 ================================================================================
 
@@ -10857,7 +10857,7 @@ License file: google.golang.org/genproto/googleapis/rpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.83.2)
+Module: google.golang.org/grpc (v1.84.0)
 License file: google.golang.org/grpc/LICENSE
 ================================================================================
 
@@ -11065,7 +11065,7 @@ License file: google.golang.org/grpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.83.2)
+Module: google.golang.org/grpc (v1.84.0)
 License file: google.golang.org/grpc/NOTICE.txt
 ================================================================================
 
