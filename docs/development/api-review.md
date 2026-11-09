@@ -196,7 +196,8 @@ The default is `atomic`: one applier replaces the whole list, and no item within
 
 - Conditions are `+listType=map +listMapKey=type` — independently owned entries with a natural key.
   Every status conditions slice in this repo uses that.
-- `priorityTiers` is atomic, and its "strictly ascending threshold" ordering is a *caller contract* that neither admission nor a status condition enforces — an out-of-order tier is simply unreachable.
+- `priorityTiers` is atomic, and its "strictly ascending threshold" ordering is load-bearing: the AGC assigns the first tier whose threshold the active-pod count is below, so an out-of-order tier never receives a pod.
+  A CEL rule on the field rejects such a list, with an `oldSelf` clause that passes an unchanged stored one (Q1312).
   If an ordering or uniqueness rule is load-bearing, either validate it or say plainly in the godoc that it is not validated.
   It is documented in [`runnerset_types.go`](../../api/v2/runnerset_types.go).
 

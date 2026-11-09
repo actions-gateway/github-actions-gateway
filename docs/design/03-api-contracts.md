@@ -511,7 +511,8 @@ type RunnerGroupSpec struct {
     // cannot name a preempting class and evict other tenants' pods. Preemption
     // behaviour is set on the platform-owned PriorityClass object itself (the
     // platform should use preemptionPolicy: Never unless cross-tenant preemption
-    // is intended). Tiers must be listed in strictly ascending threshold order.
+    // is intended). Tiers must be listed in strictly ascending threshold order;
+    // a CEL rule on the field rejects a new or changed list that is not.
     //
     // When PriorityTiers is empty the AGC stamps no PriorityClass of its own, and
     // the namespace ResourceQuota is the only active ceiling — but the worker pod

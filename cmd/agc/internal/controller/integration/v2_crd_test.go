@@ -3,9 +3,11 @@
 package integration_test
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -14,6 +16,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -129,6 +133,151 @@ func TestV2_RunnerSet_MaxWorkersMustMatchLastTier(t *testing.T) {
 	err := k8sClient.Create(ctx, rs)
 	require.Error(t, err)
 	assert.True(t, apierrors.IsInvalid(err), "expected Invalid for maxWorkers != last tier, got %v", err)
+}
+
+func TestV2_RunnerSet_PriorityTiersMustAscend(t *testing.T) {
+	const ns = "v2-runnerset-tier-order"
+	createNSForAGC(t, ns)
+
+	tiers := func(thresholds ...int32) []agcv2.PriorityTier {
+		out := make([]agcv2.PriorityTier, len(thresholds))
+		for i, th := range thresholds {
+			out[i] = agcv2.PriorityTier{PriorityClassName: "pc-" + strconv.Itoa(i), Threshold: th}
+		}
+		return out
+	}
+	for name, thresholds := range map[string][]int32{
+		"descending":   {10, 5},
+		"equal":        {5, 5},
+		"dip-mid-list": {2, 8, 4, 10},
+	} {
+		t.Run("rejects "+name, func(t *testing.T) {
+			rs := newV2RunnerSet(ns, name, "acme", "default")
+			rs.Spec.PriorityTiers = tiers(thresholds...)
+			err := k8sClient.Create(ctx, rs)
+			require.Error(t, err)
+			assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
+			assert.Contains(t, err.Error(), "priorityTiers thresholds must be strictly ascending")
+		})
+	}
+	for name, thresholds := range map[string][]int32{
+		"single":    {3},
+		"ascending": {2, 5, 10},
+	} {
+		t.Run("admits "+name, func(t *testing.T) {
+			rs := newV2RunnerSet(ns, name, "acme", "default")
+			rs.Spec.PriorityTiers = tiers(thresholds...)
+			require.NoError(t, k8sClient.Create(ctx, rs))
+			t.Cleanup(func() { _ = k8sClient.Delete(ctx, rs) })
+		})
+	}
+}
+
+// TestV2_RunnerSet_StoredOutOfOrderTiersKeepWorking: a RunnerSet stored before the
+// ordering rule keeps accepting writes that leave priorityTiers unchanged, which only a
+// stored object can show, so the CRD is edited to admit one. The rule passes an unchanged
+// value itself because ratcheting misses the status subresource on Kubernetes 1.31 and
+// 1.32 (api-review.md § narrowest field); this suite runs 1.35, so only the
+// optionalOldSelf pin below can fail here.
+func TestV2_RunnerSet_StoredOutOfOrderTiersKeepWorking(t *testing.T) {
+	const ns = "v2-runnerset-tier-ratchet"
+	createNSForAGC(t, ns)
+
+	crd := &unstructured.Unstructured{}
+	crd.SetGroupVersionKind(schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"})
+	crdKey := types.NamespacedName{Name: "runnersets.actions-gateway.com"}
+	rulePath := []string{"schema", "openAPIV3Schema", "properties", "spec", "properties", "priorityTiers", "x-kubernetes-validations"}
+	tierRules := func() []any {
+		require.NoError(t, k8sClient.Get(ctx, crdKey, crd))
+		versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+		for _, v := range versions {
+			version := v.(map[string]any)
+			if version["name"] == "v2" {
+				rules, _, err := unstructured.NestedSlice(version, rulePath...)
+				require.NoError(t, err)
+				return rules
+			}
+		}
+		t.Fatal("no v2 version in the CRD")
+		return nil
+	}
+	setRules := func(rules []any) {
+		require.Eventually(t, func() bool {
+			if err := k8sClient.Get(ctx, crdKey, crd); err != nil {
+				return false
+			}
+			versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+			for i, v := range versions {
+				version := v.(map[string]any)
+				if version["name"] != "v2" {
+					continue
+				}
+				if len(rules) == 0 {
+					unstructured.RemoveNestedField(version, rulePath...)
+				} else if err := unstructured.SetNestedSlice(version, rules, rulePath...); err != nil {
+					return false
+				}
+				versions[i] = version
+			}
+			if err := unstructured.SetNestedSlice(crd.Object, versions, "spec", "versions"); err != nil {
+				return false
+			}
+			return k8sClient.Update(ctx, crd) == nil
+		}, 15*time.Second, 200*time.Millisecond, "update the CRD")
+	}
+	original := tierRules()
+	require.Len(t, original, 1, "the rule this test exercises must exist")
+	require.Equal(t, true, original[0].(map[string]any)["optionalOldSelf"], "an unchanged value must pass on the status path too")
+	t.Cleanup(func() { setRules(original) })
+
+	outOfOrder := []agcv2.PriorityTier{{PriorityClassName: "high", Threshold: 10}, {PriorityClassName: "low", Threshold: 5}}
+	newSet := func(name string) *agcv2.RunnerSet {
+		rs := newV2RunnerSet(ns, name, "acme", "default")
+		rs.Spec.PriorityTiers = append([]agcv2.PriorityTier(nil), outOfOrder...)
+		return rs
+	}
+
+	setRules(nil)
+	stored := newSet("stored")
+	require.Eventually(t, func() bool { return k8sClient.Create(ctx, stored) == nil },
+		15*time.Second, 200*time.Millisecond, "the CRD with no rule must admit the value")
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), stored) })
+
+	setRules(original)
+	require.Eventually(t, func() bool {
+		probe := newSet("probe")
+		err := k8sClient.Create(ctx, probe)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, probe)
+		}
+		return apierrors.IsInvalid(err)
+	}, 15*time.Second, 200*time.Millisecond, "the restored rule must reject a new object")
+
+	key := types.NamespacedName{Namespace: ns, Name: "stored"}
+	update := func(edit func(*agcv2.RunnerSet)) error {
+		var got agcv2.RunnerSet
+		if err := k8sClient.Get(ctx, key, &got); err != nil {
+			return err
+		}
+		edit(&got)
+		return k8sClient.Update(ctx, &got)
+	}
+	require.NoError(t, update(func(*agcv2.RunnerSet) {}), "re-applying it unchanged must succeed")
+	require.NoError(t, update(func(rs *agcv2.RunnerSet) { rs.Spec.RunnerGroup = "edited" }),
+		"editing another field must succeed")
+	require.NoError(t, update(func(rs *agcv2.RunnerSet) { rs.Finalizers = append(rs.Finalizers, "example.com/hold") }),
+		"a metadata write must succeed")
+	require.NoError(t, update(func(rs *agcv2.RunnerSet) { rs.Finalizers = nil }))
+	var got agcv2.RunnerSet
+	require.NoError(t, k8sClient.Get(ctx, key, &got))
+	got.Status.Conditions = []metav1.Condition{{Type: "Probe", Status: metav1.ConditionTrue, Reason: "Probe", LastTransitionTime: metav1.Now()}}
+	require.NoError(t, k8sClient.Status().Update(ctx, &got), "a status write, as the AGC makes, must succeed")
+
+	err := update(func(rs *agcv2.RunnerSet) { rs.Spec.PriorityTiers[1].Threshold = 7 })
+	require.Error(t, err, "changing it to another out-of-order list must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
+	require.NoError(t, update(func(rs *agcv2.RunnerSet) { rs.Spec.PriorityTiers[1].Threshold = 12 }),
+		"fixing it must succeed")
 }
 
 // TestV2_RunnerSet_ScaleUpRoundTrip proves the opt-in worker-pod creation-rate
