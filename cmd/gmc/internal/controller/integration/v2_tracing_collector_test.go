@@ -4,6 +4,7 @@ package integration_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestV2_Tracing_Admission(t *testing.T) {
 	const https = "https://collector.observability.svc.cluster.local:4317"
 	bundle := &v2.LocalConfigMapReference{Name: "collector-ca"}
 	peer := &v2.EgressPeer{CIDR: "10.0.5.7/32"}
-	insecure := true
+	insecure, secure := true, false
 
 	for name, tc := range map[string]struct {
 		tracing v2.TracingConfig
@@ -55,6 +56,21 @@ func TestV2_Tracing_Admission(t *testing.T) {
 		"bundle with no endpoint": {
 			tracing: v2.TracingConfig{CABundleRef: bundle},
 			reject:  "caBundleRef needs an https:// endpoint",
+		},
+		"insecure over http":        {tracing: v2.TracingConfig{Endpoint: "http://collector:4317", Insecure: &insecure}},
+		"insecure with a bare host": {tracing: v2.TracingConfig{Endpoint: "collector:4317", Insecure: &insecure}},
+		"insecure false with TLS":   {tracing: v2.TracingConfig{Endpoint: https, Insecure: &secure}},
+		"insecure with https": {
+			tracing: v2.TracingConfig{Endpoint: https, Insecure: &insecure},
+			reject:  "insecure: true overrides an https:// endpoint",
+		},
+		"insecure with HTTPS": {
+			tracing: v2.TracingConfig{Endpoint: "HTTPS://collector:4317", Insecure: &insecure},
+			reject:  "insecure: true overrides an https:// endpoint",
+		},
+		"insecure with padded https": {
+			tracing: v2.TracingConfig{Endpoint: " " + https, Insecure: &insecure},
+			reject:  "insecure: true overrides an https:// endpoint",
 		},
 		"peer with no endpoint": {
 			tracing: v2.TracingConfig{NetworkPolicy: peer},
@@ -308,6 +324,113 @@ func TestV2_Tracing_StoredBadEndpointKeepsWorking(t *testing.T) {
 		var got v2.ActionsGateway
 		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "reconciled"}, &got) == nil && len(got.Status.Conditions) > 0
 	}, 30*time.Second, 200*time.Millisecond, "the GMC must be able to write status on a stored value")
+}
+
+// TestV2_Tracing_StoredInsecureHTTPSKeepsWorking: a gateway stored with insecure: true and an
+// https:// endpoint before the rule existed still takes unrelated writes. The rule sits on the
+// tracing struct, so ratcheting alone would re-fire it on any edit to a sibling tracing field;
+// its oldSelf clause passes while the endpoint and insecure are both unchanged.
+func TestV2_Tracing_StoredInsecureHTTPSKeepsWorking(t *testing.T) {
+	const ns = "v2-tracing-insecure-ratchet"
+	createNamespaceWithLabels(t, ns, map[string]string{
+		v2.SecurityProfileLabel: v2.SecurityProfileRestricted,
+	})
+	createGitHubAppSecret(t, ns, "github-app")
+
+	const message = "insecure: true overrides an https:// endpoint"
+	crd := &unstructured.Unstructured{}
+	crd.SetGroupVersionKind(schema.GroupVersionKind{Group: "apiextensions.k8s.io", Version: "v1", Kind: "CustomResourceDefinition"})
+	crdKey := types.NamespacedName{Name: "actionsgateways.actions-gateway.com"}
+	rulesPath := []string{"schema", "openAPIV3Schema", "properties", "spec", "properties", "tracing", "x-kubernetes-validations"}
+	setRules := func(rules []any) {
+		require.Eventually(t, func() bool {
+			if err := k8sClient.Get(ctx, crdKey, crd); err != nil {
+				return false
+			}
+			versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+			for i, v := range versions {
+				version := v.(map[string]any)
+				if version["name"] != "v2" {
+					continue
+				}
+				if err := unstructured.SetNestedSlice(version, rules, rulesPath...); err != nil {
+					return false
+				}
+				versions[i] = version
+			}
+			if err := unstructured.SetNestedSlice(crd.Object, versions, "spec", "versions"); err != nil {
+				return false
+			}
+			return k8sClient.Update(ctx, crd) == nil
+		}, 15*time.Second, 200*time.Millisecond, "update the CRD")
+	}
+	require.NoError(t, k8sClient.Get(ctx, crdKey, crd))
+	versions, _, _ := unstructured.NestedSlice(crd.Object, "spec", "versions")
+	var original, without []any
+	for _, v := range versions {
+		version := v.(map[string]any)
+		if version["name"] == "v2" {
+			original, _, _ = unstructured.NestedSlice(version, rulesPath...)
+		}
+	}
+	for _, r := range original {
+		rule := r.(map[string]any)
+		if msg, _ := rule["message"].(string); strings.HasPrefix(msg, message) {
+			require.Equal(t, true, rule["optionalOldSelf"], "an unchanged value must pass on the status path too")
+			continue
+		}
+		without = append(without, r)
+	}
+	require.Len(t, without, len(original)-1, "the rule this test exercises must exist")
+	t.Cleanup(func() { setRules(original) })
+
+	insecure := true
+	newGateway := func(name string) *v2.ActionsGateway {
+		ag := newV2GatewayWired(name, ns, "github-app", "")
+		ag.Spec.Tracing = v2.TracingConfig{Endpoint: "https://collector:4317", Insecure: &insecure}
+		return ag
+	}
+
+	setRules(without)
+	stored := newGateway("stored")
+	require.Eventually(t, func() bool { return k8sClient.Create(ctx, stored) == nil },
+		15*time.Second, 200*time.Millisecond, "the CRD without the rule must admit the pair")
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), stored) })
+
+	setRules(original)
+	require.Eventually(t, func() bool {
+		probe := newGateway("probe")
+		err := k8sClient.Create(ctx, probe)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, probe)
+		}
+		return apierrors.IsInvalid(err) && strings.Contains(err.Error(), message)
+	}, 15*time.Second, 200*time.Millisecond, "the restored rule must reject a new object")
+
+	update := func(edit func(*v2.ActionsGateway)) error {
+		var got v2.ActionsGateway
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "stored"}, &got); err != nil {
+			return err
+		}
+		edit(&got)
+		return k8sClient.Update(ctx, &got)
+	}
+	require.NoError(t, update(func(*v2.ActionsGateway) {}), "re-applying it unchanged must succeed")
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.LogLevel = "debug" }),
+		"editing another field must succeed")
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Sampler = "always_on" }),
+		"editing a sibling tracing field must succeed")
+	var got v2.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "stored"}, &got))
+	got.Status.Conditions = []metav1.Condition{{Type: "Probe", Status: metav1.ConditionTrue, Reason: "Probe", LastTransitionTime: metav1.Now()}}
+	require.NoError(t, k8sClient.Status().Update(ctx, &got), "a status write, as the GMC makes, must succeed")
+
+	err := update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Endpoint = "https://other-collector:4317" })
+	require.Error(t, err, "changing the endpoint to another https:// one must be rejected")
+	assert.True(t, apierrors.IsInvalid(err), "expected Invalid, got %v", err)
+	assert.Contains(t, err.Error(), message)
+	require.NoError(t, update(func(ag *v2.ActionsGateway) { ag.Spec.Tracing.Insecure = nil }),
+		"dropping insecure must succeed")
 }
 
 // TestV2_Tracing_MissingBundleIsAdvisory: a ref naming no ConfigMap sets the advisory
