@@ -245,7 +245,7 @@ type ProxySharing struct {
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.caBundleRef) || (has(self.endpoint) && self.endpoint.startsWith('https://') && !(has(self.insecure) && self.insecure))",message="caBundleRef needs an https:// endpoint with insecure unset or false; a plaintext export never reads the bundle"
 // +kubebuilder:validation:XValidation:rule="!has(self.networkPolicy) || (has(self.endpoint) && size(self.endpoint) > 0)",message="networkPolicy needs an endpoint; with tracing off the AGC has no collector to reach"
-// +kubebuilder:validation:XValidation:rule="!(has(self.insecure) && self.insecure && has(self.endpoint) && self.endpoint.matches('^[[:space:]]*[hH][tT][tT][pP][sS]://')) || (oldSelf.hasValue() && has(oldSelf.value().insecure) && oldSelf.value().insecure && has(oldSelf.value().endpoint) && oldSelf.value().endpoint == self.endpoint)",optionalOldSelf=true,message="insecure: true overrides an https:// endpoint and the AGC exports in plaintext; drop insecure to keep TLS, or write http:// to mean plaintext"
+// +kubebuilder:validation:XValidation:rule="!(has(self.insecure) && self.insecure && has(self.endpoint) && self.endpoint.trim().matches('^[hH][tT][tT][pP][sS]://')) || (oldSelf.hasValue() && has(oldSelf.value().insecure) && oldSelf.value().insecure && has(oldSelf.value().endpoint) && oldSelf.value().endpoint == self.endpoint)",optionalOldSelf=true,message="insecure: true overrides an https:// endpoint and the AGC exports in plaintext; drop insecure to keep TLS, or write http:// to mean plaintext"
 type TracingConfig struct {
 	// Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the
 	// AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.

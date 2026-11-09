@@ -72,6 +72,19 @@ func TestV2_Tracing_Admission(t *testing.T) {
 			tracing: v2.TracingConfig{Endpoint: " " + https, Insecure: &insecure},
 			reject:  "insecure: true overrides an https:// endpoint",
 		},
+		// The exporter trims with strings.TrimSpace, which strips Unicode spaces too.
+		"insecure with NBSP-padded https": {
+			tracing: v2.TracingConfig{Endpoint: "\u00a0" + https, Insecure: &insecure},
+			reject:  "insecure: true overrides an https:// endpoint",
+		},
+		"insecure with NEL-padded https": {
+			tracing: v2.TracingConfig{Endpoint: "\u0085" + https, Insecure: &insecure},
+			reject:  "insecure: true overrides an https:// endpoint",
+		},
+		"insecure with ideographic-space-padded https": {
+			tracing: v2.TracingConfig{Endpoint: "\u3000" + https, Insecure: &insecure},
+			reject:  "insecure: true overrides an https:// endpoint",
+		},
 		"peer with no endpoint": {
 			tracing: v2.TracingConfig{NetworkPolicy: peer},
 			reject:  "networkPolicy needs an endpoint",

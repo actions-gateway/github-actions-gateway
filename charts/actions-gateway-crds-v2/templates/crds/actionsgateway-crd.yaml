@@ -2152,7 +2152,7 @@ spec:
                     http:// to mean plaintext'
                   optionalOldSelf: true
                   rule: '!(has(self.insecure) && self.insecure && has(self.endpoint)
-                    && self.endpoint.matches(''^[[:space:]]*[hH][tT][tT][pP][sS]://''))
+                    && self.endpoint.trim().matches(''^[hH][tT][tT][pP][sS]://''))
                     || (oldSelf.hasValue() && has(oldSelf.value().insecure) && oldSelf.value().insecure
                     && has(oldSelf.value().endpoint) && oldSelf.value().endpoint ==
                     self.endpoint)'
