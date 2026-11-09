@@ -52,7 +52,7 @@ AUTOSCALER_CLUSTER=${AUTOSCALER_CLUSTER:-gag-autoscaler}
 # line below weekly to the newest patch published inside this minor, and the
 # resulting PR trips the drift gate's path filter (Q483). Keep the assignment on
 # one line in this exact shape — the manifest matches it by regex.
-CA_VERSION=${CA_VERSION:-v1.36.1}
+CA_VERSION=${CA_VERSION:-v1.36.2}
 KWOK_VERSION=${KWOK_VERSION:-v0.8.0}
 
 KUBE_CONTEXT="kind-${AUTOSCALER_CLUSTER}"
