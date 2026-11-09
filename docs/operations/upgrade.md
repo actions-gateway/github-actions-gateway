@@ -575,7 +575,7 @@ A delete and re-create is rejected, which includes a restore from backup.
 
 ### Action required if `spec.tracing` sets `insecure: true` with an `https://` endpoint: the pair is now rejected
 
-**Who is affected:** operators with an `ActionsGateway` whose `spec.tracing` has `insecure: true` and an `endpoint` starting `https://`, in any letter case.
+**Who is affected:** operators with an `ActionsGateway` whose `spec.tracing` has `insecure: true` and an `endpoint` starting `https://`, in any letter case and after any leading whitespace.
 
 **What changed.** The exporter applies `insecure: true` after the endpoint's scheme, so the pair has been exporting spans in plaintext although the endpoint says TLS (measured against the exporter `v2.0.0` ships).
 The schema now refuses the pair.

@@ -4135,7 +4135,7 @@ Deleting and re-creating it, or changing `endpoint` to another value that does n
 **Symptoms.** A create or an edit of `spec.tracing` on an `ActionsGateway` is rejected at admission:
 
 ```
-ActionsGateway.actions-gateway.com "<name>" is invalid: spec.tracing: Invalid value:
+The ActionsGateway "<name>" is invalid: spec.tracing: Invalid value:
 insecure: true overrides an https:// endpoint and the AGC exports in plaintext;
 drop insecure to keep TLS, or write http:// to mean plaintext
 ```
