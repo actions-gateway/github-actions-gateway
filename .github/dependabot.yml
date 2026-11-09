@@ -1,79 +1,21 @@
 version: 2
 updates:
+  # Every Go module in one entry and one group, so a bump that moves a shared
+  # dependency opens one PR. dependabot-go-sync.yml re-syncs the whole workspace
+  # on each Go PR, so per-module entries produced PRs that each rewrote every
+  # module's files and stranded each other on merge.
   - package-ecosystem: "gomod"
-    directory: "/api"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/broker"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/githubapp"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/cmd/agc"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/cmd/gmc"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/cmd/proxy"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/cmd/worker"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/cmd/probe"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/tools"
-    schedule:
-      interval: "weekly"
-    groups:
-      go-deps:
-        patterns: ["*"]
-
-  - package-ecosystem: "gomod"
-    directory: "/test/fakegithub"
+    directories:
+      - "/api"
+      - "/broker"
+      - "/githubapp"
+      - "/cmd/agc"
+      - "/cmd/gmc"
+      - "/cmd/proxy"
+      - "/cmd/worker"
+      - "/cmd/probe"
+      - "/tools"
+      - "/test/fakegithub"
     schedule:
       interval: "weekly"
     groups:
