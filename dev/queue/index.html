@@ -3570,12 +3570,20 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
+<td><a href="Q1312/">Q1312</a></td>
+<td><a href="../plan/v2-ga/#scope-ledger">Reject out-of-order priorityTiers and an insecure https tracing endpoint</a></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>Two stricter admission rules, gated on <code>v2.0.0</code> because an open major is the only cheap time to add one.</strong> Each must let an unchanged …</td>
+</tr>
+<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">The <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Everything else under <code>v2.0.0</code> has landed but the tag: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), and the …</td>
+<td>Everything else under <code>v2.0.0</code> has landed but the tag and <a href="Q1312/">Q1312</a>: the coupled removals (Q273, Q264, Q1167), the storage advance …</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>
@@ -3584,6 +3592,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>Admission now rejects an endpoint the exporter would misread, which was the part Karl gated on <code>v2.0.0</code>.</td>
+</tr>
+<tr>
+<td><a href="Q1313/">Q1313</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/v2/shared_types.go">caBundleRef refuses a scheme-less TLS tracing endpoint</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**<code>spec.tracing.caBundleRef</code>'s admission rule requires an endpoint starting <code>https://</code>, and the exporter also uses TLS for an endpoint with …</td>
 </tr>
 <tr>
 <td><a href="Q1260/">Q1260</a></td>
@@ -4392,6 +4408,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td><code>make deps-sync</code> is the documented remedy for a dependency change, and once it left a tree that <code>make tidy-check</code> rejects.</td>
+</tr>
+<tr>
+<td><a href="Q1311/">Q1311</a></td>
+<td><a href="../development/api-review/">v3 API candidates: v2 field shapes only a new version can change</a></td>
+<td><code>debt</code></td>
+<td>💤</td>
+<td>M</td>
+<td><strong>Decision:</strong> we decide to open a <code>v3</code> API version, for these or for any other reason.</td>
 </tr>
 </tbody>
 </table>
