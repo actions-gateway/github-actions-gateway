@@ -3,6 +3,7 @@ package allowlist
 import (
 	"net"
 	"testing"
+	"time"
 )
 
 // mustCIDRs parses CIDR strings for test setup, failing the test on a bad entry.
@@ -159,7 +160,7 @@ func TestEgressDestination_DynamicPending(t *testing.T) {
 	if a.DynamicPending() {
 		t.Error("with no ConfigMap configured nothing is pending")
 	}
-	a.AwaitDynamic()
+	a.AwaitDynamic(time.Now().Add(time.Hour))
 	if !a.DynamicPending() {
 		t.Error("AwaitDynamic must hold until the first load")
 	}
@@ -167,5 +168,11 @@ func TestEgressDestination_DynamicPending(t *testing.T) {
 	a.SetDynamic(nil, nil)
 	if a.DynamicPending() {
 		t.Error("the first SetDynamic ends the wait, even an empty one")
+	}
+
+	// A ConfigMap that is never read must not hold a reader forever.
+	a.AwaitDynamic(time.Now().Add(-time.Second))
+	if a.DynamicPending() {
+		t.Error("the wait ends at its deadline with no load")
 	}
 }

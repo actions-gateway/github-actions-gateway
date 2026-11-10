@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 // EgressDestinationAllowlist is the platform-owned gate (Q242 G.1) on which
@@ -42,8 +43,10 @@ type EgressDestinationAllowlist struct {
 	// wholesale by SetDynamic. nil until the reconciler first applies a ConfigMap.
 	dynamicFQDNs []string
 	dynamicCIDRs []*net.IPNet
-	// dynamicPending is true from AwaitDynamic until the first SetDynamic.
-	dynamicPending bool
+	// dynamicPending is true from AwaitDynamic until the first SetDynamic, and is
+	// read as false once pendingDeadline passes.
+	dynamicPending  bool
+	pendingDeadline time.Time
 }
 
 // NewEgressDestination returns an allowlist whose static base is the
@@ -109,22 +112,26 @@ func (a *EgressDestinationAllowlist) SetDynamic(fqdns []string, cidrs []*net.IPN
 // AwaitDynamic records that a ConfigMap source is configured and has not been read
 // yet. Until the first SetDynamic, a host the static base does not cover may be one
 // the ConfigMap is about to: DynamicPending lets a reader that would act on the
-// refusal wait for the load. Call it before the manager starts.
-func (a *EgressDestinationAllowlist) AwaitDynamic() {
+// refusal wait for the load. The wait ends at deadline whether or not a load came,
+// so a source that is never read cannot hold a reader forever. Call it before the
+// manager starts.
+func (a *EgressDestinationAllowlist) AwaitDynamic(deadline time.Time) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.dynamicPending = true
+	a.pendingDeadline = deadline
 }
 
-// DynamicPending reports whether a configured ConfigMap source is still unread. It
-// is false when no ConfigMap is configured.
+// DynamicPending reports whether a configured ConfigMap source is still unread and
+// its AwaitDynamic deadline has not passed. It is false when no ConfigMap is
+// configured.
 func (a *EgressDestinationAllowlist) DynamicPending() bool {
 	if a == nil {
 		return false
 	}
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return a.dynamicPending
+	return a.dynamicPending && time.Now().Before(a.pendingDeadline)
 }
 
 // FQDNSuffixes returns the effective FQDN allowlist (static ∪ dynamic) as a sorted,

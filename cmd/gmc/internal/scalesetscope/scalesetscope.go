@@ -53,10 +53,11 @@ var publicGitHubAliases = []string{"www.github.com", "api.github.com"}
 // GitHubScope returns the scale-set namespace a gateway's githubURL reaches, as a
 // comparable key: lowercased host and path, no trailing slash. GitHub owner and repo
 // names are case-insensitive, so ".../Acme" and ".../acme" are one scope. The port is
-// dropped (Hostname), which merges two GHES endpoints sharing a host, and the
-// www.github.com and api.github.com spellings fold to github.com, because the AGC
-// addresses all three as public GitHub. Both err toward rejecting, the safe direction
-// for a guard against sharing. Returns "" when the URL does not parse or names no host
+// dropped (Hostname), which merges two GHES endpoints sharing a host. A trailing dot
+// is dropped, since "github.com." resolves as "github.com" does. The www.github.com
+// and api.github.com spellings fold to github.com, because the AGC addresses all
+// three as public GitHub. Each errs toward rejecting, the safe direction for a guard
+// against sharing. Returns "" when the URL does not parse or names no host
 // or path; validation.GitHubURL rejects those at the gateway's own admission, so a
 // stored gateway always yields a key.
 func GitHubScope(raw string) string {
@@ -64,6 +65,7 @@ func GitHubScope(raw string) string {
 	if host == "" {
 		return ""
 	}
+	host = strings.TrimSuffix(host, ".")
 	if slices.Contains(publicGitHubAliases, host) {
 		host = publicGitHubHost
 	}
@@ -76,8 +78,8 @@ func PublicGitHubAlias(host string) bool {
 	return slices.Contains(publicGitHubAliases, strings.ToLower(host))
 }
 
-// GitHubScopeAsWritten is GitHubScope without the alias fold, so www.github.com and
-// github.com stay two keys. Admission compares a claim an update leaves unchanged by
+// GitHubScopeAsWritten is GitHubScope without the alias fold or the trailing-dot
+// drop, so www.github.com and github.com stay two keys. Admission compares a claim an update leaves unchanged by
 // this key, which keeps a pair stored under two spellings editable (see
 // Claim.CollidesAsWritten).
 func GitHubScopeAsWritten(raw string) string {

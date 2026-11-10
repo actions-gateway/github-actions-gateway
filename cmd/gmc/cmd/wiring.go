@@ -67,6 +67,10 @@ func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Opt
 	})
 }
 
+// egressAllowlistConfigMapWait bounds how long after GMC start a pool holds for the
+// egress allowlist ConfigMap's first read.
+const egressAllowlistConfigMapWait = 30 * time.Second
+
 // awaitEgressAllowlistConfigMap prepares the egress allowlist for a ConfigMap half
 // that loads after the manager starts and changes under a running GMC, while the
 // EgressProxy reconciler gates referrer GitHub hosts on it (Q1322). It marks the
@@ -74,11 +78,15 @@ func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Opt
 // load, and returns the channel that carries each replacement from the ConfigMap
 // reconciler to the EgressProxy one. With no ConfigMap configured it does neither
 // and returns nil.
+//
+// The hold is bounded by egressAllowlistConfigMapWait. The ConfigMap reconciler reads
+// once at start whether or not the object exists, so the bound is reached only if
+// that read never completes; a pool then reconciles on the static list alone.
 func awaitEgressAllowlistConfigMap(cfg *gmcFlags, al *allowlist.EgressDestinationAllowlist) chan event.TypedGenericEvent[struct{}] {
 	if cfg.egressDestinationAllowlistConfigMap == "" {
 		return nil
 	}
-	al.AwaitDynamic()
+	al.AwaitDynamic(time.Now().Add(egressAllowlistConfigMapWait))
 	return make(chan event.TypedGenericEvent[struct{}], 1)
 }
 

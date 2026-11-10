@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,6 +19,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 )
@@ -214,13 +216,24 @@ func splitAllowlistFields(raw string) []string {
 // designated ConfigMap so unrelated ConfigMaps never enqueue, and disabling leader
 // election so the dynamic allowlist is maintained in every replica that serves the
 // admission webhook.
+//
+// It also enqueues the ConfigMap once at start. A ConfigMap that does not exist
+// produces no watch event, so without this its absence is never read and a reader
+// waiting on Allowlist.DynamicPending waits out the whole deadline. The controller
+// starts its workers after the ConfigMap informer has synced, so that read sees an
+// existing object.
 func (r *EgressDestinationAllowlistReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if r.ConfigMapName == "" || r.Namespace == "" || r.Allowlist == nil {
 		return fmt.Errorf("EgressDestinationAllowlistReconciler requires ConfigMapName, Namespace, and Allowlist")
 	}
 	runUnconditionally := false
+	key := types.NamespacedName{Namespace: r.Namespace, Name: r.ConfigMapName}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.ConfigMap{}, builder.WithPredicates(r.configMapPredicate())).
+		WatchesRawSource(source.Func(func(_ context.Context, q workqueue.TypedRateLimitingInterface[reconcile.Request]) error {
+			q.Add(reconcile.Request{NamespacedName: key})
+			return nil
+		})).
 		Named("egress-destination-allowlist").
 		WithOptions(controller.Options{NeedLeaderElection: &runUnconditionally}).
 		Complete(r)

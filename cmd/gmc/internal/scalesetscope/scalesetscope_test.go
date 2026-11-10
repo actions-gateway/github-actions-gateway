@@ -71,6 +71,13 @@ func TestGitHubScope(t *testing.T) {
 			"https://github.com/acme", "https://www.github.com/acme", "https://api.github.com/acme",
 			"https://WWW.GitHub.com/Acme/", "https://api.github.com:443/acme",
 		}},
+		// One DNS name, so one scope, for public GitHub and for an appliance.
+		{"a trailing dot on the host", []string{
+			"https://github.com/acme", "https://github.com./acme", "https://www.github.com./acme",
+		}},
+		{"a trailing dot on an appliance host", []string{
+			"https://ghes.corp.example/my-org", "https://ghes.corp.example./my-org",
+		}},
 	}
 	for _, tc := range same {
 		t.Run(tc.name, func(t *testing.T) {
@@ -123,16 +130,22 @@ func TestGitHubScope_AliasesMatchDeriveAPIBaseURL(t *testing.T) {
 		assert.Equal(t, public, githubapp.DeriveAPIBaseURL("https://"+host+"/acme"),
 			"%s folds to %s, so the AGC must address it as public GitHub", host, publicGitHubHost)
 	}
+	// The guard may be coarser than the AGC, never finer: a host the AGC addresses as
+	// public GitHub must share public GitHub's scope. github.com. is the coarser case,
+	// folded here while DeriveAPIBaseURL reads it as an appliance.
 	for _, host := range []string{"www.github.com", "api.github.com", "uploads.github.com", "github.com.", "gist.github.com"} {
 		addressedAsPublic := githubapp.DeriveAPIBaseURL("https://"+host+"/acme") == public
 		folded := GitHubScope("https://"+host+"/acme") == GitHubScope("https://"+publicGitHubHost+"/acme")
-		assert.Equal(t, addressedAsPublic, folded,
-			"%s: the scope fold and DeriveAPIBaseURL must agree on whether it is public GitHub", host)
+		if addressedAsPublic {
+			assert.True(t, folded, "%s is addressed as public GitHub, so it must share its scope", host)
+		}
+	}
+	for _, host := range []string{"uploads.github.com", "gist.github.com"} {
+		assert.NotEqual(t, GitHubScope("https://"+publicGitHubHost+"/acme"), GitHubScope("https://"+host+"/acme"),
+			"%s is not public GitHub's API host and keeps its own scope", host)
 	}
 }
 
-// TestGitHubScopeAsWritten pins the key an unchanged claim is compared by: every
-// normalization GitHubScope applies except the alias fold.
 func TestPublicGitHubAlias(t *testing.T) {
 	for _, host := range []string{"www.github.com", "api.github.com", "WWW.GitHub.com"} {
 		assert.True(t, PublicGitHubAlias(host), host)
@@ -144,7 +157,10 @@ func TestPublicGitHubAlias(t *testing.T) {
 	}
 }
 
+// TestGitHubScopeAsWritten pins the key an unchanged claim is compared by: every
+// normalization GitHubScope applies except the alias fold and the trailing-dot drop.
 func TestGitHubScopeAsWritten(t *testing.T) {
+	assert.NotEqual(t, GitHubScopeAsWritten("https://github.com/acme"), GitHubScopeAsWritten("https://github.com./acme"))
 	assert.Equal(t, "www.github.com/acme", GitHubScopeAsWritten("https://WWW.GitHub.com:443/Acme/"))
 	assert.NotEqual(t, GitHubScopeAsWritten("https://github.com/acme"), GitHubScopeAsWritten("https://www.github.com/acme"))
 	assert.Equal(t, GitHubScope("https://ghes.corp.example/acme"), GitHubScopeAsWritten("https://ghes.corp.example/acme"),

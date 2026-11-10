@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,6 +29,11 @@ func TestAwaitEgressAllowlistConfigMap(t *testing.T) {
 	}
 	if !al.DynamicPending() {
 		t.Error("a configured ConfigMap must hold pools until its first read")
+	}
+	// The hold ends at a deadline, so an unread ConfigMap cannot freeze a pool. It
+	// has to outlast a normal cache sync and stay short enough to wait out.
+	if egressAllowlistConfigMapWait < 5*time.Second || egressAllowlistConfigMapWait > time.Minute {
+		t.Errorf("egressAllowlistConfigMapWait = %v, want a short positive bound", egressAllowlistConfigMapWait)
 	}
 }
 

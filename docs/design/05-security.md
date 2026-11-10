@@ -702,7 +702,7 @@ The gateway half is load-bearing rather than defensive: a `RunnerSet` applied be
 
 Two properties matter for the guard being a boundary:
 
-- **Unverifiable fails closed.** If the cluster-wide read errors, the write is rejected rather than admitted on faith, and the scope comparison is deliberately lossy in the *rejecting* direction (case-insensitive host and path, port dropped, `www.github.com` and `api.github.com` read as `github.com`), so a near-miss encoding of one org cannot slip between two keys.
+- **Unverifiable fails closed.** If the cluster-wide read errors, the write is rejected rather than admitted on faith, and the scope comparison is deliberately lossy in the *rejecting* direction (case-insensitive host and path, port and trailing dot dropped, `www.github.com` and `api.github.com` read as `github.com`), so a near-miss encoding of one org cannot slip between two keys.
   The alias fold follows what the AGC addresses: `githubapp.DeriveAPIBaseURL` sends those three hosts to one API, and a test holds the two lists together (Q1322).
   One exemption keeps the fold from locking out stored objects: an update that leaves a set's first label and gateway alone, or a gateway's `githubURL` alone, is compared without it, because such a write cannot create a collision and both guards re-run on every update.
   Without the exemption a tenant holding the alias spelling would block the other tenant's unrelated edits; the reconciler reports the stored pair instead.

@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -103,7 +104,7 @@ func TestEgressDestinationAllowlistReconcile_SignalsChanged(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			al := allowlist.NewEgressDestination(nil, nil)
-			al.AwaitDynamic()
+			al.AwaitDynamic(time.Now().Add(time.Hour))
 			changed := make(chan event.TypedGenericEvent[struct{}], 1)
 			r := &EgressDestinationAllowlistReconciler{
 				Client:        fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(tc.objs...).Build(),

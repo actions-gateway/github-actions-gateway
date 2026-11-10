@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"testing"
+	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
@@ -346,7 +347,7 @@ func TestEgressProxyReconcile_HoldsWhileAllowlistConfigMapUnread(t *testing.T) {
 		Build()
 
 	al := allowlist.NewEgressDestination([]string{"golang.org"}, nil)
-	al.AwaitDynamic()
+	al.AwaitDynamic(time.Now().Add(time.Hour))
 	r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test", EgressAllowlist: al}
 	ctx := context.Background()
 	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "team-a", Name: "shared"}}
@@ -372,12 +373,40 @@ func TestEgressProxyReconcile_HoldsWhileAllowlistConfigMapUnread(t *testing.T) {
 
 	t.Run("a host the static base covers does not wait", func(t *testing.T) {
 		static := allowlist.NewEgressDestination([]string{"corp.example"}, nil)
-		static.AwaitDynamic()
+		static.AwaitDynamic(time.Now().Add(time.Hour))
 		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep.DeepCopy(), gw.DeepCopy()).WithStatusSubresource(ep).Build()
 		r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test", EgressAllowlist: static}
 		_, err := r.Reconcile(ctx, req)
 		require.NoError(t, err)
 		require.NoError(t, c.Get(ctx, depKey, &appsv1.Deployment{}), "nothing is refused, so nothing is held")
+	})
+
+	t.Run("a host no ConfigMap could cover does not wait", func(t *testing.T) {
+		pending := allowlist.NewEgressDestination([]string{"golang.org"}, nil)
+		pending.AwaitDynamic(time.Now().Add(time.Hour))
+		wild := ghesGateway("gw", "team-a", "https://*.corp.example/acme", "shared")
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep.DeepCopy(), wild).WithStatusSubresource(ep).Build()
+		r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test", EgressAllowlist: pending}
+		_, err := r.Reconcile(ctx, req)
+		require.NoError(t, err)
+		require.NoError(t, c.Get(ctx, depKey, &appsv1.Deployment{}), "a wildcard is refused whatever the ConfigMap holds")
+	})
+
+	t.Run("a ConfigMap that is never read stops holding at the deadline", func(t *testing.T) {
+		// Without a bound a pool with a refused host would never reconcile again:
+		// no children, no status, and nothing saying why.
+		unread := allowlist.NewEgressDestination([]string{"golang.org"}, nil)
+		unread.AwaitDynamic(time.Now().Add(-time.Second))
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ep.DeepCopy(), gw.DeepCopy()).WithStatusSubresource(ep).Build()
+		r := &EgressProxyReconciler{Client: c, Scheme: scheme, ProxyImage: "proxy:test", EgressAllowlist: unread}
+		_, err := r.Reconcile(ctx, req)
+		require.NoError(t, err)
+		require.NoError(t, c.Get(ctx, depKey, &appsv1.Deployment{}), "the pool reconciles on the static list")
+		var got gmcv2.EgressProxy
+		require.NoError(t, c.Get(ctx, req.NamespacedName, &got))
+		cond := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionGitHubEgressIncomplete)
+		require.NotNil(t, cond)
+		assert.Equal(t, gmcv2.ReasonGitHubHostNotAllowlisted, cond.Reason, "and says which host it left out")
 	})
 }
 

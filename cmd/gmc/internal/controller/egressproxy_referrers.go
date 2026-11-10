@@ -57,7 +57,13 @@ func emittableGitHubHost(host string, al *allowlist.EgressDestinationAllowlist) 
 	if scalesetscope.PublicGitHubAlias(name) {
 		return true
 	}
-	return len(validation.IsDNS1123Subdomain(name)) == 0 && al.CoversFQDN(name)
+	return isGitHubHostname(host) && al.CoversFQDN(name)
+}
+
+// isGitHubHostname reports whether host is a DNS name. One that is not, such as a
+// wildcard or an IPv6 literal, can never be emitted, whatever the allowlist holds.
+func isGitHubHostname(host string) bool {
+	return len(validation.IsDNS1123Subdomain(gitHubHostName(host))) == 0
 }
 
 // gitHubHostName is host as the allowlist and the built-in GitHub list compare it:
@@ -190,14 +196,15 @@ func evalGitHubEgressIncomplete(ep *gmcv2.EgressProxy, hosts referrerGitHubHosts
 		return gitHubEgressGap{
 			incomplete: true,
 			reason:     apiconditions.ReasonGitHubHostNotAllowlisted,
-			message: fmt.Sprintf(
-				"the platform egress allowlist does not cover %s, named by a referrer's githubURL, "+
-					"so the pool's egress policy and CONNECT allowlist leave it out; a platform admin must add it "+
-					"to the GMC --allowed-egress-fqdns flag or the watched allowlist ConfigMap",
-				strings.Join(hosts.refused, ", ")),
+			message:    refusedGitHubHostsMessage(hosts.refused),
 		}
 	}
 	if !managed {
+		if len(hosts.refused) > 0 && len(ep.Spec.DestinationCIDRs) > 0 {
+			return allowed(fmt.Sprintf("egress policy is operator-maintained; the proxy's CONNECT allowlist leaves out %s, "+
+				"which the platform egress allowlist does not cover, and admits it only at an address in spec.destinationCIDRs",
+				strings.Join(hosts.refused, ", ")))
+		}
 		return allowed("egress policy is operator-maintained")
 	}
 	if !egressUsesCIDR(ep.Spec) {
@@ -218,6 +225,35 @@ func evalGitHubEgressIncomplete(ep *gmcv2.EgressProxy, hosts referrerGitHubHosts
 				"set spec.destinationCIDRs to the appliance's ranges or switch spec.egressPolicyMode to an FQDN mode",
 			strings.Join(gitHubHosts, ", ")),
 	}
+}
+
+// refusedGitHubHostsMessage names the refused hosts and, for each kind, the one thing
+// that admits it: an allowlist entry for a hostname, a corrected githubURL for a host
+// no entry can cover.
+func refusedGitHubHostsMessage(refused []string) string {
+	var uncovered, notHostnames []string
+	for _, h := range refused {
+		if isGitHubHostname(h) {
+			uncovered = append(uncovered, h)
+		} else {
+			notHostnames = append(notHostnames, h)
+		}
+	}
+	var parts []string
+	if len(uncovered) > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"the platform egress allowlist does not cover %s, named by a referrer's githubURL, "+
+				"so the pool's egress policy and CONNECT allowlist leave it out; a platform admin must add it "+
+				"to the GMC --allowed-egress-fqdns flag or the watched allowlist ConfigMap",
+			strings.Join(uncovered, ", ")))
+	}
+	if len(notHostnames) > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%s, named by a referrer's githubURL, is not a DNS hostname, so no allowlist entry can admit it "+
+				"and the pool's egress policy and CONNECT allowlist leave it out; name the appliance by hostname in that githubURL",
+			strings.Join(notHostnames, ", ")))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // referrerToEgressProxies maps an ActionsGateway or RunnerSet event to every

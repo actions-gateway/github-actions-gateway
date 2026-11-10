@@ -195,6 +195,11 @@ func TestEvalGitHubEgressIncomplete(t *testing.T) {
 		wantIncomplete bool
 		wantReason     string
 		wantRemedy     string
+		// wantMessage are substrings the message must hold, wantNotMessage one it must
+		// not, and wantHostInSkip skips the ghes.example.com check for a case without it.
+		wantMessage    []string
+		wantNotMessage string
+		wantHostInSkip bool
 	}{
 		{
 			name:           "CIDR mode with a GHES referrer and no ranges",
@@ -248,6 +253,38 @@ func TestEvalGitHubEgressIncomplete(t *testing.T) {
 			wantRemedy:     "--allowed-egress-fqdns",
 		},
 		{
+			// Not provably unreachable: the proxy admits a CONNECT that resolves into
+			// the ranges. The status still names the host the suffix list lost.
+			name: "an operator-maintained policy with ranges says which host its CONNECT allowlist lost",
+			spec: gmcv2.EgressProxySpec{
+				ManagedNetworkPolicy: &unmanaged,
+				DestinationCIDRs:     []string{"10.0.0.0/8"},
+			},
+			refused:     []string{"ghes.example.com"},
+			wantReason:  "GitHubEgressAllowed",
+			wantMessage: []string{"ghes.example.com", "spec.destinationCIDRs"},
+		},
+		{
+			// No allowlist entry admits a wildcard, so the remedy is the githubURL.
+			name:           "a host that is not a DNS name is sent to its githubURL, not the allowlist",
+			spec:           fqdn,
+			refused:        []string{"*.example.com"},
+			wantIncomplete: true,
+			wantReason:     "GitHubHostNotAllowlisted",
+			wantMessage:    []string{"*.example.com", "not a DNS hostname", "githubURL"},
+			wantNotMessage: "--allowed-egress-fqdns",
+			wantHostInSkip: true,
+		},
+		{
+			name:           "an uncovered hostname and a non-hostname each get their own remedy",
+			spec:           fqdn,
+			refused:        []string{"*.example.com", "ghes.example.com"},
+			wantIncomplete: true,
+			wantReason:     "GitHubHostNotAllowlisted",
+			wantRemedy:     "--allowed-egress-fqdns",
+			wantMessage:    []string{"does not cover ghes.example.com,", "*.example.com, named by a referrer's githubURL, is not a DNS hostname"},
+		},
+		{
 			name:       "an operator-maintained policy with no CONNECT allowlist emits nothing to refuse",
 			spec:       gmcv2.EgressProxySpec{ManagedNetworkPolicy: &unmanaged},
 			refused:    []string{"ghes.example.com"},
@@ -283,9 +320,15 @@ func TestEvalGitHubEgressIncomplete(t *testing.T) {
 			assert.Equal(t, tc.wantIncomplete, got.incomplete)
 			assert.Equal(t, tc.wantReason, got.reason)
 			assert.NotEmpty(t, got.message, "an operator reading the condition needs the why")
-			if tc.wantIncomplete {
+			if tc.wantIncomplete && !tc.wantHostInSkip {
 				assert.Contains(t, got.message, "ghes.example.com", "the message must name the unreachable host")
 				assert.Contains(t, got.message, tc.wantRemedy, "the message must name the remedy")
+			}
+			for _, want := range tc.wantMessage {
+				assert.Contains(t, got.message, want)
+			}
+			if tc.wantNotMessage != "" {
+				assert.NotContains(t, got.message, tc.wantNotMessage)
 			}
 		})
 	}

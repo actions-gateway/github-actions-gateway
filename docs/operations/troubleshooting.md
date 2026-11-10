@@ -835,7 +835,7 @@ The GMC cannot close this gap — the appliance's ranges are knowable only to yo
 
 **Cause of the third.** The tenant writes `githubURL`, so the GMC adds its host to the pool's FQDN policy and to the proxy's CONNECT allowlist only when the platform egress allowlist covers it, as it does for a `destinationFQDNs` entry.
 A host the allowlist does not cover is left out of both.
-A wildcard host, such as `*.corp.example`, is always left out.
+A host that is not a DNS hostname, such as the wildcard `*.corp.example` or an IPv6 literal, is always left out, and the message says so instead of asking for an allowlist entry.
 
 **Diagnostics.**
 
@@ -867,6 +867,7 @@ For `GitHubHostNotAllowlisted`, a platform admin adds the host to the egress all
 Add it to the chart's `allowedEgressFQDNs` (the GMC `--allowed-egress-fqdns` flag), which takes a GMC rollout, or to the [watched ConfigMap](security-operations.md#self-service-additions-via-a-watched-configmap), which the pool picks up without one.
 An entry covers its subdomains.
 Removing an entry takes the host back out of every pool that relied on it, and so does deleting the ConfigMap or leaving an invalid entry in it, because an invalid ConfigMap is ignored whole.
+Where the message says the host is not a DNS hostname, no entry helps: create the gateway again with a `githubURL` that names the appliance by hostname, or give the pool the appliance's address in `destinationCIDRs`.
 
 The condition is advisory and does not gate `Ready`: the pool is serving exactly the policy it was asked for.
 `ApplianceRangesRequired` clears once `destinationCIDRs` is non-empty — the GMC takes your declaration at face value and does not verify the ranges actually cover the appliance, so if traffic still fails, check the ranges themselves.
@@ -878,6 +879,7 @@ The GMC takes the first that applies, so read the table top-down — only the la
 | Message | The GMC sees no gap because |
 |---|---|
 | `egress policy is operator-maintained` | `spec.managedNetworkPolicy: false` — the GMC programs no `NetworkPolicy` for this pool, so it makes no claim either way. **Not a reachability check:** your own policy still has to allow the appliance. |
+| `egress policy is operator-maintained; the proxy's CONNECT allowlist leaves out <host> …` | The same pool with `destinationCIDRs` set and a `githubURL` host the platform egress allowlist does not cover. The proxy admits a CONNECT to that host only when it resolves into `destinationCIDRs`, which the GMC cannot check. If the appliance is unreachable, allowlist the host or add its address to the ranges. |
 | `FQDN mode carries every referrer's GitHub host` | `spec.egressPolicyMode` is not `CIDR`, and the platform egress allowlist covers each referring gateway's `githubURL` host, so the GMC added every one to the policy. |
 | `every referrer targets public GitHub, which the CIDR allowlist covers` | No referring gateway names a GHES host, so the ranges `api.github.com/meta` publishes are the whole story. |
 | `spec.destinationCIDRs supplies ranges for <host>` | You supplied ranges while a GHES referrer is bound. Taken at face value — this does **not** confirm they cover the appliance. |

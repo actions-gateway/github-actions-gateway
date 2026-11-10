@@ -14,12 +14,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
@@ -437,6 +439,88 @@ func TestV2_EgressProxy_AllowlistChangeReachesPolicy(t *testing.T) {
 	changed <- event.TypedGenericEvent[struct{}]{}
 	g.Eventually(carried, 15*time.Second, 100*time.Millisecond).Should(gomega.BeFalse(),
 		"a withdrawn entry must leave the policy")
+}
+
+// TestV2_EgressProxy_AllowlistConfigMapAbsentThenWritten runs the EgressProxy and
+// allowlist ConfigMap reconcilers on one manager, as the GMC does (Q1322). A named
+// ConfigMap that does not exist is a supported install, and it produces no watch
+// event, so nothing but the ConfigMap reconciler's read at start can tell a waiting
+// pool that there is nothing to wait for. The wait is given an hour here so that the
+// read is the only thing that can end it. The ConfigMap then arrives and leaves, and
+// the pool's policy follows it through the change channel both ways.
+func TestV2_EgressProxy_AllowlistConfigMapAbsentThenWritten(t *testing.T) {
+	const (
+		ns     = "v2-ep-cilium-allowlist-cm"
+		cmName = "egress-allowlist"
+		host   = "ghes.corp.example"
+	)
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+
+	ipCache := &controller.IPRangeCache{}
+	ipCache.MarkRefreshed(time.Now())
+	al := allowlist.NewEgressDestination(nil, nil)
+	al.AwaitDynamic(time.Now().Add(time.Hour))
+	changed := make(chan event.TypedGenericEvent[struct{}], 1)
+	startEgressProxyReconcilerAllowlisted(t, ipCache, controller.FQDNBackendCilium, nil, false, al, changed,
+		func(mgr ctrl.Manager) error {
+			return (&controller.EgressDestinationAllowlistReconciler{
+				Client:        mgr.GetClient(),
+				ConfigMapName: cmName,
+				Namespace:     ns,
+				Allowlist:     al,
+				Changed:       changed,
+			}).SetupWithManager(mgr)
+		})
+
+	ep := &gmcv2.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
+			MinReplicas:      ptr32(1),
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	gw := newV2GatewayWired("ghesgw", ns, "github-app", egressProxyName)
+	gw.Spec.GitHubURL = "https://" + host + "/example-org"
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+
+	g := gomega.NewWithT(t)
+	refused := gomega.And(
+		gomega.HaveField("Status", metav1.ConditionTrue),
+		gomega.HaveField("Reason", gmcv2.ReasonGitHubHostNotAllowlisted),
+		gomega.HaveField("Message", gomega.ContainSubstring(host)),
+	)
+	gap := func() *metav1.Condition {
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2.ConditionGitHubEgressIncomplete)
+	}
+	carried := func() bool {
+		cnp, err := getCNIPolicy(t, ns, egressProxyName+"-proxy-fqdn", ciliumGVK)
+		return err == nil && ciliumPolicyAllowsFQDN(t, cnp, host)
+	}
+
+	g.Eventually(gap, 30*time.Second, 100*time.Millisecond).Should(refused,
+		"with no ConfigMap to read, the pool must reconcile on the static list and say what it left out")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}, &appsv1.Deployment{}),
+		"a pool that reconciled has its children")
+	require.False(t, carried())
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: ns},
+		Data:       map[string]string{controller.EgressDestinationFQDNsConfigMapKey: "corp.example"},
+	}
+	require.NoError(t, k8sClient.Create(ctx, cm))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, cm) })
+	g.Eventually(carried, 20*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+		"writing the ConfigMap must carry the host into the policy")
+	g.Eventually(gap, 20*time.Second, 100*time.Millisecond).Should(gomega.HaveField("Status", metav1.ConditionFalse))
+
+	require.NoError(t, k8sClient.Delete(ctx, cm))
+	g.Eventually(carried, 20*time.Second, 100*time.Millisecond).Should(gomega.BeFalse(),
+		"deleting the ConfigMap falls back to the static list, which does not cover the host")
+	g.Eventually(gap, 20*time.Second, 100*time.Millisecond).Should(refused)
 }
 
 // ciliumPolicyFQDNEntries returns every matchName and matchPattern value in the

@@ -194,6 +194,7 @@ A refused host sets `GitHubEgressIncomplete=True` with the new reason `GitHubHos
 
 The allowlist's ConfigMap half loads after the GMC starts and changes under it, which the gate has to survive in both directions.
 A reconcile that would refuse a host before the first ConfigMap read holds and requeues, so a GMC restart does not narrow a live policy.
+The ConfigMap reconciler reads once at start whether or not the object exists, and the hold ends 30 seconds after the GMC starts regardless, so a named ConfigMap that was never created cannot keep a pool from reconciling.
 Each ConfigMap read then requeues every EgressProxy, so an added entry reaches the policy at once and not at the six-hour re-check.
 
 This changes what a stored GHES gateway on an FQDN-mode pool can reach on upgrade, and `docs/operations/upgrade.md` says how to find one and which allowlist entry restores it.
@@ -294,7 +295,11 @@ Candidate fix: fold the three DeriveAPIBaseURL public hosts to github.com in Git
 **Evidence.** `cmd/gmc/internal/scalesetscope/scalesetscope.go:52`, `githubapp/auth.go:230`, `scaleset/client.go:271`, `docs/design/05-security.md:668`, `cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:60`, `api/v2/actionsgateway_types.go:39`.
 
 **Resolution.** `GitHubScope` now folds `www.github.com` and `api.github.com` to `github.com`, and a unit test holds its alias list to the hosts `DeriveAPIBaseURL` treats as public GitHub.
-Rejecting the aliases in `validation.GitHubURL` was not taken: that rule re-runs on update and `githubURL` is immutable, so it would refuse every later edit to a stored alias gateway.
+It also drops a trailing dot on the host, since `github.com.` resolves as `github.com` does.
+Rejecting the alias spellings was not taken.
+In `validation.GitHubURL`, which re-runs on update, a rejection would refuse every later edit to a stored alias gateway, because `githubURL` is immutable.
+In `ValidateCreate` alone it would not, and it would stop new gateways adopting spellings whose registration behaviour is unmeasured, at the cost of one more breaking change and of refusing to re-create a stored alias gateway from a backup.
+That choice is still open, and only `v2.0.0` can take it.
 The fold alone has the same problem one step removed, because both scope guards also re-run on update.
 Two tenants stored on different spellings with one scale-set name would each be refused every unrelated edit after the upgrade, and either could hold the other there.
 So an update that leaves the claim as stored is compared by the scope as written, which is the comparison made before the fold: a RunnerSet keeping its first `runnerLabel` and `gatewayRef`, or a gateway keeping its `githubURL`.
@@ -302,7 +307,7 @@ Any new or changed claim is compared folded, and the reconciler reports a stored
 
 Both Blocked-on items stay open.
 Whether GitHub's runner registration accepts the alias spellings, and so whether a stored pair ever shared a scale set, was not measured, and the Owner check above is still the way to find out.
-A related defect in the same host comparison is tracked separately: `DeriveAPIBaseURL` matches the three hosts by exact case ([Q1333](../queue/Q1333.md)).
+A related defect in the same host comparison is tracked separately: `DeriveAPIBaseURL` matches the three hosts by exact case and with no trailing dot ([Q1333](../queue/Q1333.md)).
 
 ### Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy
 

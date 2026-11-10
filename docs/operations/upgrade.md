@@ -706,8 +706,10 @@ NetworkPolicies add up, so yours opens the path and the GMC's is unchanged.
 ### Action required if a gateway names a GitHub Enterprise Server host: an FQDN-mode pool reaches it only when the platform allowlists it
 
 **Who is affected:** platform admins with an `ActionsGateway` whose `githubURL` names a host other than public GitHub, where the `EgressProxy` it uses is in an FQDN egress mode.
-A pool with `managedNetworkPolicy: false` is affected too when it sets `destinationFQDNs` and no `destinationCIDRs`.
-A CIDR-mode pool is not affected: it reaches the appliance through the ranges in `destinationCIDRs`, as before.
+A pool with `managedNetworkPolicy: false` is affected too when it sets `destinationFQDNs` or `destinationCIDRs`, either of which turns on the proxy's CONNECT allowlist.
+The appliance's host name no longer admits a CONNECT there, so such a pool reaches the appliance only when its `destinationCIDRs` contain the appliance's address.
+With `destinationCIDRs` set it reports no gap, because the GMC cannot tell whether those ranges contain the appliance, and the `GitHubEgressIncomplete` message names the host the CONNECT allowlist lost.
+A CIDR-mode pool whose policy the GMC manages is not affected: it reaches the appliance through the ranges in `destinationCIDRs`, as before.
 
 **What changed.** The tenant writes `githubURL`, and the GMC used to add its host to the pool's FQDN policy and to the proxy's CONNECT allowlist without consulting the platform egress allowlist.
 The same host in `spec.destinationFQDNs` was refused at admission, so `githubURL` was a way around that allowlist: a tenant could open TCP/443 from the proxy pool to any hostname.
@@ -721,7 +723,7 @@ The pool reports `GitHubEgressIncomplete=True` with reason `GitHubHostNotAllowli
 
 ```bash
 kubectl get actionsgateways.actions-gateway.com -A -o json \
-  | jq -r '[.items[].spec.githubURL | capture("^https://(?<host>[^/:]+)").host | ascii_downcase] | unique[] | select(. != "github.com" and . != "www.github.com" and . != "api.github.com")'
+  | jq -r '[.items[].spec.githubURL | capture("^https://(?:[^/@]*@)?(?<host>\\[[^\\]]*\\]|[^/:?#]+)").host | ascii_downcase] | unique[] | select(. != "github.com" and . != "www.github.com" and . != "api.github.com")'
 ```
 
 Add each host to the chart's `allowedEgressFQDNs` in the same `helm upgrade` that installs `v2.0.0`, so the new GMC starts with it:
@@ -734,7 +736,8 @@ allowedEgressFQDNs:
 An entry covers its subdomains, so `corp.example` also covers `ghes.corp.example`.
 Prefer the chart value to the [watched ConfigMap](security-operations.md#self-service-additions-via-a-watched-configmap) for an appliance host.
 A ConfigMap that is deleted or fails validation is ignored whole, and every pool that reached its appliance through a ConfigMap entry then loses it until the ConfigMap is fixed.
-A wildcard host, such as `*.corp.example`, is never added, whatever the allowlist holds.
+A host the command prints that is not a DNS hostname, such as the wildcard `*.corp.example` or a bracketed IPv6 literal, is never added, whatever the allowlist holds.
+The proxy admits a CONNECT to that appliance only at an address in the pool's `destinationCIDRs`.
 
 **After the upgrade,** confirm no pool reports the gap:
 
@@ -760,15 +763,17 @@ The upgrade itself refuses nothing: a set or gateway already stored keeps runnin
 A new claim on the shared name is rejected.
 That covers creating a set, moving a set onto the name by changing its first label or its `gatewayRef`, and a delete and re-create, which includes a restore from backup.
 
-**Before you upgrade,** list the gateways that use either spelling:
+The same goes for a host written with a trailing dot, such as `github.com.`, which names the same place as the host without it.
+
+**Before you upgrade,** list the gateways that use either spelling or a trailing dot:
 
 ```bash
 kubectl get actionsgateways.actions-gateway.com -A -o json \
-  | jq -r '.items[] | select(.spec.githubURL | test("^https://(www|api)\\.github\\.com(:[0-9]+)?/"; "i")) | "\(.metadata.namespace)/\(.metadata.name)\t\(.spec.githubURL)"'
+  | jq -r '.items[] | select(.spec.githubURL | test("^https://((www|api)\\.github\\.com\\.?|[^/:@]+\\.)(:[0-9]+)?/"; "i")) | "\(.metadata.namespace)/\(.metadata.name)\t\(.spec.githubURL)"'
 ```
 
 No output means there is nothing to do.
-For each gateway listed, check whether another gateway names the same path on another of the three hosts, and whether a set under each has the same first label.
+For each gateway listed, check whether another gateway names the same path on another of the three hosts, or on the same host without the dot, and whether a set under each has the same first label.
 `githubURL` is immutable, so fix a pair by giving one side's `RunnerSet` a distinct first `runnerLabel`, and change the `runs-on` of the workflows that name it in the same change.
 
 **After the upgrade,** both gateways of a pair that is still stored report `ScaleSetNameCollision=True`, which pages through `ActionsGatewayScaleSetNameCollision` ([finding the other holder](troubleshooting.md#actionsgateway-reports-scalesetnamecollision)).

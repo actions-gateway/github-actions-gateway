@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
@@ -65,7 +66,8 @@ import (
 
 // allowlistPendingRequeue is how soon a pool holding for the egress allowlist's
 // ConfigMap to load looks again. The load itself requeues every pool; this covers a
-// GMC wired without the AllowlistChanged channel.
+// GMC wired without the AllowlistChanged channel, and a wait that ends at its
+// deadline with no load.
 const allowlistPendingRequeue = 2 * time.Second
 
 // EgressProxyReconciler reconciles a v2 EgressProxy into a standalone proxy
@@ -166,7 +168,7 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The allowlist's ConfigMap has not been read since this process started, so a
 	// refusal may be of a host it is about to cover. Hold rather than narrow a live
 	// policy on a restart.
-	if allowlistPending && len(gitHubHosts.refused) > 0 {
+	if allowlistPending && slices.ContainsFunc(gitHubHosts.refused, isGitHubHostname) {
 		return ctrl.Result{RequeueAfter: allowlistPendingRequeue}, nil
 	}
 
