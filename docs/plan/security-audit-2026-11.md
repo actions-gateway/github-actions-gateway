@@ -764,7 +764,7 @@ The opt-in gate is an expression inside those same editable files, and the AGC d
 - Which e2e overlay is live during a window (Kata by default, privileged dind by opt-in) and what a worker pod can reach inside the dogfood cluster are deployment facts that set the impact; neither is determined by source.
 
 **Local test.** No local test can settle this: the decisive step is GitHub's job assignment.
-A source-side guard can be tested locally once written: add a case to the existing scale-set fixture test file scaleset/types_test.go (its hand-written JobAssigned fixture already carries eventName at line 54) asserting the guard's decision for a fork pull_request job, once docs/queue/Q1330.md settles how the refusal reads the run's head_repository.fork (the job message has no head-repository field, decided under Q1220).
+A source-side guard can be tested locally once written: add a case to the existing scale-set fixture test file scaleset/types_test.go (its hand-written JobAssigned fixture already carries eventName at line 54) asserting the guard's decision for a fork pull_request job, once docs/queue/Q1330.md is built: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).
 
 **Owner check.** Owner reads the repository's current fork pull request approval policy (Settings > Actions > General, or the actions/permissions/fork-pr-contributor-approval setting) and records its value and the date.
 Owner lists the runner scale sets registered for the repository and confirms whether each dogfood label (gag-ci-scaleset, gag-ci-e2e, the probe labels) is repo-scoped with no runner-group restriction.
