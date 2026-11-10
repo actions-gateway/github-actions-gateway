@@ -723,7 +723,7 @@ The pool reports `GitHubEgressIncomplete=True` with reason `GitHubHostNotAllowli
 
 ```bash
 kubectl get actionsgateways.actions-gateway.com -A -o json \
-  | jq -r '[.items[].spec.githubURL | capture("^https://(?:[^/@]*@)?(?<host>\\[[^\\]]*\\]|[^/:?#]+)").host | ascii_downcase] | unique[] | select(. != "github.com" and . != "www.github.com" and . != "api.github.com")'
+  | jq -r '[.items[].spec.githubURL | capture("^https://(?:[^/@]*@)?(?<host>\\[[^\\]]*\\]|[^/:?#]+)").host | ascii_downcase | sub("\\.$"; "")] | unique[] | select(. != "github.com" and . != "www.github.com" and . != "api.github.com")'
 ```
 
 Add each host to the chart's `allowedEgressFQDNs` in the same `helm upgrade` that installs `v2.0.0`, so the new GMC starts with it:
@@ -779,7 +779,7 @@ A new gateway on `github.com.` is still accepted.
 
 ```bash
 kubectl get actionsgateways.actions-gateway.com -A -o json \
-  | jq -r '.items[] | select(.spec.githubURL | test("^https://((www|api)\\.github\\.com\\.?|[^/:@]+\\.)(:[0-9]+)?/"; "i")) | "\(.metadata.namespace)/\(.metadata.name)\t\(.spec.githubURL)"'
+  | jq -r '.items[] | select(.spec.githubURL | test("^https://([^/@]*@)?((www|api)\\.github\\.com\\.?|[^/:@]+\\.)(:[0-9]+)?/"; "i")) | "\(.metadata.namespace)/\(.metadata.name)\t\(.spec.githubURL)"'
 ```
 
 No output means no stored gateway is affected.

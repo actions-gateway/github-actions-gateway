@@ -180,8 +180,9 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 // GitHub (www.github.com or api.github.com, in any case, with or without a trailing
 // dot). The scope guard folds an alias to github.com, so the rule is not what keeps
 // two tenants apart; it keeps a new gateway off a spelling whose scale-set
-// registration at GitHub is unmeasured. It runs on create only: githubURL is immutable
-// (CRD CEL), so a gateway stored under an alias would otherwise fail every later edit.
+// registration at GitHub is unmeasured. It runs on create, and on an update that
+// changes githubURL, which the CRD's immutability CEL already refuses. An update that
+// keeps githubURL is exempt, or a gateway stored under an alias would fail every edit.
 func validatePublicGitHubSpelling(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || !scalesetscope.PublicGitHubAlias(strings.TrimSuffix(u.Hostname(), ".")) {
@@ -225,8 +226,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 // ValidateUpdate applies the same gates on update, so an existing gateway cannot be
 // edited to name an off-allowlist infra PriorityClass — or to point defaultProxyRef
 // (gitHubURL itself is immutable) at a proxy whose noProxyCIDRs exclude its GitHub
-// host. The reserved-namespace guard is create-only (namespace is immutable), as is
-// the public GitHub alias rule (validatePublicGitHubSpelling), and
+// host. The reserved-namespace guard is create-only (namespace is immutable), the
+// public GitHub alias rule applies only when gitHubURL changes
+// (validatePublicGitHubSpelling), and
 // the structural gitHubURL check re-runs as version-agnostic defense even though
 // the CRD's immutability CEL should make it unreachable on update. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
@@ -238,13 +240,19 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 	if err := validation.GitHubURL(newObj.Spec.GitHubURL); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
+	claimUnchanged := oldObj.Spec.GitHubURL == newObj.Spec.GitHubURL
+	if !claimUnchanged {
+		if err := validatePublicGitHubSpelling(newObj.Spec.GitHubURL); err != nil {
+			return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
+		}
+	}
 	if err := validateSchedulingPriorityClass(newObj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateGitHubHostVsProxies(ctx, oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateScaleSetLabelsVsScope(ctx, newObj, oldObj.Spec.GitHubURL == newObj.Spec.GitHubURL); err != nil {
+	if err := v.validateScaleSetLabelsVsScope(ctx, newObj, claimUnchanged); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil
