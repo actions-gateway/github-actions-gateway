@@ -1,19 +1,23 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/goleak"
 )
 
 // fakeResolver is a deterministic ipResolver for the CIDR-allowlist tests.
@@ -383,4 +387,85 @@ func TestParseCIDRList(t *testing.T) {
 			t.Error("expected an error for a malformed CIDR, got nil")
 		}
 	})
+}
+
+// A transport-only proxy permits every destination, so without a guard a worker
+// can CONNECT back into the proxy's own listeners and have its next request
+// arrive from the proxy's address, on whichever port it picked (Q1324).
+func TestHandleConnect_RefusesTheProxysOwnListeners(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	echoAddr := startEchoServer(t)
+	// Wildcard binds, as main.go uses, so the IPv6 and link-local cases reach it.
+	srv := NewServer("[::]:0", "[::]:0", 5*time.Second, nil, prometheus.NewRegistry())
+	startServer(t, srv)
+
+	connectStatus := func(target string) int {
+		t.Helper()
+		conn, err := net.Dial("tcp", srv.Addr)
+		if err != nil {
+			t.Fatalf("dial proxy: %v", err)
+		}
+		defer func() { _ = conn.Close() }()
+		if _, err := fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", target, target); err != nil {
+			t.Fatalf("write CONNECT: %v", err)
+		}
+		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		if err != nil {
+			t.Fatalf("read CONNECT response: %v", err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := connectStatus(echoAddr); got != http.StatusOK {
+		t.Fatalf("control: CONNECT to another loopback port returned %d, want 200", got)
+	}
+	_, connectPort, _ := net.SplitHostPort(srv.Addr)
+	_, healthPort, _ := net.SplitHostPort(srv.HealthAddr)
+	targets := []string{
+		net.JoinHostPort("127.0.0.1", connectPort),
+		net.JoinHostPort("localhost", connectPort),
+		net.JoinHostPort("0.0.0.0", connectPort),
+		net.JoinHostPort("::1", connectPort),
+		net.JoinHostPort("::", connectPort),
+		net.JoinHostPort("::ffff:127.0.0.1", connectPort),
+		net.JoinHostPort("127.0.0.1", healthPort),
+	}
+	// A zoned link-local address is the shape net.ParseIP cannot read.
+	if ll := linkLocalWithZone(t); ll != "" {
+		targets = append(targets, "["+strings.Replace(ll, "%", "%25", 1)+"]:"+connectPort)
+	} else {
+		t.Log("no interface carries an IPv6 link-local address; skipping the zoned case")
+	}
+	for _, target := range targets {
+		if got := connectStatus(target); got != http.StatusForbidden {
+			t.Errorf("CONNECT %s returned %d, want 403: it reached the proxy's own listener", target, got)
+		}
+	}
+}
+
+// linkLocalWithZone returns an IPv6 link-local address of an up interface as
+// "addr%zone", or "" when there is none.
+func linkLocalWithZone(t *testing.T) string {
+	t.Helper()
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("list interfaces: %v", err)
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok && n.IP.To4() == nil && n.IP.IsLinkLocalUnicast() {
+				return n.IP.String() + "%" + iface.Name
+			}
+		}
+	}
+	return ""
 }

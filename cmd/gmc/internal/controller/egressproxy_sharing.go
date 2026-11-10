@@ -258,13 +258,18 @@ func (r *EgressProxyReconciler) reconcileProxyShares(ctx context.Context, ep *gm
 		}, &tlsSecret); err != nil {
 			return fmt.Errorf("read proxy TLS Secret for share projection: %w", err)
 		}
-		caPEM := tlsSecret.Data[corev1.TLSCertKey]
-		if len(caPEM) == 0 {
-			return fmt.Errorf("proxy TLS Secret %q holds no %s", egressProxyTLSSecretName(ep), corev1.TLSCertKey)
-		}
-		for _, ns := range wanted {
-			if err := r.applyProxyShare(ctx, buildProxyShareConfigMap(ep, ns, caPEM)); err != nil {
-				projectErrs = append(projectErrs, fmt.Errorf("project proxy share into %q: %w", ns, err))
+		// Re-validated here rather than trusted from ensureProxyCert, since the Secret
+		// can change between the two reads; only the re-encoded leaf crosses the
+		// namespace boundary. A refused Secret projects nothing but still prunes.
+		cert, err := parseIssuedEgressProxyCert(ep.Namespace, proxyResourceName(ep), tlsSecret.Data)
+		if err != nil {
+			projectErrs = append(projectErrs, fmt.Errorf("proxy TLS Secret %q is not the GMC-issued certificate: %w", egressProxyTLSSecretName(ep), err))
+		} else {
+			caPEM := encodeCertPEM(cert.Raw)
+			for _, ns := range wanted {
+				if err := r.applyProxyShare(ctx, buildProxyShareConfigMap(ep, ns, caPEM)); err != nil {
+					projectErrs = append(projectErrs, fmt.Errorf("project proxy share into %q: %w", ns, err))
+				}
 			}
 		}
 	}

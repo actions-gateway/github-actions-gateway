@@ -3,7 +3,7 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, the medium one fixed.** 9 findings are confirmed from source (one medium, eight low) and 30 are leads that source alone cannot settle.
+> **Status: findings filed, the medium one fixed, and the four egress proxy sharing leads confirmed and fixed (Q1324).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 26 of which still are.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`: Q1321, which has landed, and [Q1322](../queue/Q1322.md), which is open.
 > The rest are [Q1323](../queue/Q1323.md) to [Q1328](../queue/Q1328.md).
@@ -53,10 +53,10 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
 | [A direct-egress gateway's workload NetworkPolicy permits direct GitHub egress for proxied workers in the same namespace, while their status reports Proxied and attributed](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
 | [A tenant can pre-claim scale-set names in a GitHub org it holds no credentials for, and another tenant's RunnerSet or gateway is then rejected at admission](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
-| [Provider-writable proxy TLS Secret is projected unvalidated into consumer namespaces and installed as an unconstrained trust root by consumer AGCs and workers](#egress-proxy-sharing-leads) | needs validation | [Q1324](../queue/Q1324.md) |
-| [A tenant can stall another tenant's EgressProxy reconcile with a labelled ConfigMap and an unblankable Secret in its own namespace](#egress-proxy-sharing-leads) | needs validation | [Q1324](../queue/Q1324.md) |
-| [Bring-your-own-autoscaled EgressProxy lets the live Deployment replica count drive an unbounded repeated-addition loop on the GMC's single EgressProxy worker](#egress-proxy-sharing-leads) | needs validation | [Q1324](../queue/Q1324.md) |
-| [Transport-only proxy tunnels to its own loopback listeners, so a worker can replace its source address and arrival port with the proxy's](#egress-proxy-sharing-leads) | needs validation | [Q1324](../queue/Q1324.md) |
+| [Provider-writable proxy TLS Secret is projected unvalidated into consumer namespaces and installed as an unconstrained trust root by consumer AGCs and workers](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
+| [A tenant can stall another tenant's EgressProxy reconcile with a labelled ConfigMap and an unblankable Secret in its own namespace](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
+| [Bring-your-own-autoscaled EgressProxy lets the live Deployment replica count drive an unbounded repeated-addition loop on the GMC's single EgressProxy worker](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
+| [Transport-only proxy tunnels to its own loopback listeners, so a worker can replace its source address and arrival port with the proxy's](#egress-proxy-sharing-leads) | confirmed by a local test, fixed | Q1324 |
 | [Worker-pod reaper deletes whichever GitHub runner the pod's runner-name annotation names, with no ownership test](#scale-set-identity-leads) | needs validation | [Q1325](../queue/Q1325.md) |
 | [Editing runnerLabels[0] releases the scale-set name claim while the AGC keeps its live session on the old name](#scale-set-identity-leads) | needs validation | [Q1325](../queue/Q1325.md) |
 | [Scale-set name uniqueness guard is check-then-act across two objects, so one tenant creating its RunnerSet and ActionsGateway concurrently may claim another tenant's scale-set name](#scale-set-identity-leads) | needs validation | [Q1325](../queue/Q1325.md) |
@@ -410,7 +410,8 @@ Whichever is chosen, state the remaining first-come behaviour between tenants th
 
 ## Egress proxy sharing leads
 
-Four leads on the egress proxy and cross-namespace sharing, tracked as [Q1324](../queue/Q1324.md).
+Four leads on the egress proxy and cross-namespace sharing, each confirmed by a local test and fixed under Q1324; the **Outcome** line under each says what was measured.
+The owner checks below were not run, and none is needed to close the lead: each fix holds whatever tenant RBAC turns out to grant.
 The first is the most consequential lead in the audit and was reported independently by five of the hunting passes.
 
 ### Provider-writable proxy TLS Secret is projected unvalidated into consumer namespaces and installed as an unconstrained trust root by consumer AGCs and workers
@@ -437,6 +438,12 @@ Locally generated keys only; a fix is proven when (1) regenerates or refuses the
 
 **Owner check.** On a non-production cluster with two tenant namespaces and a granted share, the owner, using the provider tenant's own RBAC identity, runs `kubectl auth can-i update secret/<ep>-proxy-tls -n <provider-ns>` and `kubectl auth can-i create pods -n <provider-ns>`; if the Secret update is allowed, replace tls.crt with leaf plus a test CA and read the consumer namespace's proxy-share-<provider-ns>-<name> ConfigMap and a new consumer worker pod's SSL_CERT_FILE bundle for the test CA.
 Do not attempt interception.
+
+**Outcome.** Confirmed and fixed.
+A unit test seeding `tls.crt` with the GMC-issued leaf followed by a locally generated CA confirmed that the pair verifies a leaf for `api.github.com` signed by that CA.
+The GMC now accepts only the shape `generateEgressProxyCert` issues (one non-CA leaf, exactly the Service's DNS names, paired with `tls.key`), re-issues anything else, and projects only that re-encoded leaf.
+The projected bytes then fail to verify the `api.github.com` leaf (`TestReconcileProxyShares_PlantedCAIsNeverProjected`).
+Whether tenants can write the Secret was not established, and the fix does not depend on it.
 
 **Evidence.** `cmd/gmc/internal/controller/shared_pki.go:107`, `cmd/gmc/internal/controller/egressproxy_cert.go:50`, `charts/actions-gateway/files/agc-tenant-role-rules.yaml:61`, `cmd/gmc/internal/controller/egressproxy_builder.go:95`, `docs/design/05-security.md:184`, `docs/design/05-security.md:204`, `docs/operations/security-operations.md:922`.
 
@@ -465,6 +472,11 @@ A unit variant in cmd/gmc/internal/controller/egressproxy_attribution_test.go ca
 
 **Owner check.** Owner-observed, non-destructive: on a non-production cluster with the chart installed, confirm whether tenant roles permit creating a Secret with immutable: true and a ConfigMap carrying the three projection labels, and whether a policy-enforcing CNI is in place so the stale ingress peer would matter.
 
+**Outcome.** Confirmed and fixed.
+Envtest on Kubernetes 1.35 returns `Invalid` for an Update that blanks an immutable Secret, and the unit variant shows such an error aborted the pool's reconcile.
+A withdrawal now acts only on a ConfigMap at the projection's own name and leaves a Secret it cannot blank, so the planted pair no longer stalls the victim's pool (`TestV2_EgressProxy_Attribution_ForeignUnblankableSecretDoesNotStallThePool`, `TestEgressProxyReconcile_ForeignProjectionsDoNotStallThePool`).
+The revocation half has no stall left to retain access through, so it was not tested separately.
+
 **Evidence.** `cmd/gmc/internal/controller/egressproxy_attribution.go:787`, `cmd/gmc/internal/controller/egressproxy_attribution.go:842`, `cmd/gmc/internal/controller/egressproxy_controller.go:178`, `cmd/gmc/cmd/wiring.go:212`, `cmd/gmc/internal/controller/egressproxy_controller.go:27`, `cmd/gmc/internal/controller/tenant_secret_access.go:225`, `cmd/gmc/internal/controller/egressproxy_sharing.go:210`, `docs/design/05-security.md:191`.
 
 ### Bring-your-own-autoscaled EgressProxy lets the live Deployment replica count drive an unbounded repeated-addition loop on the GMC's single EgressProxy worker
@@ -492,6 +504,11 @@ An envtest case in cmd/gmc/internal/controller/integration can scale a bring-you
 
 **Owner check.** Owner checks, read-only: for a representative tenant subject, `kubectl auth can-i patch deployments/scale -n <tenant-ns> --as <tenant-subject>`, the same for `update deployments` and `create horizontalpodautoscalers` (and KEDA scaledobjects where installed); whether marked tenant namespaces carry a ResourceQuota; the GMC container's CPU limit; and the controller_runtime_reconcile_time_seconds histogram for controller=egressproxy.
 
+**Outcome.** Confirmed and fixed.
+With the repeated addition restored, one `footprintFromResources` call at `math.MaxInt32` replicas did not finish within a 30-second test timeout on the development host.
+`mulQuantity` now calls `Quantity.Mul`, which apimachinery provides and which stays exact past int64, so the same call returns immediately with the exact product (`TestFootprintFromResources_MaxInt32ReplicasIsExact`).
+Tenant scale RBAC was not established, and the fix does not depend on it.
+
 **Evidence.** `cmd/gmc/internal/controller/shared_quota.go:69`, `cmd/gmc/internal/controller/egressproxy_quota.go:24`, `api/v2/egressproxy_types.go:65`, `cmd/gmc/internal/controller/egressproxy_controller.go:725`, `cmd/gmc/internal/controller/egressproxy_controller.go:581`, `cmd/gmc/internal/controller/egressproxy_builder.go:147`, `vendor/k8s.io/apimachinery/pkg/api/resource/quantity.go:601`, `charts/actions-gateway/values.yaml:284`, `docs/operations/tenant-onboarding.md:279`.
 
 ### Transport-only proxy tunnels to its own loopback listeners, so a worker can replace its source address and arrival port with the proxy's
@@ -512,6 +529,11 @@ In cmd/proxy/attribution_test.go, next to TestAttribution_RecordsByListenerAndSe
 Both use only loopback fixtures and the existing in-package helpers.
 
 **Owner check.** The pool owner observes, for each EgressProxy: (1) whether spec.destinationFQDNs and spec.destinationCIDRs are both empty, i.e. the proxy container has no PROXY_ALLOWED_HOST_SUFFIXES or PROXY_ALLOWED_CIDRS env and is transport-only; (2) whether spec.auditLogging is ConnectionsWithSource or spec.failureAttribution is PerConsumerPort, the two features whose identity inputs this path affects; (3) whether the cluster's CNI or any additional policy layer applies NetworkPolicy to traffic a pod sends to its own loopback (expected not to); and (4) whether the retained 'egress audit' lines for the pool already contain records with sourceIP 127.0.0.1 or ::1, or with host 127.0.0.1 or localhost on the pool's CONNECT or attributed ports, and whether the log pipeline correlates such an outer record with the inner one.
+
+**Outcome.** Confirmed and fixed.
+A transport-only proxy returned 200 to CONNECTs naming its own CONNECT and health ports, reached as `127.0.0.1`, `localhost` and `0.0.0.0`.
+The proxy now refuses any dial that lands on one of its own listening ports at a loopback, unspecified or local interface address, checked on the resolved address, and still tunnels to other loopback ports (`TestHandleConnect_RefusesTheProxysOwnListeners`).
+The nested audit and failure-record tests the lead describes were not written, because the tunnel they depend on is now refused.
 
 **Evidence.** `cmd/gmc/internal/controller/egressproxy_builder.go:187`, `cmd/proxy/main.go:96`, `cmd/proxy/proxy.go:420`, `cmd/proxy/proxy.go:760`, `cmd/proxy/audit.go:157`, `cmd/proxy/attribution.go:124`, `cmd/gmc/internal/controller/egressproxy_attribution.go:332`, `docs/design/05-security.md:401`.
 

@@ -250,3 +250,60 @@ func TestV2_EgressProxy_Attribution_HoldsUnderTheShippedRBAC(t *testing.T) {
 		}
 	}
 }
+
+// A tenant can label a ConfigMap in its own namespace as another tenant's
+// attribution projection and pair it with a Secret the GMC cannot blank. The
+// victim's pool must still provision rather than stall on the withdrawal (Q1324).
+func TestV2_EgressProxy_Attribution_ForeignUnblankableSecretDoesNotStallThePool(t *testing.T) {
+	installGMCShippedRBAC(t)
+	const victimNS = "v2-attr-stall-victim"
+	const attackerNS = "v2-attr-stall-attacker"
+	marker := map[string]string{v2.TenantNamespaceMarkerLabel: v2.TenantNamespaceMarkerValue}
+	createNamespaceWithLabels(t, victimNS, marker)
+	createNamespaceWithLabels(t, attackerNS, marker)
+
+	projName := "proxy-attribution-" + victimNS + "-pool"
+	labels := map[string]string{
+		"actions-gateway.com/proxy-attribution": "true",
+		"actions-gateway/proxy-namespace":       victimNS,
+		"actions-gateway/proxy-name":            "pool",
+	}
+	immutable := true
+	sec := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: attackerNS, Name: projName, Labels: labels},
+		Data:       map[string][]byte{corev1.TLSPrivateKeyKey: []byte("x")},
+		Immutable:  &immutable,
+	}
+	require.NoError(t, k8sClient.Create(ctx, sec))
+	require.NoError(t, k8sClient.Create(ctx, &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Namespace: attackerNS, Name: projName, Labels: labels},
+	}))
+
+	// The apiserver half of the lead: blanking an immutable Secret is rejected as Invalid.
+	blank := sec.DeepCopy()
+	blank.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
+	err := k8sClient.Update(ctx, blank)
+	require.True(t, apierrors.IsInvalid(err), "blanking an immutable Secret returned %v", err)
+
+	ep := &v2.EgressProxy{ObjectMeta: metav1.ObjectMeta{Name: "pool", Namespace: victimNS}}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ep) })
+
+	startEgressProxyAsServiceAccount(t)
+	require.Eventually(t, func() bool {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: victimNS, Name: "pool-proxy"}, &appsv1.Deployment{}) == nil
+	}, 30*time.Second, 250*time.Millisecond, "a planted projection in another namespace stalled the pool")
+
+	require.Eventually(t, func() bool {
+		var pool v2.EgressProxy
+		if k8sClient.Get(ctx, client.ObjectKeyFromObject(ep), &pool) != nil {
+			return false
+		}
+		for _, c := range pool.Status.Conditions {
+			if c.Type == "Degraded" {
+				return c.Status == metav1.ConditionFalse
+			}
+		}
+		return false
+	}, 30*time.Second, 250*time.Millisecond, "the pool went or stayed Degraded on another tenant's objects")
+}

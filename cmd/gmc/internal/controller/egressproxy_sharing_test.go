@@ -1,10 +1,21 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
+	"slices"
 	"testing"
+	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -196,10 +207,7 @@ func TestReconcileProxyShares_RevokedGrantIsPruned(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(shareTestScheme(t)).
 		WithObjects(
-			&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
-				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
-			},
+			issuedProxyTLSSecret(t, ep),
 			&gmcv2.ActionsGateway{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
 				Spec: gmcv2.ActionsGatewaySpec{
@@ -249,10 +257,7 @@ func TestReconcileProxyShares_DeniedProjectionDoesNotBlockRevocation(t *testing.
 	c := fake.NewClientBuilder().
 		WithScheme(shareTestScheme(t)).
 		WithObjects(
-			&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
-				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
-			},
+			issuedProxyTLSSecret(t, ep),
 			referrer("team-a"),
 			referrer("not-a-tenant"),
 		).
@@ -318,10 +323,7 @@ func TestReconcileProxyShares_ProjectsAuditLogging(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithScheme(shareTestScheme(t)).
 		WithObjects(
-			&corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
-				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
-			},
+			issuedProxyTLSSecret(t, ep),
 			&gmcv2.ActionsGateway{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
 				Spec: gmcv2.ActionsGatewaySpec{
@@ -345,4 +347,114 @@ func TestReconcileProxyShares_ProjectsAuditLogging(t *testing.T) {
 			t.Errorf("projection carries %s %q, want the provider's %q", shareAuditLoggingKey, got, want)
 		}
 	}
+}
+
+// issuedProxyTLSSecret returns the proxy TLS Secret ensureProxyCert would write.
+func issuedProxyTLSSecret(t *testing.T, ep *gmcv2.EgressProxy) *corev1.Secret {
+	t.Helper()
+	certPEM, keyPEM, err := generateEgressProxyCert(ep.Namespace, proxyResourceName(ep))
+	require.NoError(t, err)
+	return buildEgressProxyCertSecret(ep, certPEM, keyPEM)
+}
+
+// Consumers install the projected ca.crt as a trust root (Q1324). A provider-side
+// write that appends a CA to the Secret must be replaced before projection, so the
+// consumer namespace never receives a certificate able to sign for a GitHub host.
+func TestReconcileProxyShares_PlantedCAIsNeverProjected(t *testing.T) {
+	ctx := context.Background()
+	ep := proxyWithSharing("provider", "pool", "team-a")
+
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	caTmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "planted"},
+		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
+		IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+	ca, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+	ghKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	ghDER, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
+		SerialNumber: big.NewInt(2), DNSNames: []string{"api.github.com"},
+		NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour),
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}, ca, &ghKey.PublicKey, caKey)
+	require.NoError(t, err)
+	ghLeaf, err := x509.ParseCertificate(ghDER)
+	require.NoError(t, err)
+
+	verifiesGitHub := func(rootsPEM []byte) bool {
+		pool := x509.NewCertPool()
+		require.True(t, pool.AppendCertsFromPEM(rootsPEM))
+		_, err := ghLeaf.Verify(x509.VerifyOptions{DNSName: "api.github.com", Roots: pool})
+		return err == nil
+	}
+
+	secret := issuedProxyTLSSecret(t, ep)
+	planted := append(slices.Clone(secret.Data[corev1.TLSCertKey]), encodeCertPEM(caDER)...)
+	secret.Data[corev1.TLSCertKey] = planted
+	require.True(t, verifiesGitHub(planted), "control: the planted bytes must sign for api.github.com")
+
+	c := fake.NewClientBuilder().
+		WithScheme(shareTestScheme(t)).
+		WithObjects(ep, secret, &gmcv2.ActionsGateway{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: "gw"},
+			Spec: gmcv2.ActionsGatewaySpec{
+				DefaultProxyRef: &gmcv2.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+			},
+		}).Build()
+	r := &EgressProxyReconciler{Client: c, Scheme: shareTestScheme(t)}
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyShareConfigMapName("provider", "pool")}
+
+	// Projecting straight from the planted Secret refuses rather than copying it.
+	require.Error(t, r.reconcileProxyShares(ctx, ep))
+	var cm corev1.ConfigMap
+	require.True(t, apierrors.IsNotFound(c.Get(ctx, key, &cm)), "projected from a planted Secret")
+
+	// The reconcile order re-issues first, then projects the re-issued leaf alone.
+	require.NoError(t, r.ensureProxyCert(ctx, ep))
+	require.NoError(t, r.reconcileProxyShares(ctx, ep))
+	require.NoError(t, c.Get(ctx, key, &cm))
+	projected := []byte(cm.Data[shareCACertKey])
+	assert.NotEqual(t, planted, projected)
+	block, rest := pem.Decode(projected)
+	require.NotNil(t, block)
+	assert.Empty(t, bytes.TrimSpace(rest), "projection carries more than one certificate")
+	assert.False(t, verifiesGitHub(projected), "the projected trust root signs for api.github.com")
+}
+
+// A Secret the share step refuses must not hold off revocation: projection stops,
+// and a withdrawn grant is still pruned (Q1324).
+func TestReconcileProxyShares_RefusedCertStillPrunesARevokedGrant(t *testing.T) {
+	ctx := context.Background()
+	ep := proxyWithSharing("provider", "pool", "team-a", "team-b")
+	secret := issuedProxyTLSSecret(t, ep)
+	referrer := func(ns string) *gmcv2.ActionsGateway {
+		return &gmcv2.ActionsGateway{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "gw"},
+			Spec: gmcv2.ActionsGatewaySpec{
+				DefaultProxyRef: &gmcv2.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+			},
+		}
+	}
+	c := fake.NewClientBuilder().
+		WithScheme(shareTestScheme(t)).
+		WithObjects(secret, referrer("team-a"), referrer("team-b")).Build()
+	r := &EgressProxyReconciler{Client: c}
+	keyB := types.NamespacedName{Namespace: "team-b", Name: proxyShareConfigMapName("provider", "pool")}
+	require.NoError(t, r.reconcileProxyShares(ctx, ep))
+	require.NoError(t, c.Get(ctx, keyB, &corev1.ConfigMap{}))
+
+	// Append a second certificate, then revoke team-b while the Secret is refused.
+	require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(secret), secret))
+	secret.Data[corev1.TLSCertKey] = append(slices.Clone(secret.Data[corev1.TLSCertKey]), secret.Data[corev1.TLSCertKey]...)
+	require.NoError(t, c.Update(ctx, secret))
+	ep.Spec.Sharing.AllowedNamespaces = []string{"team-a"}
+
+	require.ErrorContains(t, r.reconcileProxyShares(ctx, ep), "is not the GMC-issued certificate")
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, keyB, &corev1.ConfigMap{})),
+		"the revoked share survived because the Secret was refused")
 }

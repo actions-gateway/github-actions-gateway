@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -94,6 +95,22 @@ func TestFootprintFromResources(t *testing.T) {
 	zero := footprintFromResources(poolResources(nil), -3)
 	z := zero[corev1.ResourcePods]
 	assert.Equal(t, int64(0), z.Value())
+}
+
+// A bring-your-own autoscaler sets the replica count the quota math multiplies by,
+// up to the int32 maximum, so the product must not cost one step per replica: the
+// old repeated addition ran this case past any test timeout (Q1324).
+func TestFootprintFromResources_MaxInt32ReplicasIsExact(t *testing.T) {
+	res := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("10m")},
+		Limits:   corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("4Ei")},
+	}
+	fp := footprintFromResources(res, math.MaxInt32)
+
+	cpu := fp[corev1.ResourceRequestsCPU]
+	assert.Equal(t, int64(10*math.MaxInt32), cpu.MilliValue())
+	mem := fp[corev1.ResourceLimitsMemory]
+	assert.Equal(t, "8589934588Ei", mem.String(), "memory product past int64 must stay exact")
 }
 
 func TestFootprintFromResources_HonoursResourceOverride(t *testing.T) {
