@@ -653,32 +653,38 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-choose-gag" class="md-nav__link">
+  <a href="#which-option-fits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to choose GAG
+        Which option fits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Which option fits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-your-own-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On your own hardware
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#location-location-location" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Location, location, location
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" class="md-nav__link">
+  <a href="#what-gag-adds-once-teams-share-a-cluster" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Multi-tenant platforms are an order of magnitude more complex
+        What GAG adds once teams share a cluster
       
     </span>
   </a>
@@ -697,10 +703,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#no-offering-is-perfect-yet" class="md-nav__link">
+  <a href="#what-you-trade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        No offering is perfect, yet…
+        What you trade
       
     </span>
   </a>
@@ -708,10 +714,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-further" class="md-nav__link">
+  <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reading further
+        Next steps
       
     </span>
   </a>
@@ -2769,32 +2775,38 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#when-not-to-choose-gag" class="md-nav__link">
+  <a href="#which-option-fits" class="md-nav__link">
     <span class="md-ellipsis">
       
-        When not to choose GAG
+        Which option fits
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Which option fits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#on-your-own-hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On your own hardware
       
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#location-location-location" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Location, location, location
-      
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" class="md-nav__link">
+  <a href="#what-gag-adds-once-teams-share-a-cluster" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Multi-tenant platforms are an order of magnitude more complex
+        What GAG adds once teams share a cluster
       
     </span>
   </a>
@@ -2813,10 +2825,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#no-offering-is-perfect-yet" class="md-nav__link">
+  <a href="#what-you-trade" class="md-nav__link">
     <span class="md-ellipsis">
       
-        No offering is perfect, yet…
+        What you trade
       
     </span>
   </a>
@@ -2824,10 +2836,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#reading-further" class="md-nav__link">
+  <a href="#next-steps" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Reading further
+        Next steps
       
     </span>
   </a>
@@ -2857,83 +2869,93 @@
 
 
 <h1 id="choosing-how-to-run-self-hosted-ci">Choosing how to run self-hosted CI<a class="headerlink" href="#choosing-how-to-run-self-hosted-ci" title="Permanent link">&para;</a></h1>
-<p>One question decides most of this: <strong>must the jobs run on a Kubernetes cluster you operate, and do several teams share it?</strong> If the first half is no, a vendor is in the lane and GitHub Actions Gateway (GAG) competes there on governance, not speed.
-If the second half is no, GAG still runs, and the trade is a short list of named capabilities rather than a category.</p>
-<h2 id="when-not-to-choose-gag">When not to choose GAG<a class="headerlink" href="#when-not-to-choose-gag" title="Permanent link">&para;</a></h2>
-<p>Every competitor-side fact here carries the date it was read, because they move.</p>
-<table>
-<thead>
-<tr>
-<th>If</th>
-<th>Use</th>
-<th>Not GAG, because</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>You need a GitHub Support entitlement, <code>containerMode: kubernetes</code>, or GHES tested on a real appliance</td>
-<td><a href="https://github.com/actions/actions-runner-controller">ARC</a></td>
-<td>GAG has none of the three and plans only the third. Team count is not the line: one team gets every GAG capability, and what running GAG costs one team against ARC is unmeasured (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">D.3</a>)</td>
-</tr>
-<tr>
-<td>Your jobs can leave the clusters you operate</td>
-<td>a managed runner service (Blacksmith, Namespace, Ubicloud), or one that runs in your cloud account under the vendor's control plane (Depot on AWS; WarpBuild on AWS, GCP and Azure, with static IPs)</td>
-<td>they sell per-build speed and price per minute; GAG has measured neither and claims neither. None of the five sites read describes running on a cluster you operate, or a platform/tenant boundary (read 2026-11-07; <a href="../design/appendix-d-alternatives-considered/#d14-managed-runner-services-an-explicit-non-competitor">D.14</a>)</td>
-</tr>
-<tr>
-<td>Managed Kubernetes is cheap and your CI fits one cloud</td>
-<td>a cluster per team, in its own project</td>
-<td>a project boundary isolates harder than any shared cluster, and costs an API call</td>
-</tr>
-<tr>
-<td>Your compute is elastic cloud capacity, no cluster wanted</td>
-<td><a href="https://runs-on.com">RunsOn</a>, <a href="https://github.com/github-aws-runners/terraform-aws-github-runner">terraform-aws-github-runner</a>, <a href="https://actuated.com">Actuated</a></td>
-<td>a VM per job isolates without any namespace argument. RunsOn retries a spot-interrupted job once on on-demand (its site, 2026-11-07), so the difference is who owns the pool, not who re-runs the job (<a href="../design/appendix-d-alternatives-considered/#d11-self-hosted-github-actions-without-kubernetes">D.11</a>)</td>
-</tr>
-</tbody>
-</table>
-<div class="admonition tip">
-<p class="admonition-title">GAG is for what is left</p>
-<p>The nodes are a cluster you operate, several teams share them, and that sharing has to be safe.
-On-premises, air-gapped, or on GPUs already bought, the vendor row does not apply at all, and the field is ARC or GAG before a feature is compared.</p>
-</div>
-<h2 id="location-location-location">Location, location, location<a class="headerlink" href="#location-location-location" title="Permanent link">&para;</a></h2>
-<p>Where each option can actually run is the fastest filter, and most comparisons omit it: "self-hosted" usually means "self-hosted on AWS".</p>
+<p>GitHub Actions Gateway (GAG) is built for one case: <strong>the jobs must run on a Kubernetes cluster you operate, and several teams share it</strong>.
+On a cluster like that, GAG separates what the platform owns from what a tenant owns, which Actions Runner Controller (ARC) has no primitive for.
+If your case is different, the chart names what fits it better.</p>
+<h2 id="which-option-fits">Which option fits<a class="headerlink" href="#which-option-fits" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>%%{init: {"flowchart": {"rankSpacing": 26, "nodeSpacing": 24, "wrappingWidth": 280}}}%%
+flowchart TD
+    managed["A managed&lt;br&gt;runner service"]
+    vm["A VM per job"]
+    percluster["A cluster&lt;br&gt;per team"]
+    arc["ARC"]
+    gag["GitHub Actions Gateway"]
+    q1(["Must you operate&lt;br&gt;the runners yourself?"])
+    q2(["Must they run on a&lt;br&gt;Kubernetes cluster?"])
+    q3(["Do several teams&lt;br&gt;share the cluster?"])
+    q4(["Is a cluster per team cheap,&lt;br&gt;and does your CI fit one cloud?"])
+    q5(["Do you need GitHub Support,&lt;br&gt;containerMode: kubernetes, or&lt;br&gt;GitHub Enterprise Server (GHES)&lt;br&gt;tested on an appliance?"])
+    q1 -- no --&gt; managed
+    q1 -- yes --&gt; q2
+    q2 -- no --&gt; vm
+    q2 -- yes --&gt; q3
+    q3 -- yes --&gt; q4
+    q3 -- no --&gt; q5
+    q4 -- yes --&gt; percluster
+    q4 -- no --&gt; q5
+    q5 -- yes --&gt; arc
+    q5 -- no --&gt; gag
+    style gag stroke-width:3px</code></pre>
+<p>The table gives each answer's options, where they can run, and the reason to pick them.
+Where an option can run is the fastest filter, and most comparisons omit it: "self-hosted" usually means "self-hosted on AWS".
+Every competitor-side fact here carries the date it was read, because they move.</p>
 <table>
 <thead>
 <tr>
 <th>Option</th>
 <th>Runs on</th>
+<th>Choose it when</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Managed runner services</td>
-<td>the vendor's infrastructure, or your cloud account under the vendor's control plane (Depot: AWS; WarpBuild: AWS, GCP, Azure; read 2026-11-07)</td>
+<td>A managed runner service: Blacksmith, Namespace, Ubicloud, Depot, WarpBuild</td>
+<td>the vendor's infrastructure, or your cloud account under the vendor's control plane (Depot: AWS; WarpBuild: AWS, GCP and Azure, with static IPs)</td>
+<td>per-build speed and price per minute are what you are buying. GAG has measured neither and claims neither. None of the five sites read describes running on a cluster you operate, or a platform/tenant boundary (read 2026-11-07; <a href="../design/appendix-d-alternatives-considered/#d14-managed-runner-services-an-explicit-non-competitor">D.14</a>)</td>
 </tr>
 <tr>
-<td>RunsOn, terraform-aws-github-runner, <a href="https://github.com/cisco-open/forge">ForgeMT</a></td>
+<td>A VM per job: <a href="https://runs-on.com">RunsOn</a>, <a href="https://github.com/github-aws-runners/terraform-aws-github-runner">terraform-aws-github-runner</a></td>
 <td>AWS only</td>
+<td>your compute is elastic cloud capacity and you want no cluster. A VM per job isolates without any namespace argument. RunsOn retries a spot-interrupted job once on on-demand (its site, 2026-11-07), so the difference from GAG is who owns the pool, not who re-runs the job (<a href="../design/appendix-d-alternatives-considered/#d11-self-hosted-github-actions-without-kubernetes">D.11</a>)</td>
 </tr>
 <tr>
-<td>Actuated</td>
+<td>A VM per job: <a href="https://actuated.com">Actuated</a></td>
 <td>your hardware, vendor-hosted control plane</td>
+<td>you want the same isolation on machines you own</td>
 </tr>
 <tr>
-<td>ARC, GAG</td>
+<td><a href="https://github.com/cisco-open/forge">ForgeMT</a></td>
+<td>AWS only</td>
+<td>you want a multi-tenant platform and your tenant boundary can be cloud identity (<a href="#on-your-own-hardware">below</a>)</td>
+</tr>
+<tr>
+<td>A cluster per team</td>
+<td>managed Kubernetes, each cluster in its own cloud project</td>
+<td>managed Kubernetes is cheap and your CI fits one cloud. A project boundary isolates harder than any shared cluster, and costs an API call</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions/actions-runner-controller">ARC</a></td>
 <td>any conformant Kubernetes cluster, including on-premises and air-gapped</td>
+<td>you need a GitHub Support entitlement, <code>containerMode: kubernetes</code>, or GHES tested on a real appliance. GAG has none of the three and plans only the third (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">D.3</a>)</td>
+</tr>
+<tr>
+<td><strong>GAG</strong></td>
+<td>any conformant Kubernetes cluster, including on-premises and air-gapped</td>
+<td>several teams share the cluster and that sharing has to be safe. One team gets every GAG capability too, and what running GAG costs one team against ARC is unmeasured (<a href="../design/appendix-d-alternatives-considered/#d3-actions-runner-controller-arc">D.3</a>)</td>
 </tr>
 </tbody>
 </table>
+<h3 id="on-your-own-hardware">On your own hardware<a class="headerlink" href="#on-your-own-hardware" title="Permanent link">&para;</a></h3>
 <div class="admonition tip">
-<p class="admonition-title">On-premises, most of this list is already gone</p>
-<p>Only the last row is left, ruled out by the same constraint that made you self-host in the first place, before a single feature is compared.</p>
+<p class="admonition-title">On your own hardware, the list is short</p>
+<p>On-premises or on GPUs already bought, three rows are left: Actuated, ARC and GAG.
+Actuated puts a vendor-hosted scheduler in the control path, so air-gapped the field is ARC or GAG before a feature is compared.</p>
 </div>
-<p>On-premises also removes the isolation boundaries those options are built from, which is the serious argument against a shared cluster.
+<p>On-premises also removes the isolation boundaries the other options are built from, which is the serious argument against a shared cluster.
 ForgeMT, the one other multi-tenant platform on the list, draws its tenant boundary in IAM and OIDC role scope, GitHub App scope, and runner labels, and offers a VM per job when a pod is not enough (its docs, read 2026-08-12).
 Every one of those is an AWS API, and on your own hardware the equivalent is a hardware purchase rather than a free call.
 <a href="../design/appendix-d-alternatives-considered/#d9-forgemt-and-cloud-identity-tenant-boundaries">Appendix D.9</a> states both trade-offs, including the one this design loses.</p>
-<h2 id="multi-tenant-platforms-are-an-order-of-magnitude-more-complex">Multi-tenant platforms are an order of magnitude more complex<a class="headerlink" href="#multi-tenant-platforms-are-an-order-of-magnitude-more-complex" title="Permanent link">&para;</a></h2>
+<h2 id="what-gag-adds-once-teams-share-a-cluster">What GAG adds once teams share a cluster<a class="headerlink" href="#what-gag-adds-once-teams-share-a-cluster" title="Permanent link">&para;</a></h2>
 <p>Adding teams does not add a feature, it adds roles.
 Three end up in the room, each with different powers and a different blast radius, and holding them apart is most of the work.
 ARC models the first two as one person, which is coherent for a single-owner cluster and is why it has no primitive separating them.</p>
@@ -3010,22 +3032,22 @@ ARC models the first two as one person, which is coherent for a single-owner clu
 </tr>
 </tbody>
 </table>
-<h2 id="no-offering-is-perfect-yet">No offering is perfect, yet…<a class="headerlink" href="#no-offering-is-perfect-yet" title="Permanent link">&para;</a></h2>
-<p>Here is where GAG loses, and to whom.
-<strong>No single alternative holds all of these</strong>, which is why the middle column matters as much as the first.</p>
+<h2 id="what-you-trade">What you trade<a class="headerlink" href="#what-you-trade" title="Permanent link">&para;</a></h2>
+<p>Six things GAG does not have today, who does, and where GAG stands on each.
+<strong>No single alternative holds all six.</strong></p>
 <table>
 <thead>
 <tr>
-<th>What GAG lacks</th>
+<th>What you give up</th>
 <th>Who has it</th>
-<th>Tracked</th>
+<th>Where GAG stands</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Install base</td>
+<td>A large install base</td>
 <td>ARC 6,632 stars, ForgeMT 214, GAG 7 (2026-11-07)</td>
-<td>see below</td>
+<td>an evidence trail, described below</td>
 </tr>
 <tr>
 <td>Commercial support</td>
@@ -3035,12 +3057,12 @@ ARC models the first two as one person, which is coherent for a single-owner clu
 <tr>
 <td><code>container:</code>/<code>services:</code> without privilege</td>
 <td>ARC, via <code>containerMode: kubernetes</code></td>
-<td><a href="../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">declined 2026-08-25</a>; Kata DinD is the answer, and needs nested virtualization</td>
+<td>Docker-in-Docker inside a Kata micro-VM, which runs them with no privileged container and needs nested virtualization. ARC's mechanism was <a href="../design/appendix-d-alternatives-considered/#d15-pod-per-step-container-execution-arcs-containermode-kubernetes">declined 2026-08-25</a></td>
 </tr>
 <tr>
 <td>GHES tested on a real appliance</td>
 <td>ARC</td>
-<td><a href="../features/">flagged untested</a>; needs an operator with one</td>
+<td>GHES gateways are served and <a href="../features/">flagged untested</a>; testing needs an operator with an appliance</td>
 </tr>
 <tr>
 <td>Per-build speed</td>
@@ -3054,12 +3076,12 @@ ARC models the first two as one person, which is coherent for a single-owner clu
 </tr>
 </tbody>
 </table>
-<p>One footnote on that table.</p>
-<p><strong>Install base has no engineering answer.</strong> If being the first production deployment is unacceptable, that settles it.
-The only counterweight is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a <a href="../design/appendix-a-capacity-slos/">published retraction</a> of the project's own best number once it proved unmeasurable.</p>
-<h2 id="reading-further">Reading further<a class="headerlink" href="#reading-further" title="Permanent link">&para;</a></h2>
-<p><a href="../design/appendix-d-alternatives-considered/">Appendix D</a> argues every alternative in full, including <a href="../design/appendix-d-alternatives-considered/#d10-prow-and-the-prior-art-for-automatic-re-run">Prow</a>, which is why GAG does not claim automatic re-run is novel, and <a href="../design/appendix-d-alternatives-considered/#d12-gitlab-runners-kubernetes-executor">GitLab Runner</a>, which faces the identical problem and resolves it the other way.
-<a href="../why-gag/">Why GAG?</a> is the capability-by-capability comparison against ARC.</p>
+<p><strong>A smaller install base has no engineering answer.</strong> ARC is widely deployed, and GAG is newer and has fewer users.
+If you need a large install base behind you, that settles it.
+If you do not, what you have to go on is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a <a href="../design/appendix-a-capacity-slos/">published retraction</a> of the project's own best number once it proved unmeasurable.</p>
+<h2 id="next-steps">Next steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
+<p><a class="md-button md-button--primary" href="../getting-started/">Get started</a> <a class="md-button" href="../why-gag/">Why GAG over ARC?</a></p>
+<p><a href="../design/appendix-d-alternatives-considered/">Appendix D</a> argues every alternative in full, including <a href="../design/appendix-d-alternatives-considered/#d10-prow-and-the-prior-art-for-automatic-re-run">Prow</a>, which is why GAG does not claim automatic re-run is novel, and <a href="../design/appendix-d-alternatives-considered/#d12-gitlab-runners-kubernetes-executor">GitLab Runner</a>, which faces the identical problem and resolves it the other way.</p>
 
 
 
