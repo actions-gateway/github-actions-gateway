@@ -219,7 +219,8 @@ func requireCreateEventually(t *testing.T, obj client.Object) {
 // then have to hold. The reconciler reports the pair, so an operator can find it. A
 // new claim on the shared name is refused. And an edit that leaves a stored claim
 // alone is still admitted, for both tenants, so neither is locked out of its own
-// RunnerSet by the other's spelling.
+// RunnerSet by the other's spelling. The last block covers the gateway's own rule: a
+// new gateway under an alias is refused, and the stored one stays editable.
 func TestV2_ScaleSetNameCollisionAcrossGitHubAlias(t *testing.T) {
 	const (
 		nsPlain = "v2-ssalias-plain"
@@ -301,4 +302,25 @@ func TestV2_ScaleSetNameCollisionAcrossGitHubAlias(t *testing.T) {
 	err := k8sClient.Update(ctx, mover)
 	require.Error(t, err, "an update that moves a set onto the shared name must be refused")
 	assert.Contains(t, err.Error(), "github.com/alias-org")
+
+	// The gateway half. A new gateway may not take an alias spelling, and the one
+	// stored under it stays editable: githubURL is immutable, so a rule that ran on
+	// update would refuse every later write to it.
+	fresh := newV2GatewayWired("gw-new", nsAlias, "github-app", "")
+	fresh.Spec.GitHubURL = "https://api.github.com/alias-new-org"
+	err = k8sClient.Create(ctx, fresh)
+	if err == nil {
+		_ = k8sClient.Delete(ctx, fresh)
+	}
+	require.Error(t, err, "a new gateway spelling public GitHub api.github.com must be refused")
+	assert.Contains(t, err.Error(), "alias of public GitHub")
+	assert.Contains(t, err.Error(), "https://github.com/alias-new-org")
+
+	var stored v2.ActionsGateway
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: nsAlias, Name: "gw"}, &stored))
+	require.Equal(t, "https://www.github.com/alias-org", stored.Spec.GitHubURL)
+	edited := stored.DeepCopy()
+	edited.Annotations = map[string]string{"example.com/unrelated-edit": "true"}
+	require.NoError(t, k8sClient.Patch(ctx, edited, client.MergeFrom(&stored)),
+		"an edit to a gateway stored under the alias must be admitted")
 }

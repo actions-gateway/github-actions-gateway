@@ -706,6 +706,7 @@ Two properties matter for the guard being a boundary:
   The alias fold follows what the AGC addresses: `githubapp.DeriveAPIBaseURL` sends those three hosts to one API, and a test holds the two lists together (Q1322).
   One exemption keeps the fold from locking out stored objects: an update that leaves a set's first label and gateway alone, or a gateway's `githubURL` alone, is compared without it, because such a write cannot create a collision and both guards re-run on every update.
   Without the exemption a tenant holding the alias spelling would block the other tenant's unrelated edits; the reconciler reports the stored pair instead.
+  A new gateway cannot take an alias spelling at all: `ValidateCreate` rejects it, so the fold and its exemption serve only gateways stored before `v2.0.0`.
 - **The rejection does not enumerate tenants.** A conflicting set in the applying tenant's own namespace is named; a cross-tenant one is withheld from the API error and written to the GMC log instead.
   The `RunnerSet` is tenant-authored, so a message naming the holder would let anyone able to create one in their own namespace probe another tenant's namespaces and label usage.
 

@@ -32,7 +32,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a shared EgressProxy exempts a consumer's GitHub host: the pair is now rejected](#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected)
   - [Action required if a networkPolicy peer names a broad or link-local cidr: the value is now rejected](#action-required-if-a-networkpolicy-peer-names-a-broad-or-link-local-cidr-the-value-is-now-rejected)
   - [Action required if a gateway names a GitHub Enterprise Server host: an FQDN-mode pool reaches it only when the platform allowlists it](#action-required-if-a-gateway-names-a-github-enterprise-server-host-an-fqdn-mode-pool-reaches-it-only-when-the-platform-allowlists-it)
-  - [Action required if a githubURL spells public GitHub www.github.com or api.github.com: it now shares scale-set names with github.com](#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-it-now-shares-scale-set-names-with-githubcom)
+  - [Action required if a githubURL spells public GitHub www.github.com or api.github.com: a new gateway is rejected, and a stored one shares scale-set names with github.com](#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-a-new-gateway-is-rejected-and-a-stored-one-shares-scale-set-names-with-githubcom)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
@@ -749,21 +749,31 @@ For a pool it lists, see [A GHES Tenant's Traffic Never Reaches the Appliance](t
 
 **Rolling back** to a `1.x` GMC puts every referrer's host back in the policy, allowlisted or not.
 
-### Action required if a `githubURL` spells public GitHub `www.github.com` or `api.github.com`: it now shares scale-set names with `github.com`
+### Action required if a `githubURL` spells public GitHub `www.github.com` or `api.github.com`: a new gateway is rejected, and a stored one shares scale-set names with `github.com`
 
-**Who is affected:** operators with an `ActionsGateway` whose `githubURL` host is `www.github.com` or `api.github.com`, when another gateway names the same organization, enterprise or repository under another of the three hosts, and a `RunnerSet` under each has the same first `runnerLabel`.
-A gateway that uses one of those spellings and has no such twin is unaffected.
+**Who is affected:** operators with an `ActionsGateway` whose `githubURL` host is `www.github.com` or `api.github.com`, stored in the cluster or written in a manifest or backup that will create one.
+A stored gateway is affected a second way when another gateway names the same organization, enterprise or repository under another of the three hosts, and a `RunnerSet` under each has the same first `runnerLabel`.
 
 **What changed.** The AGC sends all three hosts to the public GitHub API, but the [scale-set name guard](troubleshooting.md#runnerset-rejected-duplicate-first-runnerlabel) compared them as three different places, so it admitted two `RunnerSet`s claiming one scale-set name in one organization.
-The guard now reads all three as `github.com`.
+The guard now reads all three as `github.com`, and admission rejects a new gateway that uses either alias.
 Whether GitHub registers runners under the `www.` and `api.` spellings was not measured.
 If it does, such a pair drives one scale set and each tenant acquires the other's jobs; if it does not, the sets under that gateway never register.
 
-The upgrade itself refuses nothing: a set or gateway already stored keeps running, and an edit that keeps a set's first `runnerLabel` and its `gatewayRef` is still accepted.
-A new claim on the shared name is rejected.
-That covers creating a set, moving a set onto the name by changing its first label or its `gatewayRef`, and a delete and re-create, which includes a restore from backup.
+The upgrade itself refuses nothing.
+A gateway already stored under either alias keeps running and stays editable, and so does every set under it.
 
-The same goes for a host written with a trailing dot, such as `github.com.`, which names the same place as the host without it.
+Creating a gateway under either alias is [rejected](troubleshooting.md#actionsgateway-rejected-githuburl-spells-public-github-by-an-alias), in any letter case and with or without a trailing dot.
+A delete and re-create is a create, so this covers a restore from backup and a GitOps apply that re-creates a deleted gateway.
+`githubURL` is immutable, so a stored gateway leaves the alias only by that route: delete it, then create it with the host written `github.com`.
+Until you do, keep the alias in its manifest, because an apply that changes the host of a stored gateway fails the immutability rule.
+In a backup, change the host to `github.com` before you restore from it.
+
+A stored gateway also shares scale-set names with the other two hosts from now on.
+An edit that keeps a set's first `runnerLabel` and its `gatewayRef` is still accepted, and a new claim on a shared name is rejected.
+That covers creating a set, and moving a set onto the name by changing its first label or its `gatewayRef`.
+
+The name sharing also applies to a host written with a trailing dot, such as `github.com.`, which names the same place as the host without it.
+A new gateway on `github.com.` is still accepted.
 
 **Before you upgrade,** list the gateways that use either spelling or a trailing dot:
 
@@ -772,7 +782,8 @@ kubectl get actionsgateways.actions-gateway.com -A -o json \
   | jq -r '.items[] | select(.spec.githubURL | test("^https://((www|api)\\.github\\.com\\.?|[^/:@]+\\.)(:[0-9]+)?/"; "i")) | "\(.metadata.namespace)/\(.metadata.name)\t\(.spec.githubURL)"'
 ```
 
-No output means there is nothing to do.
+No output means no stored gateway is affected.
+Search your manifests and backups for the two hosts as well, since the command reads only what is stored.
 For each gateway listed, check whether another gateway names the same path on another of the three hosts, or on the same host without the dot, and whether a set under each has the same first label.
 `githubURL` is immutable, so fix a pair by giving one side's `RunnerSet` a distinct first `runnerLabel`, and change the `runs-on` of the workflows that name it in the same change.
 

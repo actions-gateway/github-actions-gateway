@@ -296,11 +296,12 @@ Candidate fix: fold the three DeriveAPIBaseURL public hosts to github.com in Git
 
 **Resolution.** `GitHubScope` now folds `www.github.com` and `api.github.com` to `github.com`, and a unit test holds its alias list to the hosts `DeriveAPIBaseURL` treats as public GitHub.
 It also drops a trailing dot on the host, since `github.com.` resolves as `github.com` does.
-Rejecting the alias spellings was not taken.
-In `validation.GitHubURL`, which re-runs on update, a rejection would refuse every later edit to a stored alias gateway, because `githubURL` is immutable.
-In `ValidateCreate` alone it would not, and it would stop new gateways adopting spellings whose registration behaviour is unmeasured, at the cost of one more breaking change and of refusing to re-create a stored alias gateway from a backup.
-That choice is still open, and only `v2.0.0` can take it.
-The fold alone has the same problem one step removed, because both scope guards also re-run on update.
+A new gateway under either alias is also rejected, in `ValidateCreate` alone.
+The fold is what keeps two tenants apart, and the rejection keeps new gateways off spellings whose registration behaviour is unmeasured.
+A rule that rejects a value earlier releases accepted is a breaking change, so it went into `v2.0.0`.
+It costs one more breaking change, and a stored alias gateway cannot be re-created from a backup until its host is written `github.com`.
+The rejection is not in `validation.GitHubURL`, which re-runs on update: `githubURL` is immutable, so there it would refuse every later edit to a stored alias gateway.
+The fold has the same problem one step removed, because both scope guards also re-run on update.
 Two tenants stored on different spellings with one scale-set name would each be refused every unrelated edit after the upgrade, and either could hold the other there.
 So an update that leaves the claim as stored is compared by the scope as written, which is the comparison made before the fold: a RunnerSet keeping its first `runnerLabel` and `gatewayRef`, or a gateway keeping its `githubURL`.
 Any new or changed claim is compared folded, and the reconciler reports a stored alias pair on both gateways as `ScaleSetNameCollision`.

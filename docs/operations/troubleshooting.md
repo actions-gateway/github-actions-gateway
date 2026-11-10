@@ -108,6 +108,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Tracing Rejected by Admission: insecure With an https Endpoint](#tracing-rejected-by-admission-insecure-with-an-https-endpoint)
 - [Egress Peer cidr Rejected by Admission](#egress-peer-cidr-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `githubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
+- [ActionsGateway Rejected: `githubURL` Spells Public GitHub by an Alias](#actionsgateway-rejected-githuburl-spells-public-github-by-an-alias)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [Priority Tiers Rejected by Admission: Thresholds Not Ascending](#priority-tiers-rejected-by-admission-thresholds-not-ascending)
 - [kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout](#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout)
@@ -3747,7 +3748,7 @@ Two ways that happens:
 - **Upgrade from a release before `v1.5.0`.** The uniqueness guard used to be namespace-scoped, so a cross-namespace pair was admitted then and is still stored now.
   A webhook only fires on a write, and nothing re-applies these objects, so the guard never sees them.
   **This is the common case, and it is why the condition exists.**
-- **Upgrade from a release before `v2.0.0`, with a gateway spelled `www.github.com` or `api.github.com`.** The guard compared those hosts as different places from `github.com`, so a pair across two spellings of one org was admitted ([upgrade note](upgrade.md#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-it-now-shares-scale-set-names-with-githubcom)).
+- **Upgrade from a release before `v2.0.0`, with a gateway spelled `www.github.com` or `api.github.com`.** The guard compared those hosts as different places from `github.com`, so a pair across two spellings of one org was admitted ([upgrade note](upgrade.md#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-a-new-gateway-is-rejected-and-a-stored-one-shares-scale-set-names-with-githubcom)).
   The condition names the scope as `github.com/<org>` on both gateways.
   Whether GitHub registers runners under those spellings was not measured, so the gateway using one may be failing to register instead of sharing jobs.
 - **A window with the validating webhook uninstalled or unreachable.** `failurePolicy: Fail` makes an unreachable webhook block writes rather than admit them, so this needs the `ValidatingWebhookConfiguration` to have been absent: a partial install, or CRDs applied without the chart's webhook resources.
@@ -4251,6 +4252,28 @@ Common misses: the field omitted entirely, an `http://` (non-TLS) URL, or a bare
 - Set `spec.githubURL` to an org URL (`https://github.com/my-org`), a single-repo URL (`https://github.com/my-org/my-repo`), or your GitHub Enterprise Server URL (`https://ghes.example.com/my-org`).
 - It must use `https://` and name the org/enterprise/owner, and must match where the App in `spec.credentials.githubApp` is installed.
 - See [tenant-onboarding — Step 2](tenant-onboarding.md#step-2-create-the-gateway-and-its-runner-set).
+
+---
+
+## ActionsGateway Rejected: `githubURL` Spells Public GitHub by an Alias
+
+**Symptoms.** Creating an `ActionsGateway` is rejected at admission:
+
+```
+admission webhook "vactionsgateway-v2.kb.io" denied the request:
+spec.githubURL host "www.github.com" is an alias of public GitHub that a new ActionsGateway may not use; write the host as github.com: "https://github.com/my-org"
+```
+
+This shows up on a new gateway, on a restore from backup, and on a GitOps apply that re-creates a deleted gateway from a manifest written before `v2.0.0`.
+
+**Likely cause.** The `githubURL` host is `www.github.com` or `api.github.com`, in any letter case and with or without a trailing dot.
+The AGC sends both to the public GitHub API, as it does `github.com`, so the three name one place.
+`v2.0.0` accepts only `github.com` on a new gateway, because whether GitHub registers runners under the other two was not measured.
+
+**Resolution.** Write the host as `github.com` and keep the path: the message carries the corrected URL.
+
+A gateway stored under an alias before `v2.0.0` is not rejected: it keeps running, and an edit to it is accepted.
+`githubURL` is immutable, so its manifest has to keep the alias until you delete the gateway and create it again on `github.com` ([finding the stored gateways](upgrade.md#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-a-new-gateway-is-rejected-and-a-stored-one-shares-scale-set-names-with-githubcom)).
 
 ---
 

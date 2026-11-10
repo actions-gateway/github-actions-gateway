@@ -3,7 +3,9 @@ package v2
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
@@ -26,7 +28,8 @@ import (
 // same both-sides shape, since the gateway binds the scope the label is unique in),
 // rejects a structurally malformed gitHubURL, and rejects creation in a reserved
 // namespace (both Q323 — the same guards the v1 webhook enforces, via the shared
-// validation package).
+// validation package). A new gateway may not spell public GitHub www.github.com or
+// api.github.com (Q1322).
 //
 // +kubebuilder:object:generate=false
 type ActionsGatewayCustomValidator struct {
@@ -173,8 +176,26 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 	return nil
 }
 
+// validatePublicGitHubSpelling rejects a githubURL whose host is an alias of public
+// GitHub (www.github.com or api.github.com, in any case, with or without a trailing
+// dot). The scope guard folds an alias to github.com, so the rule is not what keeps
+// two tenants apart; it keeps a new gateway off a spelling whose scale-set
+// registration at GitHub is unmeasured. It runs on create only: githubURL is immutable
+// (CRD CEL), so a gateway stored under an alias would otherwise fail every later edit.
+func validatePublicGitHubSpelling(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || !scalesetscope.PublicGitHubAlias(strings.TrimSuffix(u.Hostname(), ".")) {
+		return nil
+	}
+	return fmt.Errorf(
+		"spec.githubURL host %q is an alias of public GitHub that a new ActionsGateway may not use; "+
+			"write the host as github.com: %q",
+		u.Hostname(), "https://github.com/"+strings.Trim(u.Path, "/"))
+}
+
 // ValidateCreate rejects a v2 ActionsGateway created in a reserved namespace, with a
-// structurally malformed gitHubURL, whose spec.scheduling.priorityClassName is
+// structurally malformed gitHubURL, with a gitHubURL that spells public GitHub by an
+// alias, whose spec.scheduling.priorityClassName is
 // not on the infra allowlist, whose gitHubURL host a bound EgressProxy's
 // noProxyCIDRs would route around the proxy, or whose GitHub scope would put two
 // ScaleSet RunnerSets on one scale-set name.
@@ -184,6 +205,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 			fmt.Errorf("ActionsGateway may not be created in reserved namespace %q", obj.Namespace))
 	}
 	if err := validation.GitHubURL(obj.Spec.GitHubURL); err != nil {
+		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
+	}
+	if err := validatePublicGitHubSpelling(obj.Spec.GitHubURL); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
@@ -201,7 +225,8 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 // ValidateUpdate applies the same gates on update, so an existing gateway cannot be
 // edited to name an off-allowlist infra PriorityClass — or to point defaultProxyRef
 // (gitHubURL itself is immutable) at a proxy whose noProxyCIDRs exclude its GitHub
-// host. The reserved-namespace guard is create-only (namespace is immutable), and
+// host. The reserved-namespace guard is create-only (namespace is immutable), as is
+// the public GitHub alias rule (validatePublicGitHubSpelling), and
 // the structural gitHubURL check re-runs as version-agnostic defense even though
 // the CRD's immutability CEL should make it unreachable on update. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
