@@ -674,27 +674,27 @@ Remove an entry that covers the gateway's `githubURL` host, in any of the forms 
 
 - broader than `/16` for IPv4 or `/48` for IPv6, as `0.0.0.0/0` is
 - link-local: inside `169.254.0.0/16` or `fe80::/10`
-- a range covering a cloud metadata server's IPv6 address, `fd00:ec2::254` or `fd20:ce::254`
-- not a CIDR: an octet above 255, an octet written with a leading zero, or an IPv4-mapped IPv6 address
+- a range covering one of four cloud metadata and platform addresses: `100.100.100.200`, `168.63.129.16`, `fd00:ec2::254` or `fd20:ce::254`
+- not a CIDR: an octet above 255, an octet or prefix length written with a leading zero, or an IPv4-mapped IPv6 address
 
 **What changed.** Whoever writes the gateway writes this peer, and the GMC copies its `cidr` into the AGC's NetworkPolicy beside the API-server rule.
 So `0.0.0.0/0` opened the peer's port from the AGC to every address, the node's metadata server included, whatever `apiServerCIDRs` scoped.
 The schema now refuses the values above.
 The upgrade itself changes nothing: a gateway already stored with one keeps running and keeps the egress rule it has, and an edit that leaves the `cidr` alone is still accepted.
+That includes an edit to the peer's `port`, so a stored `0.0.0.0/0` can still be moved to another port until it is narrowed.
 Changing the `cidr` to another refused value is rejected, and so is a delete and re-create, which includes a restore from backup.
 
-**Before you upgrade,** list the gateways that have such a peer, with the value:
+**Before you upgrade,** list every gateway that sets a peer `cidr`, with the value, and check each against the list above:
 
 ```bash
 kubectl get actionsgateways.actions-gateway.com -A -o json \
   | jq -r '.items[] | . as $g
-      | [.spec.tracing.networkPolicy.cidr, .spec.credentials.workloadIdentity.signer.vault.networkPolicy.cidr][]
+      | (.spec.tracing.networkPolicy.cidr, .spec.credentials.workloadIdentity.signer.vault.networkPolicy.cidr)
       | select(. != null and . != "")
-      | select(((split("/")[1] // "0") | tonumber) < (if contains(":") then 48 else 16 end)
-          or test("^(169\\.254\\.|fe[89ab][0-9a-f]:|fd00:0*ec2:|fd20:0*ce:|::ffff:)"; "i")
-          or test("(^|\\.)(0[0-9]|[3-9][0-9][0-9]|2[6-9][0-9]|25[6-9])"))
       | "\($g.metadata.namespace)/\($g.metadata.name)\t\(.)"'
 ```
+
+The command does not filter, because an address can be spelled too many ways for a text match to be trusted: every line is a peer to read.
 
 Narrow each one to the peer's own address or subnet, as in `10.0.5.7/32`.
 The stored rule stays as broad as it is until you do.

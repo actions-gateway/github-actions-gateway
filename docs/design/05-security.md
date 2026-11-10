@@ -1013,11 +1013,12 @@ The live no-PEM round-trip is covered by an in-cluster (dev-mode) Vault kind e2e
 >
 > **What bounds the peer.** The gateway's author writes it, so it is tenant input on a policy the platform otherwise authors, and the rule is added beside the API-server rule, where `apiServerCIDRs` does not narrow it.
 > Admission bounds the CIDR form.
-> A `cidr` can be no broader than `/16` for IPv4 or `/48` for IPv6, cannot be link-local (`169.254.0.0/16`, `fe80::/10`), and cannot cover the IPv6 metadata address of AWS (`fd00:ec2::254`) or Google Cloud (`fd20:ce::254`).
+> A `cidr` can be no broader than `/16` for IPv4 or `/48` for IPv6, cannot be link-local (`169.254.0.0/16`, `fe80::/10`), and cannot cover four addresses where a cloud serves instance metadata or platform services outside link-local space: `100.100.100.200` (Alibaba Cloud), `168.63.129.16` (Azure), `fd00:ec2::254` (AWS) and `fd20:ce::254` (Google Cloud).
 > The floor is a policy number, chosen from what a single CIDR has to cover: `/16` is the largest AWS VPC, which is what a tenant names to reach a load balancer with one address per zone, and `/48` is one IPv6 site.
 > The floor is also what refuses `0.0.0.0/1`, which overlaps no link-local range, and it makes the link-local test exact, because an admitted CIDR that touches a link-local block lies wholly inside it.
-> The widest admitted peer is therefore 65,536 IPv4 addresses on one port, on the AGC-only policy, and never the IPv4 metadata server (`TestV2_EgressPeer_CIDRAdmission`).
-> Three things stay open.
+> The widest admitted peer is therefore 65,536 IPv4 addresses on one port, on the AGC-only policy, and never a link-local address or one of the four listed (`TestV2_EgressPeer_CIDRAdmission`).
+> Four things stay open.
+> The address list is the ones known on 2026-11-10, not every address that serves node credentials: a cloud that serves them elsewhere is not refused, and neither is an IPv6 form that embeds `169.254.169.254` for a translator, such as `64:ff9b::a9fe:a9fe`.
 > A selector peer is not bounded, because its reach is set by labels the schema cannot see: an empty `namespaceSelector` reaches every pod in the cluster on that port, though no node address and nothing outside the cluster, and the destination's own ingress policy still applies.
 > A peer stored before `v2.0.0` is not re-checked until its `cidr` changes, so a stored `0.0.0.0/0` keeps its rule until an operator [finds and narrows it](../operations/upgrade.md#action-required-if-a-networkpolicy-peer-names-a-broad-or-link-local-cidr-the-value-is-now-rejected).
 > And no operator allowlist gates the peer: a platform that wants one can refuse the field with its own admission policy.

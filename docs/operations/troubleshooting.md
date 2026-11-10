@@ -4184,13 +4184,13 @@ the peer is one destination, so name its address or its subnet
 
 ```
 The ActionsGateway "<name>" is invalid: spec.tracing.networkPolicy.cidr: Invalid value: "169.254.169.254/32":
-cidr must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata server
-(fd00:ec2::254, fd20:ce::254)
+cidr must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata address
+(100.100.100.200, 168.63.129.16, fd00:ec2::254, fd20:ce::254)
 ```
 
-**Likely cause.** The first message means the value is broader than `/16` for IPv4 or `/48` for IPv6, as `0.0.0.0/0` is, or is not a CIDR: an octet above 255, an octet written with a leading zero, or an IPv4-mapped IPv6 address.
-The second means it is link-local, inside `169.254.0.0/16` or `fe80::/10`, or covers a cloud metadata server's IPv6 address.
-The peer is one destination, and the GMC copies the value into the AGC's NetworkPolicy, so the schema refuses a value that would open the port to a whole network or to the node's metadata server.
+**Likely cause.** The first message means the value is broader than `/16` for IPv4 or `/48` for IPv6, as `0.0.0.0/0` is, or is not a CIDR: an octet above 255, an octet or prefix length written with a leading zero, or an IPv4-mapped IPv6 address.
+The second means it is link-local, inside `169.254.0.0/16` or `fe80::/10`, or covers one of the four addresses the message lists, where Alibaba Cloud, Azure, AWS and Google Cloud serve instance metadata or platform services outside link-local space.
+The peer is one destination, and the GMC copies the value into the AGC's NetworkPolicy, so the schema refuses a value that would open the port to a whole network or to one of those addresses.
 
 **Resolution.** Name the peer's own address or subnet, as in `10.0.5.7/32`.
 If its addresses span more than one `/16`, leave `networkPolicy` unset and write a NetworkPolicy of your own that selects the AGC pod.

@@ -126,7 +126,8 @@ Each rule must pass an unchanged stored value, as `spec.tracing.endpoint`'s does
 `egresspeer-unbounded-peer-agc-networkpolicy`: confirmed, low.
 Starts at `api/v2/shared_types.go:304`.
 
-**Fixed by a rule on the CIDR, with the docs corrected for what it leaves.** Two CEL rules on `EgressPeer.cidr` refuse a value that is not a CIDR or is broader than `/16` for IPv4 or `/48` for IPv6, and one that is link-local or covers the IPv6 metadata address of AWS or Google Cloud; each passes an unchanged stored value.
+**Fixed by a rule on the CIDR, with the docs corrected for what it leaves.** Two CEL rules on `EgressPeer.cidr` refuse a value that is not a CIDR or is broader than `/16` for IPv4 or `/48` for IPv6, and one that is link-local or covers one of four metadata and platform addresses that clouds serve outside link-local space (Alibaba Cloud, Azure, and the IPv6 addresses of AWS and Google Cloud); each passes an unchanged stored value.
+That list is not complete and the docs no longer say the peer cannot name a metadata server: IPv6 forms that embed `169.254.169.254` for a translator (`64:ff9b::a9fe:a9fe`, `2002:a9fe:a9fe::/48`, `::a9fe:a9fe`) are admitted, because a NAT64 prefix is also how an IPv6-only cluster reaches a legitimate IPv4 peer, and whether any of them reaches a node's metadata server was not tested.
 The floor is a policy number with no measurement behind it, set at the largest network a single CIDR has to cover: an AWS VPC is at most a `/16`, and `/48` is one IPv6 site.
 Three parts of the proposed fix were decided against, and [05-security.md](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model) says what each leaves open.
 A selector peer is not bounded, because a rule refusing `{}` would leave an `Exists` expression that selects the same pods, and a selector reaches pods only, never a node address.
