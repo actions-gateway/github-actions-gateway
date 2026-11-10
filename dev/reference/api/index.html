@@ -5065,7 +5065,7 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 </tr>
 <tr>
 <td><code>priorityTiers</code> <em><a href="#prioritytier">PriorityTier</a> array</em></td>
-<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order.</td>
+<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order, and admission rejects a list that is not: the AGC assigns the first tier whose threshold the active-pod count is below, so a tier at or under an earlier one never receives a pod. A list already stored is not re-checked until it changes.</td>
 <td></td>
 <td>MaxItems: 10<br />Optional: {}</td>
 </tr>

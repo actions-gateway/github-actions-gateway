@@ -23,7 +23,7 @@
     
     
       
-        <title>Reject out-of-order priorityTiers and an insecure https tracing endpoint - GitHub Actions Gateway</title>
+        <title>Reject an insecure https tracing endpoint - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reject-out-of-order-prioritytiers-and-an-insecure-https-tracing-endpoint" class="md-skip">
+        <a href="#reject-an-insecure-https-tracing-endpoint" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Reject out-of-order priorityTiers and an insecure https tracing endpoint
+              Reject an insecure https tracing endpoint
             
           </span>
         </div>
@@ -2657,17 +2657,14 @@
   
 
 
-<h1 id="reject-out-of-order-prioritytiers-and-an-insecure-https-tracing-endpoint">Reject out-of-order priorityTiers and an insecure https tracing endpoint<a class="headerlink" href="#reject-out-of-order-prioritytiers-and-an-insecure-https-tracing-endpoint" title="Permanent link">&para;</a></h1>
-<p><strong>Two stricter admission rules, gated on <code>v2.0.0</code> because an open major is the only cheap time to add one.</strong> Each must let an unchanged stored value through, as <code>spec.tracing.endpoint</code>'s rule does (Q1283), so a stored object is not refused when an unrelated field is edited.
-A manifest that applies today will still be refused on a fresh cluster, which is why a minor cannot take these and <code>v3</code> is the next place they could otherwise land (<a href="../Q1311/">Q1311</a>).
-Karl gated them on 2026-11-09, after the pre-<code>v2.0.0</code> API review.</p>
-<p><strong><code>RunnerSet.spec.priorityTiers</code> thresholds are never checked for order.</strong> The godoc on the field and on <code>PriorityTier</code> (<code>api/v2/runnerset_types.go:115</code>, <code>api/v2/shared_types.go:205</code>) says thresholds "must be in strictly ascending order", and nothing enforces it: no CEL rule, admission policy or controller comparison of <code>Threshold</code> exists (searched 2026-11-09).
-<a href="../../development/api-review/#choose-the-list-semantics-deliberately">api-review.md</a> says an out-of-order tier is unreachable; that is the doc's claim, not re-measured here.
-Put the rule on <code>priorityTiers</code> itself rather than the spec, so ratcheting suppresses it on writes that do not touch the list (<a href="../../development/api-review/#put-a-constraint-on-the-narrowest-field-that-expresses-it">narrowest field</a>).</p>
+<h1 id="reject-an-insecure-https-tracing-endpoint">Reject an insecure https tracing endpoint<a class="headerlink" href="#reject-an-insecure-https-tracing-endpoint" title="Permanent link">&para;</a></h1>
+<p><strong>A stricter admission rule, gated on <code>v2.0.0</code> because an open major is the only cheap time to add one.</strong> It must let an unchanged stored value through, as <code>spec.tracing.endpoint</code>'s rule does (Q1283), so a stored object is not refused when an unrelated field is edited.
+A manifest that applies today will still be refused on a fresh cluster, which is why a minor cannot take it and <code>v3</code> is the next place it could otherwise land (<a href="../Q1311/">Q1311</a>).
+Karl gated it on 2026-11-09, after the pre-<code>v2.0.0</code> API review.</p>
 <p><strong><code>spec.tracing</code> with <code>insecure: true</code> and an <code>https://</code> endpoint exports in plaintext.</strong> Read from the vendored <code>otlptracegrpc</code> v1.47.0, not run: <code>internal/otlpconfig/envconfig.go</code> sets transport security from the endpoint's scheme, then applies <code>OTEL_EXPORTER_OTLP_TRACES_INSECURE</code> after it, so the GMC's <code>insecure: true</code> overrides the <code>https://</code> the operator also wrote.
 The GMC sets that variable only when <code>insecure</code> is true (<code>tracingEnvV2</code>, <code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go</code>), so <code>http://</code> with <code>insecure: false</code> is not a contradiction it can produce.
 Run the pair once before writing the rule, since the rule's message will state what the exporter does.</p>
-<p><strong>Done when</strong> both rules are in <code>api/v2</code> with tests covering a refused new value and an accepted unchanged stored one, <code>upgrade.md</code> tells operators what <code>v2.0.0</code> now refuses and how to find a stored object that has it, and the <code>v2.0.0</code> release notes list both under breaking changes.</p>
+<p><strong>Done when</strong> the rule is in <code>api/v2</code> with tests covering a refused new value and an accepted unchanged stored one, <code>upgrade.md</code> tells operators what <code>v2.0.0</code> now refuses and how to find a stored object that has it, and the <code>v2.0.0</code> release notes list it under breaking changes.</p>
 
 
 

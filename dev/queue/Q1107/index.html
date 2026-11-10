@@ -2659,7 +2659,7 @@
 
 <h1 id="the-v200-cut">The <code>v2.0.0</code> cut<a class="headerlink" href="#the-v200-cut" title="Permanent link">&para;</a></h1>
 <p>Everything else under <code>v2.0.0</code> has landed but the tag and <a href="../Q1312/">Q1312</a>: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), and the operator docs and migration guide, which describe the surface <code>v2.0.0</code> ships with no served version it removes.
-Q1312 adds two stricter admission rules, gated 2026-11-09 because only a major can take them, so the candidate waits for it.</p>
+Q1312 adds a stricter tracing admission rule, gated 2026-11-09 because only a major can take it, so the candidate waits for it.</p>
 <p><strong>What is left</strong> is the release itself, run from <code>docs/operations/release.md</code>: the release candidate, its dogfood validation, and the tag.</p>
 <p><strong>What the candidate has to confirm.</strong> <a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">upgrade.md</a> states the upgrade and rollback order from a run on kind against <code>test/fakegithub</code> with workers held <code>Pending</code>, on 2026-11-06.
 So a job running through the gap, and the same walk against github.com, are unmeasured until the candidate reaches dogfood.

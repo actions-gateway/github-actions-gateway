@@ -3540,6 +3540,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#priority-tiers-rejected-by-admission-thresholds-not-ascending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Tiers Rejected by Admission: Thresholds Not Ascending
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4955,6 +4966,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#priority-tiers-rejected-by-admission-thresholds-not-ascending" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Tiers Rejected by Admission: Thresholds Not Ascending
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5144,6 +5166,7 @@ The recommended <code>app.kubernetes.io/name</code> label is <code>actions-gatew
 <li><a href="#tracing-endpoint-rejected-by-admission">Tracing Endpoint Rejected by Admission</a></li>
 <li><a href="#actionsgateway-rejected-missing-or-malformed-githuburl">ActionsGateway Rejected: Missing or Malformed <code>githubURL</code></a></li>
 <li><a href="#worker-pod-lifecycle-duration-rejected-by-admission">Worker-Pod Lifecycle Duration Rejected by Admission</a></li>
+<li><a href="#priority-tiers-rejected-by-admission-thresholds-not-ascending">Priority Tiers Rejected by Admission: Thresholds Not Ascending</a></li>
 <li><a href="#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout">kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout</a></li>
 <li><a href="#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service">Applying Any v2 Object Fails With no endpoints available for service "webhook-service"</a></li>
 <li><a href="#worker-https_proxy-returns-connection-refused-during-proxy-rollout">Worker HTTPS_PROXY Returns connection refused During Proxy Rollout</a></li>
@@ -8723,12 +8746,27 @@ Common misses: the field omitted entirely, an <code>http://</code> (non-TLS) URL
   <code>"24h"</code>) rather than zero.
 - Omit either field to get the defaults (<code>5m</code> retention, <code>10m</code> deadline).</p>
 <hr />
+<h2 id="priority-tiers-rejected-by-admission-thresholds-not-ascending">Priority Tiers Rejected by Admission: Thresholds Not Ascending<a class="headerlink" href="#priority-tiers-rejected-by-admission-thresholds-not-ascending" title="Permanent link">&para;</a></h2>
+<p><strong>Symptoms.</strong> A create or an edit that sets <code>spec.priorityTiers</code> on a <code>RunnerSet</code> is rejected at admission:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-175-1" name="__codelineno-175-1" href="#__codelineno-175-1"></a>RunnerSet.actions-gateway.com "&lt;name&gt;" is invalid: spec.priorityTiers: Invalid value:
+<a id="__codelineno-175-2" name="__codelineno-175-2" href="#__codelineno-175-2"></a>priorityTiers thresholds must be strictly ascending; a tier whose threshold is not
+<a id="__codelineno-175-3" name="__codelineno-175-3" href="#__codelineno-175-3"></a>above the one before it never receives a worker pod
+</code></pre></div>
+<p><strong>Likely cause.</strong> A tier's <code>threshold</code> is equal to or lower than the threshold of a tier listed before it.
+The AGC gives each new worker the first tier whose threshold the active-pod count is still below, so such a tier is never assigned, and the schema refuses the list rather than store a tier that does nothing.</p>
+<p><strong>Resolution.</strong> List the tiers from the lowest threshold to the highest, each above the one before it.
+The first workers get the first tier's class, so put first the class the set should use while it is lightly loaded.
+Set <code>maxWorkers</code> to the last threshold, or leave it unset.
+Sorting a set that already runs with such a list changes which classes its workers get; to keep what it does today, delete every tier whose threshold is not above all the thresholds before it instead.</p>
+<p>A set stored before this check keeps working: an edit that leaves <code>priorityTiers</code> alone is accepted.
+Deleting and re-creating it, or changing the list to another order that does not ascend, is rejected (<a href="../upgrade/#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected">finding the affected sets</a>).</p>
+<hr />
 <h2 id="kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout"><code>kubectl apply ActionsGateway</code> Times Out On Webhook During GMC Rollout<a class="headerlink" href="#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> Right after a GMC rolling update (image bump, env-var change, leader transition), the next <code>kubectl apply</code> of an <code>ActionsGateway</code> CR fails with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-175-1" name="__codelineno-175-1" href="#__codelineno-175-1"></a>Internal error occurred: failed calling webhook
-<a id="__codelineno-175-2" name="__codelineno-175-2" href="#__codelineno-175-2"></a>"vactionsgateway-v2.kb.io": failed to call webhook:
-<a id="__codelineno-175-3" name="__codelineno-175-3" href="#__codelineno-175-3"></a>Post "https://gmc-webhook-service.gmc-system.svc:443/...?timeout=10s":
-<a id="__codelineno-175-4" name="__codelineno-175-4" href="#__codelineno-175-4"></a>context deadline exceeded
+<div class="highlight"><pre><span></span><code><a id="__codelineno-176-1" name="__codelineno-176-1" href="#__codelineno-176-1"></a>Internal error occurred: failed calling webhook
+<a id="__codelineno-176-2" name="__codelineno-176-2" href="#__codelineno-176-2"></a>"vactionsgateway-v2.kb.io": failed to call webhook:
+<a id="__codelineno-176-3" name="__codelineno-176-3" href="#__codelineno-176-3"></a>Post "https://gmc-webhook-service.gmc-system.svc:443/...?timeout=10s":
+<a id="__codelineno-176-4" name="__codelineno-176-4" href="#__codelineno-176-4"></a>context deadline exceeded
 </code></pre></div>
 <p>The webhook recovers seconds later; the same <code>kubectl apply</code> succeeds on retry.
 Common pattern in CI / e2e suites that change GMC env vars then immediately apply a CR.</p>
@@ -8738,15 +8776,15 @@ Common pattern in CI / e2e suites that change GMC env vars then immediately appl
   The new pod is briefly added to the <code>gmc-webhook-service</code> endpoints in a not-yet-serving state.
 - A custom probe override that replaces <code>/readyz</code> with a cheap liveness check.</p>
 <p><strong>Diagnostics.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-176-1" name="__codelineno-176-1" href="#__codelineno-176-1"></a><span class="c1"># 1. Probe the GMC's /readyz directly. With the fix, output should include</span>
-<a id="__codelineno-176-2" name="__codelineno-176-2" href="#__codelineno-176-2"></a><span class="c1">#    "[+]readyz ok" AND "[+]webhook ok". Without the fix, only "[+]readyz ok".</span>
-<a id="__codelineno-176-3" name="__codelineno-176-3" href="#__codelineno-176-3"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-readyz<span class="w"> </span>--image<span class="o">=</span>alpine<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-176-4" name="__codelineno-176-4" href="#__codelineno-176-4"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"apk add --no-cache curl &gt;/dev/null 2&gt;&amp;1; \</span>
-<a id="__codelineno-176-5" name="__codelineno-176-5" href="#__codelineno-176-5"></a><span class="s2">         curl -s http://</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>control-plane<span class="o">=</span>controller-manager<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].status.podIP}'</span><span class="k">)</span><span class="s2">:8081/readyz?verbose"</span>
-<a id="__codelineno-176-6" name="__codelineno-176-6" href="#__codelineno-176-6"></a>
-<a id="__codelineno-176-7" name="__codelineno-176-7" href="#__codelineno-176-7"></a><span class="c1"># 2. Confirm the deployment is rolling. If yes, wait for it to settle before</span>
-<a id="__codelineno-176-8" name="__codelineno-176-8" href="#__codelineno-176-8"></a><span class="c1">#    retrying apply.</span>
-<a id="__codelineno-176-9" name="__codelineno-176-9" href="#__codelineno-176-9"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>--timeout<span class="o">=</span>2m
+<div class="highlight"><pre><span></span><code><a id="__codelineno-177-1" name="__codelineno-177-1" href="#__codelineno-177-1"></a><span class="c1"># 1. Probe the GMC's /readyz directly. With the fix, output should include</span>
+<a id="__codelineno-177-2" name="__codelineno-177-2" href="#__codelineno-177-2"></a><span class="c1">#    "[+]readyz ok" AND "[+]webhook ok". Without the fix, only "[+]readyz ok".</span>
+<a id="__codelineno-177-3" name="__codelineno-177-3" href="#__codelineno-177-3"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-readyz<span class="w"> </span>--image<span class="o">=</span>alpine<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-177-4" name="__codelineno-177-4" href="#__codelineno-177-4"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"apk add --no-cache curl &gt;/dev/null 2&gt;&amp;1; \</span>
+<a id="__codelineno-177-5" name="__codelineno-177-5" href="#__codelineno-177-5"></a><span class="s2">         curl -s http://</span><span class="k">$(</span>kubectl<span class="w"> </span>get<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>control-plane<span class="o">=</span>controller-manager<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.items[0].status.podIP}'</span><span class="k">)</span><span class="s2">:8081/readyz?verbose"</span>
+<a id="__codelineno-177-6" name="__codelineno-177-6" href="#__codelineno-177-6"></a>
+<a id="__codelineno-177-7" name="__codelineno-177-7" href="#__codelineno-177-7"></a><span class="c1"># 2. Confirm the deployment is rolling. If yes, wait for it to settle before</span>
+<a id="__codelineno-177-8" name="__codelineno-177-8" href="#__codelineno-177-8"></a><span class="c1">#    retrying apply.</span>
+<a id="__codelineno-177-9" name="__codelineno-177-9" href="#__codelineno-177-9"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>--timeout<span class="o">=</span>2m
 </code></pre></div>
 <p><strong>Resolution.</strong>
 - Upgrade the GMC image to one built from commit <code>0eaa30e</code> or later — the readyz check now waits for the webhook server's <code>StartedChecker()</code>.
@@ -8754,9 +8792,9 @@ Common pattern in CI / e2e suites that change GMC env vars then immediately appl
 <hr />
 <h2 id="applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service">Applying Any v2 Object Fails With <code>no endpoints available for service "webhook-service"</code><a class="headerlink" href="#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> Creating or updating any v2 custom resource fails immediately, with no timeout:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-177-1" name="__codelineno-177-1" href="#__codelineno-177-1"></a>Internal error occurred: failed calling webhook "vrunnerset-v2.kb.io": failed to call webhook: Post
-<a id="__codelineno-177-2" name="__codelineno-177-2" href="#__codelineno-177-2"></a>"https://webhook-service.gmc-system.svc:443/validate-actions-gateway-com-v2-runnerset?timeout=10s":
-<a id="__codelineno-177-3" name="__codelineno-177-3" href="#__codelineno-177-3"></a>dial tcp &lt;ClusterIP&gt;:443: connect: connection refused
+<div class="highlight"><pre><span></span><code><a id="__codelineno-178-1" name="__codelineno-178-1" href="#__codelineno-178-1"></a>Internal error occurred: failed calling webhook "vrunnerset-v2.kb.io": failed to call webhook: Post
+<a id="__codelineno-178-2" name="__codelineno-178-2" href="#__codelineno-178-2"></a>"https://webhook-service.gmc-system.svc:443/validate-actions-gateway-com-v2-runnerset?timeout=10s":
+<a id="__codelineno-178-3" name="__codelineno-178-3" href="#__codelineno-178-3"></a>dial tcp &lt;ClusterIP&gt;:443: connect: connection refused
 </code></pre></div>
 <p>The last clause depends on how the apiserver reaches a Service.
 That form is measured on a kind cluster on Kubernetes 1.36.1; a cluster whose apiserver routes to endpoints directly reports <code>no endpoints available for service "webhook-service"</code>.
@@ -8771,23 +8809,23 @@ This one has <em>no endpoints at all</em>, fails instantly, and does not clear o
 <li>The GMC Deployment is scaled to zero.</li>
 </ul>
 <p><strong>Diagnostics.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-178-1" name="__codelineno-178-1" href="#__codelineno-178-1"></a><span class="c1"># 1. Endpoints first: this is the reading the error is actually about.</span>
-<a id="__codelineno-178-2" name="__codelineno-178-2" href="#__codelineno-178-2"></a><span class="c1">#    Empty output means no Ready GMC pod backs the Service.</span>
-<a id="__codelineno-178-3" name="__codelineno-178-3" href="#__codelineno-178-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpointslice<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>kubernetes.io/service-name<span class="o">=</span>webhook-service
-<a id="__codelineno-178-4" name="__codelineno-178-4" href="#__codelineno-178-4"></a>
-<a id="__codelineno-178-5" name="__codelineno-178-5" href="#__codelineno-178-5"></a><span class="c1"># 2. Distinguish "not scheduled" from "not installed" from "crashed".</span>
-<a id="__codelineno-178-6" name="__codelineno-178-6" href="#__codelineno-178-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deployment<span class="w"> </span>gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
-<a id="__codelineno-178-7" name="__codelineno-178-7" href="#__codelineno-178-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-o<span class="w"> </span>wide
-<a id="__codelineno-178-8" name="__codelineno-178-8" href="#__codelineno-178-8"></a>
-<a id="__codelineno-178-9" name="__codelineno-178-9" href="#__codelineno-178-9"></a><span class="c1"># 3. If a pod is Pending, it is a scheduling problem, not a webhook problem.</span>
-<a id="__codelineno-178-10" name="__codelineno-178-10" href="#__codelineno-178-10"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>control-plane<span class="o">=</span>controller-manager<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
-<a id="__codelineno-178-11" name="__codelineno-178-11" href="#__codelineno-178-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>nodes
+<div class="highlight"><pre><span></span><code><a id="__codelineno-179-1" name="__codelineno-179-1" href="#__codelineno-179-1"></a><span class="c1"># 1. Endpoints first: this is the reading the error is actually about.</span>
+<a id="__codelineno-179-2" name="__codelineno-179-2" href="#__codelineno-179-2"></a><span class="c1">#    Empty output means no Ready GMC pod backs the Service.</span>
+<a id="__codelineno-179-3" name="__codelineno-179-3" href="#__codelineno-179-3"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpointslice<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>kubernetes.io/service-name<span class="o">=</span>webhook-service
+<a id="__codelineno-179-4" name="__codelineno-179-4" href="#__codelineno-179-4"></a>
+<a id="__codelineno-179-5" name="__codelineno-179-5" href="#__codelineno-179-5"></a><span class="c1"># 2. Distinguish "not scheduled" from "not installed" from "crashed".</span>
+<a id="__codelineno-179-6" name="__codelineno-179-6" href="#__codelineno-179-6"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deployment<span class="w"> </span>gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system
+<a id="__codelineno-179-7" name="__codelineno-179-7" href="#__codelineno-179-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-179-8" name="__codelineno-179-8" href="#__codelineno-179-8"></a>
+<a id="__codelineno-179-9" name="__codelineno-179-9" href="#__codelineno-179-9"></a><span class="c1"># 3. If a pod is Pending, it is a scheduling problem, not a webhook problem.</span>
+<a id="__codelineno-179-10" name="__codelineno-179-10" href="#__codelineno-179-10"></a>kubectl<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>-l<span class="w"> </span>control-plane<span class="o">=</span>controller-manager<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
+<a id="__codelineno-179-11" name="__codelineno-179-11" href="#__codelineno-179-11"></a>kubectl<span class="w"> </span>get<span class="w"> </span>nodes
 </code></pre></div>
 <p><strong>Resolution.</strong></p>
 <ul>
 <li><strong>Wait for the rollout, then re-apply.</strong> Nothing is broken; the apply was simply made too early:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-179-1" name="__codelineno-179-1" href="#__codelineno-179-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>--timeout<span class="o">=</span>5m
+<div class="highlight"><pre><span></span><code><a id="__codelineno-180-1" name="__codelineno-180-1" href="#__codelineno-180-1"></a>kubectl<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/gmc-controller-manager<span class="w"> </span>-n<span class="w"> </span>gmc-system<span class="w"> </span>--timeout<span class="o">=</span>5m
 </code></pre></div>
 <ul>
 <li><strong>If the pod is <code>Pending</code>, add capacity</strong> and let the rollout complete.
@@ -8807,25 +8845,25 @@ The proxy pods report <code>READY 1/1</code> and <code>/healthz</code> returns 2
 - A custom probe override that points the GMC-managed proxy <code>Deployment</code>'s readinessProbe at <code>/healthz</code> instead of <code>/readyz</code> (e.g. an out-of-band <code>kubectl edit deploy</code>).
   The GMC reconciler overwrites the probe back to <code>/readyz</code> on the next reconcile, but until then the regression is live.</p>
 <p><strong>Diagnostics.</strong></p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-180-1" name="__codelineno-180-1" href="#__codelineno-180-1"></a><span class="c1"># 1. Confirm the proxy Deployment's readinessProbe path. Should be /readyz.</span>
-<a id="__codelineno-180-2" name="__codelineno-180-2" href="#__codelineno-180-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;proxy&gt;-proxy<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-3" name="__codelineno-180-3" href="#__codelineno-180-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.template.spec.containers[0].readinessProbe.httpGet.path}{"\n"}'</span>
-<a id="__codelineno-180-4" name="__codelineno-180-4" href="#__codelineno-180-4"></a>
-<a id="__codelineno-180-5" name="__codelineno-180-5" href="#__codelineno-180-5"></a><span class="c1"># 2. Probe /readyz directly from a workload-labeled debug pod (the proxy</span>
-<a id="__codelineno-180-6" name="__codelineno-180-6" href="#__codelineno-180-6"></a><span class="c1">#    NetworkPolicy denies ingress from unlabeled pods).</span>
-<a id="__codelineno-180-7" name="__codelineno-180-7" href="#__codelineno-180-7"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-readyz<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-8" name="__codelineno-180-8" href="#__codelineno-180-8"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-9" name="__codelineno-180-9" href="#__codelineno-180-9"></a><span class="w">  </span>--image<span class="o">=</span>alpine<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-10" name="__codelineno-180-10" href="#__codelineno-180-10"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"apk add --no-cache curl &gt;/dev/null 2&gt;&amp;1; \</span>
-<a id="__codelineno-180-11" name="__codelineno-180-11" href="#__codelineno-180-11"></a><span class="s2">         curl -sv http://&lt;proxy&gt;-proxy.&lt;tenant-namespace&gt;.svc:8081/readyz"</span>
-<a id="__codelineno-180-12" name="__codelineno-180-12" href="#__codelineno-180-12"></a>
-<a id="__codelineno-180-13" name="__codelineno-180-13" href="#__codelineno-180-13"></a><span class="c1"># 3. From the same debug pod, confirm the CONNECT port accepts TCP. A 200 on</span>
-<a id="__codelineno-180-14" name="__codelineno-180-14" href="#__codelineno-180-14"></a><span class="c1">#    /readyz paired with a refused TCP dial would be a Q42 regression.</span>
-<a id="__codelineno-180-15" name="__codelineno-180-15" href="#__codelineno-180-15"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-connect<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-16" name="__codelineno-180-16" href="#__codelineno-180-16"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-17" name="__codelineno-180-17" href="#__codelineno-180-17"></a><span class="w">  </span>--image<span class="o">=</span>alpine<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-180-18" name="__codelineno-180-18" href="#__codelineno-180-18"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"apk add --no-cache busybox-extras &gt;/dev/null 2&gt;&amp;1; \</span>
-<a id="__codelineno-180-19" name="__codelineno-180-19" href="#__codelineno-180-19"></a><span class="s2">         nc -zv &lt;proxy&gt;-proxy.&lt;tenant-namespace&gt;.svc 8080"</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-181-1" name="__codelineno-181-1" href="#__codelineno-181-1"></a><span class="c1"># 1. Confirm the proxy Deployment's readinessProbe path. Should be /readyz.</span>
+<a id="__codelineno-181-2" name="__codelineno-181-2" href="#__codelineno-181-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>deploy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span>&lt;proxy&gt;-proxy<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-3" name="__codelineno-181-3" href="#__codelineno-181-3"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.spec.template.spec.containers[0].readinessProbe.httpGet.path}{"\n"}'</span>
+<a id="__codelineno-181-4" name="__codelineno-181-4" href="#__codelineno-181-4"></a>
+<a id="__codelineno-181-5" name="__codelineno-181-5" href="#__codelineno-181-5"></a><span class="c1"># 2. Probe /readyz directly from a workload-labeled debug pod (the proxy</span>
+<a id="__codelineno-181-6" name="__codelineno-181-6" href="#__codelineno-181-6"></a><span class="c1">#    NetworkPolicy denies ingress from unlabeled pods).</span>
+<a id="__codelineno-181-7" name="__codelineno-181-7" href="#__codelineno-181-7"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-readyz<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-8" name="__codelineno-181-8" href="#__codelineno-181-8"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-9" name="__codelineno-181-9" href="#__codelineno-181-9"></a><span class="w">  </span>--image<span class="o">=</span>alpine<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-10" name="__codelineno-181-10" href="#__codelineno-181-10"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"apk add --no-cache curl &gt;/dev/null 2&gt;&amp;1; \</span>
+<a id="__codelineno-181-11" name="__codelineno-181-11" href="#__codelineno-181-11"></a><span class="s2">         curl -sv http://&lt;proxy&gt;-proxy.&lt;tenant-namespace&gt;.svc:8081/readyz"</span>
+<a id="__codelineno-181-12" name="__codelineno-181-12" href="#__codelineno-181-12"></a>
+<a id="__codelineno-181-13" name="__codelineno-181-13" href="#__codelineno-181-13"></a><span class="c1"># 3. From the same debug pod, confirm the CONNECT port accepts TCP. A 200 on</span>
+<a id="__codelineno-181-14" name="__codelineno-181-14" href="#__codelineno-181-14"></a><span class="c1">#    /readyz paired with a refused TCP dial would be a Q42 regression.</span>
+<a id="__codelineno-181-15" name="__codelineno-181-15" href="#__codelineno-181-15"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-connect<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-16" name="__codelineno-181-16" href="#__codelineno-181-16"></a><span class="w">  </span>--labels<span class="o">=</span><span class="s1">'actions-gateway/component=workload'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-17" name="__codelineno-181-17" href="#__codelineno-181-17"></a><span class="w">  </span>--image<span class="o">=</span>alpine<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-181-18" name="__codelineno-181-18" href="#__codelineno-181-18"></a><span class="w">  </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s2">"apk add --no-cache busybox-extras &gt;/dev/null 2&gt;&amp;1; \</span>
+<a id="__codelineno-181-19" name="__codelineno-181-19" href="#__codelineno-181-19"></a><span class="s2">         nc -zv &lt;proxy&gt;-proxy.&lt;tenant-namespace&gt;.svc 8080"</span>
 </code></pre></div>
 <p><strong>Resolution.</strong>
 - Upgrade the proxy image to one built with the <code>/readyz</code> gate.
@@ -8841,23 +8879,23 @@ The proxy pods report <code>READY 1/1</code> and <code>/healthz</code> returns 2
 The GMC's per-tenant NetworkPolicies admit <code>:8443</code> ingress <em>only</em> from namespaces labelled <code>metrics: enabled</code> (the same convention the GMC's own <code>allow-metrics-traffic</code> NetworkPolicy uses).
 If the namespace your Prometheus runs in is not labelled, its scrapes are dropped before the TLS handshake.
 Kubelet liveness/readiness probes are unaffected — they hit <code>:8081</code> (<code>/healthz</code> + <code>/readyz</code>) from the node, which every supported CNI exempts from NetworkPolicy enforcement.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-181-1" name="__codelineno-181-1" href="#__codelineno-181-1"></a><span class="c1"># 1. Confirm the monitoring namespace carries the scrape label.</span>
-<a id="__codelineno-181-2" name="__codelineno-181-2" href="#__codelineno-181-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>ns<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.metadata.labels.metrics}{"\n"}'</span>
-<a id="__codelineno-181-3" name="__codelineno-181-3" href="#__codelineno-181-3"></a><span class="c1"># Expected: enabled</span>
-<a id="__codelineno-181-4" name="__codelineno-181-4" href="#__codelineno-181-4"></a>
-<a id="__codelineno-181-5" name="__codelineno-181-5" href="#__codelineno-181-5"></a><span class="c1"># 2. Inspect the per-tenant NP ingress rules — each should list an 8443 rule</span>
-<a id="__codelineno-181-6" name="__codelineno-181-6" href="#__codelineno-181-6"></a><span class="c1">#    whose `from` is a namespaceSelector on metrics=enabled.</span>
-<a id="__codelineno-181-7" name="__codelineno-181-7" href="#__codelineno-181-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-181-8" name="__codelineno-181-8" href="#__codelineno-181-8"></a><span class="w">  </span>&lt;proxy&gt;-proxy<span class="w"> </span>&lt;gateway&gt;-agc<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-181-9" name="__codelineno-181-9" href="#__codelineno-181-9"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.name}: {.spec.ingress}{"\n"}{end}'</span>
-<a id="__codelineno-181-10" name="__codelineno-181-10" href="#__codelineno-181-10"></a>
-<a id="__codelineno-181-11" name="__codelineno-181-11" href="#__codelineno-181-11"></a><span class="c1"># 3. Distinguish an NP drop from a missing client cert: scrape from the</span>
-<a id="__codelineno-181-12" name="__codelineno-181-12" href="#__codelineno-181-12"></a><span class="c1">#    monitoring namespace without a cert (-k skips server-cert verification).</span>
-<a id="__codelineno-181-13" name="__codelineno-181-13" href="#__codelineno-181-13"></a><span class="c1">#    A `tls: certificate required` error means the NP admits you — fix the cert</span>
-<a id="__codelineno-181-14" name="__codelineno-181-14" href="#__codelineno-181-14"></a><span class="c1">#    per the TLS runbook below. A timeout means the label/NP still drops you.</span>
-<a id="__codelineno-181-15" name="__codelineno-181-15" href="#__codelineno-181-15"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-scrape<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-181-16" name="__codelineno-181-16" href="#__codelineno-181-16"></a><span class="w">  </span>-n<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span>--image<span class="o">=</span>curlimages/curl<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-181-17" name="__codelineno-181-17" href="#__codelineno-181-17"></a><span class="w">  </span>curl<span class="w"> </span>-sS<span class="w"> </span>--max-time<span class="w"> </span><span class="m">5</span><span class="w"> </span>-k<span class="w"> </span>https://&lt;proxy&gt;-proxy.&lt;tenant-namespace&gt;.svc:8443/metrics
+<div class="highlight"><pre><span></span><code><a id="__codelineno-182-1" name="__codelineno-182-1" href="#__codelineno-182-1"></a><span class="c1"># 1. Confirm the monitoring namespace carries the scrape label.</span>
+<a id="__codelineno-182-2" name="__codelineno-182-2" href="#__codelineno-182-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>ns<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.metadata.labels.metrics}{"\n"}'</span>
+<a id="__codelineno-182-3" name="__codelineno-182-3" href="#__codelineno-182-3"></a><span class="c1"># Expected: enabled</span>
+<a id="__codelineno-182-4" name="__codelineno-182-4" href="#__codelineno-182-4"></a>
+<a id="__codelineno-182-5" name="__codelineno-182-5" href="#__codelineno-182-5"></a><span class="c1"># 2. Inspect the per-tenant NP ingress rules — each should list an 8443 rule</span>
+<a id="__codelineno-182-6" name="__codelineno-182-6" href="#__codelineno-182-6"></a><span class="c1">#    whose `from` is a namespaceSelector on metrics=enabled.</span>
+<a id="__codelineno-182-7" name="__codelineno-182-7" href="#__codelineno-182-7"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-182-8" name="__codelineno-182-8" href="#__codelineno-182-8"></a><span class="w">  </span>&lt;proxy&gt;-proxy<span class="w"> </span>&lt;gateway&gt;-agc<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-182-9" name="__codelineno-182-9" href="#__codelineno-182-9"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{range .items[*]}{.metadata.name}: {.spec.ingress}{"\n"}{end}'</span>
+<a id="__codelineno-182-10" name="__codelineno-182-10" href="#__codelineno-182-10"></a>
+<a id="__codelineno-182-11" name="__codelineno-182-11" href="#__codelineno-182-11"></a><span class="c1"># 3. Distinguish an NP drop from a missing client cert: scrape from the</span>
+<a id="__codelineno-182-12" name="__codelineno-182-12" href="#__codelineno-182-12"></a><span class="c1">#    monitoring namespace without a cert (-k skips server-cert verification).</span>
+<a id="__codelineno-182-13" name="__codelineno-182-13" href="#__codelineno-182-13"></a><span class="c1">#    A `tls: certificate required` error means the NP admits you — fix the cert</span>
+<a id="__codelineno-182-14" name="__codelineno-182-14" href="#__codelineno-182-14"></a><span class="c1">#    per the TLS runbook below. A timeout means the label/NP still drops you.</span>
+<a id="__codelineno-182-15" name="__codelineno-182-15" href="#__codelineno-182-15"></a>kubectl<span class="w"> </span>run<span class="w"> </span>dbg-scrape<span class="w"> </span>--rm<span class="w"> </span>-i<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span>--quiet<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-182-16" name="__codelineno-182-16" href="#__codelineno-182-16"></a><span class="w">  </span>-n<span class="w"> </span>&lt;prometheus-namespace&gt;<span class="w"> </span>--image<span class="o">=</span>curlimages/curl<span class="w"> </span>--command<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-182-17" name="__codelineno-182-17" href="#__codelineno-182-17"></a><span class="w">  </span>curl<span class="w"> </span>-sS<span class="w"> </span>--max-time<span class="w"> </span><span class="m">5</span><span class="w"> </span>-k<span class="w"> </span>https://&lt;proxy&gt;-proxy.&lt;tenant-namespace&gt;.svc:8443/metrics
 </code></pre></div>
 <p><strong>Resolution.</strong>
 - Label the namespace your Prometheus runs in: <code>kubectl label ns &lt;prometheus-namespace&gt; metrics=enabled</code>.
@@ -8915,8 +8953,8 @@ On a fixed GMC, <code>.spec.replicas</code> belongs to the HPA; the reconciler o
 <li><strong>Raising the <code>EgressProxy</code>'s <code>spec.minReplicas</code> no longer bumps the Deployment directly.</strong> The GMC raises the HPA's <code>minReplicas</code>, and the HPA scales the pool.
   That needs a working metrics pipeline — check <code>ScalingActive=True</code>:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-182-1" name="__codelineno-182-1" href="#__codelineno-182-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>&lt;proxy&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-182-2" name="__codelineno-182-2" href="#__codelineno-182-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="ScalingActive")].status}{"\n"}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-183-1" name="__codelineno-183-1" href="#__codelineno-183-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>hpa<span class="w"> </span>&lt;proxy&gt;<span class="w"> </span>-n<span class="w"> </span>&lt;tenant-namespace&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-183-2" name="__codelineno-183-2" href="#__codelineno-183-2"></a><span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions[?(@.type=="ScalingActive")].status}{"\n"}'</span>
 </code></pre></div>
 <p><code>False</code> with reason <code>FailedGetResourceMetric</code> means metrics-server is missing or unhealthy; install it, or the floor will not be enforced.
 - <strong>Lowering the <code>EgressProxy</code>'s <code>spec.minReplicas</code> no longer shrinks the pool immediately.</strong> The HPA's downscale stabilisation window (5 minutes by default) applies.</p>

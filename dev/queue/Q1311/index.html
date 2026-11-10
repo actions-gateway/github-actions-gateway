@@ -2678,7 +2678,7 @@ Two parts ship sooner: <a href="../Q1312/">Q1312</a> rejects <code>insecure: tru
 - <code>sizing.profile</code> carrying two axes, closed by Q481 because both missing cells are reachable additively.
 - The three <code>*bool</code> fields, which api-review.md names as genuinely two-valued.
 - The <code>networkPolicy</code> name on an <code>EgressPeer</code>, already shipped twice with the same meaning.</p>
-<p><code>priorityTiers</code> ordering, which the godoc states and nothing checks, was on this list and moved to <a href="../Q1312/">Q1312</a>: a rule that passes an unchanged value can land at <code>v2.0.0</code>.</p>
+<p><code>priorityTiers</code> ordering was on this list and is rejected at <code>v2.0.0</code> instead, because a rule that passes an unchanged value can land in a major already open.</p>
 
 
 
