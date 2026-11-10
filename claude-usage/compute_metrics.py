@@ -570,15 +570,24 @@ def pr_series(existing_max):
         print(f"pr_series: skipped, graphql budget {remaining} below floor {PR_RATE_FLOOR}")
         return {}
 
+    # A page holding nothing already stored means the gap is wider than the page,
+    # and the next run's high-water mark would sit above the hole. Widen until the
+    # page reaches stored rows, the list runs out, or the backfill cap is hit.
     limit = PR_BACKFILL if existing_max == 0 else PR_PAGE
-    try:
-        out = subprocess.run(
-            ["gh", "pr", "list", "--state", "merged", "--limit", str(limit),
-             "--json", "number,createdAt,mergedAt"],
-            capture_output=True, text=True, timeout=300, cwd=REPO)
-        rows = json.loads(out.stdout or "[]")
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return {}
+    while True:
+        try:
+            out = subprocess.run(
+                ["gh", "pr", "list", "--state", "merged", "--limit", str(limit),
+                 "--json", "number,createdAt,mergedAt"],
+                capture_output=True, text=True, timeout=300, cwd=REPO)
+            rows = json.loads(out.stdout or "[]")
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return {}
+        overlaps = any(int(r["number"]) <= existing_max for r in rows)
+        if (existing_max == 0 or overlaps or len(rows) < limit
+                or limit >= PR_BACKFILL):
+            break
+        limit = min(limit * 4, PR_BACKFILL)
 
     fresh = {}
     for r in rows:
@@ -597,10 +606,11 @@ def pr_series(existing_max):
             "merged_at": r["mergedAt"],
             "cycle_hours": f"{(b - a).total_seconds() / 3600:.4f}",
         }
-    # Every row on the page was new, so the gap is wider than one page. Say so
-    # rather than silently recording a hole the next run cannot detect.
-    if fresh and len(fresh) == len(rows) and existing_max:
-        print(f"pr_series: {len(fresh)} new PRs filled a full page; re-run to catch any older gap")
+    # Even the widest page was all new: the hole is recorded and a later run
+    # cannot see it, so say so loudly.
+    if existing_max and not overlaps and len(rows) == limit:
+        print(f"pr_series: {len(fresh)} new PRs filled a {limit}-row page; "
+              "PRs older than it and newer than the stored rows are missing")
     return fresh
 
 

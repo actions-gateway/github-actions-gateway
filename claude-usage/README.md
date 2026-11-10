@@ -523,7 +523,9 @@ One row per merged pull request: `number`, `merged_date`, `created_at`, `merged_
 The only series here whose source is a remote API rather than something recomputable offline, so it gets the same merge-preservation the token series does.
 
 Each run reads the highest number already stored and asks only for what is newer.
-Measured 2026-08-15: one 100-PR page costs 3 GraphQL points against a 5,000/hour budget, so the one-time 1,521-PR backfill was ~48 and every later run is 3.
+A 200-PR page that holds nothing already stored means the gap is wider than the page, so the fetch widens fourfold until it reaches stored rows or the 3,000-PR backfill cap; until 2026-11-10 it stopped at one page, and a 75-day gap recorded the newest 200 of 513 missing PRs with the rest below the next run's high-water mark.
+Measured 2026-08-15: one 100-PR page costs 3 GraphQL points against a 5,000/hour budget, so the one-time 1,521-PR backfill was ~48 and one 200-PR page is two of those.
+A PR merged after a higher-numbered one was stored falls below that mark and is never fetched; five did by 2026-11-10, filled that day by deleting the CSV and refetching all 2,208.
 The fetch is skipped entirely when the remaining budget is under 500, since that budget is shared with every other tool on the account.
 No `gh`, no network, an API error, or a low budget all leave the existing rows untouched and let the run continue, so every other series still works offline and the charts still rebuild from committed data alone.
 

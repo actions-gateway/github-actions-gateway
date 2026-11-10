@@ -628,6 +628,30 @@ class PullRequestFetch(unittest.TestCase):
         self.assertEqual(list(got), [7])
         self.assertEqual(got[7]["cycle_hours"], "2.0000")
 
+    def test_a_page_with_nothing_stored_widens_until_it_reaches_stored_rows(self):
+        # Merged PRs 1..1000, newest first; 100 are stored. A single 200-row page
+        # would record 801..1000 and leave 101..800 below the next high-water mark.
+        merged = [{"number": n, "createdAt": "2026-08-01T00:00:00Z",
+                   "mergedAt": "2026-08-01T01:00:00Z"} for n in range(1000, 0, -1)]
+        limits = []
+
+        class R:
+            def __init__(self, out):
+                self.stdout = out
+
+        def fake(cmd, *a, **k):
+            if "rate_limit" in cmd:
+                return R("5000")
+            limit = int(cmd[cmd.index("--limit") + 1])
+            limits.append(limit)
+            return R(json.dumps(merged[:limit]))
+
+        cm.subprocess.run = fake
+        got = cm.pr_series(100)
+        self.assertEqual(sorted(got), list(range(101, 1001)))
+        self.assertEqual(limits[0], cm.PR_PAGE)
+        self.assertGreater(len(limits), 1, "an all-new page must be refetched wider")
+
 
 class VendorExclusion(unittest.TestCase):
     """Both halves of the vendor test, and neither of them alone.
