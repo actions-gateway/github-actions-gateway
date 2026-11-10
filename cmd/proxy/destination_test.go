@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -395,7 +396,8 @@ func TestHandleConnect_RefusesTheProxysOwnListeners(t *testing.T) {
 	t.Cleanup(func() { goleak.VerifyNone(t) })
 
 	echoAddr := startEchoServer(t)
-	srv := NewServer("127.0.0.1:0", "127.0.0.1:0", 5*time.Second, nil, prometheus.NewRegistry())
+	// Wildcard binds, as main.go uses, so the IPv6 and link-local cases reach it.
+	srv := NewServer("[::]:0", "[::]:0", 5*time.Second, nil, prometheus.NewRegistry())
 	startServer(t, srv)
 
 	connectStatus := func(target string) int {
@@ -421,14 +423,49 @@ func TestHandleConnect_RefusesTheProxysOwnListeners(t *testing.T) {
 	}
 	_, connectPort, _ := net.SplitHostPort(srv.Addr)
 	_, healthPort, _ := net.SplitHostPort(srv.HealthAddr)
-	for _, target := range []string{
-		srv.Addr,
+	targets := []string{
+		net.JoinHostPort("127.0.0.1", connectPort),
 		net.JoinHostPort("localhost", connectPort),
 		net.JoinHostPort("0.0.0.0", connectPort),
+		net.JoinHostPort("::1", connectPort),
+		net.JoinHostPort("::", connectPort),
+		net.JoinHostPort("::ffff:127.0.0.1", connectPort),
 		net.JoinHostPort("127.0.0.1", healthPort),
-	} {
+	}
+	// A zoned link-local address is the shape net.ParseIP cannot read.
+	if ll := linkLocalWithZone(t); ll != "" {
+		targets = append(targets, "["+strings.Replace(ll, "%", "%25", 1)+"]:"+connectPort)
+	} else {
+		t.Log("no interface carries an IPv6 link-local address; skipping the zoned case")
+	}
+	for _, target := range targets {
 		if got := connectStatus(target); got != http.StatusForbidden {
 			t.Errorf("CONNECT %s returned %d, want 403: it reached the proxy's own listener", target, got)
 		}
 	}
+}
+
+// linkLocalWithZone returns an IPv6 link-local address of an up interface as
+// "addr%zone", or "" when there is none.
+func linkLocalWithZone(t *testing.T) string {
+	t.Helper()
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("list interfaces: %v", err)
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if n, ok := a.(*net.IPNet); ok && n.IP.To4() == nil && n.IP.IsLinkLocalUnicast() {
+				return n.IP.String() + "%" + iface.Name
+			}
+		}
+	}
+	return ""
 }

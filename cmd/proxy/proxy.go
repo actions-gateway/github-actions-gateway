@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -806,10 +807,12 @@ var errSelfDial = errors.New("destination is one of this proxy's own listeners")
 
 // dialSelfGuard refuses a dial to one of this proxy's own ports on a loopback,
 // unspecified or local interface address. It runs on the resolved address, so a
-// name that resolves to loopback is caught too. A tunnel back into the proxy
-// would arrive from the proxy's own address, past the pod's ingress
-// NetworkPolicy, and an attributed listener reads both the source address and
-// the arrival port as identity (Q1324).
+// name that resolves to loopback is caught too, and it compares addresses with
+// any IPv6 zone and IPv4 mapping removed. On one of its own ports it fails
+// closed: an address it cannot read, or interfaces it cannot list, refuse the
+// dial. A tunnel back into the proxy would arrive from the proxy's own address,
+// past the pod's ingress NetworkPolicy, and an attributed listener reads both
+// the source address and the arrival port as identity (Q1324).
 func (s *Server) dialSelfGuard(_, address string, _ syscall.RawConn) error {
 	host, portStr, err := net.SplitHostPort(address)
 	if err != nil {
@@ -819,29 +822,38 @@ func (s *Server) dialSelfGuard(_, address string, _ syscall.RawConn) error {
 	if err != nil || !s.ownPorts[port] {
 		return nil
 	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return nil
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return errSelfDial
 	}
-	if ip.IsLoopback() || ip.IsUnspecified() || isLocalInterfaceIP(ip) {
+	addr = addr.Unmap().WithZone("")
+	if addr.IsLoopback() || addr.IsUnspecified() {
+		return errSelfDial
+	}
+	local, err := isLocalInterfaceAddr(addr)
+	if err != nil || local {
 		return errSelfDial
 	}
 	return nil
 }
 
-// isLocalInterfaceIP reports whether ip is assigned to an interface of this host
-// (the pod's own address, inside a pod).
-func isLocalInterfaceIP(ip net.IP) bool {
+// isLocalInterfaceAddr reports whether addr is assigned to an interface of this
+// host (the pod's own address, inside a pod).
+func isLocalInterfaceAddr(addr netip.Addr) (bool, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return false
+		return false, err
 	}
 	for _, a := range addrs {
-		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
-			return true
+		n, ok := a.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		if ifAddr, ok := netip.AddrFromSlice(n.IP); ok && ifAddr.Unmap() == addr {
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // matchHostSuffix returns the configured suffix host equals or is a subdomain
