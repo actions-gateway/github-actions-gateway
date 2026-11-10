@@ -435,6 +435,7 @@ Run the negatives on **every** run rather than once: a policy that stops selecti
 
 ### What this posture does not cover
 
+- **A fork can name a different runner label.** The posture holds only for jobs that land on the untrusted runner set, and a fork edits `runs-on`; see [Fork pull requests choose their own runner label](security-operations.md#fork-pull-requests-choose-their-own-runner-label).
 - **The job still reaches GitHub**, which is what a runner is for.
   Data a job can read is data it can push to a repository it has a token for.
 - **Cache misses reach upstream from the mirror pod**, which carries no workload label and so keeps the free egress a pull-through cache needs.

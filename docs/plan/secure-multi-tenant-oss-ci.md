@@ -3,7 +3,7 @@
 > **Status: goal stated 2026-08-06, deliverables partly shipped.** This is a map and a definition of done, not a design.
 > The design for the network half is [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
 > Kernel isolation, the pod floor, the network layer, the metadata block and the egress evidence are shipped.
-> Definition of Done items 4 and 6 are open, and so are two of the three decisions at the end of this document.
+> Definition of Done items 4 and 6 are open, and so is one of the three decisions at the end of this document.
 
 ## Why this is the goal
 
@@ -83,6 +83,7 @@ The most important section.
 - **Compute abuse is contained, not prevented.** A hostile job can consume the capacity its tenant's quota allows.
   The quota, the priority tiers, and `maxWorkerLifetime` bound it; nothing detects intent in advance.
 - **Secrets a maintainer deliberately grants a fork are out of reach.** If a workflow is configured to expose a secret to `pull_request_target`, that is a repository configuration decision GAG cannot override and should not pretend to.
+- **Which runner set a fork job lands on is the fork's choice** wherever GitHub's approval gate does not cover the contributor, until the default refusal in [Q1330](../queue/Q1330.md) ships; after that, it is the choice of an adopter who sets a `RunnerSet` to accept fork jobs.
 - **Side channels between co-tenant micro-VMs are not addressed.** Kata bounds the kernel.
   Speculative-execution and shared-cache side channels between guests on one node are a hardware and hypervisor concern, not one this milestone closes.
 - **The mirror is a trusted component.** A compromised pull-through mirror reaches every job that pulls through it.
@@ -119,15 +120,20 @@ Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, p
 
 Shipped since: the per-tenant `actions/cache` server (Q215, [q215-worker-cache.md](q215-worker-cache.md)).
 
-Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), and the two open decisions below.
+Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), and the open decision below.
 
 ## Open decisions the map surfaced
 
 Surfaced by drawing the whole picture; each is a decision before it is work:
 
-1. **Secret exposure to fork pull requests** ([Q1220](../queue/Q1220.md)).
-   What GAG can and cannot influence, and what it should refuse to run.
-   Interacts with `pull_request_target` semantics that belong to the repository, not the platform.
+1. **What GAG refuses to run for a fork pull request** (decided 2026-11-09, Q1220).
+   A `pull_request` run executes the pull request's merge commit, whose workflow file carries the fork's edits, so a fork can rewrite `runs-on` to reach a trusted runner set, and routing by label is a convention rather than a control.
+   GitHub's own control comes first: approval for all external contributors, which keys on who opened the pull request (it exempts organization and repository members) rather than on the fork ([how an operator applies it](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label)).
+   Runner groups do not substitute for it: they scope by repository, and the selected-workflows restriction (Enterprise Cloud and Server only, per GitHub's docs) pins ordinary workflows to a branch while a `pull_request` run's ref is `refs/pull/N/merge`, so it refuses every pull request rather than only forks.
+   Nothing on GitHub's side refuses a job because its head is a fork, so GAG refuses fork jobs on every `RunnerSet` by default, and a set meant for untrusted pull requests accepts them explicitly ([Q1330](../queue/Q1330.md)); an opt-in was chosen first and reversed on 2026-11-10, because with no GitHub-side backstop it left every adopter who never set the field exposed.
+   The job message cannot drive it: upstream `JobMessageBase` (actions/scaleset `716908e`, read 2026-11-09) has `eventName` but no head-repository field, and the live `JobAssigned` captured on 2026-07-26 carries none ([scaleset-eviction-recovery.md](scaleset-eviction-recovery.md)).
+   The run object the AGC already reads for eviction recovery names the head repository, and the refusal compares that name with the run's own repository, scoped to the events that run the pull request's merge commit (`pull_request`, `pull_request_review`, `pull_request_review_comment`); the object's `fork` flag reads `true` for any pull request on a repository that is itself a fork, so it is not used (measured 2026-11-10, [Q1330](../queue/Q1330.md)).
+   Secrets a workflow grants to `pull_request_target` stay the repository's decision, as the residual-risk list below says.
 2. **Runner-token scope for an untrusted job.** Settled 2026-11-09: no untrusted class gets a narrower credential, because GAG has none to issue.
    The reasoning and the list it rests on are in [Credentials a job can read](#credentials-a-job-can-read).
 3. **What "untrusted" is, as a declared thing** ([Q1222](../queue/Q1222.md)).
