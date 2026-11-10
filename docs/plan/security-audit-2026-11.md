@@ -163,6 +163,8 @@ To deliver the documented property, make the namespaced-kind gate evaluate the P
 If the narrower check is kept by design, correct docs/design/05-security.md:884, docs/operations/kata-dind-workloads.md:45, :176 and :293 and deploy/templates/kata-dind/template.yaml:33-35 to say that a tenant in a privileged-profile namespace can author any pod shape short of privileged: true and the reserved host-namespace fields, so platform ownership of the template does not pin the worker shape there.
 
 **Resolved in `v2.0.0` by enforcing, not by correcting the docs.** The namespaced-kind webhook now evaluates the whole `podTemplate` against the Pod Security Standards `baseline` level on every profile, through the upstream evaluator (`k8s.io/pod-security-admission/policy` v0.37.2, vendored) and not the hand-written field list sketched above, so the webhook and a `baseline` namespace cannot drift on what `baseline` means.
+The evaluation is pinned to Pod Security Standards 1.37 and does not use the library's latest version: at latest, a Dependabot bump of `k8s.io/pod-security-admission` that carried a stricter check would refuse, in a minor release, a manifest the previous one admitted.
+The cost is that a later upstream tightening reaches a `privileged`-profile namespace only when the pin is raised, which is a breaking change to schedule; `TestPodShapeVersion_IsPinned` fails if the pin is replaced by latest.
 Every `baseline` check forbids a set value and none requires one, so evaluating the partial template gives the verdict the built pod would get.
 None of the three shipped `deploy/templates/` entries is refused, because all three are `ClusterRunnerTemplate`s; `TestTemplateLibrary_PodShape` pins that, and that `kata-dind` and `privileged-dind` are refused as the namespaced kind.
 A stored template passes while its `podTemplate` is unchanged.
@@ -367,6 +369,10 @@ Token minting needs a kubelet, so the final step is a kind e2e case, using a dum
 Whether the kubelet then mints the token was not run; envtest has no kubelet, and the kind case sketched above was not written.
 The webhook refuses the source on `RunnerTemplate` and on `ClusterRunnerTemplate`: the invariant is a floor on every profile, so platform authorship is no exemption, unlike the two pod-shape rules.
 `buildPod` also removes the source from every worker pod, because the stored-value pass would otherwise leave a template from before the rule projecting a token indefinitely; the volume stays, so a pod mounting it still starts.
+Review of the fix found a second projected source of the same kind, and it is closed with the token: a `podCertificate` source addressed to a signer under `kubernetes.io` is refused on both kinds and removed by `buildPod`.
+`k8s.io/api` v0.37.2 documents `kubernetes.io/kube-apiserver-client-pod` as issuing client certificates the apiserver accepts and as unimplemented, so nothing was reachable; the refusal goes in now because only a major release can add one.
+The whole reserved prefix is refused, not the one named signer, so a signer Kubernetes adds later starts refused and a minor release can admit it.
+Left open on purpose: a `podCertificate` from any other signer (a workload certificate, an API credential only if the cluster administrator configures the apiserver to trust that CA), and a token a mutating admission webhook injects at pod creation (IRSA, EKS Pod Identity, Azure Workload Identity), which `buildPod` runs before and cannot see; the second is read from the order of operations and was not run on a cluster.
 The remaining blockers (what the worker ServiceAccount's token can reach, tenant RBAC) are deployment facts and stay unobserved.
 
 **Evidence.** `docs/design/05-security.md:907`, `docs/design/05-security.md:869`, `cmd/agc/internal/provisioner/pod.go:349`, `cmd/gmc/internal/controller/actionsgateway_v2_builder.go:137`, `cmd/gmc/internal/controller/shared_agc_deployment.go:219`.

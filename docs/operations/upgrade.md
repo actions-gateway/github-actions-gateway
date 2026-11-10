@@ -34,7 +34,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a gateway names a GitHub Enterprise Server host: an FQDN-mode pool reaches it only when the platform allowlists it](#action-required-if-a-gateway-names-a-github-enterprise-server-host-an-fqdn-mode-pool-reaches-it-only-when-the-platform-allowlists-it)
   - [Action required if a githubURL spells public GitHub www.github.com or api.github.com: a new gateway is rejected, and a stored one shares scale-set names with github.com](#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-a-new-gateway-is-rejected-and-a-stored-one-shares-scale-set-names-with-githubcom)
   - [Action required if a namespaced RunnerTemplate goes past Pod Security baseline: the shape is now rejected](#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)
-  - [Action required if a namespaced RunnerTemplate declares an nfs, iscsi or other volume type Pod Security restricted forbids: the type is now rejected](#action-required-if-a-namespaced-runnertemplate-declares-an-nfs-iscsi-or-other-volume-type-pod-security-restricted-forbids-the-type-is-now-rejected)
+  - [Action required if a namespaced RunnerTemplate declares an nfs, iscsi or similar volume: the type is now rejected](#action-required-if-a-namespaced-runnertemplate-declares-an-nfs-iscsi-or-similar-volume-the-type-is-now-rejected)
   - [Action required if a template projects a ServiceAccount token: the source is now rejected, and removed from worker pods](#action-required-if-a-template-projects-a-serviceaccount-token-the-source-is-now-rejected-and-removed-from-worker-pods)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
@@ -794,12 +794,13 @@ For each gateway listed, check whether another gateway names the same path on an
 
 ### Action required if a namespaced `RunnerTemplate` goes past Pod Security baseline: the shape is now rejected
 
-**Who is affected:** tenants in a namespace on the `privileged` security profile who author their own `RunnerTemplate` with a field the Pod Security Standards `baseline` level forbids: a capability outside the baseline set, a `hostPath` volume, a `hostPort`, an `Unconfined` seccomp or AppArmor profile, an unmasked `procMount`, or a sysctl outside the safe set.
+**Who is affected:** tenants in a namespace on the `privileged` security profile who author their own `RunnerTemplate` with a field the Pod Security Standards `baseline` level forbids: a capability outside the baseline set, a `hostPath` volume, a `hostPort`, an `Unconfined` seccomp profile, an `Unconfined` AppArmor profile (the field or the `unconfined` annotation), an unmasked `procMount`, a sysctl outside the safe set, an SELinux type outside the allowed set, a Windows `hostProcess` container, or a `host` on a probe or lifecycle hook.
 On the `baseline` and `restricted` profiles Pod Security Admission already refuses the worker pod such a template builds, so there the template never produced a worker.
 
 **What changed.** The admission webhook refused only `securityContext.privileged: true` on a namespaced `RunnerTemplate`.
 In a `privileged`-profile namespace nothing else constrained it, so a tenant could author a host-reaching worker without a privileged container, for example one mounting the node's root filesystem through `hostPath`.
 The webhook now evaluates the whole `podTemplate` against the `baseline` level, with the same checks Pod Security Admission runs, on every profile.
+It evaluates the level as Kubernetes 1.37 defines it, and that version is fixed in the release: if a later Kubernetes tightens `baseline`, this rule does not follow until a GAG release's notes say so.
 A `ClusterRunnerTemplate` is exempt: it is how the platform publishes a shape past `baseline`, such as the library's [`kata-dind`](runner-template-library.md).
 
 The upgrade itself changes nothing: a template already stored keeps building workers, and an edit that leaves `podTemplate` alone is still accepted.
@@ -833,7 +834,7 @@ It does not read a probe or lifecycle hook's `host` field, which `baseline` also
 Have a platform administrator publish each shape that has to stay as a `ClusterRunnerTemplate`, and point the `RunnerSet`'s `templateRef` at it with `kind: ClusterRunnerTemplate`.
 Otherwise remove the field.
 
-### Action required if a namespaced `RunnerTemplate` declares an `nfs`, `iscsi` or other volume type Pod Security `restricted` forbids: the type is now rejected
+### Action required if a namespaced `RunnerTemplate` declares an `nfs`, `iscsi` or similar volume: the type is now rejected
 
 **Who is affected:** tenants whose `RunnerTemplate` declares a volume of any type other than `configMap`, `csi`, `downwardAPI`, `emptyDir`, `ephemeral`, `image`, `persistentVolumeClaim`, `projected` or `secret`.
 Those nine are the types the Pod Security Standards `restricted` level allows.
@@ -865,6 +866,13 @@ That field stops only the automatic mount: the apiserver stores a `serviceAccoun
 `v2.0.0` closes the route in two places.
 The admission webhook refuses the source on both template kinds, and the AGC removes it from every worker pod it builds.
 
+The same rule and the same removal cover a `podCertificate` source whose `signerName` begins with `kubernetes.io`.
+Kubernetes reserves those signers, and its 1.37 API documents one, `kubernetes.io/kube-apiserver-client-pod`, as issuing client certificates the apiserver accepts and as not yet implemented.
+A `podCertificate` from any other signer is left alone.
+
+Neither reaches a token that a mutating admission webhook adds when the pod is created, as IAM Roles for Service Accounts (IRSA), EKS Pod Identity and Azure Workload Identity do.
+The template does not declare that token, and the webhook adds it after the AGC has built the pod.
+
 **This one takes effect at the upgrade, for stored templates too.** A stored template is still accepted while `podTemplate` is unchanged, but workers built from it after the AGC upgrades no longer get the token.
 The volume stays and mounts without the token file, so the pod starts and a step that reads the file fails.
 
@@ -872,7 +880,7 @@ The volume stays and mounts without the token file, so the pod starts and a step
 
 ```bash
 kubectl get runnertemplates.actions-gateway.com,clusterrunnertemplates.actions-gateway.com -A -o json \
-  | jq -r '.items[] | select(any(.spec.podTemplate.spec.volumes[]?.projected.sources[]?; has("serviceAccountToken"))) | "\(.kind) \(.metadata.namespace // "-")/\(.metadata.name)"'
+  | jq -r '.items[] | select(any(.spec.podTemplate.spec.volumes[]?.projected.sources[]?; has("serviceAccountToken") or ((.podCertificate.signerName // "") | startswith("kubernetes.io")))) | "\(.kind) \(.metadata.namespace // "-")/\(.metadata.name)"'
 ```
 
 Remove the source from each, and give a job that needs a cloud or cluster credential one through its workflow, for example GitHub's OpenID Connect token exchanged with the provider.

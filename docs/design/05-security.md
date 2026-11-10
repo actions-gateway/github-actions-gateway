@@ -923,7 +923,8 @@ GAG ships the pod shape for this as `kata-dind` in the [runner template library]
 
 What remains tenant-owned is a `RunnerSet` that authors its own namespaced `RunnerTemplate` and names it explicitly.
 The GMC webhook holds that template to the Pod Security Standards `baseline` level on every profile, and to the volume types the `restricted` level allows (Q1322), so the escape hatch it offers is a weaker pod shape, not a more privileged one.
-The webhook runs the upstream checks (`k8s.io/pod-security-admission/policy`, at the version the GMC vendors), not a list of its own.
+The webhook runs the upstream checks (`k8s.io/pod-security-admission/policy`), not a list of its own, at a pinned Pod Security Standards version (1.37).
+Pinning keeps a dependency update from tightening admission between releases; raising the pin is an API change.
 
 The `baseline` rule is what makes platform ownership pin the pod shape in a `privileged`-profile namespace.
 Pod Security Admission imposes nothing there, and before `v2.0.0` the webhook refused only `securityContext.privileged: true`, so a tenant could author `hostPath`, added capabilities or an `Unconfined` seccomp profile and reach the node without a privileged container.
@@ -958,6 +959,9 @@ The AGC enforces the following on every worker pod regardless of profile, by ove
 - Every `serviceAccountToken` source is removed from the template's `projected` volumes (Q1322).
   The automount field does not cover one: the apiserver stores a source the pod declares itself (`TestUpstream_ProjectedServiceAccountTokenSurvivesAutomountFalse`), and minting it is the kubelet's documented behaviour, not observed here.
   Admission also refuses the source on both template kinds, so the removal matters only for a template stored before `v2.0.0`.
+- Every `podCertificate` source addressed to a signer under `kubernetes.io` is removed and refused the same way (Q1322).
+  Kubernetes reserves that prefix and documents `kubernetes.io/kube-apiserver-client-pod` as issuing apiserver client certificates; the signer is unimplemented at `k8s.io/api` v0.37.2, so the route is closed before it exists.
+  Not covered: a certificate from another signer whose CA the cluster administrator has configured the apiserver to trust, and a token a mutating admission webhook injects at pod creation (cloud workload identity), which the AGC never sees.
 - Reserved env vars (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, the payload mount path) are stamped by the controller
 
 A tenant who sets `securityProfile: privileged` still cannot enable host namespace sharing or expose Kubernetes API credentials inside the worker pod.

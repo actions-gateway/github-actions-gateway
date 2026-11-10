@@ -3700,18 +3700,19 @@ The third also comes from `vclusterrunnertemplate-v2.kb.io`, for a `ClusterRunne
 **Likely cause.** Each message is one rule, and the text in parentheses names the container, volume and value that tripped it.
 
 - **Past baseline.** A namespaced `RunnerTemplate` must meet the Pod Security Standards `baseline` level on every security profile, the `privileged` one included.
-  The webhook runs the checks Pod Security Admission runs, so the reasons read the same: a capability outside the baseline set, `hostPath`, `hostPort`, an `Unconfined` seccomp or AppArmor profile, an unmasked `procMount`, an unsafe sysctl.
+  The webhook runs the checks Pod Security Admission runs, so the reasons read the same: a capability outside the baseline set, `hostPath`, `hostPort`, an `Unconfined` seccomp or AppArmor profile, an unmasked `procMount`, an unsafe sysctl, an SELinux type outside the allowed set, a Windows `hostProcess` container, a `host` on a probe or lifecycle hook.
 - **Volume type.** A namespaced `RunnerTemplate` may declare only the volume types the `restricted` level allows.
   The node mounts an `nfs` or `iscsi` volume itself, so that traffic passes neither the worker `NetworkPolicy` nor the egress proxy.
 - **ServiceAccount token.** Neither kind may project a ServiceAccount token.
   `automountServiceAccountToken: false` does not stop a `projected` volume from carrying one.
+  The same rule refuses a `podCertificate` source whose signer begins with `kubernetes.io`, with a message that names the signer.
 
 **Resolution.**
 
 - For a shape past `baseline`, or a volume type off the list, have a platform administrator publish the template as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`.
   The cluster-scoped kind is exempt from both rules; Pod Security Admission still decides whether the namespace admits the pod.
 - For shared or network storage a tenant owns, mount a `persistentVolumeClaim` instead ([shared worker storage](worker-shared-storage.md)).
-- Remove a `serviceAccountToken` source.
+- Remove a `serviceAccountToken` source, or a `podCertificate` source with a `kubernetes.io` signer.
   No template kind may carry one, and the AGC removes it from the worker pod regardless.
 
 A template stored before `v2.0.0` keeps working: an edit that leaves `podTemplate` alone is accepted.
