@@ -75,7 +75,7 @@ The runner writes to its working tree (`_work`), tool cache, and temp dirs on th
 If your cluster requires `readOnlyRootFilesystem`, you **must** exempt worker pods.
 The proxy, AGC, and GMC containers all run with `readOnlyRootFilesystem: true`.
 
-**No privileged containers / no host namespaces** — The AGC unconditionally forces `hostPID/hostNetwork/hostIPC: false` and `automountServiceAccountToken: false` on every worker pod (all three profiles), overwriting any tenant `PodTemplate` value.
+**No privileged containers / no host namespaces** — The AGC unconditionally forces `hostPID/hostNetwork/hostIPC: false` and `automountServiceAccountToken: false` on every worker pod (all three profiles), overwriting any tenant `PodTemplate` value, and removes any projected `serviceAccountToken` volume source.
 `baseline`/`restricted` also forbid privileged containers via PSA.
 Only the `privileged` profile permits a privileged container — by design, and gated behind an admission webhook that requires an explicit per-tenant opt-in ([§5.3](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)).
 

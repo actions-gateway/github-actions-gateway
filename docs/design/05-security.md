@@ -922,7 +922,19 @@ Marking a sandbox-runtime template as the cluster default makes the pairing the 
 GAG ships the pod shape for this as `kata-dind` in the [runner template library](../operations/runner-template-library.md), which deliberately does **not** ship marked as a default: which template a cluster defaults to is the platform team's decision to make, not the project's.
 
 What remains tenant-owned is a `RunnerSet` that authors its own namespaced `RunnerTemplate` and names it explicitly.
-That template cannot declare a privileged container at all (rejected at admission), so the escape hatch it offers is a weaker pod shape, not a more privileged one.
+The GMC webhook holds that template to the Pod Security Standards `baseline` level on every profile, and to the volume types the `restricted` level allows (Q1322), so the escape hatch it offers is a weaker pod shape, not a more privileged one.
+The webhook runs the upstream checks (`k8s.io/pod-security-admission/policy`, at the version the GMC vendors), not a list of its own.
+
+The `baseline` rule is what makes platform ownership pin the pod shape in a `privileged`-profile namespace.
+Pod Security Admission imposes nothing there, and before `v2.0.0` the webhook refused only `securityContext.privileged: true`, so a tenant could author `hostPath`, added capabilities or an `Unconfined` seccomp profile and reach the node without a privileged container.
+A shape past `baseline` now exists only as a `ClusterRunnerTemplate`.
+
+The volume-type rule covers the gap `baseline` leaves on every profile but `restricted`.
+`baseline` forbids `hostPath` alone, so it admits `nfs` and `iscsi` (pinned by `TestUpstream_PodSecurity_BaselineAdmitsNetworkVolumes`), and the node mounts those from a server the tenant names: traffic the workload NetworkPolicy and the egress proxy never see.
+The types left are node-local, pulled like an image, or provisioned through a platform-controlled `PersistentVolume`, `StorageClass` or `CSIDriver`.
+Whether a node could have completed such a mount depends on its image and firewall and was never observed.
+
+A template stored before these rules is not re-checked until its `podTemplate` changes, so they bind new and edited templates, and Pod Security Admission remains the only runtime check on a stored one.
 
 ### Privileged worker containers are admitted only under the privileged profile
 
@@ -943,6 +955,9 @@ The AGC enforces the following on every worker pod regardless of profile, by ove
 - `Spec.HostIPC = false`
 - `Spec.AutomountServiceAccountToken = false`
 - `Spec.ServiceAccountName = <worker SA>` (no K8s API credentials projected)
+- Every `serviceAccountToken` source is removed from the template's `projected` volumes (Q1322).
+  The automount field does not cover one: the apiserver stores a source the pod declares itself (`TestUpstream_ProjectedServiceAccountTokenSurvivesAutomountFalse`), and minting it is the kubelet's documented behaviour, not observed here.
+  Admission also refuses the source on both template kinds, so the removal matters only for a template stored before `v2.0.0`.
 - Reserved env vars (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, the payload mount path) are stamped by the controller
 
 A tenant who sets `securityProfile: privileged` still cannot enable host namespace sharing or expose Kubernetes API credentials inside the worker pod.

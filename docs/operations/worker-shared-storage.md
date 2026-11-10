@@ -20,6 +20,7 @@ Three properties follow from one worker pod per job, and they are design rather 
 
 So the deliverable here is an integration, not a storage system.
 Anything a Kubernetes `PersistentVolumeClaim` can express, a worker can mount.
+The claim is also the only route for network storage in a tenant's `RunnerTemplate`: an inline `nfs` or `iscsi` volume is [rejected at admission](troubleshooting.md#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token).
 
 ## Set `fsGroup` to the runner UID, or the job fails on its first write
 
