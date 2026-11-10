@@ -541,11 +541,11 @@ GAG does not tell a fork job from any other today, so the controls that hold are
 
 - **Require approval for all external contributors** (repository or organization Settings → Actions → General).
   The `first_time_contributors` setting lets a contributor's second pull request run without a maintainer click.
-- **Keep trusted runner groups off public repositories** (`allows_public_repositories: false`, GitHub's default), and on a plan with custom runner groups, restrict a trusted group to selected workflows.
-  Whether a selected-workflow restriction refuses a fork job is unmeasured: [Q1331](../queue/Q1331.md).
+- **Runner groups separate repositories, not forks.** `allows_public_repositories: false`, GitHub's default, keeps a group off every public repository, so its own pull requests lose it too.
+  The selected-workflows restriction is documented for Enterprise Cloud and Server only, and pins an ordinary workflow to a branch; a `pull_request` run's ref is `refs/pull/N/merge`, so as documented it refuses every pull request, fork or not.
 
-Repository-level scale sets and organizations without custom runner groups have only the first.
-An opt-in refusal on the `RunnerSet` itself is [Q1330](../queue/Q1330.md).
+So on a public repository the approval setting is the only GitHub control that tells a fork from a branch, and it costs a maintainer's click per run.
+An opt-in refusal of fork jobs on the `RunnerSet` itself is [Q1330](../queue/Q1330.md).
 
 ## Tenant egress posture & deliberate widening
 

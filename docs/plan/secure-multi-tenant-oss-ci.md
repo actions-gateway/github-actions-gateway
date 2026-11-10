@@ -128,8 +128,9 @@ Surfaced by drawing the whole picture; each is a decision before it is work:
 
 1. **What GAG refuses to run for a fork pull request** (decided 2026-11-09, Q1220).
    A `pull_request` run takes its workflow from the fork's head, so a fork can rewrite `runs-on` to reach a trusted runner set, and routing by label is a convention rather than a control.
-   GitHub's own controls come first: approval for all external contributors, and runner groups kept off public repositories or restricted to selected workflows ([how an operator applies them](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label); whether the workflow restriction refuses a fork job is [Q1331](../queue/Q1331.md)).
-   Neither reaches a repository-level scale set or an organization on a plan without custom runner groups, so GAG adds an opt-in `RunnerSet` refusal ([Q1330](../queue/Q1330.md)).
+   GitHub's own control comes first: approval for all external contributors ([how an operator applies it](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label)).
+   Runner groups do not substitute for it: they scope by repository, and the selected-workflows restriction (Enterprise Cloud and Server only, per GitHub's docs) pins ordinary workflows to a branch while a `pull_request` run's ref is `refs/pull/N/merge`, so it refuses every pull request rather than only forks.
+   Nothing on GitHub's side tells a fork job from a branch job without a human click, so GAG adds an opt-in `RunnerSet` refusal ([Q1330](../queue/Q1330.md)).
    The job message cannot drive it: upstream `JobMessageBase` (actions/scaleset `716908e`, read 2026-11-09) has `eventName` but no head-repository field, and the live `JobAssigned` captured on 2026-07-26 carries none ([scaleset-eviction-recovery.md](scaleset-eviction-recovery.md)).
    The run object the AGC already reads for eviction recovery carries `head_repository.fork`, which is what the refusal keys on.
    Secrets a workflow grants to `pull_request_target` stay the repository's decision, as the residual-risk list below says.
