@@ -181,12 +181,16 @@ Starts at `api/v2/egressproxy_types.go:208`.
 The comma, `*`, `*.domain` and `host:port` forms each exempt the GitHub host.
 So does a hostname spelled in fullwidth letters, which the audit did not list: the client compares a non-ASCII name in its IDNA form.
 An address or CIDR entry exempts only a host that is itself an IP literal, so it matters for a `githubURL` written as an IP and never for a GitHub hostname.
-The client ignores `*domain` with no dot, a name with a trailing dot, and a bracketed IPv6 address with no port, and the rule does not model them.
+The client compares a trailing dot literally: a dot-only entry (`.`, `*.`) is the suffix `.` and exempts every host written with a trailing dot, which `githubURL` admits, while `github.com.` exempts `github.com.` and not `github.com`.
+The client ignores `*domain` with no dot and a bracketed IPv6 address with no port, and the rule does not model them.
 
 `noproxy.ValidateEntries` now reads an entry the way that client does, and `TestMatchesAgreesWithNetHTTP` fails if the two disagree in either direction.
-It is stricter in two declared places: a port-qualified entry is refused whatever the port, because the guard is handed a host and not the port its traffic uses, and a leading-dot entry also matches the bare domain, as it did before.
+It is stricter in four declared places.
+A port-qualified entry is refused whatever the port, because the guard is handed a host and not the port its traffic uses.
+The other three follow a second consumer, libcurl, which `git` and `curl` in a worker pod read the same `NO_PROXY` through: a leading-dot entry also matches the bare domain, a space or a tab separates entries as a comma does, and one trailing dot on the entry or the host is ignored.
+Those three were measured by hand against curl 8.7.1 on macOS on 2026-11-10, with an unresolvable host and a closed proxy port; no test pins them, because a test that runs `curl` would assert on the build host's tooling.
 An `EgressProxy` update re-judges the entries only when the list changes, so a stored value passes an unrelated edit.
-The second blocker stays open and the rule does not depend on it: whether exempted traffic leaves the pod was not measured, and neither was what the runner and job tooling in a worker pod do with these forms.
+The second blocker stays open and the rule does not depend on it: whether exempted traffic leaves the pod was not measured, and neither was the libcurl in a worker image or the Actions runner's own parser.
 
 noproxy.hostnameMatches (cmd/gmc/internal/webhook/noproxy/noproxy.go:89-96) validates each array element as one hostname using equality or dot-suffix comparison, while the builders treat the array as fragments of a comma-separated NO_PROXY string (strings.Join with ',').
 An element is never split on commas before validation, a '*' or '*.' prefix and a ':port' suffix are compared literally, ValidateEntries skips CIDR and bare-IP entries unconditionally (noproxy.go:54), and the CRD puts no pattern on the items.

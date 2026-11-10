@@ -3569,13 +3569,15 @@ An entry covers a host in any of these forms:
 | Form | Example |
 |---|---|
 | The host, or a parent domain of it, with or without a leading dot | `github.com`, `.github.com`, `githubusercontent.com`, `.com` |
-| Two values in one entry, joined by a comma | `internal.example.com,github.com` |
+| Two values in one entry, joined by a comma, a space or a tab | `internal.example.com,github.com`, `internal.example.com github.com` |
 | A wildcard | `*`, `*.github.com` |
 | A host with a port, whatever the port | `github.com:443` |
+| A host with a trailing dot, or a host without one where the `githubURL` host has it | `github.com.`, `ghes.corp.example` for `https://ghes.corp.example./my-org` |
+| A lone dot, where a gateway's `githubURL` host ends in a dot | `.` for `https://ghes.corp.example./my-org` |
 | A hostname spelled with non-ASCII letters | `ｇｉｔｈｕｂ.com` |
 | An address or CIDR that contains a `githubURL` host written as an IP | `10.0.0.0/8` for `https://10.1.2.3/my-org` |
 
-**Why it is enforced.** The GMC joins the entries with commas into the AGC's and the workers' `NO_PROXY`, and the AGC's HTTP client reads each form above as an exemption for the host.
+**Why it is enforced.** The GMC joins the entries with commas into the AGC's and the workers' `NO_PROXY`, and each form above exempts the host in the AGC's HTTP client or in libcurl, which `git` and `curl` in a worker pod use.
 That tenant's GitHub traffic would skip the per-tenant egress proxy, which defeats the egress-IP attribution that isolates tenants.
 The check runs on **both** the proxy write and the gateway/`RunnerSet` write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting `EgressProxy` and entry.
 A reference to a proxy in another namespace is compared once that proxy grants the referrer's namespace, and the write that adds the grant is checked too.

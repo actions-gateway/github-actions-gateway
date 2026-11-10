@@ -318,8 +318,8 @@ spec:
   # would route this tenant's GitHub traffic around the proxy — one covering
   # the githubURL host or the public GitHub domains (github.com,
   # githubusercontent.com, ghcr.io), whether written as a suffix, a wildcard,
-  # with a port or inside a comma-joined entry — since that breaks egress-IP
-  # attribution.
+  # with a port, with a trailing dot, or inside a comma- or space-joined entry
+  # — since that breaks egress-IP attribution.
   # Never list GitHub here. The cluster-internal exemptions are appended
   # automatically — svc.cluster.local, kubernetes.default.svc, localhost,
   # 127.0.0.1, and this cluster's API server ClusterIP — so neither the API
