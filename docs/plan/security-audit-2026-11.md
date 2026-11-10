@@ -3,9 +3,9 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, nothing fixed.** 9 findings are confirmed from source (one medium, eight low) and 30 are leads that source alone cannot settle.
+> **Status: findings filed, the medium one fixed.** 9 findings are confirmed from source (one medium, eight low) and 30 are leads that source alone cannot settle.
 > Nothing reached high or critical.
-> Two rows gate `v2.0.0`: [Q1321](../queue/Q1321.md) and [Q1322](../queue/Q1322.md).
+> Two rows gated `v2.0.0`: Q1321, which has landed, and [Q1322](../queue/Q1322.md), which is open.
 > The rest are [Q1323](../queue/Q1323.md) to [Q1328](../queue/Q1328.md).
 
 ## Method and limits
@@ -39,7 +39,7 @@ The recurring theme matches the second audit's: a documented isolation property 
 
 | Finding | Verdict | Tracked by |
 |---|---|---|
-| [GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds](#confinement-claim) | confirmed, medium | [Q1321](../queue/Q1321.md) (`2.0-gate`) |
+| [GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds](#confinement-claim) | confirmed, medium | Q1321 (`2.0-gate`), fixed |
 | [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
@@ -81,9 +81,14 @@ The recurring theme matches the second audit's: a documented isolation property 
 
 ## Confinement claim
 
-The one medium finding, tracked as [Q1321](../queue/Q1321.md) and gating `v2.0.0`.
-The design doc claims a confinement the shipped policy does not deliver, and a General Availability release should not carry a security claim that source refutes.
-Correcting the claim clears the gate; extending the policy to the unmatched kinds is the stronger fix and changes no tenant-facing API.
+The one medium finding, tracked as Q1321, which gated `v2.0.0` and has landed.
+The design doc claimed a confinement the shipped policy did not deliver, and a General Availability release should not carry a security claim that source refutes.
+
+**Fixed by both routes.** `gmc-tenant-resource-guard` now matches ConfigMaps, the three CNI-native policy kinds and ServiceMonitors, in the chart template and the config copy, and [05-security.md](../design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls) states what stays cluster-wide: ConfigMap reads, Events, and the GMC's own API kinds.
+A unit test fails when the manager ClusterRole grants a write that no shipped policy matches, and a second holds each config copy to its chart template.
+Two ConfigMap writes are admitted outside a tenant namespace, which the finding's own fix did not anticipate in full: any in the install namespace, as it proposed, and the delete of a proxy-share projection, without which a share could not be withdrawn from a namespace that had lost its marker.
+The role was not narrowed: the GMC lists its share projections by label across namespaces, so ConfigMap `get`/`list` stays cluster-wide and is recorded as a residual.
+The finding below is kept as written on 2026-11-09.
 
 ### GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds
 
