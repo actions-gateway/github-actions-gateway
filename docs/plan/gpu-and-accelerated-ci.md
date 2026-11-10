@@ -57,7 +57,7 @@ The rate is real; what nobody ships is an isolation runtime to spend it under, s
 
 The consequence is a positioning constraint, not just an engineering one.
 The strongest audience for GAG's security story and the strongest audience for its GPU story are the same people, and on managed cloud they still have to choose between a sandbox that stops at the driver and a VM boundary they cannot configure.
-On-premises and reserved hardware is where both hold at once, which is also where the [location filter](../alternatives.md#location-location-location) already removes most of the competition.
+On-premises and reserved hardware is where both hold at once, which is also where the [location filter](../alternatives.md#on-your-own-hardware) already removes most of the competition.
 That is a coherent story, but only if it is stated rather than discovered by an operator after they buy A3 nodes.
 
 ## Why gang scheduling is structurally hard, and why that matters

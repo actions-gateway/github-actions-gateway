@@ -14,7 +14,7 @@ Closing untrusted-PR egress removes the cache that works today.
 Nothing in the individual Queue rows says that, which is why they need an umbrella.
 
 It is also where the competitive position is most often misread in GAG's own favour and against it at the same time.
-See [alternatives.md](../alternatives.md#no-offering-is-perfect-yet): ARC has no in-cluster cache either, so this is not a reason to prefer ARC.
+See [alternatives.md](../alternatives.md#a-paved-road-is-worth-more-than-a-trail-map): ARC has no in-cluster cache either, so this is not a reason to prefer ARC.
 GitLab Runner and the managed services do have one, so it is a real loss against that lane.
 
 ## Three caches, routinely conflated

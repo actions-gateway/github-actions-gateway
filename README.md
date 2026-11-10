@@ -43,7 +43,7 @@ Where something else wins, it wins on a named capability, and the list is short:
 | Your jobs can leave the clusters you operate | a managed runner service (Blacksmith, Namespace, Ubicloud), or one that runs in your cloud account under the vendor's control plane (Depot on AWS; WarpBuild on AWS, GCP, Azure). They sell per-build speed; GAG has measured none and claims none |
 | Compute is cheap and elastic, and no expensive node is shared | a cluster per team in its own project, or a VM per job: [RunsOn](https://runs-on.com), [terraform-aws-github-runner](https://github.com/github-aws-runners/terraform-aws-github-runner), [Actuated](https://actuated.com). A project boundary isolates harder than any shared cluster can |
 
-[Choosing how to run self-hosted CI](docs/alternatives.md) argues each one with dated reads, and states where GAG loses and to whom.
+[Choosing how to run self-hosted CI](docs/alternatives.md) argues each one with dated reads, and lists what GAG gives up and what it offers instead.
 
 ## The problem
 

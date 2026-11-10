@@ -247,7 +247,7 @@ A single team on its own cluster gets the same behaviour; what it trades is name
 - **Compute is cheap and elastic, nothing expensive is shared** → a cluster per team, or a VM per job.
   A project boundary isolates harder
 
-[Where GAG loses, and to whom →](alternatives.md#no-offering-is-perfect-yet)
+[Which option fits your CI →](alternatives.md#which-option-fits)
 
 </div>
 
