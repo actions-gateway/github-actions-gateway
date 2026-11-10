@@ -750,7 +750,7 @@ Owner then reads the repository rulesets and release settings to state whether g
 Starts at `.github/workflows/conflict-markers.yml:12`.
 
 Runner selection is by label alone, the dogfood scale sets are registered repo-scoped against a public repository so no runner group gates them, and on pull_request events the label is text in a workflow file the pull request can edit.
-The opt-in gate is an expression inside those same editable files, and the AGC does not distinguish a fork pull request's job from any other until the opt-in refusal in docs/queue/Q1330.md ships.
+The opt-in gate is an expression inside those same editable files, and the AGC does not distinguish a fork pull request's job from any other until the default refusal in docs/queue/Q1330.md ships.
 
 **Blocked on:**
 

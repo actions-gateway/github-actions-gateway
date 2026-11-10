@@ -547,7 +547,7 @@ GAG does not tell a fork job from any other today, so the controls that hold are
   The selected-workflows restriction is documented for Enterprise Cloud and Server only, and pins an ordinary workflow to a branch; a `pull_request` run's ref is `refs/pull/N/merge`, so as documented it refuses every pull request, fork or not.
 
 So on a public repository GitHub's controls separate contributors and repositories, and none of them refuses a job because its head is a fork.
-An opt-in refusal of fork jobs on the `RunnerSet` itself is [Q1330](../queue/Q1330.md).
+A `RunnerSet` refusal of fork jobs, on by default with an explicit accept for an untrusted set, is [Q1330](../queue/Q1330.md).
 
 ## Tenant egress posture & deliberate widening
 
