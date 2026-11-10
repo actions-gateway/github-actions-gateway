@@ -34,7 +34,7 @@
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
 # platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
 # toolchain on a multi-platform build.
-FROM --platform=$BUILDPLATFORM golang:1.27@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS deps
+FROM --platform=$BUILDPLATFORM golang:1.27@sha256:e519d3b0a5b285e5aa53ab9eef02bc6bbb9cb04608389b743a136a9ce75f0d1e AS deps
 WORKDIR /src
 
 # TARGETOS/TARGETARCH are populated by BuildKit from the requested target
@@ -314,7 +314,7 @@ ENTRYPOINT ["/wrapper"]
 ##   docker buildx imagetools inspect docker:29-cli
 ## Re-check the source plugin paths when bumping the major: they are set by
 ## docker-library/docker's own Dockerfile, not by the CLI.
-FROM docker:29-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb AS docker-cli
+FROM docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS docker-cli
 
 ## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
 ## the lockstep test over it — is inherited from `worker`, so this image runs
