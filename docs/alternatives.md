@@ -14,16 +14,16 @@ If your case is different, the chart names what fits it better.
 ```mermaid
 %%{init: {"flowchart": {"rankSpacing": 26, "nodeSpacing": 24, "wrappingWidth": 280}}}%%
 flowchart TD
-    q1(["Must you operate<br>the runners yourself?"])
-    q2(["Must they run on a<br>Kubernetes cluster?"])
-    q3(["Do several teams<br>share the cluster?"])
-    q4(["Is a cluster per team cheap,<br>and does your CI fit one cloud?"])
-    q5(["Do you need GitHub Support,<br>containerMode: kubernetes, or<br>GitHub Enterprise Server (GHES)<br>tested on an appliance?"])
     managed["A managed<br>runner service"]
     vm["A VM per job"]
     percluster["A cluster<br>per team"]
     arc["ARC"]
     gag["GitHub Actions Gateway"]
+    q1(["Must you operate<br>the runners yourself?"])
+    q2(["Must they run on a<br>Kubernetes cluster?"])
+    q3(["Do several teams<br>share the cluster?"])
+    q4(["Is a cluster per team cheap,<br>and does your CI fit one cloud?"])
+    q5(["Do you need GitHub Support,<br>containerMode: kubernetes, or<br>GitHub Enterprise Server (GHES)<br>tested on an appliance?"])
     q1 -- no --> managed
     q1 -- yes --> q2
     q2 -- no --> vm
