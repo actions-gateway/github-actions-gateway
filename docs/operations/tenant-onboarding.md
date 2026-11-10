@@ -315,9 +315,11 @@ spec:
   # Optional: noProxyCIDRs excludes internal destinations from the egress proxy.
   # Entries may be CIDRs (10.0.0.0/8), bare IPs, or NO_PROXY domain suffixes
   # (svc.cluster.local, internal.example.com). Admission rejects any entry that
-  # would route this tenant's GitHub traffic around the proxy — a hostname
-  # matching the githubURL host or the public GitHub domains (github.com,
-  # githubusercontent.com, ghcr.io) — since that breaks egress-IP attribution.
+  # would route this tenant's GitHub traffic around the proxy — one covering
+  # the githubURL host or the public GitHub domains (github.com,
+  # githubusercontent.com, ghcr.io), whether written as a suffix, a wildcard,
+  # with a port, with a trailing dot, or inside a comma- or space-joined entry
+  # — since that breaks egress-IP attribution.
   # Never list GitHub here. The cluster-internal exemptions are appended
   # automatically — svc.cluster.local, kubernetes.default.svc, localhost,
   # 127.0.0.1, and this cluster's API server ClusterIP — so neither the API

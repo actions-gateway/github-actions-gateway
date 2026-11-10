@@ -28,6 +28,8 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a query reads tier on a disruption series: the label is gone](#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone)
   - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
   - [Action required if spec.tracing sets insecure: true with an https:// endpoint: the pair is now rejected](#action-required-if-spectracing-sets-insecure-true-with-an-https-endpoint-the-pair-is-now-rejected)
+  - [Action required if a noProxyCIDRs entry exempts GitHub through a comma, wildcard, port or address: the entry is now rejected](#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected)
+  - [Action required if a shared EgressProxy exempts a consumer's GitHub host: the pair is now rejected](#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
@@ -592,6 +594,77 @@ kubectl get actionsgateways.actions-gateway.com -A -o json \
 Fix each one by what its collector serves.
 To keep exporting in plaintext, as these gateways do today, change the scheme to `http://`.
 To export over TLS, remove `insecure`; spans then stop arriving at a collector that does not serve TLS, and the AGC logs the export error.
+
+### Action required if a `noProxyCIDRs` entry exempts GitHub through a comma, wildcard, port or address: the entry is now rejected
+
+**Who is affected:** operators with an `EgressProxy` whose `spec.noProxyCIDRs` covers a GitHub host in one of the forms below.
+A GitHub host is a public one, such as `github.com` or `ghcr.io`, or the `githubURL` host of a gateway that uses the proxy.
+
+| Form | Example |
+|---|---|
+| Two values in one entry, joined by a comma, a space or a tab | `internal.example.com,github.com`, `internal.example.com github.com` |
+| A wildcard | `*`, `*.github.com` |
+| A host with a port | `github.com:443` |
+| A host with a trailing dot | `github.com.` |
+| A lone dot, where a gateway's `githubURL` host ends in a dot | `.` for `https://ghes.corp.example./my-org` |
+| A hostname spelled with non-ASCII letters | `ｇｉｔｈｕｂ.com` |
+| An address or CIDR that contains a `githubURL` host written as an IP | `10.0.0.0/8` for `https://10.1.2.3/my-org` |
+
+**What changed.** The GMC joins the entries with commas into the AGC's and the workers' `NO_PROXY`.
+Two clients read that variable: the AGC's HTTP client, and libcurl, which `git` and `curl` in a worker pod use.
+Each form above exempts the GitHub host in at least one of them.
+The AGC's client was measured against the Go toolchain `v2.0.0` is built with; libcurl was measured in one release of `curl` on a workstation, not in a worker image.
+The admission check compared each entry as one bare hostname and admitted them.
+It now refuses an entry that either client reads as an exemption, and refuses a port-qualified entry whatever the port.
+Whether the exempted traffic left the pod or was dropped by the namespace's NetworkPolicy was not measured.
+
+The upgrade itself changes nothing: a proxy already stored with such an entry keeps running, and an edit that leaves `noProxyCIDRs` alone is still accepted.
+An edit that changes the list is checked against every entry in it, so it is rejected until the entry is gone.
+A delete and re-create is rejected, which includes a restore from backup.
+
+**Before you upgrade,** list the entries written with a comma, a space, a tab, a `*`, a port, a trailing dot or a non-ASCII character:
+
+```bash
+kubectl get egressproxies.actions-gateway.com -A -o json \
+  | jq -r '.items[] | "\(.metadata.namespace)/\(.metadata.name)" as $p | (.spec.noProxyCIDRs // [])[] | select(test("[,* \\t]|\\.$|[^\\x00-\\x7f]") or (test(":[0-9]*$") and (test("^[0-9a-fA-F:]+(/[0-9]+)?$") | not))) | "\($p)\t\(.)"'
+```
+
+The command lists an entry by its form, whatever it names, so `*.internal.example.com` appears and is still accepted.
+It does not list a plain address or CIDR; check those by hand only where a gateway's `githubURL` names its host by IP.
+Nor does it list a plain hostname, which is newly refused only where a gateway's `githubURL` spells that same host with a trailing dot.
+Remove each entry that covers a GitHub host.
+GitHub traffic for the gateways on that proxy then goes through it.
+
+### Action required if a shared `EgressProxy` exempts a consumer's GitHub host: the pair is now rejected
+
+**Who is affected:** operators with an `EgressProxy` that lists namespaces in `spec.sharing.allowedNamespaces` and has a `noProxyCIDRs` entry covering the `githubURL` host of a gateway in one of them.
+A public GitHub host was already refused in any proxy, so in practice the host is a GitHub Enterprise Server one.
+
+**What changed.** The check compared a proxy with the gateways and `RunnerSet`s in its own namespace only, and a gateway or `RunnerSet` with the proxy of that name in its own namespace only.
+A shared proxy and a referrer in another namespace were therefore never compared, from either side.
+Both sides now follow `defaultProxyRef.namespace` and `proxyRef.namespace`.
+A reference the proxy does not grant is still not compared, because it connects nothing; adding that namespace to `allowedNamespaces` is the write that is then checked.
+
+The upgrade itself changes nothing, and a stored pair keeps running.
+An edit to the proxy that leaves `noProxyCIDRs` and `allowedNamespaces` alone is accepted, and so is an edit to the gateway or `RunnerSet` that leaves its proxy reference alone.
+Changing the proxy's `noProxyCIDRs`, or pointing a reference at the proxy, is rejected while the entry covers the host.
+So is a delete and re-create of either object, which includes a restore from backup.
+
+**Before you upgrade,** list the references that cross a namespace:
+
+```bash
+kubectl get actionsgateways.actions-gateway.com,runnersets.actions-gateway.com -A -o json \
+  | jq -r '.items[] | (.spec.defaultProxyRef // .spec.proxyRef) as $r | select($r != null and ($r.namespace // .metadata.namespace) != .metadata.namespace) | "\(.kind) \(.metadata.namespace)/\(.metadata.name) (\(.spec.githubURL // "gateway \(.spec.gatewayRef.name)")) -> EgressProxy \($r.namespace)/\($r.name)"'
+```
+
+Each line names a gateway with its `githubURL`, or a `RunnerSet` with its gateway, and the proxy it references.
+Read that proxy's entries, with the proxy's namespace and name from the line:
+
+```bash
+kubectl get egressproxies.actions-gateway.com -n team-shared shared-proxy -o jsonpath='{.spec.noProxyCIDRs}'
+```
+
+Remove an entry that covers the gateway's `githubURL` host, in any of the forms in [the section above](#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected).
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 

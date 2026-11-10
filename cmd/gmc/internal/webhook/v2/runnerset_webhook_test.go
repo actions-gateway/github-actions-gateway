@@ -122,6 +122,55 @@ func TestRunnerSetWebhook_ProxyGitHubBypass(t *testing.T) {
 	})
 }
 
+// TestRunnerSetWebhook_ProxyGitHubBypassCrossNamespace asserts the set side reads
+// the proxy its proxyRef resolves to, namespace included, judges the pair only where
+// that proxy grants the set's namespace, and leaves a stored pair alone on update.
+func TestRunnerSetWebhook_ProxyGitHubBypassCrossNamespace(t *testing.T) {
+	ctx := context.Background()
+	gw := v2Gateway("consumer", "gw", "https://ghes.corp.example/my-org", "")
+	newRS := func() *agcv2.RunnerSet {
+		rs := labelledRS("rs", "consumer", "gw", "linux")
+		rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "shared", Namespace: "provider"}
+		return rs
+	}
+	bad := []string{"corp.example"}
+
+	t.Run("granted shared proxy excluding the host rejects", func(t *testing.T) {
+		local := proxyWithNoProxy("consumer", "shared", "10.0.0.0/8")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, sharedProxy(bad, "consumer"), local)}
+		_, err := v.ValidateCreate(ctx, newRS())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spec.proxyRef")
+		assert.Contains(t, err.Error(), "ghes.corp.example")
+	})
+
+	t.Run("a same-named proxy in the set's namespace is not consulted", func(t *testing.T) {
+		local := proxyWithNoProxy("consumer", "shared", bad...)
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, sharedProxy(nil, "consumer"), local)}
+		_, err := v.ValidateCreate(ctx, newRS())
+		require.NoError(t, err)
+	})
+
+	t.Run("ungranted proxy is admitted unread", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, sharedProxy(bad))}
+		_, err := v.ValidateCreate(ctx, newRS())
+		require.NoError(t, err)
+	})
+
+	t.Run("update judges only a changed binding", func(t *testing.T) {
+		v := &RunnerSetCustomValidator{reader: fakeReader(t, gw, sharedProxy(bad, "consumer"))}
+		edited := newRS()
+		edited.Spec.RunnerLabels = []string{"linux", "x64"}
+		_, err := v.ValidateUpdate(ctx, newRS(), edited)
+		require.NoError(t, err, "proxyRef and gatewayRef are as stored")
+
+		unbound := newRS()
+		unbound.Spec.ProxyRef = nil
+		_, err = v.ValidateUpdate(ctx, unbound, newRS())
+		require.Error(t, err, "adding the proxyRef binds a new pair")
+	})
+}
+
 func TestRunnerSetWebhook_RejectsDuplicateScaleSetLabel(t *testing.T) {
 	v := runnerSetValidatorWith(t, scaleSetRS("existing", "tenant", "gw", "linux"))
 	_, err := v.ValidateCreate(context.Background(), scaleSetRS("newset", "tenant", "gw", "linux"))

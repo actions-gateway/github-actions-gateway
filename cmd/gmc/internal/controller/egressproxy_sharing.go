@@ -64,6 +64,13 @@ func proxyShareGranted(ep *gmcv2.EgressProxy, consumerNS string) bool {
 	return slices.Contains(ep.Spec.Sharing.AllowedNamespaces, consumerNS)
 }
 
+// ProxyShareGranted is proxyShareGranted for the admission webhooks, so the
+// noProxyCIDRs guard counts a cross-namespace referrer by the same consent test the
+// reconciler binds it with.
+func ProxyShareGranted(ep *gmcv2.EgressProxy, consumerNS string) bool {
+	return proxyShareGranted(ep, consumerNS)
+}
+
 // proxyShareConfigMapName derives the name a projected share ConfigMap takes in a
 // consumer namespace. It keys on the provider's namespace AND name: one consumer may
 // hold grants from same-named proxies in two provider namespaces, and a name derived
