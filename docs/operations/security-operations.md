@@ -535,16 +535,18 @@ Threat-model rationale: [design 5.2](../design/05-security.md).
 
 ### Fork pull requests choose their own runner label
 
-A `pull_request` run takes its workflow file from the pull request's head, so a fork can rewrite `runs-on` to name any label your runner group admits for that repository.
+A `pull_request` run executes the pull request's merge commit (`refs/pull/N/merge`), whose workflow file carries the fork's edits, so a fork can rewrite `runs-on` to name any label your runner group admits for that repository.
 Routing fork jobs to an untrusted runner set by label is therefore a convention, not a control.
 GAG does not tell a fork job from any other today, so the controls that hold are GitHub's:
 
 - **Require approval for all external contributors** (repository or organization Settings → Actions → General).
-  The `first_time_contributors` setting lets a contributor's second pull request run without a maintainer click.
+  The two first-time settings stop asking once a user has had any commit or pull request merged into the repository, which one accepted typo fix earns.
+  GitHub checks both the pull request's author and the actor of the triggering event.
+  Even this setting exempts the repository's members and owners and the organization's members, so it keys on who opened the pull request, not on whether it came from a fork.
 - **Runner groups separate repositories, not forks.** `allows_public_repositories: false`, GitHub's default, keeps a group off every public repository, so its own pull requests lose it too.
   The selected-workflows restriction is documented for Enterprise Cloud and Server only, and pins an ordinary workflow to a branch; a `pull_request` run's ref is `refs/pull/N/merge`, so as documented it refuses every pull request, fork or not.
 
-So on a public repository the approval setting is the only GitHub control that tells a fork from a branch, and it costs a maintainer's click per run.
+So on a public repository GitHub's controls separate contributors and repositories, and none of them refuses a job because its head is a fork.
 An opt-in refusal of fork jobs on the `RunnerSet` itself is [Q1330](../queue/Q1330.md).
 
 ## Tenant egress posture & deliberate widening
