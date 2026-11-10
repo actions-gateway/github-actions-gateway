@@ -12,8 +12,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -117,6 +119,9 @@ type Server struct {
 	// AttributedAddrs once its listeners are bound.
 	failures      *failureStore
 	portNamespace map[int]string
+	// ownPorts holds every port ListenAndServe bound, which dialSelfGuard
+	// refuses to dial on a local address.
+	ownPorts map[int]bool
 
 	// dnsResolver resolves CONNECT hostnames for the CIDR allowlist check; nil uses
 	// net.DefaultResolver. Injected in tests.
@@ -368,6 +373,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 			return err
 		}
 		s.AttributionAddr = attributionLn.Addr().String()
+	}
+
+	s.ownPorts = make(map[int]bool, len(bound))
+	for _, ln := range bound {
+		s.ownPorts[ln.Addr().(*net.TCPAddr).Port] = true
 	}
 
 	close(s.ready)
@@ -791,6 +801,49 @@ func (s *Server) checkDestination(ctx context.Context, hostport string) (dialAdd
 	return "", destinationUnlisted, false, nil
 }
 
+// errSelfDial is dialSelfGuard's refusal.
+var errSelfDial = errors.New("destination is one of this proxy's own listeners")
+
+// dialSelfGuard refuses a dial to one of this proxy's own ports on a loopback,
+// unspecified or local interface address. It runs on the resolved address, so a
+// name that resolves to loopback is caught too. A tunnel back into the proxy
+// would arrive from the proxy's own address, past the pod's ingress
+// NetworkPolicy, and an attributed listener reads both the source address and
+// the arrival port as identity (Q1324).
+func (s *Server) dialSelfGuard(_, address string, _ syscall.RawConn) error {
+	host, portStr, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || !s.ownPorts[port] {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return nil
+	}
+	if ip.IsLoopback() || ip.IsUnspecified() || isLocalInterfaceIP(ip) {
+		return errSelfDial
+	}
+	return nil
+}
+
+// isLocalInterfaceIP reports whether ip is assigned to an interface of this host
+// (the pod's own address, inside a pod).
+func isLocalInterfaceIP(ip net.IP) bool {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return false
+	}
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && n.IP.Equal(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 // matchHostSuffix returns the configured suffix host equals or is a subdomain
 // of (so an allowed "golang.org" permits "proxy.golang.org").
 func matchHostSuffix(host string, suffixes []string) (string, bool) {
@@ -841,7 +894,16 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream, err := net.DialTimeout("tcp", dialAddr, dialTimeout)
+	dialer := net.Dialer{Timeout: dialTimeout, Control: s.dialSelfGuard}
+	upstream, err := dialer.DialContext(r.Context(), "tcp", dialAddr)
+	if errors.Is(err, errSelfDial) {
+		s.connects.WithLabelValues(destinationUnlisted, "denied").Inc()
+		s.connectDenied.WithLabelValues().Inc()
+		s.recordFailure(r, outcomeDenied, nil)
+		s.logger().Warn("CONNECT destination is this proxy's own listener", "host", truncateHost(r.Host))
+		http.Error(w, "destination not allowed", http.StatusForbidden)
+		return
+	}
 	if err != nil {
 		s.connects.WithLabelValues(destination, dialOutcome(err)).Inc()
 		s.dialErrors.WithLabelValues().Inc()

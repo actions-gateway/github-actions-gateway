@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"go.uber.org/goleak"
 )
 
 // fakeResolver is a deterministic ipResolver for the CIDR-allowlist tests.
@@ -383,4 +386,49 @@ func TestParseCIDRList(t *testing.T) {
 			t.Error("expected an error for a malformed CIDR, got nil")
 		}
 	})
+}
+
+// A transport-only proxy permits every destination, so without a guard a worker
+// can CONNECT back into the proxy's own listeners and have its next request
+// arrive from the proxy's address, on whichever port it picked (Q1324).
+func TestHandleConnect_RefusesTheProxysOwnListeners(t *testing.T) {
+	t.Cleanup(func() { goleak.VerifyNone(t) })
+
+	echoAddr := startEchoServer(t)
+	srv := NewServer("127.0.0.1:0", "127.0.0.1:0", 5*time.Second, nil, prometheus.NewRegistry())
+	startServer(t, srv)
+
+	connectStatus := func(target string) int {
+		t.Helper()
+		conn, err := net.Dial("tcp", srv.Addr)
+		if err != nil {
+			t.Fatalf("dial proxy: %v", err)
+		}
+		defer func() { _ = conn.Close() }()
+		if _, err := fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", target, target); err != nil {
+			t.Fatalf("write CONNECT: %v", err)
+		}
+		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
+		if err != nil {
+			t.Fatalf("read CONNECT response: %v", err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+
+	if got := connectStatus(echoAddr); got != http.StatusOK {
+		t.Fatalf("control: CONNECT to another loopback port returned %d, want 200", got)
+	}
+	_, connectPort, _ := net.SplitHostPort(srv.Addr)
+	_, healthPort, _ := net.SplitHostPort(srv.HealthAddr)
+	for _, target := range []string{
+		srv.Addr,
+		net.JoinHostPort("localhost", connectPort),
+		net.JoinHostPort("0.0.0.0", connectPort),
+		net.JoinHostPort("127.0.0.1", healthPort),
+	} {
+		if got := connectStatus(target); got != http.StatusForbidden {
+			t.Errorf("CONNECT %s returned %d, want 403: it reached the proxy's own listener", target, got)
+		}
+	}
 }
