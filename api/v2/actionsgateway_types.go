@@ -560,15 +560,17 @@ type EgressPeer struct {
 	//
 	// It must parse as a CIDR no broader than /16 for IPv4 or /48 for IPv6: the largest network
 	// one external service spans, an AWS VPC or one IPv6 site, and far short of 0.0.0.0/0. It
-	// must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata server's
-	// IPv6 address (fd00:ec2::254, fd20:ce::254), so the peer cannot name the address that
-	// serves the node's cloud credentials. A value already stored is not re-checked until it
-	// changes.
+	// must not be link-local (169.254.0.0/16, fe80::/10), where most clouds serve node
+	// metadata, or cover one of the metadata and platform addresses clouds serve elsewhere:
+	// 100.100.100.200 (Alibaba Cloud), 168.63.129.16 (Azure), fd00:ec2::254 (AWS) and
+	// fd20:ce::254 (Google Cloud). That list is the addresses known when it was written, not
+	// every address that serves node credentials. A value already stored is not re-checked
+	// until it changes.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxLength=43
 	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || (isCIDR(self) && cidr(self).prefixLength() >= (cidr(self).ip().family() == 4 ? 16 : 48))",optionalOldSelf=true,message="cidr must be a valid CIDR no broader than /16 for IPv4 or /48 for IPv6; the peer is one destination, so name its address or its subnet"
-	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || !isCIDR(self) || !(cidr(self).ip().isLinkLocalUnicast() || cidr(self).containsIP('fd00:ec2::254') || cidr(self).containsIP('fd20:ce::254'))",optionalOldSelf=true,message="cidr must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata server (fd00:ec2::254, fd20:ce::254)"
+	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || !isCIDR(self) || !(cidr(self).ip().isLinkLocalUnicast() || cidr(self).containsIP('100.100.100.200') || cidr(self).containsIP('168.63.129.16') || cidr(self).containsIP('fd00:ec2::254') || cidr(self).containsIP('fd20:ce::254'))",optionalOldSelf=true,message="cidr must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata address (100.100.100.200, 168.63.129.16, fd00:ec2::254, fd20:ce::254)"
 	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F:]+)/[0-9]{1,3}$`
 	CIDR string `json:"cidr,omitempty"`
 

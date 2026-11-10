@@ -53,7 +53,8 @@ var egressPeerConsumers = map[string]struct {
 // consumers. The accepted ones are what an external Vault or collector needs: one address,
 // a subnet, or a network up to an IPv4 /16 or an IPv6 /48. The rejected ones are a peer
 // broader than that, which a link-local check alone admits (0.0.0.0/1 overlaps no
-// link-local range), and a peer naming link-local space or a metadata server.
+// link-local range), and a peer naming link-local space or one of the listed metadata
+// addresses.
 func TestV2_EgressPeer_CIDRAdmission(t *testing.T) {
 	const ns = "v2-egress-peer-admission"
 	createNamespace(t, ns)
@@ -68,6 +69,10 @@ func TestV2_EgressPeer_CIDRAdmission(t *testing.T) {
 		{cidr: "2001:db8::1/128"},
 		{cidr: "2001:db8:1::/48"},
 		{cidr: "fd00:ec3::/48"},
+		{cidr: "fd00:ec2::253/128"}, // beside a named address, not over it
+		{cidr: "100.100.100.201/32"},
+		{cidr: "100.101.0.0/16"},
+		{cidr: "168.63.129.17/32"},
 
 		{cidr: "0.0.0.0/0", reject: egressPeerTooBroad},
 		{cidr: "0.0.0.0/1", reject: egressPeerTooBroad},
@@ -77,11 +82,13 @@ func TestV2_EgressPeer_CIDRAdmission(t *testing.T) {
 		{cidr: "::/0", reject: egressPeerTooBroad},
 		{cidr: "2001:db8::/47", reject: egressPeerTooBroad},
 		{cidr: "fe80::/10", reject: egressPeerTooBroad},
-		// The pattern admits all four, and CEL's isCIDR() takes none of them.
+		// The pattern admits all six, and CEL's isCIDR() takes none of them.
 		{cidr: "999.1.1.1/24", reject: egressPeerTooBroad},
 		{cidr: "10.0.256.1/32", reject: egressPeerTooBroad},
 		{cidr: "010.0.5.7/32", reject: egressPeerTooBroad},         // a leading zero, which CEL's cidr() refuses
 		{cidr: "::ffff:a9fe:a9fe/128", reject: egressPeerTooBroad}, // IPv4-mapped 169.254.169.254
+		{cidr: "0:0:0:0:0:ffff:a9fe:a9fe/128", reject: egressPeerTooBroad},
+		{cidr: "2001:db8::/064", reject: egressPeerTooBroad}, // a leading zero in the prefix length
 
 		{cidr: "169.254.169.254/32", reject: egressPeerLinkLocal},
 		{cidr: "169.254.169.0/24", reject: egressPeerLinkLocal},
@@ -92,6 +99,11 @@ func TestV2_EgressPeer_CIDRAdmission(t *testing.T) {
 		{cidr: "fd00:ec2::/48", reject: egressPeerLinkLocal},
 		{cidr: "fd20:ce::254/128", reject: egressPeerLinkLocal},
 		{cidr: "fd20:ce::/64", reject: egressPeerLinkLocal},
+		// Metadata and platform addresses outside link-local space.
+		{cidr: "100.100.100.200/32", reject: egressPeerLinkLocal},
+		{cidr: "100.100.0.0/16", reject: egressPeerLinkLocal},
+		{cidr: "168.63.129.16/32", reject: egressPeerLinkLocal},
+		{cidr: "168.63.0.0/16", reject: egressPeerLinkLocal},
 	}
 	for consumer, c := range egressPeerConsumers {
 		for i, tc := range cases {
