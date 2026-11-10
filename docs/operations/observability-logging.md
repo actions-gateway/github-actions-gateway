@@ -254,7 +254,7 @@ spec:
 | `spec.tracing` field | AGC env it sets | Notes |
 |---|---|---|
 | `endpoint` | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | **Setting it is what enables tracing.** Empty → no `OTEL_*` env, tracing stays off. |
-| `insecure` | `OTEL_EXPORTER_OTLP_TRACES_INSECURE` | Defaults to `false` (TLS). Set `true` only for a plaintext collector; it wins over an `https://` scheme. |
+| `insecure` | `OTEL_EXPORTER_OTLP_TRACES_INSECURE` | Defaults to `false` (TLS). Set `true` only for a plaintext collector, with an `http://` endpoint. Admission rejects it with an `https://` one, where it would win over the scheme. |
 | `caBundleRef` | `OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE` | A ConfigMap in this namespace with the collector's CA under `ca.crt`. Admission requires an `https://` endpoint with `insecure` unset or `false`. |
 | `networkPolicy` | None; a NetworkPolicy rule | The collector as an egress peer, which the GMC opens for the AGC alone. Admission requires an `endpoint`. |
 | `sampler` | `OTEL_TRACES_SAMPLER` | One of `always_on`, `always_off`, `traceidratio`, `parentbased_always_on`, `parentbased_always_off`, `parentbased_traceidratio` (CRD-enforced enum). |

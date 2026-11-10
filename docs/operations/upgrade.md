@@ -27,6 +27,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a RunnerSet's priorityTiers do not ascend: the list is now rejected](#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected)
   - [Action required if a query reads tier on a disruption series: the label is gone](#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone)
   - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
+  - [Action required if spec.tracing sets insecure: true with an https:// endpoint: the pair is now rejected](#action-required-if-spectracing-sets-insecure-true-with-an-https-endpoint-the-pair-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
@@ -571,6 +572,26 @@ The upgrade itself changes nothing: a gateway already stored with one keeps runn
 A delete and re-create is rejected, which includes a restore from backup.
 
 **Before you upgrade,** correct the value, as in `https://10.0.0.5:4317`.
+
+### Action required if `spec.tracing` sets `insecure: true` with an `https://` endpoint: the pair is now rejected
+
+**Who is affected:** operators with an `ActionsGateway` whose `spec.tracing` has `insecure: true` and an `endpoint` starting `https://`, in any letter case and after any leading whitespace.
+
+**What changed.** The exporter applies `insecure: true` after the endpoint's scheme, so the pair has been exporting spans in plaintext although the endpoint says TLS (measured against the exporter `v2.0.0` ships).
+The schema now refuses the pair.
+The upgrade itself changes nothing: a gateway already stored with it keeps running, and an edit that leaves `endpoint` and `insecure` alone is still accepted.
+Changing the endpoint to another `https://` one while `insecure` stays true is rejected, and so is a delete and re-create, which includes a restore from backup.
+
+**Before you upgrade,** list the gateways that have the pair:
+
+```bash
+kubectl get actionsgateways.actions-gateway.com -A -o json \
+  | jq -r '.items[] | select(.spec.tracing.insecure == true and ((.spec.tracing.endpoint // "") | test("^\\s*https://"; "i"))) | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+Fix each one by what its collector serves.
+To keep exporting in plaintext, as these gateways do today, change the scheme to `http://`.
+To export over TLS, remove `insecure`; spans then stop arriving at a collector that does not serve TLS, and the AGC logs the export error.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 

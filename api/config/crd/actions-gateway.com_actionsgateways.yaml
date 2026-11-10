@@ -1968,6 +1968,10 @@ spec:
                     description: |-
                       Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS
                       required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.
+
+                      It cannot be true with an https:// endpoint: the exporter applies it after the scheme,
+                      so the pair exports in plaintext (otlptracegrpc v1.47.0). A stored pair is not
+                      re-checked until the endpoint or this field changes.
                     type: boolean
                   networkPolicy:
                     description: |-
@@ -2138,6 +2142,15 @@ spec:
                     has no collector to reach
                   rule: '!has(self.networkPolicy) || (has(self.endpoint) && size(self.endpoint)
                     > 0)'
+                - message: 'insecure: true overrides an https:// endpoint and the
+                    AGC exports in plaintext; drop insecure to keep TLS, or write
+                    http:// to mean plaintext'
+                  optionalOldSelf: true
+                  rule: '!(has(self.insecure) && self.insecure && has(self.endpoint)
+                    && self.endpoint.trim().matches(''^[hH][tT][tT][pP][sS]://''))
+                    || (oldSelf.hasValue() && has(oldSelf.value().insecure) && oldSelf.value().insecure
+                    && has(oldSelf.value().endpoint) && oldSelf.value().endpoint ==
+                    self.endpoint)'
             required:
             - credentials
             - githubURL
