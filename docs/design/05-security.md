@@ -431,7 +431,7 @@ Neither relies on the other, so a GMC newer than the proxy image, which is the s
 | Destination host and port | The CONNECT authority; already the hard gate's input, and the whole point of the record. Capped at the longest legal DNS name (see the amplifier note below) |
 | Bytes to and from the destination | Counts taken from the relay, never content |
 | Tunnel duration | A number |
-| Client source address, under `ConnectionsWithSource` only | Read off the accepted connection, never a request header, so a worker cannot forge it. See the attribution section below for why it is a separate value rather than a widening of `Connections` |
+| Client source address, under `ConnectionsWithSource` only | Read off the accepted connection, never a request header, so a worker cannot forge it. The proxy refuses a CONNECT whose dial lands on one of its own listening ports at a local address, which would otherwise let a worker re-enter it from the proxy's own address and on another namespace's attributed port (Q1324). See the attribution section below for why it is a separate value rather than a widening of `Connections` |
 
 Not in it, and unreachable from the code path that writes it: **any request header** (`Proxy-Authorization` above all), the tunneled bytes, and anything from the TLS session inside the tunnel, which the proxy never terminates or inspects.
 The client's source IP is omitted under `Connections`, deliberately: on an unshared pool it is a pod IP that adds no attribution the namespace does not already carry, and including it would turn an egress record into a per-worker movement log.
@@ -493,6 +493,7 @@ They are `EgressProxy.spec.failureAttribution: PerConsumerPort` and `ActionsGate
 The switch is per gateway and the port is per namespace, so a namespace is opted in once any of its gateways is.
 When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and, once every pool replica listens on it, projects that port into the namespace; the AGC then sets it in the `HTTPS_PROXY` of every new worker of every gateway there that uses the pool.
 It withdraws the projection when either side turns off, and new workers go back to the shared port.
+A tenant can set the projection's labels on objects of its own, so a withdrawal acts only on a ConfigMap at the projection's own name, and a Secret the apiserver refuses to blank (an immutable one, say) is left as it is rather than retried: neither can stall another tenant's pool (Q1324).
 That is the only consumer-side change: it restarts nothing in the consumer's namespace, and the AGC's own traffic stays on the shared port, since its failures are not a job's.
 So a pool edit can move workers in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
 A namespace where no gateway has opted in is never moved by a pool edit.
