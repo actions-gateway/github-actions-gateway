@@ -2780,7 +2780,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: Q273's <code>v1alpha1</code> removal, Q264's classic removal and Q1167's drop of <code>v2alpha1</code>, <code>v2beta1</code> and the hub are on <code>main</code>; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, after Q1312's two stricter admission rules landed</td>
+<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: Q273's <code>v1alpha1</code> removal, Q264's classic removal and Q1167's drop of <code>v2alpha1</code>, <code>v2beta1</code> and the hub are on <code>main</code>; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, after Q1312's two stricter admission rules landed and behind the security audit's two gate rows, <a href="../queue/Q1321/">Q1321</a> and <a href="../queue/Q1322/">Q1322</a></td>
 </tr>
 <tr>
 <td><a href="release-2.1/">release-2.1.md</a></td>
@@ -2808,6 +2808,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td><a href="security/">security.md</a></td>
 <td>OWASP-style code review with finding-level workstreams</td>
 <td>✅ Done — every workstream shipped; sole residual is the deferred live Ed25519 probe (M-11b, <a href="../queue/Q11/">Q11</a>). Phase 1 live <code>kind</code> validation covered by the M3/M4 live runs</td>
+</tr>
+<tr>
+<td><a href="security-audit-2026-11/">security-audit-2026-11.md</a></td>
+<td>Third full security audit (2026-11-09), source-only, ahead of <code>v2.0.0</code>: 58 coverage units over the GMC, AGC, egress proxy, worker and release pipeline, with every finding checked by two independent reviewers</td>
+<td>⚠️ Findings filed, nothing fixed: nine confirmed (one medium, eight low) and 30 leads that source cannot settle. <a href="../queue/Q1321/">Q1321</a> and <a href="../queue/Q1322/">Q1322</a> gate <code>v2.0.0</code>; the rest are <a href="../queue/Q1323/">Q1323</a> to <a href="../queue/Q1328/">Q1328</a></td>
 </tr>
 <tr>
 <td><a href="q243-egress-ip-reference-arch/">q243-egress-ip-reference-arch.md</a></td>

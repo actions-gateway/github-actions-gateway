@@ -3050,6 +3050,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>EgressProxyReconciler.reconcileResources</code> applies the proxy Deployment, Service, HPA and PDB, and only then the proxy NetworkPolicy …</td>
 </tr>
 <tr>
+<td><a href="Q1323/">Q1323</a></td>
+<td><a href="../plan/security-audit-2026-11/#confirmed-low-findings">Five low-severity confirmed findings from the November security audit</a></td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Five boundary slips confirmed from source on 2026-11-09, each narrow and none needing a major to fix.</strong> Nothing was run, so each result …</td>
+</tr>
+<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -3232,6 +3240,46 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🚫</td>
 <td>S</td>
 <td>"Untrusted" is a posture an operator assembles by hand today, and nothing says what the platform would apply if it were a declared thing.</td>
+</tr>
+<tr>
+<td><a href="Q1324/">Q1324</a></td>
+<td><a href="../plan/security-audit-2026-11/#egress-proxy-sharing-leads">Validate four egress proxy sharing leads from the security audit</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
+</tr>
+<tr>
+<td><a href="Q1325/">Q1325</a></td>
+<td><a href="../plan/security-audit-2026-11/#scale-set-identity-leads">Validate four scale-set identity leads from the security audit</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
+</tr>
+<tr>
+<td><a href="Q1326/">Q1326</a></td>
+<td><a href="../plan/security-audit-2026-11/#release-and-ci-leads">Validate seven release and CI pipeline leads from the security audit</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
+</tr>
+<tr>
+<td><a href="Q1327/">Q1327</a></td>
+<td><a href="../plan/security-audit-2026-11/#agc-run-and-recovery-leads">Validate five AGC run and recovery state leads from the security audit</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
+</tr>
+<tr>
+<td><a href="Q1328/">Q1328</a></td>
+<td><a href="../plan/security-audit-2026-11/#worker-pod-and-networkpolicy-leads">Validate five worker pod and NetworkPolicy leads from security audit</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
 </tr>
 <tr>
 <td><a href="Q1168/">Q1168</a></td>
@@ -3618,12 +3666,28 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
+<td><a href="Q1321/">Q1321</a></td>
+<td><a href="../plan/security-audit-2026-11/#confinement-claim">GMC can write ConfigMaps and CNI policies outside tenant namespaces</a></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**The security design claims a confinement the shipped admission policy does not deliver, and <code>v2.0.0</code> should not ship the claim as it …</td>
+</tr>
+<tr>
+<td><a href="Q1322/">Q1322</a></td>
+<td><a href="../plan/security-audit-2026-11/#stricter-admission-rules">Eight stricter admission rules from the November security audit</a></td>
+<td><code>debt</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>Eight audit findings are fixed by a stricter admission rule, and an open major is the only cheap time to add one.</strong> A manifest that …</td>
+</tr>
+<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">The <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Everything else under <code>v2.0.0</code> has landed but the tag: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), and the …</td>
+<td>Everything else under <code>v2.0.0</code> has landed but the tag, <a href="Q1321/">Q1321</a> and <a href="Q1322/">Q1322</a>: the coupled removals (Q273, Q264, Q1167) …</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>
