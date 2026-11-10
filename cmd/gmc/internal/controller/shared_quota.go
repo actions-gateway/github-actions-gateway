@@ -66,15 +66,13 @@ func footprintFromResources(res corev1.ResourceRequirements, replicas int32) cor
 	return out
 }
 
-// mulQuantity returns q multiplied by n. n is bounded by the CRD's
-// proxy.maxReplicas maximum (100), so repeated addition stays cheap and exact
-// (resource.Quantity has no scalar-multiply primitive that preserves the
-// canonical form across both DecimalSI and BinarySI).
+// mulQuantity returns q multiplied by n in constant time. n is not bounded by the
+// CRD: a bring-your-own autoscaler supplies the live Deployment's spec.replicas,
+// up to the int32 maximum (Q1324). Quantity.Mul falls back to inf.Dec when the
+// product overflows int64, so the result stays exact.
 func mulQuantity(q resource.Quantity, n int64) resource.Quantity {
-	out := resource.Quantity{Format: q.Format}
-	for i := int64(0); i < n; i++ {
-		out.Add(q)
-	}
+	out := q.DeepCopy()
+	out.Mul(n)
 	return out
 }
 
