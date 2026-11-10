@@ -263,7 +263,7 @@ The knobs an operator is most likely to override:
 |---|---|---|
 | `gmc.image.digest` / `agc.image.digest` / `proxy.image.digest` / `wrapper.image.digest` | `""` | Always — pin all four by digest. The chart refuses to render while any of the four is empty (the GMC additionally re-checks `agc`/`proxy`/`wrapper` at startup). |
 | `allowFloatingImageTags` | `false` | Dev/test only — opt out of digest pinning (render-time check on all four images and the GMC's startup-time AGC/proxy/wrapper check). |
-| `allowUncheckedRunnerTemplatePodShape` | `false` | Only when your own admission policy decides tenant pod shape: the webhook stops holding a namespaced `RunnerTemplate` to Pod Security `baseline` and the `restricted` volume types ([what that gives up](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)). |
+| `allowUncheckedRunnerTemplatePodShape` | `false` | Only when your own admission policy decides tenant pod shape: the webhook stops holding a namespaced `RunnerTemplate` to Pod Security `baseline` and the `restricted` volume types. Without such a policy, a tenant can again author a host-reaching pod in a `privileged`-profile namespace, and an `nfs` or `iscsi` volume in any namespace below `restricted` ([the full account](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)). |
 | `certManager.enabled` | `true` | Set `false` to use the self-signed webhook cert instead of cert-manager. |
 | `namePrefix` | `gmc` | Only when running a second GMC in the same cluster. |
 | `replicaCount` | `2` | Lower to `1` only in dev; production wants HA + leader election. |

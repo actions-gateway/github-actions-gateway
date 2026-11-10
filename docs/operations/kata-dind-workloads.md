@@ -44,6 +44,7 @@ Verified against a real apiserver: `enforce=baseline` rejects this pod shape as 
 So the worker namespace still needs the [`privileged` profile](in-runner-image-builds.md#how-the-security-profiles-constrain-a-build) (platform-granted label) — or, on a self-managed control plane, a [PodSecurity admission exemption](https://kubernetes.io/docs/concepts/security/pod-security-admission/#exemptions) for the Kata `runtimeClass` (managed offerings like GKE do not expose that config).
 What keeps the pod unprivileged is therefore **not** the PSA level but the worker template being platform-owned: author the Kata shape as a cluster-scoped `ClusterRunnerTemplate`, which tenants cannot edit, exactly as for privileged DinD.
 A tenant cannot author the shape either: admission holds a namespaced `RunnerTemplate` to PSS `baseline` on every profile, so this capability set is refused there.
+That holds unless the platform has set `allowUncheckedRunnerTemplatePodShape`, in which case its own admission policy decides ([the opt-out](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
 
 ## How it fits together
 

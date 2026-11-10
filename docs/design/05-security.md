@@ -928,7 +928,7 @@ Pinning keeps a dependency update from tightening admission between releases; ra
 
 The `baseline` rule is what makes platform ownership pin the pod shape in a `privileged`-profile namespace.
 Pod Security Admission imposes nothing there, and before `v2.0.0` the webhook refused only `securityContext.privileged: true`, so a tenant could author `hostPath`, added capabilities or an `Unconfined` seccomp profile and reach the node without a privileged container.
-A shape past `baseline` now exists only as a `ClusterRunnerTemplate`.
+A shape past `baseline` now exists only as a `ClusterRunnerTemplate`, unless the platform has turned the rule off as described below.
 
 The volume-type rule covers the gap `baseline` leaves on every profile but `restricted`.
 `baseline` forbids `hostPath` alone, so it admits `nfs` and `iscsi` (pinned by `TestUpstream_PodSecurity_BaselineAdmitsNetworkVolumes`), and the node mounts those from a server the tenant names: traffic the workload NetworkPolicy and the egress proxy never see.
@@ -939,7 +939,9 @@ A template stored before these rules is not re-checked until its `podTemplate` c
 
 Both rules can be turned off install-wide with the GMC flag `--allow-unchecked-runner-template-pod-shape` (chart value `allowUncheckedRunnerTemplatePodShape`), default off.
 Admission is conjunctive: a platform's `ValidatingAdmissionPolicy` or policy engine can refuse more than this webhook but cannot admit what it refuses, so a built-in rule with no opt-out would take the pod-shape decision away from a platform that already makes it finer-grained, for example by permitting `hostPath` under one directory.
-With the flag set, that policy is the only thing between a tenant in a `privileged`-profile namespace and a host-reaching pod, which is the state before `v2.0.0` and the reason the default is to enforce.
+With the flag set, that policy is the only thing between a tenant in a `privileged`-profile namespace and a host-reaching pod, and the only thing between a tenant on any profile but `restricted` and an `nfs` or `iscsi` volume the node mounts from a server the tenant names.
+Both are the state before `v2.0.0`, and the second reaches the default `baseline` profile, which is why the default is to enforce.
+A template admitted while the flag was set is a stored template once it is cleared, and is not re-checked until its `podTemplate` changes.
 The flag does not reach the privileged-container rule, the PriorityClass allowlist or the API-credential rule below.
 
 ### Privileged worker containers are admitted only under the privileged profile

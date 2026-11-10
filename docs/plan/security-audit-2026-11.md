@@ -171,7 +171,7 @@ A stored template passes while its `podTemplate` is unchanged.
 `runtimeClassName` is not a `baseline` field and stays tenant-settable.
 The rule and the volume-type rule have one install-wide opt-out, the GMC flag `--allow-unchecked-runner-template-pod-shape`, default off.
 It exists because admission is conjunctive: a platform's own `ValidatingAdmissionPolicy` or policy engine cannot admit a template this webhook refuses, so without the flag a platform that already decides tenant pod shape, more finely than baseline-or-nothing, would lose that decision to a rule it cannot configure.
-With the flag set and no such policy, the finding stands as audited; the flag does not reach the API-credential rule.
+With the flag set and no such policy, the finding stands as audited, and so does the volume-source finding below, which the same flag covers; the flag does not reach the API-credential rule.
 
 **Evidence.** `docs/operations/kata-dind-workloads.md:45`, `docs/operations/kata-dind-workloads.md:176`, `docs/operations/kata-dind-workloads.md:293`, `deploy/templates/kata-dind/template.yaml:33`, `docs/design/05-security.md:884`, `docs/design/appendix-h-v2-api-decomposition.md:449`, `cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go:81`, `docs/design/05-security.md:754`, `docs/operations/runner-template-library.md:126`.
 
@@ -341,7 +341,9 @@ Envtest has no kubelet, so the mount itself stays an owner-observed fact.
 **Owner check.** Platform owner confirms, without mounting anything against a real external server: whether worker node pools ship NFS or iSCSI client tooling; whether node egress and any CNI host-endpoint policy permit a node to reach a tenant-chosen address; whether a cluster admission policy already limits pod volume types in namespaces labelled actions-gateway.com/tenant=managed; and whether tenant roles allow direct pod creation there.
 
 **Resolved in `v2.0.0`.** The first blocker is measured: against the envtest apiserver at 1.35.0, Pod Security Admission at `baseline` admits a pod with an `nfs` volume and one with an `iscsi` volume and forbids `hostPath`, and `restricted` forbids all three (`TestUpstream_PodSecurity_BaselineAdmitsNetworkVolumes`, which stays in the suite).
-The namespaced-kind webhook now holds `podTemplate.spec.volumes` to the types the `restricted` level allows, by running the upstream `restrictedVolumes` check alone, so the list is `configMap`, `csi`, `downwardAPI`, `emptyDir`, `ephemeral`, `image`, `persistentVolumeClaim`, `projected` and `secret` and follows upstream when it changes.
+The namespaced-kind webhook now holds `podTemplate.spec.volumes` to the types the `restricted` level allows, by running the upstream `restrictedVolumes` check alone, so the list is `configMap`, `csi`, `downwardAPI`, `emptyDir`, `ephemeral`, `image`, `persistentVolumeClaim`, `projected` and `secret`, as Pod Security Standards 1.37 defines it; the evaluation is pinned to that version, so the list moves only when the pin is raised.
+The GMC flag `--allow-unchecked-runner-template-pod-shape`, default off, turns this rule off together with the `baseline` one, and with it set and no platform policy in its place this finding is open again on every profile but `restricted`, the default `baseline` one included: a tenant can name an `nfs` or `iscsi` server and the node mounts it.
+That is the larger of the opt-out's two costs, because it does not need a `privileged`-profile namespace.
 `ClusterRunnerTemplate` is exempt, and a stored template passes while its `podTemplate` is unchanged.
 The other two blockers are deployment facts and stay unobserved: whether a node could complete the mount, and whether a tenant who may create pods directly has the same path without a template.
 The rule was added anyway because it costs a tenant only the move to a `PersistentVolumeClaim`, and no later minor can add it.

@@ -836,8 +836,12 @@ Otherwise remove the field.
 
 **If your own admission policy already decides tenant pod shape,** you can turn this rule and the volume-type rule in the next section off instead.
 A `ValidatingAdmissionPolicy` or a policy engine can refuse more than the GMC webhook does, but it cannot admit a template the webhook refuses, so with the rules on, a policy that permits tenants one specific shape past `baseline`, such as a `hostPath` under one directory, has no effect.
-Set the chart value `allowUncheckedRunnerTemplatePodShape``: true`, which passes `--allow-unchecked-runner-template-pod-shape` to the GMC.
-The webhook then checks neither rule on a namespaced `RunnerTemplate`, and what a tenant may author past `baseline` is whatever your policy admits; with no such policy, a tenant in a `privileged`-profile namespace can again author a worker pod that reaches the node.
+Set the chart value `allowUncheckedRunnerTemplatePodShape: true`, which passes `--allow-unchecked-runner-template-pod-shape` to the GMC.
+The webhook then checks neither rule on a namespaced `RunnerTemplate`, and what a tenant may author is whatever your policy admits.
+With no such policy, two things come back.
+A tenant in a `privileged`-profile namespace can again author a worker pod that reaches the node.
+And a tenant in any namespace below the `restricted` profile, the default `baseline` one included, can again declare an `nfs` or `iscsi` volume that the node mounts from a server the tenant names, so an install with no `privileged`-profile namespace gives something up too.
+Turning the value off again does not re-check a template admitted while it was on: it is a stored template like any other, checked the next time its `podTemplate` changes.
 The privileged-container, PriorityClass and ServiceAccount-token rules stay on either way.
 
 ### Action required if a namespaced `RunnerTemplate` declares an `nfs`, `iscsi` or similar volume: the type is now rejected

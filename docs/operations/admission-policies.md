@@ -14,6 +14,10 @@ This page does two things:
 > GAG uses in-tree [Pod Security Admission](https://kubernetes.io/docs/concepts/security/pod-security-admission/) (PSA) as its **floor**, not as a replacement for your policy engine — the GMC stamps a `pod-security.kubernetes.io/enforce` level on every tenant namespace ([§5.3 of the security design](../design/05-security.md#53-security-profiles-and-the-privileged-opt-in)).
 > A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page is how to make the two layers agree.
 
+One GAG rule sits in front of your engine and not beside it.
+The GMC webhook refuses a tenant-authored `RunnerTemplate` whose pod shape goes past Pod Security `baseline` or uses a volume type the `restricted` level forbids, and a policy that permits such a shape cannot override that refusal.
+If your engine is where tenant pod shape is decided, set the chart value `allowUncheckedRunnerTemplatePodShape` so the webhook steps aside, and make sure a policy of yours then covers both things it stops refusing ([what they are](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
+
 ## GAG pod classes
 
 The matrix distinguishes seven pod classes because their security posture differs by design:
