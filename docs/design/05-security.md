@@ -31,15 +31,16 @@ The exempt list is what the GMC can still write cluster-wide, and each entry car
 
 * **Events** (`create`/`patch`).
   An Event records an occurrence and configures nothing.
-* **`ActionsGateway` and `EgressProxy` objects, with their status and finalizers** (`update`/`patch`).
-  Nothing is provisioned from one outside a tenant namespace, because every kind it would produce is gated, and gating the finalizer update would wedge the deletion of one created there.
+* **`ActionsGateway` and `EgressProxy` objects and their status, and `ActionsGateway` finalizers** (`update`/`patch`).
+  Nothing is provisioned from one outside a tenant namespace, because every kind it would produce is gated, and gating the finalizer update would wedge the deletion of a gateway created there.
 
 ConfigMaps have two exceptions of their own, each needed by a controller:
 
 * **Any ConfigMap write in the GMC's own install namespace**, where the GitHub IP-range store lives (Q1227, §5.2).
   Nothing else there is opened: a Secret or Deployment write in the install namespace is still denied.
-* **Deleting a ConfigMap labelled as a proxy-share projection** (`actions-gateway/proxy-share: "true"` and `app.kubernetes.io/managed-by: actions-gateway-gmc`), in any namespace.
-  It lets the GMC withdraw a revoked share from a namespace that has since lost its tenant marker.
+* **Deleting a ConfigMap labelled as one of the GMC's two projections into a consumer namespace**, in any namespace: a proxy share (`actions-gateway/proxy-share: "true"`) or a failure-attribution port (`actions-gateway.com/proxy-attribution: "true"`), each with `app.kubernetes.io/managed-by: actions-gateway-gmc`.
+  It lets the GMC withdraw either from a namespace that has since lost its tenant marker.
+  A denied withdrawal would fail the provider `EgressProxy`'s whole reconcile, since the attribution step runs ahead of the proxy's own NetworkPolicy and Deployment.
   The GMC cannot create or relabel a ConfigMap outside a tenant namespace, so the labels on one there were written while the namespace was a tenant, or by someone who can already write ConfigMaps in it.
 
 Secret **reads** need a different mechanism, because admission never runs on `get`/`list`/`watch`.
@@ -69,7 +70,7 @@ So the GMC runs one metadata-only Secret informer per tenant namespace instead o
 * Create/update/delete workloads, Secrets, ConfigMaps, network policies and ServiceMonitors **only in marked tenant namespaces** (the `gmc-tenant-resource-guard` VAP denies writes elsewhere).
 * `get` and `list` any ConfigMap **in any namespace**.
   Admission never runs on a read, and the grant is cluster-wide because the GMC finds its share projections by label across namespaces.
-* Write any ConfigMap in its own install namespace, including the IP-range store, and delete a ConfigMap labelled as a proxy-share projection in any namespace.
+* Write any ConfigMap in its own install namespace, including the IP-range store, and delete a ConfigMap labelled as a proxy-share or failure-attribution projection in any namespace.
 * Create Events, and update `ActionsGateway` and `EgressProxy` objects, in any namespace.
 
 It CANNOT exec into pods, create new namespaces, write a provisioning resource into an unmarked namespace such as `kube-system`, or read Secrets there.

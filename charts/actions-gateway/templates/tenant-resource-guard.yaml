@@ -12,8 +12,9 @@
 # gmc-tenant-secret-reader RoleBinding, so an ex-tenant namespace stops granting
 # the GMC Secret reads (Q1271); any ConfigMap write in the release namespace,
 # where the GMC's IP-range store lives (Q1227); and the GMC deleting a ConfigMap
-# labelled as a proxy-share projection, so a revoked share is withdrawn from a
-# namespace that has since lost its marker.
+# labelled as one of its two projections into a consumer namespace, a proxy share
+# or a failure-attribution port, so either is withdrawn from a namespace that has
+# since lost its marker.
 # Not gated: reads (admission never runs on get/list/watch), Events, and the
 # GMC's own API kinds, from which nothing is provisioned outside a tenant
 # namespace (see docs/design/05-security.md §5.1).
@@ -132,17 +133,21 @@ spec:
     # The GMC's own install namespace, where its IP-range store lives (Q1227).
     - name: isInstallNamespaceConfigMap
       expression: {{ printf "variables.isConfigMap && request.namespace == '%s'" .Release.Namespace | quote }}
-    # A proxy-share projection, matched on the stored object a DELETE carries. The
+    # A proxy-share or failure-attribution projection, matched on the stored object
+    # a DELETE carries. The EgressProxy reconciler withdraws both from a consumer
+    # namespace, and a denied withdrawal fails that proxy's whole reconcile. The
     # GMC cannot label a ConfigMap outside a tenant namespace, so the labels on one
     # there were written while the namespace was a tenant or by its own writers.
-    - name: isOwnShareProjectionDelete
+    - name: isOwnProjectionDelete
       expression: >-
         request.operation == 'DELETE' && variables.isConfigMap &&
         has(oldObject.metadata.labels) &&
-        'actions-gateway/proxy-share' in oldObject.metadata.labels &&
-        oldObject.metadata.labels['actions-gateway/proxy-share'] == 'true' &&
         'app.kubernetes.io/managed-by' in oldObject.metadata.labels &&
-        oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'actions-gateway-gmc'
+        oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'actions-gateway-gmc' &&
+        (('actions-gateway/proxy-share' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['actions-gateway/proxy-share'] == 'true') ||
+        ('actions-gateway.com/proxy-attribution' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['actions-gateway.com/proxy-attribution'] == 'true'))
   validations:
     - expression: "!variables.isClusterRoleBinding || variables.bindingRoleRef == 'agc-clusterrunnertemplate-reader'"
       messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
@@ -150,7 +155,7 @@ spec:
     - expression: >-
         variables.isClusterRoleBinding || variables.isManagedTenant ||
         variables.isOwnReaderBindingDelete || variables.isInstallNamespaceConfigMap ||
-        variables.isOwnShareProjectionDelete
+        variables.isOwnProjectionDelete
       messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed; namespace ' + request.namespace + ' is not a managed tenant namespace'"
       reason: Forbidden
 ---

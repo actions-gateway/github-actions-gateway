@@ -219,7 +219,7 @@ func newAddOnObject(gvk schema.GroupVersionKind, ns, name string) *unstructured.
 // TestGMC_TenantResourceGuard_ConfinesConfigMapAndAddOnWrites pins Q1321: the
 // guard matches the kinds the GMC ClusterRole gained write grants on after Q122,
 // so ConfigMaps, CNI-native policies and ServiceMonitors are confined to marked
-// tenant namespaces like the original provisioning kinds. The two ConfigMap
+// tenant namespaces like the original provisioning kinds. The ConfigMap
 // exceptions are each admitted, and each denial case breaks one of their
 // conditions.
 func TestGMC_TenantResourceGuard_ConfinesConfigMapAndAddOnWrites(t *testing.T) {
@@ -288,6 +288,21 @@ func TestGMC_TenantResourceGuard_ConfinesConfigMapAndAddOnWrites(t *testing.T) {
 	t.Run("own share projection delete admitted in unmarked namespace", func(t *testing.T) {
 		cm := adminCreated(t, newConfigMap(unmarkedNS, "revoked-share", shareLabels))
 		require.NoError(t, gmc.Delete(ctx, cm), "a revoked share is withdrawn from an ex-tenant namespace")
+	})
+
+	t.Run("own attribution projection delete admitted in unmarked namespace", func(t *testing.T) {
+		labels := map[string]string{
+			"app.kubernetes.io/managed-by":          "actions-gateway-gmc",
+			"actions-gateway.com/proxy-attribution": "true",
+		}
+		cm := adminCreated(t, newConfigMap(unmarkedNS, "proxy-attribution-provider-pool", labels))
+		require.NoError(t, gmc.Delete(ctx, cm),
+			"a withdrawn attribution port is removed from an ex-tenant namespace, or the provider proxy's reconcile fails")
+	})
+
+	t.Run("ConfigMap with only the attribution label delete denied", func(t *testing.T) {
+		labels := map[string]string{"actions-gateway.com/proxy-attribution": "true"}
+		requireTenantDenial(t, gmc.Delete(ctx, adminCreated(t, newConfigMap(unmarkedNS, "half-attributed", labels))))
 	})
 
 	t.Run("update of a share projection denied in unmarked namespace", func(t *testing.T) {

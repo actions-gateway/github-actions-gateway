@@ -91,9 +91,27 @@ func (r policyResourceRule) matches(group, resource, operation string) bool {
 	return has(r.groups, group) && has(r.resources, resource) && has(r.operations, operation)
 }
 
-// shippedPolicyResourceRules reads the resourceRules of every
-// ValidatingAdmissionPolicy under config/admission-policy.
-func shippedPolicyResourceRules(t *testing.T) []policyResourceRule {
+// gmcIdentityCondition is how a policy's matchConditions pin the GMC
+// ServiceAccount, in the config copies.
+const gmcIdentityCondition = "request.userInfo.username == 'system:serviceaccount:gmc-system:gmc-controller-manager'"
+
+// confinesGMC reports whether a policy spec is scoped to the GMC ServiceAccount.
+// A policy that names a kind for every principal (the PriorityClass guard) checks
+// something else about the write and does not confine where the GMC makes it.
+func confinesGMC(spec map[string]any) bool {
+	conditions, _ := spec["matchConditions"].([]any)
+	for _, entry := range conditions {
+		condition, _ := entry.(map[string]any)
+		if expression, _ := condition["expression"].(string); expression == gmcIdentityCondition {
+			return true
+		}
+	}
+	return false
+}
+
+// gmcPolicyResourceRules reads the resourceRules of every ValidatingAdmissionPolicy
+// under config/admission-policy that confines the GMC ServiceAccount.
+func gmcPolicyResourceRules(t *testing.T) []policyResourceRule {
 	t.Helper()
 	files, err := filepath.Glob(filepath.Join(admissionPolicyDir, "*.yaml"))
 	require.NoError(t, err)
@@ -108,6 +126,9 @@ func shippedPolicyResourceRules(t *testing.T) []policyResourceRule {
 				continue
 			}
 			spec, _ := doc["spec"].(map[string]any)
+			if !confinesGMC(spec) {
+				continue
+			}
 			constraints, _ := spec["matchConstraints"].(map[string]any)
 			entries, _ := constraints["resourceRules"].([]any)
 			for _, entry := range entries {
@@ -125,11 +146,11 @@ func shippedPolicyResourceRules(t *testing.T) []policyResourceRule {
 }
 
 // Every kind the manager ClusterRole can write cluster-wide is either matched by a
-// shipped admission policy, for each operation the grant allows, or listed in
+// shipped admission policy scoped to the GMC, for each operation the grant allows, or listed in
 // ungatedManagerWrites. A new write marker therefore fails here until the guard
 // gains its kind or the exemption is argued (Q1321).
 func TestManagerRole_WriteGrantsAreGatedOrExempt(t *testing.T) {
-	rules := shippedPolicyResourceRules(t)
+	rules := gmcPolicyResourceRules(t)
 
 	ungated := map[string]bool{}
 	for _, grant := range loadClusterRole(t).Rules {
@@ -159,7 +180,7 @@ func TestManagerRole_WriteGrantsAreGatedOrExempt(t *testing.T) {
 	}
 	slices.Sort(unexplained)
 	require.Empty(t, unexplained,
-		"the manager ClusterRole grants writes that no policy under %s matches: add each kind to "+
+		"the manager ClusterRole grants writes that no GMC-scoped policy under %s matches: add each kind to "+
 			"tenant-resource-guard (chart template and config copy), or to ungatedManagerWrites and "+
 			"docs/design/05-security.md with the reason it is safe cluster-wide", admissionPolicyDir)
 	for kind := range ungatedManagerWrites {

@@ -650,11 +650,12 @@ Read on if a namespace that is not a tenant is listed in an `EgressProxy`'s `spe
 
 **What changed.** The guard now matches ConfigMaps, the CNI-native policy kinds (`CiliumNetworkPolicy`, Calico `NetworkPolicy`, GKE `FQDNNetworkPolicy`), and ServiceMonitors, so the GMC may create, update or delete them only in namespaces labelled `actions-gateway.com/tenant=managed` (Q1321).
 Before, the GMC's ClusterRole let it write those kinds in any namespace and no policy stopped it, which a compromised GMC could have used to rewrite a ConfigMap in `kube-system`.
-Two ConfigMap writes are admitted outside a tenant namespace: any in the GMC's own install namespace, where it keeps its GitHub IP-range store, and the delete of a proxy-share ConfigMap, so a revoked share is still withdrawn from a namespace that has lost its marker.
+Two ConfigMap writes are admitted outside a tenant namespace: any in the GMC's own install namespace, where it keeps its GitHub IP-range store, and the delete of a ConfigMap the GMC projected into a consumer namespace (`proxy-share-*` or `proxy-attribution-*`), so either is still withdrawn from a namespace that has lost its marker.
 
 **What you will see.** Nothing, on an install where every namespace holding a gateway is a marked tenant.
-Where an unmarked namespace is granted a share and holds a gateway or `RunnerSet` naming the proxy, the GMC no longer writes the `proxy-share-*` ConfigMap there: the provider `EgressProxy`'s reconcile fails at the share step with the guard's denial, which names the namespace, and retries.
-Shares into marked namespaces, and revocations, proceed in the same reconcile.
+Where an unmarked namespace is granted a share and holds a gateway or `RunnerSet` naming the proxy, the GMC no longer writes the `proxy-share-*` ConfigMap there, and the **provider** `EgressProxy` reports it: `Degraded=True` and `Ready=False` with reason `ProvisioningFailed`, a Warning event, and a message carrying the guard's denial, which names the namespace.
+The proxy itself keeps serving, because the share step is the last one, and shares into marked namespaces and revocations proceed in the same reconcile.
+The GMC retries, so the condition and the denial in the API server audit log repeat until the namespace is labelled or the grant removed.
 That gateway could not run before either, since the guard already denied its Deployment.
 
 **What to do.** Label the consumer namespace as a tenant ([tenant onboarding](tenant-onboarding.md)), or remove it from `allowedNamespaces`.

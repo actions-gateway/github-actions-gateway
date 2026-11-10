@@ -86,7 +86,7 @@ The design doc claimed a confinement the shipped policy did not deliver, and a G
 
 **Fixed by both routes.** `gmc-tenant-resource-guard` now matches ConfigMaps, the three CNI-native policy kinds and ServiceMonitors, in the chart template and the config copy, and [05-security.md](../design/05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls) states what stays cluster-wide: ConfigMap reads, Events, and the GMC's own API kinds.
 A unit test fails when the manager ClusterRole grants a write that no shipped policy matches, and a second holds each config copy to its chart template.
-Two ConfigMap writes are admitted outside a tenant namespace, which the finding's own fix did not anticipate in full: any in the install namespace, as it proposed, and the delete of a proxy-share projection, without which a share could not be withdrawn from a namespace that had lost its marker.
+Two ConfigMap writes are admitted outside a tenant namespace, which the finding's own fix did not anticipate in full: any in the install namespace, as it proposed, and the delete of a proxy-share or failure-attribution projection, without which neither could be withdrawn from a namespace that had lost its marker and the provider proxy's reconcile would fail there.
 The role was not narrowed: the GMC lists its share projections by label across namespaces, so ConfigMap `get`/`list` stays cluster-wide and is recorded as a residual.
 The finding below is kept as written on 2026-11-09.
 
