@@ -205,7 +205,7 @@ func startValidatingWebhook() error {
 	// Suite templates name no PriorityClass; the
 	// Q289 gate is exercised against a live, ConfigMap-backed allowlist in
 	// priorityclass_allowlist_test.go.
-	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, nil, false); err != nil {
+	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, &webhookv2.RunnerTemplateCustomValidator{}); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhooks: %w", err)
 	}
 	// The same ValidatingWebhookConfiguration also carries the EgressProxy webhook

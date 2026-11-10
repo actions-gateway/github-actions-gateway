@@ -281,14 +281,12 @@ func (v *ClusterRunnerTemplateCustomValidator) ValidateDelete(_ context.Context,
 // SetupRunnerTemplateWebhooksWithManager registers the validating webhooks for both
 // the namespaced RunnerTemplate and the cluster-scoped ClusterRunnerTemplate. The
 // manager's scheme must already include agcv2 (the GMC registers it at
-// startup). priorityClasses is the shared platform PriorityClass allowlist the
-// namespaced kind's podTemplate is gated against (Q289); nil forbids every named
-// class, the secure default. allowUncheckedPodShape skips the namespaced kind's
-// baseline and volume-type rules, for a platform whose own admission policy
-// decides tenant pod shape; false is the secure default.
-func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist, allowUncheckedPodShape bool) error {
+// startup). namespaced is the validator for the namespaced kind; its zero value
+// forbids every named PriorityClass and enforces the pod-shape rules, the secure
+// defaults.
+func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager, namespaced *RunnerTemplateCustomValidator) error {
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.RunnerTemplate{}).
-		WithValidator(&RunnerTemplateCustomValidator{PriorityClasses: priorityClasses, AllowUncheckedPodShape: allowUncheckedPodShape}).
+		WithValidator(namespaced).
 		Complete(); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhook: %w", err)
 	}

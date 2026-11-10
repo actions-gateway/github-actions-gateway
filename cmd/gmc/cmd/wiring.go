@@ -311,6 +311,16 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	return nil
 }
 
+// runnerTemplateValidator builds the namespaced RunnerTemplate validator from the
+// resolved config: the worker PriorityClass allowlist (Q289) and the pod-shape
+// opt-out (--allow-unchecked-runner-template-pod-shape).
+func runnerTemplateValidator(rc *resolvedConfig) *webhookv2.RunnerTemplateCustomValidator {
+	return &webhookv2.RunnerTemplateCustomValidator{
+		PriorityClasses:        rc.priorityClassAllowlist,
+		AllowUncheckedPodShape: rc.allowUncheckedRunnerTemplatePodShape,
+	}
+}
+
 // registerWebhooks registers the GMC's admission webhooks. The
 // caller gates this on ENABLE_WEBHOOKS != "false". It returns an error instead of
 // exiting so the flow stays test-reachable and main owns the single exit.
@@ -319,9 +329,9 @@ func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
 	// kinds. Q289: the namespaced kind's podTemplate.spec.priorityClassName is gated
 	// against the same platform PriorityClass allowlist as priorityTiers.
 	if rc.allowUncheckedRunnerTemplatePodShape {
-		setupLog.Info("WARNING: --allow-unchecked-runner-template-pod-shape is set; a namespaced RunnerTemplate is not held to Pod Security baseline or to the restricted volume types, so tenant pod shape depends on the platform's own admission policy")
+		setupLog.Info("WARNING: --allow-unchecked-runner-template-pod-shape is set; a namespaced RunnerTemplate is not held to Pod Security baseline or to the restricted volume types, so a host-reaching pod shape and a node-mounted nfs or iscsi volume are refused only if the platform's own admission policy refuses them")
 	}
-	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, rc.priorityClassAllowlist, rc.allowUncheckedRunnerTemplatePodShape); err != nil {
+	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, runnerTemplateValidator(rc)); err != nil {
 		return fmt.Errorf("create RunnerTemplate webhook: %w", err)
 	}
 	// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs

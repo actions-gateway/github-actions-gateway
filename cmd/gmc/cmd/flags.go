@@ -109,7 +109,9 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"admission policy (a ValidatingAdmissionPolicy or a policy engine), which can refuse "+
 			"more than the webhook does but cannot admit what the webhook refuses. Off by default: "+
 			"with it on and no such policy, a tenant in a privileged-profile namespace can author "+
-			"a worker pod that reaches the node. The privileged-container, PriorityClass and "+
+			"a worker pod that reaches the node, and a tenant in any namespace below the restricted "+
+			"profile can declare an nfs or iscsi volume the node mounts from a server the tenant "+
+			"names. The privileged-container, PriorityClass and "+
 			"API-credential rules stay enforced. The chart sets this from "+
 			"allowUncheckedRunnerTemplatePodShape.")
 	fs.StringVar(&f.allowedPriorityClasses, "allowed-priority-classes", "",

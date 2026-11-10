@@ -98,9 +98,12 @@ allowFloatingImageTags: false
 # allows. Set it only when the platform decides tenant pod shape with its own
 # admission policy (a ValidatingAdmissionPolicy or a policy engine): such a policy
 # can refuse more than the webhook does but cannot admit what the webhook refuses.
-# With it on and no such policy, a tenant in a privileged-profile namespace can
-# author a worker pod that reaches the node. Leaving it false keeps the secure
-# default.
+# With it on and no such policy, two things come back: a tenant in a
+# privileged-profile namespace can author a worker pod that reaches the node, and
+# a tenant in any namespace below the restricted profile, the default baseline
+# one included, can declare an nfs or iscsi volume that the node mounts from a
+# server the tenant names. Turning it off again does not re-check a template
+# admitted while it was on. Leaving it false keeps the secure default.
 allowUncheckedRunnerTemplatePodShape: false
 
 # allowedPriorityClasses is the platform allowlist of cluster-scoped PriorityClass

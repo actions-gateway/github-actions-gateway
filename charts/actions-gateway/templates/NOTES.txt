@@ -16,7 +16,10 @@ notes: docs/operations/install.md ("Pin images by digest").
 {{ if .Values.allowUncheckedRunnerTemplatePodShape }}
 WARNING — RunnerTemplate pod-shape rules are off (allowUncheckedRunnerTemplatePodShape=true):
   The webhook does not hold a tenant's RunnerTemplate to Pod Security baseline or
-  to the restricted volume types. Your own admission policy must.
+  to the restricted volume types. Unless your own admission policy refuses them,
+  a tenant in a privileged-profile namespace can author a host-reaching worker
+  pod, and a tenant in any namespace below the restricted profile can mount nfs
+  or iscsi from a server it names.
 {{ end -}}
 
 {{ if .Values.certManager.enabled -}}
