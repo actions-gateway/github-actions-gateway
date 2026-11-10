@@ -1292,6 +1292,7 @@ A mounted-but-unreadable CA is a misconfiguration: continuing without it would s
 The GMC renders the `proxy-ca` volume mode `0444` and projects only `tls.crt`, so neither error is reachable from a GMC-managed Deployment on its own.
 A read error means the pod spec was mutated after the fact — a hand-edited Deployment, or a mutating policy engine rewriting volume modes or `securityContext`.
 A parse error means the Secret's `tls.crt` is not a PEM certificate, which only a hand-edited Secret produces.
+A hand-supplied proxy certificate is never kept: on its next reconcile of the `EgressProxy`, the GMC replaces any `tls.crt` that is not the single leaf it issued (a second certificate, a CA, another SAN, or a cert not paired with `tls.key`) and emits `ProxyCertificateIssued`.
 
 **Diagnostics.**
 
@@ -2765,7 +2766,7 @@ System.Security.Authentication.AuthenticationException: The remote certificate i
 emitted from `JobExtension` connectivity checks, `ResultServer` init, `JobServerQueue` log uploads, the `GitHubActionsService` log-blob fetch, or `RunServer.CompleteJobAsync`.
 The runner retries for ~3 minutes, then exits 1.
 
-**Cause.** Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the cert-manager-issued self-signed CA that signed it.
+**Cause.** Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the GMC-issued self-signed proxy certificate.
 This is the worker-side mirror of the AGC's proxy-CA pinning ([§5.2](../design/05-security.md) "Cross-Tenant Proxy CA Trust"): the AGC mounts the CA explicitly so its outbound HTTPS works; worker pods must do the same.
 
 The AGC's pod provisioner is supposed to project the `<proxy>-proxy-tls` Secret into every worker pod at `/etc/actions-gateway/proxy-ca/tls.crt` and set `PROXY_CA_CERT_PATH` so the worker entrypoint wrapper builds a combined `SSL_CERT_FILE` bundle before exec'ing `Runner.Worker`.
@@ -3936,7 +3937,7 @@ Events are emitted only on a genuine state change (never on every reconcile):
 | `ActionsGateway` | `RunnerSetsImpaired` / `AllRunnerSetsHealthy` | Warning / Normal | A bound `RunnerSet` became impaired, or the last impaired set recovered (the `RunnerSetsDegraded` rollup, Q304). |
 | `ActionsGateway` | `ReconcileSucceeded` | Normal | Provisioning recovered after a prior `ProvisioningFailed`. |
 | `ActionsGateway` | `TeardownIncomplete` | Warning | Teardown could not confirm every child deleted (a delete failed, or a child lingers under another controller's finalizer); the cleanup finalizer is retained and teardown retries (Q328 — see [ActionsGateway Stuck Deleting](#actionsgateway-stuck-deleting-teardown-blocked-on-a-failing-delete)). |
-| `EgressProxy` | `ProxyCertificateIssued` | Normal | The self-signed proxy TLS certificate was issued or rotated (near expiry). |
+| `EgressProxy` | `ProxyCertificateIssued` | Normal | The self-signed proxy TLS certificate was issued, rotated (near expiry), or replaced because the Secret held something other than the certificate the GMC issued. |
 | `EgressProxy` | `ProvisioningFailed` | Warning | A reconcile failed partway through provisioning the proxy pool; the message names the failing step. |
 | `EgressProxy` | `ProxyReady` / `ProxyNotReady` | Normal / Warning | The proxy pool reached / lost its `minReplicas` ready pods. |
 | `EgressProxy` | `ReconcileSucceeded` | Normal | Proxy-pool provisioning recovered after a prior `ProvisioningFailed`. |

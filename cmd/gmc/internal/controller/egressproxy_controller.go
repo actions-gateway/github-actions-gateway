@@ -294,7 +294,8 @@ func (r *EgressProxyReconciler) deleteCNIPolicy(ctx context.Context, namespace, 
 
 // ensureProxyCert ensures the EgressProxy's proxy TLS Secret exists and holds a
 // cert valid for at least proxyCertRenewBefore, (re)generating a self-signed cert
-// when the Secret is missing, unparseable, or near expiry. Mirrors v1's
+// when the Secret is missing, near expiry, or holds anything but the shape
+// generateEgressProxyCert issues (parseIssuedEgressProxyCert). Mirrors v1's
 // ensureProxyCert; the private key never leaves the cluster.
 func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	secretName := egressProxyTLSSecretName(ep)
@@ -306,11 +307,13 @@ func (r *EgressProxyReconciler) ensureProxyCert(ctx context.Context, ep *gmcv2.E
 
 	reason := "secret missing"
 	if !apierrors.IsNotFound(getErr) {
-		reason = "unparseable cert"
-		if cert, err := parseCertPEM(existing.Data[corev1.TLSCertKey]); err == nil {
-			if time.Until(cert.NotAfter) > proxyCertRenewBefore {
-				return nil // valid and not near expiry
-			}
+		cert, err := parseIssuedEgressProxyCert(ep.Namespace, proxyResourceName(ep), existing.Data)
+		switch {
+		case err != nil:
+			reason = "unusable cert: " + err.Error()
+		case time.Until(cert.NotAfter) > proxyCertRenewBefore:
+			return nil // valid and not near expiry
+		default:
 			reason = "near expiry"
 		}
 	}

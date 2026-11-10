@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"slices"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 // generateEgressProxyCert generates a self-signed 2048-bit RSA TLS certificate for
@@ -30,17 +34,11 @@ func generateEgressProxyCert(namespace, svcName string) ([]byte, []byte, error) 
 		return nil, nil, fmt.Errorf("generate serial: %w", err)
 	}
 
-	fqdn := fmt.Sprintf("%s.%s.svc.cluster.local", svcName, namespace)
-	dnsNames := []string{
-		svcName,
-		fmt.Sprintf("%s.%s", svcName, namespace),
-		fmt.Sprintf("%s.%s.svc", svcName, namespace),
-		fqdn,
-	}
+	dnsNames := egressProxyCertDNSNames(namespace, svcName)
 
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: fqdn},
+		Subject:      pkix.Name{CommonName: dnsNames[len(dnsNames)-1]},
 		DNSNames:     dnsNames,
 		// Small backdate absorbs clock skew between the GMC and the proxy pods.
 		NotBefore:             time.Now().Add(-1 * time.Minute),
@@ -70,4 +68,46 @@ func generateEgressProxyCert(namespace, svcName string) ([]byte, []byte, error) 
 	}
 
 	return certBuf.Bytes(), keyBuf.Bytes(), nil
+}
+
+// egressProxyCertDNSNames lists every in-cluster DNS name of the <svcName> Service,
+// fully qualified name last.
+func egressProxyCertDNSNames(namespace, svcName string) []string {
+	return []string{
+		svcName,
+		fmt.Sprintf("%s.%s", svcName, namespace),
+		fmt.Sprintf("%s.%s.svc", svcName, namespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", svcName, namespace),
+	}
+}
+
+// parseIssuedEgressProxyCert returns the proxy TLS Secret's certificate when the
+// Secret holds exactly the shape generateEgressProxyCert issues: one PEM
+// certificate and nothing else, not a CA, valid for exactly the Service's DNS names
+// and no other SAN, and paired with tls.key. Consumers install the certificate as a
+// trust root (Q1324), and anyone who can write the Secret could otherwise append a
+// CA or name a GitHub host and have both projected into every consumer namespace.
+func parseIssuedEgressProxyCert(namespace, svcName string, data map[string][]byte) (*x509.Certificate, error) {
+	block, rest := pem.Decode(data[corev1.TLSCertKey])
+	if block == nil || block.Type != "CERTIFICATE" {
+		return nil, fmt.Errorf("no PEM certificate block found")
+	}
+	if len(bytes.TrimSpace(rest)) != 0 {
+		return nil, fmt.Errorf("%s holds data after its first certificate", corev1.TLSCertKey)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse certificate: %w", err)
+	}
+	if !cert.BasicConstraintsValid || cert.IsCA {
+		return nil, fmt.Errorf("certificate is not a basic-constraints leaf")
+	}
+	if !slices.Equal(cert.DNSNames, egressProxyCertDNSNames(namespace, svcName)) ||
+		len(cert.IPAddresses) != 0 || len(cert.URIs) != 0 || len(cert.EmailAddresses) != 0 {
+		return nil, fmt.Errorf("certificate SANs are not the proxy Service's DNS names")
+	}
+	if _, err := tls.X509KeyPair(data[corev1.TLSCertKey], data[corev1.TLSPrivateKeyKey]); err != nil {
+		return nil, fmt.Errorf("certificate does not match %s: %w", corev1.TLSPrivateKeyKey, err)
+	}
+	return cert, nil
 }
