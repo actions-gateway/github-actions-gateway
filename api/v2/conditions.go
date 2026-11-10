@@ -121,6 +121,7 @@ const (
 	ReasonLabelsNotRegistered      = apiconditions.ReasonLabelsNotRegistered
 	ReasonLabelsRegistered         = apiconditions.ReasonLabelsRegistered
 	ReasonApplianceRangesRequired  = apiconditions.ReasonApplianceRangesRequired
+	ReasonGitHubHostNotAllowlisted = apiconditions.ReasonGitHubHostNotAllowlisted
 	ReasonGitHubEgressAllowed      = apiconditions.ReasonGitHubEgressAllowed
 	ReasonRunnerNameConflict       = apiconditions.ReasonRunnerNameConflict
 	ReasonWorkerCeilingReached     = apiconditions.ReasonWorkerCeilingReached

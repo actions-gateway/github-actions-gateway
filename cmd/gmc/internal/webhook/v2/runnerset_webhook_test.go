@@ -262,6 +262,66 @@ func TestRunnerSetWebhook_ScaleSetLabelScope(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("a public GitHub alias is the same scope", func(t *testing.T) {
+		// The AGC addresses www.github.com and api.github.com as public GitHub, so a
+		// claim under either spelling lands in github.com's scale-set namespace (Q1322).
+		for _, alias := range []string{"https://www.github.com/acme", "https://api.github.com/acme"} {
+			v := &RunnerSetCustomValidator{reader: fakeReader(t,
+				v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+				v2Gateway("tenant-b", "gw-b", alias, ""),
+				scaleSetRS("existing", "tenant-a", "gw-a", "linux"))}
+			_, err := v.ValidateCreate(ctx, scaleSetRS("newset", "tenant-b", "gw-b", "linux"))
+			require.Error(t, err, alias)
+			assert.Contains(t, err.Error(), `"github.com/acme"`, "the message names the scope the claim lands in")
+		}
+	})
+
+	t.Run("a stored alias pair stays editable until a claim changes", func(t *testing.T) {
+		// Both sets were stored before the fold. An edit that keeps the first label
+		// and the gateway cannot create the collision, so neither tenant is locked out
+		// of its own set by the other's spelling; the reconciler reports the pair.
+		held := scaleSetRS("held", "tenant-a", "gw-a", "linux")
+		alias := scaleSetRS("alias", "tenant-b", "gw-b", "linux")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://www.github.com/acme", ""),
+			held, alias)}
+
+		for _, stored := range []*agcv2.RunnerSet{held, alias} {
+			edited := stored.DeepCopy()
+			edited.Spec.RunnerLabels = append(edited.Spec.RunnerLabels, "extra")
+			_, err := v.ValidateUpdate(ctx, stored, edited)
+			require.NoError(t, err, "%s: an edit that leaves the claim alone is admitted", stored.Name)
+		}
+
+		// Delete and re-create, which a restore from backup is, makes a new claim.
+		_, err := v.ValidateCreate(ctx, scaleSetRS("alias", "tenant-b", "gw-b", "linux"))
+		require.Error(t, err)
+
+		// So does moving another set onto the shared name.
+		other := scaleSetRS("other", "tenant-b", "gw-b", "windows")
+		v = &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://www.github.com/acme", ""),
+			held, other)}
+		_, err = v.ValidateUpdate(ctx, other, scaleSetRS("other", "tenant-b", "gw-b", "linux"))
+		require.Error(t, err)
+	})
+
+	t.Run("an unchanged claim on one spelling is still rejected", func(t *testing.T) {
+		// The as-written comparison passes only what the alias fold added: a pair on
+		// one spelling was rejected on every update before the fold and still is.
+		self := scaleSetRS("self", "tenant-b", "gw-b", "linux")
+		v := &RunnerSetCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""),
+			scaleSetRS("existing", "tenant-a", "gw-a", "linux"), self)}
+		edited := self.DeepCopy()
+		edited.Spec.RunnerLabels = append(edited.Spec.RunnerLabels, "extra")
+		_, err := v.ValidateUpdate(ctx, self, edited)
+		require.Error(t, err)
+	})
+
 	t.Run("a repo scope is distinct from its org scope", func(t *testing.T) {
 		// An org-level and a repo-level registration are separate config URLs, so
 		// their scale-set names do not share a namespace.

@@ -825,10 +825,17 @@ Depending on which of the two gaps you have hit:
   Fixed by upgrading; see [Upgrade — GHES gateways now reach their own appliance](upgrade.md#non-breaking-github-enterprise-server-gateways-now-reach-their-own-appliance-they-never-did).
 - **Egress is denied.** The AGC reaches the right host name and the connection times out.
   The tenant's `EgressProxy` reports `GitHubEgressIncomplete=True` / reason `ApplianceRangesRequired`, with a message naming the host.
+- **The host is not on the platform egress allowlist.** The pool is in an FQDN egress mode and the AGC cannot reach the appliance.
+  The `EgressProxy` reports `GitHubEgressIncomplete=True` / reason `GitHubHostNotAllowlisted`, with a message naming the host.
+  On a pool that worked before, this starts at the upgrade to `v2.0.0` ([upgrade note](upgrade.md#action-required-if-a-gateway-names-a-github-enterprise-server-host-an-fqdn-mode-pool-reaches-it-only-when-the-platform-allowlists-it)).
 
 **Cause of the second.** The default `CIDR` egress mode programs the merged `api`/`actions`/`web` ranges from `api.github.com/meta` as the proxy pool's egress `ipBlock`.
 A GHES appliance sits on your own address space and appears in none of them, so the `NetworkPolicy` denies the proxy's traffic to the one host it exists to reach.
 The GMC cannot close this gap — the appliance's ranges are knowable only to you — so it names it on status instead.
+
+**Cause of the third.** The tenant writes `githubURL`, so the GMC adds its host to the pool's FQDN policy and to the proxy's CONNECT allowlist only when the platform egress allowlist covers it, as it does for a `destinationFQDNs` entry.
+A host the allowlist does not cover is left out of both.
+A wildcard host, such as `*.corp.example`, is always left out.
 
 **Diagnostics.**
 
@@ -853,10 +860,17 @@ actions_gateway_github_egress_incomplete == 1
 - **Supply the ranges.** Put the appliance's CIDRs in the `EgressProxy`'s `spec.destinationCIDRs`.
   The field is gated by the platform `--allowed-egress-cidrs` allowlist, so a platform admin must allowlist them first — a tenant cannot self-serve.
   Admission rejects an entry outside the allowlist with a message naming the allowed ranges.
-- **Switch to an FQDN egress mode.** `spec.egressPolicyMode: FQDN` (with a `--fqdn-policy-backend` configured) allows by hostname, and every referring gateway's `githubURL` host is added to the policy and the proxy CONNECT allowlist automatically.
+- **Switch to an FQDN egress mode.** `spec.egressPolicyMode: FQDN` (with a `--fqdn-policy-backend` configured) allows by hostname.
+  The GMC adds a referring gateway's `githubURL` host to the policy and the proxy CONNECT allowlist once the platform egress allowlist covers it.
+
+For `GitHubHostNotAllowlisted`, a platform admin adds the host to the egress allowlist; a tenant cannot self-serve.
+Add it to the chart's `allowedEgressFQDNs` (the GMC `--allowed-egress-fqdns` flag), which takes a GMC rollout, or to the [watched ConfigMap](security-operations.md#self-service-additions-via-a-watched-configmap), which the pool picks up without one.
+An entry covers its subdomains.
+Removing an entry takes the host back out of every pool that relied on it, and so does deleting the ConfigMap or leaving an invalid entry in it, because an invalid ConfigMap is ignored whole.
 
 The condition is advisory and does not gate `Ready`: the pool is serving exactly the policy it was asked for.
-It clears once `destinationCIDRs` is non-empty — the GMC takes your declaration at face value and does not verify the ranges actually cover the appliance, so if traffic still fails, check the ranges themselves.
+`ApplianceRangesRequired` clears once `destinationCIDRs` is non-empty — the GMC takes your declaration at face value and does not verify the ranges actually cover the appliance, so if traffic still fails, check the ranges themselves.
+`GitHubHostNotAllowlisted` clears when the allowlist covers every host the pool's referrers name.
 
 **Confirming it cleared.** `GitHubEgressIncomplete=False` always carries the reason `GitHubEgressAllowed`; the message says *which* clean state the pool is in.
 The GMC takes the first that applies, so read the table top-down — only the last one means you supplied ranges:
@@ -864,7 +878,7 @@ The GMC takes the first that applies, so read the table top-down — only the la
 | Message | The GMC sees no gap because |
 |---|---|
 | `egress policy is operator-maintained` | `spec.managedNetworkPolicy: false` — the GMC programs no `NetworkPolicy` for this pool, so it makes no claim either way. **Not a reachability check:** your own policy still has to allow the appliance. |
-| `FQDN mode carries every referrer's GitHub host` | `spec.egressPolicyMode` is not `CIDR`, so each referring gateway's `githubURL` host is added to the policy automatically. |
+| `FQDN mode carries every referrer's GitHub host` | `spec.egressPolicyMode` is not `CIDR`, and the platform egress allowlist covers each referring gateway's `githubURL` host, so the GMC added every one to the policy. |
 | `every referrer targets public GitHub, which the CIDR allowlist covers` | No referring gateway names a GHES host, so the ranges `api.github.com/meta` publishes are the whole story. |
 | `spec.destinationCIDRs supplies ranges for <host>` | You supplied ranges while a GHES referrer is bound. Taken at face value — this does **not** confirm they cover the appliance. |
 
@@ -3688,6 +3702,7 @@ scale-set names that GitHub scope already holds)
 
   The same label under a gateway bound to a **different** org, enterprise, or repo is free, because that is a different scale-set namespace at GitHub.
   Org names are matched case-insensitively (`github.com/Acme` and `github.com/acme` are one scope), matching how GitHub resolves them.
+  The hosts `www.github.com` and `api.github.com` are read as `github.com`, because the AGC addresses all three as public GitHub; the rejection names the scope as `github.com/<org>` whichever one the gateway spells.
 
 - **The rejection can land on the `ActionsGateway` instead.** If a `RunnerSet` is applied *before* its gateway exists, admission has no `githubURL` to resolve and the set is admitted (references resolve at runtime).
   The conflict is then caught when the gateway arrives:
@@ -3730,6 +3745,9 @@ Two ways that happens:
 - **Upgrade from a release before `v1.5.0`.** The uniqueness guard used to be namespace-scoped, so a cross-namespace pair was admitted then and is still stored now.
   A webhook only fires on a write, and nothing re-applies these objects, so the guard never sees them.
   **This is the common case, and it is why the condition exists.**
+- **Upgrade from a release before `v2.0.0`, with a gateway spelled `www.github.com` or `api.github.com`.** The guard compared those hosts as different places from `github.com`, so a pair across two spellings of one org was admitted ([upgrade note](upgrade.md#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-it-now-shares-scale-set-names-with-githubcom)).
+  The condition names the scope as `github.com/<org>` on both gateways.
+  Whether GitHub registers runners under those spellings was not measured, so the gateway using one may be failing to register instead of sharing jobs.
 - **A window with the validating webhook uninstalled or unreachable.** `failurePolicy: Fail` makes an unreachable webhook block writes rather than admit them, so this needs the `ValidatingWebhookConfiguration` to have been absent: a partial install, or CRDs applied without the chart's webhook resources.
 
 **Resolution.** The two tenants are driving one scale set right now, so treat it as live cross-tenant exposure.

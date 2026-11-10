@@ -146,3 +146,26 @@ func TestEgressDestination_EffectiveListsSortedDeduped(t *testing.T) {
 		t.Errorf("CIDRStrings = %v, want sorted+deduped [10.0.0.0/8 172.16.0.0/12]", cidrs)
 	}
 }
+
+// TestEgressDestination_DynamicPending pins the window a reader must not act on a
+// refusal in: from AwaitDynamic until the ConfigMap is first applied, whatever it
+// held (Q1322).
+func TestEgressDestination_DynamicPending(t *testing.T) {
+	var nilA *EgressDestinationAllowlist
+	if nilA.DynamicPending() {
+		t.Error("a nil allowlist has no ConfigMap to wait for")
+	}
+	a := NewEgressDestination([]string{"golang.org"}, nil)
+	if a.DynamicPending() {
+		t.Error("with no ConfigMap configured nothing is pending")
+	}
+	a.AwaitDynamic()
+	if !a.DynamicPending() {
+		t.Error("AwaitDynamic must hold until the first load")
+	}
+	// An absent or invalid ConfigMap clears the dynamic set, and that is a load too.
+	a.SetDynamic(nil, nil)
+	if a.DynamicPending() {
+		t.Error("the first SetDynamic ends the wait, even an empty one")
+	}
+}

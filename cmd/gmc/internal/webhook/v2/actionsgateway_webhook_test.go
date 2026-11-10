@@ -327,6 +327,45 @@ func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+	t.Run("a public GitHub alias binds the same scope", func(t *testing.T) {
+		// The apply-order gap again, with the arriving gateway spelling the org's host
+		// www.github.com. The AGC addresses it as public GitHub (Q1322).
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("sneaky", "tenant-b", "gw-b", "linux"))}
+
+		for _, alias := range []string{"https://www.github.com/acme", "https://api.github.com/acme"} {
+			_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", alias, ""))
+			require.Error(t, err, alias)
+			assert.Contains(t, err.Error(), `"github.com/acme"`)
+		}
+	})
+
+	t.Run("a stored alias gateway stays editable", func(t *testing.T) {
+		// Stored before the fold with a referrer that shares a name across the alias.
+		// githubURL is immutable, so an update cannot create the collision and is
+		// judged on the scopes as written; the reconciler reports the pair.
+		gw := v2Gateway("tenant-b", "gw-b", "https://www.github.com/acme", "")
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("mine", "tenant-b", "gw-b", "linux"), gw)}
+
+		_, err := v.ValidateUpdate(ctx, gw, gw)
+		require.NoError(t, err)
+
+		// Delete and re-create, which a restore from backup is, binds the scope anew.
+		_, err = v.ValidateCreate(ctx, gw)
+		require.Error(t, err)
+
+		// So does a githubURL that moves onto the alias, were the CRD's immutability
+		// rule ever absent.
+		moved := v2Gateway("tenant-b", "gw-b", "https://ghes.example.com/acme", "")
+		_, err = v.ValidateUpdate(ctx, moved, gw)
+		require.Error(t, err)
+	})
+
 	t.Run("update re-checks", func(t *testing.T) {
 		gw := v2Gateway("tenant-b", "gw-b", "https://github.com/acme", "")
 		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,

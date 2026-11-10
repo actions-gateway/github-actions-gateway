@@ -42,6 +42,8 @@ type EgressDestinationAllowlist struct {
 	// wholesale by SetDynamic. nil until the reconciler first applies a ConfigMap.
 	dynamicFQDNs []string
 	dynamicCIDRs []*net.IPNet
+	// dynamicPending is true from AwaitDynamic until the first SetDynamic.
+	dynamicPending bool
 }
 
 // NewEgressDestination returns an allowlist whose static base is the
@@ -101,6 +103,28 @@ func (a *EgressDestinationAllowlist) SetDynamic(fqdns []string, cidrs []*net.IPN
 	defer a.mu.Unlock()
 	a.dynamicFQDNs = normalizeFQDNSuffixes(fqdns)
 	a.dynamicCIDRs = cidrs
+	a.dynamicPending = false
+}
+
+// AwaitDynamic records that a ConfigMap source is configured and has not been read
+// yet. Until the first SetDynamic, a host the static base does not cover may be one
+// the ConfigMap is about to: DynamicPending lets a reader that would act on the
+// refusal wait for the load. Call it before the manager starts.
+func (a *EgressDestinationAllowlist) AwaitDynamic() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.dynamicPending = true
+}
+
+// DynamicPending reports whether a configured ConfigMap source is still unread. It
+// is false when no ConfigMap is configured.
+func (a *EgressDestinationAllowlist) DynamicPending() bool {
+	if a == nil {
+		return false
+	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	return a.dynamicPending
 }
 
 // FQDNSuffixes returns the effective FQDN allowlist (static ∪ dynamic) as a sorted,

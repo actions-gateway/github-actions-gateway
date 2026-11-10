@@ -14,6 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -60,6 +61,23 @@ type EgressDestinationAllowlistReconciler struct {
 	// Allowlist is the shared allowlist the admission webhook reads. The reconciler
 	// owns its dynamic half. Required.
 	Allowlist *allowlist.EgressDestinationAllowlist
+	// Changed, when set, is sent one event after each replacement of the dynamic set,
+	// so the EgressProxy reconciler re-judges referrer GitHub hosts against it. It
+	// needs capacity 1: a send that would block is dropped, because the event already
+	// buffered wakes a reader that sees this replacement too.
+	Changed chan<- event.TypedGenericEvent[struct{}]
+}
+
+// setDynamic replaces the dynamic set and signals Changed.
+func (r *EgressDestinationAllowlistReconciler) setDynamic(fqdns []string, cidrs []*net.IPNet) {
+	r.Allowlist.SetDynamic(fqdns, cidrs)
+	if r.Changed == nil {
+		return
+	}
+	select {
+	case r.Changed <- event.TypedGenericEvent[struct{}]{}:
+	default:
+	}
 }
 
 // Reconcile reads the designated ConfigMap and updates the dynamic allowlist.
@@ -72,7 +90,7 @@ func (r *EgressDestinationAllowlistReconciler) Reconcile(ctx context.Context, _ 
 	if err := r.Get(ctx, key, &cm); err != nil {
 		if client.IgnoreNotFound(err) == nil {
 			// Absent/deleted ConfigMap: fall back to the static flag allowlists.
-			r.Allowlist.SetDynamic(nil, nil)
+			r.setDynamic(nil, nil)
 			log.Info("egress destination allowlist ConfigMap not present; using the static --allowed-egress-fqdns/--allowed-egress-cidrs flags only",
 				"configMap", key.String(),
 				"effectiveFQDNs", r.Allowlist.FQDNSuffixes(),
@@ -90,7 +108,7 @@ func (r *EgressDestinationAllowlistReconciler) Reconcile(ctx context.Context, _ 
 		// Malformed contents: fail safe to the static flag allowlists and log a
 		// warning. Do NOT requeue — the data is invalid, not transiently unreadable;
 		// the next watch event (an admin fixing it) drives the retry.
-		r.Allowlist.SetDynamic(nil, nil)
+		r.setDynamic(nil, nil)
 		log.Info("WARNING: egress destination allowlist ConfigMap is invalid; ignoring it and using the static --allowed-egress-fqdns/--allowed-egress-cidrs flags only",
 			"configMap", key.String(),
 			"reason", err.Error(),
@@ -103,7 +121,7 @@ func (r *EgressDestinationAllowlistReconciler) Reconcile(ctx context.Context, _ 
 	for _, c := range cidrs {
 		dynamicCIDRStrings = append(dynamicCIDRStrings, c.String())
 	}
-	r.Allowlist.SetDynamic(fqdns, cidrs)
+	r.setDynamic(fqdns, cidrs)
 	log.Info("applied egress destination allowlist from ConfigMap",
 		"configMap", key.String(),
 		"dynamicFQDNs", fqdns,

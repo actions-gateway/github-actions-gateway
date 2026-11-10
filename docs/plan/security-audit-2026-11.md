@@ -42,10 +42,10 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds](#confinement-claim) | confirmed, medium | Q1321 (`2.0-gate`), fixed |
 | [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`), fixed |
 | [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
-| [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
+| [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | fixed in `v2.0.0`, see the finding's Resolution |
 | [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
 | [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
-| [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
+| [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | guard fixed in `v2.0.0`, see the finding's Resolution; the GitHub-side question stays open |
 | [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
@@ -186,6 +186,22 @@ Regression cases: extend TestResolveReferrerGitHubHosts in cmd/gmc/internal/cont
 
 **Evidence.** `cmd/gmc/internal/webhook/v2/egressproxy_webhook.go:48`, `cmd/gmc/internal/webhook/validation/validation.go:69`, `cmd/gmc/internal/controller/egressproxy_referrers.go:103`, `cmd/gmc/internal/controller/egressproxy_builder.go:187`, `cmd/proxy/main.go:16`, `docs/design/05-security.md:156`, `docs/design/05-security.md:329`, `docs/design/network-architecture.md:309`, `docs/operations/security-operations.md:656`, `docs/plan/archive/q506-ghes-endpoint-audit.md:85`, `cmd/gmc/internal/controller/egressproxy_referrers.go:62`, `cmd/gmc/internal/controller/egressproxy_builder.go:527`.
 
+**Resolution.** The EgressProxy reconciler now holds the shared `EgressDestinationAllowlist`, and `resolveReferrerGitHubHosts` splits referrer hosts into allowed and refused.
+Only an allowed host reaches the FQDN policy and the proxy's CONNECT allowlist, in every egress mode.
+A host is allowed when it is an RFC 1123 name, lowercased and with one trailing dot dropped, that `CoversFQDN` accepts, so `*.corp.example` is refused even where `corp.example` is allowlisted.
+Public GitHub needs no entry: the built-in host list is matched without regard to case, and the `www.github.com` spelling of public GitHub is allowed as before.
+A refused host sets `GitHubEgressIncomplete=True` with the new reason `GitHubHostNotAllowlisted` wherever the pool cannot reach it by address: managed FQDN mode, or an unmanaged pool with `destinationFQDNs` and no `destinationCIDRs`.
+
+The allowlist's ConfigMap half loads after the GMC starts and changes under it, which the gate has to survive in both directions.
+A reconcile that would refuse a host before the first ConfigMap read holds and requeues, so a GMC restart does not narrow a live policy.
+Each ConfigMap read then requeues every EgressProxy, so an added entry reaches the policy at once and not at the six-hour re-check.
+
+This changes what a stored GHES gateway on an FQDN-mode pool can reach on upgrade, and `docs/operations/upgrade.md` says how to find one and which allowlist entry restores it.
+The optional admission-time rejection is declined.
+The allowlist and the proxy binding both change after admission, so the reconciler has to enforce the rule whatever admission says, and a rejection would add a second stricter rule for no added protection.
+An admission warning gives the same early signal without refusing anything and can ship in a minor ([Q1334](../queue/Q1334.md)).
+Whether packets reach a covered host still depends on the CNI and DNS and was not observed: the envtest asserts the emitted policy and the proxy's environment, not traffic.
+
 ### noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms
 
 `gmc-webhook-noproxy:matcher-misses-no-proxy-forms`: needs validation.
@@ -276,6 +292,17 @@ Candidate fix: fold the three DeriveAPIBaseURL public hosts to github.com in Git
 **Owner check.** Owner-observed, in a scratch org: register one ScaleSet RunnerSet under a gateway with https://github.com/<org>, then a second in another namespace under https://www.github.com/<org> with the same first label, and observe whether the second AGC's RunnerSet reaches Ready reporting the same scale set ID, or fails at runner-registration.
 
 **Evidence.** `cmd/gmc/internal/scalesetscope/scalesetscope.go:52`, `githubapp/auth.go:230`, `scaleset/client.go:271`, `docs/design/05-security.md:668`, `cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:60`, `api/v2/actionsgateway_types.go:39`.
+
+**Resolution.** `GitHubScope` now folds `www.github.com` and `api.github.com` to `github.com`, and a unit test holds its alias list to the hosts `DeriveAPIBaseURL` treats as public GitHub.
+Rejecting the aliases in `validation.GitHubURL` was not taken: that rule re-runs on update and `githubURL` is immutable, so it would refuse every later edit to a stored alias gateway.
+The fold alone has the same problem one step removed, because both scope guards also re-run on update.
+Two tenants stored on different spellings with one scale-set name would each be refused every unrelated edit after the upgrade, and either could hold the other there.
+So an update that leaves the claim as stored is compared by the scope as written, which is the comparison made before the fold: a RunnerSet keeping its first `runnerLabel` and `gatewayRef`, or a gateway keeping its `githubURL`.
+Any new or changed claim is compared folded, and the reconciler reports a stored alias pair on both gateways as `ScaleSetNameCollision`.
+
+Both Blocked-on items stay open.
+Whether GitHub's runner registration accepts the alias spellings, and so whether a stored pair ever shared a scale set, was not measured, and the Owner check above is still the way to find out.
+A related defect in the same host comparison is tracked separately: `DeriveAPIBaseURL` matches the three hosts by exact case ([Q1333](../queue/Q1333.md)).
 
 ### Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy
 

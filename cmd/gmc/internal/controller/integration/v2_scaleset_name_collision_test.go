@@ -207,3 +207,98 @@ func requireCreateEventually(t *testing.T, obj client.Object) {
 	}, 30*time.Second, 200*time.Millisecond, "creating %s/%s must eventually be admitted; last error: %v",
 		obj.GetNamespace(), obj.GetName(), last)
 }
+
+// TestV2_ScaleSetNameCollisionAcrossGitHubAlias covers Q1322 through the apiserver. A
+// gateway spelling public GitHub www.github.com is addressed by the AGC as the same
+// Actions service as github.com, so a scale-set name claimed under both spellings is
+// one name. The scope key used to follow the spelling, so the guard compared the two
+// as different orgs.
+//
+// The pair is stored with admission bypassed, which is the state an upgrade leaves:
+// both objects were admitted by a release that did not fold the alias. Three things
+// then have to hold. The reconciler reports the pair, so an operator can find it. A
+// new claim on the shared name is refused. And an edit that leaves a stored claim
+// alone is still admitted, for both tenants, so neither is locked out of its own
+// RunnerSet by the other's spelling.
+func TestV2_ScaleSetNameCollisionAcrossGitHubAlias(t *testing.T) {
+	const (
+		nsPlain = "v2-ssalias-plain"
+		nsAlias = "v2-ssalias-www"
+		shared  = "alias-shared-scale-set"
+	)
+	bypassV2Admission(t)
+	createNamespaceWithLabels(t, nsPlain, map[string]string{admissionBypassLabel: "true"})
+	createNamespaceWithLabels(t, nsAlias, map[string]string{admissionBypassLabel: "true"})
+	createGitHubAppSecret(t, nsPlain, "github-app")
+	createGitHubAppSecret(t, nsAlias, "github-app")
+
+	plain := newV2GatewayWired("gw", nsPlain, "github-app", "")
+	plain.Spec.GitHubURL = "https://github.com/alias-org"
+	alias := newV2GatewayWired("gw", nsAlias, "github-app", "")
+	alias.Spec.GitHubURL = "https://www.github.com/alias-org"
+	rsPlain := newScaleSetRunnerSet("plain-set", nsPlain, "gw", shared, "linux")
+	rsAlias := newScaleSetRunnerSet("alias-set", nsAlias, "gw", shared, "linux")
+	for _, obj := range []client.Object{plain, alias, rsPlain, rsAlias} {
+		requireCreateEventually(t, obj)
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), obj) })
+	}
+
+	startActionsGatewayV2Reconciler(t)
+	for _, ns := range []string{nsPlain, nsAlias} {
+		require.Eventually(t, func() bool {
+			var got v2.ActionsGateway
+			if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "gw"}, &got); err != nil {
+				return false
+			}
+			c := findCondition(got.Status.Conditions, v2.ConditionScaleSetNameCollision)
+			return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2.ReasonScaleSetNameShared &&
+				strings.Contains(c.Message, "github.com/alias-org") && !strings.Contains(c.Message, "www.")
+		}, 30*time.Second, 100*time.Millisecond,
+			"%s/gw must report the pair under the folded scope github.com/alias-org", ns)
+	}
+
+	// Put both namespaces back under admission. The rejection below is also the
+	// evidence that it is: the apiserver caches namespace labels and webhook
+	// configuration, so the update that follows means nothing until a write here has
+	// been seen to be refused.
+	for _, name := range []string{nsPlain, nsAlias} {
+		require.Eventually(t, func() bool {
+			var ns corev1.Namespace
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: name}, &ns); err != nil {
+				return false
+			}
+			delete(ns.Labels, admissionBypassLabel)
+			return k8sClient.Update(ctx, &ns) == nil
+		}, 10*time.Second, 100*time.Millisecond, "removing the bypass label from %s must succeed", name)
+	}
+	for _, ns := range []string{nsPlain, nsAlias} {
+		var last error
+		require.Eventually(t, func() bool {
+			thief := newScaleSetRunnerSet("second-claim", ns, "gw", shared)
+			last = k8sClient.Create(ctx, thief)
+			if last == nil {
+				_ = k8sClient.Delete(ctx, thief)
+			}
+			return last != nil && strings.Contains(last.Error(), "is already")
+		}, 20*time.Second, 200*time.Millisecond,
+			"a new claim on the shared name in %s must be refused once admission is back; last error: %v", ns, last)
+	}
+
+	for _, key := range []types.NamespacedName{{Namespace: nsPlain, Name: "plain-set"}, {Namespace: nsAlias, Name: "alias-set"}} {
+		var rs v2.RunnerSet
+		require.NoError(t, k8sClient.Get(ctx, key, &rs))
+		rs.Spec.RunnerLabels = append(rs.Spec.RunnerLabels, "unrelated-edit")
+		require.NoError(t, k8sClient.Update(ctx, &rs),
+			"%s: an edit that keeps the first label and the gateway must be admitted", key)
+	}
+
+	// The exemption is for an unchanged claim only: moving a set that holds another
+	// name onto the shared one is a new claim.
+	mover := newScaleSetRunnerSet("mover", nsAlias, "gw", "alias-mover-own-name")
+	require.NoError(t, k8sClient.Create(ctx, mover))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), mover) })
+	mover.Spec.RunnerLabels = []string{shared}
+	err := k8sClient.Update(ctx, mover)
+	require.Error(t, err, "an update that moves a set onto the shared name must be refused")
+	assert.Contains(t, err.Error(), "github.com/alias-org")
+}

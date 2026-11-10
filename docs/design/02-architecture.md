@@ -170,7 +170,7 @@ It runs with RBAC permissions limited to its own namespace and manages the lifec
   **One resolver for the API base (Q506).** Which GitHub REST API a gateway addresses is derived from `spec.gitHubURL` in exactly one place — `githubapp.DeriveAPIBaseURL`: `https://api.github.com` for public GitHub, `https://<host>/api/v3` for a GHES appliance.
   Three components had previously each derived it their own way, and the GMC derived it nowhere: it injected `GITHUB_ORG_URL` and left `GITHUB_API_BASE_URL` unset, so the AGC's token exchange defaulted to `api.github.com` and a GHES tenant failed to mint a token before acquiring any job.
   The GMC now injects the derived base on the AGC `Deployment`, and the registrar and scale-set client call the same helper — so registration, token exchange, and the disruption auto-retry cannot drift onto different hosts.
-  Egress remains a separate obligation: an FQDN egress mode carries every referrer's GHES host automatically, while the default CIDR mode allows only GitHub's published ranges and needs the appliance's ranges supplied (`GitHubEgressIncomplete` names the gap).
+  Egress remains a separate obligation: an FQDN egress mode carries a referrer's GHES host once the platform egress allowlist covers it, while the default CIDR mode allows only GitHub's published ranges and needs the appliance's ranges supplied (`GitHubEgressIncomplete` names the gap).
 
   The lifecycle of a listener goroutine is as follows.
   On startup the AGC spawns exactly one listener per RunnerGroup.

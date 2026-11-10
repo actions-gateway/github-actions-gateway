@@ -229,8 +229,8 @@ spec:
             severity: warning
           annotations:
             runbook_url: "https://actions-gateway.com/operations/runbook/#actionsgatewaygithubegressincomplete"
-            summary: "GHES egress ranges missing for {{ $labels.name }} in {{ $labels.namespace }}"
-            description: "A referring gateway names a GitHub Enterprise Server host the pool's CIDR-mode allowlist cannot reach, so the tenant's GitHub traffic is denied and it acquires no jobs. Supply the appliance's ranges in spec.destinationCIDRs or switch to an FQDN egress mode — this will not self-heal."
+            summary: "GHES egress incomplete for {{ $labels.name }} in {{ $labels.namespace }}"
+            description: "A referring gateway names a GitHub Enterprise Server host the pool's egress allowlist cannot reach, so the tenant's GitHub traffic is denied and it acquires no jobs. The condition's reason names the fix: ApplianceRangesRequired needs the appliance's ranges in spec.destinationCIDRs or an FQDN egress mode, and GitHubHostNotAllowlisted needs the host on the platform --allowed-egress-fqdns allowlist. Neither self-heals."
 
         # Page: two tenants are driving one scale set at GitHub right now (Q791, Q849)
         - alert: ActionsGatewayScaleSetNameCollision

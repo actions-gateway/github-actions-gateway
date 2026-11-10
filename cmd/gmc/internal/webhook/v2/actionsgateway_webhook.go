@@ -127,17 +127,26 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 // reject. gitHubURL is immutable (CRD CEL), so only create can introduce one — update
 // re-checks as version-agnostic defense, matching validateGitHubHostVsProxies. List
 // errors fail closed.
-func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2.ActionsGateway) error {
+//
+// claimUnchanged is true for an update that leaves gitHubURL alone. Such a write
+// cannot create a collision, so it is judged on the scopes as written and a gateway
+// stored under a public GitHub alias stays editable (scalesetscope.Claim.CollidesAsWritten).
+func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2.ActionsGateway, claimUnchanged bool) error {
 	if v.reader == nil {
 		return nil
 	}
 	scope := scalesetscope.GitHubScope(gw.Spec.GitHubURL)
+	collides := scalesetscope.Claim.CollidesWith
+	if claimUnchanged {
+		scope = scalesetscope.GitHubScopeAsWritten(gw.Spec.GitHubURL)
+		collides = scalesetscope.Claim.CollidesAsWritten
+	}
 	if scope == "" {
 		return nil
 	}
 	inv, err := scalesetscope.Of(ctx, v.reader, &scalesetscope.PendingGateway{
-		Key:   client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
-		Scope: scope,
+		Key:       client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
+		GitHubURL: gw.Spec.GitHubURL,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot verify ScaleSet runnerLabel uniqueness for GitHub scope %q: %w", scope, err)
@@ -147,7 +156,7 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 			continue
 		}
 		for j, other := range inv.Claims {
-			if i == j || !mine.CollidesWith(other) {
+			if i == j || !collides(mine, other) {
 				continue
 			}
 			// The holder is named only when it sits in this gateway's own namespace;
@@ -183,7 +192,7 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 	if err := v.validateGitHubHostVsProxies(ctx, nil, obj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateScaleSetLabelsVsScope(ctx, obj); err != nil {
+	if err := v.validateScaleSetLabelsVsScope(ctx, obj, false); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	return nil, nil
@@ -210,7 +219,7 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 	if err := v.validateGitHubHostVsProxies(ctx, oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateScaleSetLabelsVsScope(ctx, newObj); err != nil {
+	if err := v.validateScaleSetLabelsVsScope(ctx, newObj, oldObj.Spec.GitHubURL == newObj.Spec.GitHubURL); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil
