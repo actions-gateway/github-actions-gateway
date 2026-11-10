@@ -148,10 +148,16 @@ func TestV2_ActionsGateway_ScaleSetNameCollision(t *testing.T) {
 // the pre-Q791 / webhook-uninstalled state this test needs to construct.
 func bypassV2Admission(t *testing.T) {
 	t.Helper()
+	bypassAdmission(t, "vactionsgateway-v2.kb.io", "vrunnerset-v2.kb.io")
+}
+
+// bypassAdmission is bypassV2Admission for the named validating webhook entries.
+func bypassAdmission(t *testing.T, webhooks ...string) {
+	t.Helper()
 	const configName = "validating-webhook-configuration"
-	bypassed := map[string]bool{
-		"vactionsgateway-v2.kb.io": true,
-		"vrunnerset-v2.kb.io":      true,
+	bypassed := map[string]bool{}
+	for _, name := range webhooks {
+		bypassed[name] = true
 	}
 
 	var original admissionv1.ValidatingWebhookConfiguration
@@ -162,7 +168,7 @@ func bypassV2Admission(t *testing.T) {
 			restore[original.Webhooks[i].Name] = original.Webhooks[i].NamespaceSelector
 		}
 	}
-	require.Len(t, restore, len(bypassed), "both v2 webhook entries must be installed for the bypass to mean anything")
+	require.Len(t, restore, len(bypassed), "every named webhook entry must be installed for the bypass to mean anything")
 
 	patch := func(selector func(string) *metav1.LabelSelector) {
 		require.Eventually(t, func() bool {

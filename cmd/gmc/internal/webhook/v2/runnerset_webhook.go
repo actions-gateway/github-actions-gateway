@@ -65,7 +65,7 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateProxyGitHubBypass(ctx, obj); err != nil {
+	if err := v.validateProxyGitHubBypass(ctx, nil, obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
 	return nil, nil
@@ -87,7 +87,7 @@ func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateProxyGitHubBypass(ctx, newObj); err != nil {
+	if err := v.validateProxyGitHubBypass(ctx, oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil
@@ -186,9 +186,19 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 // explicit proxyRef is checked here. A missing gateway or proxy admits the write
 // (§H.7): the pair is re-checked from the arriving object's side when it is created.
 // Read errors other than NotFound fail closed, like the label-uniqueness guard.
-func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context, rs *agcv2.RunnerSet) error {
-	if v.reader == nil || rs.Spec.ProxyRef == nil {
+//
+// old is nil on create. An update that leaves proxyRef and gatewayRef as stored
+// binds no new pair and is not judged, so a pair stored before a rule tightened
+// does not refuse an unrelated edit.
+func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context, old, rs *agcv2.RunnerSet) error {
+	key, ok := proxyRefKey(rs.Spec.ProxyRef, rs.Namespace)
+	if v.reader == nil || !ok {
 		return nil
+	}
+	if old != nil && old.Spec.GatewayRef.Name == rs.Spec.GatewayRef.Name {
+		if oldKey, had := proxyRefKey(old.Spec.ProxyRef, old.Namespace); had && oldKey == key {
+			return nil
+		}
 	}
 	var gw agcv2.ActionsGateway
 	if err := v.reader.Get(ctx, client.ObjectKey{Namespace: rs.Namespace, Name: rs.Spec.GatewayRef.Name}, &gw); err != nil {
@@ -198,7 +208,7 @@ func (v *RunnerSetCustomValidator) validateProxyGitHubBypass(ctx context.Context
 		return fmt.Errorf("cannot verify proxyRef %q against gateway %q's GitHub host: %w",
 			rs.Spec.ProxyRef.Name, rs.Spec.GatewayRef.Name, err)
 	}
-	return validateGitHubHostAgainstProxy(ctx, v.reader, rs.Namespace, rs.Spec.ProxyRef.Name,
+	return validateGitHubHostAgainstProxy(ctx, v.reader, rs.Namespace, rs.Spec.ProxyRef,
 		"spec.proxyRef", gitHubURLHost(gw.Spec.GitHubURL))
 }
 

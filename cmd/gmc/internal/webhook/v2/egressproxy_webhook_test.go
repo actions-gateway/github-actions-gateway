@@ -191,8 +191,7 @@ func epWithNoProxy(entries ...string) *agcv2.EgressProxy {
 // TestEgressProxyCustomValidator_RejectsGitHubHostInNoProxyCIDRs is the v2 port of
 // the v1 ActionsGateway guard: a spec.noProxyCIDRs entry that NO_PROXY-matches a
 // public GitHub host would route GitHub traffic around the per-tenant egress proxy
-// and must be rejected. (The EgressProxy has no gitHubURL, so a referrer's GHES host
-// is not covered — Q322.)
+// and must be rejected.
 func TestEgressProxyCustomValidator_RejectsGitHubHostInNoProxyCIDRs(t *testing.T) {
 	v := &EgressProxyCustomValidator{Allowlist: allowlist.NewEgressDestination(nil, nil)}
 	for _, entry := range []string{"github.com", ".github.com", "api.github.com", "githubusercontent.com", "ghcr.io", ".com"} {
@@ -303,17 +302,171 @@ func TestEgressProxyCustomValidator_ReferrerCheckIsSurgical(t *testing.T) {
 }
 
 // TestEgressProxyCustomValidator_ReferrerCheckFailsClosed asserts an unverifiable
-// hostname entry is rejected (fail closed) — while an all-CIDR/IP list never reads
-// the API at all, so it is admitted even when the reader is down.
+// entry is rejected (fail closed), an address entry included: it can cover a GitHub
+// Enterprise Server a referrer addresses by IP. An empty list never reads the API,
+// so it is admitted even when the reader is down.
 func TestEgressProxyCustomValidator_ReferrerCheckFailsClosed(t *testing.T) {
 	v := &EgressProxyCustomValidator{reader: failingReader{}}
 
-	_, err := v.ValidateCreate(context.Background(), epWithNoProxy("internal.example.com"))
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot verify")
+	for _, entries := range [][]string{{"internal.example.com"}, {"10.0.0.0/8", "203.0.113.5"}} {
+		_, err := v.ValidateCreate(context.Background(), epWithNoProxy(entries...))
+		require.Errorf(t, err, "entries %v", entries)
+		assert.Contains(t, err.Error(), "cannot verify")
+	}
 
-	_, err = v.ValidateCreate(context.Background(), epWithNoProxy("10.0.0.0/8", "203.0.113.5"))
-	require.NoError(t, err, "CIDR/IP-only entries cannot suffix-match a host, so no referrer read is needed")
+	_, err := v.ValidateCreate(context.Background(), epWithNoProxy())
+	require.NoError(t, err, "no entry can match a host, so no referrer read is needed")
+}
+
+// TestEgressProxyCustomValidator_RejectsNoProxyFormsNetHTTPHonours asserts the
+// webhook refuses the NO_PROXY forms that exempt a GitHub host without spelling it
+// as a bare suffix, against the public hosts and against a referrer's host.
+func TestEgressProxyCustomValidator_RejectsNoProxyFormsNetHTTPHonours(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("public GitHub hosts", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{}
+		for _, entry := range []string{"x,github.com", "*", "*.github.com", "github.com:443", "ｇｉｔｈｕｂ.com"} {
+			_, err := v.ValidateCreate(ctx, epWithNoProxy("10.0.0.0/8", entry))
+			require.Errorf(t, err, "entry %q should be rejected", entry)
+			assert.Contains(t, err.Error(), "spec.noProxyCIDRs[1]")
+		}
+	})
+
+	t.Run("referrer GHES host", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://ghes.corp.example/my-org", "ep")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		for _, entry := range []string{"x,corp.example", "*.corp.example", "ghes.corp.example:443"} {
+			_, err := v.ValidateCreate(ctx, epWithNoProxy(entry))
+			require.Errorf(t, err, "entry %q should be rejected", entry)
+			assert.Contains(t, err.Error(), `ActionsGateway "gw"`)
+		}
+	})
+
+	t.Run("referrer GHES addressed by IP", func(t *testing.T) {
+		gw := v2Gateway("team-a", "gw", "https://10.1.2.3/my-org", "ep")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		for _, entry := range []string{"10.0.0.0/8", "10.1.2.3", "10.1.2.3:443"} {
+			_, err := v.ValidateCreate(ctx, epWithNoProxy(entry))
+			require.Errorf(t, err, "entry %q covers the referrer's GitHub address", entry)
+			assert.Contains(t, err.Error(), "10.1.2.3")
+		}
+		_, err := v.ValidateCreate(ctx, epWithNoProxy("192.168.0.0/16", "10.1.2.4"))
+		require.NoError(t, err, "an address entry that does not cover the referrer's address is admitted")
+	})
+}
+
+// sharedProxy builds provider/shared granting the given namespaces.
+func sharedProxy(entries []string, allowed ...string) *agcv2.EgressProxy {
+	ep := proxyWithNoProxy("provider", "shared", entries...)
+	if len(allowed) > 0 {
+		ep.Spec.Sharing = &agcv2.ProxySharing{AllowedNamespaces: allowed}
+	}
+	return ep
+}
+
+// consumerGateway builds consumer/gw on a GHES host, naming provider/shared as its
+// default proxy.
+func consumerGateway() *agcv2.ActionsGateway {
+	gw := v2Gateway("consumer", "gw", "https://ghes.corp.example/my-org", "")
+	gw.Spec.DefaultProxyRef = &agcv2.ProxyObjectRef{Name: "shared", Namespace: "provider"}
+	return gw
+}
+
+// TestEgressProxyCustomValidator_CrossNamespaceReferrers asserts a shared proxy's
+// noProxyCIDRs are compared with the GitHub hosts of referrers in the namespaces it
+// grants, and with no others.
+func TestEgressProxyCustomValidator_CrossNamespaceReferrers(t *testing.T) {
+	ctx := context.Background()
+	entries := []string{"corp.example"}
+
+	t.Run("granted gateway referrer rejects create and update", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, consumerGateway())}
+		_, err := v.ValidateCreate(ctx, sharedProxy(entries, "consumer"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "ghes.corp.example")
+		assert.Contains(t, err.Error(), `ActionsGateway "consumer/gw"`)
+
+		_, err = v.ValidateUpdate(ctx, sharedProxy(nil, "consumer"), sharedProxy(entries, "consumer"))
+		require.Error(t, err)
+	})
+
+	t.Run("granted RunnerSet referrer rejects", func(t *testing.T) {
+		gw := v2Gateway("consumer", "gw", "https://ghes.corp.example/my-org", "")
+		rs := labelledRS("rs", "consumer", "gw", "linux")
+		rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "shared", Namespace: "provider"}
+		// A same-named gateway beside the proxy must not stand in for the set's own.
+		decoy := v2Gateway("provider", "gw", "https://github.com/my-org", "")
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw, rs, decoy)}
+		_, err := v.ValidateCreate(ctx, sharedProxy(entries, "consumer"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `RunnerSet "consumer/rs"`)
+	})
+
+	t.Run("ungranted referrer does not bind", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, consumerGateway())}
+		_, err := v.ValidateCreate(ctx, sharedProxy(entries))
+		require.NoError(t, err, "a proxy sharing nothing has no cross-namespace referrer")
+		_, err = v.ValidateCreate(ctx, sharedProxy(entries, "someone-else"))
+		require.NoError(t, err, "consumer is not granted, so its gateway binds nothing")
+	})
+
+	t.Run("a same-named proxy elsewhere is not this one", func(t *testing.T) {
+		gw := v2Gateway("consumer", "gw", "https://ghes.corp.example/my-org", "shared") // consumer/shared
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, gw)}
+		_, err := v.ValidateCreate(ctx, sharedProxy(entries, "consumer"))
+		require.NoError(t, err)
+	})
+}
+
+// TestEgressProxyCustomValidator_UpdateJudgesOnlyWhatItChanges asserts a proxy
+// stored before the guard tightened still takes an unrelated edit, and that the
+// edits which bind a new pair are judged.
+func TestEgressProxyCustomValidator_UpdateJudgesOnlyWhatItChanges(t *testing.T) {
+	ctx := context.Background()
+	stored := []string{"*.github.com", "x,corp.example"}
+	sameNSReferrer := v2Gateway("provider", "gw", "https://ghes.corp.example/my-org", "shared")
+
+	t.Run("unchanged entries admit an unrelated edit without a read", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: failingReader{}}
+		edited := sharedProxy(stored, "consumer")
+		edited.Spec.DestinationCIDRs = nil
+		edited.Labels = map[string]string{"edited": "true"}
+		_, err := v.ValidateUpdate(ctx, sharedProxy(stored, "consumer"), edited)
+		require.NoError(t, err)
+	})
+
+	t.Run("the same entries are refused on create", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t)}
+		_, err := v.ValidateCreate(ctx, sharedProxy(stored, "consumer"))
+		require.Error(t, err)
+	})
+
+	t.Run("changing the list re-judges every entry", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t)}
+		_, err := v.ValidateUpdate(ctx, sharedProxy(stored), sharedProxy(append([]string{"10.0.0.0/8"}, stored...)))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spec.noProxyCIDRs[1]")
+	})
+
+	t.Run("granting a namespace judges that namespace's referrers", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, sameNSReferrer, consumerGateway())}
+		_, err := v.ValidateUpdate(ctx, sharedProxy(stored), sharedProxy(stored, "consumer"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `ActionsGateway "consumer/gw"`)
+	})
+
+	t.Run("granting a namespace does not re-judge stored pairs", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: fakeReader(t, sameNSReferrer, consumerGateway())}
+		_, err := v.ValidateUpdate(ctx, sharedProxy(stored, "consumer"), sharedProxy(stored, "consumer", "empty-ns"))
+		require.NoError(t, err, "the provider/gw and consumer/gw pairs were both stored before this write")
+	})
+
+	t.Run("revoking a grant binds nothing", func(t *testing.T) {
+		v := &EgressProxyCustomValidator{reader: failingReader{}}
+		_, err := v.ValidateUpdate(ctx, sharedProxy(stored, "consumer"), sharedProxy(stored))
+		require.NoError(t, err)
+	})
 }
 
 // epWithMode builds a minimal EgressProxy carrying only an egressPolicyMode, for the

@@ -6,8 +6,10 @@ package noproxy
 
 import (
 	"fmt"
-	"net/netip"
+	"net"
 	"strings"
+
+	"golang.org/x/net/idna"
 )
 
 // GitHubHosts is the set of public GitHub hostnames that the AGC and worker pods
@@ -28,34 +30,29 @@ var GitHubHosts = []string{
 
 // ValidateEntries rejects any NO_PROXY entry that would route traffic for one of the
 // protected hosts around the per-tenant egress proxy, defeating the egress-IP
-// attribution that isolates tenants. Each entry is threaded verbatim into the
-// AGC/worker NO_PROXY env var (builder.go buildNoProxy), where Go's httpproxy matches
-// a hostname entry as a domain suffix. So an entry like "github.com" (or
-// ".github.com", or an over-broad ".com") would silently exclude GitHub from the
-// proxy — the documented footgun. fieldPath names the CRD field in the error (e.g.
-// "proxy.noProxyCIDRs" or "spec.noProxyCIDRs").
+// attribution that isolates tenants. The entries are joined with commas into the
+// AGC/worker NO_PROXY env var (buildNoProxy), so the guard reads each entry the way
+// the AGC's consumer, Go's net/http, parses that variable (matches). fieldPath names
+// the CRD field in the error (e.g. "spec.noProxyCIDRs").
 //
 // The check is surgical, not a blanket "CIDRs only" rule: NO_PROXY legitimately
 // takes domain-suffix entries for cluster-internal destinations (the GMC's own
 // default appends svc.cluster.local/localhost, and tenants reach in-cluster
 // services that way), so forbidding all hostnames would break a supported,
 // load-bearing pattern. Only entries that NO_PROXY-match a protected host are
-// rejected. A CIDR/IP entry is allowed through here even if it happens to cover
-// GitHub's published ranges — those ranges rotate and an in-tree IP blocklist would
-// rot into a false sense of safety; that residual is the operator's responsibility
-// (see 05-security.md §5.2).
+// rejected. A CIDR/IP entry matches only a protected host that is itself an IP
+// literal, because net/http compares an address entry with an IP-literal host and
+// never resolves a name first. An address entry covering GitHub's published ranges
+// is therefore allowed through; those ranges rotate, and what the other NO_PROXY
+// consumers in a worker pod do with one is the operator's residual
+// (05-security.md §5.2).
 //
 // This is a webhook check, not a CRD CEL rule, because the protected set is dynamic
 // (the referring gateways' gitHubURL hosts) and the check is version-agnostic.
 func ValidateEntries(fieldPath string, entries, protectedHosts []string) error {
 	for i, entry := range entries {
-		// CIDR / bare-IP entries cannot be a hostname-suffix bypass; the
-		// IP-range residual is accepted and documented.
-		if !IsHostnameEntry(entry) {
-			continue
-		}
 		for _, host := range protectedHosts {
-			if hostnameMatches(entry, host) {
+			if matches(entry, host) {
 				return fmt.Errorf(
 					"%s[%d]: %q would route GitHub traffic (%s) around the per-tenant egress proxy, "+
 						"defeating egress-IP attribution; remove it — GitHub must always traverse the proxy. "+
@@ -67,30 +64,66 @@ func ValidateEntries(fieldPath string, entries, protectedHosts []string) error {
 	return nil
 }
 
-// IsHostnameEntry reports whether a NO_PROXY entry is a hostname (domain-suffix)
-// entry rather than a CIDR prefix or bare IP. Only hostname entries can suffix-match
-// a protected GitHub host, so callers use this to skip the (API-reading) referrer
-// resolution when every entry is an address.
-func IsHostnameEntry(entry string) bool {
-	if _, err := netip.ParsePrefix(entry); err == nil {
-		return false
+// matches reports whether one noProxyCIDRs entry exempts host from the proxy once it
+// reaches NO_PROXY. It follows the parse in Go's net/http (the vendored
+// golang.org/x/net/http/httpproxy), pinned by TestMatchesAgreesWithNetHTTP against
+// go1.27.3: the value splits on commas, so one entry can carry several; "*" exempts
+// every host; a CIDR or IP exempts only an IP-literal host; a "*." or "." prefix
+// and a ":port" suffix are dropped before the domain-suffix comparison; and a
+// non-ASCII name is compared in its IDNA ASCII form.
+//
+// It is stricter than that parse in two places. A port-qualified entry is matched
+// whatever its port, because the guard is handed a host, not the port its traffic
+// uses. A leading-dot entry also matches the bare domain, which net/http leaves
+// proxied but other NO_PROXY consumers in a worker pod may not.
+func matches(entry, host string) bool {
+	hostIP := net.ParseIP(host)
+	host = toASCII(strings.ToLower(host))
+	for _, p := range strings.Split(entry, ",") {
+		p = strings.ToLower(strings.TrimSpace(p))
+		if p == "" {
+			continue
+		}
+		if p == "*" {
+			return true
+		}
+		if _, cidr, err := net.ParseCIDR(p); err == nil {
+			if hostIP != nil && cidr.Contains(hostIP) {
+				return true
+			}
+			continue
+		}
+		if h, _, err := net.SplitHostPort(p); err == nil {
+			p = h
+		}
+		if ip := net.ParseIP(p); ip != nil {
+			if ip.Equal(hostIP) {
+				return true
+			}
+			continue
+		}
+		if hostIP != nil {
+			continue
+		}
+		if strings.HasPrefix(p, "*.") {
+			p = p[1:]
+		}
+		p = toASCII(strings.TrimPrefix(p, "."))
+		if p == "" {
+			continue
+		}
+		if host == p || strings.HasSuffix(host, "."+p) {
+			return true
+		}
 	}
-	if _, err := netip.ParseAddr(entry); err == nil {
-		return false
-	}
-	return true
+	return false
 }
 
-// hostnameMatches reports whether a NO_PROXY hostname entry would match the given
-// host under Go's httpproxy domain-suffix semantics: an entry matches a host that
-// equals it or is a sub-domain of it. A leading dot on the entry is insignificant
-// for this purpose (".github.com" and "github.com" both match "api.github.com");
-// the comparison is case-insensitive.
-func hostnameMatches(entry, host string) bool {
-	e := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(entry), "."))
-	h := strings.ToLower(host)
-	if e == "" {
-		return false
+// toASCII returns the IDNA ASCII form of a name, or the name unchanged when it has
+// none, which is what the consumer does with an entry it cannot convert.
+func toASCII(name string) string {
+	if ascii, err := idna.Lookup.ToASCII(name); err == nil {
+		return ascii
 	}
-	return h == e || strings.HasSuffix(h, "."+e)
+	return name
 }

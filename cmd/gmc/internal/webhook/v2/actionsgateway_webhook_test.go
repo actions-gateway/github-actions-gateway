@@ -144,6 +144,75 @@ func TestV2ActionsGatewayWebhook_AdmitsCompatibleProxyPairs(t *testing.T) {
 	})
 }
 
+// TestV2ActionsGatewayWebhook_CrossNamespaceDefaultProxy asserts the gateway side
+// reads the proxy its defaultProxyRef resolves to, namespace included, and judges
+// the pair only where that proxy grants the gateway's namespace.
+func TestV2ActionsGatewayWebhook_CrossNamespaceDefaultProxy(t *testing.T) {
+	ctx := context.Background()
+	bad := []string{"corp.example"}
+
+	t.Run("granted shared proxy excluding the host rejects", func(t *testing.T) {
+		// A clean same-named proxy beside the gateway must not be the one consulted.
+		local := proxyWithNoProxy("consumer", "shared", "10.0.0.0/8")
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, sharedProxy(bad, "consumer"), local)}
+		_, err := v.ValidateCreate(ctx, consumerGateway())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "spec.defaultProxyRef")
+		assert.Contains(t, err.Error(), "ghes.corp.example")
+	})
+
+	t.Run("a same-named proxy in the gateway's namespace is not consulted", func(t *testing.T) {
+		local := proxyWithNoProxy("consumer", "shared", bad...)
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, sharedProxy([]string{"10.0.0.0/8"}, "consumer"), local)}
+		_, err := v.ValidateCreate(ctx, consumerGateway())
+		require.NoError(t, err)
+	})
+
+	t.Run("ungranted proxy is admitted unread", func(t *testing.T) {
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, sharedProxy(bad, "someone-else"))}
+		_, err := v.ValidateCreate(ctx, consumerGateway())
+		require.NoError(t, err, "the reference binds nothing, and its proxy's entries are not this tenant's to learn")
+	})
+
+	t.Run("RunnerSet proxyRef into a granted shared proxy rejects", func(t *testing.T) {
+		rs := labelledRS("rs", "consumer", "gw", "linux")
+		rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "shared", Namespace: "provider"}
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, sharedProxy(bad, "consumer"), rs)}
+		_, err := v.ValidateCreate(ctx, v2Gateway("consumer", "gw", "https://ghes.corp.example/my-org", ""))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), `RunnerSet "rs"`)
+	})
+}
+
+// TestV2ActionsGatewayWebhook_UpdateJudgesOnlyAChangedDefaultProxyRef asserts a
+// gateway stored in a pair the guard now refuses still takes an unrelated edit.
+func TestV2ActionsGatewayWebhook_UpdateJudgesOnlyAChangedDefaultProxyRef(t *testing.T) {
+	ctx := context.Background()
+	rs := labelledRS("rs", "consumer", "gw", "linux")
+	rs.Spec.ProxyRef = &agcv2.ProxyObjectRef{Name: "set-proxy"}
+	setProxy := proxyWithNoProxy("consumer", "set-proxy", "*.corp.example")
+	v := &ActionsGatewayCustomValidator{reader: fakeReader(t, sharedProxy([]string{"corp.example"}, "consumer"), rs, setProxy)}
+
+	stored := consumerGateway()
+	_, err := v.ValidateCreate(ctx, stored)
+	require.Error(t, err, "the pair is refused when created")
+
+	edited := consumerGateway()
+	edited.Labels = map[string]string{"edited": "true"}
+	_, err = v.ValidateUpdate(ctx, stored, edited)
+	require.NoError(t, err, "defaultProxyRef and githubURL are as stored")
+
+	// Spelling the referrer's own namespace out names the same proxy.
+	local := v2Gateway("consumer", "gw", "https://ghes.corp.example/my-org", "set-proxy")
+	spelled := local.DeepCopy()
+	spelled.Spec.DefaultProxyRef.Namespace = "consumer"
+	_, err = v.ValidateUpdate(ctx, local, spelled)
+	require.NoError(t, err)
+
+	_, err = v.ValidateUpdate(ctx, local, stored)
+	require.Error(t, err, "re-pointing defaultProxyRef binds a new pair")
+}
+
 // TestV2ActionsGatewayWebhook_FailsClosedOnReadError asserts an unverifiable
 // gitHubURL/noProxyCIDRs pair is rejected, not admitted on faith.
 func TestV2ActionsGatewayWebhook_FailsClosedOnReadError(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
@@ -69,38 +70,51 @@ func validateEgressDestinations(spec *agcv2.EgressProxySpec, list *allowlist.Egr
 }
 
 // validateNoProxyCIDRs rejects any spec.noProxyCIDRs entry that would route GitHub
-// traffic around the per-tenant egress proxy, defeating egress-IP attribution — the
-// v2 port of the v1 ActionsGateway webhook's proxy.noProxyCIDRs guard (mechanism and
-// rationale live in the shared noproxy package). Unlike v1, the EgressProxy carries
-// no gitHubURL of its own — referring gateways bind the GitHub host — so beyond the
-// static public GitHub host set, the guard resolves every referrer's gitHubURL host
-// (including a GitHub Enterprise Server host) through the uncached API reader and
-// protects those too (Q322; see noproxy_referrers.go). The referrer resolution runs
-// only when a hostname entry is present — CIDR/IP entries cannot suffix-match a
-// host — and fails closed on read errors. A nil reader skips only the referrer half
-// (direct-construction unit tests); production and envtest always wire one.
-func (v *EgressProxyCustomValidator) validateNoProxyCIDRs(ctx context.Context, ep *agcv2.EgressProxy) error {
-	if err := noproxy.ValidateEntries("spec.noProxyCIDRs", ep.Spec.NoProxyCIDRs, noproxy.GitHubHosts); err != nil {
-		return err
-	}
-	hasHostnameEntry := false
-	for _, entry := range ep.Spec.NoProxyCIDRs {
-		if noproxy.IsHostnameEntry(entry) {
-			hasHostnameEntry = true
-			break
+// traffic around the per-tenant egress proxy, defeating egress-IP attribution
+// (mechanism and rationale live in the shared noproxy package). The EgressProxy
+// carries no gitHubURL of its own — referring gateways bind the GitHub host — so
+// beyond the static public GitHub host set, the guard resolves every referrer's
+// gitHubURL host (including a GitHub Enterprise Server host, and referrers in a
+// namespace the proxy grants) through the uncached API reader and protects those
+// too (Q322; see noproxy_referrers.go). The referrer half fails closed on read
+// errors. A nil reader skips only that half (direct-construction unit tests);
+// production and envtest always wire one.
+//
+// old is nil on create. On update the guard judges only what the write changes: the
+// entries against the public hosts and every referrer when noProxyCIDRs changed,
+// and otherwise the unchanged entries against the referrers in a namespace the
+// write newly grants. A proxy stored before a rule tightened therefore still takes
+// an edit to any other field.
+func (v *EgressProxyCustomValidator) validateNoProxyCIDRs(ctx context.Context, old, ep *agcv2.EgressProxy) error {
+	entries := ep.Spec.NoProxyCIDRs
+	entriesChanged := old == nil || !slices.Equal(old.Spec.NoProxyCIDRs, entries)
+	if entriesChanged {
+		if err := noproxy.ValidateEntries("spec.noProxyCIDRs", entries, noproxy.GitHubHosts); err != nil {
+			return err
 		}
 	}
-	if !hasHostnameEntry || v.reader == nil {
+	if len(entries) == 0 || v.reader == nil {
 		return nil
 	}
-	hosts, err := referrerGitHubHosts(ctx, v.reader, ep.Namespace, ep.Name)
+	// storedPair reports a referrer whose pairing with these entries predates the write.
+	storedPair := func(referrerNS string) bool {
+		return !entriesChanged && (referrerNS == ep.Namespace || controller.ProxyShareGranted(old, referrerNS))
+	}
+	if !entriesChanged && (ep.Spec.Sharing == nil || !slices.ContainsFunc(ep.Spec.Sharing.AllowedNamespaces,
+		func(ns string) bool { return !storedPair(ns) })) {
+		return nil
+	}
+	hosts, err := referrerGitHubHosts(ctx, v.reader, ep)
 	if err != nil {
-		// Fail closed: admitting an unverifiable hostname entry is the bypass this
-		// guard exists to prevent.
+		// Fail closed: admitting an unverifiable entry is the bypass this guard
+		// exists to prevent.
 		return fmt.Errorf("cannot verify spec.noProxyCIDRs against referring gateways' GitHub hosts: %w", err)
 	}
 	for _, rh := range hosts {
-		if err := noproxy.ValidateEntries("spec.noProxyCIDRs", ep.Spec.NoProxyCIDRs, []string{rh.host}); err != nil {
+		if storedPair(rh.namespace) {
+			continue
+		}
+		if err := noproxy.ValidateEntries("spec.noProxyCIDRs", entries, []string{rh.host}); err != nil {
 			return fmt.Errorf("%w (GitHub host bound by referring %s)", err, rh.boundBy)
 		}
 	}
@@ -152,15 +166,15 @@ type EgressProxyCustomValidator struct {
 // validate runs the shared admission checks for both create and update: it rejects an
 // FQDN intent with no operator backend, gates any extra destinations against the
 // platform allowlist, and rejects noProxyCIDRs entries that would bypass the proxy for
-// GitHub.
-func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, obj *agcv2.EgressProxy) (admission.Warnings, error) {
+// GitHub. old is the stored object on update and nil on create.
+func (v *EgressProxyCustomValidator) validate(ctx context.Context, verb string, old, obj *agcv2.EgressProxy) (admission.Warnings, error) {
 	if err := validateFQDNBackend(obj.Spec.EgressPolicyMode, v.FQDNBackend); err != nil {
 		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateEgressDestinations(&obj.Spec, v.Allowlist); err != nil {
 		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateNoProxyCIDRs(ctx, obj); err != nil {
+	if err := v.validateNoProxyCIDRs(ctx, old, obj); err != nil {
 		return nil, logRejection(ctx, "EgressProxy", verb, obj.Namespace, obj.Name, err)
 	}
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
@@ -178,7 +192,7 @@ func (v *EgressProxyCustomValidator) ValidateCreate(ctx context.Context, obj *ag
 		return nil, logRejection(ctx, "EgressProxy", "create", obj.Namespace, obj.Name,
 			fmt.Errorf("EgressProxy may not be created in reserved namespace %q", obj.Namespace))
 	}
-	return v.validate(ctx, "create", obj)
+	return v.validate(ctx, "create", nil, obj)
 }
 
 // ValidateUpdate applies the same gates on update, so widening the destinations or
@@ -189,7 +203,7 @@ func (v *EgressProxyCustomValidator) ValidateUpdate(ctx context.Context, oldObj,
 	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
 		return nil, nil
 	}
-	return v.validate(ctx, "update", newObj)
+	return v.validate(ctx, "update", oldObj, newObj)
 }
 
 // ValidateDelete is a no-op.

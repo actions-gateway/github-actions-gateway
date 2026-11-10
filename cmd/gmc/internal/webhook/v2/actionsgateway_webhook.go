@@ -62,10 +62,15 @@ type ActionsGatewayCustomValidator struct {
 // gateway's GitHub host through THEIR proxy). The RunnerSet half closes the
 // create-order gap: a RunnerSet+EgressProxy pair naming a not-yet-applied gateway
 // admits unchecked on both sides (§H.7), so the arriving gateway is the first
-// object that can see the conflict. gitHubURL itself is immutable (CRD CEL), but
-// defaultProxyRef is not, so updates re-check too. Missing referents admit (§H.7);
-// List errors fail closed.
-func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.Context, gw *agcv2.ActionsGateway) error {
+// object that can see the conflict. Missing referents admit (§H.7); List errors
+// fail closed.
+//
+// old is nil on create. An update judges only a defaultProxyRef it changes: the
+// RunnerSet pairs are bound by each set's proxyRef and by gitHubURL, which is
+// immutable (CRD CEL), so a gateway write cannot newly bind one, and a stored pair
+// does not refuse an unrelated edit. An update that does change gitHubURL is judged
+// as a create.
+func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.Context, old, gw *agcv2.ActionsGateway) error {
 	if v.reader == nil {
 		return nil
 	}
@@ -73,12 +78,23 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 	if host == "" {
 		return nil
 	}
-	checked := map[string]bool{}
-	if gw.Spec.DefaultProxyRef != nil {
-		checked[gw.Spec.DefaultProxyRef.Name] = true
-		if err := validateGitHubHostAgainstProxy(ctx, v.reader, gw.Namespace, gw.Spec.DefaultProxyRef.Name, "spec.defaultProxyRef", host); err != nil {
-			return err
+	hostBound := old == nil || old.Spec.GitHubURL != gw.Spec.GitHubURL
+	checked := map[client.ObjectKey]bool{}
+	if key, ok := proxyRefKey(gw.Spec.DefaultProxyRef, gw.Namespace); ok {
+		checked[key] = true
+		refBound := hostBound
+		if !refBound {
+			oldKey, had := proxyRefKey(old.Spec.DefaultProxyRef, old.Namespace)
+			refBound = !had || oldKey != key
 		}
+		if refBound {
+			if err := validateGitHubHostAgainstProxy(ctx, v.reader, gw.Namespace, gw.Spec.DefaultProxyRef, "spec.defaultProxyRef", host); err != nil {
+				return err
+			}
+		}
+	}
+	if !hostBound {
+		return nil
 	}
 	var runnerSets agcv2.RunnerSetList
 	if err := v.reader.List(ctx, &runnerSets, client.InNamespace(gw.Namespace)); err != nil {
@@ -88,12 +104,13 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 	}
 	for i := range runnerSets.Items {
 		rs := &runnerSets.Items[i]
-		if rs.Spec.GatewayRef.Name != gw.Name || rs.Spec.ProxyRef == nil || checked[rs.Spec.ProxyRef.Name] {
+		key, ok := proxyRefKey(rs.Spec.ProxyRef, rs.Namespace)
+		if rs.Spec.GatewayRef.Name != gw.Name || !ok || checked[key] {
 			continue
 		}
-		checked[rs.Spec.ProxyRef.Name] = true
+		checked[key] = true
 		refField := fmt.Sprintf("spec.githubURL (EgressProxy referenced by RunnerSet %q)", rs.Name)
-		if err := validateGitHubHostAgainstProxy(ctx, v.reader, gw.Namespace, rs.Spec.ProxyRef.Name, refField, host); err != nil {
+		if err := validateGitHubHostAgainstProxy(ctx, v.reader, rs.Namespace, rs.Spec.ProxyRef, refField, host); err != nil {
 			return err
 		}
 	}
@@ -163,7 +180,7 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateGitHubHostVsProxies(ctx, obj); err != nil {
+	if err := v.validateGitHubHostVsProxies(ctx, nil, obj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateScaleSetLabelsVsScope(ctx, obj); err != nil {
@@ -190,7 +207,7 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 	if err := validateSchedulingPriorityClass(newObj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateGitHubHostVsProxies(ctx, newObj); err != nil {
+	if err := v.validateGitHubHostVsProxies(ctx, oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateScaleSetLabelsVsScope(ctx, newObj); err != nil {
