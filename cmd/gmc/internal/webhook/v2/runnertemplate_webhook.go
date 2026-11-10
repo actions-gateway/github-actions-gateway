@@ -156,7 +156,8 @@ func logRejection(ctx context.Context, kind, op, namespace, name string, err err
 
 // RunnerTemplateCustomValidator validates the namespaced RunnerTemplate data kind.
 // It rejects the reserved per-container pod fields, including privileged containers,
-// and gates podTemplate.spec.priorityClassName against the platform allowlist (Q289).
+// gates podTemplate.spec.priorityClassName against the platform allowlist (Q289), and
+// holds podTemplate to the pod-shape rules in runnertemplate_podshape.go (Q1322).
 //
 // +kubebuilder:object:generate=false
 type RunnerTemplateCustomValidator struct {
@@ -170,7 +171,7 @@ type RunnerTemplateCustomValidator struct {
 // off-allowlist priorityClassName, and emits a non-blocking reap-blocking-sidecar
 // warning (Q249).
 func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.RunnerTemplate) (admission.Warnings, error) {
-	if err := v.validate(&obj.Spec); err != nil {
+	if err := v.validate(nil, &obj.Spec); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
 	return reapBlockingSidecarWarnings(&obj.Spec, obj.Annotations), nil
@@ -179,23 +180,37 @@ func (v *RunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj 
 // ValidateUpdate applies the same checks on update, so an existing RunnerTemplate
 // cannot be edited to smuggle in a reserved field or an off-allowlist PriorityClass.
 // Deletion-only updates — deletionTimestamp set, spec unchanged — are admitted
-// without re-validation (Q518; see validation.DeletionOnlyUpdate).
+// without re-validation (Q518; see validation.DeletionOnlyUpdate). The pod-shape
+// rules alone are skipped while podTemplate is unchanged.
 func (v *RunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.RunnerTemplate) (admission.Warnings, error) {
 	if validation.DeletionOnlyUpdate(newObj, oldObj.Spec, newObj.Spec) {
 		return nil, nil
 	}
-	if err := v.validate(&newObj.Spec); err != nil {
+	if err := v.validate(&oldObj.Spec, &newObj.Spec); err != nil {
 		return nil, logRejection(ctx, "RunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return reapBlockingSidecarWarnings(&newObj.Spec, newObj.Annotations), nil
 }
 
-// validate runs the shared create/update gates for the namespaced kind.
-func (v *RunnerTemplateCustomValidator) validate(spec *agcv2.RunnerTemplateSpec) error {
+// validate runs the shared create/update gates for the namespaced kind. oldSpec is
+// the stored spec on update and nil on create.
+func (v *RunnerTemplateCustomValidator) validate(oldSpec, spec *agcv2.RunnerTemplateSpec) error {
 	if err := validateReservedPodFields(spec, true); err != nil {
 		return err
 	}
-	return validatePodTemplatePriorityClass(spec, v.PriorityClasses)
+	if err := validatePodTemplatePriorityClass(spec, v.PriorityClasses); err != nil {
+		return err
+	}
+	if oldSpec != nil && podTemplateUnchanged(&oldSpec.PodTemplate, &spec.PodTemplate) {
+		return nil
+	}
+	if err := validateNoServiceAccountTokenProjection(&spec.PodTemplate.Spec); err != nil {
+		return err
+	}
+	if err := validateVolumeTypes(&spec.PodTemplate); err != nil {
+		return err
+	}
+	return validateBaselinePodShape(&spec.PodTemplate)
 }
 
 // ValidateDelete is a no-op.
@@ -213,24 +228,40 @@ func (v *RunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agc
 // would only constrain the platform against itself — the allowlist exists to stop a
 // TENANT naming a preempting class (Q132/Q289). PSA remains the runtime backstop.
 //
+// Of the Q1322 pod-shape rules only the projected serviceAccountToken one binds
+// this kind: no Kubernetes API credential in a worker pod is a floor on every
+// profile, where the baseline and volume-type rules decide who may author a shape.
+//
 // +kubebuilder:object:generate=false
 type ClusterRunnerTemplateCustomValidator struct{}
 
 // ValidateCreate rejects a ClusterRunnerTemplate carrying reserved proxy env vars and
 // emits a non-blocking reap-blocking-sidecar warning (Q249).
 func (v *ClusterRunnerTemplateCustomValidator) ValidateCreate(ctx context.Context, obj *agcv2.ClusterRunnerTemplate) (admission.Warnings, error) {
-	if err := validateReservedPodFields(&obj.Spec, false); err != nil {
+	if err := validateClusterTemplate(nil, &obj.Spec); err != nil {
 		return nil, logRejection(ctx, "ClusterRunnerTemplate", "create", obj.Namespace, obj.Name, err)
 	}
 	return reapBlockingSidecarWarnings(&obj.Spec, obj.Annotations), nil
 }
 
 // ValidateUpdate applies the same checks and reap-blocking-sidecar warning on update.
-func (v *ClusterRunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *agcv2.ClusterRunnerTemplate) (admission.Warnings, error) {
-	if err := validateReservedPodFields(&newObj.Spec, false); err != nil {
+func (v *ClusterRunnerTemplateCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *agcv2.ClusterRunnerTemplate) (admission.Warnings, error) {
+	if err := validateClusterTemplate(&oldObj.Spec, &newObj.Spec); err != nil {
 		return nil, logRejection(ctx, "ClusterRunnerTemplate", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return reapBlockingSidecarWarnings(&newObj.Spec, newObj.Annotations), nil
+}
+
+// validateClusterTemplate runs the create/update gates for the cluster-scoped kind.
+// oldSpec is the stored spec on update and nil on create.
+func validateClusterTemplate(oldSpec, spec *agcv2.RunnerTemplateSpec) error {
+	if err := validateReservedPodFields(spec, false); err != nil {
+		return err
+	}
+	if oldSpec != nil && podTemplateUnchanged(&oldSpec.PodTemplate, &spec.PodTemplate) {
+		return nil
+	}
+	return validateNoServiceAccountTokenProjection(&spec.PodTemplate.Spec)
 }
 
 // ValidateDelete is a no-op.

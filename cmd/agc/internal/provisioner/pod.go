@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -289,6 +290,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	sa := p.WorkerSA
 	autoMount := false
 	template.Spec.AutomountServiceAccountToken = &autoMount
+	dropServiceAccountTokenProjections(template.Spec.Volumes)
 	if sa != "" {
 		template.Spec.ServiceAccountName = sa
 	}
@@ -354,6 +356,24 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	}
 
 	return pod
+}
+
+// dropServiceAccountTokenProjections removes every serviceAccountToken source from
+// the projected volumes in vols, in place. The kubelet mints that token whatever
+// automountServiceAccountToken says, so the automount overwrite alone leaves a
+// template a route to a Kubernetes API credential. Admission refuses a new one;
+// this holds the invariant for a template stored before that rule. The volume
+// stays, so a container mounting it still starts.
+func dropServiceAccountTokenProjections(vols []corev1.Volume) {
+	for i := range vols {
+		p := vols[i].Projected
+		if p == nil {
+			continue
+		}
+		p.Sources = slices.DeleteFunc(p.Sources, func(s corev1.VolumeProjection) bool {
+			return s.ServiceAccountToken != nil
+		})
+	}
 }
 
 // injectWrapper delivers the GAG worker wrapper into the pod and points the

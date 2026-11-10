@@ -79,6 +79,19 @@ spec:
                   cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the
                   platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped
                   ClusterRunnerTemplate is platform-authored and therefore exempt.
+
+                  The same webhook holds the namespaced RunnerTemplate to the Pod Security Standards
+                  baseline level and to the volume types the restricted level allows (configMap, csi,
+                  downwardAPI, emptyDir, ephemeral, image, persistentVolumeClaim, projected, secret),
+                  whatever security profile the namespace is on. A worker shape past either belongs
+                  in a ClusterRunnerTemplate, which is exempt.
+
+                  On both kinds it rejects a projected volume with a serviceAccountToken source, and
+                  the AGC removes one from every worker pod it builds: worker pods carry no
+                  Kubernetes API credential.
+
+                  A template stored before these three rules is not re-checked against them until
+                  podTemplate changes.
                 properties:
                   metadata:
                     description: |-
