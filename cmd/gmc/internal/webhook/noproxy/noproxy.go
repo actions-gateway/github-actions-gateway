@@ -72,51 +72,61 @@ func ValidateEntries(fieldPath string, entries, protectedHosts []string) error {
 // and a ":port" suffix are dropped before the domain-suffix comparison; and a
 // non-ASCII name is compared in its IDNA ASCII form.
 //
-// It is stricter than that parse in two places. A port-qualified entry is matched
+// It is stricter than that parse in four places. A port-qualified entry is matched
 // whatever its port, because the guard is handed a host, not the port its traffic
-// uses. A leading-dot entry also matches the bare domain, which net/http leaves
-// proxied but other NO_PROXY consumers in a worker pod may not.
+// uses. The other three follow libcurl, which git and curl in a worker pod read the
+// same variable through (measured on curl 8.7.1): a leading-dot entry also matches
+// the bare domain, a blank or tab separates entries as a comma does, and one
+// trailing dot on the entry or the host is ignored.
 func matches(entry, host string) bool {
 	hostIP := net.ParseIP(host)
 	host = toASCII(strings.ToLower(host))
-	for _, p := range strings.Split(entry, ",") {
-		p = strings.ToLower(strings.TrimSpace(p))
-		if p == "" {
-			continue
-		}
-		if p == "*" {
+	for _, part := range strings.Split(entry, ",") {
+		if strings.TrimSpace(part) == "*" {
 			return true
 		}
-		if _, cidr, err := net.ParseCIDR(p); err == nil {
-			if hostIP != nil && cidr.Contains(hostIP) {
+		for _, p := range strings.FieldsFunc(part, isBlank) {
+			if matchesOne(strings.ToLower(strings.TrimSpace(p)), host, hostIP) {
 				return true
 			}
-			continue
-		}
-		if h, _, err := net.SplitHostPort(p); err == nil {
-			p = h
-		}
-		if ip := net.ParseIP(p); ip != nil {
-			if ip.Equal(hostIP) {
-				return true
-			}
-			continue
-		}
-		if hostIP != nil {
-			continue
-		}
-		if strings.HasPrefix(p, "*.") {
-			p = p[1:]
-		}
-		p = toASCII(strings.TrimPrefix(p, "."))
-		if p == "" {
-			continue
-		}
-		if host == p || strings.HasSuffix(host, "."+p) {
-			return true
 		}
 	}
 	return false
+}
+
+func isBlank(r rune) bool { return r == ' ' || r == '\t' }
+
+// matchesOne is matches for a single lower-cased NO_PROXY entry. hostIP is host
+// parsed as an IP literal, or nil for a name.
+func matchesOne(p, host string, hostIP net.IP) bool {
+	if _, cidr, err := net.ParseCIDR(p); err == nil {
+		return hostIP != nil && cidr.Contains(hostIP)
+	}
+	if h, _, err := net.SplitHostPort(p); err == nil {
+		p = h
+	}
+	if ip := net.ParseIP(p); ip != nil {
+		return ip.Equal(hostIP)
+	}
+	if hostIP != nil || p == "" {
+		return false
+	}
+	if strings.HasPrefix(p, "*.") {
+		p = p[1:]
+	}
+	name := toASCII(strings.TrimPrefix(p, "."))
+	if domainCovers(name, host) {
+		return true
+	}
+	bare := strings.TrimSuffix(name, ".")
+	return bare != "" && domainCovers(bare, strings.TrimSuffix(host, "."))
+}
+
+// domainCovers reports whether host is name or a subdomain of it. An empty name is
+// what a dot-only entry leaves: the suffix ".", which a host written with a
+// trailing dot ends in.
+func domainCovers(name, host string) bool {
+	return (name != "" && host == name) || strings.HasSuffix(host, "."+name)
 }
 
 // toASCII returns the IDNA ASCII form of a name, or the name unchanged when it has

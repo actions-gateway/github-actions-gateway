@@ -235,7 +235,7 @@ func TestV2_EgressProxy_Admission_NoProxyForms(t *testing.T) {
 	const ns = "v2-ep-adm-noproxy-forms"
 	createNamespace(t, ns)
 
-	for _, entry := range []string{"x,github.com", "*", "*.github.com", "github.com:443"} {
+	for _, entry := range []string{"x,github.com", "*", "*.github.com", "github.com:443", "x github.com", "github.com."} {
 		ep := &gmcv2.EgressProxy{
 			ObjectMeta: metav1.ObjectMeta{Name: "forms", Namespace: ns},
 			Spec:       gmcv2.EgressProxySpec{NoProxyCIDRs: []string{"10.0.0.0/8", entry}},

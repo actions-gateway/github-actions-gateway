@@ -65,10 +65,41 @@ func TestValidateEntries_EmptyAndIndex(t *testing.T) {
 	assert.Contains(t, err.Error(), "spec.noProxyCIDRs[1]")
 }
 
-// TestValidateEntries_BlankEntryAllowed asserts a whitespace- or dot-only entry is
-// inert in NO_PROXY, not a bypass.
+// TestValidateEntries_BlankEntryAllowed asserts an entry with no host part is inert
+// in NO_PROXY, and a dot-only one is inert for a host written without a trailing dot.
 func TestValidateEntries_BlankEntryAllowed(t *testing.T) {
-	require.NoError(t, ValidateEntries("spec.noProxyCIDRs", []string{"", " ", ".", ",", ":443"}, GitHubHosts))
+	require.NoError(t, ValidateEntries("spec.noProxyCIDRs", []string{"", " ", ".", ",", ":443", "x *"}, GitHubHosts))
+}
+
+// TestValidateEntries_TrailingDot covers a host or an entry spelled with the root
+// label's dot: a dot-only entry exempts every such host in net/http, and libcurl
+// ignores one trailing dot on either side.
+func TestValidateEntries_TrailingDot(t *testing.T) {
+	dotted := []string{"ghes.corp.example."}
+	for _, entry := range []string{".", "*.", ".:443", "[.]:443", "x,.", "ghes.corp.example", "corp.example", "example.", ".example"} {
+		require.Errorf(t, ValidateEntries("spec.noProxyCIDRs", []string{entry}, dotted),
+			"entry %q exempts a host written with a trailing dot", entry)
+	}
+	for _, entry := range []string{"github.com.", "com.", ".github.com.", "*.github.com.", "github.com.:443"} {
+		require.Errorf(t, ValidateEntries("spec.noProxyCIDRs", []string{entry}, GitHubHosts),
+			"entry %q exempts GitHub with its trailing dot ignored", entry)
+	}
+	require.NoError(t, ValidateEntries("spec.noProxyCIDRs",
+		[]string{"github.com..", "svc.cluster.local.", "internal.example.com."},
+		append([]string{"ghes.corp.example."}, GitHubHosts...)))
+}
+
+// TestValidateEntries_RejectsBlankSeparatedForms covers the separators libcurl
+// honours and net/http does not: a blank or a tab ends one entry and starts the next.
+func TestValidateEntries_RejectsBlankSeparatedForms(t *testing.T) {
+	for _, entry := range []string{"x github.com", "x\tghcr.io", "10.0.0.0/8  api.github.com", "x .github.com:443"} {
+		err := ValidateEntries("spec.noProxyCIDRs", []string{entry}, GitHubHosts)
+		require.Errorf(t, err, "entry %q should be rejected", entry)
+		assert.Contains(t, err.Error(), fmt.Sprintf("%q", entry))
+	}
+	require.NoError(t, ValidateEntries("spec.noProxyCIDRs",
+		[]string{"10.0.0.0/8 svc.cluster.local", "x\ngithub.com", "x github.com"}, GitHubHosts),
+		"only a blank or a tab separates entries, and only a GitHub host is refused")
 }
 
 // TestValidateEntries_RejectsCommaWildcardAndPortForms covers the NO_PROXY forms
@@ -177,34 +208,58 @@ func consumerExempts(t *testing.T, entry string, hosts []string) map[string]bool
 // still proxies only where a case declares it (stricter), so the guard does not
 // refuse forms the consumer ignores.
 func TestMatchesAgreesWithNetHTTP(t *testing.T) {
-	hosts := []string{"github.com", "api.github.com", "ghes.corp.example", "10.1.2.3", "fd00::1"}
+	hosts := []string{
+		"github.com", "api.github.com", "ghes.corp.example", "10.1.2.3", "fd00::1",
+		// A githubURL may spell its host with the root label's trailing dot.
+		"github.com.", "ghes.corp.example.",
+	}
 	cases := []struct {
 		entry string
 		// stricter lists the hosts matches reports although net/http proxies them.
 		stricter []string
 	}{
-		{entry: "github.com"},
-		{entry: "GitHub.COM"},
-		{entry: ".github.com", stricter: []string{"github.com"}},
-		{entry: "com"},
-		{entry: "x,github.com"},
-		{entry: "x, github.com "},
+		// Trailing dot ignored: net/http compares the dot literally, so an entry
+		// without one leaves the dotted host proxied, and the reverse.
+		{entry: "github.com", stricter: []string{"github.com."}},
+		{entry: "GitHub.COM", stricter: []string{"github.com."}},
+		{entry: "com", stricter: []string{"github.com."}},
+		{entry: "x,github.com", stricter: []string{"github.com."}},
+		{entry: "x, github.com ", stricter: []string{"github.com."}},
+		{entry: "com.", stricter: []string{"github.com", "api.github.com"}},
+		{entry: "github.com.", stricter: []string{"github.com", "api.github.com"}},
+		{entry: "github.com.."},
+		{entry: "ｇｉｔｈｕｂ.com", stricter: []string{"github.com."}},
+		{entry: "corp.example", stricter: []string{"ghes.corp.example."}},
+		// Leading dot or "*." also matches the bare domain.
+		{entry: ".github.com", stricter: []string{"github.com", "github.com."}},
+		{entry: "*.github.com", stricter: []string{"github.com", "github.com."}},
+		{entry: "*github.com"},
+		// A dot-only entry is the suffix ".", which a dotted host ends in.
+		{entry: "."},
+		{entry: "*."},
+		{entry: ".:443"},
+		{entry: "[.]:443"},
+		{entry: ".."},
+		// The whole of a comma-separated part, never a blank-separated one.
 		{entry: "*"},
 		{entry: "x,*"},
-		{entry: "*.github.com", stricter: []string{"github.com"}},
-		{entry: "*github.com"},
-		{entry: "github.com:443"},
-		{entry: "github.com:"},
-		{entry: "[github.com]:443"},
-		{entry: "github.com:8080", stricter: []string{"github.com", "api.github.com"}},
-		{entry: "github.com:https", stricter: []string{"github.com", "api.github.com"}},
-		{entry: "*.github.com:443", stricter: []string{"github.com"}},
+		{entry: " * "},
+		{entry: "x *"},
+		// Any port.
+		{entry: "github.com:443", stricter: []string{"github.com."}},
+		{entry: "github.com:", stricter: []string{"github.com."}},
+		{entry: "[github.com]:443", stricter: []string{"github.com."}},
+		{entry: "github.com:8080", stricter: []string{"github.com", "api.github.com", "github.com."}},
+		{entry: "github.com:https", stricter: []string{"github.com", "api.github.com", "github.com."}},
+		{entry: "*.github.com:443", stricter: []string{"github.com", "github.com."}},
+		{entry: "ghes.corp.example:8443", stricter: []string{"ghes.corp.example", "ghes.corp.example."}},
 		{entry: ":443"},
-		{entry: "github.com."},
-		{entry: "ｇｉｔｈｕｂ.com"},
+		// A blank or a tab separates entries; other whitespace does not.
+		{entry: "x github.com", stricter: []string{"github.com", "api.github.com", "github.com."}},
+		{entry: "x\tgithub.com", stricter: []string{"github.com", "api.github.com", "github.com."}},
+		{entry: "x\ngithub.com"},
+		{entry: "x github.com"},
 		{entry: "xn--github-abc.com"},
-		{entry: "corp.example"},
-		{entry: "ghes.corp.example:8443", stricter: []string{"ghes.corp.example"}},
 		{entry: "internal.example.com"},
 		{entry: "svc.cluster.local"},
 		{entry: "10.0.0.0/8"},
