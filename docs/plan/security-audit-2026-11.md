@@ -169,6 +169,9 @@ Every `baseline` check forbids a set value and none requires one, so evaluating 
 None of the three shipped `deploy/templates/` entries is refused, because all three are `ClusterRunnerTemplate`s; `TestTemplateLibrary_PodShape` pins that, and that `kata-dind` and `privileged-dind` are refused as the namespaced kind.
 A stored template passes while its `podTemplate` is unchanged.
 `runtimeClassName` is not a `baseline` field and stays tenant-settable.
+The rule and the volume-type rule have one install-wide opt-out, the GMC flag `--allow-unchecked-runner-template-pod-shape`, default off.
+It exists because admission is conjunctive: a platform's own `ValidatingAdmissionPolicy` or policy engine cannot admit a template this webhook refuses, so without the flag a platform that already decides tenant pod shape, more finely than baseline-or-nothing, would lose that decision to a rule it cannot configure.
+With the flag set and no such policy, the finding stands as audited; the flag does not reach the API-credential rule.
 
 **Evidence.** `docs/operations/kata-dind-workloads.md:45`, `docs/operations/kata-dind-workloads.md:176`, `docs/operations/kata-dind-workloads.md:293`, `deploy/templates/kata-dind/template.yaml:33`, `docs/design/05-security.md:884`, `docs/design/appendix-h-v2-api-decomposition.md:449`, `cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go:81`, `docs/design/05-security.md:754`, `docs/operations/runner-template-library.md:126`.
 

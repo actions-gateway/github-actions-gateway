@@ -3711,6 +3711,8 @@ The third also comes from `vclusterrunnertemplate-v2.kb.io`, for a `ClusterRunne
 
 - For a shape past `baseline`, or a volume type off the list, have a platform administrator publish the template as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`.
   The cluster-scoped kind is exempt from both rules; Pod Security Admission still decides whether the namespace admits the pod.
+- Where the platform's own admission policy is meant to decide tenant pod shape, the two rules can be turned off for the whole install with the chart value `allowUncheckedRunnerTemplatePodShape` ([what that gives up](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
+  A policy that permits a shape does not override this webhook's refusal.
 - For shared or network storage a tenant owns, mount a `persistentVolumeClaim` instead ([shared worker storage](worker-shared-storage.md)).
 - Remove a `serviceAccountToken` source, or a `podCertificate` source with a `kubernetes.io` signer.
   No template kind may carry one, and the AGC removes it from the worker pod regardless.

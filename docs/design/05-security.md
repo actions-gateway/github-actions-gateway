@@ -937,6 +937,11 @@ Whether a node could have completed such a mount depends on its image and firewa
 
 A template stored before these rules is not re-checked until its `podTemplate` changes, so they bind new and edited templates, and Pod Security Admission remains the only runtime check on a stored one.
 
+Both rules can be turned off install-wide with the GMC flag `--allow-unchecked-runner-template-pod-shape` (chart value `allowUncheckedRunnerTemplatePodShape`), default off.
+Admission is conjunctive: a platform's `ValidatingAdmissionPolicy` or policy engine can refuse more than this webhook but cannot admit what it refuses, so a built-in rule with no opt-out would take the pod-shape decision away from a platform that already makes it finer-grained, for example by permitting `hostPath` under one directory.
+With the flag set, that policy is the only thing between a tenant in a `privileged`-profile namespace and a host-reaching pod, which is the state before `v2.0.0` and the reason the default is to enforce.
+The flag does not reach the privileged-container rule, the PriorityClass allowlist or the API-credential rule below.
+
 ### Privileged worker containers are admitted only under the privileged profile
 
 The GMC validating webhook (`validateRunnerGroups`) rejects a `securityContext.privileged: true` container or init-container in any RunnerGroup's `PodTemplate` — **except** when the `ActionsGateway` has explicitly set `securityProfile: privileged`.

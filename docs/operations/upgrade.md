@@ -834,6 +834,12 @@ It does not read a probe or lifecycle hook's `host` field, which `baseline` also
 Have a platform administrator publish each shape that has to stay as a `ClusterRunnerTemplate`, and point the `RunnerSet`'s `templateRef` at it with `kind: ClusterRunnerTemplate`.
 Otherwise remove the field.
 
+**If your own admission policy already decides tenant pod shape,** you can turn this rule and the volume-type rule in the next section off instead.
+A `ValidatingAdmissionPolicy` or a policy engine can refuse more than the GMC webhook does, but it cannot admit a template the webhook refuses, so with the rules on, a policy that permits tenants one specific shape past `baseline`, such as a `hostPath` under one directory, has no effect.
+Set the chart value `allowUncheckedRunnerTemplatePodShape``: true`, which passes `--allow-unchecked-runner-template-pod-shape` to the GMC.
+The webhook then checks neither rule on a namespaced `RunnerTemplate`, and what a tenant may author past `baseline` is whatever your policy admits; with no such policy, a tenant in a `privileged`-profile namespace can again author a worker pod that reaches the node.
+The privileged-container, PriorityClass and ServiceAccount-token rules stay on either way.
+
 ### Action required if a namespaced `RunnerTemplate` declares an `nfs`, `iscsi` or similar volume: the type is now rejected
 
 **Who is affected:** tenants whose `RunnerTemplate` declares a volume of any type other than `configMap`, `csi`, `downwardAPI`, `emptyDir`, `ephemeral`, `image`, `persistentVolumeClaim`, `projected` or `secret`.
@@ -856,6 +862,7 @@ kubectl get runnertemplates.actions-gateway.com -A -o json \
 ```
 
 Move each one to a `persistentVolumeClaim` volume bound to a `PersistentVolume` or `StorageClass` the platform provides ([shared worker storage](worker-shared-storage.md) is the worked example), or have a platform administrator publish the shape as a `ClusterRunnerTemplate`.
+A platform whose own admission policy decides volume types can turn this rule off together with the `baseline` one ([how, and what it gives up](#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
 
 ### Action required if a template projects a ServiceAccount token: the source is now rejected, and removed from worker pods
 
