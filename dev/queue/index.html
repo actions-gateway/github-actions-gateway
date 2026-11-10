@@ -2725,7 +2725,7 @@ Pick the number deliberately rather than treating it as a constant: it is a deci
 <h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
 <p><strong>Status:</strong> <code>ready</code> · <code>blocked</code> · <code>deferred</code><br />
 <strong>Size:</strong> S = one session · M = 2-3 sessions · L = multi-session, needs a phased plan doc in <a href="../plan/"><code>docs/plan/</code></a><br />
-<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.10-gate</code> (blocks the <a href="../plan/archive/release-1.10/">Release 1.10</a> tag, the storage advance) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag)<br />
+<strong>Labels:</strong> <code>milestone</code> <code>security</code> <code>tests</code> <code>speed</code> <code>docs</code> <code>ci</code> <code>dogfood</code> <code>debt</code> <code>feature</code> <code>bug</code> <code>flake</code> <code>retro</code> <code>open-question</code> (the row ends in a choice, and names the route that settles it) <code>1.10-gate</code> (blocks the <a href="../plan/archive/release-1.10/">Release 1.10</a> tag, the storage advance) <code>2.0-gate</code> (blocks the <a href="../plan/v2-ga/">v2 GA</a> tag) <code>2.1-gate</code> (blocks the <a href="../plan/release-2.1/">Release 2.1</a> tag, the automatic-recovery headline)<br />
 <strong>New IDs:</strong> <code>make queue-id TITLE="…"</code>: it searches for near-duplicates, then claims (<a href="../development/queue-id-allocation/">why there is no counter</a>)<br />
 <strong>Ranks:</strong> <code>make queue-rank ARGS="--after &lt;rank&gt; --before &lt;rank&gt;"</code> (also <code>--head</code> / <code>--tail</code>): it warns when the key it mints is one the store already holds (<a href="../development/maintaining-backlog/#mint-the-rank-dont-write-one">why a tie is legal</a>)</p>
 <p>The trailing hard breaks above are load-bearing: <code>check-queue-rules.sh</code> anchors the vocabulary to a line starting <code>**Labels:**</code>, and without them <code>mdreflow</code> folds all four into one paragraph.
@@ -3132,10 +3132,58 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <tr>
 <td><a href="Q1236/">Q1236</a></td>
 <td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Measure flaky-job detection on dogfood: result spelling, re-run job IDs</a></td>
-<td><code>dogfood</code> <code>tests</code></td>
+<td><code>dogfood</code> <code>tests</code> <code>2.1-gate</code></td>
 <td>🔲</td>
 <td>S</td>
 <td>Q555 built flaky-job detection without the dogfood turn-up its row put first, because the GKE dogfood cluster is prod-classified and the …</td>
+</tr>
+<tr>
+<td><a href="Q1317/">Q1317</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Reproduce the out-of-memory retry class on dogfood (M3, R12)</a></td>
+<td><code>dogfood</code> <code>tests</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>Q1183 shipped the out-of-memory retry class from source, without the dogfood reproduction R12 asks of every class, so the shape it …</td>
+</tr>
+<tr>
+<td><a href="Q1320/">Q1320</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#the-futility-checks-r18-in-order">Build the already_rerun, run_succeeded and worker_unstartable checks</a></td>
+<td><code>feature</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Three of the design's futility checks, which withhold a re-run that cannot help, were left unbuilt when Q1181 shipped the other four, so a …</td>
+</tr>
+<tr>
+<td><a href="Q1318/">Q1318</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#measure-before-building">Measure the superseded check on a fork PR whose branch is main (M5)</a></td>
+<td><code>tests</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>The <code>superseded</code> futility check (Q1181) withholds a re-run when a newer run of the same workflow, event and branch exists from the same …</td>
+</tr>
+<tr>
+<td><a href="Q1319/">Q1319</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#run--or-job-granular-re-run-open-question-2">Re-run only the classified job once job names are shown to match (M6)</a></td>
+<td><code>feature</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>Every automatic re-run today uses <code>rerun-failed-jobs</code>, so a class firing on one job also re-runs every other failed job of the run …</td>
+</tr>
+<tr>
+<td><a href="Q1315/">Q1315</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#classes-after-the-first">Retry a job failed while its colocated egress proxy pool was unavailable</a></td>
+<td><code>feature</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A job that fails because the tenant's egress proxy pool was down is a platform failure, and today it needs a manual re-run.</td>
+</tr>
+<tr>
+<td><a href="Q1316/">Q1316</a></td>
+<td><a href="../plan/q555-automatic-recovery-design/#classes-after-the-first">Retry a job whose Docker-in-Docker sidecar crashed under it</a></td>
+<td><code>feature</code> <code>2.1-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A job that fails because its Docker-in-Docker sidecar crashed is a platform failure, and today it needs a manual re-run.</td>
 </tr>
 <tr>
 <td><a href="Q1255/">Q1255</a></td>

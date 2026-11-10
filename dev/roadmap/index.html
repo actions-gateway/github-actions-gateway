@@ -2805,7 +2805,7 @@ Anything that waits on demand, on an unbuilt prerequisite, or on hardware sits u
 Some of it is committed to a named release, and a pill beside the title says which; the pill is read from the backlog rather than typed here, so it cannot outlive the commitment.
 No pill means no release is decided for that item yet.</p>
 <ul>
-<li><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <!-- q:Q1236 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
+<li><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <span class="gag-release-chip" title="Blocks the 2.1 release">2.1</span> <!-- q:Q1236,Q1317,Q1320,Q1318,Q1319,Q1315,Q1316 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.</li>
 </ul>
