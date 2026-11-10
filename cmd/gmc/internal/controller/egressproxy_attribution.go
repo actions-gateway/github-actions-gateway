@@ -813,7 +813,9 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 
 	for i := range existing.Items {
 		cm := &existing.Items[i]
-		if keep[cm.Namespace] {
+		// The labels are settable by any tenant, so only the name the GMC writes
+		// marks a projection as this pool's (Q1324).
+		if keep[cm.Namespace] || cm.Name != proxyAttributionName(ep.Namespace, ep.Name) {
 			continue
 		}
 		// Blank first: the ConfigMap is what finds this namespace again, so a
@@ -833,6 +835,9 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 // reads the one Secret by name rather than listing, and blanks it in place. A
 // namespace that is no longer a tenant's cannot be read; its workers still move
 // off the port when the ConfigMap goes, and the key stays where it was written.
+// A Secret the apiserver will not blank (immutable, or of a type that requires
+// other keys) is not one the GMC wrote, and is left alone rather than retried, so
+// a tenant cannot stall another tenant's pool with one (Q1324).
 func (r *EgressProxyReconciler) blankProjectedSecret(ctx context.Context, key client.ObjectKey) error {
 	var s corev1.Secret
 	if err := r.shareReader().Get(ctx, key, &s); err != nil {
@@ -849,7 +854,14 @@ func (r *EgressProxyReconciler) blankProjectedSecret(ctx context.Context, key cl
 		return nil
 	}
 	s.Data = map[string][]byte{corev1.TLSCertKey: {}, corev1.TLSPrivateKeyKey: {}}
-	return r.Update(ctx, &s)
+	if err := r.Update(ctx, &s); err != nil {
+		if apierrors.IsInvalid(err) {
+			logf.FromContext(ctx).Info("withdrawn attribution Secret cannot be blanked; leaving it", "namespace", key.Namespace, "name", key.Name, "error", err.Error())
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // applyProjectedSecret creates or updates a Secret in a consumer namespace. Like

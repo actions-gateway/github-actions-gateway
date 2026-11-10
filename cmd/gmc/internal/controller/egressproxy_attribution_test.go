@@ -662,6 +662,46 @@ func TestEgressProxyReconcile_RetriesAFailedBlankBeforeWithdrawing(t *testing.T)
 	assert.Zero(t, len(sec.Data[corev1.TLSPrivateKeyKey]), "the retry blanks the key")
 }
 
+// A Secret the apiserver refuses to blank is not one the GMC wrote, and retrying
+// it would stall the pool on every reconcile; a labelled ConfigMap under any other
+// name is not the pool's projection at all (Q1324).
+func TestEgressProxyReconcile_ForeignProjectionsDoNotStallThePool(t *testing.T) {
+	ep := attributingPool()
+	ep.Spec.FailureAttribution = ""
+	labels := map[string]string{labelAttributionManaged: "true", labelShareProxyNS: "provider", labelShareProxyNam: "shared"}
+	name := proxyAttributionName("provider", "shared")
+	planted := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "attacker", Name: name, Labels: labels}}
+	renamed := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: "attacker", Name: "other", Labels: labels}}
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "attacker", Name: name},
+		Data:       map[string][]byte{corev1.TLSPrivateKeyKey: []byte("x")},
+	}
+	otherSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "attacker", Name: "other"},
+		Data:       map[string][]byte{corev1.TLSPrivateKeyKey: []byte("x")},
+	}
+	c := interceptor.NewClient(withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, planted, renamed, secret, otherSecret).WithStatusSubresource(ep).Build()), interceptor.Funcs{
+		Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if s, ok := obj.(*corev1.Secret); ok && s.Namespace == "attacker" {
+				return apierrors.NewInvalid(corev1.SchemeGroupVersion.WithKind("Secret").GroupKind(), s.Name, nil)
+			}
+			return cl.Update(ctx, obj, opts...)
+		},
+	})
+	ctx := context.Background()
+	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: &IPRangeCache{}, ProxyImage: "proxy:test"}
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "provider", Name: "shared"}})
+	require.NoError(t, err)
+
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &appsv1.Deployment{}),
+		"the pool never provisioned")
+	assert.True(t, apierrors.IsNotFound(c.Get(ctx, client.ObjectKeyFromObject(planted), &corev1.ConfigMap{})),
+		"the projection-named ConfigMap is withdrawn even though its Secret could not be blanked")
+	require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(renamed), &corev1.ConfigMap{}),
+		"a ConfigMap under another name is not the pool's to withdraw")
+}
+
 func TestApplyAttributionEgress_AdmitsThePortRangeAndTheReadPort(t *testing.T) {
 	workload := &networkingv1.NetworkPolicy{}
 	agc := &networkingv1.NetworkPolicy{}
