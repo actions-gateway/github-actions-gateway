@@ -11,8 +11,11 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 // shareTestScheme registers the groups the sharing path reads and writes.
@@ -226,6 +229,53 @@ func TestReconcileProxyShares_RevokedGrantIsPruned(t *testing.T) {
 	if err := c.Get(ctx, key, &cm); !apierrors.IsNotFound(err) {
 		t.Errorf("projection survived the revoked grant (err=%v)", err)
 	}
+}
+
+// gmc-tenant-resource-guard denies a projection into a namespace that is not a
+// marked tenant. That denial is reported, and must not stop the same reconcile
+// withdrawing a share another namespace has lost.
+func TestReconcileProxyShares_DeniedProjectionDoesNotBlockRevocation(t *testing.T) {
+	ctx := context.Background()
+	ep := proxyWithSharing("provider", "pool", "team-a", "not-a-tenant")
+	referrer := func(ns string) *gmcv2.ActionsGateway {
+		return &gmcv2.ActionsGateway{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: "gw"},
+			Spec: gmcv2.ActionsGatewaySpec{
+				DefaultProxyRef: &gmcv2.ProxyObjectRef{Name: "pool", Namespace: "provider"},
+			},
+		}
+	}
+
+	c := fake.NewClientBuilder().
+		WithScheme(shareTestScheme(t)).
+		WithObjects(
+			&corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "provider", Name: egressProxyTLSSecretName(ep)},
+				Data:       map[string][]byte{corev1.TLSCertKey: []byte("-----BEGIN CERTIFICATE-----")},
+			},
+			referrer("team-a"),
+			referrer("not-a-tenant"),
+		).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if _, ok := obj.(*corev1.ConfigMap); ok && obj.GetNamespace() == "not-a-tenant" {
+					return apierrors.NewForbidden(schema.GroupResource{Resource: "configmaps"}, obj.GetName(), nil)
+				}
+				return c.Create(ctx, obj, opts...)
+			},
+		}).Build()
+	r := &EgressProxyReconciler{Client: c}
+	key := types.NamespacedName{Namespace: "team-a", Name: proxyShareConfigMapName("provider", "pool")}
+
+	err := r.reconcileProxyShares(ctx, ep)
+	require.ErrorContains(t, err, `"not-a-tenant"`, "the denied projection is reported")
+	require.NoError(t, c.Get(ctx, key, &corev1.ConfigMap{}), "the admitted namespace is still projected")
+
+	ep.Spec.Sharing.AllowedNamespaces = []string{"not-a-tenant"}
+	err = r.reconcileProxyShares(ctx, ep)
+	require.ErrorContains(t, err, `"not-a-tenant"`)
+	require.True(t, apierrors.IsNotFound(c.Get(ctx, key, &corev1.ConfigMap{})),
+		"the revoked share is withdrawn although another projection was denied")
 }
 
 // A referrer alone must not pull the CA into its namespace: consent is provider-side,

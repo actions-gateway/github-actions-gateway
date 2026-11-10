@@ -1,17 +1,22 @@
 {{- if .Values.admissionPolicy.enabled }}
 # ValidatingAdmissionPolicy that confines the GMC ServiceAccount's cluster-wide
 # write grants for tenant provisioning resources (Deployments, Services,
-# ServiceAccounts, NetworkPolicies, RoleBindings, Roles, HPAs, VPAs,
-# PodDisruptionBudgets, and Secret create/update) to namespaces marked
+# ServiceAccounts, ConfigMaps, NetworkPolicies, the CNI-native policy kinds,
+# RoleBindings, Roles, HPAs, VPAs, PodDisruptionBudgets, ServiceMonitors, and
+# Secret create/update) to namespaces marked
 # actions-gateway.com/tenant=managed — the gate RBAC cannot express (Q121/Q122).
 # It also restricts the GMC's ClusterRoleBinding writes to the
 # agc-clusterrunnertemplate-reader role, so its reader `bind` grants cannot be
 # turned into cluster-wide Secret reads (Q1188).
-# Outside a tenant namespace it admits one write: the GMC deleting its own
+# Outside a tenant namespace it admits three writes: the GMC deleting its own
 # gmc-tenant-secret-reader RoleBinding, so an ex-tenant namespace stops granting
-# the GMC Secret reads (Q1271).
-# Secret reads are not gated: admission never runs on get/list/watch (see
-# docs/design/05-security.md §5.1).
+# the GMC Secret reads (Q1271); any ConfigMap write in the release namespace,
+# where the GMC's IP-range store lives (Q1227); and the GMC deleting a ConfigMap
+# labelled as a proxy-share projection, so a revoked share is withdrawn from a
+# namespace that has since lost its marker.
+# Not gated: reads (admission never runs on get/list/watch), Events, and the
+# GMC's own API kinds, from which nothing is provisioned outside a tenant
+# namespace (see docs/design/05-security.md §5.1).
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -25,7 +30,7 @@ spec:
       - apiGroups: [""]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
-        resources: ["secrets", "serviceaccounts", "services"]
+        resources: ["configmaps", "secrets", "serviceaccounts", "services"]
       - apiGroups: ["apps"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
@@ -38,14 +43,31 @@ spec:
         apiVersions: ["v2"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["horizontalpodautoscalers"]
-      # The managed AGC VerticalPodAutoscaler (Q360). autoscaling.k8s.io is an
-      # optional add-on group: a resourceRule naming a kind whose CRD is absent is
-      # simply never matched, so listing it costs nothing on clusters without the
-      # vertical-pod-autoscaler and confines the write the moment it is installed.
+      # The kinds below this point belong to optional add-on groups. A resourceRule
+      # naming a kind whose CRD is absent is never matched, so listing one costs
+      # nothing on a cluster without it and confines the write the moment it is
+      # installed. Their versions are wildcarded because the served set varies by
+      # add-on release.
       - apiGroups: ["autoscaling.k8s.io"]
-        apiVersions: ["v1"]
+        apiVersions: ["*"]
         operations: ["CREATE", "UPDATE", "DELETE"]
         resources: ["verticalpodautoscalers"]
+      - apiGroups: ["cilium.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["ciliumnetworkpolicies"]
+      - apiGroups: ["projectcalico.org"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["networkpolicies"]
+      - apiGroups: ["networking.gke.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["fqdnnetworkpolicies"]
+      - apiGroups: ["monitoring.coreos.com"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE", "DELETE"]
+        resources: ["servicemonitors"]
       - apiGroups: ["policy"]
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE", "DELETE"]
@@ -105,11 +127,30 @@ spec:
         has(oldObject.subjects) && size(oldObject.subjects) == 1 &&
         oldObject.subjects[0].kind == 'ServiceAccount' &&
         'system:serviceaccount:' + oldObject.subjects[0].namespace + ':' + oldObject.subjects[0].name == request.userInfo.username
+    - name: isConfigMap
+      expression: "request.resource.group == '' && request.resource.resource == 'configmaps'"
+    # The GMC's own install namespace, where its IP-range store lives (Q1227).
+    - name: isInstallNamespaceConfigMap
+      expression: {{ printf "variables.isConfigMap && request.namespace == '%s'" .Release.Namespace | quote }}
+    # A proxy-share projection, matched on the stored object a DELETE carries. The
+    # GMC cannot label a ConfigMap outside a tenant namespace, so the labels on one
+    # there were written while the namespace was a tenant or by its own writers.
+    - name: isOwnShareProjectionDelete
+      expression: >-
+        request.operation == 'DELETE' && variables.isConfigMap &&
+        has(oldObject.metadata.labels) &&
+        'actions-gateway/proxy-share' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['actions-gateway/proxy-share'] == 'true' &&
+        'app.kubernetes.io/managed-by' in oldObject.metadata.labels &&
+        oldObject.metadata.labels['app.kubernetes.io/managed-by'] == 'actions-gateway-gmc'
   validations:
     - expression: "!variables.isClusterRoleBinding || variables.bindingRoleRef == 'agc-clusterrunnertemplate-reader'"
       messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
       reason: Forbidden
-    - expression: "variables.isClusterRoleBinding || variables.isManagedTenant || variables.isOwnReaderBindingDelete"
+    - expression: >-
+        variables.isClusterRoleBinding || variables.isManagedTenant ||
+        variables.isOwnReaderBindingDelete || variables.isInstallNamespaceConfigMap ||
+        variables.isOwnShareProjectionDelete
       messageExpression: "'the GMC service account may only write tenant resources in namespaces labeled actions-gateway.com/tenant=managed; namespace ' + request.namespace + ' is not a managed tenant namespace'"
       reason: Forbidden
 ---
