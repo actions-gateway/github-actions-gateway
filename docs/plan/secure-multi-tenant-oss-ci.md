@@ -83,6 +83,7 @@ The most important section.
 - **Compute abuse is contained, not prevented.** A hostile job can consume the capacity its tenant's quota allows.
   The quota, the priority tiers, and `maxWorkerLifetime` bound it; nothing detects intent in advance.
 - **Secrets a maintainer deliberately grants a fork are out of reach.** If a workflow is configured to expose a secret to `pull_request_target`, that is a repository configuration decision GAG cannot override and should not pretend to.
+- **Which runner set a fork job lands on is the fork's choice** wherever GitHub's approval gate and runner-group restrictions are not set, until the opt-in refusal in [Q1330](../queue/Q1330.md) ships; an adopter who registers a trusted label on a public repository without either has accepted that.
 - **Side channels between co-tenant micro-VMs are not addressed.** Kata bounds the kernel.
   Speculative-execution and shared-cache side channels between guests on one node are a hardware and hypervisor concern, not one this milestone closes.
 - **The mirror is a trusted component.** A compromised pull-through mirror reaches every job that pulls through it.
@@ -125,9 +126,13 @@ Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage l
 
 Surfaced by drawing the whole picture; each is a decision before it is work:
 
-1. **Secret exposure to fork pull requests** ([Q1220](../queue/Q1220.md)).
-   What GAG can and cannot influence, and what it should refuse to run.
-   Interacts with `pull_request_target` semantics that belong to the repository, not the platform.
+1. **What GAG refuses to run for a fork pull request** (decided 2026-11-09, Q1220).
+   A `pull_request` run takes its workflow from the fork's head, so a fork can rewrite `runs-on` to reach a trusted runner set, and routing by label is a convention rather than a control.
+   GitHub's own controls come first: approval for all external contributors, and runner groups kept off public repositories or restricted to selected workflows ([how an operator applies them](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label); whether the workflow restriction refuses a fork job is [Q1331](../queue/Q1331.md)).
+   Neither reaches a repository-level scale set or an organization on a plan without custom runner groups, so GAG adds an opt-in `RunnerSet` refusal ([Q1330](../queue/Q1330.md)).
+   The job message cannot drive it: upstream `JobMessageBase` (actions/scaleset `716908e`, read 2026-11-09) has `eventName` but no head-repository field, and the live `JobAssigned` captured on 2026-07-26 carries none ([scaleset-eviction-recovery.md](scaleset-eviction-recovery.md)).
+   The run object the AGC already reads for eviction recovery carries `head_repository.fork`, which is what the refusal keys on.
+   Secrets a workflow grants to `pull_request_target` stay the repository's decision, as the residual-risk list below says.
 2. **Runner-token scope for an untrusted job.** Settled 2026-11-09: no untrusted class gets a narrower credential, because GAG has none to issue.
    The reasoning and the list it rests on are in [Credentials a job can read](#credentials-a-job-can-read).
 3. **What "untrusted" is, as a declared thing** ([Q1222](../queue/Q1222.md)).

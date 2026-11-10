@@ -34,6 +34,7 @@ Two detection substrates are used:
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Job intake: bind every tenant to a GitHub runner group](#job-intake-bind-every-tenant-to-a-github-runner-group)
+  - [Fork pull requests choose their own runner label](#fork-pull-requests-choose-their-own-runner-label)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
   - [Managing egress at scale](#managing-egress-at-scale)
   - [Expressing GitHub egress by FQDN: the `egressPolicyMode` opt-in](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in)
@@ -531,6 +532,20 @@ That is deliberate: the fallback would widen the boundary at the moment the name
 
 Onboarding walkthrough and failure modes: [tenant onboarding](tenant-onboarding.md#bind-a-runner-set-to-a-github-runner-group).
 Threat-model rationale: [design 5.2](../design/05-security.md).
+
+### Fork pull requests choose their own runner label
+
+A `pull_request` run takes its workflow file from the pull request's head, so a fork can rewrite `runs-on` to name any label your runner group admits for that repository.
+Routing fork jobs to an untrusted runner set by label is therefore a convention, not a control.
+GAG does not tell a fork job from any other today, so the controls that hold are GitHub's:
+
+- **Require approval for all external contributors** (repository or organization Settings → Actions → General).
+  The `first_time_contributors` setting lets a contributor's second pull request run without a maintainer click.
+- **Keep trusted runner groups off public repositories** (`allows_public_repositories: false`, GitHub's default), and on a plan with custom runner groups, restrict a trusted group to selected workflows.
+  Whether a selected-workflow restriction refuses a fork job is unmeasured: [Q1331](../queue/Q1331.md).
+
+Repository-level scale sets and organizations without custom runner groups have only the first.
+An opt-in refusal on the `RunnerSet` itself is [Q1330](../queue/Q1330.md).
 
 ## Tenant egress posture & deliberate widening
 
