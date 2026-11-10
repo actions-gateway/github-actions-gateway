@@ -3,7 +3,7 @@
 > **Status: goal stated 2026-08-06, deliverables partly shipped.** This is a map and a definition of done, not a design.
 > The design for the network half is [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
 > Kernel isolation, the pod floor, the network layer, the metadata block and the egress evidence are shipped.
-> Definition of Done items 4 and 6 are open, and so are two of the three decisions at the end of this document.
+> Definition of Done items 4 and 6 are open, and so is one of the three decisions at the end of this document.
 
 ## Why this is the goal
 
@@ -120,7 +120,7 @@ Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, p
 
 Shipped since: the per-tenant `actions/cache` server (Q215, [q215-worker-cache.md](q215-worker-cache.md)).
 
-Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), and the two open decisions below.
+Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), and the open decision below.
 
 ## Open decisions the map surfaced
 
