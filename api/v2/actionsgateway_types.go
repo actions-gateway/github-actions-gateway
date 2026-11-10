@@ -526,7 +526,12 @@ type VaultSigner struct {
 // EgressPeer identifies a single destination the GMC may open in an otherwise default-deny
 // per-tenant NetworkPolicy: a pod/namespace selector for an in-cluster peer, or a CIDR for an
 // external one. Exactly one peer form must be given — a CIDR cannot carry a selector and vice
-// versa — so the rule the GMC emits is always scoped to one peer, never a broaden-to-all-egress.
+// versa — so the rule the GMC emits has one peer on one port.
+//
+// The gateway's author writes the peer, and admission bounds only the CIDR form: its size and
+// the ranges it may name (see CIDR). A selector is not bounded, since its reach is whatever
+// pods carry the labels, and an empty namespaceSelector reaches pods in every namespace. The
+// rule is added beside the operator's API-server scoping, not inside it.
 //
 // This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
 // reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
@@ -553,8 +558,17 @@ type EgressPeer struct {
 	// CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually
 	// exclusive with the pod/namespace selectors.
 	//
+	// It must parse as a CIDR no broader than /16 for IPv4 or /48 for IPv6: the largest network
+	// one external service spans, an AWS VPC or one IPv6 site, and far short of 0.0.0.0/0. It
+	// must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata server's
+	// IPv6 address (fd00:ec2::254, fd20:ce::254), so the peer cannot name the address that
+	// serves the node's cloud credentials. A value already stored is not re-checked until it
+	// changes.
+	//
 	// +optional
 	// +kubebuilder:validation:MaxLength=43
+	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || (isCIDR(self) && cidr(self).prefixLength() >= (cidr(self).ip().family() == 4 ? 16 : 48))",optionalOldSelf=true,message="cidr must be a valid CIDR no broader than /16 for IPv4 or /48 for IPv6; the peer is one destination, so name its address or its subnet"
+	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || !isCIDR(self) || !(cidr(self).ip().isLinkLocalUnicast() || cidr(self).containsIP('fd00:ec2::254') || cidr(self).containsIP('fd20:ce::254'))",optionalOldSelf=true,message="cidr must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata server (fd00:ec2::254, fd20:ce::254)"
 	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$|^([0-9a-fA-F:]+)/[0-9]{1,3}$`
 	CIDR string `json:"cidr,omitempty"`
 
