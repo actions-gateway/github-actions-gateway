@@ -112,10 +112,14 @@ type RunnerSetSpec struct {
 	RunnerGroup string `json:"runnerGroup,omitempty"`
 
 	// PriorityTiers defines PriorityClass assignments and cumulative pod-count
-	// thresholds. Tiers must be in strictly ascending threshold order.
+	// thresholds. Tiers must be in strictly ascending threshold order, and admission
+	// rejects a list that is not: the AGC assigns the first tier whose threshold the
+	// active-pod count is below, so a tier at or under an earlier one never receives a
+	// pod. A list already stored is not re-checked until it changes.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=10
+	// +kubebuilder:validation:XValidation:rule="(oldSelf.hasValue() && oldSelf.value() == self) || (self.map(t, t.threshold).isSorted() && self.all(a, self.exists_one(b, b.threshold == a.threshold)))",optionalOldSelf=true,message="priorityTiers thresholds must be strictly ascending; a tier whose threshold is not above the one before it never receives a worker pod"
 	PriorityTiers []PriorityTier `json:"priorityTiers,omitempty"`
 
 	// MaxEvictionRetries controls how many times the AGC automatically re-queues a

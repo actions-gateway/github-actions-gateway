@@ -107,6 +107,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Tracing Endpoint Rejected by Admission](#tracing-endpoint-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `githubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
+- [Priority Tiers Rejected by Admission: Thresholds Not Ascending](#priority-tiers-rejected-by-admission-thresholds-not-ascending)
 - [kubectl apply ActionsGateway Times Out On Webhook During GMC Rollout](#kubectl-apply-actionsgateway-times-out-on-webhook-during-gmc-rollout)
 - [Applying Any v2 Object Fails With no endpoints available for service "webhook-service"](#applying-any-v2-object-fails-with-no-endpoints-available-for-service-webhook-service)
 - [Worker HTTPS_PROXY Returns connection refused During Proxy Rollout](#worker-https_proxy-returns-connection-refused-during-proxy-rollout)
@@ -4182,6 +4183,29 @@ pendingPodDeadline must be at least 1s
 - Use a duration of `1s` or more for `pendingPodDeadline`; to effectively park the deadline while debugging a scheduling issue, set it large (e.g.
   `"24h"`) rather than zero.
 - Omit either field to get the defaults (`5m` retention, `10m` deadline).
+
+---
+
+## Priority Tiers Rejected by Admission: Thresholds Not Ascending
+
+**Symptoms.** A create or an edit that sets `spec.priorityTiers` on a `RunnerSet` is rejected at admission:
+
+```
+RunnerSet.actions-gateway.com "<name>" is invalid: spec.priorityTiers: Invalid value:
+priorityTiers thresholds must be strictly ascending; a tier whose threshold is not
+above the one before it never receives a worker pod
+```
+
+**Likely cause.** A tier's `threshold` is equal to or lower than the threshold of a tier listed before it.
+The AGC gives each new worker the first tier whose threshold the active-pod count is still below, so such a tier is never assigned, and the schema refuses the list rather than store a tier that does nothing.
+
+**Resolution.** List the tiers from the lowest threshold to the highest, each above the one before it.
+The first workers get the first tier's class, so put first the class the set should use while it is lightly loaded.
+Set `maxWorkers` to the last threshold, or leave it unset.
+Sorting a set that already runs with such a list changes which classes its workers get; to keep what it does today, delete every tier whose threshold is not above all the thresholds before it instead.
+
+A set stored before this check keeps working: an edit that leaves `priorityTiers` alone is accepted.
+Deleting and re-creating it, or changing the list to another order that does not ascend, is rejected ([finding the affected sets](upgrade.md#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected)).
 
 ---
 

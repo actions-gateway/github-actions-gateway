@@ -24,6 +24,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
   - [Action required after v2.0.0: delete what an owner deleted during the upgrade left behind](#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
+  - [Action required if a RunnerSet's priorityTiers do not ascend: the list is now rejected](#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected)
   - [Action required if a query reads tier on a disruption series: the label is gone](#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone)
   - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
@@ -525,6 +526,26 @@ The AGC's `Provisioner.provision` span went with the classic path too, and the s
 A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and `spec.tracing.networkPolicy` can now replace it ([Reaching the collector](observability-logging.md#reaching-the-collector)).
 
 **Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
+
+### Action required if a `RunnerSet`'s `priorityTiers` do not ascend: the list is now rejected
+
+**Who is affected:** operators with a `RunnerSet` whose `spec.priorityTiers` thresholds are not strictly ascending, such as a tier at `threshold: 10` followed by one at `threshold: 5`, or two tiers at the same threshold.
+
+**What changed.** The AGC gives each new worker the first tier whose threshold the active-pod count is still below, so a tier at or below an earlier one never received a pod.
+With thresholds 10 then 5, every worker got the first tier's class, and the set's real ceiling was 10 although `maxWorkers`, which has to equal the last threshold, said 5.
+The schema now refuses such a list.
+The upgrade itself changes nothing: a set already stored with one keeps running, and an edit that leaves `priorityTiers` alone is still accepted.
+A change to the list that leaves it out of order is rejected, and so is a delete and re-create, which includes a restore from backup.
+
+**Before you upgrade,** list the sets whose thresholds do not ascend:
+
+```bash
+kubectl get runnersets.actions-gateway.com -A -o json \
+  | jq -r '.items[] | select((.spec.priorityTiers // []) as $t | any(range(1; $t | length); $t[.].threshold <= $t[. - 1].threshold)) | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+Fix each one by the classes its workers should get rather than by sorting alone, because sorting starts assigning a class the set has never assigned.
+To keep today's behaviour, delete every tier whose threshold is not above all the thresholds before it, then set `maxWorkers` to the new last threshold, or unset it.
 
 ### Action required if a query reads `tier` on a disruption series: the label is gone
 

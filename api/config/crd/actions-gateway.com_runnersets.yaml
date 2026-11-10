@@ -215,7 +215,10 @@ spec:
               priorityTiers:
                 description: |-
                   PriorityTiers defines PriorityClass assignments and cumulative pod-count
-                  thresholds. Tiers must be in strictly ascending threshold order.
+                  thresholds. Tiers must be in strictly ascending threshold order, and admission
+                  rejects a list that is not: the AGC assigns the first tier whose threshold the
+                  active-pod count is below, so a tier at or under an earlier one never receives a
+                  pod. A list already stored is not re-checked until it changes.
                 items:
                   description: |-
                     PriorityTier maps a Kubernetes PriorityClass to a cumulative pod-count
@@ -245,6 +248,14 @@ spec:
                   type: object
                 maxItems: 10
                 type: array
+                x-kubernetes-validations:
+                - message: priorityTiers thresholds must be strictly ascending; a
+                    tier whose threshold is not above the one before it never receives
+                    a worker pod
+                  optionalOldSelf: true
+                  rule: (oldSelf.hasValue() && oldSelf.value() == self) || (self.map(t,
+                    t.threshold).isSorted() && self.all(a, self.exists_one(b, b.threshold
+                    == a.threshold)))
               proxyRef:
                 description: |-
                   ProxyRef optionally names the EgressProxy this runner set's traffic egresses
