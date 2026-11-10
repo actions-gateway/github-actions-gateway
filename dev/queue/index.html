@@ -3234,12 +3234,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>GAG cannot tell a fork pull request's job from any other today, so it can neither refuse one nor route it to a tighter runner shape.</td>
 </tr>
 <tr>
-<td><a href="Q1221/">Q1221</a></td>
-<td><a href="../plan/secure-multi-tenant-oss-ci/">Decide whether an untrusted job gets a narrower runner credential</a></td>
-<td><code>security</code> <code>open-question</code></td>
+<td><a href="Q1329/">Q1329</a></td>
+<td><a href="../plan/secure-multi-tenant-oss-ci/#credentials-a-job-can-read">Measure what a JIT runner credential permits from inside its own job</a></td>
+<td><code>security</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>Every credential a worker pod holds is readable by the job's own code, and nobody has listed them or asked whether an untrusted job should …</td>
+<td>A worker's job can read its runner's just-in-time (JIT) config, and what the job can do with it while its own job runs has never been run …</td>
 </tr>
 <tr>
 <td><a href="Q1222/">Q1222</a></td>
@@ -3674,14 +3674,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
-<td><a href="Q1321/">Q1321</a></td>
-<td><a href="../plan/security-audit-2026-11/#confinement-claim">GMC can write ConfigMaps and CNI policies outside tenant namespaces</a></td>
-<td><code>debt</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>**The security design claims a confinement the shipped admission policy does not deliver, and <code>v2.0.0</code> should not ship the claim as it …</td>
-</tr>
-<tr>
 <td><a href="Q1322/">Q1322</a></td>
 <td><a href="../plan/security-audit-2026-11/#stricter-admission-rules">Eight stricter admission rules from the November security audit</a></td>
 <td><code>debt</code> <code>2.0-gate</code></td>
@@ -3695,7 +3687,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Everything else under <code>v2.0.0</code> has landed but the tag, <a href="Q1321/">Q1321</a> and <a href="Q1322/">Q1322</a>: the coupled removals (Q273, Q264, Q1167) …</td>
+<td>Everything else under <code>v2.0.0</code> has landed but the tag and <a href="Q1322/">Q1322</a>: the coupled removals (Q273, Q264, Q1167), the storage advance …</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>

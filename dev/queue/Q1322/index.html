@@ -2674,7 +2674,7 @@ Each rule must let an unchanged stored value through, as <code>spec.tracing.endp
 Re-check each asserted gap against source before writing its rule: these were read on 2026-11-09 at <code>7b3f016ad</code>, and the leads' downstream effect was never run.
 A finding whose rule turns out to cost more than it protects can be declined here with the reason recorded in the plan doc; it should not silently drop off the list.</p>
 <p><strong>Done when</strong> each of the six has a rule with tests covering a refused new value and an accepted unchanged stored one, or a recorded decision not to add it; <code>upgrade.md</code> tells operators what <code>v2.0.0</code> now refuses and how to find a stored object that has it; and the <code>v2.0.0</code> release notes list each rule under breaking changes.</p>
-<p>The <code>security</code> label is left off for the reason given in <a href="../Q1321/">Q1321</a>.</p>
+<p>The <code>security</code> label is left off deliberately: with a gate label it would oblige a public roadmap bullet (<code>roadmapcheck</code> rule 7), and Q1312 set the precedent of gating a pre-release tightening as <code>debt</code>.</p>
 
 
 

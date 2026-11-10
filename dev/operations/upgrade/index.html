@@ -1893,6 +1893,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4065,6 +4076,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4975,6 +4997,7 @@ For <strong>initial installation</strong> of the GMC, see <a href="../install/">
 <li><a href="#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected">Action required if a shared EgressProxy exempts a consumer's GitHub host: the pair is now rejected</a></li>
 <li><a href="#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2">Action required if you overlay a library template: deploy/templates/ is written at v2</a></li>
 <li><a href="#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">Action required: the GMC reads Secrets only in marked tenant namespaces</a></li>
+<li><a href="#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces">Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces</a></li>
 <li><a href="#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks">Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks</a></li>
 <li><a href="#non-breaking-two-runnersets-may-share-a-name-across-namespaces">Non-breaking: two <code>RunnerSet</code>s may share a name across namespaces</a></li>
 <li><a href="#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run">Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run</a></li>
@@ -5175,7 +5198,7 @@ Run this and expect <code>No resources found</code>:</p>
 </table>
 <p>A namespace carrying only the old tenant marker is no longer a tenant namespace once the <code>v2.0.0</code> GMC starts.
 The GMC stops watching Secrets there, so a gateway in it cannot read its credential, and the <code>gmc-tenant-resource-guard</code> policy denies every write the GMC makes there, deletes included, so its teardown cannot finish either.
-The GMC's Secret <em>access</em> ends with it: the GMC deletes the <code>gmc-tenant-secret-reader</code> RoleBinding 1.x created there, the one write the guard admits outside a tenant namespace.
+The GMC's Secret <em>access</em> ends with it: the GMC deletes the <code>gmc-tenant-secret-reader</code> RoleBinding 1.x created there, a write the guard admits outside a tenant namespace.
 A namespace whose privileged grant is only on the old key loses it, and the <code>namespace-security-profile-guard</code> policy rejects the next change that selects <code>privileged</code> there.
 A tenant migrated with <a href="../migration-v1-to-v2/"><code>gag-migrate</code></a> already carries both spellings and needs nothing.</p>
 <p>Run these and expect <code>No resources found</code> from each:</p>
@@ -5576,6 +5599,19 @@ Label each namespace that <code>kubectl get namespace &lt;namespace&gt; --show-l
 <p><strong>Removing a namespace from the tenants</strong> now has a second step: delete its <code>gmc-tenant-secret-reader</code> RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
 From <code>v2.0.0</code> the GMC deletes the binding itself when the marker goes, and this step is no longer needed.</p>
+<h3 id="non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces">Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces<a class="headerlink" href="#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces" title="Permanent link">&para;</a></h3>
+<p><strong>Who is affected:</strong> nobody whose <code>gmc-tenant-resource-guard</code> binding runs in the default <code>Deny</code> mode with every gateway and proxy in a marked tenant namespace.
+Read on if a namespace that is not a tenant is listed in an <code>EgressProxy</code>'s <code>spec.sharing.allowedNamespaces</code>, or if you deploy the GMC from your own copy of the policy manifests.</p>
+<p><strong>What changed.</strong> The guard now matches ConfigMaps, the CNI-native policy kinds (<code>CiliumNetworkPolicy</code>, Calico <code>NetworkPolicy</code>, GKE <code>FQDNNetworkPolicy</code>), and ServiceMonitors, so the GMC may create, update or delete them only in namespaces labelled <code>actions-gateway.com/tenant=managed</code> (Q1321).
+Before, the GMC's ClusterRole let it write those kinds in any namespace and no policy stopped it, which a compromised GMC could have used to rewrite a ConfigMap in <code>kube-system</code>.
+Two ConfigMap writes are admitted outside a tenant namespace: any in the GMC's own install namespace, where it keeps its GitHub IP-range store, and the delete of a ConfigMap the GMC projected into a consumer namespace (<code>proxy-share-*</code> or <code>proxy-attribution-*</code>), so either is still withdrawn from a namespace that has lost its marker.</p>
+<p><strong>What you will see.</strong> Nothing, on an install where every namespace holding a gateway is a marked tenant.
+Where an unmarked namespace is granted a share and holds a gateway or <code>RunnerSet</code> naming the proxy, the GMC no longer writes the <code>proxy-share-*</code> ConfigMap there, and the <strong>provider</strong> <code>EgressProxy</code> reports it: <code>Degraded=True</code> and <code>Ready=False</code> with reason <code>ProvisioningFailed</code>, a Warning event, and a message carrying the guard's denial, which names the namespace.
+The proxy itself keeps serving, because the share step is the last one, and shares into marked namespaces and revocations proceed in the same reconcile.
+The GMC retries, so the condition and the denial in the API server audit log repeat until the namespace is labelled or the grant removed.
+That gateway could not run before either, since the guard already denied its Deployment.</p>
+<p><strong>What to do.</strong> Label the consumer namespace as a tenant (<a href="../tenant-onboarding/">tenant onboarding</a>), or remove it from <code>allowedNamespaces</code>.
+If you apply <code>cmd/gmc/config/admission-policy/tenant-resource-guard.yaml</code> yourself and the GMC does not run in <code>gmc-system</code>, change the namespace in the <code>isInstallNamespaceConfigMap</code> expression as well as the ServiceAccount identity in <code>matchConditions</code>; the chart renders both from the release namespace.</p>
 <h3 id="action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks">Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the <code>-v2</code> webhooks<a class="headerlink" href="#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone who copied the <code>ActionsGatewayWebhookRejections</code> alert from <a href="../security-operations/#prometheus-abuse-alerts">security-operations.md</a>, or imported the security dashboard, whose <code>name=~</code> selector still names a <code>-v2alpha1</code> webhook: any copy taken from release 1.8, 1.9 or 1.10.</p>
 <p><strong>What changed.</strong> Both select the GMC's webhooks by name, and through 1.10 they still named the <code>-v2alpha1</code> webhooks that 1.9 renamed to <code>-v2</code>, so a copy taken from 1.8 went blind on the upgrade to 1.9.

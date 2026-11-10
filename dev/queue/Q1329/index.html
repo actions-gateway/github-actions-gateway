@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1321/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1329/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>GMC can write ConfigMaps and CNI policies outside tenant namespaces - GitHub Actions Gateway</title>
+        <title>Measure what a JIT runner credential permits from inside its own job - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#gmc-can-write-configmaps-and-cni-policies-outside-tenant-namespaces" class="md-skip">
+        <a href="#measure-what-a-jit-runner-credential-permits-from-inside-its-own-job" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              GMC can write ConfigMaps and CNI policies outside tenant namespaces
+              Measure what a JIT runner credential permits from inside its own job
             
           </span>
         </div>
@@ -2657,20 +2657,16 @@
   
 
 
-<h1 id="gmc-can-write-configmaps-and-cni-policies-outside-tenant-namespaces">GMC can write ConfigMaps and CNI policies outside tenant namespaces<a class="headerlink" href="#gmc-can-write-configmaps-and-cni-policies-outside-tenant-namespaces" title="Permanent link">&para;</a></h1>
-<p><strong>The security design claims a confinement the shipped admission policy does not deliver, and <code>v2.0.0</code> should not ship the claim as it stands.</strong> <code>docs/design/05-security.md</code> says a compromised Gateway Manager Controller (GMC) is confined to marked tenant namespaces.
-Its ClusterRole grants cluster-wide writes on ConfigMaps, on the CNI-native network policy kinds and on ServiceMonitors, and no rule in <code>gmc-tenant-resource-guard</code> or any other shipped policy names those kinds.
-Confirmed by reading source on 2026-11-09 at medium severity, not observed on a cluster (<a href="../../plan/security-audit-2026-11/#confinement-claim">the finding</a>).</p>
-<p>Gated on <code>v2.0.0</code> because General Availability is when the security doc becomes a commitment, and the second audit's rule was that the claim and the code must agree.</p>
-<p>Two fixes clear it, and they are not exclusive:</p>
-<ul>
-<li>Correct the claim: state the kinds a compromised GMC can still write cluster-wide, with the bound.
-  This is the smallest change that makes the doc true.</li>
-<li>Extend the policy to the unmatched kinds, so the claim holds as written.
-  It changes no tenant-facing API, so it does not need the major.</li>
-</ul>
-<p><strong>Done when</strong> the doc's confinement claim and the shipped policies agree, a test fails if a kind in the GMC ClusterRole's write rules is matched by no policy, and the envtest copies under <code>cmd/gmc/config/admission-policy</code> match the chart templates.</p>
-<p>The <code>security</code> label is left off deliberately: with a gate label it would oblige a public roadmap bullet (<code>roadmapcheck</code> rule 7), and Q1312 set the precedent of gating a pre-release tightening as <code>debt</code>.</p>
+<h1 id="measure-what-a-jit-runner-credential-permits-from-inside-its-own-job">Measure what a JIT runner credential permits from inside its own job<a class="headerlink" href="#measure-what-a-jit-runner-credential-permits-from-inside-its-own-job" title="Permanent link">&para;</a></h1>
+<p>A worker's job can read its runner's just-in-time (JIT) config, and what the job can do with it while its own job runs has never been run against GitHub.
+The config holds the runner's ID, its OAuth client ID and its RSA private key, mounted from the per-job Secret and passed as the argument to <code>run.sh --jitconfig</code> (<code>cmd/worker/main.go</code>, <code>runScaleSet</code>).</p>
+<p><strong>Read from the code, not measured.</strong> The pod holds no registration token and no App token, so the credential cannot register a second runner.
+It belongs to one ephemeral runner in one <code>RunnerSet</code>'s scale set, so anything it reaches stays inside that set.
+The wrapper's comment on <code>runScaleSet</code> asserts it "grants nothing the job it configures does not already run with", and nothing measured backs that.</p>
+<p><strong>Measure,</strong> with the credential-gated scale-set probe against a test repository (testing.md § Credential-gated probe scenarios): while a job runs on a JIT runner, take that runner's credential from inside the job, mint an OAuth token with it, and try <code>CreateSession</code> and a message poll for the same runner.
+Record whether the broker refuses the second session, and whether a second queued job for the same scale set can be acquired through it.</p>
+<p><strong>Why it matters:</strong> the decision this came out of, Q1221, settled in the plan doc's credential list and deleted with that change, assumes the credential reaches nothing beyond its own job, and a positive result here would not reopen it.
+If the probe finds it can take another job, a job's code can run inside a second job of the same set, which is a defect for every class rather than a narrowing for an untrusted one, and it goes into the <a href="../../design/05-security/">05-security.md</a> threat table.</p>
 
 
 

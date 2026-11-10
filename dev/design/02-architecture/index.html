@@ -3037,7 +3037,7 @@ The two flows touch overlapping resources but answer different questions.</p>
 <h2 id="21-tier-1--gateway-manager-controller-gmc">2.1. Tier 1 — Gateway Manager Controller (GMC)<a class="headerlink" href="#21-tier-1--gateway-manager-controller-gmc" title="Permanent link">&para;</a></h2>
 <p>Deployed once by the platform team in a dedicated system namespace.
 The default install uses <code>gmc-system</code>.
-It holds a ClusterRole that grants it read access to <code>ActionsGateway</code> resources across all namespaces, and write access (cluster-wide at the RBAC layer) to Deployments, Roles, RoleBindings, and NetworkPolicies.
+It holds a ClusterRole that grants it read access to <code>ActionsGateway</code> resources across all namespaces, and write access (cluster-wide at the RBAC layer) to the kinds it provisions, among them Deployments, RoleBindings, ConfigMaps and NetworkPolicies (<a href="../05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">the full list</a>).
 Per-namespace confinement of those writes is enforced not by RBAC — which cannot express "only namespaces carrying a marker label" — but by the <code>gmc-tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code>, which denies the GMC ServiceAccount any <code>create</code>/<code>update</code>/<code>delete</code> of those kinds outside namespaces an administrator has marked <code>actions-gateway.com/tenant: managed</code> (Q122).
 It does <strong>not</strong> hold <code>resourcequotas</code>/<code>limitranges</code> write verbs: the namespace <code>ResourceQuota</code> is platform-owned and the GMC operates within it without creating or mutating it <em>(Q130 — dropping that grant is least privilege, partially subsuming Q122)</em>.</p>
 <ul>

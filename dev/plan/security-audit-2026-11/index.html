@@ -3278,9 +3278,9 @@
 <p>Third full security audit, performed 2026-11-09 against <code>7b3f016ad</code>, ahead of <code>v2.0.0</code>.
 The first audit (2026-05) is <a href="../security/">security.md</a> and the second (2026-06) is <a href="../archive/security-audit-2026-06/">archive/security-audit-2026-06.md</a>; this doc records only the third audit's findings and where each one is tracked.</p>
 <blockquote>
-<p><strong>Status: findings filed, nothing fixed.</strong> 9 findings are confirmed from source (one medium, eight low) and 30 are leads that source alone cannot settle.
+<p><strong>Status: findings filed, the medium one fixed.</strong> 9 findings are confirmed from source (one medium, eight low) and 30 are leads that source alone cannot settle.
 Nothing reached high or critical.
-Two rows gate <code>v2.0.0</code>: <a href="../../queue/Q1321/">Q1321</a> and <a href="../../queue/Q1322/">Q1322</a>.
+Two rows gated <code>v2.0.0</code>: Q1321, which has landed, and <a href="../../queue/Q1322/">Q1322</a>, which is open.
 The rest are <a href="../../queue/Q1323/">Q1323</a> to <a href="../../queue/Q1328/">Q1328</a>.</p>
 </blockquote>
 <h2 id="method-and-limits">Method and limits<a class="headerlink" href="#method-and-limits" title="Permanent link">&para;</a></h2>
@@ -3319,7 +3319,7 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 <tr>
 <td><a href="#confinement-claim">GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds</a></td>
 <td>confirmed, medium</td>
-<td><a href="../../queue/Q1321/">Q1321</a> (<code>2.0-gate</code>)</td>
+<td>Q1321 (<code>2.0-gate</code>), fixed</td>
 </tr>
 <tr>
 <td><a href="#stricter-admission-rules">Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'</a></td>
@@ -3514,9 +3514,13 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 </tbody>
 </table>
 <h2 id="confinement-claim">Confinement claim<a class="headerlink" href="#confinement-claim" title="Permanent link">&para;</a></h2>
-<p>The one medium finding, tracked as <a href="../../queue/Q1321/">Q1321</a> and gating <code>v2.0.0</code>.
-The design doc claims a confinement the shipped policy does not deliver, and a General Availability release should not carry a security claim that source refutes.
-Correcting the claim clears the gate; extending the policy to the unmatched kinds is the stronger fix and changes no tenant-facing API.</p>
+<p>The one medium finding, tracked as Q1321, which gated <code>v2.0.0</code> and has landed.
+The design doc claimed a confinement the shipped policy did not deliver, and a General Availability release should not carry a security claim that source refutes.</p>
+<p><strong>Fixed by both routes.</strong> <code>gmc-tenant-resource-guard</code> now matches ConfigMaps, the three CNI-native policy kinds and ServiceMonitors, in the chart template and the config copy, and <a href="../../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">05-security.md</a> states what stays cluster-wide: ConfigMap reads, Events, and the GMC's own API kinds.
+A unit test fails when the manager ClusterRole grants a write that no shipped policy matches, and a second holds each config copy to its chart template.
+Two ConfigMap writes are admitted outside a tenant namespace, which the finding's own fix did not anticipate in full: any in the install namespace, as it proposed, and the delete of a proxy-share or failure-attribution projection, without which neither could be withdrawn from a namespace that had lost its marker and the provider proxy's reconcile would fail there.
+The role was not narrowed: the GMC lists its share projections by label across namespaces, so ConfigMap <code>get</code>/<code>list</code> stays cluster-wide and is recorded as a residual.
+The finding below is kept as written on 2026-11-09.</p>
 <h3 id="gmc-serviceaccount-can-write-configmaps-and-where-the-crds-exist-cni-native-network-policies-and-servicemonitors-in-any-namespace-tenant-resource-guard-does-not-match-those-kinds">GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds<a class="headerlink" href="#gmc-serviceaccount-can-write-configmaps-and-where-the-crds-exist-cni-native-network-policies-and-servicemonitors-in-any-namespace-tenant-resource-guard-does-not-match-those-kinds" title="Permanent link">&para;</a></h3>
 <p><code>gmc-tenant-resource-guard:ungated-configmap-cni-servicemonitor-writes</code>: confirmed, medium.
 Starts at <code>charts/actions-gateway/templates/rbac.yaml:17</code>.</p>
