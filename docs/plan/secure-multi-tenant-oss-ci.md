@@ -3,7 +3,7 @@
 > **Status: goal stated 2026-08-06, deliverables partly shipped.** This is a map and a definition of done, not a design.
 > The design for the network half is [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
 > Kernel isolation, the pod floor, the network layer, the metadata block and the egress evidence are shipped.
-> Definition of Done items 4 and 6 are open, and so are the three decisions at the end of this document.
+> Definition of Done items 4 and 6 are open, and so are two of the three decisions at the end of this document.
 
 ## Why this is the goal
 
@@ -119,7 +119,7 @@ Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, p
 
 Shipped since: the per-tenant `actions/cache` server (Q215, [q215-worker-cache.md](q215-worker-cache.md)).
 
-Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), and the three decisions below.
+Open, with rows: [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), and the two open decisions below.
 
 ## Open decisions the map surfaced
 
@@ -128,10 +128,32 @@ Surfaced by drawing the whole picture; each is a decision before it is work:
 1. **Secret exposure to fork pull requests** ([Q1220](../queue/Q1220.md)).
    What GAG can and cannot influence, and what it should refuse to run.
    Interacts with `pull_request_target` semantics that belong to the repository, not the platform.
-2. **Runner-token scope for an untrusted job** ([Q1221](../queue/Q1221.md)).
-   The job's own credentials are a reachable asset.
-   Whether an untrusted class should receive a narrower token than a trusted one is unexamined.
+2. **Runner-token scope for an untrusted job.** Settled 2026-11-09: no untrusted class gets a narrower credential, because GAG has none to issue.
+   The reasoning and the list it rests on are in [Credentials a job can read](#credentials-a-job-can-read).
 3. **What "untrusted" is, as a declared thing** ([Q1222](../queue/Q1222.md)).
    Today it is a posture an operator assembles.
    A declared class would let the platform apply the whole set at once, but the moat review rejected building that surface while five of its dependencies are open or blocked, which is the correct order.
    The decision this document owes is what the class would mean, not yet how to express it.
+
+## Credentials a job can read
+
+Every credential a worker pod holds is readable by the job's own code, so the job's credentials are an asset the untrusted contributor reaches by default.
+This is the list, read from the code on 2026-11-09.
+It covers the scale-set tier alone, because v2.0.0 retired the classic tier (Q1273), and `ProvisionScaleSetWorker` is the only provision path the AGC has.
+
+| Credential | How the job reaches it | Who issues and scopes it | What it permits from inside the job |
+| --- | --- | --- | --- |
+| The runner's just-in-time (JIT) config: runner ID, OAuth client ID, and RSA private key | The per-job Secret's `jitconfig` key, mounted read-only into the runner container, and the argument the wrapper passes to `run.sh --jitconfig` | GAG mints it through `generatejitconfig`, and GAG's request carries a runner name and a work folder and no scope (`scaleset/client.go`, `GenerateJITConfig`); whether GitHub's endpoint accepts a narrower scope is unmeasured | Acting as its own runner, which is one ephemeral runner in this `RunnerSet`'s scale set. It cannot register a second runner, because the pod holds no registration token and no App token: the Secret carries `plan-id` and `jitconfig` alone (`buildSecret` in `cmd/agc/internal/provisioner/pod.go`). Whether it can open a second broker session or take a second job while its own runs is unmeasured ([Q1329](../queue/Q1329.md)). |
+| The job's runtime tokens: `ACTIONS_RUNTIME_TOKEN` and the results and cache URLs, plus `ACTIONS_ID_TOKEN_REQUEST_TOKEN` when the workflow grants `id-token: write` | GitHub delivers them in the job message, and the runner exports them to actions | GitHub, per job | Whatever GitHub scopes them to for that run. The per-tenant cache server checks its reserve, finalize and lookup calls against the runtime token's scopes ([q215-worker-cache.md](q215-worker-cache.md#the-scope-comes-from-githubs-own-token)). |
+| The workflow's `GITHUB_TOKEN` | The job context | GitHub, from the workflow's `permissions:` | The repository's decision, outside the platform. |
+| A Kubernetes ServiceAccount token | Not mounted: the AGC sets `automountServiceAccountToken: false` on every worker. Admission rejects a template that sets `automountServiceAccountToken` or `serviceAccountName`, but not a projected token volume, so a tenant template could still project the worker ServiceAccount's token explicitly | The kubelet, for the per-gateway worker ServiceAccount | No RoleBinding the GMC writes names that ServiceAccount, and workers have no egress to the API server. |
+| The node's cloud credentials | The metadata server, where it is reachable | The cloud provider | Covered by Definition of Done #3, and closed there. |
+| Anything a tenant template adds: env vars, Secret volumes | The template | The tenant | The tenant's own choice, made per `RunnerTemplate`. |
+
+The proxy and GitHub Enterprise Server CA certificates are mounted too, and both are public.
+The proxy env vars carry addresses and no credential, and attribution identifies a worker by its source address, so the attribution client certificate goes to the AGC's reader and never to a worker.
+
+**No class gets a narrower credential, and the evidence leaves no option to prefer.** The only credential GAG issues is already scoped to one runner in one `RunnerSet`'s scale set, so a class drawn per `RunnerSet` bounds it without anything new, and GAG's request for it carries no scope that could be narrowed.
+Hiding it from the job is not on offer either: a job's steps run as the runner's own user, in the container the runner reads the credential from (the runner's behaviour, not measured here).
+If Q1329 finds that the credential can take a second job, that is a defect for every class, not a narrowing for one.
+So the declared class in decision 3 carries no credential item from this list.
