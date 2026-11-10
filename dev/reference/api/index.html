@@ -5425,7 +5425,7 @@ the collector at the network layer instead. See docs/operations/observability.md
 </tr>
 <tr>
 <td><code>insecure</code> <em>boolean</em></td>
-<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.</td>
+<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.<br />It cannot be true with an https:// endpoint: the exporter applies it after the scheme, so the pair exports in plaintext (otlptracegrpc v1.47.0). A stored pair is not re-checked until the endpoint or this field changes.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>

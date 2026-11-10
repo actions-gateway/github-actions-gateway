@@ -2667,7 +2667,7 @@ The initContainer path itself stays reachable, through <code>WRAPPER_DELIVERY=in
 So <code>v1.10.0</code> workers fail on 1.33 and 1.34 unless <code>WRAPPER_DELIVERY=init</code> is set, which <code>upgrade.md</code> tells operators to do; the 1.35 floor makes the comparison correct from <code>v2.0.0</code>.</p>
 <p>The <code>t.Skipf</code> guards on a server below 1.31 in <code>v2_crd_test.go</code> and <code>v2_multigateway_test.go</code> can never skip while <code>ENVTEST_K8S_VERSION</code> is 1.35.</p>
 <p>Two more things exist only for clusters below the floor, and neither is a version branch.
-<code>spec.tracing.endpoint</code>'s <code>oldSelf</code> clause (<code>api/v2/shared_types.go:258</code>) works around ratcheting missing the status subresource on 1.31 and 1.32, and removing it changes the CRD, so whether it goes is open.
+<code>spec.tracing.endpoint</code>'s <code>oldSelf</code> clause (<code>api/v2/shared_types.go:259</code>) works around ratcheting missing the status subresource on 1.31 and 1.32, and removing it changes the CRD, so whether it goes is open.
 <code>docs/operations/examples/kind-cluster-audit.yaml</code> defaults to the <code>extraArgs</code> form its own comment scopes to 1.30 and older; the example was not run.</p>
 <p>Done when no branch tests for a version below the floor, the two above are decided, and the docs describe what remains.</p>
 

@@ -3256,7 +3256,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <tr>
 <td><code>insecure</code></td>
 <td><code>OTEL_EXPORTER_OTLP_TRACES_INSECURE</code></td>
-<td>Defaults to <code>false</code> (TLS). Set <code>true</code> only for a plaintext collector; it wins over an <code>https://</code> scheme.</td>
+<td>Defaults to <code>false</code> (TLS). Set <code>true</code> only for a plaintext collector, with an <code>http://</code> endpoint. Admission rejects it with an <code>https://</code> one, where it would win over the scheme.</td>
 </tr>
 <tr>
 <td><code>caBundleRef</code></td>
