@@ -1137,6 +1137,16 @@ def record_text(rec):
     return ""
 
 
+# The harness prepends reminder blocks to some submitted prompts (measured from
+# 2026-07 to 2026-09), so a leading tag says nothing about what follows it.
+LEADING_REMINDERS = re.compile(r"\A\s*(?:<system-reminder>.*?</system-reminder>\s*)+", re.S)
+
+
+def prompt_body(rec):
+    """``record_text`` with any leading reminder blocks removed."""
+    return LEADING_REMINDERS.sub("", record_text(rec)).lstrip()
+
+
 def is_human_prompt(rec):
     """True when a person actually typed this.
 
@@ -1152,7 +1162,11 @@ def is_human_prompt(rec):
         return False
     if (rec.get("origin") or {}).get("kind") != "human":
         return False
-    return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
+    text = record_text(rec)
+    body = prompt_body(rec)
+    if not body:
+        return not LEADING_REMINDERS.match(text)   # an image-only prompt has no text
+    return not body.startswith(NOT_A_PROMPT)
 
 
 # A session opened by the dispatcher starts with a brief it composed rather than
@@ -1184,6 +1198,18 @@ MACHINE_BRIEF = re.compile(
     % "|".join(re.escape(s) for s in WORKER_SKILLS))
 
 
+# A session started by another session opens with the starter's brief, which
+# carries no ``origin.kind`` at all (measured from 2026-10 on Claude Code 2.1.30x),
+# so it is never a human prompt and needs its own test to file as dispatched.
+SESSION_BRIEF = ("Background (from the session that started this one)",
+                 "Task (from the session that started this one)")
+
+
+def is_session_brief(rec):
+    """True for a session opening composed by the session that started it."""
+    return rec.get("type") == "user" and prompt_body(rec).startswith(SESSION_BRIEF)
+
+
 def is_authored_prompt(rec):
     """A human prompt that is not a dispatcher-composed session opening.
 
@@ -1207,7 +1233,7 @@ def is_authored_prompt(rec):
     """
     if not is_human_prompt(rec):
         return False
-    text = record_text(rec).lstrip()
+    text = prompt_body(rec)
     if text.startswith(MACHINE_MARKER):
         return False
     return not (text.startswith(MACHINE_PERSONA) or MACHINE_BRIEF.search(text))
@@ -1436,7 +1462,9 @@ def session_kind_series(host):
                     continue
                 if start is None or dt < start:
                     start = dt
-                if kind is None and is_human_prompt(rec):
+                if kind is None and is_session_brief(rec):
+                    kind = "dispatched"
+                elif kind is None and is_human_prompt(rec):
                     kind = "manual" if is_authored_prompt(rec) else "dispatched"
                 if rec.get("type") != "assistant":
                     continue
