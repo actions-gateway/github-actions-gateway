@@ -102,15 +102,16 @@ Six things GAG does not have today, who does, and where GAG stands on each.
 
 | What you give up | Who has it | Where GAG stands |
 |---|---|---|
-| Install base | ARC 6,632 stars, ForgeMT 214, GAG 7 (2026-11-07) | an evidence trail, described below |
+| A large install base | ARC 6,632 stars, ForgeMT 214, GAG 7 (2026-11-07) | an evidence trail, described below |
 | Commercial support | ARC, and every managed service | none planned, by design |
 | `container:`/`services:` without privilege | ARC, via `containerMode: kubernetes` | Docker-in-Docker inside a Kata micro-VM, which runs them with no privileged container and needs nested virtualization. ARC's mechanism was [declined 2026-08-25](design/appendix-d-alternatives-considered.md#d15-pod-per-step-container-execution-arcs-containermode-kubernetes) |
 | GHES tested on a real appliance | ARC | GHES gateways are served and [flagged untested](features.md); testing needs an operator with an appliance |
 | Per-build speed | managed runner services | not claimed in either direction; a [benchmark](roadmap.md) is on the roadmap and not done |
 | Flaky-job retry | several CI systems ([G.17](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)) | detection ships; retry is [on the roadmap](roadmap.md). Auto re-run covers a job the cluster disrupted, never one that failed |
 
-**Install base has no engineering answer.** If being the first production deployment is unacceptable, that settles it.
-If it is not, what you have to go on is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a [published retraction](design/appendix-a-capacity-slos.md) of the project's own best number once it proved unmeasurable.
+**A smaller install base has no engineering answer.** ARC is widely deployed, and GAG is newer and has fewer users.
+If you need a large install base behind you, that settles it.
+If you do not, what you have to go on is the evidence trail: dated measurements, failure modes documented with the incidents that found them, and a [published retraction](design/appendix-a-capacity-slos.md) of the project's own best number once it proved unmeasurable.
 
 ## Next steps
 
