@@ -15,6 +15,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -239,13 +240,17 @@ type remoteProxy struct {
 // reconcileProxyShares projects the proxy's CA and connection facts into every
 // namespace entitled to them, and prunes projections that are no longer entitled.
 // Pruning runs even when the proxy grants nothing, so clearing allowedNamespaces
-// revokes access rather than merely stopping refreshes.
+// revokes access rather than merely stopping refreshes. It also runs when a
+// projection fails: gmc-tenant-resource-guard denies one into a namespace that is
+// not a marked tenant, and that denial must not hold up another namespace's
+// revocation.
 func (r *EgressProxyReconciler) reconcileProxyShares(ctx context.Context, ep *gmcv2.EgressProxy) error {
 	wanted, err := consumerNamespacesFor(ctx, r.Client, ep)
 	if err != nil {
 		return err
 	}
 
+	var projectErrs []error
 	if len(wanted) > 0 {
 		var tlsSecret corev1.Secret
 		if err := r.Get(ctx, types.NamespacedName{
@@ -259,12 +264,12 @@ func (r *EgressProxyReconciler) reconcileProxyShares(ctx context.Context, ep *gm
 		}
 		for _, ns := range wanted {
 			if err := r.applyProxyShare(ctx, buildProxyShareConfigMap(ep, ns, caPEM)); err != nil {
-				return fmt.Errorf("project proxy share into %q: %w", ns, err)
+				projectErrs = append(projectErrs, fmt.Errorf("project proxy share into %q: %w", ns, err))
 			}
 		}
 	}
 
-	return r.pruneProxyShares(ctx, ep, wanted)
+	return errors.Join(append(projectErrs, r.pruneProxyShares(ctx, ep, wanted))...)
 }
 
 // shareReader returns the uncached reader used for projected share ConfigMaps, or

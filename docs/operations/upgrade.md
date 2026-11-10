@@ -32,6 +32,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a shared EgressProxy exempts a consumer's GitHub host: the pair is now rejected](#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
+  - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
   - [Non-breaking: two `RunnerSet`s may share a name across namespaces](#non-breaking-two-runnersets-may-share-a-name-across-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
@@ -235,7 +236,7 @@ kubectl delete crd actionsgateways.actions-gateway.github.com runnergroups.actio
 
 A namespace carrying only the old tenant marker is no longer a tenant namespace once the `v2.0.0` GMC starts.
 The GMC stops watching Secrets there, so a gateway in it cannot read its credential, and the `gmc-tenant-resource-guard` policy denies every write the GMC makes there, deletes included, so its teardown cannot finish either.
-The GMC's Secret *access* ends with it: the GMC deletes the `gmc-tenant-secret-reader` RoleBinding 1.x created there, the one write the guard admits outside a tenant namespace.
+The GMC's Secret *access* ends with it: the GMC deletes the `gmc-tenant-secret-reader` RoleBinding 1.x created there, a write the guard admits outside a tenant namespace.
 A namespace whose privileged grant is only on the old key loses it, and the `namespace-security-profile-guard` policy rejects the next change that selects `privileged` there.
 A tenant migrated with [`gag-migrate`](migration-v1-to-v2.md) already carries both spellings and needs nothing.
 
@@ -714,6 +715,24 @@ kubectl label namespace <namespace> actions-gateway.com/tenant=managed
 **Removing a namespace from the tenants** now has a second step: delete its `gmc-tenant-secret-reader` RoleBinding after removing the marker.
 The guard denies the GMC that delete once the namespace is no longer a tenant, so the binding, and the GMC's read access, stay until you remove it.
 From `v2.0.0` the GMC deletes the binding itself when the marker goes, and this step is no longer needed.
+
+### Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces
+
+**Who is affected:** nobody whose `gmc-tenant-resource-guard` binding runs in the default `Deny` mode with every gateway and proxy in a marked tenant namespace.
+Read on if a namespace that is not a tenant is listed in an `EgressProxy`'s `spec.sharing.allowedNamespaces`, or if you deploy the GMC from your own copy of the policy manifests.
+
+**What changed.** The guard now matches ConfigMaps, the CNI-native policy kinds (`CiliumNetworkPolicy`, Calico `NetworkPolicy`, GKE `FQDNNetworkPolicy`), and ServiceMonitors, so the GMC may create, update or delete them only in namespaces labelled `actions-gateway.com/tenant=managed` (Q1321).
+Before, the GMC's ClusterRole let it write those kinds in any namespace and no policy stopped it, which a compromised GMC could have used to rewrite a ConfigMap in `kube-system`.
+Two ConfigMap writes are admitted outside a tenant namespace: any in the GMC's own install namespace, where it keeps its GitHub IP-range store, and the delete of a ConfigMap the GMC projected into a consumer namespace (`proxy-share-*` or `proxy-attribution-*`), so either is still withdrawn from a namespace that has lost its marker.
+
+**What you will see.** Nothing, on an install where every namespace holding a gateway is a marked tenant.
+Where an unmarked namespace is granted a share and holds a gateway or `RunnerSet` naming the proxy, the GMC no longer writes the `proxy-share-*` ConfigMap there, and the **provider** `EgressProxy` reports it: `Degraded=True` and `Ready=False` with reason `ProvisioningFailed`, a Warning event, and a message carrying the guard's denial, which names the namespace.
+The proxy itself keeps serving, because the share step is the last one, and shares into marked namespaces and revocations proceed in the same reconcile.
+The GMC retries, so the condition and the denial in the API server audit log repeat until the namespace is labelled or the grant removed.
+That gateway could not run before either, since the guard already denied its Deployment.
+
+**What to do.** Label the consumer namespace as a tenant ([tenant onboarding](tenant-onboarding.md)), or remove it from `allowedNamespaces`.
+If you apply `cmd/gmc/config/admission-policy/tenant-resource-guard.yaml` yourself and the GMC does not run in `gmc-system`, change the namespace in the `isInstallNamespaceConfigMap` expression as well as the ServiceAccount identity in `matchConditions`; the chart renders both from the release namespace.
 
 ### Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the `-v2` webhooks
 

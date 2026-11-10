@@ -70,7 +70,7 @@ All AGC and worker traffic to GitHub flows through the proxy pool; Kubernetes AP
 
 Deployed once by the platform team in a dedicated system namespace.
 The default install uses `gmc-system`.
-It holds a ClusterRole that grants it read access to `ActionsGateway` resources across all namespaces, and write access (cluster-wide at the RBAC layer) to Deployments, Roles, RoleBindings, and NetworkPolicies.
+It holds a ClusterRole that grants it read access to `ActionsGateway` resources across all namespaces, and write access (cluster-wide at the RBAC layer) to the kinds it provisions, among them Deployments, RoleBindings, ConfigMaps and NetworkPolicies ([the full list](05-security.md#gmc-privilege-escalation-blast-radius-and-compensating-controls)).
 Per-namespace confinement of those writes is enforced not by RBAC — which cannot express "only namespaces carrying a marker label" — but by the `gmc-tenant-resource-guard` `ValidatingAdmissionPolicy`, which denies the GMC ServiceAccount any `create`/`update`/`delete` of those kinds outside namespaces an administrator has marked `actions-gateway.com/tenant: managed` (Q122).
 It does **not** hold `resourcequotas`/`limitranges` write verbs: the namespace `ResourceQuota` is platform-owned and the GMC operates within it without creating or mutating it *(Q130 — dropping that grant is least privilege, partially subsuming Q122)*.
 

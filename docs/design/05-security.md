@@ -11,7 +11,7 @@ Threats are grouped by which tier they affect.
 
 | Threat Vector | Impact | Mitigation Strategy |
 | --- | --- | --- |
-| **GMC Privilege Escalation** (Blast Radius: All Tenants) | Critical | Cluster-wide provisioning writes are confined to marked tenant namespaces by two `ValidatingAdmissionPolicy` objects (`namespace-psa-guard`, `gmc-tenant-resource-guard`), and Secret *reads* are granted per tenant namespace through a RoleBinding the same policy fences (Q1188). Full blast radius and compensating controls: [see below](#gmc-privilege-escalation-blast-radius-and-compensating-controls). |
+| **GMC Privilege Escalation** (Blast Radius: All Tenants) | Critical | Cluster-wide provisioning writes are confined to marked tenant namespaces by two `ValidatingAdmissionPolicy` objects (`namespace-psa-guard`, `gmc-tenant-resource-guard`), and Secret *reads* are granted per tenant namespace through a RoleBinding the same policy fences (Q1188). ConfigMap reads, Events and the GMC's own API kinds stay cluster-wide. Full blast radius and compensating controls: [see below](#gmc-privilege-escalation-blast-radius-and-compensating-controls). |
 | **Admission Webhook Unavailability or Bypass** | Medium | The reserved-namespace validating webhook serves as a safety check, not a security boundary — namespace isolation is enforced by RBAC and NetworkPolicy regardless of webhook state. The webhook uses `failurePolicy: Fail` so requests are rejected when the webhook pod is unhealthy rather than silently bypassed. Serving certificates are managed by cert-manager with automatic rotation; the CA bundle is injected via `caBundle` from the cert-manager-managed Secret. Webhook pod runs `replicas: 2` behind a Service with `podAntiAffinity` to survive single-node loss without stalling tenant onboarding. |
 | **Metrics Scrape Interception (MITM)** | Low | The `:8443` metrics endpoint is TLS + TokenReview/SAR-authorized, served with a cert-manager metrics cert the `ServiceMonitor` verifies (secure default), with a documented `insecureSkipVerify` fallback only when cert-manager is absent; the manager NetworkPolicy admits `:8443` **only** from `metrics: enabled` namespaces. Full TLS/network posture: [see below](#metrics-scrape-interception-and-the-mtls-posture). |
 | **Tenant Namespace Escape via Overpermissioned AGC** | Critical | Each AGC's ServiceAccount is bound by a RoleBinding limited to its own namespace. The AGC cannot list or touch resources in any other tenant namespace. |
@@ -20,17 +20,35 @@ Threats are grouped by which tier they affect.
 
 ### GMC privilege-escalation blast radius and compensating controls
 
-The GMC's ClusterRole grants cluster-wide *write* (`create`/`update`/`delete`) on the tenant provisioning kinds — Deployments, Services, ServiceAccounts, RoleBindings, Roles, NetworkPolicies, HPAs, VerticalPodAutoscalers (Q360; the grant is inert on a cluster without the optional `autoscaling.k8s.io` CRDs, and a VPA only ever resizes the workload it targets), PodDisruptionBudgets, RunnerGroups, and Secret `create`/`update` — because RBAC cannot express "only namespaces that carry a marker label".
+The GMC's ClusterRole grants cluster-wide *write* (`create`/`update`/`delete`) on the tenant provisioning kinds — Deployments, Services, ServiceAccounts, ConfigMaps, RoleBindings, NetworkPolicies, the CNI-native policy kinds (`CiliumNetworkPolicy`, Calico `NetworkPolicy`, GKE `FQDNNetworkPolicy`), HPAs, VerticalPodAutoscalers (Q360; the grant is inert on a cluster without the optional `autoscaling.k8s.io` CRDs, and a VPA only ever resizes the workload it targets), PodDisruptionBudgets, ServiceMonitors, and Secret `create`/`update` — because RBAC cannot express "only namespaces that carry a marker label".
 
 Two `ValidatingAdmissionPolicy` objects close that gap by confining the GMC ServiceAccount at admission: `namespace-psa-guard` confines `namespaces:patch` to the six `pod-security.kubernetes.io/*` keys on marked namespaces, and **`gmc-tenant-resource-guard` confines every `create`/`update`/`delete` of the kinds above to namespaces an administrator has marked `actions-gateway.com/tenant: managed`** (Q121 write path / Q122).
 So a compromised GMC cannot create a Deployment or RoleBinding in `kube-system`, write a Secret into an arbitrary namespace, or relabel `kube-system` PSA to `privileged` (see [§5.3](#53-security-profiles-and-the-privileged-opt-in)).
+
+The guard and the ClusterRole are held to each other by a test: `admission_policy_coverage_test.go` fails when the role grants a write on a kind that no shipped policy matches and that is not on its short exempt list.
+The role had outgrown the guard once: ConfigMaps, the CNI-native policy kinds and ServiceMonitors gained write grants the guard did not match, so a compromised GMC could write them into any namespace until the guard was extended.
+The exempt list is what the GMC can still write cluster-wide, and each entry carries no authority outside a tenant namespace:
+
+* **Events** (`create`/`patch`).
+  An Event records an occurrence and configures nothing.
+* **`ActionsGateway` and `EgressProxy` objects and their status, and `ActionsGateway` finalizers** (`update`/`patch`).
+  Nothing is provisioned from one outside a tenant namespace, because every kind it would produce is gated, and gating the finalizer update would wedge the deletion of a gateway created there.
+
+ConfigMaps have two exceptions of their own, each needed by a controller:
+
+* **Any ConfigMap write in the GMC's own install namespace**, where the GitHub IP-range store lives (Q1227, §5.2).
+  Nothing else there is opened: a Secret or Deployment write in the install namespace is still denied.
+* **Deleting a ConfigMap labelled as one of the GMC's two projections into a consumer namespace**, in any namespace: a proxy share (`actions-gateway/proxy-share: "true"`) or a failure-attribution port (`actions-gateway.com/proxy-attribution: "true"`), each with `app.kubernetes.io/managed-by: actions-gateway-gmc`.
+  It lets the GMC withdraw either from a namespace that has since lost its tenant marker.
+  A denied withdrawal would fail the provider `EgressProxy`'s whole reconcile, since the attribution step runs ahead of the proxy's own NetworkPolicy and Deployment.
+  The GMC cannot create or relabel a ConfigMap outside a tenant namespace, so the labels on one there were written while the namespace was a tenant, or by someone who can already write ConfigMaps in it.
 
 Secret **reads** need a different mechanism, because admission never runs on `get`/`list`/`watch`.
 RBAC cannot scope a grant by namespace label either, so the reads leave the ClusterRole altogether (Q1188).
 A singleton ClusterRole, `gmc-tenant-secret-reader`, holds `get`/`list`/`watch` on Secrets, and the GMC creates a RoleBinding to it in each namespace carrying the tenant marker, and deletes that RoleBinding when the namespace loses the marker.
 The GMC holds `bind` on that one `resourceName` and nothing broader, the pattern it already uses to hand the AGC `agc-tenant-role`, so RBAC escalation prevention is satisfied without `escalate`.
 What stops the GMC binding the reader into `kube-system` is `gmc-tenant-resource-guard`, which confines its RoleBinding writes to tenant namespaces, together with `namespace-psa-guard`, which makes the tenant marker immutable to it.
-The guard admits one write outside a tenant namespace: the GMC deleting a RoleBinding named `gmc-tenant-secret-reader` whose `roleRef` is the ClusterRole of that name and whose only subject is the GMC's own ServiceAccount (Q1271).
+The guard admits one RoleBinding write outside a tenant namespace: the GMC deleting a RoleBinding named `gmc-tenant-secret-reader` whose `roleRef` is the ClusterRole of that name and whose only subject is the GMC's own ServiceAccount (Q1271).
 That delete can only remove the GMC's access, and the match leaves out updates, Roles, ClusterRoleBindings, and any binding with another subject.
 
 The ClusterRole's Secret write verbs are `create` and `update`, and never `patch`, because a `patch` is a read.
@@ -49,9 +67,13 @@ So the GMC runs one metadata-only Secret informer per tenant namespace instead o
 
 * Enumerate every `ActionsGateway` CR in the cluster, learning each tenant's `gitHubAppRef` name and namespace.
 * `list`/`watch` and `get` the full `.data` of any Secret **in a marked tenant namespace**, including that tenant's GitHub App private key.
-* Create/update/delete workloads and Secrets **only in marked tenant namespaces** (the `gmc-tenant-resource-guard` VAP denies writes elsewhere).
+* Create/update/delete workloads, Secrets, ConfigMaps, network policies and ServiceMonitors **only in marked tenant namespaces** (the `gmc-tenant-resource-guard` VAP denies writes elsewhere).
+* `get` and `list` any ConfigMap **in any namespace**.
+  Admission never runs on a read, and the grant is cluster-wide because the GMC finds its share projections by label across namespaces.
+* Write any ConfigMap in its own install namespace, including the IP-range store, and delete a ConfigMap labelled as a proxy-share or failure-attribution projection in any namespace.
+* Create Events, and update `ActionsGateway` and `EgressProxy` objects, in any namespace.
 
-It CANNOT exec into pods, create new namespaces, write resources into unmarked namespaces such as `kube-system`, or read their Secrets.
+It CANNOT exec into pods, create new namespaces, write a provisioning resource into an unmarked namespace such as `kube-system`, or read Secrets there.
 
 **Residuals.**
 

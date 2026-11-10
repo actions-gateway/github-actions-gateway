@@ -18,6 +18,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -60,8 +62,10 @@ func installTenantResourceGuard(t *testing.T) {
 	cr := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-gmc-tenant-writes"},
 		Rules: []rbacv1.PolicyRule{
-			{APIGroups: []string{""}, Resources: []string{"secrets", "serviceaccounts", "services"}, Verbs: []string{"create", "update", "delete"}},
+			{APIGroups: []string{""}, Resources: []string{"configmaps", "secrets", "serviceaccounts", "services"}, Verbs: []string{"create", "update", "delete"}},
 			{APIGroups: []string{"apps"}, Resources: []string{"deployments"}, Verbs: []string{"create", "update", "delete"}},
+			{APIGroups: []string{"cilium.io"}, Resources: []string{"ciliumnetworkpolicies"}, Verbs: []string{"create", "update", "delete"}},
+			{APIGroups: []string{"monitoring.coreos.com"}, Resources: []string{"servicemonitors"}, Verbs: []string{"create", "update", "delete"}},
 		},
 	}
 	if err := k8sClient.Create(ctx, cr); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -163,6 +167,179 @@ func TestGMC_TenantResourceGuard_ConfinesWritesToMarkedNamespaces(t *testing.T) 
 		// cluster-admin client can still write into an unmarked namespace freely.
 		require.NoError(t, k8sClient.Create(ctx, newSecret(unmarkedNS, "admin-secret")))
 	})
+}
+
+// ensureLiveNamespace creates name, first removing a copy an earlier test left
+// terminating: envtest runs no namespace controller, so a deleted namespace keeps
+// its finalizer and refuses every create. The cleanup removes it the same way, so
+// a later test finds no namespace rather than a terminating one.
+func ensureLiveNamespace(t *testing.T, name string) {
+	t.Helper()
+	g := gomega.NewWithT(t)
+	purge := func() {
+		key := types.NamespacedName{Name: name}
+		ns := &corev1.Namespace{}
+		if err := k8sClient.Get(context.Background(), key, ns); err != nil {
+			return
+		}
+		_ = k8sClient.Delete(context.Background(), ns)
+		// Re-read: the delete changed the object, and finalize is refused on a
+		// stale resourceVersion.
+		if err := k8sClient.Get(context.Background(), key, ns); err != nil {
+			return
+		}
+		ns.Spec.Finalizers = nil
+		_ = k8sClient.SubResource("finalize").Update(context.Background(), ns)
+		g.Eventually(func() bool {
+			return apierrors.IsNotFound(k8sClient.Get(context.Background(), types.NamespacedName{Name: name}, &corev1.Namespace{}))
+		}, 10*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "namespace %s must be gone", name)
+	}
+	purge()
+	require.NoError(t, k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}))
+	t.Cleanup(purge)
+}
+
+func newConfigMap(ns, name string, labels map[string]string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, Labels: labels},
+		Data:       map[string]string{"k": "v"},
+	}
+}
+
+// newAddOnObject is a minimal object of an optional add-on kind the GMC writes
+// (a CNI-native policy, a ServiceMonitor), against the suite's stub CRDs.
+func newAddOnObject(gvk schema.GroupVersionKind, ns, name string) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(gvk)
+	u.SetNamespace(ns)
+	u.SetName(name)
+	return u
+}
+
+// TestGMC_TenantResourceGuard_ConfinesConfigMapAndAddOnWrites pins Q1321: the
+// guard matches the kinds the GMC ClusterRole gained write grants on after Q122,
+// so ConfigMaps, CNI-native policies and ServiceMonitors are confined to marked
+// tenant namespaces like the original provisioning kinds. The ConfigMap
+// exceptions are each admitted, and each denial case breaks one of their
+// conditions.
+func TestGMC_TenantResourceGuard_ConfinesConfigMapAndAddOnWrites(t *testing.T) {
+	installTenantResourceGuard(t)
+
+	const unmarkedNS = "resguard-cm-unmarked"
+	const markedNS = "resguard-cm-marked"
+	createNamespace(t, unmarkedNS)
+	createNamespaceWithLabels(t, markedNS, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	ensureLiveNamespace(t, gmcSANamespace)
+
+	const tenantDenial = "is not a managed tenant namespace"
+	shareLabels := map[string]string{
+		"app.kubernetes.io/managed-by": "actions-gateway-gmc",
+		"actions-gateway/proxy-share":  "true",
+	}
+
+	gmc := newImpersonatedClient(t, gmcSANamespace, gmcSAName)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		return apierrors.IsForbidden(gmc.Create(ctx, newConfigMap(unmarkedNS, "probe", nil)))
+	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+		"GMC SA must be denied creating a ConfigMap in an unmarked namespace")
+
+	requireTenantDenial := func(t *testing.T, err error) {
+		t.Helper()
+		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+		require.ErrorContains(t, err, tenantDenial, "denied by the guard's tenant rule")
+	}
+	// adminCreated creates obj as the admin, outside the guard's reach.
+	adminCreated := func(t *testing.T, obj client.Object) client.Object {
+		t.Helper()
+		require.NoError(t, k8sClient.Create(ctx, obj))
+		t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), obj) })
+		return obj
+	}
+
+	t.Run("ConfigMap create denied in unmarked namespace", func(t *testing.T) {
+		requireTenantDenial(t, gmc.Create(ctx, newConfigMap(unmarkedNS, "rogue", nil)))
+	})
+
+	t.Run("share-labelled ConfigMap create denied in unmarked namespace", func(t *testing.T) {
+		requireTenantDenial(t, gmc.Create(ctx, newConfigMap(unmarkedNS, "rogue-share", shareLabels)))
+	})
+
+	t.Run("ConfigMap write allowed in marked namespace", func(t *testing.T) {
+		cm := newConfigMap(markedNS, "proxy-share-provider-pool", shareLabels)
+		require.NoError(t, gmc.Create(ctx, cm), "a share projection lands in a tenant namespace")
+		cm.Data["k"] = "v2"
+		require.NoError(t, gmc.Update(ctx, cm))
+		require.NoError(t, gmc.Delete(ctx, cm))
+	})
+
+	t.Run("ConfigMap write allowed in the install namespace", func(t *testing.T) {
+		cm := newConfigMap(gmcSANamespace, "actions-gateway-gmc-ip-ranges", nil)
+		require.NoError(t, gmc.Create(ctx, cm), "the IP-range store lives beside the GMC")
+		cm.Data["k"] = "v2"
+		require.NoError(t, gmc.Update(ctx, cm))
+		require.NoError(t, gmc.Delete(ctx, cm))
+	})
+
+	t.Run("Secret write still denied in the install namespace", func(t *testing.T) {
+		requireTenantDenial(t, gmc.Create(ctx, newSecret(gmcSANamespace, "leak")))
+	})
+
+	t.Run("own share projection delete admitted in unmarked namespace", func(t *testing.T) {
+		cm := adminCreated(t, newConfigMap(unmarkedNS, "revoked-share", shareLabels))
+		require.NoError(t, gmc.Delete(ctx, cm), "a revoked share is withdrawn from an ex-tenant namespace")
+	})
+
+	t.Run("own attribution projection delete admitted in unmarked namespace", func(t *testing.T) {
+		labels := map[string]string{
+			"app.kubernetes.io/managed-by":          "actions-gateway-gmc",
+			"actions-gateway.com/proxy-attribution": "true",
+		}
+		cm := adminCreated(t, newConfigMap(unmarkedNS, "proxy-attribution-provider-pool", labels))
+		require.NoError(t, gmc.Delete(ctx, cm),
+			"a withdrawn attribution port is removed from an ex-tenant namespace, or the provider proxy's reconcile fails")
+	})
+
+	t.Run("ConfigMap with only the attribution label delete denied", func(t *testing.T) {
+		labels := map[string]string{"actions-gateway.com/proxy-attribution": "true"}
+		requireTenantDenial(t, gmc.Delete(ctx, adminCreated(t, newConfigMap(unmarkedNS, "half-attributed", labels))))
+	})
+
+	t.Run("update of a share projection denied in unmarked namespace", func(t *testing.T) {
+		cm := adminCreated(t, newConfigMap(unmarkedNS, "stale-share", shareLabels)).(*corev1.ConfigMap)
+		cm.Data["k"] = "v2"
+		requireTenantDenial(t, gmc.Update(ctx, cm))
+	})
+
+	t.Run("unlabelled ConfigMap delete denied in unmarked namespace", func(t *testing.T) {
+		requireTenantDenial(t, gmc.Delete(ctx, adminCreated(t, newConfigMap(unmarkedNS, "someone-elses", nil))))
+	})
+
+	t.Run("ConfigMap with only the share label delete denied", func(t *testing.T) {
+		labels := map[string]string{"actions-gateway/proxy-share": "true"}
+		requireTenantDenial(t, gmc.Delete(ctx, adminCreated(t, newConfigMap(unmarkedNS, "half-labelled", labels))))
+	})
+
+	t.Run("ConfigMap with the share label not 'true' delete denied", func(t *testing.T) {
+		labels := map[string]string{
+			"app.kubernetes.io/managed-by": "actions-gateway-gmc",
+			"actions-gateway/proxy-share":  "false",
+		}
+		requireTenantDenial(t, gmc.Delete(ctx, adminCreated(t, newConfigMap(unmarkedNS, "not-a-share", labels))))
+	})
+
+	addOns := map[string]schema.GroupVersionKind{
+		"CiliumNetworkPolicy": {Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"},
+		"ServiceMonitor":      {Group: "monitoring.coreos.com", Version: "v1", Kind: "ServiceMonitor"},
+	}
+	for kind, gvk := range addOns {
+		t.Run(kind+" write denied in unmarked namespace", func(t *testing.T) {
+			requireTenantDenial(t, gmc.Create(ctx, newAddOnObject(gvk, unmarkedNS, "rogue")))
+		})
+		t.Run(kind+" write allowed in marked namespace", func(t *testing.T) {
+			require.NoError(t, gmc.Create(ctx, newAddOnObject(gvk, markedNS, "tenant")))
+		})
+	}
 }
 
 // readerBindingIn is a RoleBinding named like the GMC's Secret reader binding, for
