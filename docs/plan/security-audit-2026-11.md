@@ -585,8 +585,8 @@ In cmd/gmc/internal/scalesetscope/scalesetscope_test.go add a CollidesWith case 
 
 Seven leads on the release pipeline and CI, tracked as [Q1326](../queue/Q1326.md).
 The first four turn on repository settings that source does not show: who may create a `v*` tag, who may dispatch `publish.yml` and `pages.yml`, and whether a deployment environment protects either.
-If those are restricted to maintainers the four are same-principal and close.
-Read the settings before the `v2.0.0` tag, since the tag is what they would affect.
+Read on 2026-11-09, they are: the repository has one collaborator and the organisation one member, the same admin account, so for a person the four are same-principal today.
+Nothing but that headcount holds them closed, since no ruleset targets tags and `publish.yml` runs under no deployment environment, and [Q1326](../queue/Q1326.md) names the two events that reopen them.
 
 ### publish.yml dispatch `tag` input is never compared with the dispatch ref, so one tag's source can be published and signed under another version name while the stop-ship gates evaluate the named version
 
