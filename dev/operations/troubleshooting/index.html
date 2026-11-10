@@ -6176,7 +6176,8 @@ Only an <em>absent</em> file means "no TLS egress proxy" — the direct-egress a
 A mounted-but-unreadable CA is a misconfiguration: continuing without it would strip proxy trust and resurface much later as an unrelated-looking <code>unknown authority</code> failure on the first proxied GitHub call, so the AGC exits at startup instead.</p>
 <p>The GMC renders the <code>proxy-ca</code> volume mode <code>0444</code> and projects only <code>tls.crt</code>, so neither error is reachable from a GMC-managed Deployment on its own.
 A read error means the pod spec was mutated after the fact — a hand-edited Deployment, or a mutating policy engine rewriting volume modes or <code>securityContext</code>.
-A parse error means the Secret's <code>tls.crt</code> is not a PEM certificate, which only a hand-edited Secret produces.</p>
+A parse error means the Secret's <code>tls.crt</code> is not a PEM certificate, which only a hand-edited Secret produces.
+A hand-supplied proxy certificate is never kept: on its next reconcile of the <code>EgressProxy</code>, the GMC replaces any <code>tls.crt</code> that is not the single leaf it issued (a second certificate, a CA, another SAN, or a cert not paired with <code>tls.key</code>) and emits <code>ProxyCertificateIssued</code>.</p>
 <p><strong>Diagnostics.</strong></p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-61-1" name="__codelineno-61-1" href="#__codelineno-61-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;proxy&gt;-proxy-tls<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.data.tls\.crt}'</span><span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-61-2" name="__codelineno-61-2" href="#__codelineno-61-2"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>base64<span class="w"> </span>-d<span class="w"> </span><span class="p">|</span><span class="w"> </span>openssl<span class="w"> </span>x509<span class="w"> </span>-noout<span class="w"> </span>-subject<span class="w"> </span>-dates
@@ -7479,7 +7480,7 @@ Confirm the shipped policy:</p>
 </code></pre></div>
 <p>emitted from <code>JobExtension</code> connectivity checks, <code>ResultServer</code> init, <code>JobServerQueue</code> log uploads, the <code>GitHubActionsService</code> log-blob fetch, or <code>RunServer.CompleteJobAsync</code>.
 The runner retries for ~3 minutes, then exits 1.</p>
-<p><strong>Cause.</strong> Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the cert-manager-issued self-signed CA that signed it.
+<p><strong>Cause.</strong> Runner.Worker's .NET HttpClient is validating the egress proxy's TLS cert and the worker pod's trust store does not include the GMC-issued self-signed proxy certificate.
 This is the worker-side mirror of the AGC's proxy-CA pinning (<a href="../../design/05-security/">§5.2</a> "Cross-Tenant Proxy CA Trust"): the AGC mounts the CA explicitly so its outbound HTTPS works; worker pods must do the same.</p>
 <p>The AGC's pod provisioner is supposed to project the <code>&lt;proxy&gt;-proxy-tls</code> Secret into every worker pod at <code>/etc/actions-gateway/proxy-ca/tls.crt</code> and set <code>PROXY_CA_CERT_PATH</code> so the worker entrypoint wrapper builds a combined <code>SSL_CERT_FILE</code> bundle before exec'ing <code>Runner.Worker</code>.
 UntrustedRoot means one of those steps did not happen.</p>
@@ -8633,7 +8634,7 @@ Events are emitted only on a genuine state change (never on every reconcile):</p
 <td><code>EgressProxy</code></td>
 <td><code>ProxyCertificateIssued</code></td>
 <td>Normal</td>
-<td>The self-signed proxy TLS certificate was issued or rotated (near expiry).</td>
+<td>The self-signed proxy TLS certificate was issued, rotated (near expiry), or replaced because the Secret held something other than the certificate the GMC issued.</td>
 </tr>
 <tr>
 <td><code>EgressProxy</code></td>

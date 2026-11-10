@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1324/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1335/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate four egress proxy sharing leads from the security audit - GitHub Actions Gateway</title>
+        <title>A consumer's unwritable projected Secret stalls a provider's EgressProxy - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-four-egress-proxy-sharing-leads-from-the-security-audit" class="md-skip">
+        <a href="#a-consumers-unwritable-projected-secret-stalls-a-providers-egressproxy" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate four egress proxy sharing leads from the security audit
+              A consumer's unwritable projected Secret stalls a provider's EgressProxy
             
           </span>
         </div>
@@ -2657,20 +2657,18 @@
   
 
 
-<h1 id="validate-four-egress-proxy-sharing-leads-from-the-security-audit">Validate four egress proxy sharing leads from the security audit<a class="headerlink" href="#validate-four-egress-proxy-sharing-leads-from-the-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a severity.
-<a href="../../plan/security-audit-2026-11/#egress-proxy-sharing-leads">Each lead, with evidence, blockers and a validation plan</a>:</p>
-<ul>
-<li>Provider-writable proxy TLS Secret is projected unvalidated into consumer namespaces and installed as an unconstrained trust root by consumer AGCs and workers (needs validation).</li>
-<li>A tenant can stall another tenant's EgressProxy reconcile with a labelled ConfigMap and an unblankable Secret in its own namespace (needs validation).</li>
-<li>Bring-your-own-autoscaled EgressProxy lets the live Deployment replica count drive an unbounded repeated-addition loop on the GMC's single EgressProxy worker (needs validation).</li>
-<li>Transport-only proxy tunnels to its own loopback listeners, so a worker can replace its source address and arrival port with the proxy's (needs validation).</li>
-</ul>
-<p>Start with the first: a provider's proxy TLS certificate is projected unvalidated into consumer namespaces and installed as a trust root for the consumer's controller and workers.
-Five separate hunting passes reported it, and it decides how far a tenant that shares its proxy is trusted by the tenants that consume it.</p>
-<p><strong>Measure:</strong> each lead's local test in the plan doc is an envtest or unit case that needs no cluster; what the test leaves open is one owner-observed fact per lead, named beside it.</p>
-<p><strong>Done when</strong> each lead is either confirmed and fixed, refuted with the measurement recorded, or written into <code>05-security.md</code> as an accepted residual with its bound.
-The plan doc gives each one a bounded local test and the fact an owner has to observe.</p>
+<h1 id="a-consumers-unwritable-projected-secret-stalls-a-providers-egressproxy">A consumer's unwritable projected Secret stalls a provider's EgressProxy<a class="headerlink" href="#a-consumers-unwritable-projected-secret-stalls-a-providers-egressproxy" title="Permanent link">&para;</a></h1>
+<p>A granted, opted-in consumer namespace can pre-create a Secret at <code>proxyAttributionName(&lt;provider-ns&gt;, &lt;proxy&gt;)</code> that the apiserver will not update, such as an immutable one holding different data.
+<code>applyProjectedSecret</code> then returns <code>Invalid</code>, <code>reconcileAttribution</code> fails, and the provider pool's NetworkPolicy, Deployment, Service and every later step never apply.
+One consumer can stall a pool every other consumer shares.</p>
+<p><strong>Measured</strong> in the PR #2292 review, at <code>7b78afc</code>: a fake client with an interceptor returning <code>Invalid</code> on that Secret's Update fails the reconcile with <code>reconcile failure attribution: project attribution: project client certificate into "team-a": Secret ... is invalid</code>.
+The apiserver half is measured too: envtest on Kubernetes 1.35 returns <code>Invalid</code> for a data change to an immutable Secret (<code>TestV2_EgressProxy_Attribution_ForeignUnblankableSecretDoesNotStallThePool</code>).
+PR #2292 closed the same class on the withdrawal path only (Q1324), where a Secret the GMC cannot blank is now left as it is.</p>
+<p>The share ConfigMaps do not have this shape.
+<code>reconcileProxyShares</code> is the last step of <code>reconcileResources</code>, after every child is applied, and it collects a per-namespace failure and carries on to the next consumer (read from source at <code>b5edaef1b</code>, not probed).
+An unwritable share ConfigMap therefore marks the pool Degraded without stopping its children or other consumers' shares.</p>
+<p><strong>Done when</strong> a consumer-side attribution Secret the GMC cannot write fails only that consumer's projection, surfaced on the pool (an Event or condition naming the namespace), while the pool's own children and every other consumer's projection still reconcile.
+A unit case beside <code>TestEgressProxyReconcile_ForeignProjectionsDoNotStallThePool</code> pins it.</p>
 
 
 

@@ -3058,6 +3058,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Five boundary slips confirmed from source on 2026-11-09, each narrow and none needing a major to fix.</strong> Nothing was run, so each result …</td>
 </tr>
 <tr>
+<td><a href="Q1335/">Q1335</a></td>
+<td>A consumer's unwritable projected Secret stalls a provider's EgressProxy</td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A granted, opted-in consumer namespace can pre-create a Secret at <code>proxyAttributionName(&lt;provider-ns&gt;, &lt;proxy&gt;)</code> that the apiserver will …</td>
+</tr>
+<tr>
 <td><a href="Q822/">Q822</a></td>
 <td><a href="../development/testing/#the-fast-gates-fan-out-past-the-heavy-build-semaphore">Three unrelated suites fail under concurrent load and pass on rerun</a></td>
 <td><code>flake</code> <code>ci</code> <code>tests</code></td>
@@ -3248,14 +3256,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>"Untrusted" is a posture an operator assembles by hand today, and nothing says what the platform would apply if it were a declared thing.</td>
-</tr>
-<tr>
-<td><a href="Q1324/">Q1324</a></td>
-<td><a href="../plan/security-audit-2026-11/#egress-proxy-sharing-leads">Validate four egress proxy sharing leads from the security audit</a></td>
-<td><code>security</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
 </tr>
 <tr>
 <td><a href="Q1325/">Q1325</a></td>
