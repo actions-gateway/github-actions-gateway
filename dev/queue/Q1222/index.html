@@ -2660,8 +2660,9 @@
 <h1 id="define-what-a-declared-untrusted-runner-class-would-mean">Define what a declared untrusted runner class would mean<a class="headerlink" href="#define-what-a-declared-untrusted-runner-class-would-mean" title="Permanent link">&para;</a></h1>
 <p>"Untrusted" is a posture an operator assembles by hand today, and nothing says what the platform would apply if it were a declared thing.
 This is the third of three gaps <a href="../../plan/secure-multi-tenant-oss-ci/#open-decisions-the-map-surfaced">the multi-tenant goal</a> surfaced.</p>
-<p>Blocked by <a href="../Q1220/">Q1220</a>: a class would bundle what it decides, so defining the class first would fix its answer before it is measured.
-The credential half is settled: the plan doc's <a href="../../plan/secure-multi-tenant-oss-ci/#credentials-a-job-can-read">credential list</a> found nothing to narrow per class, so the class carries no credential item.</p>
+<p>Its two prerequisites are settled.
+The credential half: the plan doc's <a href="../../plan/secure-multi-tenant-oss-ci/#credentials-a-job-can-read">credential list</a> found nothing to narrow per class, so the class carries no credential item.
+The fork half (Q1220, 2026-11-10): every <code>RunnerSet</code> refuses fork pull request jobs by default (<a href="../Q1330/">Q1330</a>), so accepting them is what a declared untrusted class would switch on.</p>
 <p><strong>Today's assembly</strong> is the Kata <code>ClusterRunnerTemplate</code>, the registry mirrors and their wiring, a tenant namespace with no allow-all egress rule, and a mirror topology choice (<a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">kata-dind-workloads.md</a>).
 The goal doc's Definition of Done #1 already declines one shape of this: shipping the Kata template as a cluster default, because a default template applies to every <code>RunnerSet</code> naming none.
 It also records that the moat review rejected building the surface while its dependencies were open, so this row asks for the meaning and not an API.</p>

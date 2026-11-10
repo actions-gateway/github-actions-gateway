@@ -3266,7 +3266,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <tr>
 <td><code>networkPolicy</code></td>
 <td>None; a NetworkPolicy rule</td>
-<td>The collector as an egress peer, which the GMC opens for the AGC alone. Admission requires an <code>endpoint</code>.</td>
+<td>The collector as an egress peer, which the GMC opens for the AGC alone. Admission requires an <code>endpoint</code>, and a <code>cidr</code> peer no broader than <code>/16</code> (IPv4) or <code>/48</code> (IPv6) and not link-local.</td>
 </tr>
 <tr>
 <td><code>sampler</code></td>

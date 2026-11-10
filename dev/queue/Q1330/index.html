@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1220/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1330/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Decide what GAG refuses to run for a fork pull request - GitHub Actions Gateway</title>
+        <title>Refuse fork pull request jobs by default on every RunnerSet - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#decide-what-gag-refuses-to-run-for-a-fork-pull-request" class="md-skip">
+        <a href="#refuse-fork-pull-request-jobs-by-default-on-every-runnerset" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Decide what GAG refuses to run for a fork pull request
+              Refuse fork pull request jobs by default on every RunnerSet
             
           </span>
         </div>
@@ -2657,17 +2657,62 @@
   
 
 
-<h1 id="decide-what-gag-refuses-to-run-for-a-fork-pull-request">Decide what GAG refuses to run for a fork pull request<a class="headerlink" href="#decide-what-gag-refuses-to-run-for-a-fork-pull-request" title="Permanent link">&para;</a></h1>
-<p>GAG cannot tell a fork pull request's job from any other today, so it can neither refuse one nor route it to a tighter runner shape.
-This is the first of three gaps <a href="../../plan/secure-multi-tenant-oss-ci/#open-decisions-the-map-surfaced">the multi-tenant goal</a> surfaced, and the untrusted-PR claim waits on it.</p>
-<p><strong>What a fork job can hold is the repository's decision, not GAG's.</strong> Per GitHub's documentation, unmeasured here, a <code>pull_request</code> run from a fork gets no repository secrets and a read-only <code>GITHUB_TOKEN</code>, while <code>pull_request_target</code> runs the base repository's workflow with its secrets.
-A workflow that checks out the fork's head under <code>pull_request_target</code> hands those secrets to fork code, and no runner-side control undoes that.
-The goal doc already accepts this as residual risk; what it has not decided is whether GAG should refuse the shape when it sees it.</p>
-<p><strong>What GAG could see is unmodelled.</strong> The scale-set fixture carries <code>eventName</code> and <code>jobWorkflowRef</code> (<code>scaleset/types_test.go:54:"eventName": "push",</code>), mirroring upstream's <code>JobMessageBase</code>, and <code>JobMessage</code> in <code>scaleset/types.go</code> models neither.
-That fixture is hand-written, so whether a live <code>JobAssigned</code> carries them is unchecked.
-<code>eventName</code> would also separate <code>pull_request</code> from <code>pull_request_target</code> without saying whether the head is a fork.</p>
-<p><strong>Measure:</strong> capture a live <code>JobAssigned</code> for a fork <code>pull_request</code> run and a <code>pull_request_target</code> run against a test repository, and record which fields distinguish the two cases, and whether any names the head repository.
-<strong>Ask:</strong> whether refusing a job by event is GAG's job at all, given that a workflow already chooses its runner by label and GitHub's fork-approval setting already gates first-time contributors; and if it is, whether refusal happens at acquisition or as a scheduling error the workflow run shows.</p>
+<h1 id="refuse-fork-pull-request-jobs-by-default-on-every-runnerset">Refuse fork pull request jobs by default on every RunnerSet<a class="headerlink" href="#refuse-fork-pull-request-jobs-by-default-on-every-runnerset" title="Permanent link">&para;</a></h1>
+<p>A fork pull request can rewrite <code>runs-on</code> to reach a trusted <code>RunnerSet</code>, because a <code>pull_request</code> run executes the pull request's merge commit, whose workflow file carries the fork's edits.
+GitHub's runner groups cannot stop it: they scope by repository, and the selected-workflows restriction (Enterprise Cloud and Server only) pins ordinary workflows to a branch while a <code>pull_request</code> run's ref is <code>refs/pull/N/merge</code>, so per GitHub's docs it refuses every pull request rather than only forks.
+GitHub's approval setting keys on the contributor rather than the fork: even "all external contributors" exempts organization and repository members, and costs a maintainer's click per run where it applies, so this refusal is the only control that separates a fork's job from the repository's own.
+Decided in Q1220 (2026-11-10): <strong>every <code>RunnerSet</code> refuses fork jobs unless it explicitly accepts them</strong>, and a set meant for untrusted pull requests (the Kata posture) is the one that accepts.
+An opt-in is rejected: with no GitHub-side backstop, it leaves every adopter who never sets the field exposed.
+The default is a breaking change for any adopter running fork CI today, so it ships with an upgrade note naming the field that restores acceptance, and is cheapest inside a release that is already breaking.
+The decision and the GitHub-side controls it sits beside are in <a href="../../plan/secure-multi-tenant-oss-ci/#open-decisions-the-map-surfaced">the goal doc</a>.</p>
+<p><strong>The job message cannot mark a fork, so the refusal reads the run.</strong> Upstream <code>JobMessageBase</code> (actions/scaleset <code>716908e</code>, read 2026-11-09) carries <code>eventName</code> and <code>jobWorkflowRef</code> but no head-repository field, and the live <code>JobAssigned</code> captured 2026-07-26 has none (<a href="../../plan/scaleset-eviction-recovery/">scaleset-eviction-recovery.md</a>).
+The AGC already calls <code>GET /repos/{owner}/{repo}/actions/runs/{run_id}</code> for eviction recovery (<code>cmd/agc/internal/provisioner/eviction.go:690:// runConclusion calls GET /repos/{owner}/{repo}/actions/runs/{run_id}</code>), and decodes the head repository's name into <code>runState.headRepo</code> (<code>cmd/agc/internal/provisioner/eviction.go:750:headBranch: run.HeadBranch, headSHA: run.HeadSHA, headRepo: run.HeadRepository.FullName,</code>) and the event into <code>runState.event</code>.</p>
+<p><strong>The refusal compares names, never the <code>head_repository.fork</code> flag.</strong> A job is foreign when <code>headRepo</code> differs from the run's own <code>owner/repo</code>.
+The flag answers whether the head repository is a fork of anything, which is a different question, measured 2026-11-10:</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th><code>head_repository.full_name</code></th>
+<th><code>fork</code></th>
+<th>Foreign by name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>actions/runner</code>, 100 <code>pull_request</code> runs</td>
+<td>44 a contributor's fork (e.g. <code>jenseng/runner</code>), 56 <code>actions/runner</code></td>
+<td><code>true</code> on the 44, <code>false</code> on the 56</td>
+<td>agrees on all 100</td>
+</tr>
+<tr>
+<td><code>karlkfi/gag-q215-fork</code> (itself a fork), a pull request from a branch of that same repository (run <code>42869194507</code>)</td>
+<td><code>karlkfi/gag-q215-fork</code></td>
+<td><code>true</code></td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>So the flag refuses every pull request on a repository that is itself a fork, and the comparison does not.
+The probe pull request (<code>karlkfi/gag-q215-fork#1</code>) and its branch were closed and deleted after the read.</p>
+<p><strong>Open in this row, each to settle before the field is written</strong> (<a href="../../development/api-review/">api-review.md</a>):</p>
+<ul>
+<li>Where the refusal happens: not acquiring leaves the job queued with nothing on the run page, while acquiring and failing it shows the contributor why.
+  Whether the AGC can fail an acquired job visibly without running a runner is unmeasured; <code>force-cancel</code> (<code>cmd/agc/internal/provisioner/abandoned.go:120:// forceCancelRun calls POST</code>) is the existing call nearest to it.</li>
+<li>What happens when the run lookup fails or the identity is absent (<code>RunIdentity</code> returns <code>ok=false</code>): a refusing set fails closed, which is the secure default, but costs a refused pull request job on every refusing set per GitHub API outage.</li>
+<li><strong>The refusal must also check the event, or it refuses the base repository's own <code>pull_request_target</code> workflows.</strong> A <code>pull_request_target</code> run triggered by a fork pull request reports the fork as its head repository: 22 of <code>cli/cli</code>'s last 100 such runs did (e.g.
+  <code>shounakjoshi88-a11y/cli</code>, read 2026-11-10).
+  Its workflow comes from the base, so a fork cannot retarget <code>runs-on</code> there; refusing it would refuse the maintainers' code, such as a triage workflow.
+  <code>runState.event</code> already carries the event to scope the refusal.</li>
+<li><strong>The scope is every event that runs the merge commit, not <code>pull_request</code> alone.</strong> GitHub's events reference (<code>github/docs</code> <code>f309096</code>) gives <code>pull_request_review</code> and <code>pull_request_review_comment</code> the same <code>GITHUB_REF</code>, <code>refs/pull/N/merge</code>, so a fork can add either trigger beside a trusted label.
+  What those runs report as <code>head_repository</code> is unmeasured: 11 public repositories with <code>pull_request_review</code> runs had no fork-headed run in their last 100, and <code>pull_request_review_comment</code> was not checked (reviewer's read, 2026-11-10).</li>
+<li><strong>An empty <code>headRepo</code> reads as foreign, deliberately.</strong> A deleted fork leaves the run's head repository empty, and a refusing set refuses that job rather than guessing.</li>
+<li><strong>Compare the names case-insensitively.</strong> GitHub resolves repository names case-insensitively (<code>gh api repos/ACTIONS/Runner</code> answers <code>actions/runner</code>, read 2026-11-10), and the run's own <code>owner/repo</code> comes from the job message while <code>headRepo</code> comes from REST; whether the two can differ in case is unmeasured.</li>
+<li>One extra REST call per pull request job on every refusing set, against the installation's rate limit.
+  Only the three merge-commit events need it: <code>eventName</code> is on the job message itself (seen live on a <code>JobAssigned</code>, 2026-07-26), so a <code>push</code> or <code>schedule</code> job is decided without a lookup.
+  The field is best-effort and <code>omitempty</code> (<code>scaleset/types.go:221:EventName      string</code>), so an absent <code>eventName</code> takes the lookup; skipping it would admit that job unchecked.</li>
+</ul>
+<p>The security audit's lead on a fork naming a dogfood scale-set label (<a href="../Q1326/">Q1326</a>) is the first consumer.</p>
 
 
 

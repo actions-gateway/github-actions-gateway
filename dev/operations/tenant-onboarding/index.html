@@ -4568,6 +4568,7 @@ Instead you put the non-secret App identity (<code>appId</code>/<code>installati
 Vault's <code>address</code> is not itself a NetworkPolicy-expressible peer, so set <code>signer.vault.networkPolicy</code> (above) to identify Vault — a <code>namespaceSelector</code>/<code>podSelector</code> for an in-cluster Vault, or a <code>cidr</code> for an external one.
 The GMC then opens a <strong>scoped</strong> AGC→Vault egress rule (that peer, on the Vault API port from <code>address</code>) on the AGC NetworkPolicy automatically — you no longer add it by hand.
 If you leave <code>networkPolicy</code> unset on a policy-enforcing CNI (Calico/Cilium — the production recommendation), the AGC's Vault login will be dropped, so set it; on a non-enforcing CNI (kindnet) it is inert and may be omitted.
+A <code>cidr</code> can be no broader than <code>/16</code> for IPv4 or <code>/48</code> for IPv6 and cannot be link-local, so name Vault's address or its subnet (<a href="../troubleshooting/#egress-peer-cidr-rejected-by-admission">what admission refuses</a>).
 As with all egress rules, it is enforced only by a policy-aware CNI.
 The field is a shared <code>EgressPeer</code> type (Q204) — the optional <code>port</code> overrides the address-derived port and is normally left unset; <code>spec.tracing.networkPolicy</code> is the same type, and future egress peers such as a cloud KMS will be too, so the example shape stays stable.</p>
 </blockquote>

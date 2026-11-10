@@ -4118,7 +4118,7 @@ That is what lets the reading move the condition where the self-report deliberat
 </ul>
 <h4 id="a-scoped-agc-egress-policy-carries-no-registry-allowance">A scoped AGC egress policy carries no registry allowance<a class="headerlink" href="#a-scoped-agc-egress-policy-carries-no-registry-allowance" title="Permanent link">&para;</a></h4>
 <p>The default policy admits 443 with no <code>to:</code> restriction, so the read works out of the box.
-An install that narrows egress with <code>apiServerCIDRs</code> closes the registry along with everything else, and an FQDN-mode allowlist does not reopen it either, because <code>githubEgressFQDNs</code> lists no registry host and so would not admit <code>ghcr.io</code> even for the default worker image.
+An install that narrows egress with <code>apiServerCIDRs</code> closes the registry along with everything else that rule reached, and an FQDN-mode allowlist does not reopen it either, because <code>githubEgressFQDNs</code> lists no registry host and so would not admit <code>ghcr.io</code> even for the default worker image.
 In both cases the read fails, the verdict falls back to the tag, and the failure reaches the condition message.
 That is the designed fallback rather than a defect, which is what makes doing nothing a real option here.</p>
 <p><strong>The decision is to leave it closed.</strong> Scoping the AGC's egress is the operator choosing to shrink what a compromised AGC can reach, and a registry allowance widens exactly that, in the one direction the scoping exists to narrow.
@@ -4747,12 +4747,23 @@ The live no-PEM round-trip is covered by an in-cluster (dev-mode) Vault kind e2e
 <p><strong>NetworkPolicy egress to Vault (Q202).</strong> The per-tenant AGC NetworkPolicy default-denies egress except DNS + GitHub + the kube API.
 Vault's <code>address</code> is an opaque URL, not a selectable peer, so the GMC takes the peer from <code>signer.vault.networkPolicy</code>: a pod/namespace selector (in-cluster Vault) or a CIDR (external Vault).
 When set, the GMC adds a <strong>scoped</strong> AGC→Vault egress rule — that one peer on the Vault API port parsed from <code>address</code> — to the per-gateway AGC NetworkPolicy only (worker pods never get it).
-It is emitted <strong>only</strong> for <code>credentials.type: WorkloadIdentity</code> with a Vault signer; a possession-model (<code>githubApp</code>) gateway keeps strict default-deny and the rule is a strict tightening that is only ever added, never a broaden-to-all-egress.
+It is emitted <strong>only</strong> for <code>credentials.type: WorkloadIdentity</code> with a Vault signer; a possession-model (<code>githubApp</code>) gateway keeps strict default-deny.
 Leave <code>networkPolicy</code> unset on a non-enforcing CNI (kindnet) or to manage the rule out of band — the egress posture is unchanged in that case.
 As with every egress negative this is enforced only by a policy-aware CNI.</p>
 <p><code>signer.vault.networkPolicy</code> is a shared <code>EgressPeer</code> (selector | CIDR + optional explicit <code>port</code>) — the one descriptor tenant-delegated egress holes reuse, so the v2 API freezes one consistent shape (Q204).
-For Vault the <code>port</code> is left unset and derived from <code>address</code>; the secure default is unchanged — still a single scoped peer, never a broaden-to-all-egress.</p>
-<p><strong>NetworkPolicy egress to a trace collector.</strong> <code>spec.tracing.networkPolicy</code> is the second consumer: one peer the operator names, on the port parsed from <code>endpoint</code>, on the AGC-only policy.
+For Vault the <code>port</code> is left unset and derived from <code>address</code>; the default is unchanged: no peer, and no rule.</p>
+<p><strong>What bounds the peer.</strong> The gateway's author writes it, so it is tenant input on a policy the platform otherwise authors, and the rule is added beside the API-server rule, where <code>apiServerCIDRs</code> does not narrow it.
+Admission bounds the CIDR form.
+A <code>cidr</code> can be no broader than <code>/16</code> for IPv4 or <code>/48</code> for IPv6, cannot be link-local (<code>169.254.0.0/16</code>, <code>fe80::/10</code>), and cannot cover four addresses where a cloud serves instance metadata or platform services outside link-local space: <code>100.100.100.200</code> (Alibaba Cloud), <code>168.63.129.16</code> (Azure), <code>fd00:ec2::254</code> (AWS) and <code>fd20:ce::254</code> (Google Cloud).
+The floor is a policy number, chosen from what a single CIDR has to cover: <code>/16</code> is the largest AWS VPC, which is what a tenant names to reach a load balancer with one address per zone, and <code>/48</code> is one IPv6 site.
+The floor is also what refuses <code>0.0.0.0/1</code>, which overlaps no link-local range, and it makes the link-local test exact, because an admitted CIDR that touches a link-local block lies wholly inside it.
+The widest admitted peer is therefore 65,536 IPv4 addresses on one port, on the AGC-only policy, and never a link-local address or one of the four listed (<code>TestV2_EgressPeer_CIDRAdmission</code>).
+Four things stay open.
+The address list is the ones known on 2026-11-10, not every address that serves node credentials: a cloud that serves them elsewhere is not refused, and neither is an IPv6 form that embeds <code>169.254.169.254</code> for a translator, such as <code>64:ff9b::a9fe:a9fe</code>.
+A selector peer is not bounded, because its reach is set by labels the schema cannot see: an empty <code>namespaceSelector</code> reaches every pod in the cluster on that port, though no node address and nothing outside the cluster, and the destination's own ingress policy still applies.
+A peer stored before <code>v2.0.0</code> is not re-checked until its <code>cidr</code> changes, so a stored <code>0.0.0.0/0</code> keeps its rule until an operator <a href="../../operations/upgrade/#action-required-if-a-networkpolicy-peer-names-a-broad-or-link-local-cidr-the-value-is-now-rejected">finds and narrows it</a>.
+And no operator allowlist gates the peer: a platform that wants one can refuse the field with its own admission policy.</p>
+<p><strong>NetworkPolicy egress to a trace collector.</strong> <code>spec.tracing.networkPolicy</code> is the second consumer: one peer the gateway's author names, bounded the same way, on the port parsed from <code>endpoint</code>, on the AGC-only policy.
 The GMC never derives a peer from <code>endpoint</code>, so a gateway with tracing on and no peer stays default-deny, and worker pods never gain the rule.
 <code>spec.tracing.caBundleRef</code> is scoped the same way: the bundle replaces the system roots for the export connection only, and joins neither the trust the AGC uses for GitHub nor any worker pod's.
 An unresolved bundle is advisory rather than fail-closed, because traces are telemetry and a lost bundle should not stop CI: the mount is optional, and with no file the exporter keeps verifying against the system roots, so the failure mode is no spans and never an unverified connection (<code>TestInit_UnusableCertificateFileKeepsVerifying</code>).

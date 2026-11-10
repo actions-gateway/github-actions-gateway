@@ -2680,7 +2680,7 @@ So the four reopen on either of two events:</p>
   The default workflow token is read-only, but a job that asks for <code>contents: write</code> or <code>actions: write</code> holds a token no tag ruleset stops.
   Whether such a token can create a <code>v*</code> tag that starts <code>publish.yml</code>, or dispatch it, was not tested; the Dependabot lead below is the job to trace it from.</li>
 </ul>
-<p>The fork-pull-request <code>runs-on</code> lead belongs with <a href="../Q1220/">Q1220</a>, which decides what the gateway refuses to run for a fork.</p>
+<p>The fork-pull-request <code>runs-on</code> lead is closed by a control once <a href="../Q1330/">Q1330</a> lets a <code>RunnerSet</code> refuse fork jobs; until then GitHub's approval setting is what holds it (<a href="../../operations/security-operations/#fork-pull-requests-choose-their-own-runner-label">operator guidance</a>).</p>
 <p><strong>Ask (answered):</strong> the first four settled from the repository's collaborators, rulesets and environments, read with <code>gh api</code> on 2026-11-09.
 <strong>Measure:</strong> the other three have a local test in the plan doc.</p>
 <p><strong>Done when</strong> each lead is either confirmed and fixed, refuted with the measurement recorded, or written into <code>05-security.md</code> as an accepted residual with its bound.

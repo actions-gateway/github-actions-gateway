@@ -2696,6 +2696,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Job intake: bind every tenant to a GitHub runner group">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fork-pull-requests-choose-their-own-runner-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fork pull requests choose their own runner label
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3548,6 +3565,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Job intake: bind every tenant to a GitHub runner group">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fork-pull-requests-choose-their-own-runner-label" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fork pull requests choose their own runner label
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -4003,6 +4037,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <li><a href="#manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)</a></li>
 <li><a href="#cis-benchmark-posture--kube-bench-manual-pre-production">CIS-benchmark posture — kube-bench (manual, pre-production)</a></li>
 <li><a href="#job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group</a></li>
+<li><a href="#fork-pull-requests-choose-their-own-runner-label">Fork pull requests choose their own runner label</a></li>
 <li><a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a></li>
 <li><a href="#managing-egress-at-scale">Managing egress at scale</a></li>
 <li><a href="#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">Expressing GitHub egress by FQDN: the <code>egressPolicyMode</code> opt-in</a></li>
@@ -4561,6 +4596,20 @@ The pod isolation described above is untouched; what is unbounded is the intake.
 That is deliberate: the fallback would widen the boundary at the moment the name was mistyped.</p>
 <p>Onboarding walkthrough and failure modes: <a href="../tenant-onboarding/#bind-a-runner-set-to-a-github-runner-group">tenant onboarding</a>.
 Threat-model rationale: <a href="../../design/05-security/">design 5.2</a>.</p>
+<h3 id="fork-pull-requests-choose-their-own-runner-label">Fork pull requests choose their own runner label<a class="headerlink" href="#fork-pull-requests-choose-their-own-runner-label" title="Permanent link">&para;</a></h3>
+<p>A <code>pull_request</code> run executes the pull request's merge commit (<code>refs/pull/N/merge</code>), whose workflow file carries the fork's edits, so a fork can rewrite <code>runs-on</code> to name any label your runner group admits for that repository.
+Routing fork jobs to an untrusted runner set by label is therefore a convention, not a control.
+GAG does not tell a fork job from any other today, so the controls that hold are GitHub's:</p>
+<ul>
+<li><strong>Require approval for all external contributors</strong> (repository or organization Settings → Actions → General).
+  The two first-time settings stop asking once a user has had any commit or pull request merged into the repository, which one accepted typo fix earns.
+  GitHub checks both the pull request's author and the actor of the triggering event.
+  Even this setting exempts the repository's members and owners and the organization's members, so it keys on who opened the pull request, not on whether it came from a fork.</li>
+<li><strong>Runner groups separate repositories, not forks.</strong> <code>allows_public_repositories: false</code>, GitHub's default, keeps a group off every public repository, so its own pull requests lose it too.
+  The selected-workflows restriction is documented for Enterprise Cloud and Server only, and pins an ordinary workflow to a branch; a <code>pull_request</code> run's ref is <code>refs/pull/N/merge</code>, so as documented it refuses every pull request, fork or not.</li>
+</ul>
+<p>So on a public repository GitHub's controls separate contributors and repositories, and none of them refuses a job because its head is a fork.
+A <code>RunnerSet</code> refusal of fork jobs, on by default with an explicit accept for an untrusted set, is <a href="../../queue/Q1330/">Q1330</a>.</p>
 <h2 id="tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening<a class="headerlink" href="#tenant-egress-posture--deliberate-widening" title="Permanent link">&para;</a></h2>
 <p><strong>The secure default is controller-managed and not opt-in.</strong> For every tenant, the GMC reconciles three NetworkPolicies that confine worker (and AGC) egress to exactly what the design requires: DNS to the cluster DNS service only, and all GitHub-bound traffic through the per-tenant egress proxy (whose source IPs are attributable).
 Worker pods cannot reach arbitrary destinations directly — that is the per-tenant egress-IP isolation property, and it is present automatically the moment a tenant is provisioned.

@@ -3651,6 +3651,7 @@ Those four probe three destinations, the upstream twice, by curl and by <code>do
 Run the negatives on <strong>every</strong> run rather than once: a policy that stops selecting the worker is invisible in a green suite.</p>
 <h3 id="what-this-posture-does-not-cover">What this posture does not cover<a class="headerlink" href="#what-this-posture-does-not-cover" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>A fork can name a different runner label.</strong> The posture holds only for jobs that land on the untrusted runner set, and a fork edits <code>runs-on</code>; see <a href="../security-operations/#fork-pull-requests-choose-their-own-runner-label">Fork pull requests choose their own runner label</a>.</li>
 <li><strong>The job still reaches GitHub</strong>, which is what a runner is for.
   Data a job can read is data it can push to a repository it has a token for.</li>
 <li><strong>Cache misses reach upstream from the mirror pod</strong>, which carries no workload label and so keeps the free egress a pull-through cache needs.
