@@ -22,6 +22,7 @@ That is a page telling adopters nine things are in progress when they are waitin
 | **1.9** | The Rule 4b overlap: `v2` served beside `v2beta1`, storage still `v2beta1`. The admission reject plus pre-upgrade check from Q1085, then [v2-ga.md](v2-ga.md) Phase 2, then the validating webhooks retyped onto `v2` (Q1150) | [release-1.9.md](archive/release-1.9.md) |
 | **1.10** | The storage advance: `v2` becomes the storage version and Q1086's sweep rewrites every stored object, with every version still served. Gated with it, three scale-set correctness fixes (Q1152, Q1153, Q1154) and the per-set egress-audit flag (Q1069) | [release-1.10.md](archive/release-1.10.md) |
 | **2.0** | v2 GA: four coupled removals, `v1alpha1`, `v2alpha1`, `v2beta1`, and classic acquisition, in one apply on clusters 1.10 has already migrated. Scoped 2026-10-09; widened 2026-10-25 to gate on Q555's flaky-job detection and the recovery rows split from it | [v2-ga.md](v2-ga.md) |
+| **2.1** | Automatic recovery, finished: the dogfood readings flaky-job detection and the first retry class shipped without, the remaining futility checks, job-granular re-run, and the egress-proxy and Docker-in-Docker retry classes. Scoped 2026-11-09 as the release's headline | [release-2.1.md](release-2.1.md) |
 
 ## Why 1.6 exists rather than folding into 1.5
 

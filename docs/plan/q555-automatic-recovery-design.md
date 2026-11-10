@@ -571,4 +571,4 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.
    Three departures from Component 1: `JobCompleted` carries no attempt number, so a later attempt is attributed from GAG's re-runs by job name, each re-run paired at most once per job ([04-operational-flows.md](../design/04-operational-flows.md#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555)); event and workflow ref are read from the completion rather than carried from the assignment; and the in-memory copy is an index of failure keys, loaded on first use.
 5. Q1183 (built): the breaker and the out-of-memory class, on the disruption arms' re-run window; Q1244 (built) moved its re-run onto the `pending` map, Q1245 (built) added the alert, the gauge and the annotation, and job-granular re-run still waits on M6.
-6. Q1178 (built); Q1184 after its review.
+6. Q1178 and Q1184 (built).
