@@ -165,6 +165,12 @@ type RunnerTemplateCustomValidator struct {
 	// a tenant may name on a worker pod. A nil allowlist forbids every named class
 	// (the secure default), matching the v1 ActionsGateway validator.
 	PriorityClasses *allowlist.PriorityClassAllowlist
+
+	// AllowUncheckedPodShape skips the baseline and volume-type rules, leaving
+	// tenant pod shape to the platform's own admission policy
+	// (--allow-unchecked-runner-template-pod-shape). The API-credential rule and the
+	// older rules still apply. False is the secure default.
+	AllowUncheckedPodShape bool
 }
 
 // ValidateCreate rejects a RunnerTemplate carrying reserved pod fields or an
@@ -206,6 +212,9 @@ func (v *RunnerTemplateCustomValidator) validate(oldSpec, spec *agcv2.RunnerTemp
 	}
 	if err := validateNoAPICredentialProjection(&spec.PodTemplate.Spec); err != nil {
 		return err
+	}
+	if v.AllowUncheckedPodShape {
+		return nil
 	}
 	if err := validateVolumeTypes(&spec.PodTemplate); err != nil {
 		return err
@@ -274,10 +283,12 @@ func (v *ClusterRunnerTemplateCustomValidator) ValidateDelete(_ context.Context,
 // manager's scheme must already include agcv2 (the GMC registers it at
 // startup). priorityClasses is the shared platform PriorityClass allowlist the
 // namespaced kind's podTemplate is gated against (Q289); nil forbids every named
-// class, the secure default.
-func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist) error {
+// class, the secure default. allowUncheckedPodShape skips the namespaced kind's
+// baseline and volume-type rules, for a platform whose own admission policy
+// decides tenant pod shape; false is the secure default.
+func SetupRunnerTemplateWebhooksWithManager(mgr ctrl.Manager, priorityClasses *allowlist.PriorityClassAllowlist, allowUncheckedPodShape bool) error {
 	if err := ctrl.NewWebhookManagedBy(mgr, &agcv2.RunnerTemplate{}).
-		WithValidator(&RunnerTemplateCustomValidator{PriorityClasses: priorityClasses}).
+		WithValidator(&RunnerTemplateCustomValidator{PriorityClasses: priorityClasses, AllowUncheckedPodShape: allowUncheckedPodShape}).
 		Complete(); err != nil {
 		return fmt.Errorf("register RunnerTemplate webhook: %w", err)
 	}

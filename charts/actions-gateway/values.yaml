@@ -91,6 +91,18 @@ wrapper:
 # default.
 allowFloatingImageTags: false
 
+# allowUncheckedRunnerTemplatePodShape=true passes
+# --allow-unchecked-runner-template-pod-shape to the GMC, which then skips the
+# two pod-shape rules its webhook applies to a namespaced RunnerTemplate: the Pod
+# Security Standards baseline level, and the volume types the restricted level
+# allows. Set it only when the platform decides tenant pod shape with its own
+# admission policy (a ValidatingAdmissionPolicy or a policy engine): such a policy
+# can refuse more than the webhook does but cannot admit what the webhook refuses.
+# With it on and no such policy, a tenant in a privileged-profile namespace can
+# author a worker pod that reaches the node. Leaving it false keeps the secure
+# default.
+allowUncheckedRunnerTemplatePodShape: false
+
 # allowedPriorityClasses is the platform allowlist of cluster-scoped PriorityClass
 # names that tenant RunnerSets may reference in priorityTiers. It is passed to
 # the GMC as --allowed-priority-classes. The platform admin pre-creates these

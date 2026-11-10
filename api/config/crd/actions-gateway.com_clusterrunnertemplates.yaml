@@ -84,7 +84,9 @@ spec:
                   baseline level and to the volume types the restricted level allows (configMap, csi,
                   downwardAPI, emptyDir, ephemeral, image, persistentVolumeClaim, projected, secret),
                   whatever security profile the namespace is on. A worker shape past either belongs
-                  in a ClusterRunnerTemplate, which is exempt.
+                  in a ClusterRunnerTemplate, which is exempt. A platform that decides tenant pod
+                  shape with its own admission policy can turn these two rules off on the GMC
+                  (--allow-unchecked-runner-template-pod-shape).
 
                   On both kinds it rejects a projected volume with a serviceAccountToken source, or
                   with a podCertificate source whose signerName begins with kubernetes.io, and the

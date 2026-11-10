@@ -318,7 +318,10 @@ func registerWebhooks(mgr ctrl.Manager, rc *resolvedConfig) error {
 	// v2 M2: reserved-pod-field validating webhooks for the RunnerTemplate data
 	// kinds. Q289: the namespaced kind's podTemplate.spec.priorityClassName is gated
 	// against the same platform PriorityClass allowlist as priorityTiers.
-	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, rc.priorityClassAllowlist); err != nil {
+	if rc.allowUncheckedRunnerTemplatePodShape {
+		setupLog.Info("WARNING: --allow-unchecked-runner-template-pod-shape is set; a namespaced RunnerTemplate is not held to Pod Security baseline or to the restricted volume types, so tenant pod shape depends on the platform's own admission policy")
+	}
+	if err := webhookv2.SetupRunnerTemplateWebhooksWithManager(mgr, rc.priorityClassAllowlist, rc.allowUncheckedRunnerTemplatePodShape); err != nil {
 		return fmt.Errorf("create RunnerTemplate webhook: %w", err)
 	}
 	// Q242 G.1: gate tenant-authored EgressProxy destinationFQDNs/destinationCIDRs

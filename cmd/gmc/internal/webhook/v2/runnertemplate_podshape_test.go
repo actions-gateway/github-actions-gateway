@@ -177,6 +177,35 @@ func TestClusterRunnerTemplate_PodShape_Create(t *testing.T) {
 	}
 }
 
+// TestRunnerTemplate_PodShape_Unchecked covers the platform opt-out: the baseline and
+// volume-type rules are skipped, and the rules that are floors on every install
+// (a projected API credential, a privileged container) are not.
+func TestRunnerTemplate_PodShape_Unchecked(t *testing.T) {
+	v := &RunnerTemplateCustomValidator{AllowUncheckedPodShape: true}
+	for _, tc := range podShapeCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			rt := newRunnerTemplate("team-a", "rt", nil)
+			rt.Spec = shapedSpec(tc.mutate)
+			_, err := v.ValidateCreate(context.Background(), rt)
+			if !bindsBothKinds(tc.wantErr) {
+				require.NoError(t, err, "the opt-out admits what the baseline and volume-type rules refuse")
+				return
+			}
+			require.Error(t, err, "the API-credential rule is not part of the opt-out")
+			assert.Contains(t, err.Error(), tc.wantErr)
+		})
+	}
+
+	t.Run("a privileged container is still refused", func(t *testing.T) {
+		privileged := true
+		rt := newRunnerTemplate("team-a", "rt", nil)
+		rt.Spec = shapedSpec(runnerSecurityContext(&corev1.SecurityContext{Privileged: &privileged}))
+		_, err := v.ValidateCreate(context.Background(), rt)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "privileged containers are not permitted")
+	})
+}
+
 // TestPodShapeVersion_IsPinned: the rules evaluate at a named Pod Security
 // Standards version. At the library's latest, a dependency bump carrying a stricter
 // upstream check would refuse a manifest the previous release admitted.

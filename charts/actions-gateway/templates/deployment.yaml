@@ -62,6 +62,11 @@ spec:
         # DEV/TEST ONLY: disables AGC_IMAGE/PROXY_IMAGE digest-pin enforcement.
         - --allow-floating-image-tags
         {{- end }}
+        {{- if .Values.allowUncheckedRunnerTemplatePodShape }}
+        # Tenant pod shape is left to the platform's own admission policy: the
+        # webhook skips the baseline and volume-type rules on a RunnerTemplate.
+        - --allow-unchecked-runner-template-pod-shape
+        {{- end }}
         {{- with .Values.allowedPriorityClasses }}
         # Platform allowlist of cluster-scoped PriorityClass names tenant
         # priorityTiers may reference. Empty/unset rejects all (secure default).
