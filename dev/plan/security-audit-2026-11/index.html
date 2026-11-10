@@ -3338,13 +3338,13 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 </tr>
 <tr>
 <td><a href="#stricter-admission-rules">noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1322/">Q1322</a> (<code>2.0-gate</code>)</td>
+<td>validated at admission, rule added</td>
+<td>landed for <code>v2.0.0</code> (Q1322)</td>
 </tr>
 <tr>
 <td><a href="#stricter-admission-rules">noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1322/">Q1322</a> (<code>2.0-gate</code>)</td>
+<td>validated at admission, rule added</td>
+<td>landed for <code>v2.0.0</code> (Q1322)</td>
 </tr>
 <tr>
 <td><a href="#stricter-admission-rules">www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them</a></td>
@@ -3581,6 +3581,19 @@ Regression cases: extend TestResolveReferrerGitHubHosts in cmd/gmc/internal/cont
 <h3 id="noproxycidrs-admission-guard-does-not-model-comma-carrying-wildcard-port-qualified-or-ip-literal-no_proxy-forms">noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms<a class="headerlink" href="#noproxycidrs-admission-guard-does-not-model-comma-carrying-wildcard-port-qualified-or-ip-literal-no_proxy-forms" title="Permanent link">&para;</a></h3>
 <p><code>gmc-webhook-noproxy:matcher-misses-no-proxy-forms</code>: needs validation.
 Starts at <code>api/v2/egressproxy_types.go:208</code>.</p>
+<p><strong>Resolved for <code>v2.0.0</code>: the admission gap is real and the rule is added.</strong> The first blocker below is settled by running the consumer, Go's <code>net/http</code> on go1.27.3, in a child process per <code>NO_PROXY</code> value.
+The comma, <code>*</code>, <code>*.domain</code> and <code>host:port</code> forms each exempt the GitHub host.
+So does a hostname spelled in fullwidth letters, which the audit did not list: the client compares a non-ASCII name in its IDNA form.
+An address or CIDR entry exempts only a host that is itself an IP literal, so it matters for a <code>githubURL</code> written as an IP and never for a GitHub hostname.
+The client compares a trailing dot literally: a dot-only entry (<code>.</code>, <code>*.</code>) is the suffix <code>.</code> and exempts every host written with a trailing dot, which <code>githubURL</code> admits, while <code>github.com.</code> exempts <code>github.com.</code> and not <code>github.com</code>.
+The client ignores <code>*domain</code> with no dot and a bracketed IPv6 address with no port, and the rule does not model them.</p>
+<p><code>noproxy.ValidateEntries</code> now reads an entry the way that client does, and <code>TestMatchesAgreesWithNetHTTP</code> fails if the two disagree in either direction.
+It is stricter in four declared places.
+A port-qualified entry is refused whatever the port, because the guard is handed a host and not the port its traffic uses.
+The other three follow a second consumer, libcurl, which <code>git</code> and <code>curl</code> in a worker pod read the same <code>NO_PROXY</code> through: a leading-dot entry also matches the bare domain, a space or a tab separates entries as a comma does, and one trailing dot on the entry or the host is ignored.
+Those three were measured by hand against curl 8.7.1 on macOS on 2026-11-10, with an unresolvable host and a closed proxy port; no test pins them, because a test that runs <code>curl</code> would assert on the build host's tooling.
+An <code>EgressProxy</code> update re-judges the entries only when the list changes, so a stored value passes an unrelated edit.
+The second blocker stays open and the rule does not depend on it: whether exempted traffic leaves the pod was not measured, and neither was the libcurl in a worker image or the Actions runner's own parser.</p>
 <p>noproxy.hostnameMatches (cmd/gmc/internal/webhook/noproxy/noproxy.go:89-96) validates each array element as one hostname using equality or dot-suffix comparison, while the builders treat the array as fragments of a comma-separated NO_PROXY string (strings.Join with ',').
 An element is never split on commas before validation, a '<em>' or '</em>.' prefix and a ':port' suffix are compared literally, ValidateEntries skips CIDR and bare-IP entries unconditionally (noproxy.go:54), and the CRD puts no pattern on the items.</p>
 <p><strong>Blocked on:</strong></p>
@@ -3600,6 +3613,13 @@ Then, with a RunnerSet proxyRef under a gateway that has no defaultProxyRef, run
 <h3 id="noproxycidrsgithuburl-bypass-guard-ignores-proxyrefnamespace-so-a-shared-egressproxy-and-its-cross-namespace-referrers-are-never-compared-at-admission">noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission<a class="headerlink" href="#noproxycidrsgithuburl-bypass-guard-ignores-proxyrefnamespace-so-a-shared-egressproxy-and-its-cross-namespace-referrers-are-never-compared-at-admission" title="Permanent link">&para;</a></h3>
 <p><code>gmc-webhook-noproxy:cross-namespace-proxyref-unchecked</code>: needs validation.
 Starts at <code>api/v2/shared_types.go:202</code>.</p>
+<p><strong>Resolved for <code>v2.0.0</code>: the admission gap is real and the rule is added.</strong> The first blocker below is settled by the webhook unit tests and the envtest suite: with the namespace handling removed, the provider-side and consumer-side cases for a shared proxy are admitted, as the finding reads from source.
+Both directions now resolve <code>ProxyObjectRef.Namespace</code> and count a cross-namespace pair only where the proxy grants the referrer's namespace, the binding <code>resolveReferrerGitHubHosts</code> applies.
+A referrer naming a proxy that does not grant it is admitted without the proxy's entries being judged: the reference wires nothing, and a rejection would tell a tenant what another namespace's proxy excludes.
+The <code>EgressProxy</code> write that adds the grant is checked against the newly granted namespace's referrers, so the pair cannot be assembled grant-last.
+The proxy side lists gateways and <code>RunnerSet</code>s cluster-wide only for a proxy that grants a namespace, and on update only when <code>noProxyCIDRs</code> changed or a namespace was added.
+Each side's update judges only the pairs that write can newly bind, so a stored pair passes an unrelated edit.
+The other two blockers stay open and the rule does not depend on them; the envtest assertion on the projected share ConfigMap proposed below was not added, because it tests the downstream effect and not the rule.</p>
 <p>validateGitHubHostAgainstProxy takes a single namespace argument and its three callers (actionsgateway_webhook.go:79 and :96, runnerset_webhook.go:201) pass the referrer's namespace with ref.Name only; referrerGitHubHosts matches on ref.Name alone and scopes both Lists to the proxy's namespace.
 Neither was updated when ProxyObjectRef gained Namespace for cross-namespace sharing, unlike the reconcile-side resolveReferrerGitHubHosts.</p>
 <p><strong>Blocked on:</strong></p>

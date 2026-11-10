@@ -8222,13 +8222,63 @@ See <a href="../../design/05-security/#no-silent-profile-downgrades">§5.3 — N
 <a id="__codelineno-143-3" name="__codelineno-143-3" href="#__codelineno-143-3"></a>".corp.example" would route GitHub traffic (ghes.corp.example) around the
 <a id="__codelineno-143-4" name="__codelineno-143-4" href="#__codelineno-143-4"></a>per-tenant egress proxy, ...
 </code></pre></div>
-<p><strong>Likely cause.</strong> An <code>EgressProxy</code>'s <code>spec.noProxyCIDRs</code> entry NO_PROXY-matches a GitHub host: <code>github.com</code>, <code>.github.com</code>, <code>api.github.com</code>, <code>githubusercontent.com</code>, <code>ghcr.io</code>, your configured <code>githubURL</code> host (including a GitHub Enterprise Server host, which is the <code>githubURL</code> of every gateway that references the proxy, directly or via a <code>RunnerSet</code>), or an over-broad suffix like <code>.com</code> that covers them.</p>
-<p><strong>Why it is enforced.</strong> <code>noProxyCIDRs</code> is threaded into the AGC/worker <code>NO_PROXY</code> env var, where a hostname entry is a domain-suffix match.
-If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
-The check runs on <strong>both</strong> the proxy write and the gateway/<code>RunnerSet</code> write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting <code>EgressProxy</code> and entry.</p>
+<p><strong>Likely cause.</strong> An <code>EgressProxy</code>'s <code>spec.noProxyCIDRs</code> entry covers a GitHub host.
+The host is a public one, such as <code>github.com</code>, <code>api.github.com</code> or <code>ghcr.io</code>, or the <code>githubURL</code> host of a gateway that references the proxy, directly or through a <code>RunnerSet</code>, from the proxy's own namespace or from one it lists in <code>spec.sharing.allowedNamespaces</code>.
+That second kind is how a GitHub Enterprise Server host is protected.</p>
+<p>An entry covers a host in any of these forms:</p>
+<table>
+<thead>
+<tr>
+<th>Form</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The host, or a parent domain of it, with or without a leading dot</td>
+<td><code>github.com</code>, <code>.github.com</code>, <code>githubusercontent.com</code>, <code>.com</code></td>
+</tr>
+<tr>
+<td>Two values in one entry, joined by a comma, a space or a tab</td>
+<td><code>internal.example.com,github.com</code>, <code>internal.example.com github.com</code></td>
+</tr>
+<tr>
+<td>A wildcard</td>
+<td><code>*</code>, <code>*.github.com</code></td>
+</tr>
+<tr>
+<td>A host with a port, whatever the port</td>
+<td><code>github.com:443</code></td>
+</tr>
+<tr>
+<td>A host with a trailing dot, or a host without one where the <code>githubURL</code> host has it</td>
+<td><code>github.com.</code>, <code>ghes.corp.example</code> for <code>https://ghes.corp.example./my-org</code></td>
+</tr>
+<tr>
+<td>A lone dot, where a gateway's <code>githubURL</code> host ends in a dot</td>
+<td><code>.</code> for <code>https://ghes.corp.example./my-org</code></td>
+</tr>
+<tr>
+<td>A hostname spelled with non-ASCII letters</td>
+<td><code>ｇｉｔｈｕｂ.com</code></td>
+</tr>
+<tr>
+<td>An address or CIDR that contains a <code>githubURL</code> host written as an IP</td>
+<td><code>10.0.0.0/8</code> for <code>https://10.1.2.3/my-org</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why it is enforced.</strong> The GMC joins the entries with commas into the AGC's and the workers' <code>NO_PROXY</code>, and each form above exempts the host in the AGC's HTTP client or in libcurl, which <code>git</code> and <code>curl</code> in a worker pod use.
+That tenant's GitHub traffic would skip the per-tenant egress proxy, which defeats the egress-IP attribution that isolates tenants.
+The check runs on <strong>both</strong> the proxy write and the gateway/<code>RunnerSet</code> write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting <code>EgressProxy</code> and entry.
+A reference to a proxy in another namespace is compared once that proxy grants the referrer's namespace, and the write that adds the grant is checked too.</p>
 <p><strong>Resolution.</strong> Remove the GitHub-matching entry — GitHub must always traverse the proxy.
 <code>noProxyCIDRs</code> is for <em>internal</em> destinations only and accepts CIDRs (<code>10.0.0.0/8</code>), bare IPs, and non-GitHub domain suffixes (<code>svc.cluster.local</code>, <code>internal.example.com</code>).
-Note the guard cannot detect a <strong>CIDR/IP range</strong> that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility.</p>
+The guard does not detect a <strong>CIDR/IP range</strong> that covers the addresses a GitHub <em>hostname</em> resolves to: the AGC's client never resolves a name before matching, what the tools in a worker pod do was not measured, and GitHub's published ranges rotate.
+Never add those either; that residual is the operator's responsibility.</p>
+<p>An object stored before <code>v2.0.0</code> tightened this check keeps working.
+An edit that leaves an <code>EgressProxy</code>'s <code>noProxyCIDRs</code> and <code>allowedNamespaces</code> alone is accepted, and so is an edit to a gateway or <code>RunnerSet</code> that leaves its proxy reference alone.
+Changing the list, pointing a reference at the proxy, or deleting and re-creating either object is rejected until the entry is gone; the upgrade guide shows how to find <a href="../upgrade/#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected">the entries</a> and <a href="../upgrade/#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected">the shared-proxy pairs</a>.</p>
 <hr />
 <h2 id="privileged-worker-container-rejected-by-admission">Privileged Worker Container Rejected by Admission<a class="headerlink" href="#privileged-worker-container-rejected-by-admission" title="Permanent link">&para;</a></h2>
 <p><strong>Symptoms.</strong> A <code>RunnerTemplate</code> whose <code>podTemplate</code> requests a privileged container or init container is rejected by the GMC validating webhook:</p>

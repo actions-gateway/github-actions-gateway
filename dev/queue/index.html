@@ -3202,6 +3202,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Several alerts in <code>deploy/monitoring/prometheusrule.yaml</code> fire on <code>increase(&lt;counter&gt;[window]) &gt; 0</code>, among them …</td>
 </tr>
 <tr>
+<td><a href="Q1336/">Q1336</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/shared_agc_deployment.go">GMC brackets an IPv6 API-server NO_PROXY entry, which net/http ignores</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**On a cluster whose API server ClusterIP is IPv6, the GMC writes that address into the AGC's <code>NO_PROXY</code> in brackets, and Go's <code>net/http</code> …</td>
+</tr>
+<tr>
 <td><a href="Q1243/">Q1243</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/agent/pr-mergeability-watch.py">Mergeability watch reports no merge-queue eviction</a></td>
 <td><code>debt</code> <code>retro</code></td>
