@@ -2,6 +2,7 @@ package v2
 
 import (
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -13,17 +14,30 @@ import (
 // limits a pod's volumes to the types the restricted level allows.
 const restrictedVolumesCheckID psapolicy.CheckID = "restrictedVolumes"
 
+// reservedSignerPrefix marks the certificate signers the Kubernetes project
+// reserves. k8s.io/api v0.37.2 documents one, kubernetes.io/kube-apiserver-client-pod,
+// as issuing client certificates the apiserver accepts.
+const reservedSignerPrefix = "kubernetes.io"
+
+// podShapeVersion is the Pod Security Standards version both rules evaluate at.
+// It is pinned, not psaapi.LatestVersion(): the latest version moves with the
+// vendored k8s.io/pod-security-admission, so a dependency bump that carried a
+// stricter upstream check would refuse a manifest the previous release admitted.
+// Raising the pin is an API change: it is breaking whenever the newer version
+// forbids something this one allows.
+var podShapeVersion = psaapi.MajorMinorVersion(1, 37)
+
 // baselineEvaluator evaluates the Pod Security Standards baseline level and
-// volumeTypeEvaluator the restricted level's volume-type check alone, both at the
-// latest version the vendored k8s.io/pod-security-admission knows. They are the
-// checks the apiserver's PodSecurity admission plugin runs, so the webhook and a
-// baseline namespace agree on what a baseline pod is.
+// volumeTypeEvaluator the restricted level's volume-type check alone, both at
+// podShapeVersion. They are the checks the apiserver's PodSecurity admission plugin
+// runs, so the webhook and a baseline namespace at that version agree on what a
+// baseline pod is.
 var (
 	baselineEvaluator   = mustEvaluator(psapolicy.DefaultChecks())
 	volumeTypeEvaluator = mustEvaluator(checksByID(psapolicy.DefaultChecks(), restrictedVolumesCheckID))
 
-	baselineLatest   = psaapi.LevelVersion{Level: psaapi.LevelBaseline, Version: psaapi.LatestVersion()}
-	restrictedLatest = psaapi.LevelVersion{Level: psaapi.LevelRestricted, Version: psaapi.LatestVersion()}
+	baselineLevel   = psaapi.LevelVersion{Level: psaapi.LevelBaseline, Version: podShapeVersion}
+	restrictedLevel = psaapi.LevelVersion{Level: psaapi.LevelRestricted, Version: podShapeVersion}
 )
 
 func mustEvaluator(checks []psapolicy.Check) psapolicy.Evaluator {
@@ -56,7 +70,7 @@ func checksByID(checks []psapolicy.Check, id psapolicy.CheckID) []psapolicy.Chec
 // Every baseline check forbids a set value and none requires one, so a partial
 // template evaluates the same as the pod the AGC builds from it.
 func validateBaselinePodShape(tmpl *corev1.PodTemplateSpec) error {
-	results := baselineEvaluator.EvaluatePod(baselineLatest, &tmpl.ObjectMeta, &tmpl.Spec)
+	results := baselineEvaluator.EvaluatePod(baselineLevel, &tmpl.ObjectMeta, &tmpl.Spec)
 	agg := psapolicy.AggregateCheckResults(results)
 	if agg.Allowed {
 		return nil
@@ -74,7 +88,7 @@ func validateBaselinePodShape(tmpl *corev1.PodTemplateSpec) error {
 // container image, or provisioned through an object the platform controls (a
 // PersistentVolume, a StorageClass, a CSIDriver).
 func validateVolumeTypes(tmpl *corev1.PodTemplateSpec) error {
-	results := volumeTypeEvaluator.EvaluatePod(restrictedLatest, &tmpl.ObjectMeta, &tmpl.Spec)
+	results := volumeTypeEvaluator.EvaluatePod(restrictedLevel, &tmpl.ObjectMeta, &tmpl.Spec)
 	agg := psapolicy.AggregateCheckResults(results)
 	if agg.Allowed {
 		return nil
@@ -84,12 +98,13 @@ func validateVolumeTypes(tmpl *corev1.PodTemplateSpec) error {
 		agg.ForbiddenDetail())
 }
 
-// validateNoServiceAccountTokenProjection rejects a projected volume carrying a
-// serviceAccountToken source, on both template kinds. The kubelet mints that token
-// whatever automountServiceAccountToken says, so it is a second route to a
-// Kubernetes API credential in the worker pod, which the AGC forbids on every
-// security profile.
-func validateNoServiceAccountTokenProjection(spec *corev1.PodSpec) error {
+// validateNoAPICredentialProjection rejects a projected volume source that puts a
+// Kubernetes API credential in the worker pod, on both template kinds: a
+// serviceAccountToken, which the kubelet mints whatever automountServiceAccountToken
+// says, and a podCertificate addressed to a reserved signer. The AGC forbids an API
+// credential in a worker pod on every security profile. A podCertificate from any
+// other signer is a workload certificate and is left alone.
+func validateNoAPICredentialProjection(spec *corev1.PodSpec) error {
 	for _, v := range spec.Volumes {
 		if v.Projected == nil {
 			continue
@@ -100,9 +115,22 @@ func validateNoServiceAccountTokenProjection(spec *corev1.PodSpec) error {
 					"podTemplate.spec.volumes[%q]: a projected serviceAccountToken source is reserved: worker pods carry no Kubernetes API credential; remove the source",
 					v.Name)
 			}
+			if isAPICredentialCertificate(s.PodCertificate) {
+				return fmt.Errorf(
+					"podTemplate.spec.volumes[%q]: a projected podCertificate source with signer %q is reserved: worker pods carry no Kubernetes API credential; remove the source, or name a signer outside %s",
+					v.Name, s.PodCertificate.SignerName, reservedSignerPrefix)
+			}
 		}
 	}
 	return nil
+}
+
+// isAPICredentialCertificate reports whether p asks a reserved signer for its
+// certificate. The whole reserved prefix is refused, not the one documented
+// signer, so a signer Kubernetes adds later is refused until it is shown not to
+// authenticate to the apiserver.
+func isAPICredentialCertificate(p *corev1.PodCertificateProjection) bool {
+	return p != nil && strings.HasPrefix(p.SignerName, reservedSignerPrefix)
 }
 
 // podTemplateUnchanged reports whether an update leaves podTemplate as stored. The

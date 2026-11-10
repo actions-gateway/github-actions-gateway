@@ -28,7 +28,14 @@ const (
 	podShapeVolumeTypeMsg = "restricted volume types"
 	podShapeBaselineMsg   = "exceeds the Pod Security Standards baseline level"
 	podShapeSATokenMsg    = "projected serviceAccountToken source is reserved"
+	podShapePodCertMsg    = "projected podCertificate source with signer"
 )
+
+// podShapeBindsBothKinds reports whether msg comes from the API-credential rule,
+// the one the cluster-scoped kind is held to as well.
+func podShapeBindsBothKinds(msg string) bool {
+	return msg == podShapeSATokenMsg || msg == podShapePodCertMsg
+}
 
 func nfsVolume() corev1.Volume {
 	return corev1.Volume{Name: "data", VolumeSource: corev1.VolumeSource{
@@ -50,8 +57,18 @@ func saTokenVolume() corev1.Volume {
 	}}
 }
 
-// podShapes are the three shapes the rules refuse, one per rule, keyed by the
-// message the namespaced kind answers with.
+func apiClientCertificateVolume() corev1.Volume {
+	return corev1.Volume{Name: "creds", VolumeSource: corev1.VolumeSource{
+		Projected: &corev1.ProjectedVolumeSource{Sources: []corev1.VolumeProjection{{
+			PodCertificate: &corev1.PodCertificateProjection{
+				SignerName: "kubernetes.io/kube-apiserver-client-pod", KeyType: "ED25519", CredentialBundlePath: "credentials.pem",
+			},
+		}}},
+	}}
+}
+
+// podShapes are the shapes the rules refuse, keyed by the message the namespaced
+// kind answers with.
 func podShapes() map[string]func(*agcv2.RunnerTemplateSpec) {
 	return map[string]func(*agcv2.RunnerTemplateSpec){
 		podShapeVolumeTypeMsg: func(s *agcv2.RunnerTemplateSpec) {
@@ -64,6 +81,9 @@ func podShapes() map[string]func(*agcv2.RunnerTemplateSpec) {
 		},
 		podShapeSATokenMsg: func(s *agcv2.RunnerTemplateSpec) {
 			s.PodTemplate.Spec.Volumes = []corev1.Volume{saTokenVolume()}
+		},
+		podShapePodCertMsg: func(s *agcv2.RunnerTemplateSpec) {
+			s.PodTemplate.Spec.Volumes = []corev1.Volume{apiClientCertificateVolume()}
 		},
 	}
 }
@@ -91,22 +111,22 @@ func TestV2_RunnerTemplate_PodShape_RejectsNewValue(t *testing.T) {
 }
 
 // TestV2_ClusterRunnerTemplate_PodShape: the platform-authored kind keeps the
-// shapes the namespaced kind loses and is refused only the ServiceAccount token.
+// shapes the namespaced kind loses and is refused only a projected API credential.
 func TestV2_ClusterRunnerTemplate_PodShape(t *testing.T) {
 	for msg, shape := range podShapes() {
 		name := "podshape-" + map[string]string{
-			podShapeVolumeTypeMsg: "nfs", podShapeBaselineMsg: "caps", podShapeSATokenMsg: "token",
+			podShapeVolumeTypeMsg: "nfs", podShapeBaselineMsg: "caps", podShapeSATokenMsg: "token", podShapePodCertMsg: "cert",
 		}[msg]
 		crt := clusterRunnerTemplateWithContainer(name, corev1.Container{Name: "runner"})
 		shape(&crt.Spec)
 		err := k8sClient.Create(ctx, crt)
-		if msg != podShapeSATokenMsg {
+		if !podShapeBindsBothKinds(msg) {
 			require.NoError(t, err, "a ClusterRunnerTemplate may carry this shape: %s", msg)
 			t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), crt) })
 			continue
 		}
-		require.Error(t, err, "the ServiceAccount token is refused on the cluster-scoped kind too")
-		assert.Contains(t, err.Error(), podShapeSATokenMsg)
+		require.Error(t, err, "an API credential is refused on the cluster-scoped kind too")
+		assert.Contains(t, err.Error(), msg)
 	}
 }
 
@@ -208,7 +228,9 @@ func TestV2_RunnerTemplate_PodShape_StoredValueKeepsWorking(t *testing.T) {
 	restore := bypassRunnerTemplateAdmission(t)
 	bypass := map[string]string{podShapeUncheckedLabel: "true"}
 
-	names := map[string]string{podShapeVolumeTypeMsg: "nfs", podShapeBaselineMsg: "caps", podShapeSATokenMsg: "token"}
+	names := map[string]string{
+		podShapeVolumeTypeMsg: "nfs", podShapeBaselineMsg: "caps", podShapeSATokenMsg: "token", podShapePodCertMsg: "cert",
+	}
 	type storedCase struct {
 		stored, probe client.Object
 		spec          func(client.Object) *agcv2.RunnerTemplateSpec

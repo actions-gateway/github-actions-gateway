@@ -204,7 +204,7 @@ func (v *RunnerTemplateCustomValidator) validate(oldSpec, spec *agcv2.RunnerTemp
 	if oldSpec != nil && podTemplateUnchanged(&oldSpec.PodTemplate, &spec.PodTemplate) {
 		return nil
 	}
-	if err := validateNoServiceAccountTokenProjection(&spec.PodTemplate.Spec); err != nil {
+	if err := validateNoAPICredentialProjection(&spec.PodTemplate.Spec); err != nil {
 		return err
 	}
 	if err := validateVolumeTypes(&spec.PodTemplate); err != nil {
@@ -228,7 +228,7 @@ func (v *RunnerTemplateCustomValidator) ValidateDelete(_ context.Context, _ *agc
 // would only constrain the platform against itself — the allowlist exists to stop a
 // TENANT naming a preempting class (Q132/Q289). PSA remains the runtime backstop.
 //
-// Of the Q1322 pod-shape rules only the projected serviceAccountToken one binds
+// Of the Q1322 pod-shape rules only the projected API-credential one binds
 // this kind: no Kubernetes API credential in a worker pod is a floor on every
 // profile, where the baseline and volume-type rules decide who may author a shape.
 //
@@ -261,7 +261,7 @@ func validateClusterTemplate(oldSpec, spec *agcv2.RunnerTemplateSpec) error {
 	if oldSpec != nil && podTemplateUnchanged(&oldSpec.PodTemplate, &spec.PodTemplate) {
 		return nil
 	}
-	return validateNoServiceAccountTokenProjection(&spec.PodTemplate.Spec)
+	return validateNoAPICredentialProjection(&spec.PodTemplate.Spec)
 }
 
 // ValidateDelete is a no-op.

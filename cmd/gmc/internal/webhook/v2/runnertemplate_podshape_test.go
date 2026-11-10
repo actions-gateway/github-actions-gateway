@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/yaml"
 )
 
@@ -39,17 +40,33 @@ func saTokenVolume() corev1.VolumeSource {
 	}}
 }
 
+func podCertificateVolume(signer string) corev1.VolumeSource {
+	return corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+		Sources: []corev1.VolumeProjection{{PodCertificate: &corev1.PodCertificateProjection{
+			SignerName: signer, KeyType: "ED25519", CredentialBundlePath: "credentials.pem",
+		}}},
+	}}
+}
+
 const (
 	errVolumeType = "restricted volume types"
 	errBaseline   = "exceeds the Pod Security Standards baseline level"
 	errSAToken    = "projected serviceAccountToken source is reserved"
+	errPodCert    = "projected podCertificate source with signer"
 )
+
+// bindsBothKinds reports whether wantErr comes from the API-credential rule, the
+// one pod-shape rule the cluster-scoped kind is held to as well.
+func bindsBothKinds(wantErr string) bool {
+	return wantErr == errSAToken || wantErr == errPodCert
+}
 
 // podShapeCases is the shared table: wantErr is the namespaced kind's verdict.
 func podShapeCases() []podShapeCase {
 	unconfined := &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined}
 	unmasked := corev1.UnmaskedProcMount
 	root := int64(0)
+	hostProcess := true
 	return []podShapeCase{
 		// Volume types (the restricted level's allowlist).
 		{"nfs volume", volume("data", corev1.VolumeSource{NFS: &corev1.NFSVolumeSource{Server: "203.0.113.7", Path: "/export"}}), errVolumeType},
@@ -62,8 +79,11 @@ func podShapeCases() []podShapeCase {
 			Sources: []corev1.VolumeProjection{{ConfigMap: &corev1.ConfigMapProjection{LocalObjectReference: corev1.LocalObjectReference{Name: "settings"}}}},
 		}}), ""},
 
-		// The projected ServiceAccount token.
+		// A projected Kubernetes API credential.
 		{"projected serviceAccountToken", volume("creds", saTokenVolume()), errSAToken},
+		{"projected podCertificate, the apiserver client signer", volume("creds", podCertificateVolume("kubernetes.io/kube-apiserver-client-pod")), errPodCert},
+		{"projected podCertificate, another reserved signer", volume("creds", podCertificateVolume("kubernetes.io/not-yet-defined")), errPodCert},
+		{"projected podCertificate, a workload signer", volume("mtls", podCertificateVolume("example.com/workload-mtls")), ""},
 
 		// The baseline level.
 		{"capability outside the baseline set", runnerSecurityContext(&corev1.SecurityContext{
@@ -90,6 +110,25 @@ func podShapeCases() []podShapeCase {
 		}, errBaseline},
 		{"unsafe sysctl", func(t *corev1.PodTemplateSpec) {
 			t.Spec.SecurityContext = &corev1.PodSecurityContext{Sysctls: []corev1.Sysctl{{Name: "kernel.msgmax", Value: "65536"}}}
+		}, errBaseline},
+		{"AppArmor unconfined annotation", func(t *corev1.PodTemplateSpec) {
+			t.Annotations = map[string]string{"container.apparmor.security.beta.kubernetes.io/runner": "unconfined"}
+		}, errBaseline},
+		{"SELinux type outside the baseline set", runnerSecurityContext(&corev1.SecurityContext{
+			SELinuxOptions: &corev1.SELinuxOptions{Type: "spc_t"},
+		}), errBaseline},
+		{"Windows hostProcess", runnerSecurityContext(&corev1.SecurityContext{
+			WindowsOptions: &corev1.WindowsSecurityContextOptions{HostProcess: &hostProcess},
+		}), errBaseline},
+		{"probe host", func(t *corev1.PodTemplateSpec) {
+			t.Spec.Containers[0].LivenessProbe = &corev1.Probe{ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{Host: "169.254.169.254", Port: intstr.FromInt32(80)},
+			}}
+		}, errBaseline},
+		{"lifecycle hook host", func(t *corev1.PodTemplateSpec) {
+			t.Spec.Containers[0].Lifecycle = &corev1.Lifecycle{PostStart: &corev1.LifecycleHandler{
+				HTTPGet: &corev1.HTTPGetAction{Host: "169.254.169.254", Port: intstr.FromInt32(80)},
+			}}
 		}, errBaseline},
 		{"root user", runnerSecurityContext(&corev1.SecurityContext{RunAsUser: &root}), ""},
 	}
@@ -119,7 +158,7 @@ func TestRunnerTemplate_PodShape_Create(t *testing.T) {
 }
 
 // TestClusterRunnerTemplate_PodShape_Create: the platform-authored kind keeps every
-// shape the namespaced kind loses, except the ServiceAccount token, which is a
+// shape the namespaced kind loses, except a projected API credential, which is a
 // floor on both.
 func TestClusterRunnerTemplate_PodShape_Create(t *testing.T) {
 	v := &ClusterRunnerTemplateCustomValidator{}
@@ -128,14 +167,24 @@ func TestClusterRunnerTemplate_PodShape_Create(t *testing.T) {
 			crt := newClusterRunnerTemplate("golden", nil)
 			crt.Spec = shapedSpec(tc.mutate)
 			_, err := v.ValidateCreate(context.Background(), crt)
-			if tc.wantErr != errSAToken {
+			if !bindsBothKinds(tc.wantErr) {
 				require.NoError(t, err)
 				return
 			}
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), errSAToken)
+			assert.Contains(t, err.Error(), tc.wantErr)
 		})
 	}
+}
+
+// TestPodShapeVersion_IsPinned: the rules evaluate at a named Pod Security
+// Standards version. At the library's latest, a dependency bump carrying a stricter
+// upstream check would refuse a manifest the previous release admitted.
+func TestPodShapeVersion_IsPinned(t *testing.T) {
+	assert.False(t, podShapeVersion.Latest(), "evaluate at a pinned version, not the vendored library's latest")
+	assert.Equal(t, "v1.37", podShapeVersion.String())
+	assert.Equal(t, podShapeVersion, baselineLevel.Version)
+	assert.Equal(t, podShapeVersion, restrictedLevel.Version)
 }
 
 // TestRunnerTemplate_PodShape_StoredValuePassesUnchanged covers the upgrade path:
@@ -146,7 +195,10 @@ func TestRunnerTemplate_PodShape_StoredValuePassesUnchanged(t *testing.T) {
 	for _, tc := range podShapeCases() {
 		stored[tc.name] = tc
 	}
-	for _, name := range []string{"nfs volume", "projected serviceAccountToken", "capability outside the baseline set"} {
+	for _, name := range []string{
+		"nfs volume", "projected serviceAccountToken", "projected podCertificate, the apiserver client signer",
+		"capability outside the baseline set",
+	} {
 		tc := stored[name]
 		require.NotEmpty(t, tc.wantErr, "the case must be one a create refuses")
 

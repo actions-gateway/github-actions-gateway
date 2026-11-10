@@ -86,8 +86,9 @@ spec:
                   whatever security profile the namespace is on. A worker shape past either belongs
                   in a ClusterRunnerTemplate, which is exempt.
 
-                  On both kinds it rejects a projected volume with a serviceAccountToken source, and
-                  the AGC removes one from every worker pod it builds: worker pods carry no
+                  On both kinds it rejects a projected volume with a serviceAccountToken source, or
+                  with a podCertificate source whose signerName begins with kubernetes.io, and the
+                  AGC removes either from every worker pod it builds: worker pods carry no
                   Kubernetes API credential.
 
                   A template stored before these three rules is not re-checked against them until
