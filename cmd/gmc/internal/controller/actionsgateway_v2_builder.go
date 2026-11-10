@@ -436,6 +436,8 @@ func tracingEgressPort(endpoint string) int32 {
 // egressPeerTo converts a shared EgressPeer descriptor (Q204) to a NetworkPolicy peer: a CIDR
 // IPBlock for an external peer, otherwise the pod/namespace selector for an in-cluster one. The
 // EgressPeer CEL validation guarantees exactly one form is set, so the branch is unambiguous.
+// The CIDR is emitted as stored: admission bounds a new value, and a value stored unchanged
+// from before the bound is not narrowed here.
 // Shared so every egress-peer consumer (the Vault signer, the trace collector) emits peers identically.
 func egressPeerTo(p *gmcv2.EgressPeer) networkingv1.NetworkPolicyPeer {
 	if p.CIDR != "" {

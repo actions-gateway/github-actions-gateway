@@ -300,7 +300,12 @@ _Appears in:_
 EgressPeer identifies a single destination the GMC may open in an otherwise default-deny
 per-tenant NetworkPolicy: a pod/namespace selector for an in-cluster peer, or a CIDR for an
 external one. Exactly one peer form must be given — a CIDR cannot carry a selector and vice
-versa — so the rule the GMC emits is always scoped to one peer, never a broaden-to-all-egress.
+versa — so the rule the GMC emits has one peer on one port.
+
+The gateway's author writes the peer, and admission bounds only the CIDR form: its size and
+the ranges it may name (see CIDR). A selector is not bounded, since its reach is whatever
+pods carry the labels, and an empty namespaceSelector reaches pods in every namespace. The
+rule is added beside the operator's API-server scoping, not inside it.
 
 This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
 reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
@@ -318,7 +323,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `podSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#labelselector-v1-meta)_ | PodSelector selects the in-cluster peer pods the AGC may reach (e.g. \{app.kubernetes.io/name: vault\}). Combined with NamespaceSelector when both are set, matching NetworkPolicy peer semantics. Mutually exclusive with CIDR. |  | Optional: \{\} |
 | `namespaceSelector` _[LabelSelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#labelselector-v1-meta)_ | NamespaceSelector selects the namespace(s) the in-cluster peer runs in (e.g. \{kubernetes.io/metadata.name: vault\}). Combined with PodSelector when both are set. Mutually exclusive with CIDR. |  | Optional: \{\} |
-| `cidr` _string_ | CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually exclusive with the pod/namespace selectors. |  | MaxLength: 43<br />Pattern: `^([0-9]\{1,3\}\.)\{3\}[0-9]\{1,3\}/[0-9]\{1,2\}$\|^([0-9a-fA-F:]+)/[0-9]\{1,3\}$`<br />Optional: \{\} |
+| `cidr` _string_ | CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually exclusive with the pod/namespace selectors.<br />It must parse as a CIDR no broader than /16 for IPv4 or /48 for IPv6: the largest network one external service spans, an AWS VPC or one IPv6 site, and far short of 0.0.0.0/0. It must not be link-local (169.254.0.0/16, fe80::/10), where most clouds serve node metadata, or cover one of the metadata and platform addresses clouds serve elsewhere: 100.100.100.200 (Alibaba Cloud), 168.63.129.16 (Azure), fd00:ec2::254 (AWS) and fd20:ce::254 (Google Cloud). That list is the addresses known when it was written, not every address that serves node credentials. A value already stored is not re-checked until it changes. |  | MaxLength: 43<br />Pattern: `^([0-9]\{1,3\}\.)\{3\}[0-9]\{1,3\}/[0-9]\{1,2\}$\|^([0-9a-fA-F:]+)/[0-9]\{1,3\}$`<br />Optional: \{\} |
 | `port` _integer_ | Port optionally pins the destination port (1–65535) the egress rule permits. Leave it unset for a peer whose port is derivable elsewhere — the Vault signer derives it from VaultSigner.Address, so an unset Port preserves that behavior. Set it for peers whose port is not otherwise derivable, or to override the derived port. |  | Maximum: 65535<br />Minimum: 1<br />Optional: \{\} |
 
 

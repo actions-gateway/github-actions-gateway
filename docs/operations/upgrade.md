@@ -30,6 +30,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if spec.tracing sets insecure: true with an https:// endpoint: the pair is now rejected](#action-required-if-spectracing-sets-insecure-true-with-an-https-endpoint-the-pair-is-now-rejected)
   - [Action required if a noProxyCIDRs entry exempts GitHub through a comma, wildcard, port or address: the entry is now rejected](#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected)
   - [Action required if a shared EgressProxy exempts a consumer's GitHub host: the pair is now rejected](#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected)
+  - [Action required if a networkPolicy peer names a broad or link-local cidr: the value is now rejected](#action-required-if-a-networkpolicy-peer-names-a-broad-or-link-local-cidr-the-value-is-now-rejected)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
@@ -666,6 +667,39 @@ kubectl get egressproxies.actions-gateway.com -n team-shared shared-proxy -o jso
 ```
 
 Remove an entry that covers the gateway's `githubURL` host, in any of the forms in [the section above](#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected).
+
+### Action required if a `networkPolicy` peer names a broad or link-local `cidr`: the value is now rejected
+
+**Who is affected:** operators with an `ActionsGateway` whose `spec.tracing.networkPolicy.cidr` or `spec.credentials.workloadIdentity.signer.vault.networkPolicy.cidr` is one of these:
+
+- broader than `/16` for IPv4 or `/48` for IPv6, as `0.0.0.0/0` is
+- link-local: inside `169.254.0.0/16` or `fe80::/10`
+- a range covering one of four cloud metadata and platform addresses: `100.100.100.200`, `168.63.129.16`, `fd00:ec2::254` or `fd20:ce::254`
+- not a CIDR: an octet above 255, an octet or prefix length written with a leading zero, or an IPv4-mapped IPv6 address
+
+**What changed.** Whoever writes the gateway writes this peer, and the GMC copies its `cidr` into the AGC's NetworkPolicy beside the API-server rule.
+So `0.0.0.0/0` opened the peer's port from the AGC to every address, the node's metadata server included, whatever `apiServerCIDRs` scoped.
+The schema now refuses the values above.
+The upgrade itself changes nothing: a gateway already stored with one keeps running and keeps the egress rule it has, and an edit that leaves the `cidr` alone is still accepted.
+That includes an edit to the peer's `port`, so a stored `0.0.0.0/0` can still be moved to another port until it is narrowed.
+Changing the `cidr` to another refused value is rejected, and so is a delete and re-create, which includes a restore from backup.
+
+**Before you upgrade,** list every gateway that sets a peer `cidr`, with the value, and check each against the list above:
+
+```bash
+kubectl get actionsgateways.actions-gateway.com -A -o json \
+  | jq -r '.items[] | . as $g
+      | (.spec.tracing.networkPolicy.cidr, .spec.credentials.workloadIdentity.signer.vault.networkPolicy.cidr)
+      | select(. != null and . != "")
+      | "\($g.metadata.namespace)/\($g.metadata.name)\t\(.)"'
+```
+
+The command does not filter, because an address can be spelled too many ways for a text match to be trusted: every line is a peer to read.
+
+Narrow each one to the peer's own address or subnet, as in `10.0.5.7/32`.
+The stored rule stays as broad as it is until you do.
+If the peer's addresses span more than one `/16`, remove `networkPolicy` and write a NetworkPolicy of your own that selects the AGC pod.
+NetworkPolicies add up, so yours opens the path and the GMC's is unchanged.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 

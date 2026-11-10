@@ -40,7 +40,7 @@ The recurring theme matches the second audit's: a documented isolation property 
 | Finding | Verdict | Tracked by |
 |---|---|---|
 | [GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds](#confinement-claim) | confirmed, medium | Q1321 (`2.0-gate`), fixed |
-| [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
+| [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`), fixed |
 | [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
@@ -125,6 +125,15 @@ Each rule must pass an unchanged stored value, as `spec.tracing.endpoint`'s does
 
 `egresspeer-unbounded-peer-agc-networkpolicy`: confirmed, low.
 Starts at `api/v2/shared_types.go:304`.
+
+**Fixed by a rule on the CIDR, with the docs corrected for what it leaves.** Two CEL rules on `EgressPeer.cidr` refuse a value that is not a CIDR or is broader than `/16` for IPv4 or `/48` for IPv6, and one that is link-local or covers one of four metadata and platform addresses that clouds serve outside link-local space (Alibaba Cloud, Azure, and the IPv6 addresses of AWS and Google Cloud); each passes an unchanged stored value.
+That list is not complete and the docs no longer say the peer cannot name a metadata server: IPv6 forms that embed `169.254.169.254` for a translator (`64:ff9b::a9fe:a9fe`, `2002:a9fe:a9fe::/48`, `::a9fe:a9fe`) are admitted, because a NAT64 prefix is also how an IPv6-only cluster reaches a legitimate IPv4 peer, and whether any of them reaches a node's metadata server was not tested.
+The floor is a policy number with no measurement behind it, set at the largest network a single CIDR has to cover: an AWS VPC is at most a `/16`, and `/48` is one IPv6 site.
+Three parts of the proposed fix were decided against, and [05-security.md](../design/05-security.md#57-workload-identity-the-no-pem-delegation-model) says what each leaves open.
+A selector peer is not bounded, because a rule refusing `{}` would leave an `Exists` expression that selects the same pods, and a selector reaches pods only, never a node address.
+No operator allowlist gates the peer, since an opt-in one is additive and needs no major.
+The builder does not narrow a stored value, so a `0.0.0.0/0` stored before `v2.0.0` keeps its rule until an operator narrows it, which `upgrade.md` tells them how to find.
+The finding below is kept as written on 2026-11-09.
 
 EgressPeer validation is structural only: the CEL rule at api/v2/actionsgateway_types.go:537 checks exactly-one-of, the pattern at :558 matches any prefix length including /0, the ActionsGateway webhook (actionsgateway_webhook.go:155-200) never inspects the peer, and egressPeerTo (actionsgateway_v2_builder.go:440-448) passes the CIDR straight into an IPBlock. buildAGCNetworkPolicyV2 appends the rule regardless of apiServerCIDRs, so nothing subordinates the tenant-delegated hole to the operator's scope.
 

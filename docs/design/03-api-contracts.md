@@ -287,6 +287,7 @@ type TracingConfig struct {
     // NetworkPolicy names the collector as an egress peer. The GMC emits one
     // AGC-only rule on the port parsed from Endpoint, and never derives a peer from
     // Endpoint itself, so egress stays closed until this is set. Needs an Endpoint.
+    // A CIDR peer is at most an IPv4 /16 or an IPv6 /48, and never link-local.
     // +optional
     NetworkPolicy *EgressPeer `json:"networkPolicy,omitempty"`
 

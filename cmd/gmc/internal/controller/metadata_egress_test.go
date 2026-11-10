@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+
+	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 )
 
 // cloudMetadataIP is the link-local cloud metadata server (GCE, EC2 IMDS, Azure
@@ -142,5 +144,32 @@ func TestBuildNetworkPolicy_DeniesCloudMetadataServer(t *testing.T) {
 		assert.True(t, egressAdmits(np, cloudMetadataIP, corev1.ProtocolUDP, 53),
 			"%s no longer admits UDP/53 to the link-local block — the NodeLocal DNSCache peer "+
 				"(Q136) is gone, so the metadata assertions above prove nothing", np.Name)
+	}
+}
+
+// TestBuildAGCNetworkPolicyV2_EgressPeerOpensOnlyItsBlock: a tenant-authored peer at the
+// widest IPv4 block admission accepts, on the metadata server's own port, admits its own
+// block on that port and still not the metadata server, under either consumer and with the
+// API server scoped. The CIDR bound itself is a CRD rule, pinned under the real apiserver
+// by TestV2_EgressPeer_CIDRAdmission.
+func TestBuildAGCNetworkPolicyV2_EgressPeerOpensOnlyItsBlock(t *testing.T) {
+	peer := &gmcv2.EgressPeer{CIDR: "10.20.0.0/16", Port: ptr(int32(80))}
+	inside, outside := net.ParseIP("10.20.255.9"), net.ParseIP("10.21.0.1")
+
+	traced := v2Gateway("traced", "team-a", "github-app", "proxy")
+	traced.Spec.Tracing = gmcv2.TracingConfig{Endpoint: "https://collector:4317", NetworkPolicy: peer}
+	vaulted := v2WorkloadIdentityGateway("vaulted", "team-a", "")
+	vaulted.Spec.Credentials.WorkloadIdentity.Signer.Vault.NetworkPolicy = peer
+
+	for _, ag := range []*gmcv2.ActionsGateway{traced, vaulted} {
+		np := buildAGCNetworkPolicyV2(ag, []string{"10.0.0.0/24"}, nil, false, nil)
+		assert.True(t, egressAdmits(np, inside, corev1.ProtocolTCP, 80),
+			"%s: the peer's own block must be reachable on its port, or the assertions below prove nothing", ag.Name)
+		assert.False(t, egressAdmits(np, inside, corev1.ProtocolTCP, 8080),
+			"%s: the peer opens one port", ag.Name)
+		assert.False(t, egressAdmits(np, outside, corev1.ProtocolTCP, 80),
+			"%s: the peer opens its own block only", ag.Name)
+		assert.False(t, egressAdmits(np, cloudMetadataIP, corev1.ProtocolTCP, 80),
+			"%s admits TCP/80 to the cloud metadata server %s through a tenant-authored peer", ag.Name, cloudMetadataIP)
 	}
 }
