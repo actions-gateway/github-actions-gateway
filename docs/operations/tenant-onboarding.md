@@ -1226,6 +1226,7 @@ Operator prerequisites in Vault (configured out of band, once per gateway):
 > Vault's `address` is not itself a NetworkPolicy-expressible peer, so set `signer.vault.networkPolicy` (above) to identify Vault — a `namespaceSelector`/`podSelector` for an in-cluster Vault, or a `cidr` for an external one.
 > The GMC then opens a **scoped** AGC→Vault egress rule (that peer, on the Vault API port from `address`) on the AGC NetworkPolicy automatically — you no longer add it by hand.
 > If you leave `networkPolicy` unset on a policy-enforcing CNI (Calico/Cilium — the production recommendation), the AGC's Vault login will be dropped, so set it; on a non-enforcing CNI (kindnet) it is inert and may be omitted.
+> A `cidr` can be no broader than `/16` for IPv4 or `/48` for IPv6 and cannot be link-local, so name Vault's address or its subnet ([what admission refuses](troubleshooting.md#egress-peer-cidr-rejected-by-admission)).
 > As with all egress rules, it is enforced only by a policy-aware CNI.
 > The field is a shared `EgressPeer` type (Q204) — the optional `port` overrides the address-derived port and is normally left unset; `spec.tracing.networkPolicy` is the same type, and future egress peers such as a cloud KMS will be too, so the example shape stays stable.
 

@@ -106,6 +106,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Tracing Sampler Rejected by Admission](#tracing-sampler-rejected-by-admission)
 - [Tracing Endpoint Rejected by Admission](#tracing-endpoint-rejected-by-admission)
 - [Tracing Rejected by Admission: insecure With an https Endpoint](#tracing-rejected-by-admission-insecure-with-an-https-endpoint)
+- [Egress Peer cidr Rejected by Admission](#egress-peer-cidr-rejected-by-admission)
 - [ActionsGateway Rejected: Missing or Malformed `githubURL`](#actionsgateway-rejected-missing-or-malformed-githuburl)
 - [Worker-Pod Lifecycle Duration Rejected by Admission](#worker-pod-lifecycle-duration-rejected-by-admission)
 - [Priority Tiers Rejected by Admission: Thresholds Not Ascending](#priority-tiers-rejected-by-admission-thresholds-not-ascending)
@@ -4168,6 +4169,34 @@ The exporter applies `insecure` after the scheme, so the pair would export in pl
 
 A gateway stored before this check keeps working, still in plaintext: an edit that leaves `endpoint` and `insecure` alone is accepted.
 Deleting and re-creating it, or changing `endpoint` to another `https://` value while `insecure` stays true, is rejected ([finding the affected gateways](upgrade.md#action-required-if-spectracing-sets-insecure-true-with-an-https-endpoint-the-pair-is-now-rejected)).
+
+---
+
+## Egress Peer `cidr` Rejected by Admission
+
+**Symptoms.** A create or an edit of an `ActionsGateway` that sets `networkPolicy.cidr`, under `spec.tracing` or under the Vault signer, is rejected at admission with one of these, the Vault signer's under `spec.credentials.workloadIdentity.signer.vault.networkPolicy.cidr`:
+
+```
+The ActionsGateway "<name>" is invalid: spec.tracing.networkPolicy.cidr: Invalid value: "0.0.0.0/0":
+cidr must be a valid CIDR no broader than /16 for IPv4 or /48 for IPv6;
+the peer is one destination, so name its address or its subnet
+```
+
+```
+The ActionsGateway "<name>" is invalid: spec.tracing.networkPolicy.cidr: Invalid value: "169.254.169.254/32":
+cidr must not be link-local (169.254.0.0/16, fe80::/10) or cover a cloud metadata server
+(fd00:ec2::254, fd20:ce::254)
+```
+
+**Likely cause.** The first message means the value is broader than `/16` for IPv4 or `/48` for IPv6, as `0.0.0.0/0` is, or is not a CIDR: an octet above 255, an octet written with a leading zero, or an IPv4-mapped IPv6 address.
+The second means it is link-local, inside `169.254.0.0/16` or `fe80::/10`, or covers a cloud metadata server's IPv6 address.
+The peer is one destination, and the GMC copies the value into the AGC's NetworkPolicy, so the schema refuses a value that would open the port to a whole network or to the node's metadata server.
+
+**Resolution.** Name the peer's own address or subnet, as in `10.0.5.7/32`.
+If its addresses span more than one `/16`, leave `networkPolicy` unset and write a NetworkPolicy of your own that selects the AGC pod.
+
+A gateway stored before this check keeps working, with the egress rule it has: an edit that leaves the `cidr` alone is accepted.
+Deleting and re-creating it, or changing the `cidr` to another refused value, is rejected ([finding the affected gateways](upgrade.md#action-required-if-a-networkpolicy-peer-names-a-broad-or-link-local-cidr-the-value-is-now-rejected)).
 
 ---
 
