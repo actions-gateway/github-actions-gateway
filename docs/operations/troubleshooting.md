@@ -3560,15 +3560,34 @@ spec.defaultProxyRef: EgressProxy "corp-proxy" spec.noProxyCIDRs[0]:
 per-tenant egress proxy, ...
 ```
 
-**Likely cause.** An `EgressProxy`'s `spec.noProxyCIDRs` entry NO_PROXY-matches a GitHub host: `github.com`, `.github.com`, `api.github.com`, `githubusercontent.com`, `ghcr.io`, your configured `githubURL` host (including a GitHub Enterprise Server host, which is the `githubURL` of every gateway that references the proxy, directly or via a `RunnerSet`), or an over-broad suffix like `.com` that covers them.
+**Likely cause.** An `EgressProxy`'s `spec.noProxyCIDRs` entry covers a GitHub host.
+The host is a public one, such as `github.com`, `api.github.com` or `ghcr.io`, or the `githubURL` host of a gateway that references the proxy, directly or through a `RunnerSet`, from the proxy's own namespace or from one it lists in `spec.sharing.allowedNamespaces`.
+That second kind is how a GitHub Enterprise Server host is protected.
 
-**Why it is enforced.** `noProxyCIDRs` is threaded into the AGC/worker `NO_PROXY` env var, where a hostname entry is a domain-suffix match.
-If it matches a GitHub host, that tenant's GitHub traffic skips the per-tenant egress proxy — defeating the egress-IP attribution that isolates tenants.
+An entry covers a host in any of these forms:
+
+| Form | Example |
+|---|---|
+| The host, or a parent domain of it, with or without a leading dot | `github.com`, `.github.com`, `githubusercontent.com`, `.com` |
+| Two values in one entry, joined by a comma | `internal.example.com,github.com` |
+| A wildcard | `*`, `*.github.com` |
+| A host with a port, whatever the port | `github.com:443` |
+| A hostname spelled with non-ASCII letters | `ｇｉｔｈｕｂ.com` |
+| An address or CIDR that contains a `githubURL` host written as an IP | `10.0.0.0/8` for `https://10.1.2.3/my-org` |
+
+**Why it is enforced.** The GMC joins the entries with commas into the AGC's and the workers' `NO_PROXY`, and the AGC's HTTP client reads each form above as an exemption for the host.
+That tenant's GitHub traffic would skip the per-tenant egress proxy, which defeats the egress-IP attribution that isolates tenants.
 The check runs on **both** the proxy write and the gateway/`RunnerSet` write, so the conflicting pair is rejected whichever side is applied last; a rejection on the referrer side names the conflicting `EgressProxy` and entry.
+A reference to a proxy in another namespace is compared once that proxy grants the referrer's namespace, and the write that adds the grant is checked too.
 
 **Resolution.** Remove the GitHub-matching entry — GitHub must always traverse the proxy.
 `noProxyCIDRs` is for *internal* destinations only and accepts CIDRs (`10.0.0.0/8`), bare IPs, and non-GitHub domain suffixes (`svc.cluster.local`, `internal.example.com`).
-Note the guard cannot detect a **CIDR/IP range** that happens to cover GitHub's (rotating) published ranges — never add those either; that residual is the operator's responsibility.
+The guard does not detect a **CIDR/IP range** that covers the addresses a GitHub *hostname* resolves to: the AGC's client never resolves a name before matching, what the tools in a worker pod do was not measured, and GitHub's published ranges rotate.
+Never add those either; that residual is the operator's responsibility.
+
+An object stored before `v2.0.0` tightened this check keeps working.
+An edit that leaves an `EgressProxy`'s `noProxyCIDRs` and `allowedNamespaces` alone is accepted, and so is an edit to a gateway or `RunnerSet` that leaves its proxy reference alone.
+Changing the list, pointing a reference at the proxy, or deleting and re-creating either object is rejected until the entry is gone; the upgrade guide shows how to find [the entries](upgrade.md#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected) and [the shared-proxy pairs](upgrade.md#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected).
 
 ---
 

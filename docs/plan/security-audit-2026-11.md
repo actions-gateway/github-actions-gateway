@@ -43,8 +43,8 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
-| [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
-| [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
+| [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
+| [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
 | [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
 | [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
@@ -177,6 +177,17 @@ Regression cases: extend TestResolveReferrerGitHubHosts in cmd/gmc/internal/cont
 `gmc-webhook-noproxy:matcher-misses-no-proxy-forms`: needs validation.
 Starts at `api/v2/egressproxy_types.go:208`.
 
+**Resolved for `v2.0.0`: the admission gap is real and the rule is added.** The first blocker below is settled by running the consumer, Go's `net/http` on go1.27.3, in a child process per `NO_PROXY` value.
+The comma, `*`, `*.domain` and `host:port` forms each exempt the GitHub host.
+So does a hostname spelled in fullwidth letters, which the audit did not list: the client compares a non-ASCII name in its IDNA form.
+An address or CIDR entry exempts only a host that is itself an IP literal, so it matters for a `githubURL` written as an IP and never for a GitHub hostname.
+The client ignores `*domain` with no dot, a name with a trailing dot, and a bracketed IPv6 address with no port, and the rule does not model them.
+
+`noproxy.ValidateEntries` now reads an entry the way that client does, and `TestMatchesAgreesWithNetHTTP` fails if the two disagree in either direction.
+It is stricter in two declared places: a port-qualified entry is refused whatever the port, because the guard is handed a host and not the port its traffic uses, and a leading-dot entry also matches the bare domain, as it did before.
+An `EgressProxy` update re-judges the entries only when the list changes, so a stored value passes an unrelated edit.
+The second blocker stays open and the rule does not depend on it: whether exempted traffic leaves the pod was not measured, and neither was what the runner and job tooling in a worker pod do with these forms.
+
 noproxy.hostnameMatches (cmd/gmc/internal/webhook/noproxy/noproxy.go:89-96) validates each array element as one hostname using equality or dot-suffix comparison, while the builders treat the array as fragments of a comma-separated NO_PROXY string (strings.Join with ',').
 An element is never split on commas before validation, a '*' or '*.' prefix and a ':port' suffix are compared literally, ValidateEntries skips CIDR and bare-IP entries unconditionally (noproxy.go:54), and the CRD puts no pattern on the items.
 
@@ -201,6 +212,14 @@ Then, with a RunnerSet proxyRef under a gateway that has no defaultProxyRef, run
 
 `gmc-webhook-noproxy:cross-namespace-proxyref-unchecked`: needs validation.
 Starts at `api/v2/shared_types.go:202`.
+
+**Resolved for `v2.0.0`: the admission gap is real and the rule is added.** The first blocker below is settled by the webhook unit tests and the envtest suite: with the namespace handling removed, the provider-side and consumer-side cases for a shared proxy are admitted, as the finding reads from source.
+Both directions now resolve `ProxyObjectRef.Namespace` and count a cross-namespace pair only where the proxy grants the referrer's namespace, the binding `resolveReferrerGitHubHosts` applies.
+A referrer naming a proxy that does not grant it is admitted without the proxy's entries being judged: the reference wires nothing, and a rejection would tell a tenant what another namespace's proxy excludes.
+The `EgressProxy` write that adds the grant is checked against the newly granted namespace's referrers, so the pair cannot be assembled grant-last.
+The proxy side lists gateways and `RunnerSet`s cluster-wide only for a proxy that grants a namespace, and on update only when `noProxyCIDRs` changed or a namespace was added.
+Each side's update judges only the pairs that write can newly bind, so a stored pair passes an unrelated edit.
+The other two blockers stay open and the rule does not depend on them; the envtest assertion on the projected share ConfigMap proposed below was not added, because it tests the downstream effect and not the rule.
 
 validateGitHubHostAgainstProxy takes a single namespace argument and its three callers (actionsgateway_webhook.go:79 and :96, runnerset_webhook.go:201) pass the referrer's namespace with ref.Name only; referrerGitHubHosts matches on ref.Name alone and scopes both Lists to the proxy's namespace.
 Neither was updated when ProxyObjectRef gained Namespace for cross-namespace sharing, unlike the reconcile-side resolveReferrerGitHubHosts.
