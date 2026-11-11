@@ -15,6 +15,7 @@
       }
     },
     "allowFloatingImageTags": { "type": "boolean" },
+    "allowUncheckedRunnerTemplatePodShape": { "type": "boolean" },
     "priorityClassName": { "type": "string" },
     "systemCriticalPriorityQuota": {
       "type": "object",

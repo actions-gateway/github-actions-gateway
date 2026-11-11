@@ -1,6 +1,7 @@
 package provisioner
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/actions-gateway/github-actions-gateway/agc/names"
@@ -289,6 +290,7 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	sa := p.WorkerSA
 	autoMount := false
 	template.Spec.AutomountServiceAccountToken = &autoMount
+	dropAPICredentialProjections(template.Spec.Volumes)
 	if sa != "" {
 		template.Spec.ServiceAccountName = sa
 	}
@@ -354,6 +356,30 @@ func (p *Provisioner) buildPod(target Target, spec *ResolvedSpec, podName, secre
 	}
 
 	return pod
+}
+
+// reservedSignerPrefix marks the certificate signers the Kubernetes project
+// reserves, one of which issues apiserver client certificates. The GMC's
+// RunnerTemplate webhook refuses the same prefix.
+const reservedSignerPrefix = "kubernetes.io"
+
+// dropAPICredentialProjections removes, in place, every projected source in vols
+// that puts a Kubernetes API credential in the pod: a serviceAccountToken, which
+// the kubelet mints whatever automountServiceAccountToken says, and a
+// podCertificate addressed to a reserved signer. Admission refuses a new one; this
+// holds the invariant for a template stored before that rule. The volume stays, so
+// a container mounting it still starts.
+func dropAPICredentialProjections(vols []corev1.Volume) {
+	for i := range vols {
+		p := vols[i].Projected
+		if p == nil {
+			continue
+		}
+		p.Sources = slices.DeleteFunc(p.Sources, func(s corev1.VolumeProjection) bool {
+			return s.ServiceAccountToken != nil ||
+				(s.PodCertificate != nil && strings.HasPrefix(s.PodCertificate.SignerName, reservedSignerPrefix))
+		})
+	}
 }
 
 // injectWrapper delivers the GAG worker wrapper into the pod and points the

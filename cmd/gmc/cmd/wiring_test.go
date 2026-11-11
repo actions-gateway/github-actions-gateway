@@ -58,3 +58,22 @@ func TestDeploymentOwnerRef(t *testing.T) {
 		t.Errorf("missing Deployment: got %+v, %v; want nil and an error", ref, err)
 	}
 }
+
+// TestRunnerTemplateValidator covers the hand-off from the resolved config to the
+// namespaced RunnerTemplate webhook: the pod-shape opt-out reaches the validator
+// only when its flag set it, and the PriorityClass allowlist is the shared one.
+func TestRunnerTemplateValidator(t *testing.T) {
+	for _, optOut := range []bool{false, true} {
+		rc := &resolvedConfig{
+			priorityClassAllowlist:               allowlist.New([]string{"worker-high"}),
+			allowUncheckedRunnerTemplatePodShape: optOut,
+		}
+		v := runnerTemplateValidator(rc)
+		if v.AllowUncheckedPodShape != optOut {
+			t.Errorf("opt-out flag %v: validator AllowUncheckedPodShape = %v", optOut, v.AllowUncheckedPodShape)
+		}
+		if v.PriorityClasses != rc.priorityClassAllowlist {
+			t.Errorf("opt-out flag %v: validator must share the resolved PriorityClass allowlist", optOut)
+		}
+	}
+}

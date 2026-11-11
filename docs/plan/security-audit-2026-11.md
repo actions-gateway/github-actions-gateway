@@ -3,9 +3,9 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, the medium one fixed, and the four egress proxy sharing leads confirmed and fixed (Q1324).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 26 of which still are.
+> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), and the four egress proxy sharing leads confirmed and fixed (Q1324).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 26 of which still are.
 > Nothing reached high or critical.
-> Two rows gated `v2.0.0`: Q1321, which has landed, and [Q1322](../queue/Q1322.md), which is open.
+> Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
 > The rest are [Q1323](../queue/Q1323.md) to [Q1328](../queue/Q1328.md).
 
 ## Method and limits
@@ -40,14 +40,14 @@ The recurring theme matches the second audit's: a documented isolation property 
 | Finding | Verdict | Tracked by |
 |---|---|---|
 | [GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds](#confinement-claim) | confirmed, medium | Q1321 (`2.0-gate`), fixed |
-| [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`), fixed |
-| [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
-| [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | fixed in `v2.0.0`, see the finding's Resolution |
-| [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
-| [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
-| [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | guard fixed in `v2.0.0`, see the finding's Resolution; the GitHub-side question stays open |
-| [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
-| [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | needs validation | [Q1322](../queue/Q1322.md) (`2.0-gate`) |
+| [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | Q1322 (`2.0-gate`), fixed |
+| [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | Q1322 (`2.0-gate`), fixed |
+| [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | Q1322 (`2.0-gate`), fixed, see the finding's Resolution |
+| [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | Q1322 (`2.0-gate`), fixed |
+| [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | validated at admission, rule added | Q1322 (`2.0-gate`), fixed |
+| [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | Q1322 (`2.0-gate`), guard fixed, see the finding's Resolution; the GitHub-side question stays open |
+| [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | rule gap confirmed in envtest; node mount not observed | Q1322 (`2.0-gate`), fixed |
+| [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | rule gap confirmed in envtest; token minting not observed | Q1322 (`2.0-gate`), fixed |
 | [Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
 | [ActionsGateway defaultProxyRef status tells a tenant whether a named EgressProxy exists in another namespace](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
 | [An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
@@ -116,7 +116,8 @@ The code change below is a sketch and was not rendered or tested.
 
 ## Stricter admission rules
 
-Eight findings whose fix is a stricter admission rule, tracked together as [Q1322](../queue/Q1322.md) and gating `v2.0.0` for the reason Q1283 and Q1312 were: a manifest that applies today would be refused afterwards, so only a major can take the rule, and the next major is `v3`.
+Eight findings whose fix is a stricter admission rule, tracked together as Q1322 and gating `v2.0.0` for the reason Q1283 and Q1312 were: a manifest that applies today would be refused afterwards, so only a major can take the rule, and the next major is `v3`.
+All eight have landed for `v2.0.0`.
 Three are confirmed and five are leads.
 For the leads the gap in the rule is visible in source; what is unsettled is whether anything gets through the layer behind it.
 Each rule must pass an unchanged stored value, as `spec.tracing.endpoint`'s does.
@@ -161,6 +162,17 @@ Whether the apiserver admits the pod is decided only by the namespace Pod Securi
 **Fix.** Decide which statement is authoritative.
 To deliver the documented property, make the namespaced-kind gate evaluate the Pod Security Standards baseline level rather than one boolean: when rejectPrivileged is true in validateReservedPodFields, reject capabilities.add outside the baseline set, hostPath volumes, hostPort, procMount other than Default, Unconfined seccomp or AppArmor, and non-baseline sysctls on the pod and every container and init container, and add a table case per field to the existing validateReservedPodFields tests in cmd/gmc/internal/webhook/v2/runnertemplate_webhook_test.go.
 If the narrower check is kept by design, correct docs/design/05-security.md:884, docs/operations/kata-dind-workloads.md:45, :176 and :293 and deploy/templates/kata-dind/template.yaml:33-35 to say that a tenant in a privileged-profile namespace can author any pod shape short of privileged: true and the reserved host-namespace fields, so platform ownership of the template does not pin the worker shape there.
+
+**Resolved in `v2.0.0` by enforcing, not by correcting the docs.** The namespaced-kind webhook now evaluates the whole `podTemplate` against the Pod Security Standards `baseline` level on every profile, through the upstream evaluator (`k8s.io/pod-security-admission/policy` v0.37.2, vendored) and not the hand-written field list sketched above, so the webhook and a `baseline` namespace cannot drift on what `baseline` means.
+The evaluation is pinned to Pod Security Standards 1.37 and does not use the library's latest version: at latest, a Dependabot bump of `k8s.io/pod-security-admission` that carried a stricter check would refuse, in a minor release, a manifest the previous one admitted.
+The cost is that a later upstream tightening reaches a `privileged`-profile namespace only when the pin is raised, which is a breaking change to schedule; `TestPodShapeVersion_IsPinned` fails if the pin is replaced by latest.
+Every `baseline` check forbids a set value and none requires one, so evaluating the partial template gives the verdict the built pod would get.
+None of the three shipped `deploy/templates/` entries is refused, because all three are `ClusterRunnerTemplate`s; `TestTemplateLibrary_PodShape` pins that, and that `kata-dind` and `privileged-dind` are refused as the namespaced kind.
+A stored template passes while its `podTemplate` is unchanged.
+`runtimeClassName` is not a `baseline` field and stays tenant-settable.
+The rule and the volume-type rule have one install-wide opt-out, the GMC flag `--allow-unchecked-runner-template-pod-shape`, default off.
+It exists because admission is conjunctive: a platform's own `ValidatingAdmissionPolicy` or policy engine cannot admit a template this webhook refuses, so without the flag a platform that already decides tenant pod shape, more finely than baseline-or-nothing, would lose that decision to a rule it cannot configure.
+With the flag set and no such policy, the finding stands as audited, and so does the volume-source finding below, which the same flag covers; the flag does not reach the API-credential rule.
 
 **Evidence.** `docs/operations/kata-dind-workloads.md:45`, `docs/operations/kata-dind-workloads.md:176`, `docs/operations/kata-dind-workloads.md:293`, `deploy/templates/kata-dind/template.yaml:33`, `docs/design/05-security.md:884`, `docs/design/appendix-h-v2-api-decomposition.md:449`, `cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go:81`, `docs/design/05-security.md:754`, `docs/operations/runner-template-library.md:126`.
 
@@ -329,6 +341,14 @@ Envtest has no kubelet, so the mount itself stays an owner-observed fact.
 
 **Owner check.** Platform owner confirms, without mounting anything against a real external server: whether worker node pools ship NFS or iSCSI client tooling; whether node egress and any CNI host-endpoint policy permit a node to reach a tenant-chosen address; whether a cluster admission policy already limits pod volume types in namespaces labelled actions-gateway.com/tenant=managed; and whether tenant roles allow direct pod creation there.
 
+**Resolved in `v2.0.0`.** The first blocker is measured: against the envtest apiserver at 1.35.0, Pod Security Admission at `baseline` admits a pod with an `nfs` volume and one with an `iscsi` volume and forbids `hostPath`, and `restricted` forbids all three (`TestUpstream_PodSecurity_BaselineAdmitsNetworkVolumes`, which stays in the suite).
+The namespaced-kind webhook now holds `podTemplate.spec.volumes` to the types the `restricted` level allows, by running the upstream `restrictedVolumes` check alone, so the list is `configMap`, `csi`, `downwardAPI`, `emptyDir`, `ephemeral`, `image`, `persistentVolumeClaim`, `projected` and `secret`, as Pod Security Standards 1.37 defines it; the evaluation is pinned to that version, so the list moves only when the pin is raised.
+The GMC flag `--allow-unchecked-runner-template-pod-shape`, default off, turns this rule off together with the `baseline` one, and with it set and no platform policy in its place this finding is open again on every profile but `restricted`, the default `baseline` one included: a tenant can name an `nfs` or `iscsi` server and the node mounts it.
+That is the larger of the opt-out's two costs, because it does not need a `privileged`-profile namespace.
+`ClusterRunnerTemplate` is exempt, and a stored template passes while its `podTemplate` is unchanged.
+The other two blockers are deployment facts and stay unobserved: whether a node could complete the mount, and whether a tenant who may create pods directly has the same path without a template.
+The rule was added anyway because it costs a tenant only the move to a `PersistentVolumeClaim`, and no later minor can add it.
+
 **Evidence.** `docs/design/05-security.md:120`, `docs/design/05-security.md:329`, `docs/design/05-security.md:752`, `cmd/agc/internal/provisioner/pod.go:314`, `docs/operations/admission-policies.md:14`.
 
 ### Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant
@@ -350,6 +370,16 @@ Then add an envtest to cmd/agc/internal/controller/integration/v2_runnerset_scal
 Token minting needs a kubelet, so the final step is a kind e2e case, using a dummy gateway, that asserts the projected token file is present in the runner container.
 
 **Owner check.** Platform owner checks, read-only: whether any RoleBinding, ClusterRoleBinding or workload-identity/Vault federation references the '<gateway>-worker' ServiceAccounts or the system:serviceaccounts groups; whether tenants hold pod create or serviceaccounts/token create in their namespace; and whether the apiserver endpoint is reachable from outside the cluster or through the tenant egress proxy.
+
+**Resolved in `v2.0.0`, in two places.** The apiserver half of the first blocker is measured: the envtest apiserver at 1.35.0 stores a pod with `automountServiceAccountToken: false` and its own projected `serviceAccountToken` source as written (`TestUpstream_ProjectedServiceAccountTokenSurvivesAutomountFalse`).
+Whether the kubelet then mints the token was not run; envtest has no kubelet, and the kind case sketched above was not written.
+The webhook refuses the source on `RunnerTemplate` and on `ClusterRunnerTemplate`: the invariant is a floor on every profile, so platform authorship is no exemption, unlike the two pod-shape rules.
+`buildPod` also removes the source from every worker pod, because the stored-value pass would otherwise leave a template from before the rule projecting a token indefinitely; the volume stays, so a pod mounting it still starts.
+Review of the fix found a second projected source of the same kind, and it is closed with the token: a `podCertificate` source addressed to a signer under `kubernetes.io` is refused on both kinds and removed by `buildPod`.
+`k8s.io/api` v0.37.2 documents `kubernetes.io/kube-apiserver-client-pod` as issuing client certificates the apiserver accepts and as unimplemented, so nothing was reachable; the refusal goes in now because only a major release can add one.
+The whole reserved prefix is refused, not the one named signer, so a signer Kubernetes adds later starts refused and a minor release can admit it.
+Left open on purpose: a `podCertificate` from any other signer (a workload certificate, an API credential only if the cluster administrator configures the apiserver to trust that CA), and a token a mutating admission webhook injects at pod creation (IRSA, EKS Pod Identity, Azure Workload Identity), which `buildPod` runs before and cannot see; the second is read from the order of operations and was not run on a cluster.
+The remaining blockers (what the worker ServiceAccount's token can reach, tenant RBAC) are deployment facts and stay unobserved.
 
 **Evidence.** `docs/design/05-security.md:907`, `docs/design/05-security.md:869`, `cmd/agc/internal/provisioner/pod.go:349`, `cmd/gmc/internal/controller/actionsgateway_v2_builder.go:137`, `cmd/gmc/internal/controller/shared_agc_deployment.go:219`.
 

@@ -661,6 +661,55 @@ func TestProvisioner_ReservedFieldsOverwritten(t *testing.T) {
 	assert.Equal(t, corev1.RestartPolicyNever, pod.Spec.RestartPolicy)
 }
 
+// TestProvisioner_APICredentialProjectionsDropped pins the half of the
+// no-API-credential invariant the automount overwrite does not reach: the kubelet
+// mints a projected serviceAccountToken source whatever automountServiceAccountToken
+// says, and a podCertificate from a reserved signer is an apiserver client
+// certificate, so buildPod removes both and leaves the rest of the volume alone.
+func TestProvisioner_APICredentialProjectionsDropped(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	ctx := context.Background()
+	fc := fake.NewClientBuilder().WithScheme(newScheme()).WithStatusSubresource(&corev1.Pod{}).Build()
+	p := newProvisioner(fc)
+
+	token := corev1.VolumeProjection{ServiceAccountToken: &corev1.ServiceAccountTokenProjection{Path: "token"}}
+	configMap := corev1.VolumeProjection{ConfigMap: &corev1.ConfigMapProjection{
+		LocalObjectReference: corev1.LocalObjectReference{Name: "settings"},
+	}}
+	podCert := func(signer string) corev1.VolumeProjection {
+		return corev1.VolumeProjection{PodCertificate: &corev1.PodCertificateProjection{
+			SignerName: signer, KeyType: "ED25519", CredentialBundlePath: "credentials.pem",
+		}}
+	}
+	apiClientCert := podCert("kubernetes.io/kube-apiserver-client-pod")
+	workloadCert := podCert("example.com/workload-mtls")
+	rg := newRG("mygroup", "team-a")
+	rg.Spec.PodTemplate.Spec.Volumes = []corev1.Volume{
+		{Name: "mixed", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+			Sources: []corev1.VolumeProjection{token, configMap, apiClientCert, workloadCert},
+		}}},
+		{Name: "token-only", VolumeSource: corev1.VolumeSource{Projected: &corev1.ProjectedVolumeSource{
+			Sources: []corev1.VolumeProjection{token},
+		}}},
+	}
+
+	require.NoError(t, rg.provision(ctx, p, "plan-sa-token"))
+
+	pod := waitForPodCreated(ctx, t, fc, "team-a")
+	byName := map[string]corev1.Volume{}
+	for _, v := range pod.Spec.Volumes {
+		byName[v.Name] = v
+	}
+	require.Contains(t, byName, "mixed")
+	require.Contains(t, byName, "token-only", "the volume stays so a container mounting it still starts")
+	assert.Equal(t, []corev1.VolumeProjection{configMap, workloadCert}, byName["mixed"].Projected.Sources,
+		"only the API-credential sources are removed")
+	assert.Empty(t, byName["token-only"].Projected.Sources)
+
+	assert.Len(t, rg.Spec.PodTemplate.Spec.Volumes[0].Projected.Sources, 4,
+		"the resolved template is shared between builds and must not be edited")
+}
+
 // failPodCreateClient wraps a client.Client and returns an error for Pod creates,
 // simulating a Kubernetes admission rejection without depending on pod naming internals.
 type failPodCreateClient struct {

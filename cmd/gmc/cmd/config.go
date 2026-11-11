@@ -35,6 +35,10 @@ type resolvedConfig struct {
 	podServiceAccount           string
 	deploymentName              string
 	cacheOptions                cache.Options
+
+	// allowUncheckedRunnerTemplatePodShape carries
+	// --allow-unchecked-runner-template-pod-shape to the RunnerTemplate webhook.
+	allowUncheckedRunnerTemplatePodShape bool
 }
 
 // resolveConfig validates the GMC's cross-flag configuration and builds the live
@@ -106,6 +110,8 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 		podServiceAccount:           getenv("POD_SERVICE_ACCOUNT"),
 		deploymentName:              getenv("DEPLOYMENT_NAME"),
 		cacheOptions:                cacheOptions,
+
+		allowUncheckedRunnerTemplatePodShape: cfg.allowUncheckedRunnerTemplatePodShape,
 	}, nil
 }
 

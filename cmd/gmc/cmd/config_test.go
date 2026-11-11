@@ -61,6 +61,9 @@ func TestAddFlags(t *testing.T) {
 		if f.allowFloatingImageTags || f.allowAgcExtraEnv || f.enableTenantServiceMonitors {
 			t.Error("dev/test opt-in flags must all default to false")
 		}
+		if f.allowUncheckedRunnerTemplatePodShape {
+			t.Error("--allow-unchecked-runner-template-pod-shape must default to false: the pod-shape rules are on unless the platform opts out")
+		}
 	})
 
 	t.Run("overrides", func(t *testing.T) {
@@ -73,6 +76,7 @@ func TestAddFlags(t *testing.T) {
 			"--allowed-priority-classes=high",
 			"--fqdn-policy-backend=cilium",
 			"--allow-floating-image-tags=true",
+			"--allow-unchecked-runner-template-pod-shape=true",
 		})
 		if err != nil {
 			t.Fatalf("parse: %v", err)
@@ -94,6 +98,9 @@ func TestAddFlags(t *testing.T) {
 		}
 		if !f.allowFloatingImageTags {
 			t.Error("--allow-floating-image-tags=true must set the flag")
+		}
+		if !f.allowUncheckedRunnerTemplatePodShape {
+			t.Error("--allow-unchecked-runner-template-pod-shape=true must set the flag")
 		}
 	})
 }
@@ -124,6 +131,17 @@ func TestResolveConfig(t *testing.T) {
 		}
 		if rc.cacheOptions.ByObject != nil {
 			t.Error("no ConfigMap watch configured, so cache ByObject must be nil")
+		}
+		if rc.allowUncheckedRunnerTemplatePodShape {
+			t.Error("the pod-shape opt-out must stay off when its flag is unset")
+		}
+		cfg.allowUncheckedRunnerTemplatePodShape = true
+		rc, err = resolveConfig(cfg, fakeGetenv(map[string]string{"POD_NAMESPACE": "gmc-system"}))
+		if err != nil {
+			t.Fatalf("resolveConfig: %v", err)
+		}
+		if !rc.allowUncheckedRunnerTemplatePodShape {
+			t.Error("--allow-unchecked-runner-template-pod-shape must reach the resolved config the webhook is built from")
 		}
 	})
 

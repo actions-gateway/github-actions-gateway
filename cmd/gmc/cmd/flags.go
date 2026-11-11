@@ -35,6 +35,8 @@ type gmcFlags struct {
 	allowFloatingImageTags      bool
 	enableTenantServiceMonitors bool
 
+	allowUncheckedRunnerTemplatePodShape bool
+
 	allowedPriorityClasses      string
 	allowedInfraPriorityClasses string
 	priorityClassAllowlistName  string
@@ -100,6 +102,18 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"metrics ports (:8443). Off by default: requires the monitoring.coreos.com CRD "+
 			"(Prometheus Operator) installed. When off, the metrics Services are still created "+
 			"but nothing is wired to scrape them. The chart sets this from metrics.serviceMonitor.enabled.")
+	fs.BoolVar(&f.allowUncheckedRunnerTemplatePodShape, "allow-unchecked-runner-template-pod-shape", false,
+		"Skip the two pod-shape rules the admission webhook applies to a namespaced "+
+			"RunnerTemplate: the Pod Security Standards baseline level, and the volume types the "+
+			"restricted level allows. For a platform that decides tenant pod shape with its own "+
+			"admission policy (a ValidatingAdmissionPolicy or a policy engine), which can refuse "+
+			"more than the webhook does but cannot admit what the webhook refuses. Off by default: "+
+			"with it on and no such policy, a tenant in a privileged-profile namespace can author "+
+			"a worker pod that reaches the node, and a tenant in any namespace below the restricted "+
+			"profile can declare an nfs or iscsi volume the node mounts from a server the tenant "+
+			"names. The privileged-container, PriorityClass and "+
+			"API-credential rules stay enforced. The chart sets this from "+
+			"allowUncheckedRunnerTemplatePodShape.")
 	fs.StringVar(&f.allowedPriorityClasses, "allowed-priority-classes", "",
 		"Comma-separated allowlist of cluster-scoped PriorityClass names that tenant "+
 			"RunnerSets may reference in priorityTiers. The platform admin pre-creates "+

@@ -936,6 +936,10 @@ Before hand-authoring a `RunnerTemplate`, check whether one of the three shipped
 A `RunnerSet` then names one with `templateRef: { name: plain, kind: ClusterRunnerTemplate }`.
 They are cluster-scoped and platform-applied, none is marked as the cluster default, and each carries prerequisites the template cannot express: see the [runner template library](runner-template-library.md).
 
+A `RunnerTemplate` you author yourself has a narrower range than those entries.
+Unless the platform has turned those two rules off, admission holds it to the Pod Security Standards `baseline` level on every security profile and to the volume types the `restricted` level allows; it always refuses a projected ServiceAccount token on either kind ([the rejections and their fixes](troubleshooting.md#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token)).
+A shape past that, the two DinD entries included, has to be a `ClusterRunnerTemplate` the platform publishes.
+
 ### Optional `templateRef` (a default worker pod shape)
 
 `RunnerSet.spec.templateRef` is **optional**.

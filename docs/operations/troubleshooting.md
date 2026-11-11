@@ -92,6 +92,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [`noProxyCIDRs` Rejected: Entry Would Bypass the Proxy for GitHub](#noproxycidrs-rejected-entry-would-bypass-the-proxy-for-github)
 - [Privileged Worker Container Rejected by Admission](#privileged-worker-container-rejected-by-admission)
 - [`RunnerTemplate` Rejected: Reserved Pod Field](#runnertemplate-rejected-reserved-pod-field)
+- [`RunnerTemplate` Rejected: Pod Shape Past Baseline, Volume Type, or ServiceAccount Token](#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token)
 - [`RunnerSet` Rejected: Duplicate First `runnerLabel`](#runnerset-rejected-duplicate-first-runnerlabel)
 - [`ActionsGateway` Reports `ScaleSetNameCollision`](#actionsgateway-reports-scalesetnamecollision)
 - [`RunnerSet` Rejected: `nodeShare.allocatable` Declares Neither cpu Nor memory](#runnerset-rejected-nodeshareallocatable-declares-neither-cpu-nor-memory)
@@ -3664,6 +3665,60 @@ The scalar reserved pod-level fields (`serviceAccountName`, `host{PID,Network,IP
 - Remove the reserved proxy env vars from every container and init container; the AGC sets them itself.
 - For a **privileged** worker shape (Kata/DinD/sysbox), have a platform administrator publish it as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`.
   Privileged pods still require the namespace's Pod Security Admission level to admit them (stamped from the namespace's security profile), which remains the runtime backstop.
+
+---
+
+## `RunnerTemplate` Rejected: Pod Shape Past Baseline, Volume Type, or ServiceAccount Token
+
+**Symptoms.** Creating a `RunnerTemplate`, or changing its `podTemplate`, is rejected by the GMC validating webhook with one of:
+
+```
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
+podTemplate exceeds the Pod Security Standards baseline level, which a namespaced
+RunnerTemplate must meet: non-default capabilities (container "runner" must not
+include "SYS_ADMIN" in securityContext.capabilities.add); use a platform-owned
+ClusterRunnerTemplate for a worker shape that needs more
+```
+
+```
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
+podTemplate.spec.volumes: restricted volume types (volume "data" uses restricted
+volume type "nfs"); a namespaced RunnerTemplate may use only configMap, csi,
+downwardAPI, emptyDir, ephemeral, image, persistentVolumeClaim, projected and
+secret volumes; mount other storage through a PersistentVolumeClaim, or use a
+platform-owned ClusterRunnerTemplate
+```
+
+```
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
+podTemplate.spec.volumes["creds"]: a projected serviceAccountToken source is
+reserved: worker pods carry no Kubernetes API credential; remove the source
+```
+
+The third also comes from `vclusterrunnertemplate-v2.kb.io`, for a `ClusterRunnerTemplate`.
+
+**Likely cause.** Each message is one rule, and the text in parentheses names the container, volume and value that tripped it.
+
+- **Past baseline.** A namespaced `RunnerTemplate` must meet the Pod Security Standards `baseline` level on every security profile, the `privileged` one included.
+  The webhook runs the checks Pod Security Admission runs, so the reasons read the same: a capability outside the baseline set, `hostPath`, `hostPort`, an `Unconfined` seccomp or AppArmor profile, an unmasked `procMount`, an unsafe sysctl, an SELinux type outside the allowed set, a Windows `hostProcess` container, a `host` on a probe or lifecycle hook.
+- **Volume type.** A namespaced `RunnerTemplate` may declare only the volume types the `restricted` level allows.
+  The node mounts an `nfs` or `iscsi` volume itself, so that traffic passes neither the worker `NetworkPolicy` nor the egress proxy.
+- **ServiceAccount token.** Neither kind may project a ServiceAccount token.
+  `automountServiceAccountToken: false` does not stop a `projected` volume from carrying one.
+  The same rule refuses a `podCertificate` source whose signer begins with `kubernetes.io`, with a message that names the signer.
+
+**Resolution.**
+
+- For a shape past `baseline`, or a volume type off the list, have a platform administrator publish the template as a `ClusterRunnerTemplate` and reference it from the `RunnerSet`'s `templateRef` with `kind: ClusterRunnerTemplate`.
+  The cluster-scoped kind is exempt from both rules; Pod Security Admission still decides whether the namespace admits the pod.
+- Where the platform's own admission policy is meant to decide tenant pod shape, the two rules can be turned off for the whole install with the chart value `allowUncheckedRunnerTemplatePodShape` ([what that gives up](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
+  A policy that permits a shape does not override this webhook's refusal.
+- For shared or network storage a tenant owns, mount a `persistentVolumeClaim` instead ([shared worker storage](worker-shared-storage.md)).
+- Remove a `serviceAccountToken` source, or a `podCertificate` source with a `kubernetes.io` signer.
+  No template kind may carry one, and the AGC removes it from the worker pod regardless.
+
+A template stored before `v2.0.0` keeps working: an edit that leaves `podTemplate` alone is accepted.
+The first change to `podTemplate` is checked against all three rules ([finding the affected templates](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
 
 ---
 
