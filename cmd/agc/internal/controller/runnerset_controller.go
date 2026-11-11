@@ -866,11 +866,19 @@ func (r *RunnerSetReconciler) reapWorkerPods(ctx context.Context, log *slog.Logg
 // failure is logged and left to the start-up sweep. None of them may stop the reap —
 // the pod is condemned either way, and a retained pod would hold its concurrency slot.
 func (r *RunnerSetReconciler) deregisterScaleSetRunner(rs *v2.RunnerSet, log *slog.Logger) func(context.Context, string) {
-	ssClient := r.scaleSetClientFor(types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name})
+	ssClient, scaleSetName := r.scaleSetClientFor(types.NamespacedName{Namespace: rs.Namespace, Name: rs.Name})
 	if ssClient == nil {
 		return nil
 	}
 	return func(ctx context.Context, runnerName string) {
+		// The annotation is a pod field, writable by anyone who can patch the pod, and
+		// the name resolves across the whole org or repo listing, so only a name this
+		// set's listener minted is deregistered — the sweep's ownership test (Q1325).
+		if !scalesetlistener.MintedBy(scaleSetName, runnerName) {
+			log.Info("reaper: not deregistering a runner name this scale set did not mint",
+				"runner", runnerName, "scaleSet", scaleSetName)
+			return
+		}
 		deleted, err := ssClient.DeregisterRunnerByName(ctx, runnerName)
 		switch {
 		case err != nil:
