@@ -1127,7 +1127,7 @@ def chart_velocity():
     fig.text(0.012, 0.006,
              "bars are daily · lines are a 7-day centered mean, stopping 3 days short at each end "
              "rather than averaging a partial window · shaded = the series cannot mean what its axis "
-             "says yet · Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
+             "says yet\nOpus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
              fontsize=7.5, color="#999")
     save(fig, "velocity")
 
@@ -1627,9 +1627,9 @@ def chart_session_kinds():
     a0.legend(loc="upper left", frameon=False, fontsize=9.5, ncol=3)
     fig.text(0.012, 0.006,
              "sessions counted on the day they started; tokens on the day they were spent · "
-             "lines are a 7-day centered mean · covers only days with surviving transcripts, "
-             "about half the project's spend · a session's kind is read from its opening prompt, "
-             "which is a convention the dispatcher follows rather than a marker it emits",
+             "lines are a 7-day centered mean · covers only days with surviving transcripts\n"
+             "a session's kind is read from its opening, which is mostly a convention: "
+             "the dispatcher's marker covers only Sep 17 to Oct 10",
              fontsize=7.5, color="#999")
     save(fig, "session_kinds")
 
