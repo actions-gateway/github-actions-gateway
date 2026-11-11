@@ -175,7 +175,9 @@ The class puts preconditions on that switch, and a set whose preconditions fail 
 **The class replaces the precondition-free switch rather than sitting beside it.** Kept beside it, the class would be an opt-in stricter mode, and Q1220 rejected exactly that shape for the refusal itself: an adopter who never sets the stricter field stays exposed.
 So once the class is built, accepting fork jobs means the preconditions are checked.
 The escape hatch stays the operator's explicit act: the micro-VM list the kernel row checks is the operator's, so an operator who accepts forks on another runtime says so by listing it.
-Q1330 ships the switch without preconditions, so adding them later is a breaking tightening for any set that accepts forks on a posture that would fail them, and the release that builds the class carries an upgrade note.
+Q1330 ships the switch without preconditions, so how the class retires the bare form is an API decision this section leaves open, with two shapes on the table.
+Tightening `Accept` in place changes what a stored value does, which [Is this change breaking?](../development/api-review.md#is-this-change-breaking) counts as a behaviour change on existing objects.
+Adding a value beside `Accept` is not breaking, but it leaves the bare form standing until a deprecation removes it.
 Its jobs from the repository's own branches are unaffected either way.
 
 The class is drawn per `RunnerSet` and marks one set, so it does not revive the cluster-default template that Definition of Done #1 declines: a set that never declares it gets nothing new.
