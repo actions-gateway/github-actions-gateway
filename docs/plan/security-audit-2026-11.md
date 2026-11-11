@@ -1140,6 +1140,7 @@ Source shows both paths the lead names: the AGC zeroes `activeJobs`/`pendingJobs
 Two unit cases in `actionsgateway_v2_worker_drain_test.go`, a Running pod past the deadline and a terminating pod with zero counts, went red on `main` with the policy deleted.
 Teardown now keeps `<gateway>-workload`, and the finalizer, while any pod of a bound RunnerSet remains, from an uncached metadata Pod list granted through `gmc-tenant-secret-reader` (which gains `list` on Pods); a neighbour gateway's pods do not hold it.
 `TestGMC_Teardown_HoldsWorkloadPolicyForWorkerPod` pins it under the shipped RBAC and goes red with the hold removed.
+Review found two gaps in that first fix, each now a test that went red on it: a RunnerSet deleted with its gateway left its terminating pods unheld, so a pod whose RunnerSet is gone now holds too; and deleting the namespace wedged teardown on a Pod list its revoked binding refused, so a terminating namespace now skips the hold.
 Not observed: how a CNI treats a pod whose policy is deleted, since no kind cluster was available (Docker was not running); the fix no longer depends on it, because the policy now outlives the pods.
 The owner check was not run.
 

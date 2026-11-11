@@ -206,3 +206,46 @@ func TestReconcileDeleteV2_OtherGatewaysWorkersDoNotHold(t *testing.T) {
 	assert.True(t, apierrors.IsNotFound(c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{})),
 		"another gateway's worker pods must not hold this gateway's teardown")
 }
+
+// TestReconcileDeleteV2_OrphanedWorkerKeepsWorkloadPolicy (Q1328 review): a RunnerSet
+// deleted with its gateway sheds its finalizer without waiting for its pods, so a
+// terminating worker can outlive the set that bound it. Its owner gone, the pod still
+// runs job code, so it holds the policy too.
+func TestReconcileDeleteV2_OrphanedWorkerKeepsWorkloadPolicy(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := "team-a"
+	ag := deletingV2GatewayFor(10 * time.Second)
+	pod := workerPod("gone-w1", ns, "gone")
+	now := metav1.Now()
+	pod.DeletionTimestamp = &now
+	pod.Finalizers = []string{"test.actions-gateway.com/hold"}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(ag, workloadNP(ag), pod).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
+
+	_, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{}),
+		"a terminating worker whose RunnerSet is already gone must stay confined")
+}
+
+// TestReconcileDeleteV2_TerminatingNamespaceSkipsHold (Q1328 review): deleting the
+// namespace revokes the reader binding the Pod list rides on, and the namespace
+// controller deletes the policy and the pods itself, so the hold neither can run nor
+// protects anything there.
+func TestReconcileDeleteV2_TerminatingNamespaceSkipsHold(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := "team-a"
+	ag := deletingV2GatewayFor(10 * time.Second)
+	now := metav1.Now()
+	nsObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns, DeletionTimestamp: &now, Finalizers: []string{"kubernetes"}}}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ag, nsObj, workloadNP(ag), workingRunnerSet("drained", ns, 0, 0), workerPod("drained-w1", ns, "drained")).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
+
+	_, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.True(t, apierrors.IsNotFound(c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{})),
+		"a terminating namespace must not hold the gateway on a Pod list it can no longer authorize")
+}

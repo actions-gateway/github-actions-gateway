@@ -371,3 +371,40 @@ func TestGMC_Teardown_HoldsWorkloadPolicyForWorkerPod(t *testing.T) {
 	}, 20*time.Second, 50*time.Millisecond).Should(gomega.BeTrue(), "the gateway finalizes away once the pod is gone")
 	require.True(t, apierrors.IsNotFound(k8sClient.Get(ctx, npKey, &networkingv1.NetworkPolicy{})))
 }
+
+// TestGMC_Teardown_FinalizesInTerminatingNamespace pins the Q1328 review finding:
+// deleting a tenant namespace revokes the reader binding the teardown hold lists
+// Pods through, so the hold must not apply there or the gateway never finalizes.
+// envtest runs no namespace controller, so the namespace's binding delete is done by
+// hand and the namespace stays Terminating.
+func TestGMC_Teardown_FinalizesInTerminatingNamespace(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	const ns = "teardown-ns-terminating"
+	const gwName = "gw-ns-gone"
+	createNamespaceWithLabels(t, ns, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	createGitHubAppSecret(t, ns, "github-app")
+	ag := newV2GatewayWired(gwName, ns, "github-app", "")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	rs := newBoundRunnerSet("ns-gone-set", ns)
+	rs.Spec.GatewayRef.Name = gwName
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+
+	startGMCAsServiceAccount(t)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwName + "-workload"}, &networkingv1.NetworkPolicy{})
+	}, 20*time.Second, 50*time.Millisecond).Should(gomega.Succeed())
+
+	var n corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: ns}, &n))
+	require.NoError(t, k8sClient.Delete(ctx, &n))
+	require.NoError(t, k8sClient.Delete(ctx, &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: controller.TenantSecretReaderName}}))
+	require.NoError(t, k8sClient.Delete(ctx, ag))
+
+	g.Eventually(func() bool {
+		return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(ag), &gmcv2.ActionsGateway{}))
+	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "the gateway finalizes in a terminating namespace")
+}

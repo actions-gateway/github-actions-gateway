@@ -1198,8 +1198,10 @@ func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag
 }
 
 // boundWorkerPods names the pods, terminating ones included, that the workload
-// NetworkPolicy selects and that belong to a RunnerSet bound to ag. It reads pod
-// metadata uncached, through the namespace's gmc-tenant-secret-reader RoleBinding.
+// NetworkPolicy selects and that belong to a RunnerSet bound to ag, or to one that
+// no longer exists: a RunnerSet deleted with its gateway sheds its finalizer before
+// its pods exit. It reads pod metadata uncached, through the namespace's
+// gmc-tenant-secret-reader RoleBinding.
 func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gmcv2.ActionsGateway) ([]string, error) {
 	var rsList gmcv2.RunnerSetList
 	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
@@ -1207,12 +1209,7 @@ func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gm
 	}
 	bound := map[string]bool{}
 	for i := range rsList.Items {
-		if rsList.Items[i].Spec.GatewayRef.Name == ag.Name {
-			bound[rsList.Items[i].Name] = true
-		}
-	}
-	if len(bound) == 0 {
-		return nil, nil
+		bound[rsList.Items[i].Name] = rsList.Items[i].Spec.GatewayRef.Name == ag.Name
 	}
 	pods := &metav1.PartialObjectMetadataList{}
 	pods.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("PodList"))
@@ -1222,11 +1219,26 @@ func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gm
 	}
 	var names []string
 	for i := range pods.Items {
-		if bound[pods.Items[i].Labels[labelRunnerSetOwner]] {
+		set, ok := pods.Items[i].Labels[labelRunnerSetOwner]
+		if !ok {
+			continue
+		}
+		if mine, exists := bound[set]; mine || !exists {
 			names = append(names, pods.Items[i].Name)
 		}
 	}
 	return names, nil
+}
+
+// namespaceTerminating reports whether ag's namespace is being deleted. The namespace
+// controller then deletes the workload NetworkPolicy and the pods itself, and revokes
+// the reader binding the Pod list needs, so the teardown hold does not apply.
+func (r *ActionsGatewayV2Reconciler) namespaceTerminating(ctx context.Context, ag *gmcv2.ActionsGateway) (bool, error) {
+	var ns corev1.Namespace
+	if err := r.uncachedReader().Get(ctx, types.NamespacedName{Name: ag.Namespace}, &ns); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+	return !ns.DeletionTimestamp.IsZero(), nil
 }
 
 // reconcileDelete tears down the per-gateway control plane fail-closed (Q125,
@@ -1331,8 +1343,13 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 	// cannot vouch for that: the counts reach zero when the AGC issues its deletes,
 	// while the kubelet runs each pod through the template's
 	// terminationGracePeriodSeconds, and past the deadline the pods are not reaped at
-	// all. A pod list that fails holds the policy too.
-	if workers, err := r.boundWorkerPods(ctx, ag); err != nil {
+	// all. A pod list that fails holds the policy too, except in a terminating
+	// namespace, where the namespace controller removes both.
+	if terminating, err := r.namespaceTerminating(ctx, ag); err != nil {
+		errs = append(errs, fmt.Errorf("NetworkPolicy %s: reading namespace: %w", workloadNPNameV2(ag), err))
+	} else if terminating {
+		del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, workloadNPNameV2(ag))
+	} else if workers, err := r.boundWorkerPods(ctx, ag); err != nil {
 		errs = append(errs, fmt.Errorf("NetworkPolicy %s: listing worker pods: %w", workloadNPNameV2(ag), err))
 	} else if len(workers) > 0 {
 		lingering = append(lingering, fmt.Sprintf("NetworkPolicy %s (held for worker pods %s)",

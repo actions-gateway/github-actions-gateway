@@ -1076,7 +1076,7 @@ On an affected one the GMC's stamp is denied, the Pod Security labels stay as th
 **Who is affected:** anyone who deletes an `ActionsGateway` while its `RunnerSet`s still have worker pods.
 
 **What changed.** Teardown used to delete the `<gateway>-workload` NetworkPolicy once the bound sets reported no jobs, which happens as soon as the AGC issues its pod deletes, while each pod still runs through its `terminationGracePeriodSeconds`; past the 90-second drain deadline the pods were not reaped at all.
-It now deletes every other child and keeps that policy, and the gateway's finalizer, until no pod of a bound set remains (Q1328).
+It now deletes every other child and keeps that policy, and the gateway's finalizer, until no pod of a bound set, or of a RunnerSet already deleted, remains (Q1328); deleting the namespace skips the wait.
 To see those pods, the `gmc-tenant-secret-reader` ClusterRole gains `list` on Pods, still granted one tenant namespace at a time.
 `gmc-tenant-resource-guard` also now admits a GMC RoleBinding write only as its own reader binding or an `agc-tenant-role` binding to ServiceAccounts of that namespace, the two shapes the GMC writes.
 
