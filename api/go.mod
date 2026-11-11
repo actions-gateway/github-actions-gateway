@@ -1,6 +1,6 @@
 module github.com/actions-gateway/github-actions-gateway/api
 
-go 1.27.3
+go 1.27.4
 
 require (
 	k8s.io/api v0.37.2

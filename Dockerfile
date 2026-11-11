@@ -34,7 +34,7 @@
 # --platform=$BUILDPLATFORM: the builder always runs on the build host's native
 # platform and CROSS-COMPILES for $TARGETARCH — no QEMU emulation of the Go
 # toolchain on a multi-platform build.
-FROM --platform=$BUILDPLATFORM golang:1.27@sha256:2920bb124f1a2e12a1d39f0cab756ae0068441ee1da7655dec7f5e374944095b AS deps
+FROM --platform=$BUILDPLATFORM golang:1.27@sha256:01aa404fa56b604b6f48e90c1d6e2c79fe5cd78f9592f78d80303fbe171cdcc0 AS deps
 WORKDIR /src
 
 # TARGETOS/TARGETARCH are populated by BuildKit from the requested target
