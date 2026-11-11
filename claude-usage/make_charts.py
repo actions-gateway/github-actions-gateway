@@ -924,10 +924,18 @@ def chart_parallel_sessions():
            alpha=0.45, zorder=2)
     a1.plot(xs, mean, color=darken(OI["green"]), lw=2.6, marker="o", ms=5, zorder=4,
             path_effects=halo)
-    for x, v in zip(xs, mean):
-        a1.annotate(f"{v:.1f}", (x, v), xytext=(0, 7), textcoords="offset points", ha="center",
-                    fontsize=9, fontweight="bold", color=darken(OI["green"]), zorder=6,
-                    path_effects=halo)
+    # A label on every day overlaps once the series passes a few weeks, so only the
+    # highest means are labelled, greedily, at least a week apart.
+    labelled = []
+    for x in sorted(xs, key=lambda i: -mean[i]):
+        if len(labelled) == 8:
+            break
+        if all(abs(x - y) >= 7 for y in labelled):
+            labelled.append(x)
+    for x in labelled:
+        a1.annotate(f"{mean[x]:.1f}", (x, mean[x]), xytext=(0, 7), textcoords="offset points",
+                    ha="center", fontsize=9, fontweight="bold", color=darken(OI["green"]),
+                    zorder=6, path_effects=halo)
     a1.set_title("Parallel Claude Code sessions", fontsize=14, fontweight="bold", loc="left")
     a1.set_ylabel("sessions running at once", fontsize=11)
     a1.set_ylim(0, max(peak) * 1.22)
@@ -1390,6 +1398,7 @@ def chart_rhythm(dim):
                     (xs[hi], vals[hi]), xytext=(0, 4), textcoords="offset points",
                     ha="center", fontsize=9, fontweight="bold", color=darken(c),
                     zorder=LABEL_Z, path_effects=HALO)
+        ax.set_ylim(0, max(vals) * 1.18 if max(vals) else 1)  # room for the label under the title
         ax.set_ylabel(ylab, fontsize=10.5)
         ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
         ax.grid(axis="y", alpha=0.22)
@@ -1399,6 +1408,7 @@ def chart_rhythm(dim):
     axes[-1].set_xticklabels(labels, fontsize=9.5)
     fig.suptitle(f"The project's rhythm by {title_of}", fontsize=14, fontweight="bold",
                  x=0.012, ha="left", y=0.995)
+    fig.subplots_adjust(top=0.95)
     note = ("every timestamp bucketed in local time, since UTC would move an evening onto the next day"
             " · keyboard share and token spend only exist from 2026-07-26")
     if dim == "weekday":
