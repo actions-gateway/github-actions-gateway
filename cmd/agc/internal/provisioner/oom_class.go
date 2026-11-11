@@ -222,7 +222,7 @@ func evictOldestMemoryFloors(l *rerunLedger, excess int) bool {
 		freed += len(k) + len(b) + len(`"":,`)
 		delete(l.MemoryFloors, k)
 	}
-	return len(keys) > 0
+	return freed > 0
 }
 
 // applyMemoryFloor returns spec with job's memory limit raised to the floor an
