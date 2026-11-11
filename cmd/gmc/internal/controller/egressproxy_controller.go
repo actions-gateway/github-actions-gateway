@@ -33,9 +33,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -54,10 +56,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
+
+// allowlistPendingRequeue is how soon a pool holding for the egress allowlist's
+// ConfigMap to load looks again. The load itself requeues every pool; this covers a
+// GMC wired without the AllowlistChanged channel, and a wait that ends at its
+// deadline with no load.
+const allowlistPendingRequeue = 2 * time.Second
 
 // EgressProxyReconciler reconciles a v2 EgressProxy into a standalone proxy
 // pool, owning the proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
@@ -105,6 +116,14 @@ type EgressProxyReconciler struct {
 	// is treated as FQDNBackendNone: FQDN intent emits no CNI-native policy (and is
 	// rejected at admission).
 	FQDNBackend FQDNBackend
+	// EgressAllowlist is the platform egress allowlist a referrer's GitHub host must be
+	// on to reach the emitted FQDN policy or the CONNECT allowlist (Q1322). nil covers
+	// nothing, so only the built-in public GitHub hosts are emitted.
+	EgressAllowlist *allowlist.EgressDestinationAllowlist
+	// AllowlistChanged requeues every EgressProxy when the allowlist's ConfigMap half
+	// is replaced, so an added entry reaches a pool's policy and a removed one leaves
+	// it without waiting for the egress re-check. nil when no ConfigMap is configured.
+	AllowlistChanged <-chan event.TypedGenericEvent[struct{}]
 	// Now supplies the current time for failure-attribution port holds. nil is
 	// time.Now.
 	Now func() time.Time
@@ -140,12 +159,20 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The GitHub host a referrer binds to this proxy lives on the referrer, not here,
 	// so the hostname allowlists must be assembled from the referrer graph (Q506 #2).
 	// A read failure degrades rather than emitting a policy missing a tenant's host.
-	gitHubHosts, err := resolveReferrerGitHubHosts(ctx, r.Client, &ep)
+	// Read before the hosts are judged, so a load landing in between is not missed.
+	allowlistPending := r.EgressAllowlist.DynamicPending()
+	gitHubHosts, err := resolveReferrerGitHubHosts(ctx, r.Client, &ep, r.EgressAllowlist)
 	if err != nil {
 		return r.setDegraded(ctx, &ep, &provisioningError{step: "resolve referrer GitHub hosts", err: err})
 	}
+	// The allowlist's ConfigMap has not been read since this process started, so a
+	// refusal may be of a host it is about to cover. Hold rather than narrow a live
+	// policy on a restart.
+	if allowlistPending && slices.ContainsFunc(gitHubHosts.refused, isGitHubHostname) {
+		return ctrl.Result{RequeueAfter: allowlistPendingRequeue}, nil
+	}
 
-	if err := r.reconcileResources(ctx, &ep, githubCIDRs, gitHubHosts); err != nil {
+	if err := r.reconcileResources(ctx, &ep, githubCIDRs, gitHubHosts.allowed); err != nil {
 		return r.setDegraded(ctx, &ep, err)
 	}
 
@@ -567,7 +594,7 @@ func (r *EgressProxyReconciler) applyOwnedSecret(ctx context.Context, ep *gmcv2.
 // status/condition contract (§H.7): readyReplicas, observedGeneration, a Ready
 // condition (True once readyReplicas ≥ minReplicas), and a cleared Degraded
 // condition (the reconcile reached here, so provisioning succeeded).
-func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2.EgressProxy, gitHubHosts []string) (ctrl.Result, error) {
+func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2.EgressProxy, gitHubHosts referrerGitHubHosts) (ctrl.Result, error) {
 	var dep appsv1.Deployment
 	readyReplicas := int32(0)
 	if err := r.Get(ctx, types.NamespacedName{Namespace: ep.Namespace, Name: proxyResourceName(ep)}, &dep); err == nil {
@@ -624,8 +651,8 @@ func (r *EgressProxyReconciler) updateStatus(ctx context.Context, ep *gmcv2.Egre
 	setCondition(gmcv2.ConditionProxyQuotaExceeded, qc.exceeded, qc.exceededReason, qc.exceededMessage)
 	es := r.evalEgressProxyEgressRulesStale(ep, now.Time)
 	setCondition(gmcv2.ConditionEgressRulesStale, es.stale, es.reason, es.message)
-	// GitHubEgressIncomplete (Q506 #3): the one GHES gap the GMC cannot close, named
-	// rather than left to surface as a connect timeout with no cause.
+	// GitHubEgressIncomplete (Q506 #3, Q1322): the GHES gaps the GMC cannot close,
+	// named rather than left to surface as a connect timeout with no cause.
 	eg := evalGitHubEgressIncomplete(ep, gitHubHosts)
 	setCondition(gmcv2.ConditionGitHubEgressIncomplete, eg.incomplete, eg.reason, eg.message)
 
@@ -725,7 +752,7 @@ func (r *EgressProxyReconciler) setDegraded(ctx context.Context, ep *gmcv2.Egres
 // The Secret still carries a controller owner reference for GC, and ensureProxyCert
 // re-creates it on the next reconcile if it is removed out-of-band.
 func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
+	b := ctrl.NewControllerManagedBy(mgr).
 		For(&gmcv2.EgressProxy{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
@@ -758,6 +785,27 @@ func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.referrerToEgressProxies),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
-		Named("egressproxy").
-		Complete(r)
+		Named("egressproxy")
+	if r.AllowlistChanged != nil {
+		b = b.WatchesRawSource(source.Channel(r.AllowlistChanged,
+			handler.TypedEnqueueRequestsFromMapFunc(r.allEgressProxies)))
+	}
+	return b.Complete(r)
+}
+
+// allEgressProxies maps an egress-allowlist change to every EgressProxy: any pool may
+// have a referrer whose GitHub host the change covers or uncovers.
+func (r *EgressProxyReconciler) allEgressProxies(ctx context.Context, _ struct{}) []reconcile.Request {
+	var list gmcv2.EgressProxyList
+	if err := r.List(ctx, &list); err != nil {
+		return nil
+	}
+	reqs := make([]reconcile.Request, 0, len(list.Items))
+	for i := range list.Items {
+		reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
+			Namespace: list.Items[i].Namespace,
+			Name:      list.Items[i].Name,
+		}})
+	}
+	return reqs
 }

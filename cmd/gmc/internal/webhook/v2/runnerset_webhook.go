@@ -62,7 +62,7 @@ func (v *RunnerSetCustomValidator) ValidateCreate(ctx context.Context, obj *agcv
 	if err := v.validatePriorityTiers(obj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateScaleSetLabelUniqueness(ctx, obj); err != nil {
+	if err := v.validateScaleSetLabelUniqueness(ctx, obj, false); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateProxyGitHubBypass(ctx, nil, obj); err != nil {
@@ -84,7 +84,7 @@ func (v *RunnerSetCustomValidator) ValidateUpdate(ctx context.Context, oldObj, n
 	if err := v.validatePriorityTiers(newObj); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateScaleSetLabelUniqueness(ctx, newObj); err != nil {
+	if err := v.validateScaleSetLabelUniqueness(ctx, newObj, scaleSetClaimUnchanged(oldObj, newObj)); err != nil {
 		return nil, logRejection(ctx, "RunnerSet", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateProxyGitHubBypass(ctx, oldObj, newObj); err != nil {
@@ -142,7 +142,12 @@ func (v *RunnerSetCustomValidator) ValidateDelete(_ context.Context, _ *agcv2.Ru
 //
 // The check is fail-closed: if a List errors, the request is rejected rather than admitted on
 // faith — admitting a possible collision is the failure mode this guards against.
-func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2.RunnerSet) error {
+//
+// claimUnchanged is true for an update that keeps the first label and the gateway.
+// Such a write cannot create a collision, so it is judged on the scopes as written and
+// a set stored under a public GitHub alias stays editable
+// (scalesetscope.Claim.CollidesAsWritten).
+func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.Context, rs *agcv2.RunnerSet, claimUnchanged bool) error {
 	if len(rs.Spec.RunnerLabels) == 0 {
 		// MinItems=1 rejects this before the webhook runs; nothing to compare.
 		return nil
@@ -159,11 +164,16 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 			rs.Name, rs.Namespace, err)
 	}
 	self := scalesetscope.Claim{
-		Namespace:  rs.Namespace,
-		Name:       rs.Name,
-		GatewayRef: rs.Spec.GatewayRef.Name,
-		Label:      rs.Spec.RunnerLabels[0],
-		Scope:      inv.ScopeOf(rs.Namespace, rs.Spec.GatewayRef.Name),
+		Namespace:      rs.Namespace,
+		Name:           rs.Name,
+		GatewayRef:     rs.Spec.GatewayRef.Name,
+		Label:          rs.Spec.RunnerLabels[0],
+		Scope:          inv.ScopeOf(rs.Namespace, rs.Spec.GatewayRef.Name),
+		ScopeAsWritten: inv.ScopeAsWrittenOf(rs.Namespace, rs.Spec.GatewayRef.Name),
+	}
+	collides := scalesetscope.Claim.CollidesWith
+	if claimUnchanged {
+		collides = scalesetscope.Claim.CollidesAsWritten
 	}
 	for _, other := range inv.Claims {
 		// On CREATE the new object is not yet persisted; on UPDATE it appears in the
@@ -171,11 +181,19 @@ func (v *RunnerSetCustomValidator) validateScaleSetLabelUniqueness(ctx context.C
 		if other.Namespace == self.Namespace && other.Name == self.Name {
 			continue
 		}
-		if self.CollidesWith(other) {
+		if collides(self, other) {
 			return scaleSetConflictError(self, other)
 		}
 	}
 	return nil
+}
+
+// scaleSetClaimUnchanged reports whether an update keeps the set's claim on a
+// scale-set name: the same first runnerLabel under the same gateway.
+func scaleSetClaimUnchanged(oldObj, newObj *agcv2.RunnerSet) bool {
+	return len(oldObj.Spec.RunnerLabels) > 0 && len(newObj.Spec.RunnerLabels) > 0 &&
+		oldObj.Spec.RunnerLabels[0] == newObj.Spec.RunnerLabels[0] &&
+		oldObj.Spec.GatewayRef.Name == newObj.Spec.GatewayRef.Name
 }
 
 // validateProxyGitHubBypass rejects a RunnerSet whose proxyRef names an EgressProxy

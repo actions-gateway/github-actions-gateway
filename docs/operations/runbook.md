@@ -206,14 +206,16 @@ See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-
 
 ### ActionsGatewayGitHubEgressIncomplete
 
-**Ticket.** A referring gateway names a GitHub Enterprise Server host the `EgressProxy` pool's `CIDR`-mode allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
-The fix is yours to make — the appliance's ranges are knowable only to you, so this will not self-heal: supply them in `spec.destinationCIDRs` (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
+**Ticket.** A referring gateway names a GitHub Enterprise Server host the `EgressProxy` pool's egress allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
+The condition's reason says which fix it needs, and neither self-heals.
+`ApplianceRangesRequired` is a `CIDR`-mode pool: the appliance's ranges are knowable only to you, so supply them in `spec.destinationCIDRs` (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
+`GitHubHostNotAllowlisted` is a host the platform egress allowlist does not cover: a platform admin adds it to `--allowed-egress-fqdns` or the watched ConfigMap.
 See [A GHES Tenant's Traffic Never Reaches the Appliance](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
 ### ActionsGatewayScaleSetNameCollision
 
 **Page.** Two tenants are driving one scale set at GitHub right now, and each is acquiring the other's jobs: another organization's workflow content runs in the wrong namespace, against the wrong quota, egressing from the wrong attributed IPs.
-Admission rejects every new such pair, so this one predates the guard (an upgrade from before `v1.5.0`) or was applied while the validating webhook was uninstalled.
+Admission rejects every new such pair, so this one predates the guard (an upgrade from before `v1.5.0`, or from before `v2.0.0` where one gateway spells the host `www.github.com` or `api.github.com`) or was applied while the validating webhook was uninstalled.
 It will not self-heal, and the condition names only the alerting gateway's own runner sets: the other holder is in the GMC log, because gateway status is tenant-readable.
 See [`ActionsGateway` Reports `ScaleSetNameCollision`](troubleshooting.md#actionsgateway-reports-scalesetnamecollision).
 

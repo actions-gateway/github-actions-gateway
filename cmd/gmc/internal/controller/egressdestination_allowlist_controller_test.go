@@ -1,9 +1,20 @@
 package controller
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 )
 
 func cm(data map[string]string) *corev1.ConfigMap {
@@ -67,4 +78,59 @@ func TestParseEgressDestinationAllowlistConfigMap_RejectsMalformed(t *testing.T)
 	})); err == nil {
 		t.Error("a malformed FQDN entry must fail the whole parse (fail-safe)")
 	}
+}
+
+// TestEgressDestinationAllowlistReconcile_SignalsChanged covers the wake the
+// EgressProxy reconciler depends on (Q1322): every outcome that replaces the dynamic
+// set sends one event, after the replacement, and a second replacement with the first
+// event still buffered neither blocks nor is lost to the reader.
+func TestEgressDestinationAllowlistReconcile_SignalsChanged(t *testing.T) {
+	const ns, name = "gmc-system", "egress-allowlist"
+	configMap := func(fqdns string) *corev1.ConfigMap {
+		return &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
+			Data:       map[string]string{EgressDestinationFQDNsConfigMapKey: fqdns},
+		}
+	}
+	cases := []struct {
+		name       string
+		objs       []client.Object
+		wantCovers bool
+	}{
+		{"applied", []client.Object{configMap("ghes.corp.example")}, true},
+		{"absent", nil, false},
+		{"malformed", []client.Object{configMap("not a host!")}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			al := allowlist.NewEgressDestination(nil, nil)
+			al.AwaitDynamic(time.Now().Add(time.Hour))
+			changed := make(chan event.TypedGenericEvent[struct{}], 1)
+			r := &EgressDestinationAllowlistReconciler{
+				Client:        fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(tc.objs...).Build(),
+				ConfigMapName: name,
+				Namespace:     ns,
+				Allowlist:     al,
+				Changed:       changed,
+			}
+			for range 2 {
+				_, err := r.Reconcile(context.Background(), ctrl.Request{})
+				require.NoError(t, err)
+			}
+			require.Len(t, changed, 1, "one buffered wake covers both replacements")
+			assert.False(t, al.DynamicPending(), "the event is sent after the set it announces is in place")
+			assert.Equal(t, tc.wantCovers, al.CoversFQDN("ghes.corp.example"))
+		})
+	}
+
+	t.Run("no channel wired", func(t *testing.T) {
+		r := &EgressDestinationAllowlistReconciler{
+			Client:        fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).Build(),
+			ConfigMapName: name,
+			Namespace:     ns,
+			Allowlist:     allowlist.NewEgressDestination(nil, nil),
+		}
+		_, err := r.Reconcile(context.Background(), ctrl.Request{})
+		require.NoError(t, err)
+	})
 }

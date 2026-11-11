@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +65,19 @@ func TestGitHubScope(t *testing.T) {
 		{"repo path casing", []string{
 			"https://github.com/acme/Repo", "https://github.com/Acme/repo",
 		}},
+		// The AGC addresses all three hosts as public GitHub, so a scope keyed on the
+		// spelling would let two tenants claim one name in one org (Q1322).
+		{"public GitHub aliases", []string{
+			"https://github.com/acme", "https://www.github.com/acme", "https://api.github.com/acme",
+			"https://WWW.GitHub.com/Acme/", "https://api.github.com:443/acme",
+		}},
+		// One DNS name, so one scope, for public GitHub and for an appliance.
+		{"a trailing dot on the host", []string{
+			"https://github.com/acme", "https://github.com./acme", "https://www.github.com./acme",
+		}},
+		{"a trailing dot on an appliance host", []string{
+			"https://ghes.corp.example/my-org", "https://ghes.corp.example./my-org",
+		}},
 	}
 	for _, tc := range same {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,6 +95,11 @@ func TestGitHubScope(t *testing.T) {
 			"https://github.com/acme-corp",
 			"https://github.com/acme/repo",
 			"https://ghes.corp.example/acme",
+			// Only the exact alias hosts fold: a GHES appliance under a www or api
+			// label is its own Actions service.
+			"https://www.ghes.corp.example/acme",
+			"https://api.ghes.corp.example/acme",
+			"https://www.github.com.corp.example/acme",
 		}
 		seen := map[string]string{}
 		for _, u := range distinct {
@@ -100,6 +119,79 @@ func TestGitHubScope(t *testing.T) {
 			assert.Empty(t, GitHubScope(u), "%q must not yield a scope key", u)
 		}
 	})
+}
+
+// TestGitHubScope_AliasesMatchDeriveAPIBaseURL holds the fold to the hosts the AGC
+// actually treats as public GitHub. A host DeriveAPIBaseURL starts collapsing without a
+// matching entry here would split one org into two scopes again.
+func TestGitHubScope_AliasesMatchDeriveAPIBaseURL(t *testing.T) {
+	public := githubapp.DeriveAPIBaseURL("https://" + publicGitHubHost + "/acme")
+	for _, host := range publicGitHubAliases {
+		assert.Equal(t, public, githubapp.DeriveAPIBaseURL("https://"+host+"/acme"),
+			"%s folds to %s, so the AGC must address it as public GitHub", host, publicGitHubHost)
+	}
+	// The guard may be coarser than the AGC, never finer: a host the AGC addresses as
+	// public GitHub must share public GitHub's scope. github.com. is the coarser case,
+	// folded here while DeriveAPIBaseURL reads it as an appliance.
+	for _, host := range []string{"www.github.com", "api.github.com", "uploads.github.com", "github.com.", "gist.github.com"} {
+		addressedAsPublic := githubapp.DeriveAPIBaseURL("https://"+host+"/acme") == public
+		folded := GitHubScope("https://"+host+"/acme") == GitHubScope("https://"+publicGitHubHost+"/acme")
+		if addressedAsPublic {
+			assert.True(t, folded, "%s is addressed as public GitHub, so it must share its scope", host)
+		}
+	}
+	for _, host := range []string{"uploads.github.com", "gist.github.com"} {
+		assert.NotEqual(t, GitHubScope("https://"+publicGitHubHost+"/acme"), GitHubScope("https://"+host+"/acme"),
+			"%s is not public GitHub's API host and keeps its own scope", host)
+	}
+}
+
+func TestPublicGitHubAlias(t *testing.T) {
+	for _, host := range []string{"www.github.com", "api.github.com", "WWW.GitHub.com"} {
+		assert.True(t, PublicGitHubAlias(host), host)
+	}
+	// github.com is the name the aliases fold to, not an alias, and a host that only
+	// contains one is somebody else's.
+	for _, host := range []string{"github.com", "www.github.com.evil.example", "ghes.example.com", ""} {
+		assert.False(t, PublicGitHubAlias(host), host)
+	}
+}
+
+// TestGitHubScopeAsWritten pins the key an unchanged claim is compared by: every
+// normalization GitHubScope applies except the alias fold and the trailing-dot drop.
+func TestGitHubScopeAsWritten(t *testing.T) {
+	assert.NotEqual(t, GitHubScopeAsWritten("https://github.com/acme"), GitHubScopeAsWritten("https://github.com./acme"))
+	assert.Equal(t, "www.github.com/acme", GitHubScopeAsWritten("https://WWW.GitHub.com:443/Acme/"))
+	assert.NotEqual(t, GitHubScopeAsWritten("https://github.com/acme"), GitHubScopeAsWritten("https://www.github.com/acme"))
+	assert.Equal(t, GitHubScope("https://ghes.corp.example/acme"), GitHubScopeAsWritten("https://ghes.corp.example/acme"),
+		"a host with no alias has one key")
+	for _, u := range []string{"", "https://www.github.com", "not a url"} {
+		assert.Empty(t, GitHubScopeAsWritten(u), "%q must not yield a scope key", u)
+	}
+}
+
+// TestClaimCollidesAsWritten pins the narrower test an unchanged claim is held to: a
+// pair split only by a public GitHub alias collides for a new claim and not for one an
+// update leaves alone, while a pair on one spelling collides either way.
+func TestClaimCollidesAsWritten(t *testing.T) {
+	claim := func(ns, url string) Claim {
+		return Claim{
+			Namespace: ns, Name: "set", GatewayRef: "gw", Label: "linux",
+			Scope: GitHubScope(url), ScopeAsWritten: GitHubScopeAsWritten(url),
+		}
+	}
+	plain := claim("tenant-a", "https://github.com/acme")
+	alias := claim("tenant-b", "https://www.github.com/acme")
+	same := claim("tenant-c", "https://github.com/acme")
+
+	assert.True(t, plain.CollidesWith(alias), "the fold makes the alias pair one scope")
+	assert.False(t, plain.CollidesAsWritten(alias), "as written they are two")
+	assert.True(t, plain.CollidesWith(same))
+	assert.True(t, plain.CollidesAsWritten(same), "one spelling collides under either test")
+
+	sibling := plain
+	sibling.Name = "other"
+	assert.True(t, plain.CollidesAsWritten(sibling), "the same gateway is one scope whatever it resolves to")
 }
 
 // TestClaimCollidesWith pins the two shapes that mean one scale set: the same gateway
@@ -173,15 +265,28 @@ func TestOf(t *testing.T) {
 		assert.Empty(t, byName["orphan"].Scope, "an unapplied gateway resolves no scope")
 	})
 
+	t.Run("an alias gateway carries both keys", func(t *testing.T) {
+		inv, err := Of(ctx, fakeReader(t,
+			gateway("tenant-a", "gw-a", "https://www.github.com/acme"),
+			scaleSetRS("scaled", "tenant-a", "gw-a", "linux"),
+		), nil)
+		require.NoError(t, err)
+		require.Len(t, inv.Claims, 1)
+		assert.Equal(t, "github.com/acme", inv.Claims[0].Scope)
+		assert.Equal(t, "www.github.com/acme", inv.Claims[0].ScopeAsWritten)
+		assert.Equal(t, "www.github.com/acme", inv.ScopeAsWrittenOf("tenant-a", "gw-a"))
+	})
+
 	t.Run("pending gateway places its own referrers", func(t *testing.T) {
 		reader := fakeReader(t, scaleSetRS("waiting", "tenant-b", "gw-b", "linux"))
 		inv, err := Of(ctx, reader, &PendingGateway{
-			Key:   client.ObjectKey{Namespace: "tenant-b", Name: "gw-b"},
-			Scope: "github.com/acme",
+			Key:       client.ObjectKey{Namespace: "tenant-b", Name: "gw-b"},
+			GitHubURL: "https://api.github.com/acme",
 		})
 		require.NoError(t, err)
 		require.Len(t, inv.Claims, 1)
 		assert.Equal(t, "github.com/acme", inv.Claims[0].Scope)
+		assert.Equal(t, "api.github.com/acme", inv.Claims[0].ScopeAsWritten)
 		assert.Equal(t, "github.com/acme", inv.ScopeOf("tenant-b", "gw-b"))
 	})
 

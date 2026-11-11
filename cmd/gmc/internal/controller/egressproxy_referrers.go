@@ -9,7 +9,10 @@ import (
 
 	"github.com/actions-gateway/github-actions-gateway/api/apiconditions"
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/scalesetscope"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -25,10 +28,55 @@ import (
 // binding shapes are identical: an ActionsGateway whose defaultProxyRef names the
 // proxy, and a RunnerSet whose proxyRef names it (contributing its gateway's host).
 
+// referrerGitHubHosts is the GitHub hosts an EgressProxy's referrers bind to it beyond
+// the built-in public set, split by the platform egress allowlist. githubURL is
+// tenant-authored, so a host reaches an emitted policy on the same terms as a
+// destinationFQDNs entry and not on the referrer's say-so.
+type referrerGitHubHosts struct {
+	// allowed are the hosts the allowlist covers: the only ones emitted into the FQDN
+	// policy and the CONNECT allowlist.
+	allowed []string
+	// refused are the hosts it does not cover, or that are not DNS names.
+	refused []string
+}
+
+// all returns every host, sorted. CIDR mode reaches an appliance by range, so its
+// condition names a host whichever list holds it.
+func (h referrerGitHubHosts) all() []string {
+	out := slices.Concat(h.allowed, h.refused)
+	slices.Sort(out)
+	return out
+}
+
+// emittableGitHubHost reports whether a referrer's host may enter an emitted
+// allowlist: a DNS name the platform egress allowlist covers. The name check keeps a
+// wildcard out of a CNI pattern rule, which CoversFQDN alone would not: it reads
+// "*.corp.example" as its parent domain.
+func emittableGitHubHost(host string, al *allowlist.EgressDestinationAllowlist) bool {
+	name := gitHubHostName(host)
+	if scalesetscope.PublicGitHubAlias(name) {
+		return true
+	}
+	return isGitHubHostname(host) && al.CoversFQDN(name)
+}
+
+// isGitHubHostname reports whether host is a DNS name. One that is not, such as a
+// wildcard or an IPv6 literal, can never be emitted, whatever the allowlist holds.
+func isGitHubHostname(host string) bool {
+	return len(validation.IsDNS1123Subdomain(gitHubHostName(host))) == 0
+}
+
+// gitHubHostName is host as the allowlist and the built-in GitHub list compare it:
+// lowercased, with one trailing dot dropped.
+func gitHubHostName(host string) string {
+	return strings.ToLower(strings.TrimSuffix(host, "."))
+}
+
 // resolveReferrerGitHubHosts returns the sorted, deduplicated GitHub hosts that
 // referrers in the proxy's namespace bind to it, excluding hosts the built-in public
-// GitHub allowlist already covers. An empty result — every referrer on public GitHub,
-// or none yet applied — leaves the emitted allowlist byte-for-byte as before.
+// GitHub allowlist already covers, and split by whether al covers them. An empty
+// result — every referrer on public GitHub, or none yet applied — leaves the emitted
+// allowlist byte-for-byte as before. A nil al covers nothing.
 //
 // A RunnerSet whose gateway is missing contributes nothing: with no githubURL there is
 // no host to allow, and the gateway's own arrival requeues this proxy.
@@ -41,7 +89,7 @@ import (
 // own namespace could only cost — and it costs on every reconcile, for every proxy in
 // the cluster, against a resync that re-enqueues them all. Keeping the unshared case
 // namespace-scoped leaves it exactly as expensive as it was before M4.
-func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2.EgressProxy) ([]string, error) {
+func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2.EgressProxy, al *allowlist.EgressDestinationAllowlist) (referrerGitHubHosts, error) {
 	namespace, proxyName := ep.Namespace, ep.Name
 
 	scope := []client.ListOption{client.InNamespace(namespace)}
@@ -51,7 +99,7 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2.
 
 	var gateways gmcv2.ActionsGatewayList
 	if err := c.List(ctx, &gateways, scope...); err != nil {
-		return nil, fmt.Errorf("list ActionsGateways: %w", err)
+		return referrerGitHubHosts{}, fmt.Errorf("list ActionsGateways: %w", err)
 	}
 	// Keyed namespace/name: a RunnerSet's gatewayRef is always same-namespace, so two
 	// namespaces may hold same-named gateways with different GitHub URLs.
@@ -87,7 +135,7 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2.
 
 	var runnerSets gmcv2.RunnerSetList
 	if err := c.List(ctx, &runnerSets, scope...); err != nil {
-		return nil, fmt.Errorf("list RunnerSets: %w", err)
+		return referrerGitHubHosts{}, fmt.Errorf("list RunnerSets: %w", err)
 	}
 	for i := range runnerSets.Items {
 		rs := &runnerSets.Items[i]
@@ -101,12 +149,17 @@ func resolveReferrerGitHubHosts(ctx context.Context, c client.Client, ep *gmcv2.
 
 	slices.Sort(hosts)
 	hosts = slices.Compact(slices.DeleteFunc(hosts, func(h string) bool {
-		return h == "" || slices.Contains(githubEgressFQDNs, h)
+		return h == "" || slices.Contains(githubEgressFQDNs, gitHubHostName(h))
 	}))
-	if len(hosts) == 0 {
-		return nil, nil
+	var out referrerGitHubHosts
+	for _, h := range hosts {
+		if emittableGitHubHost(h, al) {
+			out.allowed = append(out.allowed, h)
+		} else {
+			out.refused = append(out.refused, h)
+		}
 	}
-	return hosts, nil
+	return out, nil
 }
 
 // gitHubEgressGap is the computed GitHubEgressIncomplete condition (Q506 #3).
@@ -116,10 +169,10 @@ type gitHubEgressGap struct {
 	message    string
 }
 
-// evalGitHubEgressIncomplete reports whether a CIDR-mode pool's egress allowlist
-// provably cannot reach the GitHub its referrers bind to it. CIDR mode programs the
-// ranges api.github.com/meta publishes; a GitHub Enterprise Server appliance sits in
-// the customer's own address space and appears in none of them, so the NetworkPolicy
+// evalGitHubEgressIncomplete reports whether a pool's egress allowlist provably
+// cannot reach the GitHub its referrers bind to it. CIDR mode programs the ranges
+// api.github.com/meta publishes; a GitHub Enterprise Server appliance sits in the
+// customer's own address space and appears in none of them, so the NetworkPolicy
 // denies the proxy's traffic to the one host it exists to reach — as a connect
 // timeout, with nothing naming the cause.
 //
@@ -127,16 +180,37 @@ type gitHubEgressGap struct {
 // knowable only to the operator. So the condition names the obligation rather than
 // closing it. Supplying spec.destinationCIDRs clears it; whether those ranges cover
 // the appliance is not checkable here.
-func evalGitHubEgressIncomplete(ep *gmcv2.EgressProxy, gitHubHosts []string) gitHubEgressGap {
+//
+// A refused host is the other gap. It is missing from the FQDN policy the GMC emits,
+// and from the CONNECT allowlist when one is injected. The proxy still admits a
+// CONNECT whose target resolves into spec.destinationCIDRs, so where only the CONNECT
+// allowlist is the GMC's, supplied ranges are taken at face value as CIDR mode's are.
+func evalGitHubEgressIncomplete(ep *gmcv2.EgressProxy, hosts referrerGitHubHosts) gitHubEgressGap {
 	allowed := func(msg string) gitHubEgressGap {
 		return gitHubEgressGap{reason: apiconditions.ReasonGitHubEgressAllowed, message: msg}
 	}
-	if ep.Spec.ManagedNetworkPolicy != nil && !*ep.Spec.ManagedNetworkPolicy {
+	managed := ep.Spec.ManagedNetworkPolicy == nil || *ep.Spec.ManagedNetworkPolicy
+	fqdnPolicy := managed && !egressUsesCIDR(ep.Spec)
+	connectOnly := !managed && len(ep.Spec.DestinationFQDNs) > 0 && len(ep.Spec.DestinationCIDRs) == 0
+	if len(hosts.refused) > 0 && (fqdnPolicy || connectOnly) {
+		return gitHubEgressGap{
+			incomplete: true,
+			reason:     apiconditions.ReasonGitHubHostNotAllowlisted,
+			message:    refusedGitHubHostsMessage(hosts.refused),
+		}
+	}
+	if !managed {
+		if len(hosts.refused) > 0 && len(ep.Spec.DestinationCIDRs) > 0 {
+			return allowed(fmt.Sprintf("egress policy is operator-maintained; the proxy's CONNECT allowlist leaves out %s, "+
+				"which the platform egress allowlist does not cover, and admits it only at an address in spec.destinationCIDRs",
+				strings.Join(hosts.refused, ", ")))
+		}
 		return allowed("egress policy is operator-maintained")
 	}
 	if !egressUsesCIDR(ep.Spec) {
 		return allowed("FQDN mode carries every referrer's GitHub host")
 	}
+	gitHubHosts := hosts.all()
 	if len(gitHubHosts) == 0 {
 		return allowed("every referrer targets public GitHub, which the CIDR allowlist covers")
 	}
@@ -151,6 +225,35 @@ func evalGitHubEgressIncomplete(ep *gmcv2.EgressProxy, gitHubHosts []string) git
 				"set spec.destinationCIDRs to the appliance's ranges or switch spec.egressPolicyMode to an FQDN mode",
 			strings.Join(gitHubHosts, ", ")),
 	}
+}
+
+// refusedGitHubHostsMessage names the refused hosts and, for each kind, the one thing
+// that admits it: an allowlist entry for a hostname, a corrected githubURL for a host
+// no entry can cover.
+func refusedGitHubHostsMessage(refused []string) string {
+	var uncovered, notHostnames []string
+	for _, h := range refused {
+		if isGitHubHostname(h) {
+			uncovered = append(uncovered, h)
+		} else {
+			notHostnames = append(notHostnames, h)
+		}
+	}
+	var parts []string
+	if len(uncovered) > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"the platform egress allowlist does not cover %s, named by a referrer's githubURL, "+
+				"so the pool's egress policy and CONNECT allowlist leave it out; a platform admin must add it "+
+				"to the GMC --allowed-egress-fqdns flag or the watched allowlist ConfigMap",
+			strings.Join(uncovered, ", ")))
+	}
+	if len(notHostnames) > 0 {
+		parts = append(parts, fmt.Sprintf(
+			"%s, named by a referrer's githubURL, is not a DNS hostname, so no allowlist entry can admit it "+
+				"and the pool's egress policy and CONNECT allowlist leave it out; name the appliance by hostname in that githubURL",
+			strings.Join(notHostnames, ", ")))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // referrerToEgressProxies maps an ActionsGateway or RunnerSet event to every

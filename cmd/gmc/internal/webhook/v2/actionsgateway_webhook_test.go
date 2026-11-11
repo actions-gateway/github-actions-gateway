@@ -281,6 +281,58 @@ func TestV2ActionsGatewayWebhook_RejectsMalformedGitHubURL(t *testing.T) {
 	}
 }
 
+// TestV2ActionsGatewayWebhook_PublicGitHubAlias pins both halves of the alias rule
+// (Q1322). A gateway may not take www.github.com or api.github.com as its host, on
+// create or by an update that changes githubURL. A gateway already stored under one
+// stays editable, because githubURL is immutable and a rule that ran on every update
+// would refuse every edit to it.
+func TestV2ActionsGatewayWebhook_PublicGitHubAlias(t *testing.T) {
+	ctx := context.Background()
+	v := &ActionsGatewayCustomValidator{reader: fakeReader(t)}
+
+	refused := map[string]string{
+		"https://www.github.com/acme":       "https://github.com/acme",
+		"https://api.github.com/acme":       "https://github.com/acme",
+		"https://WWW.GitHub.com/acme/repo/": "https://github.com/acme/repo",
+		"https://api.github.com.:443/acme":  "https://github.com/acme",
+	}
+	for alias, respelled := range refused {
+		t.Run("create "+alias, func(t *testing.T) {
+			_, err := v.ValidateCreate(ctx, v2Gateway("team-a", "gw", alias, ""))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "spec.githubURL")
+			assert.Contains(t, err.Error(), "alias of public GitHub")
+			assert.Contains(t, err.Error(), `"`+respelled+`"`, "the message carries the spelling to use")
+		})
+		t.Run("update "+alias, func(t *testing.T) {
+			stored := v2Gateway("team-a", "gw", alias, "")
+			edited := stored.DeepCopy()
+			edited.Labels = map[string]string{"edited": "true"}
+			_, err := v.ValidateUpdate(ctx, stored, edited)
+			require.NoError(t, err, "a stored alias gateway must stay editable")
+		})
+		t.Run("update onto "+alias, func(t *testing.T) {
+			// No set collides here, so the spelling is the only thing to refuse.
+			old := v2Gateway("team-a", "gw", respelled, "")
+			_, err := v.ValidateUpdate(ctx, old, v2Gateway("team-a", "gw", alias, ""))
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "alias of public GitHub")
+		})
+	}
+
+	// github.com is the name, not an alias, and a host that only contains one is
+	// somebody else's.
+	for _, u := range []string{
+		"https://github.com/acme",
+		"https://github.com./acme",
+		"https://www.github.com.corp.example/acme",
+		"https://uploads.github.com/acme",
+	} {
+		_, err := v.ValidateCreate(ctx, v2Gateway("team-a", "gw", u, ""))
+		require.NoError(t, err, u)
+	}
+}
+
 // TestV2ActionsGatewayWebhook_ScaleSetLabelScope is the gateway corner of the Q791
 // guard. A RunnerSet applied before its gateway has no resolvable GitHub scope and
 // admits unchecked (§H.7), so without this half the guard is bypassable by apply
@@ -325,6 +377,51 @@ func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
 
 		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-c", "gw-c", "https://github.com/acme", ""))
 		require.NoError(t, err)
+	})
+
+	t.Run("a stored public GitHub alias holds the same scope", func(t *testing.T) {
+		// The apply-order gap again, with the holder stored under an alias before
+		// v2.0.0. The AGC addresses it as public GitHub (Q1322), so a gateway arriving
+		// on github.com binds the scope the alias gateway's set already holds a name in.
+		for _, alias := range []string{"https://www.github.com/acme", "https://api.github.com/acme"} {
+			v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+				v2Gateway("tenant-a", "gw-a", alias, ""),
+				scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+				scaleSetRS("sneaky", "tenant-b", "gw-b", "linux"))}
+			arriving := v2Gateway("tenant-b", "gw-b", "https://github.com/acme", "")
+
+			_, err := v.ValidateCreate(ctx, arriving)
+			require.Error(t, err, alias)
+			assert.Contains(t, err.Error(), `"github.com/acme"`)
+
+			// A githubURL that changes is a new claim too, were the CRD's immutability
+			// rule ever absent.
+			old := v2Gateway("tenant-b", "gw-b", "https://ghes.example.com/acme", "")
+			_, err = v.ValidateUpdate(ctx, old, arriving)
+			require.Error(t, err, alias)
+			assert.Contains(t, err.Error(), `"github.com/acme"`)
+		}
+	})
+
+	t.Run("a stored alias gateway stays editable", func(t *testing.T) {
+		// Stored before the fold with a referrer that shares a name across the alias.
+		// githubURL is immutable, so an update cannot create the collision and is
+		// judged on the scopes as written; the reconciler reports the pair.
+		gw := v2Gateway("tenant-b", "gw-b", "https://www.github.com/acme", "")
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t,
+			v2Gateway("tenant-a", "gw-a", "https://github.com/acme", ""),
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("mine", "tenant-b", "gw-b", "linux"), gw)}
+
+		_, err := v.ValidateUpdate(ctx, gw, gw)
+		require.NoError(t, err)
+
+		// A githubURL that moves onto the alias is refused for its spelling, were the
+		// CRD's immutability rule ever absent.
+		moved := v2Gateway("tenant-b", "gw-b", "https://ghes.example.com/acme", "")
+		_, err = v.ValidateUpdate(ctx, moved, gw)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "alias of public GitHub")
 	})
 
 	t.Run("update re-checks", func(t *testing.T) {

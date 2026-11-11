@@ -306,10 +306,13 @@ The choice is **split across two roles** (Q245) so the tenant API stays stable a
   - `gke` → a GKE Dataplane V2 `FQDNNetworkPolicy` (`networking.gke.io/v1alpha1`) with `matches` on TCP/443 (no DNS rule — DNS bypasses GKE FQDN enforcement and is carried by the base NetworkPolicy).
   - `none` (default) → **no backend**; an `FQDN`-intent `EgressProxy` is **rejected at admission**, fail-closed and loud, never a silent `Degraded`.
 
-The GitHub hostname set is the same across backends: `api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `*.actions.githubusercontent.com`, `*.blob.core.windows.net` — **plus every referring gateway's `gitHubURL` host** (Q506).
+The GitHub hostname set is the same across backends: `api.github.com`, `github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `*.actions.githubusercontent.com`, `*.blob.core.windows.net` — **plus every referring gateway's `gitHubURL` host that the platform egress allowlist covers** (Q506, Q1322).
 That addition is what makes an FQDN mode work for GitHub Enterprise Server: the appliance's hostname lives on the referring `ActionsGateway`, not on the `EgressProxy`, so the reconciler resolves the referrer graph (gateways whose `defaultProxyRef` names the proxy, `RunnerSet`s whose `proxyRef` does, contributing their gateway's host) and feeds both the CNI policy and the CONNECT suffix list.
 A referrer applied after the proxy requeues it through a watch on both kinds.
 Hosts the public set already covers are dropped and the result is sorted, so a public-GitHub-only pool emits exactly the policy it did before.
+`gitHubURL` is tenant-authored, so its host is held to the allowlist that gates `destinationFQDNs`: one `--allowed-egress-fqdns` or its ConfigMap does not cover, or one that is not a DNS name, reaches neither surface and is named on `GitHubEgressIncomplete` with reason `GitHubHostNotAllowlisted`.
+The ConfigMap half of that allowlist loads after the GMC starts and changes under it, so a pool holds its reconcile until the first read rather than drop a host on a restart, and each replacement of the set requeues every pool.
+The ConfigMap reconciler reads once at start whether or not the object exists, and the hold ends 30 seconds after the GMC starts regardless, so a named ConfigMap that was never created cannot keep a pool from reconciling.
 In any FQDN mode the standard NetworkPolicy keeps its DNS + ingress rules but **drops the GitHub-CIDR egress rule**, and the IP-range reconcile skips the proxy.
 
 > **CIDR mode cannot do the same, and says so.** The default mode programs the ranges `api.github.com/meta` publishes, and a GHES appliance on the customer's own address space appears in none of them — so the NetworkPolicy denies the proxy's traffic to the one host it exists to reach.

@@ -8,17 +8,21 @@ import (
 	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 )
 
 // These tests exercise the Q208 CNI-native FQDN egress opt-in on the v2 EgressProxy
@@ -268,6 +272,274 @@ func TestV2_EgressProxy_FQDNCarriesReferrerGHESHost(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ciliumPolicyAllowsFQDN(t, cnp, "api.github.com"),
 		"the implicit GitHub hostnames must survive")
+}
+
+// TestV2_EgressProxy_FQDNOmitsUnallowlistedReferrerHost covers Q1322. githubURL is
+// tenant-authored, so before this an FQDN-mode pool's policy allowed TCP/443 to any
+// hostname a tenant put there, although the same host in spec.destinationFQDNs is
+// refused at admission. Three gateways bind one pool: the suite's allowlisted
+// appliance, a host on no allowlist, and a wildcard whose parent domain is
+// allowlisted. Only the first may reach the emitted policy or the CONNECT allowlist,
+// and the condition names the other two.
+func TestV2_EgressProxy_FQDNOmitsUnallowlistedReferrerHost(t *testing.T) {
+	const (
+		ns          = "v2-ep-cilium-refused"
+		allowedHost = "ghes.example.com"
+		refusedHost = "exfil.example.net"
+		// CoversFQDN reads this as golang.org, which the suite allowlists; emitted, it
+		// would be a Cilium matchPattern admitting every host under golang.org.
+		wildcardHost = "*.golang.org"
+	)
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+	startEgressProxyReconcilerWithBackend(t, nil, controller.FQDNBackendCilium)
+
+	ep := &gmcv2.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
+			MinReplicas:      ptr32(1),
+			// Opts the proxy in to its CONNECT allowlist, the second emitted surface.
+			DestinationFQDNs: []string{"proxy.golang.org"},
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	for _, bound := range []struct{ name, host string }{
+		{"refusedgw", refusedHost}, {"wildgw", wildcardHost}, {"allowedgw", allowedHost},
+	} {
+		gw := newV2GatewayWired(bound.name, ns, "github-app", egressProxyName)
+		gw.Spec.GitHubURL = "https://" + bound.host + "/example-org"
+		require.NoError(t, k8sClient.Create(ctx, gw), "gateway bound to %s", bound.host)
+		t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+	}
+
+	g := gomega.NewWithT(t)
+	g.Eventually(func() *metav1.Condition {
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2.ConditionGitHubEgressIncomplete)
+	}, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
+		gomega.HaveField("Status", metav1.ConditionTrue),
+		gomega.HaveField("Reason", gmcv2.ReasonGitHubHostNotAllowlisted),
+		gomega.HaveField("Message", gomega.ContainSubstring(refusedHost)),
+		gomega.HaveField("Message", gomega.ContainSubstring(wildcardHost)),
+		gomega.HaveField("Message", gomega.Not(gomega.ContainSubstring(allowedHost))),
+		gomega.HaveField("Message", gomega.ContainSubstring("--allowed-egress-fqdns")),
+	), "the condition must name both refused hosts and the remedy")
+
+	// The status write follows the policy and Deployment applies in one reconcile, so
+	// the condition above means both children have been built with the two refused
+	// referrers in view, and stay so. The allowlisted gateway is created last and may
+	// not have been in that reconcile, so wait for its host before reading the rest.
+	fqdnName := egressProxyName + "-proxy-fqdn"
+	var entries []string
+	g.Eventually(func() []string {
+		cnp, err := getCNIPolicy(t, ns, fqdnName, ciliumGVK)
+		if err != nil {
+			return nil
+		}
+		entries = ciliumPolicyFQDNEntries(t, cnp)
+		return entries
+	}, 20*time.Second, 100*time.Millisecond).Should(gomega.ContainElement(allowedHost),
+		"an allowlisted appliance is still carried")
+	assert.Contains(t, entries, "api.github.com")
+	assert.Contains(t, entries, "proxy.golang.org", "destinationFQDNs are unaffected")
+	assert.NotContains(t, entries, refusedHost, "a host on no allowlist must not reach the policy")
+	assert.NotContains(t, entries, wildcardHost, "a wildcard host must not reach the policy as a pattern")
+
+	var suffixes string
+	g.Eventually(func() string {
+		var dep appsv1.Deployment
+		if err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}, &dep); err != nil {
+			return ""
+		}
+		suffixes = containerEnv(t, dep)["PROXY_ALLOWED_HOST_SUFFIXES"]
+		return suffixes
+	}, 20*time.Second, 100*time.Millisecond).Should(gomega.ContainSubstring(allowedHost))
+	assert.NotContains(t, suffixes, refusedHost)
+	assert.NotContains(t, suffixes, wildcardHost)
+}
+
+// TestV2_EgressProxy_AllowlistChangeReachesPolicy covers the other half of gating a
+// referrer host on a list that changes under a running GMC (Q1322): a platform admin
+// adding the host must reach the pool's policy, and withdrawing it must leave. The
+// pool is Ready and idle with the suite's resync off, so the only wake left is the
+// one under test, the allowlist's change channel.
+func TestV2_EgressProxy_AllowlistChangeReachesPolicy(t *testing.T) {
+	const ns = "v2-ep-cilium-allowlist-change"
+	const lateHost = "late.example.org"
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+
+	ipCache := &controller.IPRangeCache{}
+	ipCache.MarkRefreshed(time.Now())
+	al := allowlist.NewEgressDestination(nil, nil)
+	changed := make(chan event.TypedGenericEvent[struct{}], 1)
+	reconciles := startEgressProxyReconcilerAllowlisted(t, ipCache, controller.FQDNBackendCilium, nil, false, al, changed)
+
+	ep := &gmcv2.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
+			MinReplicas:      ptr32(1),
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+
+	gw := newV2GatewayWired("lategw", ns, "github-app", egressProxyName)
+	gw.Spec.GitHubURL = "https://" + lateHost + "/example-org"
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+
+	// envtest runs no kubelet, so drive the pool Ready by hand: a not-ready pool
+	// short-requeues, and that requeue alone would carry the allowlist change in.
+	g := gomega.NewWithT(t)
+	depKey := types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}
+	var dep appsv1.Deployment
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, depKey, &dep)
+	}, 20*time.Second, 100*time.Millisecond).Should(gomega.Succeed())
+	dep.Status.Replicas = 1
+	dep.Status.ReadyReplicas = 1
+	require.NoError(t, k8sClient.Status().Update(ctx, &dep))
+	g.Eventually(func() *metav1.Condition {
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2.ConditionReady)
+	}, 20*time.Second, 100*time.Millisecond).Should(gomega.HaveField("Status", metav1.ConditionTrue))
+
+	gap := func() *metav1.Condition {
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2.ConditionGitHubEgressIncomplete)
+	}
+	carried := func() bool {
+		cnp, err := getCNIPolicy(t, ns, egressProxyName+"-proxy-fqdn", ciliumGVK)
+		return err == nil && ciliumPolicyAllowsFQDN(t, cnp, lateHost)
+	}
+	g.Eventually(gap, 20*time.Second, 100*time.Millisecond).Should(gomega.And(
+		gomega.HaveField("Status", metav1.ConditionTrue),
+		gomega.HaveField("Reason", gmcv2.ReasonGitHubHostNotAllowlisted),
+	), "with an empty allowlist the host is refused")
+	require.False(t, carried())
+	reconciles.waitIdle(t, ns, time.Second)
+
+	// Replacing the set alone wakes nothing, which is what makes the send the cause.
+	al.SetDynamic([]string{lateHost}, nil)
+	g.Consistently(carried, 2*time.Second, 200*time.Millisecond).Should(gomega.BeFalse(),
+		"nothing but the change channel may carry the new entry in")
+
+	changed <- event.TypedGenericEvent[struct{}]{}
+	g.Eventually(carried, 15*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+		"an allowlisted host must reach the policy on the change, not at the 6h re-check")
+	g.Eventually(gap, 15*time.Second, 100*time.Millisecond).Should(gomega.And(
+		gomega.HaveField("Status", metav1.ConditionFalse),
+		gomega.HaveField("Reason", gmcv2.ReasonGitHubEgressAllowed),
+	))
+
+	reconciles.waitIdle(t, ns, time.Second)
+	al.SetDynamic(nil, nil)
+	changed <- event.TypedGenericEvent[struct{}]{}
+	g.Eventually(carried, 15*time.Second, 100*time.Millisecond).Should(gomega.BeFalse(),
+		"a withdrawn entry must leave the policy")
+}
+
+// TestV2_EgressProxy_AllowlistConfigMapAbsentThenWritten runs the EgressProxy and
+// allowlist ConfigMap reconcilers on one manager, as the GMC does (Q1322). A named
+// ConfigMap that does not exist is a supported install, and it produces no watch
+// event, so nothing but the ConfigMap reconciler's read at start can tell a waiting
+// pool that there is nothing to wait for. The wait is given an hour here so that the
+// read is the only thing that can end it. The ConfigMap then arrives and leaves, and
+// the pool's policy follows it through the change channel both ways.
+func TestV2_EgressProxy_AllowlistConfigMapAbsentThenWritten(t *testing.T) {
+	const (
+		ns     = "v2-ep-cilium-allowlist-cm"
+		cmName = "egress-allowlist"
+		host   = "ghes.corp.example"
+	)
+	createNamespace(t, ns)
+	createGitHubAppSecret(t, ns, "github-app")
+
+	ipCache := &controller.IPRangeCache{}
+	ipCache.MarkRefreshed(time.Now())
+	al := allowlist.NewEgressDestination(nil, nil)
+	al.AwaitDynamic(time.Now().Add(time.Hour))
+	changed := make(chan event.TypedGenericEvent[struct{}], 1)
+	startEgressProxyReconcilerAllowlisted(t, ipCache, controller.FQDNBackendCilium, nil, false, al, changed,
+		func(mgr ctrl.Manager) error {
+			return (&controller.EgressDestinationAllowlistReconciler{
+				Client:        mgr.GetClient(),
+				ConfigMapName: cmName,
+				Namespace:     ns,
+				Allowlist:     al,
+				Changed:       changed,
+			}).SetupWithManager(mgr)
+		})
+
+	ep := &gmcv2.EgressProxy{
+		ObjectMeta: metav1.ObjectMeta{Name: egressProxyName, Namespace: ns},
+		Spec: gmcv2.EgressProxySpec{
+			EgressPolicyMode: gmcv2.EgressPolicyModeFQDN,
+			MinReplicas:      ptr32(1),
+		},
+	}
+	require.NoError(t, k8sClient.Create(ctx, ep))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, ep) })
+	gw := newV2GatewayWired("ghesgw", ns, "github-app", egressProxyName)
+	gw.Spec.GitHubURL = "https://" + host + "/example-org"
+	require.NoError(t, k8sClient.Create(ctx, gw))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, gw) })
+
+	g := gomega.NewWithT(t)
+	refused := gomega.And(
+		gomega.HaveField("Status", metav1.ConditionTrue),
+		gomega.HaveField("Reason", gmcv2.ReasonGitHubHostNotAllowlisted),
+		gomega.HaveField("Message", gomega.ContainSubstring(host)),
+	)
+	gap := func() *metav1.Condition {
+		return egressProxyCondition(t, ns, egressProxyName, gmcv2.ConditionGitHubEgressIncomplete)
+	}
+	carried := func() bool {
+		cnp, err := getCNIPolicy(t, ns, egressProxyName+"-proxy-fqdn", ciliumGVK)
+		return err == nil && ciliumPolicyAllowsFQDN(t, cnp, host)
+	}
+
+	g.Eventually(gap, 30*time.Second, 100*time.Millisecond).Should(refused,
+		"with no ConfigMap to read, the pool must reconcile on the static list and say what it left out")
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: proxyChildName(egressProxyName)}, &appsv1.Deployment{}),
+		"a pool that reconciled has its children")
+	require.False(t, carried())
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: cmName, Namespace: ns},
+		Data:       map[string]string{controller.EgressDestinationFQDNsConfigMapKey: "corp.example"},
+	}
+	require.NoError(t, k8sClient.Create(ctx, cm))
+	t.Cleanup(func() { _ = k8sClient.Delete(ctx, cm) })
+	g.Eventually(carried, 20*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+		"writing the ConfigMap must carry the host into the policy")
+	g.Eventually(gap, 20*time.Second, 100*time.Millisecond).Should(gomega.HaveField("Status", metav1.ConditionFalse))
+
+	require.NoError(t, k8sClient.Delete(ctx, cm))
+	g.Eventually(carried, 20*time.Second, 100*time.Millisecond).Should(gomega.BeFalse(),
+		"deleting the ConfigMap falls back to the static list, which does not cover the host")
+	g.Eventually(gap, 20*time.Second, 100*time.Millisecond).Should(refused)
+}
+
+// ciliumPolicyFQDNEntries returns every matchName and matchPattern value in the
+// policy's GitHub egress rule.
+func ciliumPolicyFQDNEntries(t *testing.T, cnp *unstructured.Unstructured) []string {
+	t.Helper()
+	egress, found, err := unstructured.NestedSlice(cnp.Object, "spec", "egress")
+	require.NoError(t, err)
+	require.True(t, found)
+	fqdns, found, err := unstructured.NestedSlice(egress[len(egress)-1].(map[string]interface{}), "toFQDNs")
+	require.NoError(t, err)
+	require.True(t, found)
+	var out []string
+	for _, f := range fqdns {
+		for _, v := range f.(map[string]interface{}) {
+			out = append(out, v.(string))
+		}
+	}
+	return out
 }
 
 // ciliumPolicyAllowsFQDN reports whether the policy's GitHub egress rule names the

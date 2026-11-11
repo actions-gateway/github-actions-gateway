@@ -31,6 +31,8 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a noProxyCIDRs entry exempts GitHub through a comma, wildcard, port or address: the entry is now rejected](#action-required-if-a-noproxycidrs-entry-exempts-github-through-a-comma-wildcard-port-or-address-the-entry-is-now-rejected)
   - [Action required if a shared EgressProxy exempts a consumer's GitHub host: the pair is now rejected](#action-required-if-a-shared-egressproxy-exempts-a-consumers-github-host-the-pair-is-now-rejected)
   - [Action required if a networkPolicy peer names a broad or link-local cidr: the value is now rejected](#action-required-if-a-networkpolicy-peer-names-a-broad-or-link-local-cidr-the-value-is-now-rejected)
+  - [Action required if a gateway names a GitHub Enterprise Server host: an FQDN-mode pool reaches it only when the platform allowlists it](#action-required-if-a-gateway-names-a-github-enterprise-server-host-an-fqdn-mode-pool-reaches-it-only-when-the-platform-allowlists-it)
+  - [Action required if a githubURL spells public GitHub www.github.com or api.github.com: a new gateway is rejected, and a stored one shares scale-set names with github.com](#action-required-if-a-githuburl-spells-public-github-wwwgithubcom-or-apigithubcom-a-new-gateway-is-rejected-and-a-stored-one-shares-scale-set-names-with-githubcom)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
@@ -701,6 +703,92 @@ The stored rule stays as broad as it is until you do.
 If the peer's addresses span more than one `/16`, remove `networkPolicy` and write a NetworkPolicy of your own that selects the AGC pod.
 NetworkPolicies add up, so yours opens the path and the GMC's is unchanged.
 
+### Action required if a gateway names a GitHub Enterprise Server host: an FQDN-mode pool reaches it only when the platform allowlists it
+
+**Who is affected:** platform admins with an `ActionsGateway` whose `githubURL` names a host other than public GitHub, where the `EgressProxy` it uses is in an FQDN egress mode.
+A pool with `managedNetworkPolicy: false` is affected too when it sets `destinationFQDNs` or `destinationCIDRs`, either of which turns on the proxy's CONNECT allowlist.
+The appliance's host name no longer admits a CONNECT there, so such a pool reaches the appliance only when its `destinationCIDRs` contain the appliance's address.
+With `destinationCIDRs` set it reports no gap, because the GMC cannot tell whether those ranges contain the appliance, and the `GitHubEgressIncomplete` message names the host the CONNECT allowlist lost.
+A CIDR-mode pool whose policy the GMC manages is not affected: it reaches the appliance through the ranges in `destinationCIDRs`, as before.
+
+**What changed.** The tenant writes `githubURL`, and the GMC used to add its host to the pool's FQDN policy and to the proxy's CONNECT allowlist without consulting the platform egress allowlist.
+The same host in `spec.destinationFQDNs` was refused at admission, so `githubURL` was a way around that allowlist: a tenant could open TCP/443 from the proxy pool to any hostname.
+The GMC now adds the host only when `--allowed-egress-fqdns` or the watched allowlist ConfigMap covers it.
+Public GitHub needs no entry, whichever of `github.com`, `www.github.com` and `api.github.com` the gateway spells and in any letter case.
+
+**This takes effect when the GMC is upgraded, with no object edited.** The new GMC's first reconcile of the pool rewrites its policy without a host the allowlist does not cover, and that gateway's AGC and workers can then no longer reach the appliance.
+The pool reports `GitHubEgressIncomplete=True` with reason `GitHubHostNotAllowlisted`, and the message names the host.
+
+**Before you upgrade,** list the hosts your gateways name other than public GitHub:
+
+```bash
+kubectl get actionsgateways.actions-gateway.com -A -o json \
+  | jq -r '[.items[].spec.githubURL | capture("^https://(?:[^/@]*@)?(?<host>\\[[^\\]]*\\]|[^/:?#]+)").host | ascii_downcase | sub("\\.$"; "")] | unique[] | select(. != "github.com" and . != "www.github.com" and . != "api.github.com")'
+```
+
+Add each host to the chart's `allowedEgressFQDNs` in the same `helm upgrade` that installs `v2.0.0`, so the new GMC starts with it:
+
+```yaml
+allowedEgressFQDNs:
+  - ghes.corp.example
+```
+
+An entry covers its subdomains, so `corp.example` also covers `ghes.corp.example`.
+Prefer the chart value to the [watched ConfigMap](security-operations.md#self-service-additions-via-a-watched-configmap) for an appliance host.
+A ConfigMap that is deleted or fails validation is ignored whole, and every pool that reached its appliance through a ConfigMap entry then loses it until the ConfigMap is fixed.
+A host the command prints that is not a DNS hostname, such as the wildcard `*.corp.example` or a bracketed IPv6 literal, is never added, whatever the allowlist holds.
+The proxy admits a CONNECT to that appliance only at an address in the pool's `destinationCIDRs`.
+
+**After the upgrade,** confirm no pool reports the gap:
+
+```bash
+kubectl get egressproxy -A -o jsonpath='{range .items[?(@.status.conditions[?(@.type=="GitHubEgressIncomplete")].status=="True")]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}'
+```
+
+For a pool it lists, see [A GHES Tenant's Traffic Never Reaches the Appliance](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
+
+**Rolling back** to a `1.x` GMC puts every referrer's host back in the policy, allowlisted or not.
+
+### Action required if a `githubURL` spells public GitHub `www.github.com` or `api.github.com`: a new gateway is rejected, and a stored one shares scale-set names with `github.com`
+
+**Who is affected:** operators with an `ActionsGateway` whose `githubURL` host is `www.github.com` or `api.github.com`, stored in the cluster or written in a manifest or backup that will create one.
+A stored gateway is affected a second way when another gateway names the same organization, enterprise or repository under another of the three hosts, and a `RunnerSet` under each has the same first `runnerLabel`.
+
+**What changed.** The AGC sends all three hosts to the public GitHub API, but the [scale-set name guard](troubleshooting.md#runnerset-rejected-duplicate-first-runnerlabel) compared them as three different places, so it admitted two `RunnerSet`s claiming one scale-set name in one organization.
+The guard now reads all three as `github.com`, and admission rejects a new gateway that uses either alias.
+Whether GitHub registers runners under the `www.` and `api.` spellings was not measured.
+If it does, such a pair drives one scale set and each tenant acquires the other's jobs; if it does not, the sets under that gateway never register.
+
+The upgrade itself refuses nothing.
+A gateway already stored under either alias keeps running and stays editable, and so does every set under it.
+
+Creating a gateway under either alias is [rejected](troubleshooting.md#actionsgateway-rejected-githuburl-spells-public-github-by-an-alias), in any letter case and with or without a trailing dot.
+A delete and re-create is a create, so this covers a restore from backup and a GitOps apply that re-creates a deleted gateway.
+`githubURL` is immutable, so a stored gateway leaves the alias only by that route: delete it, then create it with the host written `github.com`.
+Until you do, keep the alias in its manifest, because an apply that changes the host of a stored gateway fails the immutability rule.
+In a backup, change the host to `github.com` before you restore from it.
+
+A stored gateway also shares scale-set names with the other two hosts from now on.
+An edit that keeps a set's first `runnerLabel` and its `gatewayRef` is still accepted, and a new claim on a shared name is rejected.
+That covers creating a set, and moving a set onto the name by changing its first label or its `gatewayRef`.
+
+The name sharing also applies to a host written with a trailing dot, such as `github.com.`, which names the same place as the host without it.
+A new gateway on `github.com.` is still accepted.
+
+**Before you upgrade,** list the gateways that use either spelling or a trailing dot:
+
+```bash
+kubectl get actionsgateways.actions-gateway.com -A -o json \
+  | jq -r '.items[] | select(.spec.githubURL | test("^https://([^/@]*@)?((www|api)\\.github\\.com\\.?|[^/:@]+\\.)(:[0-9]+)?/"; "i")) | "\(.metadata.namespace)/\(.metadata.name)\t\(.spec.githubURL)"'
+```
+
+No output means no stored gateway is affected.
+Search your manifests and backups for the two hosts as well, since the command reads only what is stored.
+For each gateway listed, check whether another gateway names the same path on another of the three hosts, or on the same host without the dot, and whether a set under each has the same first label.
+`githubURL` is immutable, so fix a pair by giving one side's `RunnerSet` a distinct first `runnerLabel`, and change the `runs-on` of the workflows that name it in the same change.
+
+**After the upgrade,** both gateways of a pair that is still stored report `ScaleSetNameCollision=True`, which pages through `ActionsGatewayScaleSetNameCollision` ([finding the other holder](troubleshooting.md#actionsgateway-reports-scalesetnamecollision)).
+
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 
 **Who is affected:** operators who apply a [runner template library](runner-template-library.md) entry through their own kustomize overlay with a JSON 6902 patch.
@@ -1270,6 +1358,7 @@ One of those copies tested `github.com` as a substring of the whole URL, so a GH
 
 - **FQDN egress modes** now carry every referrer's GHES host into the CNI policy and the proxy CONNECT allowlist automatically.
   Nothing to do.
+  From `v2.0.0` the host must also be on the platform egress allowlist ([what to add](#action-required-if-a-gateway-names-a-github-enterprise-server-host-an-fqdn-mode-pool-reaches-it-only-when-the-platform-allowlists-it)).
 - **CIDR mode (the default)** allows only the ranges `api.github.com/meta` publishes, which never contain a customer appliance.
   **You must supply the appliance's ranges in the `EgressProxy`'s `spec.destinationCIDRs`** — and, because that field is gated by the platform `--allowed-egress-cidrs` allowlist, a platform admin must allowlist them first.
   A pool in this state now reports `GitHubEgressIncomplete=True` with reason `ApplianceRangesRequired`, naming the unreachable host, instead of failing as an unexplained connect timeout.

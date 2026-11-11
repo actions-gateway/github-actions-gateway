@@ -3,7 +3,9 @@ package v2
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	agcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
@@ -26,7 +28,8 @@ import (
 // same both-sides shape, since the gateway binds the scope the label is unique in),
 // rejects a structurally malformed gitHubURL, and rejects creation in a reserved
 // namespace (both Q323 — the same guards the v1 webhook enforces, via the shared
-// validation package).
+// validation package). A new gateway may not spell public GitHub www.github.com or
+// api.github.com (Q1322).
 //
 // +kubebuilder:object:generate=false
 type ActionsGatewayCustomValidator struct {
@@ -127,17 +130,26 @@ func (v *ActionsGatewayCustomValidator) validateGitHubHostVsProxies(ctx context.
 // reject. gitHubURL is immutable (CRD CEL), so only create can introduce one — update
 // re-checks as version-agnostic defense, matching validateGitHubHostVsProxies. List
 // errors fail closed.
-func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2.ActionsGateway) error {
+//
+// claimUnchanged is true for an update that leaves gitHubURL alone. Such a write
+// cannot create a collision, so it is judged on the scopes as written and a gateway
+// stored under a public GitHub alias stays editable (scalesetscope.Claim.CollidesAsWritten).
+func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx context.Context, gw *agcv2.ActionsGateway, claimUnchanged bool) error {
 	if v.reader == nil {
 		return nil
 	}
 	scope := scalesetscope.GitHubScope(gw.Spec.GitHubURL)
+	collides := scalesetscope.Claim.CollidesWith
+	if claimUnchanged {
+		scope = scalesetscope.GitHubScopeAsWritten(gw.Spec.GitHubURL)
+		collides = scalesetscope.Claim.CollidesAsWritten
+	}
 	if scope == "" {
 		return nil
 	}
 	inv, err := scalesetscope.Of(ctx, v.reader, &scalesetscope.PendingGateway{
-		Key:   client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
-		Scope: scope,
+		Key:       client.ObjectKey{Namespace: gw.Namespace, Name: gw.Name},
+		GitHubURL: gw.Spec.GitHubURL,
 	})
 	if err != nil {
 		return fmt.Errorf("cannot verify ScaleSet runnerLabel uniqueness for GitHub scope %q: %w", scope, err)
@@ -147,7 +159,7 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 			continue
 		}
 		for j, other := range inv.Claims {
-			if i == j || !mine.CollidesWith(other) {
+			if i == j || !collides(mine, other) {
 				continue
 			}
 			// The holder is named only when it sits in this gateway's own namespace;
@@ -164,8 +176,27 @@ func (v *ActionsGatewayCustomValidator) validateScaleSetLabelsVsScope(ctx contex
 	return nil
 }
 
+// validatePublicGitHubSpelling rejects a githubURL whose host is an alias of public
+// GitHub (www.github.com or api.github.com, in any case, with or without a trailing
+// dot). The scope guard folds an alias to github.com, so the rule is not what keeps
+// two tenants apart; it keeps a new gateway off a spelling whose scale-set
+// registration at GitHub is unmeasured. It runs on create, and on an update that
+// changes githubURL, which the CRD's immutability CEL already refuses. An update that
+// keeps githubURL is exempt, or a gateway stored under an alias would fail every edit.
+func validatePublicGitHubSpelling(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || !scalesetscope.PublicGitHubAlias(strings.TrimSuffix(u.Hostname(), ".")) {
+		return nil
+	}
+	return fmt.Errorf(
+		"spec.githubURL host %q is an alias of public GitHub that a new ActionsGateway may not use; "+
+			"write the host as github.com: %q",
+		u.Hostname(), "https://github.com/"+strings.Trim(u.Path, "/"))
+}
+
 // ValidateCreate rejects a v2 ActionsGateway created in a reserved namespace, with a
-// structurally malformed gitHubURL, whose spec.scheduling.priorityClassName is
+// structurally malformed gitHubURL, with a gitHubURL that spells public GitHub by an
+// alias, whose spec.scheduling.priorityClassName is
 // not on the infra allowlist, whose gitHubURL host a bound EgressProxy's
 // noProxyCIDRs would route around the proxy, or whose GitHub scope would put two
 // ScaleSet RunnerSets on one scale-set name.
@@ -177,13 +208,16 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 	if err := validation.GitHubURL(obj.Spec.GitHubURL); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
+	if err := validatePublicGitHubSpelling(obj.Spec.GitHubURL); err != nil {
+		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
+	}
 	if err := validateSchedulingPriorityClass(obj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	if err := v.validateGitHubHostVsProxies(ctx, nil, obj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
-	if err := v.validateScaleSetLabelsVsScope(ctx, obj); err != nil {
+	if err := v.validateScaleSetLabelsVsScope(ctx, obj, false); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "create", obj.Namespace, obj.Name, err)
 	}
 	return nil, nil
@@ -192,7 +226,9 @@ func (v *ActionsGatewayCustomValidator) ValidateCreate(ctx context.Context, obj 
 // ValidateUpdate applies the same gates on update, so an existing gateway cannot be
 // edited to name an off-allowlist infra PriorityClass — or to point defaultProxyRef
 // (gitHubURL itself is immutable) at a proxy whose noProxyCIDRs exclude its GitHub
-// host. The reserved-namespace guard is create-only (namespace is immutable), and
+// host. The reserved-namespace guard is create-only (namespace is immutable), the
+// public GitHub alias rule applies only when gitHubURL changes
+// (validatePublicGitHubSpelling), and
 // the structural gitHubURL check re-runs as version-agnostic defense even though
 // the CRD's immutability CEL should make it unreachable on update. Deletion-only
 // updates — deletionTimestamp set, spec unchanged — are admitted without
@@ -204,13 +240,19 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 	if err := validation.GitHubURL(newObj.Spec.GitHubURL); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
+	claimUnchanged := oldObj.Spec.GitHubURL == newObj.Spec.GitHubURL
+	if !claimUnchanged {
+		if err := validatePublicGitHubSpelling(newObj.Spec.GitHubURL); err != nil {
+			return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
+		}
+	}
 	if err := validateSchedulingPriorityClass(newObj.Spec.Scheduling, v.InfraPriorityClasses); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	if err := v.validateGitHubHostVsProxies(ctx, oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateScaleSetLabelsVsScope(ctx, newObj); err != nil {
+	if err := v.validateScaleSetLabelsVsScope(ctx, newObj, claimUnchanged); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
 	return nil, nil
