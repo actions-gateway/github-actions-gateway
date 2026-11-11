@@ -172,13 +172,14 @@ Settled 2026-11-11 (Q1222), as a meaning and not an API: nothing below names a f
 **A `RunnerSet` declared untrusted is the set that accepts fork pull request jobs, and it accepts them only while the parts of the posture the platform can check still hold.** That is the whole difference from the default [Q1330](../queue/Q1330.md) ships, which is decided (Q1220) and not yet built.
 Under that default every set refuses fork jobs and a set accepts them through one explicit switch with no precondition, so a set on a `runc` template in a namespace with an allow-all egress rule accepts forks as readily as one on the Kata recipe.
 The class puts preconditions on that switch, and a set whose preconditions fail refuses fork jobs, through whatever refusal path Q1330 settles on.
-**The class replaces the precondition-free switch rather than sitting beside it.** Kept beside it, the class would be an opt-in stricter mode, and Q1220 rejected exactly that shape for the refusal itself: an adopter who never sets the stricter field stays exposed.
-So once the class is built, accepting fork jobs means the preconditions are checked.
-The escape hatch stays the operator's explicit act: the micro-VM list the kernel row checks is the operator's, so an operator who accepts forks on another runtime says so by listing it.
-Q1330 ships the switch without preconditions, so how the class retires the bare form is an API decision this section leaves open, with two shapes on the table.
-Tightening `Accept` in place changes what a stored value does, which [Is this change breaking?](../development/api-review.md#is-this-change-breaking) counts as a behaviour change on existing objects.
-Adding a value beside `Accept` is not breaking, but it leaves the bare form standing until a deprecation removes it.
 Its jobs from the repository's own branches are unaffected either way.
+
+**The class replaces the precondition-free switch rather than sitting beside it.** Accepting fork jobs is already the operator's claim that the set is fit for them, so checking the half of that claim the platform can check costs a set that really runs the Kata posture nothing.
+The override stays explicit: the micro-VM list the kernel row checks is the operator's, so an operator who accepts forks on another runtime says so by listing it.
+Q1220's reversal of an opt-in refusal is the parallel, not the source: there the exposed adopter had done nothing, while here the operator has accepted forks and the class checks that acceptance.
+How the class retires the bare form is an API decision this section leaves open, with two shapes on the table.
+Tightening `Accept` in place is not breaking if it lands before `Accept` ships in a stable tag, and breaking after, by the first question of [Is this change breaking?](../development/api-review.md#is-this-change-breaking).
+Adding a value beside `Accept` is not breaking either way, but it leaves the bare form standing until a deprecation removes it.
 
 The class is drawn per `RunnerSet` and marks one set, so it does not revive the cluster-default template that Definition of Done #1 declines: a set that never declares it gets nothing new.
 
