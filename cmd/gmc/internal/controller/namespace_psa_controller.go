@@ -95,12 +95,13 @@ func (r *NamespacePSAReconciler) applyNamespacePSA(ctx context.Context, ns *core
 		return nil
 	}
 	if apierrors.IsForbidden(err) {
-		// The namespace-psa-guard ValidatingAdmissionPolicy denied the patch — almost
-		// always because the namespace lost its tenant marker. Surface an actionable
-		// signal; a retry will not help until the marker is restored.
+		// The namespace-psa-guard ValidatingAdmissionPolicy denied the patch: the
+		// namespace lost its tenant marker, or selects privileged without the
+		// platform's eligibility label (Q1328). A retry will not help until the
+		// labels change.
 		if r.Recorder != nil {
 			r.Recorder.Eventf(ns, nil, corev1.EventTypeWarning, "NamespaceMarkerMissing", "ApplyPSALabels",
-				"Cannot stamp Pod Security Admission labels on namespace %q: the admission policy denied the update. Label the namespace with %s=%s to mark it a managed tenant namespace: %v",
+				"Cannot stamp Pod Security Admission labels on namespace %q: the admission policy denied the update. Label the namespace with %s=%s to mark it a managed tenant namespace, or, if it selects the privileged profile, give it the platform's eligibility label: %v",
 				ns.Name, gmcv2.TenantNamespaceMarkerLabel, gmcv2.TenantNamespaceMarkerValue, err)
 		}
 		return fmt.Errorf("stamp PSA labels on namespace %q: %w", ns.Name, err)

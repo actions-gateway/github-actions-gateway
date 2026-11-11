@@ -10,7 +10,7 @@
 # by `make deploy`, like config/agc-tenant-role/) so its cluster-scoped names stay
 # stable and the binding->policy reference is not rewritten by namePrefix.
 #
-# Two constraints, both scoped to the GMC ServiceAccount only:
+# Three constraints, all scoped to the GMC ServiceAccount only:
 #   1. Marker scope  — the namespace must already carry
 #                       actions-gateway.com/tenant=managed (read from oldObject,
 #                       which a compromised GMC cannot forge, and which is applied by
@@ -18,11 +18,13 @@
 #                       kube-system and all non-tenant namespaces lack it.
 #   2. Field guard   — the GMC may only change pod-security.kubernetes.io/* labels;
 #                       all other labels and all annotations are immutable to it.
+#   3. Value pin     — those labels carry the profile the namespace's own
+#                       security-profile label selects, at version latest, and
+#                       privileged only with privileged-profile=allowed (Q1328).
 #
 # A blanket "GMC may never write PSA=privileged" is deliberately NOT enforced:
 # securityProfile=privileged is a supported tenant opt-in (DinD / kernel modules),
-# so the GMC legitimately stamps `privileged` on those tenants' namespaces. The
-# marker scope already confines the blast radius to GMC-managed tenant namespaces.
+# so the GMC legitimately stamps `privileged` on eligible tenants' namespaces.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
