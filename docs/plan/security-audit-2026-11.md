@@ -664,7 +664,8 @@ Nothing is deleted; revert by removing the second RunnerSet and the test scale s
 **Outcome.** Confirmed and fixed.
 In the AGC envtest suite on `main`, editing a live set's first label left the listener on the old scale set: the new name was never registered within 20 seconds.
 The listener handle now records the scale-set name it registered, and a reconcile that finds the spec naming another restarts the listener as it does for a runner-group change (Q712), so the old session is deleted and the new name registered (`TestV2_RunnerSet_ScaleSet_FirstLabelChangeMovesTheSession`).
-The GMC half, a second tenant admitted onto the released name, is admission working as designed, so it was not tested; whether GitHub refuses a second session was not measured, and the fix removes the stale session it would have been asked about.
+The GMC half, a second tenant admitted onto the released name, was not tested, and whether GitHub refuses a second session was not measured; the fix removes the stale session that question was about.
+It does not remove the old scale set, which stays registered and is adopted by exact name by the next tenant admitted onto that name, filed as Q1344 (read from source).
 
 **Evidence.** `cmd/agc/internal/controller/runnerset_scaleset.go:609`, `cmd/agc/internal/controller/runnerset_scaleset.go:285`, `cmd/agc/internal/controller/runnerset_scaleset.go:309`, `api/v2/runnerset_types.go:85`, `cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:54`, `docs/design/05-security.md:672`, `docs/operations/upgrade.md:331`, `docs/operations/troubleshooting.md:2439`.
 
@@ -692,7 +693,7 @@ A never-red result within the bound does not refute the race, so also record how
 **Outcome.** Confirmed, and accepted as a residual.
 The plan's envtest admitted both objects of a concurrently created pair onto the held name in 25 of 50 iterations on 2026-11-11.
 Admission cannot reserve a name across two objects, so the residual and its bound are in `05-security.md`.
-The bound turned out to be mostly the guard itself: the GMC's first write to the raced gateway, its finalizer, is an update the gateway webhook refuses while the pair collides, so none of the 25 raced gateways was provisioned, while the held tenant's gateway reported `ScaleSetNameCollision` (`TestV2_ScaleSetNameGuard_ConcurrentPairIsReported`).
+The bound turned out to be mostly the guard itself: the GMC's first write to the raced gateway, its finalizer, is an update the gateway webhook refuses while the pair collides, so none of the 25 raced gateways was provisioned, while the held tenant's gateway reported `ScaleSetNameCollision`; `TestV2_ScaleSetNameGuard_ConcurrentPairIsReported` asserts both, and goes red with the gateway webhook's update-path scope check removed.
 The same refusal blocks every update to the held tenant's gateway while the pair stands, filed as Q1342.
 The sentence in `05-security.md` saying both halves were complete in every apply order now says one object after the other.
 
