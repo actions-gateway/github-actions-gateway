@@ -177,9 +177,10 @@ Its jobs from the repository's own branches are unaffected either way.
 **The class replaces the precondition-free switch rather than sitting beside it.** Accepting fork jobs is already the operator's claim that the set is fit for them, so checking the half of that claim the platform can check costs a set that really runs the Kata posture nothing.
 The override stays explicit: the micro-VM list the kernel row checks is the operator's, so an operator who accepts forks on another runtime says so by listing it.
 Q1220's reversal of an opt-in refusal is the parallel, not the source: there the exposed adopter had done nothing, while here the operator has accepted forks and the class checks that acceptance.
-How the class retires the bare form is an API decision this section leaves open, with two shapes on the table.
-Tightening `Accept` in place is not breaking if it lands before `Accept` ships in a stable tag, and breaking after, by the first question of [Is this change breaking?](../development/api-review.md#is-this-change-breaking).
-Adding a value beside `Accept` is not breaking either way, but it leaves the bare form standing until a deprecation removes it.
+**The bare form retires by deprecation, not by tightening** (Karl, 2026-11-11).
+`v2.0.0` ships `Accept` as Q1330 builds it, and the release that builds the class adds a value beside it and deprecates bare `Accept`.
+That is not breaking, and bare `Accept` stays valid while its API version is served.
+Tightening `Accept` in place was the other shape, and would have cost nothing only before `Accept` ships in a stable tag ([Is this change breaking?](../development/api-review.md#is-this-change-breaking), question 1).
 
 The class is drawn per `RunnerSet` and marks one set, so it does not revive the cluster-default template that Definition of Done #1 declines: a set that never declares it gets nothing new.
 
