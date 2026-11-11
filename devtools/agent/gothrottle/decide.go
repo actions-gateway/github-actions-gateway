@@ -344,11 +344,26 @@ func plainCall(call *syntax.CallExpr) bool {
 		if !readable(w) {
 			return false
 		}
-		if s := literal(w); strings.HasPrefix(s, "-") && !safeFlag(s) {
+		s := literal(w)
+		if strings.HasPrefix(s, "-") && !safeFlag(s) || outsidePath(s) {
 			return false
 		}
 	}
 	return true
+}
+
+// outsidePath reports whether a word names a path that can leave the working
+// directory: absolute, home-relative, or climbing through `..`.
+func outsidePath(s string) bool {
+	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~") {
+		return true
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 // safeFlag reports whether a `-name`, `--name` or `-name=value` word is in
@@ -360,19 +375,24 @@ func safeFlag(word string) bool {
 }
 
 // readable reports whether a word reaches go as the text literal renders: only
-// literals and quoted literals, and no unquoted glob or brace character the
-// shell would expand into words of its own.
+// literals and quoted literals, with no backslash or `$'…'` escape the shell
+// would rewrite (`\-exec` reaches go as `-exec`), and no unquoted glob or brace
+// character the shell would expand into words of its own.
 func readable(w *syntax.Word) bool {
 	for _, part := range w.Parts {
 		switch p := part.(type) {
 		case *syntax.Lit:
-			if strings.ContainsAny(p.Value, "*?[{") {
+			if strings.ContainsAny(p.Value, `*?[{\`) {
 				return false
 			}
 		case *syntax.SglQuoted:
+			if p.Dollar {
+				return false
+			}
 		case *syntax.DblQuoted:
 			for _, dp := range p.Parts {
-				if _, ok := dp.(*syntax.Lit); !ok {
+				lit, ok := dp.(*syntax.Lit)
+				if !ok || strings.Contains(lit.Value, `\`) {
 					return false
 				}
 			}

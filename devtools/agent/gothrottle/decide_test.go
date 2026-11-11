@@ -74,6 +74,18 @@ func TestDecide(t *testing.T) {
 		{name: "flags from a quoted parameter", cmd: `go test "$FLAGS" ./api/...`},
 		{name: "brace expansion into a flag", cmd: "go test {-exec,/bin/echo} ./api/..."},
 		{name: "test binary flags after -args", cmd: "go test ./api/... -args -test.cpuprofile=/tmp/outside"},
+		// The shell removes the escape before go reads the word, so these are
+		// `-exec`, `-toolexec` and `-o` to go (each ran or wrote under go1.27.1).
+		{name: "backslash-escaped -exec", cmd: `go test \-exec /bin/echo ./api/...`},
+		{name: "ANSI-C quoted -exec", cmd: `go test $'\x2dexec' /bin/echo ./api/...`},
+		{name: "backslash-escaped -toolexec", cmd: `go build \-toolexec=/bin/echo ./cmd/proxy`},
+		{name: "backslash-escaped -o", cmd: `go build \-o /tmp/outside ./cmd/proxy`},
+		{name: "backslash-escaped -overlay", cmd: `go build \-overlay=/tmp/o.json ./cmd/proxy`},
+		{name: "backslash-escaped -modfile", cmd: `go test \-modfile=/tmp/go.mod ./api/...`},
+		{name: "backslash inside double quotes", cmd: `go test "\-exec" /bin/echo ./api/...`},
+		{name: "absolute package path", cmd: "go test /abs/x_test.go"},
+		{name: "home-relative package path", cmd: "go test ~/elsewhere/..."},
+		{name: "package path climbing out", cmd: "go test ../../../tmp/x/..."},
 		{
 			name: "-exec with -race is throttled and asked", cmd: "go test -race -exec /bin/echo ./api/...",
 			want: ask, wantCmd: testPrefix + " go test -race -exec /bin/echo ./api/...",
