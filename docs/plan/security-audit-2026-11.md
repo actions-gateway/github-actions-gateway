@@ -907,8 +907,8 @@ Repeat with the go-throttle entry removed from .claude/settings.json to confirm 
 Against the real toolchain (go1.27.1, a scratch module), `go test -exec PROG`, `go build -toolexec PROG` and `GOFLAGS=-toolexec=PROG go build` each ran the named program, and `go build -o PATH` and `go test -cpuprofile PATH` wrote outside the module; `-vettool` is no longer a `go test` flag there.
 The real hook returned `allow` for all of them, and for `go test $FLAGS` and `CC=PROG go build` too.
 The comment justifying the allow cited a repository `Bash(go test *)` allowlist that no committed settings file carries, so the allow was a grant of its own.
-The auto-allow now also requires literal words, flags from `safeFlags`, and only `GOFLAGS` (checked the same way), `GOWORK=off` or `CGO_ENABLED` as leading assignments; the same commands now get no decision, or an ask when they carry `-race`.
-Fifteen new `TestDecide` cases go red with the check removed.
+The auto-allow now also requires literal words with no shell escape, neither a backslash nor ANSI-C quoting (review found `go test \-exec PROG` still allowed, and it ran PROG), no package path that leaves the working directory, flags from `safeFlags`, and only `GOFLAGS` (checked the same way), `GOWORK=off` or `CGO_ENABLED` as leading assignments; the same commands now get no decision, or an ask when they carry `-race`.
+Twenty-five new `TestDecide` cases go red with the checks removed.
 The owner check above was not run, because the fix holds whatever Claude Code does with an allow.
 
 **Evidence.** `devtools/agent/gothrottle/decide_test.go:48`, `devtools/agent/gothrottle/main.go:19`, `.claude/settings.json:6`, `devtools/agent/gothrottle/decide.go:273`, `devtools/agent/gothrottle/main.go:27`, `scripts/agent/local-throttle.sh:297`, `docs/development/testing.md:277`.

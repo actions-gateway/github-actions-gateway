@@ -352,6 +352,7 @@ Separating tool execution from the write into a second job is hardening tracked 
 
 **A fork pull request can name a dogfood scale-set label in `runs-on`.** The label is text in a workflow file the pull request edits, and the dogfood scale sets are repository-scoped on a public repository, so no runner group sits in front of them.
 Until [Q1330](../queue/Q1330.md) ships the default refusal of fork jobs on every `RunnerSet`, GitHub's fork approval setting is the only thing holding it, and it read `first_time_contributors` on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval.
+Setting it to `all_external_contributors` is a cheap interim tightening, though it still exempts organization and repository members.
 The lead closes when Q1330 lands; the operator half is in [security-operations.md](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label).
 
 ### GitHub-App-key exfiltration via AGC apiserver egress
