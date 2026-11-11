@@ -27,9 +27,9 @@ const scaleSetRaceIterations = 50
 // pair from reads of what is already stored, so a RunnerSet and its ActionsGateway
 // created at once can each see the pair incomplete and both be admitted onto an
 // established tenant's name. The established gateway must then report the collision,
-// and the test logs how many raced gateways received the GMC finalizer: the gateway
-// webhook refuses that first write while the pair collides, which is what keeps a
-// raced gateway unprovisioned, but a reconcile between the two creates could win.
+// and a raced gateway's finalizer write, which the GMC needs before it provisions
+// anything, must be refused while the pair collides. The test logs how many raced
+// gateways got the finalizer anyway, from a reconcile landing between the two creates.
 func TestV2_ScaleSetNameGuard_ConcurrentPairIsReported(t *testing.T) {
 	const (
 		nsA    = "v2-ssname-race-a"
@@ -101,11 +101,19 @@ func TestV2_ScaleSetNameGuard_ConcurrentPairIsReported(t *testing.T) {
 
 	// A raced gateway's first GMC write, the finalizer, is an update the gateway
 	// webhook refuses while the pair collides, and provisioning starts only after it.
+	// That refusal is the bound, so it is asserted, not only observed: an exemption
+	// for metadata-only updates would let the GMC provision a raced gateway (Q1342).
 	provisioned := 0
 	for _, key := range raced {
 		if hasFinalizer(key) {
 			provisioned++
+			continue
 		}
+		var got v2.ActionsGateway
+		require.NoError(t, k8sClient.Get(ctx, key, &got))
+		controllerutil.AddFinalizer(&got, v2.ActionsGatewayFinalizer)
+		require.Error(t, k8sClient.Update(ctx, &got),
+			"%s: the finalizer write that starts provisioning must be refused while the pair collides", key)
 	}
 	t.Logf("%d of %d raced gateways carry the GMC finalizer, so may have been provisioned", provisioned, len(raced))
 }
