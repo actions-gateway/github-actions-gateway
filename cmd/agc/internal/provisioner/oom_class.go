@@ -201,6 +201,23 @@ func (p *Provisioner) recordMemoryFloor(ctx context.Context, target Target, runI
 	return prior, err
 }
 
+// evictOldestMemoryFloor drops the floor that expires first, reporting whether there
+// was one. The job it raised then provisions at its resolved limit again, and a second
+// kill of it reads as a first one, which the run's budget still bounds.
+func evictOldestMemoryFloor(l *rerunLedger) bool {
+	oldest := ""
+	for k, m := range l.MemoryFloors {
+		if oldest == "" || m.ExpiresAt.Before(l.MemoryFloors[oldest].ExpiresAt) {
+			oldest = k
+		}
+	}
+	if oldest == "" {
+		return false
+	}
+	delete(l.MemoryFloors, oldest)
+	return true
+}
+
 // applyMemoryFloor returns spec with job's memory limit raised to the floor an
 // out-of-memory retry recorded for it, where the resolved limit is lower, and spec
 // itself otherwise; it never writes through spec. The lookup is the failure

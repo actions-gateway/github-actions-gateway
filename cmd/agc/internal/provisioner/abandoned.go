@@ -1,14 +1,16 @@
 package provisioner
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	neturl "net/url"
-	"strings"
 	"time"
+
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 // abandonedForceCancelTimeout bounds the single force-cancel POST. The call is on
@@ -159,7 +161,7 @@ func (p *Provisioner) forceCancelRun(ctx context.Context, owner, repo, runID str
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("force-cancel API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("force-cancel API returned %d: %s", resp.StatusCode, githubapp.SanitizeBody(bytes.TrimSpace(body), 512))
 	}
 	return nil
 }

@@ -328,3 +328,31 @@ func TestMemoryRetryPolicy(t *testing.T) {
 		}
 	}
 }
+
+// TestApplySizingProfileThroughputMemoryLimitHonoursMaxRequests: maxRequests bounds the
+// limits that track a derived request, and Throughput's memory limit tracks a peak the
+// job controls, so without the clamp each generation could sample a job at its last
+// limit and derive one headroom-factor higher (Q1327).
+func TestApplySizingProfileThroughputMemoryLimitHonoursMaxRequests(t *testing.T) {
+	tmpl := profileTemplate(false)
+	ceiling := resource.MustParse("2Gi")
+	sizing := &v2.WorkerSizing{Profile: v2.SizingProfileThroughput, MaxRequests: corev1.ResourceList{corev1.ResourceMemory: ceiling}}
+	rec := confidentRec("runner")
+	for gen := range 5 {
+		out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, []v2.ContainerSizingRecommendation{rec})
+		limit := out.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory]
+		if limit.Cmp(ceiling) > 0 {
+			t.Fatalf("generation %d: throughput memory limit %s exceeds maxRequests.memory %s", gen, limit.String(), ceiling.String())
+		}
+		// The most a job held under this limit can be sampled at.
+		rec.ObservedPeak[corev1.ResourceMemory] = limit
+	}
+
+	// The limit is never below the request, whichever bound sets it.
+	sizing.MaxRequests[corev1.ResourceMemory] = resource.MustParse("1Gi")
+	out := applySizingProfile(tmpl.PodTemplate, sizing, tmpl, []v2.ContainerSizingRecommendation{confidentRec("runner")})
+	res := out.Spec.Containers[0].Resources
+	if l, r := res.Limits[corev1.ResourceMemory], res.Requests[corev1.ResourceMemory]; l.Cmp(r) < 0 || l.String() != "1Gi" {
+		t.Fatalf("memory limit %s, request %s, want both 1Gi", l.String(), r.String())
+	}
+}

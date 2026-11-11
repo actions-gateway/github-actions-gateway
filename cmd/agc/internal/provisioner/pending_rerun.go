@@ -60,11 +60,18 @@ type pendingRerun struct {
 	extra         map[string]json.RawMessage
 }
 
-// parkRerun records r in l, reporting whether it was absent.
+// parkRerun records r in l, reporting whether it was absent. One entry per run attempt
+// is enough, since its release re-runs every failed job of the attempt, so a job whose
+// attempt is already parked records nothing (Q1327).
 func parkRerun(l *rerunLedger, now time.Time, r pendingRerun) bool {
 	key := failureKey(r.RunID, r.Job)
 	if l.Pending[key] != nil {
 		return false
+	}
+	for _, e := range l.Pending {
+		if e != nil && r.FailedAttempt > 0 && e.RunID == r.RunID && e.FailedAttempt == r.FailedAttempt {
+			return false
+		}
 	}
 	r.FiredAt = now
 	r.ExpiresAt = now.Add(pendingRerunMaxWait + pendingRerunExpiryGrace)
