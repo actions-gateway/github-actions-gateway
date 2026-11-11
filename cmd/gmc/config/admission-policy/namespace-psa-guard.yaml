@@ -66,6 +66,17 @@ spec:
     - name: isManagedTenant
       expression: >-
         'actions-gateway.com/tenant' in variables.oldLabels && variables.oldLabels['actions-gateway.com/tenant'] == 'managed'
+    # The profile the reconciler stamps, derived from the namespace's own
+    # security-profile label (baseline when absent), which Constraint 2a makes
+    # immutable to the GMC (Q1328).
+    - name: derivedProfile
+      expression: >-
+        'actions-gateway.com/security-profile' in variables.oldLabels ? variables.oldLabels['actions-gateway.com/security-profile'] : 'baseline'
+    - name: privilegedEligible
+      expression: >-
+        'actions-gateway.com/privileged-profile' in variables.oldLabels && variables.oldLabels['actions-gateway.com/privileged-profile'] == 'allowed'
+    - name: psaModes
+      expression: "['enforce', 'warn', 'audit']"
   validations:
     # Constraint 1 — marker scope. The existing namespace must be a managed tenant.
     - expression: "variables.isManagedTenant"
@@ -82,6 +93,21 @@ spec:
         variables.oldAnnotations.all(k, k in variables.newAnnotations && variables.newAnnotations[k] == variables.oldAnnotations[k])
         && variables.newAnnotations.all(k, k in variables.oldAnnotations && variables.oldAnnotations[k] == variables.newAnnotations[k])
       message: "the GMC service account may not modify annotations on namespaces"
+      reason: Forbidden
+    # Constraint 3 — value pin (Q1328). Each mode label the GMC leaves on the
+    # namespace, or had found there, carries the derived profile at version
+    # latest, and privileged additionally needs the platform's eligibility label.
+    # Without it the GMC's namespace grant could make any tenant namespace
+    # privileged, or drop a mode label so the cluster default applies.
+    - expression: >-
+        variables.psaModes.all(m,
+        (!((variables.psaPrefix + m) in variables.oldLabels) && !((variables.psaPrefix + m) in variables.newLabels)) ||
+        ((variables.psaPrefix + m) in variables.newLabels && variables.newLabels[variables.psaPrefix + m] == variables.derivedProfile))
+        && variables.psaModes.all(m, !((variables.psaPrefix + m + '-version') in variables.newLabels) || variables.newLabels[variables.psaPrefix + m + '-version'] == 'latest')
+      messageExpression: "'the GMC service account may only stamp pod-security.kubernetes.io/{enforce,warn,audit}=' + variables.derivedProfile + ' at version latest on namespace ' + object.metadata.name + ', the profile its actions-gateway.com/security-profile label selects'"
+      reason: Forbidden
+    - expression: "variables.derivedProfile != 'privileged' || variables.privilegedEligible"
+      messageExpression: "'the GMC service account may not stamp the privileged Pod Security profile on namespace ' + object.metadata.name + ': it lacks the platform-applied label actions-gateway.com/privileged-profile=allowed'"
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1
