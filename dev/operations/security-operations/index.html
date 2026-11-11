@@ -4741,8 +4741,9 @@ If your cluster enforces DNS-based egress, you can instead have the GMC express 
 </tr>
 </tbody>
 </table>
-<p>The emitted object is named <code>&lt;proxy&gt;-proxy-fqdn</code>, owned by the <code>EgressProxy</code> (garbage-collected with it), and covers the GitHub Actions runner endpoint families: <code>api.github.com</code>, <code>github.com</code>, <code>codeload.github.com</code>, <code>objects.githubusercontent.com</code>, <code>*.actions.githubusercontent.com</code>, and <code>*.blob.core.windows.net</code> — <strong>plus the <code>githubURL</code> host of every gateway that references this proxy</strong>, directly via <code>defaultProxyRef</code> or through a <code>RunnerSet</code>'s <code>proxyRef</code> (Q506).
-That is what makes an FQDN mode work for GitHub Enterprise Server without any extra configuration: the appliance's hostname is on the referring <code>ActionsGateway</code>, and a gateway applied after the proxy re-triggers the policy.
+<p>The emitted object is named <code>&lt;proxy&gt;-proxy-fqdn</code>, owned by the <code>EgressProxy</code> (garbage-collected with it), and covers the GitHub Actions runner endpoint families: <code>api.github.com</code>, <code>github.com</code>, <code>codeload.github.com</code>, <code>objects.githubusercontent.com</code>, <code>*.actions.githubusercontent.com</code>, and <code>*.blob.core.windows.net</code> — <strong>plus the <code>githubURL</code> host of every gateway that references this proxy</strong>, directly via <code>defaultProxyRef</code> or through a <code>RunnerSet</code>'s <code>proxyRef</code> (Q506), when the <a href="#how-the-allowlist-works">platform egress allowlist</a> covers that host.
+That is what makes an FQDN mode work for GitHub Enterprise Server with nothing set on the <code>EgressProxy</code>: the appliance's hostname is on the referring <code>ActionsGateway</code>, and a gateway applied after the proxy re-triggers the policy.
+A host the allowlist does not cover is left out, and the pool reports <code>GitHubEgressIncomplete=True</code> / <code>GitHubHostNotAllowlisted</code> naming it.
 A public-GitHub-only pool emits exactly what it did before.
 In an FQDN mode the standard <code>NetworkPolicy</code> drops its GitHub-CIDR rule (DNS + ingress are unchanged) and the 24h IP-range reconcile skips this proxy.
 The GMC also re-checks the emitted policy on a bounded cadence (a fraction of the egress-staleness window, ~6h at the default; Q326), so an out-of-band edit or delete is repaired within that window even when nothing else touches the <code>EgressProxy</code>.</p>
@@ -4751,7 +4752,7 @@ The GMC also re-checks the emitted policy on a bounded cadence (a fraction of th
 The default never guesses a mechanism or auto-detects.</p>
 <p><strong>GHES on the CIDR default needs the appliance's ranges.</strong> CIDR mode allows only the ranges <code>api.github.com/meta</code> publishes, and a GitHub Enterprise Server appliance on your own address space is in none of them — so the pool's <code>NetworkPolicy</code> denies the traffic it exists to carry.
 The GMC cannot know those ranges, so it names the gap: <code>GitHubEgressIncomplete=True</code> / <code>ApplianceRangesRequired</code> on the <code>EgressProxy</code>, with the unreachable host in the message.
-Supply the ranges in <code>spec.destinationCIDRs</code> — allowlisting them under <code>--allowed-egress-cidrs</code> first, since that field is platform-gated — or move the pool to an FQDN mode, which carries the host for you.
+Supply the ranges in <code>spec.destinationCIDRs</code> — allowlisting them under <code>--allowed-egress-cidrs</code> first, since that field is platform-gated — or move the pool to an FQDN mode, which carries the host once a platform admin allowlists it under <code>--allowed-egress-fqdns</code>.
 See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">troubleshooting</a>.</p>
 </blockquote>
 <p><strong>Removed <code>CiliumFQDN</code> / <code>CalicoFQDN</code>.</strong> The earlier per-CNI enum values were removed at <code>v2.0.0</code>: the <code>v2</code> CRD's <code>egressPolicyMode</code> accepts only <code>CIDR</code> and <code>FQDN</code>, so the apiserver rejects an alias.
@@ -4887,7 +4888,8 @@ The <code>EgressProxy</code> is a tenant-authorable CR, so a tenant may <em>requ
 <ul>
 <li><code>--allowed-egress-fqdns</code> (chart: <code>allowedEgressFQDNs</code>) — permitted FQDN <strong>suffixes</strong>.
   A request matches if it equals or is a subdomain of an entry (allowing <code>golang.org</code> permits <code>proxy.golang.org</code>).
-  Gates <code>EgressProxy.spec.destinationFQDNs</code>.</li>
+  Gates <code>EgressProxy.spec.destinationFQDNs</code>, and the <code>githubURL</code> host of every gateway that uses the proxy.
+  The second is not checked at admission: the GMC leaves an uncovered host out of the policy it emits and names it on the pool's <code>GitHubEgressIncomplete</code> condition.</li>
 <li><code>--allowed-egress-cidrs</code> (chart: <code>allowedEgressCIDRs</code>) — permitted IP ranges.
   A request matches by <strong>subnet containment</strong> (allowing <code>10.0.0.0/8</code> permits a requested <code>10.1.0.0/16</code>).
   Gates <code>EgressProxy.spec.destinationCIDRs</code>.</li>
@@ -4937,6 +4939,11 @@ The Private-Google-Access VIPs in particular require subnet-level Private Google
 </code></pre></div>
 <p>Setting <code>configMapName</code> also renders a namespaced Role/RoleBinding granting the GMC get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read).
 The effective allowlist is the union of the flags and the ConfigMap, enforced by the EgressProxy validating webhook on every create/update — a destination outside it is rejected with a message naming the effective allowlist.</p>
+<p>A ConfigMap change reaches a gateway's <code>githubURL</code> host differently from a <code>destinationFQDNs</code> entry.
+A <code>destinationFQDNs</code> entry is checked once, when the <code>EgressProxy</code> is written, and stays after the allowlist entry behind it is removed.
+A <code>githubURL</code> host is re-checked whenever the ConfigMap changes: an added entry puts the host into every pool whose gateways name it, and a removed one takes it out.
+A deleted ConfigMap, or one with an invalid entry, is ignored whole, so every appliance host it covered leaves its pools until the ConfigMap is fixed.
+Put a GitHub Enterprise Server host in <code>allowedEgressFQDNs</code> instead when that is not what you want.</p>
 <hr />
 <h2 id="sharing-an-egress-proxy-across-namespaces">Sharing an egress proxy across namespaces<a class="headerlink" href="#sharing-an-egress-proxy-across-namespaces" title="Permanent link">&para;</a></h2>
 <p>By default an <code>EgressProxy</code> serves only its own namespace.

@@ -2659,12 +2659,10 @@
 
 <h1 id="eight-stricter-admission-rules-from-the-november-security-audit">Eight stricter admission rules from the November security audit<a class="headerlink" href="#eight-stricter-admission-rules-from-the-november-security-audit" title="Permanent link">&para;</a></h1>
 <p><strong>Eight audit findings are fixed by a stricter admission rule, and an open major is the only cheap time to add one.</strong> A manifest that applies today would be refused afterwards, so a minor cannot take these and <code>v3</code> is the next place they could land, which is why Q1283 and Q1312 were gated.
-Five of the eight remain, listed below; the other three, the two <code>noProxyCIDRs</code> guard rules and the <code>EgressPeer</code> CIDR bound, have theirs.
-Two are confirmed from source and three are leads whose rule gap is visible in source (<a href="../../plan/security-audit-2026-11/#stricter-admission-rules">each finding, with evidence and the proposed rule</a>):</p>
+Three of the eight remain, listed below; the other five have theirs: the two <code>noProxyCIDRs</code> guard rules, the <code>EgressPeer</code> CIDR bound, the allowlist gate on a <code>githubURL</code> host, and the public GitHub alias fold.
+One is confirmed from source and two are leads whose rule gap is visible in source (<a href="../../plan/security-audit-2026-11/#stricter-admission-rules">each finding, with evidence and the proposed rule</a>):</p>
 <ul>
 <li>Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace (confirmed, low).</li>
-<li>FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist (confirmed, low).</li>
-<li>www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them (needs validation).</li>
 <li>Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy (needs validation).</li>
 <li>Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant (needs validation).</li>
 </ul>
@@ -2672,7 +2670,7 @@ Two are confirmed from source and three are leads whose rule gap is visible in s
 Each rule must let an unchanged stored value through, as <code>spec.tracing.endpoint</code>'s does (Q1283), so a stored object is not refused when an unrelated field is edited.
 Re-check each asserted gap against source before writing its rule: these were read on 2026-11-09 at <code>7b3f016ad</code>, and the leads' downstream effect was never run.
 A finding whose rule turns out to cost more than it protects can be declined here with the reason recorded in the plan doc; it should not silently drop off the list.</p>
-<p><strong>Done when</strong> each of the five has a rule with tests covering a refused new value and an accepted unchanged stored one, or a recorded decision not to add it; <code>upgrade.md</code> tells operators what <code>v2.0.0</code> now refuses and how to find a stored object that has it; and the <code>v2.0.0</code> release notes list each rule under breaking changes.</p>
+<p><strong>Done when</strong> each of the three has a rule with tests covering a refused new value and an accepted unchanged stored one, or a recorded decision not to add it; <code>upgrade.md</code> tells operators what <code>v2.0.0</code> now refuses and how to find a stored object that has it; and the <code>v2.0.0</code> release notes list each rule under breaking changes.</p>
 <p>The <code>security</code> label is left off deliberately: with a gate label it would oblige a public roadmap bullet (<code>roadmapcheck</code> rule 7), and Q1312 set the precedent of gating a pre-release tightening as <code>debt</code>.</p>
 
 

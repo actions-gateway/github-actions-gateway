@@ -4529,6 +4529,30 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>M</td>
 <td><strong>Decision:</strong> we decide to open a <code>v3</code> API version, for these or for any other reason.</td>
 </tr>
+<tr>
+<td><a href="Q1333/">Q1333</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/githubapp/auth.go">DeriveAPIBaseURL reads a mixed-case or dotted GitHub host as GHES</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A gateway whose <code>githubURL</code> is <code>https://GitHub.com/acme</code> is admitted and then addressed as a GitHub Enterprise Server (GHES) appliance.</strong> …</td>
+</tr>
+<tr>
+<td><a href="Q1334/">Q1334</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/actionsgateway_webhook.go">Warn at admission when a gateway's GitHub host is not allowlisted</a></td>
+<td><code>feature</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**An FQDN-mode EgressProxy leaves a referrer's GitHub Enterprise Server (GHES) host out of its policy until the platform allowlists it, and …</td>
+</tr>
+<tr>
+<td><a href="Q1337/">Q1337</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/cmd/wiring.go">Allowlist ConfigMap wait starts before the manager, not at cache sync</a></td>
+<td><code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**The EgressProxy reconciler holds a pool for at most 30 s while the egress allowlist ConfigMap is unread, and the 30 s starts when the GMC …</td>
+</tr>
 </tbody>
 </table>
 

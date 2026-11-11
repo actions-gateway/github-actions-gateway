@@ -3422,7 +3422,8 @@ For day-2 operations after onboarding, see the <a href="../runbook/">Runbook</a>
 <li>[ ] <strong>GHES only: the appliance's egress ranges are allowlisted.</strong> A GitHub Enterprise Server appliance sits on your own address space, so it appears in none of the ranges <code>api.github.com/meta</code> publishes — which is exactly what the default <code>CIDR</code> egress mode programs.
   In that mode the tenant's <code>EgressProxy</code> must carry the appliance's ranges in <code>spec.destinationCIDRs</code>, and because that field is gated by the platform <code>--allowed-egress-cidrs</code> allowlist, <strong>a platform admin has to allowlist them first</strong>; a tenant cannot self-serve.
   A pool missing them reports <code>GitHubEgressIncomplete=True</code> (reason <code>ApplianceRangesRequired</code>) naming the unreachable host.
-  An FQDN egress mode needs nothing here — the referring gateway's host is added to the policy automatically.
+  An FQDN egress mode needs the appliance's hostname on the platform <code>--allowed-egress-fqdns</code> allowlist instead, which is also a platform admin's change.
+  A pool whose gateway names a host that is not on it reports <code>GitHubEgressIncomplete=True</code> (reason <code>GitHubHostNotAllowlisted</code>).
   See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">troubleshooting: GHES tenant's egress is denied</a>.</li>
 <li>[ ] <strong>GHES only: the appliance's CA is available, if it is a private one.</strong> Reaching the appliance and trusting it are separate problems.
   The AGC and its worker pods trust the OS system roots plus the egress proxy's own CA, so an appliance fronted by an internal certificate authority fails the TLS handshake — a handshake error, not a timeout.

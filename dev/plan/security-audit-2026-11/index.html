@@ -3334,7 +3334,7 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 <tr>
 <td><a href="#stricter-admission-rules">FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist</a></td>
 <td>confirmed, low</td>
-<td><a href="../../queue/Q1322/">Q1322</a> (<code>2.0-gate</code>)</td>
+<td>fixed in <code>v2.0.0</code>, see the finding's Resolution</td>
 </tr>
 <tr>
 <td><a href="#stricter-admission-rules">noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms</a></td>
@@ -3349,7 +3349,7 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 <tr>
 <td><a href="#stricter-admission-rules">www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them</a></td>
 <td>needs validation</td>
-<td><a href="../../queue/Q1322/">Q1322</a> (<code>2.0-gate</code>)</td>
+<td>guard fixed in <code>v2.0.0</code>, see the finding's Resolution; the GitHub-side question stays open</td>
 </tr>
 <tr>
 <td><a href="#stricter-admission-rules">Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy</a></td>
@@ -3590,6 +3590,20 @@ Validate the extracted host as an RFC 1123 name before emitting it, so no wildca
 If self-serve GHES in FQDN mode is the intended design instead, correct docs/design/05-security.md:156-159 and :329 and the threat row at :203 to say githubURL is a tenant-controlled egress destination there.
 Regression cases: extend TestResolveReferrerGitHubHosts in cmd/gmc/internal/controller/egressproxy_referrers_test.go with an off-allowlist GHES referrer expecting no host, an allowlisted one expecting the host, and a wildcard host expecting none; add an FQDN-mode case to cmd/gmc/internal/controller/integration/v2_egressproxy_ghes_egress_test.go asserting the emitted policy omits an unallowlisted githubURL host.</p>
 <p><strong>Evidence.</strong> <code>cmd/gmc/internal/webhook/v2/egressproxy_webhook.go:48</code>, <code>cmd/gmc/internal/webhook/validation/validation.go:69</code>, <code>cmd/gmc/internal/controller/egressproxy_referrers.go:103</code>, <code>cmd/gmc/internal/controller/egressproxy_builder.go:187</code>, <code>cmd/proxy/main.go:16</code>, <code>docs/design/05-security.md:156</code>, <code>docs/design/05-security.md:329</code>, <code>docs/design/network-architecture.md:309</code>, <code>docs/operations/security-operations.md:656</code>, <code>docs/plan/archive/q506-ghes-endpoint-audit.md:85</code>, <code>cmd/gmc/internal/controller/egressproxy_referrers.go:62</code>, <code>cmd/gmc/internal/controller/egressproxy_builder.go:527</code>.</p>
+<p><strong>Resolution.</strong> The EgressProxy reconciler now holds the shared <code>EgressDestinationAllowlist</code>, and <code>resolveReferrerGitHubHosts</code> splits referrer hosts into allowed and refused.
+Only an allowed host reaches the FQDN policy and the proxy's CONNECT allowlist, in every egress mode.
+A host is allowed when it is an RFC 1123 name, lowercased and with one trailing dot dropped, that <code>CoversFQDN</code> accepts, so <code>*.corp.example</code> is refused even where <code>corp.example</code> is allowlisted.
+Public GitHub needs no entry: the built-in host list is matched without regard to case, and the <code>www.github.com</code> spelling of public GitHub is allowed as before.
+A refused host sets <code>GitHubEgressIncomplete=True</code> with the new reason <code>GitHubHostNotAllowlisted</code> wherever the pool cannot reach it by address: managed FQDN mode, or an unmanaged pool with <code>destinationFQDNs</code> and no <code>destinationCIDRs</code>.</p>
+<p>The allowlist's ConfigMap half loads after the GMC starts and changes under it, which the gate has to survive in both directions.
+A reconcile that would refuse a host before the first ConfigMap read holds and requeues, so a GMC restart does not narrow a live policy.
+The ConfigMap reconciler reads once at start whether or not the object exists, and the hold ends 30 seconds after the GMC starts regardless, so a named ConfigMap that was never created cannot keep a pool from reconciling.
+Each ConfigMap read then requeues every EgressProxy, so an added entry reaches the policy at once and not at the six-hour re-check.</p>
+<p>This changes what a stored GHES gateway on an FQDN-mode pool can reach on upgrade, and <code>docs/operations/upgrade.md</code> says how to find one and which allowlist entry restores it.
+The optional admission-time rejection is declined.
+The allowlist and the proxy binding both change after admission, so the reconciler has to enforce the rule whatever admission says, and a rejection would add a second stricter rule for no added protection.
+An admission warning gives the same early signal without refusing anything and can ship in a minor (<a href="../../queue/Q1334/">Q1334</a>).
+Whether packets reach a covered host still depends on the CNI and DNS and was not observed: the envtest asserts the emitted policy and the proxy's environment, not traffic.</p>
 <h3 id="noproxycidrs-admission-guard-does-not-model-comma-carrying-wildcard-port-qualified-or-ip-literal-no_proxy-forms">noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms<a class="headerlink" href="#noproxycidrs-admission-guard-does-not-model-comma-carrying-wildcard-port-qualified-or-ip-literal-no_proxy-forms" title="Permanent link">&para;</a></h3>
 <p><code>gmc-webhook-noproxy:matcher-misses-no-proxy-forms</code>: needs validation.
 Starts at <code>api/v2/egressproxy_types.go:208</code>.</p>
@@ -3660,6 +3674,20 @@ Both are expected to fail on the current code.
 Candidate fix: fold the three DeriveAPIBaseURL public hosts to github.com in GitHubScope (or reject the aliases in validation.GitHubURL).</p>
 <p><strong>Owner check.</strong> Owner-observed, in a scratch org: register one ScaleSet RunnerSet under a gateway with https://github.com/<org>, then a second in another namespace under https://www.github.com/<org> with the same first label, and observe whether the second AGC's RunnerSet reaches Ready reporting the same scale set ID, or fails at runner-registration.</p>
 <p><strong>Evidence.</strong> <code>cmd/gmc/internal/scalesetscope/scalesetscope.go:52</code>, <code>githubapp/auth.go:230</code>, <code>scaleset/client.go:271</code>, <code>docs/design/05-security.md:668</code>, <code>cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:60</code>, <code>api/v2/actionsgateway_types.go:39</code>.</p>
+<p><strong>Resolution.</strong> <code>GitHubScope</code> now folds <code>www.github.com</code> and <code>api.github.com</code> to <code>github.com</code>, and a unit test holds its alias list to the hosts <code>DeriveAPIBaseURL</code> treats as public GitHub.
+It also drops a trailing dot on the host, since <code>github.com.</code> resolves as <code>github.com</code> does.
+A new gateway under either alias is also rejected: on create, and on an update that changes <code>githubURL</code>, which the CRD's immutability rule refuses first.
+The fold is what keeps two tenants apart, and the rejection keeps new gateways off spellings whose registration behaviour is unmeasured.
+A rule that rejects a value earlier releases accepted is a breaking change, so it went into <code>v2.0.0</code>.
+It costs one more breaking change, and a stored alias gateway cannot be re-created from a backup until its host is written <code>github.com</code>.
+The rejection is not in <code>validation.GitHubURL</code>, which re-runs on every update: <code>githubURL</code> is immutable, so there it would refuse every later edit to a stored alias gateway.
+The fold has the same problem one step removed, because both scope guards also re-run on update.
+Two tenants stored on different spellings with one scale-set name would each be refused every unrelated edit after the upgrade, and either could hold the other there.
+So an update that leaves the claim as stored is compared by the scope as written, which is the comparison made before the fold: a RunnerSet keeping its first <code>runnerLabel</code> and <code>gatewayRef</code>, or a gateway keeping its <code>githubURL</code>.
+Any new or changed claim is compared folded, and the reconciler reports a stored alias pair on both gateways as <code>ScaleSetNameCollision</code>.</p>
+<p>Both Blocked-on items stay open.
+Whether GitHub's runner registration accepts the alias spellings, and so whether a stored pair ever shared a scale set, was not measured, and the Owner check above is still the way to find out.
+A related defect in the same host comparison is tracked separately: <code>DeriveAPIBaseURL</code> matches the three hosts by exact case and with no trailing dot (<a href="../../queue/Q1333/">Q1333</a>).</p>
 <h3 id="tenant-runnertemplate-volume-sources-are-unfiltered-so-a-node-mounted-network-volume-nfs-iscsi-may-give-workers-a-data-path-outside-the-worker-networkpolicy-and-egress-proxy">Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy<a class="headerlink" href="#tenant-runnertemplate-volume-sources-are-unfiltered-so-a-node-mounted-network-volume-nfs-iscsi-may-give-workers-a-data-path-outside-the-worker-networkpolicy-and-egress-proxy" title="Permanent link">&para;</a></h3>
 <p><code>worker-pod-node-mounted-network-volume</code>: needs validation.
 Starts at <code>api/v2/runnertemplate_types.go:38</code>.</p>
