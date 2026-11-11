@@ -957,6 +957,9 @@ The label confines the grant to managed tenants so a compromised GMC cannot rela
 The GMC never sets this label itself — a trusted administrator must apply it.
 The same marker also gates the `gmc-tenant-resource-guard` policy, which confines every tenant-resource write (Deployments, Secrets, RoleBindings, …) to marked namespaces; provisioning fails at the PSA-stamping step first, so `NamespaceMarkerMissing` is the signal you will see, but applying the label clears both gates.
 
+**A marked namespace can show the same event** when it carries `actions-gateway.com/security-profile=privileged` without `actions-gateway.com/privileged-profile=allowed`: the guard admits the GMC only the Pod Security values the profile selects, and `privileged` only where the platform has made the namespace eligible (Q1328).
+The denial in the event message names the profile; add the eligibility label or lower the profile, as the [upgrade note](upgrade.md#action-required-if-a-tenant-namespace-selects-privileged-without-the-eligibility-label-the-gmc-can-no-longer-stamp-it) describes.
+
 **Diagnostics.**
 
 ```sh
@@ -994,6 +997,7 @@ If a delete keeps failing — most often an API-server error, or a `Forbidden` f
 A NotFound is treated as success, so an already-deleted resource never blocks convergence.
 
 The gateway holds its own cleanup finalizer and **verifies each child is actually gone** after its delete is accepted — a child held by another controller's finalizer (its `deletionTimestamp` is set but the object lingers) also keeps the teardown open, with the lingering child named in the `TeardownIncomplete` event message.
+One lingering child is held on purpose: a message reading `NetworkPolicy <gateway>-workload (held for worker pods …)` means pods of the gateway's RunnerSets still exist, terminating ones included, and teardown keeps their egress restriction until they are gone (Q1328, see [WaitingForWorkerDrain](#actionsgateway-deletion-hangs-on-waitingforworkerdrain)).
 The v2 per-tenant metrics Secrets are the one exception: they are removed by owner-reference garbage collection (the GMC deliberately holds no delete permission on Secrets), so they never appear in the event.
 
 **Diagnostics.**
@@ -1836,8 +1840,10 @@ kubectl get deploy -n <namespace> -l app.kubernetes.io/component=agc
 kubectl logs -n <namespace> deploy/<gateway>-agc --tail=50
 ```
 
-**Resolution.** Teardown is bounded: after **90 seconds** it proceeds anyway and emits a `WorkerDrainTimeout` Warning naming what it is leaving behind.
-If you see that event, those pods now have no reaper and are bounded only by their `maxWorkerLifetime` deadline — delete them by hand to release the node:
+**Resolution.** The wait is bounded: after **90 seconds** teardown proceeds anyway and emits a `WorkerDrainTimeout` Warning naming what it is leaving behind.
+If you see that event, those pods now have no reaper and are bounded only by their `maxWorkerLifetime` deadline.
+The gateway stays `Terminating` until they are gone, with a `TeardownIncomplete` event naming its `<gateway>-workload` NetworkPolicy as held for them, because that policy is their only egress restriction (Q1328).
+Delete them by hand to release the node and finish the teardown:
 
 ```sh
 kubectl delete pod -n <namespace> -l actions-gateway.com/runner-set=<set-name>

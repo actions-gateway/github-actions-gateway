@@ -43,6 +43,8 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
   - [Action required if a Throughput RunnerSet sets maxRequests.memory: its memory limit now stops there](#action-required-if-a-throughput-runnerset-sets-maxrequestsmemory-its-memory-limit-now-stops-there)
   - [Non-breaking: one repository's out-of-memory kills no longer fill the scale-set failure ledger](#non-breaking-one-repositorys-out-of-memory-kills-no-longer-fill-the-scale-set-failure-ledger)
+  - [Action required if a tenant namespace selects privileged without the eligibility label: the GMC can no longer stamp it](#action-required-if-a-tenant-namespace-selects-privileged-without-the-eligibility-label-the-gmc-can-no-longer-stamp-it)
+  - [Non-breaking: deleting a gateway keeps its workers' NetworkPolicy until they are gone](#non-breaking-deleting-a-gateway-keeps-its-workers-networkpolicy-until-they-are-gone)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
   - [Non-breaking: two `RunnerSet`s may share a name across namespaces](#non-breaking-two-runnersets-may-share-a-name-across-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
@@ -1051,6 +1053,35 @@ A set with no `maxRequests.memory` is unchanged.
 Now one parked re-run is kept per run attempt, since its release re-runs every failed job of the attempt; a re-run lists at most 16 merged disruptions and jobs; and memory floors are evicted oldest first, after failed-job records, before a budget write is refused.
 
 **What you will see.** Nothing, unless floors are evicted: a job whose floor is gone provisions at its resolved limit again, and a second kill of it reads as a first one, still inside the run's `maxEvictionRetries`.
+
+### Action required if a tenant namespace selects `privileged` without the eligibility label: the GMC can no longer stamp it
+
+**Who is affected:** a tenant namespace labelled `actions-gateway.com/security-profile=privileged` without `actions-gateway.com/privileged-profile=allowed`.
+`namespace-security-profile-guard` refuses that pair when the profile label is set, so it exists only where that guard ran in `Audit` or was disabled.
+
+```sh
+kubectl get namespaces -l 'actions-gateway.com/tenant=managed,actions-gateway.com/security-profile=privileged,actions-gateway.com/privileged-profile!=allowed'
+```
+
+**What changed.** `namespace-psa-guard` now admits a GMC Pod Security stamp only at the values the namespace's own profile label selects, at version `latest`, with no mode label dropped, and `privileged` only where the namespace is eligible (Q1328).
+Before, it checked which labels the GMC changed but not their values, so the GMC's namespace grant could set `enforce=privileged` on any tenant namespace.
+
+**What you will see.** Nothing on a namespace whose labels already agree.
+On an affected one the GMC's stamp is denied, the Pod Security labels stay as they are, and the namespace gets a repeating `NamespaceMarkerMissing` Warning event carrying the guard's denial.
+
+**What to do.** Either add `actions-gateway.com/privileged-profile=allowed`, if privileged workers there are a platform decision you have made, or set the profile label to `baseline` or `restricted` with the `actions-gateway.com/allow-profile-downgrade=allowed` annotation.
+
+### Non-breaking: deleting a gateway keeps its workers' NetworkPolicy until they are gone
+
+**Who is affected:** anyone who deletes an `ActionsGateway` while its `RunnerSet`s still have worker pods.
+
+**What changed.** Teardown used to delete the `<gateway>-workload` NetworkPolicy once the bound sets reported no jobs, which happens as soon as the AGC issues its pod deletes, while each pod still runs through its `terminationGracePeriodSeconds`; past the 90-second drain deadline the pods were not reaped at all.
+It now deletes every other child and keeps that policy, and the gateway's finalizer, until no pod of a bound set remains (Q1328).
+To see those pods, the `gmc-tenant-secret-reader` ClusterRole gains `list` on Pods, still granted one tenant namespace at a time.
+`gmc-tenant-resource-guard` also now admits a GMC RoleBinding write only as its own reader binding or an `agc-tenant-role` binding to ServiceAccounts of that namespace, the two shapes the GMC writes.
+
+**What you will see.** A deletion that waits for terminating workers shows a `TeardownIncomplete` event naming the policy as held for them, and finishes when they exit.
+After a `WorkerDrainTimeout` it waits until you delete the pods or their `maxWorkerLifetime` deadline fires ([troubleshooting](troubleshooting.md#actionsgateway-deletion-hangs-on-waitingforworkerdrain)).
 
 ### Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the `-v2` webhooks
 
