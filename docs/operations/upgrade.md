@@ -24,6 +24,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required at v2.0.0: apply the CRDs with the upgrade, because the AGC's watch depends on them](#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them)
   - [Action required after v2.0.0: delete what an owner deleted during the upgrade left behind](#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
+  - [Action required if a RunnerSet runs fork pull request jobs: they are now refused](#action-required-if-a-runnerset-runs-fork-pull-request-jobs-they-are-now-refused)
   - [Action required if a RunnerSet's priorityTiers do not ascend: the list is now rejected](#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected)
   - [Action required if a query reads tier on a disruption series: the label is gone](#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone)
   - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
@@ -536,6 +537,28 @@ The AGC's `Provisioner.provision` span went with the classic path too, and the s
 A NetworkPolicy you wrote to let the AGC reach a collector keeps working, and `spec.tracing.networkPolicy` can now replace it ([Reaching the collector](observability-logging.md#reaching-the-collector)).
 
 **Before you upgrade,** search your own rules and dashboards for the names above, and re-apply the reference `PrometheusRule` and re-import the dashboards if you run copies of them.
+
+### Action required if a `RunnerSet` runs fork pull request jobs: they are now refused
+
+**Who is affected:** operators with a `RunnerSet` that runs jobs from pull requests opened from a fork, which on a public repository is usually every outside contribution.
+
+**What changed.** Every `RunnerSet` now refuses a fork pull request's job unless it sets `spec.forkPullRequests: Accept`.
+A fork could already name any set's label in `runs-on`, because a `pull_request` run executes the fork's edited workflow, and nothing at GitHub refuses a job for coming from a fork.
+A refused job gets no runner, its run is force-cancelled, and the set records a `ForkJobRefused` Event.
+`pull_request_target` workflows and every non-pull-request event run as before.
+What counts as a fork's job and what the contributor sees: [security operations](security-operations.md#fork-pull-requests-choose-their-own-runner-label).
+
+**Before you upgrade,** decide for each set that fork pull requests reach whether it should run them.
+For a set built for untrusted code, such as one on the Kata template, keep fork CI running by setting the field:
+
+```bash
+kubectl patch runnerset <name> -n <tenant-namespace> --type merge \
+  -p '{"spec":{"forkPullRequests":"Accept"}}'
+```
+
+The field is new at `v2.0.0`, so the patch is rejected until the upgraded CRDs are applied; apply it right after them, before the new AGC takes jobs.
+To show contributors why a job was refused, also grant the GitHub App `Checks: Read and write` ([onboarding](tenant-onboarding.md#0a-create-the-app-web-ui)).
+Without it the refusal still happens, and the run reads only as cancelled.
 
 ### Action required if a `RunnerSet`'s `priorityTiers` do not ascend: the list is now rejected
 

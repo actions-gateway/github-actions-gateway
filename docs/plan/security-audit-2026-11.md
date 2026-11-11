@@ -854,7 +854,7 @@ The sandboxed fixture-module test above was not run: the run log already shows t
 Starts at `.github/workflows/conflict-markers.yml:12`.
 
 Runner selection is by label alone, the dogfood scale sets are registered repo-scoped against a public repository so no runner group gates them, and on pull_request events the label is text in a workflow file the pull request can edit.
-The opt-in gate is an expression inside those same editable files, and the AGC does not distinguish a fork pull request's job from any other until the default refusal in docs/queue/Q1330.md ships.
+The opt-in gate is an expression inside those same editable files, and until Q1330 the AGC did not distinguish a fork pull request's job from any other; it now refuses one on every `RunnerSet` that does not set `spec.forkPullRequests: Accept`.
 
 **Blocked on:**
 
@@ -868,7 +868,7 @@ The opt-in gate is an expression inside those same editable files, and the AGC d
 - Which e2e overlay is live during a window (Kata by default, privileged dind by opt-in) and what a worker pod can reach inside the dogfood cluster are deployment facts that set the impact; neither is determined by source.
 
 **Local test.** No local test can settle this: the decisive step is GitHub's job assignment.
-A source-side guard can be tested locally once written: add a case to the existing scale-set fixture test file scaleset/types_test.go (its hand-written JobAssigned fixture already carries eventName at line 54) asserting the guard's decision for a fork pull_request job, once docs/queue/Q1330.md is built: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).
+The source-side guard Q1330 built is tested locally in cmd/agc/internal/provisioner/fork_refusal_internal_test.go: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).
 
 **Owner check.** Owner reads the repository's current fork pull request approval policy (Settings > Actions > General, or the actions/permissions/fork-pr-contributor-approval setting) and records its value and the date.
 Owner lists the runner scale sets registered for the repository and confirms whether each dogfood label (gag-ci-scaleset, gag-ci-e2e, the probe labels) is repo-scoped with no runner-group restriction.

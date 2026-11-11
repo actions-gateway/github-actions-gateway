@@ -59,6 +59,8 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Scale-Set Job Stranded by a Stale Runner Record (Runner-Name 409)](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409)
 - [Scale-Set Jobs Waiting at the Worker Ceiling (WorkerCeilingReached)](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached)
 - [Scale-Set Job Waiting for Its Previous Worker to Terminate (WorkerTerminating)](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating)
+- [Scale-Set Job Held Because Its Run Could Not Be Read (JobSourceUnverified)](#scale-set-job-held-because-its-run-could-not-be-read-jobsourceunverified)
+- [Fork Pull Request Job Refused (ForkJobRefused)](#fork-pull-request-job-refused-forkjobrefused)
 - [Scale-Set Assignments Abandoned (AssignmentAbandoned)](#scale-set-assignments-abandoned-assignmentabandoned)
 - [Worker Pods Stuck Running After the Job Finished (Mesh Sidecar)](#worker-pods-stuck-running-after-the-job-finished-mesh-sidecar)
 - [RunnerSet Reports PossibleReapBlockingSidecar (Build/DinD Sidecar in the Template)](#runnerset-reports-possiblereapblockingsidecar-builddind-sidecar-in-the-template)
@@ -1889,14 +1891,15 @@ kubectl get runnerset <name> -n <namespace> \
   -o jsonpath='{.status.conditions[?(@.type=="JobProvisionStalled")].message}'
 ```
 
-**The condition's four reasons.** `JobProvisionStalled` is advisory — it never gates `Ready`:
+**The condition's five reasons.** `JobProvisionStalled` is advisory — it never gates `Ready`:
 
 | `status` / `reason` | Meaning |
 |---|---|
 | `True` / `RunnerNameConflict` | At least one held job cannot register its runner name. An anomaly worth acting on — see [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409). Outranks `WorkerCeilingReached` whenever both classes are held at once, because it is the one you can do something about; a full ceiling clears itself. |
 | `True` / `WorkerTerminating` | At least one held job is waiting for its previous worker pod to finish terminating; see [Scale-Set Job Waiting for Its Previous Worker to Terminate](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating). Outranks `WorkerCeilingReached` and is outranked by `RunnerNameConflict`. |
+| `True` / `JobSourceUnverified` | At least one held pull request job could not be checked for a fork, because its run could not be read; see [Scale-Set Job Held Because Its Run Could Not Be Read](#scale-set-job-held-because-its-run-could-not-be-read-jobsourceunverified). Outranks `WorkerTerminating` and `WorkerCeilingReached` and is outranked by `RunnerNameConflict`. |
 | `True` / `WorkerCeilingReached` | Every held job is waiting only on worker capacity — this section. |
-| `False` / `JobsProvisioning` | No assigned job is waiting on a runner name, a terminating worker, or capacity. Published when the listener opens its session and again the moment the last held job provisions or completes, so a set that has never stalled reports it too. |
+| `False` / `JobsProvisioning` | No assigned job is waiting on a runner name, a terminating worker, a source check, or capacity. Published when the listener opens its session and again the moment the last held job provisions or completes, so a set that has never stalled reports it too. |
 
 **When to act.** Only when the wait itself is the problem.
 Either raise the ceiling (`spec.maxWorkers` or the top `priorityTiers` threshold) if the cluster has room, or treat it as the signal that the tenant needs more capacity.
@@ -1932,6 +1935,47 @@ kubectl delete pod <pod-name> -n <namespace> --grace-period=0 --force
 ```
 
 Releases after `v1.10.0` hold the job this way; earlier ones treated the old pod as the job's worker, so the job was acknowledged and no worker ever started for the runner the replay registered (Q1199).
+
+---
+
+## Scale-Set Job Held Because Its Run Could Not Be Read (JobSourceUnverified)
+
+**Symptom.** A `RunnerSet` reports `JobProvisionStalled=True/JobSourceUnverified`, `actions_gateway_scaleset_jobs_deferred{reason="source_unverified"}` is `> 0`, and a `JobSourceUnverified` Warning Event is recorded.
+The AGC logs `scaleset: could not check the assigned job's source; holding it` with the error from GitHub.
+
+**What happened.** The set refuses fork pull request jobs, which is the default, and a job triggered by `pull_request`, `pull_request_review` or `pull_request_review_comment` (or one naming no event) arrived.
+Telling a fork's job from the repository's own takes a read of the run from the GitHub REST API, and that read failed.
+The listener holds the job rather than run it unchecked, mints no runner, and re-reads after 30 seconds, doubling to every 5 minutes.
+It clears on the first read that succeeds.
+
+**When to act.** When it does not clear.
+The logged error names the cause: a 5xx or a connection error is GitHub or the egress path, and clears when they recover; a 401 or 403 means the App's token cannot read Actions on that repository, which needs `Actions: Read and write` ([onboarding](tenant-onboarding.md#0a-create-the-app-web-ui)).
+A set that is meant to run untrusted pull requests can skip the read entirely with `spec.forkPullRequests: Accept`.
+
+---
+
+## Fork Pull Request Job Refused (ForkJobRefused)
+
+**Symptom.** A contributor reports their pull request's workflow run was cancelled before anything ran, and the `RunnerSet` records a `ForkJobRefused` Warning Event naming the head repository and the run.
+Where the GitHub App holds `Checks: Read and write`, the pull request also carries a failed check named `actions-gateway: fork pull request refused`.
+
+**What happened.** The job came from a fork pull request and the set does not set `spec.forkPullRequests: Accept`, so the AGC minted no runner and force-cancelled the run.
+GitHub has no call that cancels a single job, so the run's other jobs were cancelled too.
+What counts as a fork's job: [security operations](security-operations.md#fork-pull-requests-choose-their-own-runner-label).
+
+**When to act.** If the set should run fork pull requests, set the field, then re-run the workflow:
+
+```bash
+kubectl patch runnerset <name> -n <namespace> --type merge \
+  -p '{"spec":{"forkPullRequests":"Accept"}}'
+```
+
+Set it only on a set built for untrusted code.
+Otherwise the refusal is working as intended, and the contributor's workflow should target a set that accepts fork pull requests, or a GitHub-hosted runner.
+
+A `ForkRefusalCheckRunSkipped` Normal Event beside it means the check run could not be written, usually because the App lacks `Checks: Read and write`, so the contributor saw only a cancelled run.
+
+A refused job whose assignment carried no run identity is not cancelled, since there is no run to address, and waits until GitHub ends it; its Event says so.
 
 ---
 
@@ -2117,6 +2161,9 @@ An event is recorded on the owner's next reconcile, so it can trail the underlyi
 | `PlatformFaultOnFailedJob` | Warning | A scale-set job failed and its worker shows a platform fault: the pod `Failed`, a `DisruptionTarget` condition, a container `OOMKilled`, the runner container exiting non-zero, or the set's colocated EgressProxy not `Ready` or with no ready replica (Q555, Q1237). Names the run, the job, the worker and the fault. | [Flaky Jobs and Platform Faults on Failed Jobs](#flaky-jobs-and-platform-faults-on-failed-jobs) |
 | `JobProvisionStalled` | Warning | A scale-set job cannot register its runner name (`generate-jitconfig` 409 that no retry cleared), so no worker can be created for it. The job is held and re-offered on a backoff. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Stranded by a Stale Runner Record](#scale-set-job-stranded-by-a-stale-runner-record-runner-name-409) |
 | `WorkerTerminating` | Normal | A scale-set job replayed to a re-created session is waiting for its previous worker pod to finish terminating; it is re-offered on a backoff until that pod is gone. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Waiting for Its Previous Worker to Terminate](#scale-set-job-waiting-for-its-previous-worker-to-terminate-workerterminating) |
+| `JobSourceUnverified` | Warning | A pull request job on a set refusing fork pull requests is held because its run could not be read to check for a fork; it is re-read on a backoff and never run unchecked. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Job Held Because Its Run Could Not Be Read](#scale-set-job-held-because-its-run-could-not-be-read-jobsourceunverified) |
+| `ForkJobRefused` | Warning | A fork pull request's job was refused because the set does not set `spec.forkPullRequests: Accept`: no runner was minted and its run was force-cancelled. Names the head repository and the run. | [Fork Pull Request Job Refused](#fork-pull-request-job-refused-forkjobrefused) |
+| `ForkRefusalCheckRunSkipped` | Normal | The check run explaining a fork refusal could not be written, usually because the GitHub App lacks `Checks: Read and write`; the refusal still happened. | [Fork Pull Request Job Refused](#fork-pull-request-job-refused-forkjobrefused) |
 | `WorkerCeilingReached` | Normal | Scale-set jobs are waiting because the set is already running as many workers as its spec allows; they are re-offered until capacity frees. Expected backpressure, hence Normal. Also sets the advisory `JobProvisionStalled` condition, whose message names the job ids. Once per episode. | [Scale-Set Jobs Waiting at the Worker Ceiling](#scale-set-jobs-waiting-at-the-worker-ceiling-workerceilingreached) |
 | `AssignmentAbandoned` | Warning | The listener gave up on assigned jobs it was holding, because the scale set reported no assigned jobs at all on two consecutive readings — GitHub is no longer holding them, and never reported them complete. Each is a workflow run that will not run. Clears `JobProvisionStalled` and steps `…_jobs_abandoned_total`. | [Scale-Set Assignments Abandoned](#scale-set-assignments-abandoned-assignmentabandoned) |
 | `OrphanedWorkerRecovered` | Warning | A scale-set worker pod for an unconcluded job was already gone when this AGC process started, so the disruption happened while nothing was watching and its cause was lost with the pod (Q844). The run is re-run through the shared per-run retry budget as `cause="vanished"`. Expected after an AGC restart that overlapped a node drain or a preemption; a steady trickle with no restarts is not. | [Evicted Worker Pods Exhausting Retry Budget](#evicted-worker-pods-exhausting-retry-budget) |

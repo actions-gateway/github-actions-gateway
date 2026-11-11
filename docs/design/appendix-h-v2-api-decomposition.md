@@ -566,6 +566,13 @@ Nothing is reserved on either axis today, the other contrast with the gate, whic
 In-place pod resize — the one extension the plan anticipates — changes *when* actuation happens, not where values come from or what limits follow, so it is a sibling field rather than a fifth profile.
 If the intent framing ever fails, `v2.0.0` is already a scheduled break.
 
+**Fork pull request refusal: `spec.forkPullRequests` (Q1220, Q1330).** A `RunnerSet` refuses a job from a fork pull request unless the field is `Accept`; `Refuse` is the default and what an empty value means, defaulted in the controller rather than the CRD so a stored object carries no value it did not ask for.
+It is an enum rather than a `bool` because it is a policy, and the values name the action, so a later value such as one that accepts only with GitHub's approval has room beside them.
+The tenant owns the answer: accepting exposes the tenant's own namespace, quota and egress identity, never another tenant's, so the [whose-fact](../development/api-review.md#ask-whose-fact-it-is) question resolves as it does for `runnerGroup`.
+The default is a refusal because nothing at GitHub refuses a job for coming from a fork, so an opt-in would leave every adopter who never set the field exposed.
+It also fails safe on a stale CRD: a schema that prunes the field stores nothing, and nothing reads as `Refuse`, so unlike `runnerGroup` it needs no startup schema probe.
+What a refusal does, and why it ends the run: [05-security.md](05-security.md#fork-pull-request-jobs-choose-their-own-runner-set).
+
 **Opt-in intake gating: `spec.capacityGate` (Q405, Q406, Q470).** A `RunnerSet` may opt into the placeability rung of the admission ladder — the AGC refuses to take on jobs whose worker pod the cluster cannot currently place, instead of claiming them and stalling.
 `capacityGate.mode` selects `Off` (the default, today's behavior exactly) or `Observe`.
 

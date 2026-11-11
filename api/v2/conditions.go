@@ -126,6 +126,7 @@ const (
 	ReasonRunnerNameConflict       = apiconditions.ReasonRunnerNameConflict
 	ReasonWorkerCeilingReached     = apiconditions.ReasonWorkerCeilingReached
 	ReasonWorkerTerminating        = apiconditions.ReasonWorkerTerminating
+	ReasonJobSourceUnverified      = apiconditions.ReasonJobSourceUnverified
 	ReasonJobsProvisioning         = apiconditions.ReasonJobsProvisioning
 	ReasonScaleSetNameShared       = apiconditions.ReasonScaleSetNameShared
 	ReasonScaleSetNamesUnique      = apiconditions.ReasonScaleSetNamesUnique

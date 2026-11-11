@@ -119,11 +119,13 @@ There is **no `gh` command to create a GitHub App** (the GitHub CLI has no `gh a
    The gateway polls GitHub; it does not receive webhooks, so no webhook URL or secret is needed.
 5. **Permissions** — grant these; the access levels are from GitHub's [permissions required for GitHub Apps](https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps) reference:
    - **Repository permissions → Actions: Read and write.** Read is what observes a workflow run.
-     Write is used only for automatic recovery: re-running a job whose worker pod was lost (`rerun-failed-jobs`), and force-cancelling the run of a job abandoned before its worker started (`force-cancel`).
+     Write is used for automatic recovery, re-running a job whose worker pod was lost (`rerun-failed-jobs`) and force-cancelling the run of a job abandoned before its worker started (`force-cancel`), and for force-cancelling the run of a fork pull request job a `RunnerSet` refuses.
    - **Runner registration: Read and write** on the permission that matches the scope of the `githubURL` you set in [Step 2](#step-2-create-the-gateway-and-its-runner-set).
      For an organization URL that is **Organization permissions → Self-hosted runners**; for a repository URL it is **Repository permissions → Administration**.
      GitHub has no read-only way to register a runner: `generate-jitconfig` and `registration-token` both require write.
    - **Repository permissions → Metadata: Read-only** is added by GitHub automatically.
+   - **Optional: Repository permissions → Checks: Read and write.** Used only to write a failed check run on a pull request whose fork job a `RunnerSet` refused, naming the set and `spec.forkPullRequests`, because the cancelled run shows no reason ([what a refusal does](security-operations.md#fork-pull-requests-choose-their-own-runner-label)).
+     Without it the refusal still happens.
    - Leave **Contents**, **Pull requests**, and the rest at **No access**: the gateway never reads tenant code or writes to repositories.
 6. **Where can this GitHub App be installed?** — **Only on this account** is the typical choice for a single-org deployment.
 7. Click **Create GitHub App**.

@@ -226,7 +226,44 @@ type RunnerSetSpec struct {
 	//
 	// +optional
 	CapacityGate *CapacityGate `json:"capacityGate,omitempty"`
+
+	// ForkPullRequests decides whether this set runs a job from a fork pull request:
+	// Refuse (the default) or Accept. A pull_request run executes the pull request's
+	// merge commit, whose workflow file carries the fork's edits, so a fork can name
+	// any set's label in runs-on; GitHub's runner groups scope by repository and
+	// cannot tell a fork's job from the repository's own (Q1220).
+	//
+	// A job is a fork's when its run was triggered by pull_request,
+	// pull_request_review, or pull_request_review_comment and the run's head
+	// repository is not the repository the job belongs to, compared by name and
+	// case-insensitively. An empty head repository (a deleted fork) counts as a
+	// fork's. pull_request_target runs the base repository's workflow and is never
+	// refused. Refusing reads the run from the GitHub REST API before a runner is
+	// minted, so a job of those three events costs one extra call; a read that fails
+	// holds the job (JobProvisionStalled=True/JobSourceUnverified) and retries it,
+	// never admitting it unread.
+	//
+	// A refused job gets no runner. Its run is force-cancelled, the only way the
+	// AGC can end a job it will not run, which also ends the run's other jobs, and
+	// the AGC records a ForkJobRefused Event. Where the GitHub App holds Checks:
+	// Read and write, it also writes a failed check run on the pull request's head
+	// commit naming this set and this field, because a cancelled run shows no
+	// reason. Accept is for a set built for untrusted code, such as one on the Kata
+	// template. Empty means Refuse.
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Refuse;Accept
+	ForkPullRequests string `json:"forkPullRequests,omitempty"`
 }
+
+// Fork pull request policies selectable via RunnerSetSpec.ForkPullRequests (Q1330).
+const (
+	// ForkPullRequestsRefuse refuses a fork pull request's job. The default, and what
+	// an empty value means.
+	ForkPullRequestsRefuse = "Refuse"
+	// ForkPullRequestsAccept runs a fork pull request's job like any other.
+	ForkPullRequestsAccept = "Accept"
+)
 
 // Capacity-gate modes selectable via CapacityGate.Mode (Q405, Q406, Q470). The enum
 // answers ONE question — how hard should this set try not to claim work it cannot

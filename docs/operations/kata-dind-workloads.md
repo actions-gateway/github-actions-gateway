@@ -327,6 +327,8 @@ This page used to tell you to stop there and treat Kata as protection against a 
 That caveat is retired.
 The posture below is built, shipped as manifests, and measured on GAG's own dogfood cluster, where it carries every Kata end-to-end run.
 
+**Accept fork pull requests on this set explicitly.** Every `RunnerSet` refuses a fork pull request's job by default, so the set built on this posture is the one that sets `spec.forkPullRequests: Accept` ([what a refusal does](security-operations.md#fork-pull-requests-choose-their-own-runner-label)).
+
 **What it does.** A worker's whole reachable set becomes cluster DNS on 53, GitHub on 443, and the in-cluster registry mirrors on 5000.
 The public internet, the upstream registries by their own hostnames, and the cloud metadata server all answer nothing.
 

@@ -72,6 +72,7 @@ Two badges appear below. <span class="gag-v2-badge">v2</span> marks a capability
 - **[In-runner image builds](operations/in-runner-image-builds.md)**: a decision table mapping BuildKit rootless, Kaniko, Sysbox, Kata, and privileged Docker-in-Docker to the right security profile and PSA level.
 - **[Signed images, SBOM, and SLSA provenance](operations/release.md)**: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.
 - **[Admission policy compatibility](operations/admission-policies.md)**: a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.
+- **[Fork pull requests refused by default](operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label)** <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 2.0</span>: a fork that edits `runs-on` to name a runner set gets no runner, unless that set sets `spec.forkPullRequests: Accept`.
 - **[Optional CONNECT destination allow-listing](operations/security-operations.md)**: defense in depth, off by default.
   An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal.
   The mandatory default-deny NetworkPolicy stays the primary gate.
