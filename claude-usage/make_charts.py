@@ -267,6 +267,36 @@ def v2_marker(axes, label_ax, y=0.01):
     tree_marker(axes, label_ax, V2_RETIREMENT, "v2.0.0 cleanup", RETIRE_STYLE, y)
 
 
+# Date ticks are rotated 45°, so two labels collide when the tick pitch across the
+# slant falls below the text height. Measured on these 11-inch figures at 8.5pt,
+# 45 ticks clear it (1.15 text heights at 179 days); 90 do not (0.58).
+MAX_DATE_TICKS = 45
+TICK_STEPS = (1, 2, 3, 4, 7, 14, 28)
+
+
+def tick_step(n_days):
+    """Smallest day step that keeps ``n_days`` to ``MAX_DATE_TICKS`` labels."""
+    return next((s for s in TICK_STEPS if n_days / s <= MAX_DATE_TICKS), TICK_STEPS[-1])
+
+
+class SpanDayLocator(mdates.DateLocator):
+    """Day ticks whose step follows the visible span, so a longer series thins itself."""
+
+    def __call__(self):
+        lo, hi = self.axis.get_view_interval()
+        return self.tick_values(mdates.num2date(lo), mdates.num2date(hi))
+
+    def tick_values(self, vmin, vmax):
+        step = tick_step((vmax - vmin).days + 1)
+        return mdates.DayLocator(interval=step).tick_values(vmin, vmax)
+
+
+def day_labels(days):
+    """``%b %-d`` labels for an index axis, blank between every ``tick_step`` day."""
+    step = tick_step(len(days))
+    return [dparse(d).strftime("%b %-d") if i % step == 0 else "" for i, d in enumerate(days)]
+
+
 def rolling_mean(vals, window=7):
     """Centered rolling mean, ``None`` where the full window doesn't fit.
 
@@ -416,8 +446,7 @@ def chart_tokens_by_model():
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
-    ax.set_xticklabels([dparse(d).strftime("%b %-d") if i % 2 == 0 else "" for i, d in enumerate(days)],
-                       rotation=45, ha="right", fontsize=8)
+    ax.set_xticklabels(day_labels(days), rotation=45, ha="right", fontsize=8)
     ax.legend(handles=handles, frameon=False, fontsize=10, ncol=5, loc="upper center",
               bbox_to_anchor=(0.5, -0.18))
     for s in ("top", "right"):
@@ -560,7 +589,7 @@ def chart_tokens_per_word():
     axb.set_ylim(0, running * 1.05)
     axb.set_xlim(xs[0], xs[-1])
     axb.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    axb.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    axb.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(axb.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     axb.grid(axis="y", alpha=0.22)
     for s in ("top", "right"):
@@ -575,7 +604,7 @@ def chart_tokens_per_word():
             a.axvline(wd, color="#9AA0A6", ls=(0, (4, 3)), lw=1.0, alpha=0.7, zorder=1)
     for wd in week_dates:
         v = _val_on(wd)
-        if v is None or wd == xs[-1]:  # the final point already carries a big label
+        if v is None or (xs[-1] - wd).days < 7:  # the end label already gives this value
             continue
         ax.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         ax.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
@@ -630,9 +659,10 @@ def chart_tokens_vs_words():
                  fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative count (log scale)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=10)
+    # Inside the empty band below the words curve, clear of the footer.
+    ax.legend(loc="lower center", ncol=2, frameon=False, fontsize=10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     v2_marker((ax,), ax, y=0.03)
@@ -727,7 +757,7 @@ def chart_overview():
                 path_effects=HALO, zorder=LABEL_Z)
     for wd in week_dates:
         v = _val_on(wd)
-        if v is None or wd == xs[-1]:
+        if v is None or (xs[-1] - wd).days < 7:
             continue
         a3.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         a3.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
@@ -738,7 +768,7 @@ def chart_overview():
     a3.set_title("What those words cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
     a3.grid(axis="y", alpha=0.22)
     a3.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a3.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    a3.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a3.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
 
     # shared x + day/week guides on all panels
@@ -797,7 +827,7 @@ def chart_token_anatomy():
     ax.set_ylabel("tokens / day  (log scale)", fontsize=11)
     ax.set_title("Anatomy of token usage", fontsize=14, fontweight="bold", loc="left")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     # Upper left: the series are ordered by magnitude and never cross, so the band
     # above the cache-read line early in the timeline is the one region no series
@@ -833,7 +863,7 @@ def chart_cumulative_cache():
     ax.set_title("Cumulative cache traffic", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative tokens  (billions)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     ax.set_xlim(days[0], days[-1])
     ax.set_ylim(0, (cc + cr)[-1] * 1.10)
@@ -940,8 +970,7 @@ def chart_parallel_sessions():
         for s in ("top", "right"):
             a.spines[s].set_visible(False)
     a2.set_xticks(xs)
-    a2.set_xticklabels([dparse(d).strftime("%b %-d") for d in days], rotation=45, ha="right",
-                       fontsize=9)
+    a2.set_xticklabels(day_labels(days), rotation=45, ha="right", fontsize=8.5)
     fig.text(0.012, 0.01,
              "session-level data survives only from " + days[0] +
              " — earlier transcripts were not retained, so this series cannot be backfilled",
@@ -1132,7 +1161,7 @@ def chart_velocity():
     stagger_labels(fig, labels, 0.11)
 
     a4.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    a4.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a4.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     # One figure-level key rather than four inline ones: every panel shares the
     # encoding, and a legend box inside any of them lands on an event label.
@@ -1439,7 +1468,7 @@ def chart_lines_vs_words():
     reflow_marker((a1, a2), a2, y=0.05)
     v2_marker((a2,), a2, y=0.05)  # the docs corpus barely moved (-0.5%), the ratio did
     a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a2.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    a2.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     fig.text(0.012, 0.006,
              "same non-blank text both times, only the unit differs · "
@@ -1524,7 +1553,7 @@ def chart_authored_bands():
     al.set_title("The same split in lines — only this panel steps at the reflow",
                  fontsize=13.5, fontweight="bold", loc="left")
     al.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    al.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    al.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(al.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
 
     reflow_marker((aw, al), al, y=0.03)
@@ -1643,7 +1672,7 @@ def chart_session_kinds():
         stagger_labels(fig, labels, 0.11)
 
     a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a2.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    a2.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     a0.legend(loc="upper left", frameon=False, fontsize=9.5, ncol=3)
     fig.text(0.012, 0.006,
