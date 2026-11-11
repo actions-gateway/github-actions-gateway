@@ -1246,6 +1246,10 @@ kubectl delete configmap -n <namespace> scaleset-guards-<name>
 The cost of the reset is bounded and one-time: if a hard kill had stranded undeleted messages, their assignments replay once and may each provision one short-lived worker for a job that is already over (the pre-Q606 restart behaviour).
 A transient apiserver error in the same event message needs no action at all; the reconciler retries and the listener starts once the read succeeds.
 
+**The same Event naming a scale set that `differs from` the set's name `only by case`, or `scale sets are named` with a count.** The AGC found no scale set with exactly the set's first label, but one whose name differs only in letter case, or more than one with exactly that name (Q1325).
+It refuses to adopt either, because adopting would drive a scale set something else registered, and creating beside a case-only twin would register a name that `runs-on` cannot tell apart.
+Find the other set in the GitHub UI or with the runner-scale-set API, and either delete it there if nothing owns it, or give this `RunnerSet` a distinct first label.
+
 **Not this event: a session still held by the outgoing AGC during a rollout.** One session per scale set is a protocol invariant, so while the previous AGC finishes its exit teardown the new one cannot open a session.
 That is a wait, not a fault, and since Q689 it records no Event at all — the reconciler logs `scale-set session still held by a predecessor; retrying shortly` at Info and re-attempts every couple of seconds until the predecessor's session delete lands.
 Nothing to do.
@@ -1830,6 +1834,8 @@ Every later re-provision of the same `jobID` derives the same name and `409`s.
 1. **Deregistration on reap.** When the AGC reaps a scale-set worker pod it deletes that pod's runner record first (REST `DELETE .../actions/runners/{id}`), using the name stamped on the pod as `actions-gateway.com/runner-name`.
    This is what stops the records accumulating in the first place.
    A record still running a job (`422`) is kept, and a failed deregistration never blocks the reap.
+   Only a name the set's own listener mints, `<scaleSet>-<job UUID>` with an optional attempt, is deregistered; any other name is left registered and logged as `reaper: not deregistering a runner name this scale set did not mint`.
+   That line means the pod's annotation was edited, so read who patched the pod rather than cleaning up the record.
 2. **Reclaim on conflict.** On a base-name `409` the listener deletes the colliding record and re-registers under the same name, so a job that races its own leftover still provisions under its deterministic name.
 3. **Sweep at listener start.** When a listener starts it lists the records named `<scaleSet>-*` and deletes those whose remaining name is a job UUID with an optional attempt, and that are offline, not busy, and not claimed by any live worker pod.
    This collects what the first two cannot: records whose pod is already gone (an AGC that crashed between deregistering and deleting), and the suffixed `-1`/`-2`/`-3` names the conflict path mints and never revisits.
@@ -2466,6 +2472,7 @@ Two ways in, and the condition message says which labels are affected either way
 
 **Note on the first label.** It names the scale set, which makes it the set's identity.
 Reordering `runnerLabels` renames the scale set, leaving the old one orphaned at GitHub with any queued jobs still pointed at it.
+The AGC moves to the new name on the next reconcile, deleting its session on the old scale set; before `v2.0.0` it stayed on the old one until the AGC restarted.
 Append rather than prepend.
 
 **Why it does not gate `Ready`.** The set is still serving every job that targets the labels which *did* register, so it is a configuration mismatch rather than an outage.
