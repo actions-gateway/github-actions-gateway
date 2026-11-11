@@ -457,6 +457,13 @@ func (c *Client) GetRunnerScaleSet(ctx context.Context, id int) (*RunnerScaleSet
 // GetRunnerScaleSetByName looks a scale set up by name, returning (nil, nil) when
 // none matches. Used to reconcile against an already-registered scale set (and to
 // recover one leaked by an interrupted run).
+//
+// The name query is the service's filter, and whether it is exact is unmeasured, so
+// only a set whose name equals name is returned (Q1325). A set whose name differs only
+// by case is an error rather than a miss: adopting it would drive another controller's
+// scale set, and creating beside it would register a name runs-on cannot tell apart.
+// So are two sets of exactly that name, since the lookup cannot say which is this one;
+// an exact match beside a case-only one is returned.
 func (c *Client) GetRunnerScaleSetByName(ctx context.Context, name string) (*RunnerScaleSet, error) {
 	var out struct {
 		Count int              `json:"count"`
@@ -466,10 +473,25 @@ func (c *Client) GetRunnerScaleSetByName(ctx context.Context, name string) (*Run
 		"/_apis/runtime/runnerscalesets?name="+url.QueryEscape(name), nil, &out); err != nil {
 		return nil, err
 	}
-	if out.Count == 0 || len(out.Value) == 0 {
-		return nil, nil
+	var exact []RunnerScaleSet
+	caseOnly := ""
+	for _, ss := range out.Value {
+		switch {
+		case ss.Name == name:
+			exact = append(exact, ss)
+		case strings.EqualFold(ss.Name, name):
+			caseOnly = ss.Name
+		}
 	}
-	return &out.Value[0], nil
+	switch {
+	case len(exact) == 1:
+		return &exact[0], nil
+	case len(exact) > 1:
+		return nil, fmt.Errorf("scaleset: %d scale sets are named %q; refusing to pick one", len(exact), name)
+	case caseOnly != "":
+		return nil, fmt.Errorf("scaleset: scale set %q differs from %q only by case; refusing to adopt or shadow it", caseOnly, name)
+	}
+	return nil, nil
 }
 
 // ListRunnerScaleSets returns every scale set registered against the configured

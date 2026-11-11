@@ -183,6 +183,9 @@ type Stub struct {
 	// dropExtraScaleSetLabels makes a create keep only the scale set's name label
 	// while set, without erroring — see DropExtraScaleSetLabels.
 	dropExtraScaleSetLabels bool
+	// scaleSetNameMatch, when non-nil, replaces the by-name filter's exact compare —
+	// see SetScaleSetNameMatch.
+	scaleSetNameMatch func(stored, query string) bool
 	// labelPatchMode is what a labels PATCH does to the stored set — see
 	// LabelPatchMode. The zero value is LabelPatchIgnore, which is both what this
 	// stub modelled before Q793 and what Q793 measured github.com to do.
@@ -637,6 +640,17 @@ func (s *Stub) DropExtraScaleSetLabels(on bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.dropExtraScaleSetLabels = on
+}
+
+// SetScaleSetNameMatch replaces the exact compare behind the runnerscalesets name
+// filter with match, so a test can model a service whose filter is looser than
+// equality: case-insensitive, prefix or substring. Whether github.com's filter is
+// exact is unmeasured (Q1325); the client must not adopt a set on the filter's word.
+// nil restores the exact compare.
+func (s *Stub) SetScaleSetNameMatch(match func(stored, query string) bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.scaleSetNameMatch = match
 }
 
 // LabelPatchMode is what a labels PATCH does to the stored label set. Investigation I
@@ -1207,12 +1221,19 @@ func (s *Stub) handleGetScaleSetByName(w http.ResponseWriter, r *http.Request) {
 	match := []scaleset.RunnerScaleSet{}
 	for _, id := range ids {
 		ss := s.scaleSets[id]
-		if name != "" && ss.name != name {
+		if name != "" && !s.scaleSetNameMatchesLocked(ss.name, name) {
 			continue
 		}
 		match = append(match, scaleset.RunnerScaleSet{ID: ss.id, Name: ss.name, RunnerGroupID: ss.groupID, Labels: ss.labels})
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"count": len(match), "value": match})
+}
+
+func (s *Stub) scaleSetNameMatchesLocked(stored, query string) bool {
+	if s.scaleSetNameMatch != nil {
+		return s.scaleSetNameMatch(stored, query)
+	}
+	return stored == query
 }
 
 func (s *Stub) handleGetScaleSet(w http.ResponseWriter, r *http.Request) {
