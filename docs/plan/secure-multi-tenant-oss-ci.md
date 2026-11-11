@@ -174,12 +174,14 @@ Under that default every set refuses fork jobs and a set accepts them through on
 The class puts preconditions on that switch, and a set whose preconditions fail refuses fork jobs, through whatever refusal path Q1330 settles on.
 Its jobs from the repository's own branches are unaffected either way.
 
-**The class replaces the precondition-free switch rather than sitting beside it.** Accepting fork jobs is already the operator's claim that the set is fit for them, so checking the half of that claim the platform can check costs a set that really runs the Kata posture nothing.
+**The class is meant to replace the precondition-free switch, not to sit beside it for good.** Accepting fork jobs is already the operator's claim that the set is fit for them, so checking the half of that claim the platform can check costs a set that really runs the Kata posture nothing.
 The override stays explicit: the micro-VM list the kernel row checks is the operator's, so an operator who accepts forks on another runtime says so by listing it.
 Q1220's reversal of an opt-in refusal is the parallel, not the source: there the exposed adopter had done nothing, while here the operator has accepted forks and the class checks that acceptance.
-**The bare form retires by deprecation, not by tightening** (Karl, 2026-11-11).
+**The bare form retires by deprecation, not by tightening.** Settled 2026-11-11.
 `v2.0.0` ships `Accept` as Q1330 builds it, and the release that builds the class adds a value beside it and deprecates bare `Accept`.
 That is not breaking, and bare `Accept` stays valid while its API version is served.
+A deprecated value is removable only at the next API version ([Removal needs a version increment](../development/api-review.md#removal-needs-a-version-increment-not-a-promise)), so the replacement completes there, and until then the class sits beside bare `Accept`.
+**That leaves a residual for the rest of that version:** a set left on bare `Accept` keeps accepting fork jobs with no precondition checked, and what points its operator at the class is the deprecation notice.
 Tightening `Accept` in place was the other shape, and would have cost nothing only before `Accept` ships in a stable tag ([Is this change breaking?](../development/api-review.md#is-this-change-breaking), question 1).
 
 The class is drawn per `RunnerSet` and marks one set, so it does not revive the cluster-default template that Definition of Done #1 declines: a set that never declares it gets nothing new.
