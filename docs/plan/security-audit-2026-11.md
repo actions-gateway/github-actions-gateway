@@ -3,7 +3,7 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), and six of the seven release and CI leads settled (Q1326).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 20 of which still are; the seventh release and CI lead waits on Q1330.
+> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), and six of the seven release and CI leads settled (Q1326).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 16 of which still are, one of them the release and CI lead that waits on Q1330.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
 > The rest are [Q1323](../queue/Q1323.md) to [Q1328](../queue/Q1328.md).
