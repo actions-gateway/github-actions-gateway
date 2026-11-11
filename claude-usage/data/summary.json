@@ -26,7 +26,9 @@
     "pro_to_max_date": "2026-05-23",
     "max_5x_to_20x_date": "2026-07-05",
     "docs_reflow_date": "2026-08-09",
-    "docs_reflow_note": "every tracked doc reflowed to sentence-per-line; the `md` series steps down ~18.6k lines here with no words removed"
+    "docs_reflow_note": "every tracked doc reflowed to sentence-per-line; the `md` series steps down ~18.6k lines here with no words removed",
+    "v2_retirement_date": "2026-11-02",
+    "v2_retirement_note": "v2.0.0 removes the older API versions and classic acquisition through 11-06; product words fall ~20% and tokens per word steps up with no change in spend"
   },
   "estimation": {
     "method": "per-commit Pro-era rate x commits authored that day",

@@ -87,6 +87,9 @@ MAX_5X_TO_20X = "2026-07-05"
 # hard-wrapped paragraphs cut ~18.6k non-blank Markdown lines without deleting a
 # word, so `md` steps down here for a reason no reader could infer from the CSV.
 DOCS_REFLOW = "2026-08-09"
+# v2.0.0 retires the older API versions and classic acquisition, 11-02 to 11-06:
+# real deletion that steps the tree series down, so the ratios over it step up.
+V2_RETIREMENT = "2026-11-02"
 
 # Bucket width for session concurrency. Wide enough that a session waiting on a
 # build or a test run still counts as in flight, narrow enough that two sessions
@@ -1828,6 +1831,10 @@ def main():
             "docs_reflow_date": DOCS_REFLOW,
             "docs_reflow_note": ("every tracked doc reflowed to sentence-per-line; the `md` "
                                  "series steps down ~18.6k lines here with no words removed"),
+            "v2_retirement_date": V2_RETIREMENT,
+            "v2_retirement_note": ("v2.0.0 removes the older API versions and classic acquisition "
+                                   "through 11-06; product words fall ~20% and tokens per word "
+                                   "steps up with no change in spend"),
         },
         "estimation": {
             "method": "per-commit Pro-era rate x commits authored that day",

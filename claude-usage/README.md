@@ -181,7 +181,8 @@ What it cannot be pinned on is either the model or the machine alone, since Opus
 See the [velocity chart](#work-shipped-on-proxies-a-reformat-cant-move).
 Charts use the Okabe–Ito colourblind-safe palette, and each model also carries its own hatch pattern.
 
-Three kinds of event line, styled apart because they mean different things: a **black dashed** line is a plan upgrade (a higher ceiling on what one machine can spend), a **green dash-dot** line is a machine's rows beginning (a change in which machine is measuring), and a **grey dotted** line is the sentence-per-line reflow (a change in what a line *is*).
+Four kinds of event line, styled apart because they mean different things: a **black dashed** line is a plan upgrade (a higher ceiling on what one machine can spend), a **green dash-dot** line is a machine's rows beginning (a change in which machine is measuring), a **grey dotted** line is the sentence-per-line reflow (a change in what a line *is*), and a **purple dash-dot** line is the v2.0.0 cleanup from 2026-11-02 (about a fifth of the product's words deleted within the week).
+The last two are drawn only on charts built from the tree, because they moved the denominator and nothing about what was spent: the reflow where a lines series is drawn, the cleanup wherever words or lines are.
 The reflow line appears only on the three lines-and-ratio charts, because it moved the denominator and nothing about what was spent; marking it on a token chart would invite the reading that the reformat cost or saved something.
 Machine lines are derived from the first row each machine reports, so a third machine marks itself with no code change.
 They read "begins" rather than "joins" because the data can't tell a replacement from an addition: an old machine going quiet is not evidence it was retired.
@@ -202,7 +203,7 @@ Over the whole project each word now costs ~5.7× what it did in week one.
 **Bottom:** the denominator itself, decomposed into Go, Markdown docs, hand-written YAML, and scripts & web.
 Its total height at any date *is* the divisor above, so "a word" is shown, not just named; Markdown now outweighs all of Go, 1.23M words against 0.89M.
 There is no reflow marker on this chart, and that is the point of the switch: the 2026-08-09 reformat moved lines and not words, so neither the band nor the ratio above it notices.
-The marker now appears only where a lines series is drawn, following the same rule the other event markers do.
+The v2.0.0 cleanup is marked, because it deleted words as well as lines.
 
 ### Work shipped, on proxies a reformat can't move
 ![PRs merged, tests added, backlog rows closed per day, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
@@ -580,7 +581,7 @@ The `head_snapshot` block counts the **working tree**, and the daily series coun
 Both exclude vendor and both exclude symlinks: `git grep` skips a symlink, so the series counts a linked file once under its real path, and `tracked_files` drops the same paths for the same reason.
 Counting them would credit the target twice, which put 623 Markdown lines into every snapshot before 2026-08-27: `AGENTS.md` points at `CLAUDE.md`, and two `testdata/` doc links do the same.
 
-Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).
+Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades, the docs reflow, and the v2.0.0 cleanup).
 
 ## Methodology & caveats
 

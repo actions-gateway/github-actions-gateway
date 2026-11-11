@@ -56,6 +56,11 @@ MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
 # paragraphs cut ~18.6k non-blank Markdown lines without deleting a word, so the
 # lines denominator steps down here and the cost-per-line ratio steps up.
 DOCS_REFLOW = date(2026, 8, 9)
+# v2.0.0 retires the v1alpha1/v2alpha1/v2beta1 APIs and classic acquisition
+# (#2241 first, through #2263 on 11-06). Real deletion, unlike the reflow, but it
+# moves the tree series the same way: product words fall 20.5% in five days, so
+# tokens per word steps up with no change in what was spent.
+V2_RETIREMENT = date(2026, 11, 2)
 
 # Event markers. A plan upgrade raises the ceiling on what one machine can spend;
 # a machine starting changes which machine is doing the measuring; a reflow moves
@@ -65,6 +70,7 @@ PLAN_STYLE = ("#222", "--")
 MODEL_STYLE = ("#8C4A00", (0, (7, 2)))
 MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
 REFLOW_STYLE = ("#5B5B5B", (0, (1, 1.8)))
+RETIRE_STYLE = ("#7A1F5C", (0, (4, 1.5, 1, 1.5)))
 
 # Event lines are drawn at zorder 5, after the series they cross. A value label
 # left at the default zorder is painted over and reads as struck through, so
@@ -238,17 +244,27 @@ def event_label(ax, x, y, label, col, yc="data"):
                                      pe.Normal()])
 
 
-def reflow_marker(axes, label_ax, y=0.01):
-    """Mark the sentence-per-line reflow across ``axes``, labelled on ``label_ax``.
+def tree_marker(axes, label_ax, when, label, style, y=0.01):
+    """Mark an event that moved the tree series across ``axes``, labelled on ``label_ax``.
 
-    Only the lines and cost-per-line charts call this. The reformat changed the
+    Only charts drawn from the tree call this. Such an event changes the
     denominator, not the spend, so marking it on a token chart would invite the
     reading that it cost or saved something.
     """
-    col, ls = REFLOW_STYLE
+    col, ls = style
     for a in axes:
-        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=EVENT_Z)
-    event_label(label_ax, DOCS_REFLOW, y, "docs reflow", col, yc="axes fraction")
+        a.axvline(when, color=col, ls=ls, lw=1.6, zorder=EVENT_Z)
+    event_label(label_ax, when, y, label, col, yc="axes fraction")
+
+
+def reflow_marker(axes, label_ax, y=0.01):
+    """The sentence-per-line reflow: moves lines, not words, so line charts only."""
+    tree_marker(axes, label_ax, DOCS_REFLOW, "docs reflow", REFLOW_STYLE, y)
+
+
+def v2_marker(axes, label_ax, y=0.01):
+    """The v2.0.0 API retirement: moves lines and words alike."""
+    tree_marker(axes, label_ax, V2_RETIREMENT, "v2.0.0 cleanup", RETIRE_STYLE, y)
 
 
 def rolling_mean(vals, window=7):
@@ -566,6 +582,7 @@ def chart_tokens_per_word():
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
                     path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
                     zorder=LABEL_Z)
+    v2_marker((ax, axb), ax, y=0.03)
 
     fig.text(0.012, 0.008, "generated CRD YAML, binaries & lockfiles excluded · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
@@ -618,6 +635,7 @@ def chart_tokens_vs_words():
     ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    v2_marker((ax,), ax, y=0.03)
     fig.text(0.012, 0.008, "words authored = Go + Markdown + hand-written YAML + scripts & web, comments included · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
     save(fig, "tokens_vs_words")
@@ -692,7 +710,7 @@ def chart_overview():
                     textcoords="offset points", va="center", fontsize=9, fontweight="bold",
                     color=darken(col))
     a2.set_ylim(0, running * 1.05)
-    a2.set_ylabel("lines authored (thousands)", fontsize=11)
+    a2.set_ylabel("words authored (thousands)", fontsize=11)
     a2.set_title("What those words are", fontsize=12.5, fontweight="bold", loc="left")
     a2.grid(axis="y", alpha=0.22)
 
@@ -740,6 +758,7 @@ def chart_overview():
         for a in (a1, a2, a3):
             a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
         event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
+    v2_marker((a1, a2, a3), a1, 0.01)
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 
@@ -1418,6 +1437,7 @@ def chart_lines_vs_words():
             ax.spines[sp].set_visible(False)
 
     reflow_marker((a1, a2), a2, y=0.05)
+    v2_marker((a2,), a2, y=0.05)  # the docs corpus barely moved (-0.5%), the ratio did
     a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
     a2.xaxis.set_major_locator(mdates.DayLocator(interval=4))
     plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
@@ -1508,6 +1528,7 @@ def chart_authored_bands():
     plt.setp(al.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
 
     reflow_marker((aw, al), al, y=0.03)
+    v2_marker((aw, al), aw, y=0.03)
     head = summary().get("head_snapshot", {})
     vendor = head.get("vendor_files")
     context = (f"vendored dependencies ({vendor:,} of "
