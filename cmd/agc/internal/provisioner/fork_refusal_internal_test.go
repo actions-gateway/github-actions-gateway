@@ -29,6 +29,7 @@ func (e *eventTarget) RecordEvent(_, reason, _, _ string) {
 // status per call where the default is not wanted.
 type forkReplies struct {
 	event, headRepo string
+	status          string // the run's status field; "" reads as queued
 	runStatus       int
 	cancelStatus    int
 	checkStatus     int
@@ -56,7 +57,7 @@ func (f *forkGitHub) handler() http.HandlerFunc {
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"status": "queued", "event": f.event, "head_sha": "abc123",
+				"status": orString(f.status, "queued"), "conclusion": "cancelled", "event": f.event, "head_sha": "abc123",
 				"head_repository": map[string]any{"full_name": f.headRepo},
 			})
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/actions/runs/42/force-cancel"):
@@ -71,6 +72,13 @@ func (f *forkGitHub) handler() http.HandlerFunc {
 			w.WriteHeader(http.StatusNotFound)
 		}
 	}
+}
+
+func orString(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 func orStatus(s, def int) int {
@@ -97,6 +105,7 @@ func TestRefuseForkJob(t *testing.T) {
 		jobEvent  string
 		gh        forkReplies
 		noID      bool
+		noCancel  bool // refused with no force-cancel: identity missing or run already concluded
 		refused   bool
 		held      bool // an error that is not a refusal: the caller holds and retries
 		wantRead  bool
@@ -131,6 +140,8 @@ func TestRefuseForkJob(t *testing.T) {
 		{name: "a refused check run still refuses", jobEvent: "pull_request",
 			gh: forkReplies{headRepo: "contributor/widgets", checkStatus: http.StatusForbidden}, refused: true, wantRead: true,
 			wantCheck: true, events: []string{"ForkJobRefused", "ForkRefusalCheckRunSkipped"}},
+		{name: "a fork job whose run already concluded is refused without a second cancel", jobEvent: "pull_request",
+			gh: forkReplies{headRepo: "contributor/widgets", status: "completed"}, refused: true, wantRead: true, noCancel: true},
 		{name: "no run identity is refused without a call", jobEvent: "pull_request", noID: true, refused: true,
 			events: []string{"ForkJobRefused"}},
 	}
@@ -157,8 +168,9 @@ func TestRefuseForkJob(t *testing.T) {
 				if !IsForkJobRefused(err) {
 					t.Fatalf("err = %v, want a refusal", err)
 				}
-				if !tc.noID && !gh.called("POST /repos/acme/widgets/actions/runs/42/force-cancel") {
-					t.Errorf("refused without force-cancelling the run; calls %v", gh.calls)
+				cancelled := gh.called("POST /repos/acme/widgets/actions/runs/42/force-cancel")
+				if wantCancel := !tc.noID && !tc.noCancel; cancelled != wantCancel {
+					t.Errorf("force-cancel = %v, want %v; calls %v", cancelled, wantCancel, gh.calls)
 				}
 			case tc.held:
 				if err == nil || IsForkJobRefused(err) {

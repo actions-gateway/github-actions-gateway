@@ -1571,7 +1571,7 @@ func (l *Listener) retryDeferred(ctx context.Context, ssID int) {
 		}
 		outcome := l.provisionAssigned(ctx, ssID, d.job)
 		if outcome == provisionAcked {
-			l.log.Info("scaleset: deferred job provisioned on re-offer",
+			l.log.Info("scaleset: deferred job provisioned or refused on re-offer",
 				"scaleSet", l.cfg.ScaleSetName, "jobID", d.job.JobID, "attempts", d.attempts)
 			l.resolveDeferred(d.job.JobID)
 			continue

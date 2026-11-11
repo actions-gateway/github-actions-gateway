@@ -74,6 +74,13 @@ func (p *Provisioner) RefuseForkJob(ctx context.Context, target Target, job Scal
 	if head == "" {
 		head = "an unknown repository"
 	}
+	if run.status == runStatusCompleted {
+		// Another of the run's jobs was refused first, or the run ended some other way:
+		// there is nothing left to cancel or explain, and a cancel would be refused.
+		log.Info("refused a fork pull request job whose run has already concluded",
+			"headRepository", run.headRepo, "conclusion", run.conclusion)
+		return fmt.Errorf("%w: head repository %q, run already %s", ErrForkJobRefused, run.headRepo, run.conclusion)
+	}
 	if err := p.forceCancelRun(ctx, job.Owner, job.Repository, job.RunID); err != nil {
 		return fmt.Errorf("force-cancel the run of a refused fork pull request job: %w", err)
 	}

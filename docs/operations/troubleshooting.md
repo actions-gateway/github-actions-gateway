@@ -1949,7 +1949,7 @@ The listener holds the job rather than run it unchecked, mints no runner, and re
 It clears on the first read that succeeds.
 
 **When to act.** When it does not clear.
-The logged error names the cause: a 5xx or a connection error is GitHub or the egress path, and clears when they recover; a 401 or 403 means the App's token cannot read Actions on that repository, which needs `Actions: Read and write` ([onboarding](tenant-onboarding.md#0a-create-the-app-web-ui)).
+The logged error names the cause: a 5xx or a connection error is GitHub or the egress path, and clears when they recover; a 401 or 403 means the App's token cannot read Actions on that repository, which needs `Actions: Read and write` ([onboarding](tenant-onboarding.md#0a-create-the-app-web-ui)); a 404 means the run is gone, and the job is given up as [abandoned](#scale-set-assignments-abandoned-assignmentabandoned) once GitHub stops counting it as assigned.
 A set that is meant to run untrusted pull requests can skip the read entirely with `spec.forkPullRequests: Accept`.
 
 ---

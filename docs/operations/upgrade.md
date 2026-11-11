@@ -556,7 +556,15 @@ kubectl patch runnerset <name> -n <tenant-namespace> --type merge \
   -p '{"spec":{"forkPullRequests":"Accept"}}'
 ```
 
-The field is new at `v2.0.0`, so the patch is rejected until the upgraded CRDs are applied; apply it right after them, before the new AGC takes jobs.
+The field is new at `v2.0.0`, so patch it right after the upgraded CRDs are applied and before the new AGC takes jobs.
+Patched against an older CRD, the field is pruned rather than rejected, so the patch can succeed and store nothing.
+Read it back after the patch:
+
+```bash
+kubectl get runnerset <name> -n <tenant-namespace> -o jsonpath='{.spec.forkPullRequests}'
+```
+
+`Accept` is the answer that keeps fork CI; an empty answer means the set refuses fork jobs.
 To show contributors why a job was refused, also grant the GitHub App `Checks: Read and write` ([onboarding](tenant-onboarding.md#0a-create-the-app-web-ui)).
 Without it the refusal still happens, and the run reads only as cancelled.
 
