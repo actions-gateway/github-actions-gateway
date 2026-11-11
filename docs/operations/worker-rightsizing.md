@@ -121,7 +121,7 @@ spec:
 |---|---|---|
 | `Static` (default) | Exactly what the template says — today's behavior. | You apply measured values by hand. |
 | `Binpack` | `requests` = `limits`: CPU from the p95 of per-job peaks, memory from the recommended limit (observed max + headroom) → **Guaranteed QoS**. The implied CPU limit deliberately trades burst for predictable packing. | Expensive nodes (GPUs, large VMs) where workers-per-node is the cost driver. |
-| `Throughput` | `requests` from the p95 of per-job peaks; **no CPU limit** (jobs burst into idle node capacity); memory limit = observed peak × `limitHeadroomPercent` (default 150). | Job latency matters more than packing density. |
+| `Throughput` | `requests` from the p95 of per-job peaks; **no CPU limit** (jobs burst into idle node capacity); memory limit = observed peak × `limitHeadroomPercent` (default 150), clamped by `maxRequests.memory`. | Job latency matters more than packing density. |
 | `NodeShare` | Runner-container `requests` = a declared per-node envelope ÷ `workersPerNode` — no usage history needed. Declare the envelope yourself (`sizing.nodeShare.allocatable` + `workersPerNode`); the AGC is namespace-scoped and never reads Node objects. Limits keep the template's values (a template limit below the derived request is lifted to it). | GPU bin-packing: `allocatable ÷ GPUs per node` keeps the GPU count, not an inflated CPU ask, the binding constraint. |
 
 Safety rails, in all profiles:
@@ -131,7 +131,8 @@ Safety rails, in all profiles:
   Declaring just one of the two is fine — the other keeps the template's ask.
 - **History-based profiles fall back to `Static` until confident** — `Binpack` and `Throughput` apply only once *every* template container has a recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).
   `status.sizingProfileState` reports which side you're on: `Active` (derived values applied) or `AwaitingSamples` (template values, history accumulating).
-- **Clamps** — `minRequests`/`maxRequests` bound every derived request, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
+- **Clamps** — `minRequests`/`maxRequests` bound every derived request, and `Throughput`'s derived memory limit, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
+  The limit needs the bound most: it follows a peak the jobs control, so without `maxRequests.memory` a job held near its limit raises the next one by the headroom factor each generation (Q1327).
   Size the ceiling against the namespace `ResourceQuota` and any `LimitRange`: derived values are still subject to both at admission, and the existing `WorkerQuota*` conditions and quota retries surface a conflict at runtime.
   An admission mutation that cancels `Throughput` rejects nothing, so it gets its own condition — [`SizingProfileOverridden`](#when-something-re-injects-the-cpu-limit-throughput-removes).
 
