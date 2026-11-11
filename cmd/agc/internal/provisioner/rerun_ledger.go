@@ -531,7 +531,7 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 		l.MinWriterVersion = max(l.MinWriterVersion, rerunLedgerMinWriterVersion)
 
 		data, err := json.Marshal(l)
-		for err == nil && len(data) > failureRecordsCeiling && (evictOldestFailure(l) || evictOldestMemoryFloor(l)) {
+		for err == nil && len(data) > failureRecordsCeiling && (evictOldestFailure(l) || evictOldestMemoryFloors(l, len(data)-failureRecordsCeiling)) {
 			data, err = json.Marshal(l)
 		}
 		if err != nil {

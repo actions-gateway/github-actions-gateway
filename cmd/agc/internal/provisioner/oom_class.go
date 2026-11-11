@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
 	"sync"
 	"time"
 
@@ -201,21 +203,26 @@ func (p *Provisioner) recordMemoryFloor(ctx context.Context, target Target, runI
 	return prior, err
 }
 
-// evictOldestMemoryFloor drops the floor that expires first, reporting whether there
-// was one. The job it raised then provisions at its resolved limit again, and a second
-// kill of it reads as a first one, which the run's budget still bounds.
-func evictOldestMemoryFloor(l *rerunLedger) bool {
-	oldest := ""
-	for k, m := range l.MemoryFloors {
-		if oldest == "" || m.ExpiresAt.Before(l.MemoryFloors[oldest].ExpiresAt) {
-			oldest = k
+// evictOldestMemoryFloors drops floors, the soonest to expire first, until their
+// encoded size covers excess bytes, reporting whether it dropped any. Freeing a batch
+// keeps one write to one re-encode per pass, where dropping a floor per pass made a
+// ledger full of floors quadratic to write. The job a floor raised then provisions at
+// its resolved limit again, and a second kill of it reads as a first one, which the
+// run's budget still bounds.
+func evictOldestMemoryFloors(l *rerunLedger, excess int) bool {
+	keys := slices.SortedFunc(maps.Keys(l.MemoryFloors), func(a, b string) int {
+		return l.MemoryFloors[a].ExpiresAt.Compare(l.MemoryFloors[b].ExpiresAt)
+	})
+	freed := 0
+	for _, k := range keys {
+		if freed >= excess {
+			break
 		}
+		b, _ := json.Marshal(l.MemoryFloors[k])
+		freed += len(k) + len(b) + len(`"":,`)
+		delete(l.MemoryFloors, k)
 	}
-	if oldest == "" {
-		return false
-	}
-	delete(l.MemoryFloors, oldest)
-	return true
+	return len(keys) > 0
 }
 
 // applyMemoryFloor returns spec with job's memory limit raised to the floor an

@@ -13,8 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// Q1327: one repository's out-of-memory kills write a floor, a parked re-run and a
-// merged disruption per job, none of which the cap evicts, so its matrix runs alone
+// Q1327: one repository's out-of-memory kills wrote a floor, a parked re-run and a
+// merged disruption per job, none of which the cap evicted, so its matrix runs alone
 // could fill the per-set ledger and every other repository's re-run was then refused.
 
 // oomKillJob records what recoverOOMKilled writes for one killed matrix job: its floor,
@@ -34,37 +34,28 @@ func oomKillJob(ctx context.Context, p *Provisioner, target Target, repo, runID 
 	return err
 }
 
-// TestRerunLedger_OneRepositoryCannotFillTheLedger kills every job of 256-job matrix
-// runs in one repository, more than GitHub keeps in one run's matrix, and then asks for
-// a re-run in a second repository.
-func TestRerunLedger_OneRepositoryCannotFillTheLedger(t *testing.T) {
+// TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState kills 40 jobs of one run
+// attempt. Before Q1327 each wrote a parked re-run and a merged entry into the run's
+// budget record, which is never evicted, and 564 such jobs filled the ledger; now the
+// attempt keeps one parked re-run and a bounded list, so all that grows per job is its
+// floor, which TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused evicts.
+func TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState(t *testing.T) {
 	ctx := context.Background()
 	c, _, srv, target := ledgerFixture(t)
 	p := ledgerProvisioner(c, srv)
 
-	// 564 such jobs filled the ledger before Q1327.
-	const runs, jobs = 3, 256
-	for r := range runs {
-		runID := fmt.Sprint(30_000_000_000 + r)
-		for i := range jobs {
-			require.NoError(t, oomKillJob(ctx, p, target, "noisy/repo", runID, i),
-				"run %d job %d: one repository's kills filled the ledger", r, i)
-		}
+	const runID, jobs = "30000000000", 40
+	for i := range jobs {
+		require.NoError(t, oomKillJob(ctx, p, target, "noisy/repo", runID, i))
 	}
-	t.Logf("ledger holds %d bytes after %d runs of %d killed jobs", len(readLedgerData(t, c, target)), runs, jobs)
 	l, _, err := p.readRerunLedger(ctx, target)
 	require.NoError(t, err)
-	assert.Len(t, l.Pending, runs, "one parked re-run per run attempt")
-	for runID, r := range l.Reruns {
-		for _, a := range r.Attempts {
-			assert.LessOrEqual(t, len(a.Disruptions), maxMergedPerAttempt, "run %s lists every merged disruption", runID)
-			assert.LessOrEqual(t, len(a.Jobs), maxMergedPerAttempt, "run %s lists every merged job", runID)
-		}
-	}
-
-	_, _, err = p.reserveScaleSetRerun(ctx, target, "40000000000",
-		rerunDisruption{key: "other-pod", job: "test", failedAttempt: 1}, recoveryCauseEviction, 2, nil)
-	require.NoError(t, err, "another repository's re-run is refused")
+	assert.Len(t, l.Pending, 1, "one parked re-run per run attempt")
+	assert.Len(t, l.MemoryFloors, jobs, "every killed job keeps its floor")
+	a := l.Reruns[runID].Attempts["1"]
+	require.NotNil(t, a)
+	assert.Len(t, a.Disruptions, maxMergedPerAttempt, "the attempt lists every merged disruption")
+	assert.Len(t, a.Jobs, maxMergedPerAttempt, "the attempt lists every merged job")
 }
 
 // TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused fills the ledger past its cap
