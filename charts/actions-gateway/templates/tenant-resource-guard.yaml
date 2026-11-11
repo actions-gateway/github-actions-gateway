@@ -128,6 +128,27 @@ spec:
         has(oldObject.subjects) && size(oldObject.subjects) == 1 &&
         oldObject.subjects[0].kind == 'ServiceAccount' &&
         'system:serviceaccount:' + oldObject.subjects[0].namespace + ':' + oldObject.subjects[0].name == request.userInfo.username
+    # A RoleBinding the GMC writes has one of the two shapes it provisions (Q1328):
+    # its own reader binding, or an AGC binding to agc-tenant-role whose subjects
+    # are all ServiceAccounts of the binding's own namespace. Unmarking a namespace
+    # deletes the reader binding by name, so any other binding naming the GMC, or
+    # any other role, would keep granting it reads there.
+    - name: isRoleBindingWrite
+      expression: "request.resource.resource == 'rolebindings' && request.operation != 'DELETE'"
+    - name: isOwnReaderBindingShape
+      expression: >-
+        object.metadata.name == 'gmc-tenant-secret-reader' &&
+        object.roleRef.kind == 'ClusterRole' &&
+        object.roleRef.name == 'gmc-tenant-secret-reader' &&
+        has(object.subjects) && size(object.subjects) == 1 &&
+        object.subjects[0].kind == 'ServiceAccount' &&
+        'system:serviceaccount:' + object.subjects[0].namespace + ':' + object.subjects[0].name == request.userInfo.username
+    - name: isAGCBindingShape
+      expression: >-
+        object.roleRef.kind == 'ClusterRole' &&
+        object.roleRef.name == 'agc-tenant-role' &&
+        has(object.subjects) && size(object.subjects) > 0 &&
+        object.subjects.all(s, s.kind == 'ServiceAccount' && s.namespace == object.metadata.namespace)
     - name: isConfigMap
       expression: "request.resource.group == '' && request.resource.resource == 'configmaps'"
     # The GMC's own install namespace, where its IP-range store lives (Q1227).
@@ -151,6 +172,9 @@ spec:
   validations:
     - expression: "!variables.isClusterRoleBinding || variables.bindingRoleRef == 'agc-clusterrunnertemplate-reader'"
       messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
+      reason: Forbidden
+    - expression: "!variables.isRoleBindingWrite || variables.isOwnReaderBindingShape || variables.isAGCBindingShape"
+      messageExpression: "'the GMC service account may only write its own gmc-tenant-secret-reader RoleBinding, or an agc-tenant-role RoleBinding whose subjects are ServiceAccounts in namespace ' + request.namespace"
       reason: Forbidden
     - expression: >-
         variables.isClusterRoleBinding || variables.isManagedTenant ||

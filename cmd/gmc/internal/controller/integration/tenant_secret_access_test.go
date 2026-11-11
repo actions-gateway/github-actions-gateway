@@ -252,3 +252,57 @@ func TestGMC_TenantSecretAccess_DeletesReaderBindingOutsideTenants(t *testing.T)
 	g.Eventually(bindingGone(tenantNS), 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"unmarking a tenant namespace removes the GMC's reader binding")
 }
+
+// TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding pins Q1328: unmarking a
+// tenant namespace has to leave the GMC with no Secret read there. The unmark
+// removes one binding by name, so the guard must stop the GMC writing any other
+// RoleBinding that would grant it Secret reads: a second binding to its reader, or
+// one to agc-tenant-role naming its own ServiceAccount.
+func TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	const tenantNS = "reader-unmark-tenant"
+	createNamespaceWithLabels(t, tenantNS, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	require.NoError(t, k8sClient.Create(ctx, newSecret(tenantNS, "dummy")))
+
+	startGMCAsServiceAccount(t)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: controller.TenantSecretReaderName}, &rbacv1.RoleBinding{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	gmc, err := client.New(gmcServiceAccountConfig(), client.Options{Scheme: testScheme})
+	require.NoError(t, err)
+	self := []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: gmcSAName, Namespace: gmcSANamespace}}
+	for name, role := range map[string]string{"extra-reader": controller.TenantSecretReaderName, "extra-agc": "agc-tenant-role"} {
+		err := gmc.Create(ctx, &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Namespace: tenantNS, Name: name},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role},
+			Subjects:   self,
+		})
+		require.True(t, apierrors.IsForbidden(err), "a GMC RoleBinding %s to %s naming itself must be denied; got: %v", name, role, err)
+		require.ErrorContains(t, err, "may only write its own gmc-tenant-secret-reader RoleBinding", "denied by the guard, not by RBAC")
+	}
+	agcBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Namespace: tenantNS, Name: "agc-shape"},
+		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "agc-tenant-role"},
+		Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: "some-agc", Namespace: tenantNS}},
+	}
+	require.NoError(t, gmc.Create(ctx, agcBinding), "the AGC binding shape stays writable")
+	require.NoError(t, gmc.Delete(ctx, agcBinding))
+
+	var ns corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: tenantNS}, &ns))
+	delete(ns.Labels, gmcv2.TenantNamespaceMarkerLabel)
+	require.NoError(t, k8sClient.Update(ctx, &ns))
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: controller.TenantSecretReaderName}, &rbacv1.RoleBinding{})
+		return apierrors.IsNotFound(err)
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue())
+
+	g.Eventually(func() bool {
+		err := gmc.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: "dummy"}, &corev1.Secret{})
+		return apierrors.IsForbidden(err)
+	}, 5*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "an ex-tenant namespace must grant the GMC no Secret read")
+}
