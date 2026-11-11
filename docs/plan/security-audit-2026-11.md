@@ -1007,7 +1007,7 @@ A fix is demonstrated when the second repository's reservation still succeeds, f
 Killing every job of 256-job matrix runs in one repository filled the 512 KiB ledger after 564 jobs, and every later write, another repository's budget included, was refused.
 Each job had written a memory floor, a parked re-run and a merged disruption, none evictable.
 Now one parked re-run is kept per run attempt, since its release re-runs every failed job of the attempt; a re-run attempt lists at most 16 merged disruptions and jobs; and memory floors are evicted oldest first, after failure records, before a budget write is refused.
-With the fix, 768 such jobs left 234 KiB and the other repository's reservation succeeded; that measurement took 44 s, so the shipped tests are smaller: 40 killed jobs of one attempt add one parked re-run and 16 merged entries (`TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState`), and a ledger past the cap with floors alone gives up its oldest floors, freed in one batch, rather than the re-run (`TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused`); each of the three mechanisms, deleted, turns one of the two red.
+With the fix, 768 such jobs left 228.7 KiB (234,204 bytes) and the other repository's reservation succeeded; that measurement took 44 s, so the shipped tests are smaller: 40 killed jobs of one attempt add one parked re-run and 16 merged entries (`TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState`), and a ledger past the cap with floors alone gives up its oldest floors, freed in one batch, rather than the re-run (`TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused`); each of the three mechanisms, deleted, turns one of the two red.
 Budget records stay unevictable by design, so one repository can still spend the documented budget capacity over 30 days.
 
 **Evidence.** `cmd/agc/internal/provisioner/rerun_ledger.go:525`, `cmd/agc/internal/provisioner/flaky_jobs.go:344`, `cmd/agc/internal/provisioner/eviction.go:268`, `cmd/agc/internal/provisioner/oom_class.go:378`, `cmd/agc/internal/provisioner/oom_class.go:134`, `cmd/agc/internal/provisioner/oom_class.go:197`, `cmd/agc/internal/provisioner/pending_rerun.go:349`, `cmd/agc/internal/controller/runnerset_sizing_profile.go:120`, `cmd/agc/internal/provisioner/rerun_ledger_internal_test.go:523`, `docs/operations/upgrade.md:770`, `docs/design/04-operational-flows.md:617`.
@@ -1070,7 +1070,7 @@ In cmd/gmc/internal/controller add a unit test feeding buildNoProxy's output to 
 Repeat with a dummy Service on 443 in another namespace to see whether its ingress policy or the AGC policy stops it, and confirm from tenant RBAC that the template author cannot otherwise place an unrestricted pod in the namespace.
 
 **Outcome.** Bound measured, and recorded as an accepted residual.
-The registry read follows a redirect to another host and reports only its status code (`manifest latest: HTTP 418`), never its body; `net/http` on go1.27.3 drops the pull secret on a redirect to another hostname and keeps it on the registry's own hostname at another port (`TestInspectFollowsRedirectOffRegistry`).
+The registry read follows a redirect to another host and reports only its status code (`manifest latest: HTTP 418`), never its body; `net/http` drops the pull secret on a redirect to another hostname and keeps it on the registry's own hostname at another port (go1.27.3 and go1.27.4) and on a subdomain of it (go1.27.4) (`TestInspectFollowsRedirectOffRegistry`).
 A TLS name mismatch reports the certificate's names, for example `x509: certificate is valid for example.com, *.example.com, not localhost` (`TestInspectNamesTheCertificatesHostsOnAMismatch`).
 So a template author gets a reachability and status-code oracle for in-cluster endpoints on 443 and 6443, with no Kubernetes or GitHub credential attached.
 Refusing cluster-internal hosts would break in-cluster registries; the residual is in [05-security.md](../design/05-security.md#the-registry-read-behind-runnerversiontooold).
@@ -1101,7 +1101,7 @@ Expected today by source reading: the token and padding are present.
 
 **Outcome.** Confirmed and fixed.
 A non-2xx body echoing a `ghs_`-shaped token plus 100 KiB of padding reached the run-status, re-run and force-cancel errors whole, and the run-status and re-run ones feed the `EvictionRerunFailed` Event.
-All six sites now pass the body through `githubapp.SanitizeBody` with a 512-byte cap, so the token and padding are gone (`TestRESTErrors_UpstreamBodyIsSanitized`).
+All six sites now pass the body through `githubapp.SanitizeBody` with a 512-byte cap, so the token and padding are gone, and reverting any one site turns a case of `TestRESTErrors_UpstreamBodyIsSanitized` red.
 No upstream was observed echoing a credential; the fix does not depend on one doing so.
 
 **Evidence.** `docs/design/05-security.md:199`, `cmd/agc/internal/provisioner/abandoned.go:162`, `cmd/agc/internal/provisioner/eviction.go:860`, `scaleset/client.go:413`, `cmd/agc/internal/controller/runnerset_controller.go:538`, `cmd/agc/internal/controller/runnerset_target.go:152`.
