@@ -16,11 +16,13 @@
 //
 // # The three outcomes
 //
-//   - A bare `go build`/`go test` is rewritten and auto-allowed. Auto-allow is
-//     safe because the shape is strictly a bare invocation, the same boundary
-//     the repo's `Bash(go build *)` / `Bash(go test *)` allowlist already
-//     trusts; it is also necessary, since the rewritten `taskpolicy … go test …`
-//     form would otherwise stop matching that allowlist and raise a new prompt.
+//   - A bare `go build`/`go test` is rewritten and auto-allowed. No committed
+//     settings file grants these commands, so the allow is a grant of its own
+//     and is held to the bare shape: literal words, flags from safeFlags, and
+//     only setting-like leading assignments, so nothing in it has go run a
+//     program or write a path the caller names (Q1326). It is also necessary
+//     where a contributor allowlists `Bash(go test *)` themselves, since the
+//     rewritten `taskpolicy … go test …` form would stop matching that rule.
 //   - A compound or redirected form carrying `-race` is rewritten and asked.
 //     An allow would carry the command's other segments — a chained git op, a
 //     redirect to an outside-workspace path — past branch-guard and
