@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1322/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1332/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Eight stricter admission rules from the November security audit - GitHub Actions Gateway</title>
+        <title>Image-build guide says PSS baseline permits Unconfined seccomp - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#eight-stricter-admission-rules-from-the-november-security-audit" class="md-skip">
+        <a href="#image-build-guide-says-pss-baseline-permits-unconfined-seccomp" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Eight stricter admission rules from the November security audit
+              Image-build guide says PSS baseline permits Unconfined seccomp
             
           </span>
         </div>
@@ -2657,21 +2657,16 @@
   
 
 
-<h1 id="eight-stricter-admission-rules-from-the-november-security-audit">Eight stricter admission rules from the November security audit<a class="headerlink" href="#eight-stricter-admission-rules-from-the-november-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Eight audit findings are fixed by a stricter admission rule, and an open major is the only cheap time to add one.</strong> A manifest that applies today would be refused afterwards, so a minor cannot take these and <code>v3</code> is the next place they could land, which is why Q1283 and Q1312 were gated.
-Three of the eight remain, listed below; the other five have theirs: the two <code>noProxyCIDRs</code> guard rules, the <code>EgressPeer</code> CIDR bound, the allowlist gate on a <code>githubURL</code> host, and the public GitHub alias fold.
-One is confirmed from source and two are leads whose rule gap is visible in source (<a href="../../plan/security-audit-2026-11/#stricter-admission-rules">each finding, with evidence and the proposed rule</a>):</p>
-<ul>
-<li>Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace (confirmed, low).</li>
-<li>Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy (needs validation).</li>
-<li>Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant (needs validation).</li>
-</ul>
-<p>Fix sizes are unmeasured; the row is sized on the count, not on a reading of each webhook.
-Each rule must let an unchanged stored value through, as <code>spec.tracing.endpoint</code>'s does (Q1283), so a stored object is not refused when an unrelated field is edited.
-Re-check each asserted gap against source before writing its rule: these were read on 2026-11-09 at <code>7b3f016ad</code>, and the leads' downstream effect was never run.
-A finding whose rule turns out to cost more than it protects can be declined here with the reason recorded in the plan doc; it should not silently drop off the list.</p>
-<p><strong>Done when</strong> each of the three has a rule with tests covering a refused new value and an accepted unchanged stored one, or a recorded decision not to add it; <code>upgrade.md</code> tells operators what <code>v2.0.0</code> now refuses and how to find a stored object that has it; and the <code>v2.0.0</code> release notes list each rule under breaking changes.</p>
-<p>The <code>security</code> label is left off deliberately: with a gate label it would oblige a public roadmap bullet (<code>roadmapcheck</code> rule 7), and Q1312 set the precedent of gating a pre-release tightening as <code>debt</code>.</p>
+<h1 id="image-build-guide-says-pss-baseline-permits-unconfined-seccomp">Image-build guide says PSS baseline permits Unconfined seccomp<a class="headerlink" href="#image-build-guide-says-pss-baseline-permits-unconfined-seccomp" title="Permanent link">&para;</a></h1>
+<p><strong><code>in-runner-image-builds.md</code> recommends rootless BuildKit on the <code>baseline</code> profile on the strength of a claim about Pod Security Standards that the upstream checks contradict.</strong> The profile table says <code>baseline</code> "<strong>Permits</strong> running as root (uid 0) inside the container and <code>seccompProfile: Unconfined</code>", and Approach 1 says "<code>baseline</code> permits <code>seccompProfile: Unconfined</code> and the <code>unconfined</code> AppArmor annotation; <code>restricted</code> forbids both".</p>
+<p>Measured 2026-11-10 with the vendored <code>k8s.io/pod-security-admission/policy</code> v0.37.2 at the <code>baseline</code> level, which is the code Pod Security Admission runs: a pod-level and a container-level <code>seccompProfile.type: Unconfined</code> are each refused (<code>seccompProfile (pod must not set securityContext.seccompProfile.type to "Unconfined")</code>), and so is an <code>Unconfined</code> AppArmor profile.
+The cases are <code>pod seccomp Unconfined</code>, <code>container seccomp Unconfined</code> and <code>AppArmor Unconfined</code> in <code>TestRunnerTemplate_PodShape_Create</code> (<code>cmd/gmc/internal/webhook/v2/runnertemplate_podshape_test.go</code>).
+Not run against an apiserver; the neighbouring <code>TestUpstream_PodSecurity_BaselineAdmitsNetworkVolumes</code> shows the envtest apiserver enforcing <code>baseline</code>, so a pod case there would settle it in one run.
+Running as root is permitted at <code>baseline</code>, so that half of the table cell is right.</p>
+<p>The page now also disagrees with the tree: the <code>RunnerTemplate</code> webhook holds a namespaced template to <code>baseline</code> (Q1322), and <a href="../../operations/troubleshooting/#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token">its runbook</a> lists an <code>Unconfined</code> profile among the refusals.</p>
+<p>What is unmeasured is the consequence: whether rootless BuildKit works on the nodes GAG is tested on under <code>RuntimeDefault</code> seccomp, which decides whether Approach 1 keeps <code>baseline</code> as its recommended profile, moves to a <code>Localhost</code> profile, or needs a <code>ClusterRunnerTemplate</code> on the <code>privileged</code> profile.
+Correcting the two sentences without that answer would leave the recommendation unsupported.</p>
+<p><strong>Done when</strong> the profile table and Approach 1 state what <code>baseline</code> forbids, and the BuildKit recommendation names a profile it was run under.</p>
 
 
 

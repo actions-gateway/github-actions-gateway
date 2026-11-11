@@ -2853,7 +2853,8 @@ Jobs that must pass files to each other need a <code>ReadWriteMany</code> (RWX) 
   A generic <em>ephemeral</em> volume is charged per pod instead, and the AGC's admission gate counts it, so see <a href="../resourcequota-sizing/">ResourceQuota sizing</a>.</li>
 </ul>
 <p>So the deliverable here is an integration, not a storage system.
-Anything a Kubernetes <code>PersistentVolumeClaim</code> can express, a worker can mount.</p>
+Anything a Kubernetes <code>PersistentVolumeClaim</code> can express, a worker can mount.
+The claim is also the only route for network storage in a tenant's <code>RunnerTemplate</code>: an inline <code>nfs</code> or <code>iscsi</code> volume is <a href="../troubleshooting/#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token">rejected at admission</a>, unless the platform has turned that rule off and left volume types to its own admission policy.</p>
 <h2 id="set-fsgroup-to-the-runner-uid-or-the-job-fails-on-its-first-write">Set <code>fsGroup</code> to the runner UID, or the job fails on its first write<a class="headerlink" href="#set-fsgroup-to-the-runner-uid-or-the-job-fails-on-its-first-write" title="Permanent link">&para;</a></h2>
 <p>This is the one requirement that is not obvious, and skipping it produces a job that starts cleanly and dies mid-step.</p>
 <p>A freshly provisioned volume's root directory belongs to <code>root</code>.

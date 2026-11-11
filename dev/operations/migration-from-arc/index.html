@@ -3231,7 +3231,7 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <tr>
 <td><code>spec.template</code> (pod template, a <code>PodTemplateSpec</code>)</td>
 <td><code>RunnerTemplate.spec.podTemplate</code> (the same <code>PodTemplateSpec</code>)</td>
-<td><code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, init/sidecar containers transfer <strong>one-to-one</strong>. ARC inlines this per scale set; a <code>RunnerTemplate</code> is referenced by many <code>RunnerSet</code>s, so identical shapes are written once.</td>
+<td><code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, init/sidecar containers transfer <strong>one-to-one</strong>, within what a tenant-authored template may carry: PSS <code>baseline</code>, the volume types <code>restricted</code> allows, and no ServiceAccount token (<a href="../troubleshooting/#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token">the rejections</a>). ARC inlines this per scale set; a <code>RunnerTemplate</code> is referenced by many <code>RunnerSet</code>s, so identical shapes are written once.</td>
 </tr>
 <tr>
 <td>runner container image (ARC default <code>ghcr.io/actions/actions-runner</code>)</td>

@@ -3335,6 +3335,11 @@ The knobs an operator is most likely to override:</p>
 <td>Dev/test only — opt out of digest pinning (render-time check on all four images and the GMC's startup-time AGC/proxy/wrapper check).</td>
 </tr>
 <tr>
+<td><code>allowUncheckedRunnerTemplatePodShape</code></td>
+<td><code>false</code></td>
+<td>Only when your own admission policy decides tenant pod shape: the webhook stops holding a namespaced <code>RunnerTemplate</code> to Pod Security <code>baseline</code> and the <code>restricted</code> volume types. Without such a policy, a tenant can again author a host-reaching pod in a <code>privileged</code>-profile namespace, and an <code>nfs</code> or <code>iscsi</code> volume in any namespace below <code>restricted</code> (<a href="../upgrade/#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected">the full account</a>).</td>
+</tr>
+<tr>
 <td><code>certManager.enabled</code></td>
 <td><code>true</code></td>
 <td>Set <code>false</code> to use the self-signed webhook cert instead of cert-manager.</td>

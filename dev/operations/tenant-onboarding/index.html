@@ -4309,6 +4309,9 @@ GAG only registers the tenant's scale sets into the group you named; if the grou
 <code>kubectl apply -k deploy/templates/plain</code> gives a baseline worker; <code>kata-dind</code> and <code>privileged-dind</code> cover jobs that build container images.
 A <code>RunnerSet</code> then names one with <code>templateRef: { name: plain, kind: ClusterRunnerTemplate }</code>.
 They are cluster-scoped and platform-applied, none is marked as the cluster default, and each carries prerequisites the template cannot express: see the <a href="../runner-template-library/">runner template library</a>.</p>
+<p>A <code>RunnerTemplate</code> you author yourself has a narrower range than those entries.
+Unless the platform has turned those two rules off, admission holds it to the Pod Security Standards <code>baseline</code> level on every security profile and to the volume types the <code>restricted</code> level allows; it always refuses a projected ServiceAccount token on either kind (<a href="../troubleshooting/#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token">the rejections and their fixes</a>).
+A shape past that, the two DinD entries included, has to be a <code>ClusterRunnerTemplate</code> the platform publishes.</p>
 <h3 id="optional-templateref-a-default-worker-pod-shape">Optional <code>templateRef</code> (a default worker pod shape)<a class="headerlink" href="#optional-templateref-a-default-worker-pod-shape" title="Permanent link">&para;</a></h3>
 <p><code>RunnerSet.spec.templateRef</code> is <strong>optional</strong>.
 A <code>RunnerSet</code> that omits it resolves a worker pod shape through a fallback chain, so a tenant does not have to name a template in every runner set.
