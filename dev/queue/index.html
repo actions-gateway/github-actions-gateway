@@ -4538,6 +4538,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>A gateway whose <code>githubURL</code> is <code>https://GitHub.com/acme</code> is admitted and then addressed as a GitHub Enterprise Server (GHES) appliance.</strong> …</td>
 </tr>
 <tr>
+<td><a href="Q1339/">Q1339</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/claude-usage/compute_metrics.py">claude-usage: PR fetch misses a PR merged after a higher-numbered one</a></td>
+<td><code>debt</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><code>pr_series</code> asks only for merged PRs numbered above the highest one already stored, so a PR opened early and merged after a later-numbered …</td>
+</tr>
+<tr>
 <td><a href="Q1334/">Q1334</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/actionsgateway_webhook.go">Warn at admission when a gateway's GitHub host is not allowlisted</a></td>
 <td><code>feature</code></td>
