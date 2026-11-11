@@ -34,6 +34,9 @@ func TestRESTErrors_UpstreamBodyIsSanitized(t *testing.T) {
 			_, err := p.runConclusion(context.Background(), "myorg", "myrepo", "42")
 			return err
 		}},
+		{"re-run 403 already running", http.StatusForbidden, func(p *Provisioner) error {
+			return p.rerunFailedJobs(context.Background(), "myorg", "myrepo", "42", discardLog)
+		}},
 		{"re-run 403", http.StatusForbidden, func(p *Provisioner) error {
 			return p.rerunFailedJobs(context.Background(), "myorg", "myrepo", "42", discardLog)
 		}},
@@ -44,7 +47,11 @@ func TestRESTErrors_UpstreamBodyIsSanitized(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tc.status)
-				_, _ = w.Write([]byte(`{"message":"echo: Authorization: token ` + token + `"}` + padding))
+				msg := "echo"
+				if strings.Contains(tc.name, "already running") {
+					msg = "This workflow is already running"
+				}
+				_, _ = w.Write([]byte(`{"message":"` + msg + `: Authorization: token ` + token + `"}` + padding))
 			}))
 			t.Cleanup(srv.Close)
 			p := &Provisioner{
@@ -57,6 +64,9 @@ func TestRESTErrors_UpstreamBodyIsSanitized(t *testing.T) {
 			assert.NotContains(t, err.Error(), token, "the echoed token survives into the error")
 			assert.Less(t, len(err.Error()), 2<<10, "the body is not capped")
 			assert.Contains(t, err.Error(), "[REDACTED]")
+			if strings.Contains(tc.name, "already running") {
+				assert.ErrorIs(t, err, errRunNotConcluded, "the still-running refusal keeps its retry")
+			}
 		})
 	}
 }

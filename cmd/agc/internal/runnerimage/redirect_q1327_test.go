@@ -16,7 +16,7 @@ import (
 // TestInspectFollowsRedirectOffRegistry pins the bound Q1327 records for a tenant-chosen
 // registry host: the AGC follows a registry's redirect to another endpoint, as it must
 // for registries that serve blobs from a CDN, and reports only the far end's status
-// code, never its body. net/http (measured on go1.27.3) keeps the pull secret on the
+// code, never its body. net/http (measured on go1.27.3 and go1.27.4) keeps the pull secret on the
 // registry's own hostname, any port, and its subdomains, and drops it for any other host.
 func TestInspectFollowsRedirectOffRegistry(t *testing.T) {
 	var (
@@ -38,10 +38,11 @@ func TestInspectFollowsRedirectOffRegistry(t *testing.T) {
 		name, location string
 		wantAuth       bool
 	}{
-		// example.com is a name the httptest certificate carries; the dialer below sends
-		// it to the loopback listeners.
+		// example.com and *.example.com are names the httptest certificate carries; the
+		// dialer below sends them to the loopback listeners.
 		{"another host", internal.URL + "/internal", false},
 		{"the registry's own hostname on another port", "https://example.com:" + internalPort + "/internal", true},
+		{"a subdomain of the registry's hostname", "https://cdn.example.com:" + internalPort + "/internal", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mu.Lock()
@@ -63,7 +64,9 @@ func TestInspectFollowsRedirectOffRegistry(t *testing.T) {
 			// CheckRedirect.
 			transport := registry.Client().Transport.(*http.Transport).Clone()
 			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-				addr = strings.Replace(addr, "example.com:", "127.0.0.1:", 1)
+				if host, port, err := net.SplitHostPort(addr); err == nil && strings.HasSuffix(host, "example.com") {
+					addr = net.JoinHostPort("127.0.0.1", port)
+				}
 				return (&net.Dialer{}).DialContext(ctx, network, addr)
 			}
 			hc := &http.Client{Transport: transport}
