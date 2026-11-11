@@ -3,9 +3,9 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, the medium one fixed, and the four egress proxy sharing leads confirmed and fixed (Q1324).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 26 of which still are.
+> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), and the four egress proxy sharing leads confirmed and fixed (Q1324).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 26 of which still are.
 > Nothing reached high or critical.
-> Two rows gated `v2.0.0`: Q1321, which has landed, and [Q1322](../queue/Q1322.md), which is open.
+> Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
 > The rest are [Q1323](../queue/Q1323.md) to [Q1328](../queue/Q1328.md).
 
 ## Method and limits
@@ -40,14 +40,14 @@ The recurring theme matches the second audit's: a documented isolation property 
 | Finding | Verdict | Tracked by |
 |---|---|---|
 | [GMC ServiceAccount can write ConfigMaps (and, where the CRDs exist, CNI-native network policies and ServiceMonitors) in any namespace; tenant-resource-guard does not match those kinds](#confinement-claim) | confirmed, medium | Q1321 (`2.0-gate`), fixed |
-| [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | [Q1322](../queue/Q1322.md) (`2.0-gate`), fixed |
-| [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | Fixed in `v2.0.0` (Q1322) |
-| [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | fixed in `v2.0.0`, see the finding's Resolution |
-| [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
-| [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | validated at admission, rule added | landed for `v2.0.0` (Q1322) |
-| [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | guard fixed in `v2.0.0`, see the finding's Resolution; the GitHub-side question stays open |
-| [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | rule gap confirmed in envtest; node mount not observed | Fixed in `v2.0.0` (Q1322) |
-| [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | rule gap confirmed in envtest; token minting not observed | Fixed in `v2.0.0` (Q1322) |
+| [Tenant-authored EgressPeer accepts 0.0.0.0/0 on any port, so the AGC NetworkPolicy can be widened past the operator's apiServerCIDRs narrowing, contrary to the documented 'single scoped peer'](#stricter-admission-rules) | confirmed, low | Q1322 (`2.0-gate`), fixed |
+| [Namespaced RunnerTemplate privilege gate checks only securityContext.privileged, so the documented 'platform-owned template pins the pod shape' property is not enforced in a privileged-profile namespace](#stricter-admission-rules) | confirmed, low | Q1322 (`2.0-gate`), fixed |
+| [FQDN-mode EgressProxy policy admits any hostname a tenant puts in ActionsGateway.spec.githubURL, without consulting the platform egress allowlist](#stricter-admission-rules) | confirmed, low | Q1322 (`2.0-gate`), fixed, see the finding's Resolution |
+| [noProxyCIDRs admission guard does not model comma-carrying, wildcard, port-qualified or IP-literal NO_PROXY forms](#stricter-admission-rules) | validated at admission, rule added | Q1322 (`2.0-gate`), fixed |
+| [noProxyCIDRs/githubURL bypass guard ignores proxyRef.namespace, so a shared EgressProxy and its cross-namespace referrers are never compared at admission](#stricter-admission-rules) | validated at admission, rule added | Q1322 (`2.0-gate`), fixed |
+| [www.github.com and api.github.com spellings of githubURL yield a different scope key for the same org, so the cross-tenant scale-set name guard does not compare them](#stricter-admission-rules) | needs validation | Q1322 (`2.0-gate`), guard fixed, see the finding's Resolution; the GitHub-side question stays open |
+| [Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy](#stricter-admission-rules) | rule gap confirmed in envtest; node mount not observed | Q1322 (`2.0-gate`), fixed |
+| [Template projected serviceAccountToken volume survives buildPod despite the documented 'no Kubernetes API credentials in the worker pod' floor invariant](#stricter-admission-rules) | rule gap confirmed in envtest; token minting not observed | Q1322 (`2.0-gate`), fixed |
 | [Share and attribution projection names collide for (ns 'a-b', proxy 'c') and (ns 'a', proxy 'b-c')](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
 | [ActionsGateway defaultProxyRef status tells a tenant whether a named EgressProxy exists in another namespace](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
 | [An attributed namespace named 'ca' overwrites the attribution CA in the clients Secret and forces a bundle regeneration on every reconcile](#confirmed-low-findings) | confirmed, low | [Q1323](../queue/Q1323.md) |
@@ -116,7 +116,8 @@ The code change below is a sketch and was not rendered or tested.
 
 ## Stricter admission rules
 
-Eight findings whose fix is a stricter admission rule, tracked together as [Q1322](../queue/Q1322.md) and gating `v2.0.0` for the reason Q1283 and Q1312 were: a manifest that applies today would be refused afterwards, so only a major can take the rule, and the next major is `v3`.
+Eight findings whose fix is a stricter admission rule, tracked together as Q1322 and gating `v2.0.0` for the reason Q1283 and Q1312 were: a manifest that applies today would be refused afterwards, so only a major can take the rule, and the next major is `v3`.
+All eight have landed for `v2.0.0`.
 Three are confirmed and five are leads.
 For the leads the gap in the rule is visible in source; what is unsettled is whether anything gets through the layer behind it.
 Each rule must pass an unchanged stored value, as `spec.tracing.endpoint`'s does.
