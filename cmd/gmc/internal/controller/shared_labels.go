@@ -32,6 +32,10 @@ const (
 	// NetworkPolicy podSelector matching.
 	labelComponent    = "actions-gateway/component"
 	componentWorkload = "workload"
+
+	// labelRunnerSetOwner names the RunnerSet that owns a v2 worker pod; the AGC
+	// stamps it (provisioner.LabelRunnerSet).
+	labelRunnerSetOwner = "actions-gateway.com/runner-set"
 )
 
 // copyRecommendedLabels copies the app.kubernetes.io/* recommended metadata from

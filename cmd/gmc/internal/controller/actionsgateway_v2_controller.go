@@ -1197,6 +1197,38 @@ func (r *ActionsGatewayV2Reconciler) undrainedRunnerSets(ctx context.Context, ag
 	return undrained
 }
 
+// boundWorkerPods names the pods, terminating ones included, that the workload
+// NetworkPolicy selects and that belong to a RunnerSet bound to ag. It reads pod
+// metadata uncached, through the namespace's gmc-tenant-secret-reader RoleBinding.
+func (r *ActionsGatewayV2Reconciler) boundWorkerPods(ctx context.Context, ag *gmcv2.ActionsGateway) ([]string, error) {
+	var rsList gmcv2.RunnerSetList
+	if err := r.List(ctx, &rsList, client.InNamespace(ag.Namespace)); err != nil {
+		return nil, err
+	}
+	bound := map[string]bool{}
+	for i := range rsList.Items {
+		if rsList.Items[i].Spec.GatewayRef.Name == ag.Name {
+			bound[rsList.Items[i].Name] = true
+		}
+	}
+	if len(bound) == 0 {
+		return nil, nil
+	}
+	pods := &metav1.PartialObjectMetadataList{}
+	pods.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("PodList"))
+	if err := r.uncachedReader().List(ctx, pods, client.InNamespace(ag.Namespace),
+		client.MatchingLabels{labelComponent: componentWorkload}); err != nil {
+		return nil, err
+	}
+	var names []string
+	for i := range pods.Items {
+		if bound[pods.Items[i].Labels[labelRunnerSetOwner]] {
+			names = append(names, pods.Items[i].Name)
+		}
+	}
+	return names, nil
+}
+
 // reconcileDelete tears down the per-gateway control plane fail-closed (Q125,
 // ported from v1's reconcileDelete via Q328): every child is deleted explicitly
 // and the finalizer is NOT removed until each one is verifiably gone. The
@@ -1239,11 +1271,13 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 		// The AGC never got there — crashed, scaled to zero, or never healthy. Proceed
-		// rather than hold the gateway forever, and name what is being left behind:
-		// those pods now have no reaper and are bounded only by maxWorkerLifetime.
+		// rather than hold the AGC forever, and name what is being left behind: those
+		// pods now have no reaper and are bounded only by maxWorkerLifetime, and the
+		// workload NetworkPolicy below waits for them.
 		r.recordEvent(ag, corev1.EventTypeWarning, "WorkerDrainTimeout", "ReconcileDelete",
 			"Worker pods did not drain within %s of deletion; tearing down anyway, so any pod still "+
-				"running is orphaned until its spec.maxWorkerLifetime deadline: %s",
+				"running is orphaned until its spec.maxWorkerLifetime deadline, and the workload "+
+				"NetworkPolicy and this gateway's finalizer are kept until it is gone: %s",
 			workerDrainTimeout, strings.Join(undrained, ", "))
 	}
 
@@ -1292,7 +1326,20 @@ func (r *ActionsGatewayV2Reconciler) reconcileDelete(ctx context.Context, ag *gm
 	del(&appsv1.Deployment{}, "Deployment", ns, agcNameV2(ag))
 	del(&corev1.Service{}, "Service", ns, agcNameV2(ag))
 	del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, agcNameV2(ag))
-	del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, workloadNPNameV2(ag))
+	// The workload NetworkPolicy is the only egress restriction on a worker pod, so it
+	// outlives every pod of this gateway's RunnerSets (Q1328). The drain gate above
+	// cannot vouch for that: the counts reach zero when the AGC issues its deletes,
+	// while the kubelet runs each pod through the template's
+	// terminationGracePeriodSeconds, and past the deadline the pods are not reaped at
+	// all. A pod list that fails holds the policy too.
+	if workers, err := r.boundWorkerPods(ctx, ag); err != nil {
+		errs = append(errs, fmt.Errorf("NetworkPolicy %s: listing worker pods: %w", workloadNPNameV2(ag), err))
+	} else if len(workers) > 0 {
+		lingering = append(lingering, fmt.Sprintf("NetworkPolicy %s (held for worker pods %s)",
+			workloadNPNameV2(ag), strings.Join(workers, ", ")))
+	} else {
+		del(&networkingv1.NetworkPolicy{}, "NetworkPolicy", ns, workloadNPNameV2(ag))
+	}
 	del(&rbacv1.RoleBinding{}, "RoleBinding", ns, agcNameV2(ag))
 	del(&corev1.ServiceAccount{}, "ServiceAccount", ns, agcNameV2(ag))
 	del(&corev1.ServiceAccount{}, "ServiceAccount", ns, workerSANameV2(ag))

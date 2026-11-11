@@ -9,8 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -111,4 +115,94 @@ func TestUndrainedRunnerSets_ScopeAndReporting(t *testing.T) {
 	got := r.undrainedRunnerSets(context.Background(), ag)
 	require.Len(t, got, 1, "an idle set and another gateway's set must not hold this teardown")
 	assert.Equal(t, "busy (2 active, 3 pending)", got[0])
+}
+
+// workerPod is a pod the AGC provisioned for RunnerSet rs: selected by the workload
+// NetworkPolicy and carrying the RunnerSet owner label.
+func workerPod(name, ns, rs string) *corev1.Pod {
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+		Name: name, Namespace: ns,
+		Labels: map[string]string{labelComponent: componentWorkload, labelRunnerSetOwner: rs},
+	}}
+}
+
+// workloadNP is the gateway's workload NetworkPolicy, seeded so teardown has it to delete.
+func workloadNP(ag *gmcv2.ActionsGateway) *networkingv1.NetworkPolicy {
+	return &networkingv1.NetworkPolicy{ObjectMeta: metav1.ObjectMeta{Name: workloadNPNameV2(ag), Namespace: ag.Namespace}}
+}
+
+// TestReconcileDeleteV2_WorkerDrainTimeoutKeepsWorkloadPolicy (Q1328): past the drain
+// deadline teardown proceeds without the AGC, but a worker pod it never reaped is still
+// running job code. Deleting the workload NetworkPolicy then would leave that pod with
+// no egress restriction for up to maxWorkerLifetime, so the policy — and the gateway's
+// finalizer — stay until the pod is gone. Everything else is still torn down.
+func TestReconcileDeleteV2_WorkerDrainTimeoutKeepsWorkloadPolicy(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := "team-a"
+	ag := deletingV2GatewayFor(workerDrainTimeout + time.Minute)
+	dep := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: agcNameV2(ag), Namespace: ns}}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ag, dep, workloadNP(ag), workingRunnerSet("stuck", ns, 1, 0), workerPod("stuck-w1", ns, "stuck")).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
+
+	res, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.Positive(t, res.RequeueAfter, "teardown must poll until the worker pod is gone")
+	assert.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{}),
+		"the workload NetworkPolicy must outlive a worker pod still running job code")
+	assert.Error(t, c.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: agcNameV2(ag)}, &appsv1.Deployment{}),
+		"the rest of the control plane is still torn down")
+	var got gmcv2.ActionsGateway
+	require.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(ag), &got))
+	assert.Contains(t, got.Finalizers, gmcv2.ActionsGatewayFinalizer, "the finalizer holds the policy's teardown open")
+
+	// The pod goes: the next pass deletes the policy and releases the gateway.
+	require.NoError(t, c.Delete(context.Background(), workerPod("stuck-w1", ns, "stuck")))
+	_, err = r.reconcileDelete(context.Background(), &got)
+	require.NoError(t, err)
+	assert.True(t, apierrors.IsNotFound(c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{})),
+		"with no worker pod left the workload NetworkPolicy is deleted")
+}
+
+// TestReconcileDeleteV2_TerminatingWorkerKeepsWorkloadPolicy (Q1328): the healthy path.
+// The AGC's counts reach zero as soon as it ISSUES its deletes, while the kubelet is
+// still running the pod through its terminationGracePeriodSeconds, which the tenant
+// template sets. A pod carrying a deletion timestamp is still running job code.
+func TestReconcileDeleteV2_TerminatingWorkerKeepsWorkloadPolicy(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := "team-a"
+	ag := deletingV2GatewayFor(10 * time.Second)
+	pod := workerPod("drained-w1", ns, "drained")
+	now := metav1.Now()
+	pod.DeletionTimestamp = &now
+	pod.Finalizers = []string{"test.actions-gateway.com/hold"}
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ag, workloadNP(ag), workingRunnerSet("drained", ns, 0, 0), pod).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
+
+	_, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.NoError(t, c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{}),
+		"a terminating worker pod is still running job code and must stay confined")
+}
+
+// TestReconcileDeleteV2_OtherGatewaysWorkersDoNotHold (Q1328): the hold is scoped to
+// this gateway's RunnerSets, so a neighbour gateway's busy workers in the same
+// namespace never pin this teardown.
+func TestReconcileDeleteV2_OtherGatewaysWorkersDoNotHold(t *testing.T) {
+	scheme := actionsGatewayV2TestScheme(t)
+	ns := "team-a"
+	ag := deletingV2GatewayFor(10 * time.Second)
+	neighbour := boundRunnerSet("neighbour", ns, "other-gw")
+
+	c := fake.NewClientBuilder().WithScheme(scheme).
+		WithObjects(ag, workloadNP(ag), neighbour, workerPod("neighbour-w1", ns, "neighbour")).Build()
+	r := &ActionsGatewayV2Reconciler{Client: c, Scheme: scheme}
+
+	_, err := r.reconcileDelete(context.Background(), ag)
+	require.NoError(t, err)
+	assert.True(t, apierrors.IsNotFound(c.Get(context.Background(), client.ObjectKeyFromObject(workloadNP(ag)), &networkingv1.NetworkPolicy{})),
+		"another gateway's worker pods must not hold this gateway's teardown")
 }
