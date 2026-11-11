@@ -4561,6 +4561,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>S</td>
 <td>**The EgressProxy reconciler holds a pool for at most 30 s while the egress allowlist ConfigMap is unread, and the 30 s starts when the GMC …</td>
 </tr>
+<tr>
+<td><a href="Q1340/">Q1340</a></td>
+<td><a href="../development/parallel-dispatch/">Plan shared docs when one backlog row is split across parallel PRs</a></td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>When one row is split into parallel streams, every stream edits the same append-only docs, so the PRs conflict pairwise from the start and …</td>
+</tr>
 </tbody>
 </table>
 
