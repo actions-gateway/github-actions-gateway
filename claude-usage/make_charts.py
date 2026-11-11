@@ -56,6 +56,11 @@ MAX_5X_TO_20X = date(2026, 7, 5)  # Max 5x -> Max 20x plan upgrade
 # paragraphs cut ~18.6k non-blank Markdown lines without deleting a word, so the
 # lines denominator steps down here and the cost-per-line ratio steps up.
 DOCS_REFLOW = date(2026, 8, 9)
+# v2.0.0 retires the v1alpha1/v2alpha1/v2beta1 APIs and classic acquisition
+# (#2241 first, through #2263 on 11-06). Real deletion, unlike the reflow, but it
+# moves the tree series the same way: product words fall 20.5% in five days, so
+# tokens per word steps up with no change in what was spent.
+V2_RETIREMENT = date(2026, 11, 2)
 
 # Event markers. A plan upgrade raises the ceiling on what one machine can spend;
 # a machine starting changes which machine is doing the measuring; a reflow moves
@@ -65,6 +70,7 @@ PLAN_STYLE = ("#222", "--")
 MODEL_STYLE = ("#8C4A00", (0, (7, 2)))
 MACHINE_STYLE = ("#005E44", (0, (5, 2, 1, 2)))
 REFLOW_STYLE = ("#5B5B5B", (0, (1, 1.8)))
+RETIRE_STYLE = ("#7A1F5C", (0, (4, 1.5, 1, 1.5)))
 
 # Event lines are drawn at zorder 5, after the series they cross. A value label
 # left at the default zorder is painted over and reads as struck through, so
@@ -238,17 +244,57 @@ def event_label(ax, x, y, label, col, yc="data"):
                                      pe.Normal()])
 
 
-def reflow_marker(axes, label_ax, y=0.01):
-    """Mark the sentence-per-line reflow across ``axes``, labelled on ``label_ax``.
+def tree_marker(axes, label_ax, when, label, style, y=0.01):
+    """Mark an event that moved the tree series across ``axes``, labelled on ``label_ax``.
 
-    Only the lines and cost-per-line charts call this. The reformat changed the
+    Only charts drawn from the tree call this. Such an event changes the
     denominator, not the spend, so marking it on a token chart would invite the
     reading that it cost or saved something.
     """
-    col, ls = REFLOW_STYLE
+    col, ls = style
     for a in axes:
-        a.axvline(DOCS_REFLOW, color=col, ls=ls, lw=1.6, zorder=EVENT_Z)
-    event_label(label_ax, DOCS_REFLOW, y, "docs reflow", col, yc="axes fraction")
+        a.axvline(when, color=col, ls=ls, lw=1.6, zorder=EVENT_Z)
+    event_label(label_ax, when, y, label, col, yc="axes fraction")
+
+
+def reflow_marker(axes, label_ax, y=0.01):
+    """The sentence-per-line reflow: moves lines, not words, so line charts only."""
+    tree_marker(axes, label_ax, DOCS_REFLOW, "docs reflow", REFLOW_STYLE, y)
+
+
+def v2_marker(axes, label_ax, y=0.01):
+    """The v2.0.0 API retirement: moves lines and words alike."""
+    tree_marker(axes, label_ax, V2_RETIREMENT, "v2.0.0 cleanup", RETIRE_STYLE, y)
+
+
+# Date ticks are rotated 45°, so two labels collide when the tick pitch across the
+# slant falls below the text height. Measured on these 11-inch figures at 8.5pt,
+# 45 ticks clear it (1.15 text heights at 179 days); 90 do not (0.58).
+MAX_DATE_TICKS = 45
+TICK_STEPS = (1, 2, 3, 4, 7, 14, 28)
+
+
+def tick_step(n_days):
+    """Smallest day step that keeps ``n_days`` to ``MAX_DATE_TICKS`` labels."""
+    return next((s for s in TICK_STEPS if n_days / s <= MAX_DATE_TICKS), TICK_STEPS[-1])
+
+
+class SpanDayLocator(mdates.DateLocator):
+    """Day ticks whose step follows the visible span, so a longer series thins itself."""
+
+    def __call__(self):
+        lo, hi = self.axis.get_view_interval()
+        return self.tick_values(mdates.num2date(lo), mdates.num2date(hi))
+
+    def tick_values(self, vmin, vmax):
+        step = tick_step((vmax - vmin).days + 1)
+        return mdates.DayLocator(interval=step).tick_values(vmin, vmax)
+
+
+def day_labels(days):
+    """``%b %-d`` labels for an index axis, blank between every ``tick_step`` day."""
+    step = tick_step(len(days))
+    return [dparse(d).strftime("%b %-d") if i % step == 0 else "" for i, d in enumerate(days)]
 
 
 def rolling_mean(vals, window=7):
@@ -400,8 +446,7 @@ def chart_tokens_by_model():
     ax.set_title("Daily Claude Code token usage by model", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("tokens / day  (millions)", fontsize=11)
     ax.set_xticks(xs)
-    ax.set_xticklabels([dparse(d).strftime("%b %-d") if i % 2 == 0 else "" for i, d in enumerate(days)],
-                       rotation=45, ha="right", fontsize=8)
+    ax.set_xticklabels(day_labels(days), rotation=45, ha="right", fontsize=8)
     ax.legend(handles=handles, frameon=False, fontsize=10, ncol=5, loc="upper center",
               bbox_to_anchor=(0.5, -0.18))
     for s in ("top", "right"):
@@ -544,7 +589,7 @@ def chart_tokens_per_word():
     axb.set_ylim(0, running * 1.05)
     axb.set_xlim(xs[0], xs[-1])
     axb.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    axb.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    axb.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(axb.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     axb.grid(axis="y", alpha=0.22)
     for s in ("top", "right"):
@@ -559,13 +604,14 @@ def chart_tokens_per_word():
             a.axvline(wd, color="#9AA0A6", ls=(0, (4, 3)), lw=1.0, alpha=0.7, zorder=1)
     for wd in week_dates:
         v = _val_on(wd)
-        if v is None or wd == xs[-1]:  # the final point already carries a big label
+        if v is None or (xs[-1] - wd).days < 7:  # the end label already gives this value
             continue
         ax.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         ax.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=8.5, fontweight="bold", color=gold,
                     path_effects=[pe.Stroke(linewidth=2.5, foreground="white"), pe.Normal()],
                     zorder=LABEL_Z)
+    v2_marker((ax, axb), ax, y=0.03)
 
     fig.text(0.012, 0.008, "generated CRD YAML, binaries & lockfiles excluded · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
@@ -613,11 +659,13 @@ def chart_tokens_vs_words():
                  fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative count (log scale)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=2, frameon=False, fontsize=10)
+    # Inside the empty band below the words curve, clear of the footer.
+    ax.legend(loc="lower center", ncol=2, frameon=False, fontsize=10)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    v2_marker((ax,), ax, y=0.03)
     fig.text(0.012, 0.008, "words authored = Go + Markdown + hand-written YAML + scripts & web, comments included · tokens = input + output + cache writes",
              fontsize=7.5, color="#999")
     save(fig, "tokens_vs_words")
@@ -692,7 +740,7 @@ def chart_overview():
                     textcoords="offset points", va="center", fontsize=9, fontweight="bold",
                     color=darken(col))
     a2.set_ylim(0, running * 1.05)
-    a2.set_ylabel("lines authored (thousands)", fontsize=11)
+    a2.set_ylabel("words authored (thousands)", fontsize=11)
     a2.set_title("What those words are", fontsize=12.5, fontweight="bold", loc="left")
     a2.grid(axis="y", alpha=0.22)
 
@@ -709,7 +757,7 @@ def chart_overview():
                 path_effects=HALO, zorder=LABEL_Z)
     for wd in week_dates:
         v = _val_on(wd)
-        if v is None or wd == xs[-1]:
+        if v is None or (xs[-1] - wd).days < 7:
             continue
         a3.plot([wd], [v], "o", color=gold, ms=5, zorder=6)
         a3.annotate(f"{v:,.0f}", (wd, v), xytext=(0, 9), textcoords="offset points",
@@ -720,7 +768,7 @@ def chart_overview():
     a3.set_title("What those words cost in tokens", fontsize=12.5, fontweight="bold", loc="left")
     a3.grid(axis="y", alpha=0.22)
     a3.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a3.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    a3.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a3.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
 
     # shared x + day/week guides on all panels
@@ -740,6 +788,7 @@ def chart_overview():
         for a in (a1, a2, a3):
             a.axvline(ev_date, color=col, ls=ls, lw=1.4, zorder=EVENT_Z)
         event_label(a1, ev_date, 0.01, label, col, yc="axes fraction")
+    v2_marker((a1, a2, a3), a1, 0.01)
     for a in (a1, a2):
         plt.setp(a.get_xticklabels(), visible=False)
 
@@ -778,7 +827,7 @@ def chart_token_anatomy():
     ax.set_ylabel("tokens / day  (log scale)", fontsize=11)
     ax.set_title("Anatomy of token usage", fontsize=14, fontweight="bold", loc="left")
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     # Upper left: the series are ordered by magnitude and never cross, so the band
     # above the cache-read line early in the timeline is the one region no series
@@ -814,7 +863,7 @@ def chart_cumulative_cache():
     ax.set_title("Cumulative cache traffic", fontsize=14, fontweight="bold", loc="left")
     ax.set_ylabel("cumulative tokens  (billions)", fontsize=11)
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    ax.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    ax.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     ax.set_xlim(days[0], days[-1])
     ax.set_ylim(0, (cc + cr)[-1] * 1.10)
@@ -875,10 +924,18 @@ def chart_parallel_sessions():
            alpha=0.45, zorder=2)
     a1.plot(xs, mean, color=darken(OI["green"]), lw=2.6, marker="o", ms=5, zorder=4,
             path_effects=halo)
-    for x, v in zip(xs, mean):
-        a1.annotate(f"{v:.1f}", (x, v), xytext=(0, 7), textcoords="offset points", ha="center",
-                    fontsize=9, fontweight="bold", color=darken(OI["green"]), zorder=6,
-                    path_effects=halo)
+    # A label on every day overlaps once the series passes a few weeks, so only the
+    # highest means are labelled, greedily, at least a week apart.
+    labelled = []
+    for x in sorted(xs, key=lambda i: -mean[i]):
+        if len(labelled) == 8:
+            break
+        if all(abs(x - y) >= 7 for y in labelled):
+            labelled.append(x)
+    for x in labelled:
+        a1.annotate(f"{mean[x]:.1f}", (x, mean[x]), xytext=(0, 7), textcoords="offset points",
+                    ha="center", fontsize=9, fontweight="bold", color=darken(OI["green"]),
+                    zorder=6, path_effects=halo)
     a1.set_title("Parallel Claude Code sessions", fontsize=14, fontweight="bold", loc="left")
     a1.set_ylabel("sessions running at once", fontsize=11)
     a1.set_ylim(0, max(peak) * 1.22)
@@ -921,8 +978,7 @@ def chart_parallel_sessions():
         for s in ("top", "right"):
             a.spines[s].set_visible(False)
     a2.set_xticks(xs)
-    a2.set_xticklabels([dparse(d).strftime("%b %-d") for d in days], rotation=45, ha="right",
-                       fontsize=9)
+    a2.set_xticklabels(day_labels(days), rotation=45, ha="right", fontsize=8.5)
     fig.text(0.012, 0.01,
              "session-level data survives only from " + days[0] +
              " — earlier transcripts were not retained, so this series cannot be backfilled",
@@ -1113,7 +1169,7 @@ def chart_velocity():
     stagger_labels(fig, labels, 0.11)
 
     a4.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a4.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    a4.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a4.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     # One figure-level key rather than four inline ones: every panel shares the
     # encoding, and a legend box inside any of them lands on an event label.
@@ -1127,7 +1183,7 @@ def chart_velocity():
     fig.text(0.012, 0.006,
              "bars are daily · lines are a 7-day centered mean, stopping 3 days short at each end "
              "rather than averaging a partial window · shaded = the series cannot mean what its axis "
-             "says yet · Opus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
+             "says yet\nOpus 5 and mac-2 land one day apart, so this data cannot separate model from machine",
              fontsize=7.5, color="#999")
     save(fig, "velocity")
 
@@ -1342,6 +1398,7 @@ def chart_rhythm(dim):
                     (xs[hi], vals[hi]), xytext=(0, 4), textcoords="offset points",
                     ha="center", fontsize=9, fontweight="bold", color=darken(c),
                     zorder=LABEL_Z, path_effects=HALO)
+        ax.set_ylim(0, max(vals) * 1.18 if max(vals) else 1)  # room for the label under the title
         ax.set_ylabel(ylab, fontsize=10.5)
         ax.set_title(title, fontsize=12.5, fontweight="bold", loc="left")
         ax.grid(axis="y", alpha=0.22)
@@ -1351,6 +1408,7 @@ def chart_rhythm(dim):
     axes[-1].set_xticklabels(labels, fontsize=9.5)
     fig.suptitle(f"The project's rhythm by {title_of}", fontsize=14, fontweight="bold",
                  x=0.012, ha="left", y=0.995)
+    fig.subplots_adjust(top=0.95)
     note = ("every timestamp bucketed in local time, since UTC would move an evening onto the next day"
             " · keyboard share and token spend only exist from 2026-07-26")
     if dim == "weekday":
@@ -1418,8 +1476,9 @@ def chart_lines_vs_words():
             ax.spines[sp].set_visible(False)
 
     reflow_marker((a1, a2), a2, y=0.05)
+    v2_marker((a2,), a2, y=0.05)  # the docs corpus barely moved (-0.5%), the ratio did
     a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a2.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    a2.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     fig.text(0.012, 0.006,
              "same non-blank text both times, only the unit differs · "
@@ -1504,10 +1563,11 @@ def chart_authored_bands():
     al.set_title("The same split in lines — only this panel steps at the reflow",
                  fontsize=13.5, fontweight="bold", loc="left")
     al.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    al.xaxis.set_major_locator(mdates.DayLocator(interval=4))
+    al.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(al.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
 
     reflow_marker((aw, al), al, y=0.03)
+    v2_marker((aw, al), aw, y=0.03)
     head = summary().get("head_snapshot", {})
     vendor = head.get("vendor_files")
     context = (f"vendored dependencies ({vendor:,} of "
@@ -1622,14 +1682,14 @@ def chart_session_kinds():
         stagger_labels(fig, labels, 0.11)
 
     a2.xaxis.set_major_formatter(mdates.DateFormatter("%b %-d"))
-    a2.xaxis.set_major_locator(mdates.DayLocator(interval=2))
+    a2.xaxis.set_major_locator(SpanDayLocator())
     plt.setp(a2.get_xticklabels(), rotation=45, ha="right", fontsize=8.5)
     a0.legend(loc="upper left", frameon=False, fontsize=9.5, ncol=3)
     fig.text(0.012, 0.006,
              "sessions counted on the day they started; tokens on the day they were spent · "
-             "lines are a 7-day centered mean · covers only days with surviving transcripts, "
-             "about half the project's spend · a session's kind is read from its opening prompt, "
-             "which is a convention the dispatcher follows rather than a marker it emits",
+             "lines are a 7-day centered mean · covers only days with surviving transcripts\n"
+             "a session's kind is read from its opening, which is mostly a convention: "
+             "the dispatcher's marker covers only Sep 17 to Oct 10",
              fontsize=7.5, color="#999")
     save(fig, "session_kinds")
 

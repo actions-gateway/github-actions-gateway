@@ -1,8 +1,8 @@
 {
   "provenance": {
-    "snapshot_date": "2026-08-26",
+    "snapshot_date": "2026-11-10",
     "projects_glob": "/Users/karl/.claude/projects/*github-actions-gateway*",
-    "transcript_files_read": 560,
+    "transcript_files_read": 1048,
     "snapshot_host": "mac-2",
     "hosts": [
       "mac-1",
@@ -14,7 +14,7 @@
     "token_dedup": "(message.id, requestId)",
     "message_dedup": "record uuid (user) / (message.id, requestId) (assistant)",
     "first_measured_date": "2026-05-19",
-    "last_measured_date": "2026-08-27",
+    "last_measured_date": "2026-11-10",
     "first_project_date": "2026-05-16",
     "growth_chart_baseline": {
       "tokens": 10000000,
@@ -26,7 +26,9 @@
     "pro_to_max_date": "2026-05-23",
     "max_5x_to_20x_date": "2026-07-05",
     "docs_reflow_date": "2026-08-09",
-    "docs_reflow_note": "every tracked doc reflowed to sentence-per-line; the `md` series steps down ~18.6k lines here with no words removed"
+    "docs_reflow_note": "every tracked doc reflowed to sentence-per-line; the `md` series steps down ~18.6k lines here with no words removed",
+    "v2_retirement_date": "2026-11-02",
+    "v2_retirement_note": "v2.0.0 removes the older API versions and classic acquisition through 11-06; product words fall ~20% and tokens per word steps up with no change in spend"
   },
   "estimation": {
     "method": "per-commit Pro-era rate x commits authored that day",
@@ -48,13 +50,13 @@
   },
   "totals": {
     "measured": {
-      "input": 8489626,
-      "output": 108096317,
-      "cache_creation": 562227938,
-      "cache_read": 34053828785,
-      "assistant_msgs": 154451,
-      "user_msgs": 170824,
-      "headline_input_output_cachecreation": 678813881
+      "input": 8674506,
+      "output": 154591815,
+      "cache_creation": 819550775,
+      "cache_read": 52895311399,
+      "assistant_msgs": 229380,
+      "user_msgs": 254636,
+      "headline_input_output_cachecreation": 982817096
     },
     "estimated": {
       "input": 6559,
@@ -66,27 +68,27 @@
       "headline_input_output_cachecreation": 2494920
     },
     "combined": {
-      "input": 8496185,
-      "output": 108575253,
-      "cache_creation": 564237363,
-      "cache_read": 34121347628,
-      "assistant_msgs": 155193,
-      "user_msgs": 171685,
-      "headline_input_output_cachecreation": 681308801,
-      "grand_total_incl_cache_read": 34802656429,
-      "cache_reuse_ratio": 60.47
+      "input": 8681065,
+      "output": 155070751,
+      "cache_creation": 821560200,
+      "cache_read": 52962830242,
+      "assistant_msgs": 230122,
+      "user_msgs": 255497,
+      "headline_input_output_cachecreation": 985312016,
+      "grand_total_incl_cache_read": 53948142258,
+      "cache_reuse_ratio": 64.47
     }
   },
   "by_model": {
     "Sonnet 4.6": {
-      "headline": 24868199,
-      "output": 5142624,
-      "messages": 8937
+      "headline": 27445058,
+      "output": 5500230,
+      "messages": 9854
     },
     "Other": {
       "headline": 0,
       "output": 0,
-      "messages": 199
+      "messages": 264
     },
     "Opus 4.7": {
       "headline": 16947491,
@@ -104,14 +106,14 @@
       "messages": 44636
     },
     "Fable 5": {
-      "headline": 43213353,
-      "output": 6310772,
-      "messages": 8356
+      "headline": 63489399,
+      "output": 9391859,
+      "messages": 11702
     },
     "Opus 5": {
-      "headline": 375211316,
-      "output": 55901925,
-      "messages": 88516
+      "headline": 656361626,
+      "output": 98958730,
+      "messages": 159117
     }
   },
   "by_host": {
@@ -134,49 +136,49 @@
       "headline_input_output_cachecreation": 300762526
     },
     "mac-2": {
-      "input": 425604,
-      "output": 56134154,
-      "cache_creation": 321491597,
-      "cache_read": 22917437500,
-      "assistant_msgs": 87860,
-      "user_msgs": 96521,
-      "headline_input_output_cachecreation": 378051355
+      "input": 610484,
+      "output": 102629652,
+      "cache_creation": 578814434,
+      "cache_read": 41758920114,
+      "assistant_msgs": 162789,
+      "user_msgs": 180333,
+      "headline_input_output_cachecreation": 682054570
     }
   },
   "sessions": {
     "bucket_minutes": 10,
     "first_date": "2026-07-26",
-    "last_date": "2026-08-27",
-    "session_days": 670,
-    "peak_concurrent": 20,
-    "mean_concurrent": 3.06,
-    "hours_using_claude": 285.5,
-    "session_hours": 873.7,
+    "last_date": "2026-11-10",
+    "session_days": 1320,
+    "peak_concurrent": 24,
+    "mean_concurrent": 3.07,
+    "hours_using_claude": 574.3,
+    "session_hours": 1760.8,
     "parallel_share_pct": 63,
-    "attended_hours": 128.3,
-    "attended_share_pct": 45,
+    "attended_hours": 221.2,
+    "attended_share_pct": 39,
     "attended_first_date": "2026-07-26",
     "prompts_note": "attended_hours scales with bucket_minutes and is a scale rather than a measurement; prompt_minutes.csv holds the parameter-free record, from which any bucket width or idle threshold is derivable",
     "note": "Concurrency needs session-level transcripts, which no earlier CSV preserved, so the series starts at the first day whose transcripts survive rather than at the first project day. It is never estimated."
   },
   "head_snapshot": {
-    "go_code": 119357,
-    "go_comments": 43628,
-    "go_generated": 2246,
-    "markdown_nonblank": 58344,
-    "yaml_handwritten": 13569,
-    "yaml_generated": 132003,
-    "tests": 2323,
-    "authored_files": 1697,
-    "vendor_files": 13294,
+    "go_code": 119716,
+    "go_comments": 39388,
+    "go_generated": 1003,
+    "markdown_nonblank": 68968,
+    "yaml_handwritten": 16940,
+    "yaml_generated": 46467,
+    "tests": 2280,
+    "authored_files": 1906,
+    "vendor_files": 13724,
     "band_files": {
-      "product": 750,
-      "machinery": 407,
-      "project_mgmt": 387,
-      "product_docs": 123,
+      "product": 753,
+      "machinery": 539,
+      "project_mgmt": 452,
+      "product_docs": 132,
       "machinery_docs": 26,
       "residual": 4
     },
-    "commits": 2167
+    "commits": 2682
   }
 }

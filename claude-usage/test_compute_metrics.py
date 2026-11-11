@@ -275,6 +275,17 @@ class SessionKinds(unittest.TestCase):
         self.assertEqual(r[("2026-07-26", "mac-x", "unprompted")]["sessions"], 1)
         self.assertNotIn(("2026-07-26", "mac-x", "manual"), r)
 
+    def test_a_brief_from_the_starting_session_is_dispatched(self):
+        """Such a brief carries no origin.kind, so it is never a human prompt and
+        the session would otherwise read as unprompted."""
+        brief = {"type": "user", "uuid": "b1", "timestamp": "2026-10-28T02:59:25Z",
+                 "message": {"content": "<system-reminder>\nLinked sessions\n</system-reminder>\n"
+                             "Background (from the session that started this one):\nWork Q1141."}}
+        self.write("a", [brief, self.spend("2026-10-28T03:00:00Z", "m1", 100)])
+        r = self.rows()
+        self.assertEqual(r[("2026-10-28", "mac-x", "dispatched")]["sessions"], 1)
+        self.assertNotIn(("2026-10-28", "mac-x", "unprompted"), r)
+
     def test_spend_lands_on_its_own_day_but_the_session_on_its_first(self):
         """A session running past midnight spends on both days. Crediting it all to
         the opening would move spend to a day it was not spent."""
@@ -578,6 +589,30 @@ class AuthoredPrompts(unittest.TestCase):
         r = self.rec("why does the dispatcher emit %s at all?" % cm.MACHINE_MARKER)
         self.assertTrue(cm.is_authored_prompt(r))
 
+    REMINDER = "<system-reminder>\nYou are operating in a git worktree.\n</system-reminder>\n"
+
+    def test_a_prompt_behind_a_prepended_reminder_still_counts(self):
+        """The harness prepends reminders to a submitted prompt, so the leading
+        tag is the harness's and the prompt after it is the person's."""
+        r = self.rec(self.REMINDER + "status?")
+        self.assertTrue(cm.is_human_prompt(r))
+        self.assertTrue(cm.is_authored_prompt(r))
+
+    def test_a_brief_behind_a_prepended_reminder_is_still_machine_composed(self):
+        for brief in ("You are a worker session. ...",
+                      "%s\nClear Q1012." % cm.MACHINE_MARKER):
+            r = self.rec(self.REMINDER + brief)
+            self.assertTrue(cm.is_human_prompt(r), brief)
+            self.assertFalse(cm.is_authored_prompt(r), brief)
+
+    def test_a_reminder_with_nothing_after_it_is_not_a_prompt(self):
+        self.assertFalse(cm.is_human_prompt(self.rec(self.REMINDER)))
+        self.assertFalse(cm.is_human_prompt(self.rec(self.REMINDER + self.REMINDER)))
+
+    def test_a_peer_message_behind_a_reminder_is_still_not_a_prompt(self):
+        r = self.rec(self.REMINDER + '<cross-session-message from="x">hi</cross-session-message>')
+        self.assertFalse(cm.is_human_prompt(r))
+
 
 class PullRequestFetch(unittest.TestCase):
     """The fetch must fail soft, and must never re-ask for what it already holds."""
@@ -627,6 +662,30 @@ class PullRequestFetch(unittest.TestCase):
         got = cm.pr_series(5)
         self.assertEqual(list(got), [7])
         self.assertEqual(got[7]["cycle_hours"], "2.0000")
+
+    def test_a_page_with_nothing_stored_widens_until_it_reaches_stored_rows(self):
+        # Merged PRs 1..1000, newest first; 100 are stored. A single 200-row page
+        # would record 801..1000 and leave 101..800 below the next high-water mark.
+        merged = [{"number": n, "createdAt": "2026-08-01T00:00:00Z",
+                   "mergedAt": "2026-08-01T01:00:00Z"} for n in range(1000, 0, -1)]
+        limits = []
+
+        class R:
+            def __init__(self, out):
+                self.stdout = out
+
+        def fake(cmd, *a, **k):
+            if "rate_limit" in cmd:
+                return R("5000")
+            limit = int(cmd[cmd.index("--limit") + 1])
+            limits.append(limit)
+            return R(json.dumps(merged[:limit]))
+
+        cm.subprocess.run = fake
+        got = cm.pr_series(100)
+        self.assertEqual(sorted(got), list(range(101, 1001)))
+        self.assertEqual(limits[0], cm.PR_PAGE)
+        self.assertGreater(len(limits), 1, "an all-new page must be refetched wider")
 
 
 class VendorExclusion(unittest.TestCase):

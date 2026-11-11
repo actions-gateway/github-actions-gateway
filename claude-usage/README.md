@@ -102,50 +102,57 @@ That is also why the head snapshot and the series can disagree by a few lines.
 
 ## Results
 
-Latest snapshot **2026-08-27** (project day 104; first commit 2026-05-16).
-"Day 7" is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the [day-22 follow-up][post2]; "Day 104" is the current snapshot the charts here back.
+Latest snapshot **2026-11-10** (project day 179; first commit 2026-05-16).
+"Day 7" is the [original day-7 Bluesky post][post1]'s published figures; "Day 22" is the [day-22 follow-up][post2]; "Day 104" is the previous snapshot here; "Day 179" is the current one the charts back.
 The snapshots are announced as a quote-post chain (each post quotes the previous one): [day 7][post1] → [day 22][post2] → [day 35][post3] → [day 48][post4] → [day 70][post5].
 
-> **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the 2026-08-27 snapshot.
+> **Frozen snapshot.** The committed CSVs, `summary.json`, and charts are the 2026-11-10 snapshot.
 > Re-running `compute_metrics.py` advances the token/message series as new sessions accrue (the merge rule only ever revises upward); leave it un-run to keep these figures, or re-run and refresh the charts to roll forward to a new dated snapshot.
 
-| Metric | Day 7 | Day 22 | Day 104 | Source |
-|---|--:|--:|--:|---|
-| Tokens (input + output + cache-creation) | ~10M | 56.2M | **681.3M** | transcripts + est. |
-| └ measured only | — | 53.7M | 678.8M | transcripts |
-| └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | per-commit estimate |
-| └ incl. cache reads | — | 2.02B | **34.8B** | transcripts + est. |
-| Cache reuse ratio (reads ÷ writes) | — | ~44× | **~60×** | transcripts |
-| Git commits | 232 | 617 | **2,167** | git |
-| Tests (`func Test*`) | 269 | 393 | **2,323** | git |
-| Lines of Go (code) | 15.5k | 20.9k | **119.4k** | git |
-| Lines of Go (comments) | 2.3k | 4.2k | **43.6k** | git |
-| Markdown (non-blank) | 14.3k | 14.0k | **58.3k** | git |
-| YAML (hand-written) | 1.5k | 2.3k | **13.6k** | git |
-| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | **58.0k** | git |
-| **Words authored** (Go + docs + hand-written YAML + scripts) | — | — | **2.35M** | git |
-| **Tokens per word** | — | — | **290** | both |
-| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | **Opus 5 55% / Opus 4.8 32% / Fable 6% / Sonnet 4% / Opus 4.7 3%** | transcripts |
-| Mean concurrent sessions | — | — | **3.1** (peak 20) | transcripts, since Jul 26 |
-| Hours using Claude (wall-clock) | — | — | **285.5h** → 873.7h session-time | transcripts, since Jul 26 |
-| Prompts submitted by a person | — | — | **1,586** | transcripts, since Jul 26 |
-| └ of those, authored rather than machine-composed | — | — | **1,432** | transcripts, since Jul 26 |
-| └ time at the keyboard | — | — | **~128h** (45%), width-dependent | transcripts, since Jul 26 |
+| Metric | Day 7 | Day 22 | Day 104 | Day 179 | Source |
+|---|--:|--:|--:|--:|---|
+| Tokens (input + output + cache-creation) | ~10M | 56.2M | 681.3M | **985.3M** | transcripts + est. |
+| └ measured only | — | 53.7M | 678.8M | 982.8M | transcripts |
+| └ estimated backfill (May 16–18) | — | +2.5M | +2.5M | +2.5M | per-commit estimate |
+| └ incl. cache reads | — | 2.02B | 34.8B | **53.9B** | transcripts + est. |
+| Cache reuse ratio (reads ÷ writes) | — | ~44× | ~60× | **~64×** | transcripts |
+| Git commits | 232 | 617 | 2,167 | **2,682** | git |
+| Tests (`func Test*`) | 269 | 393 | 2,323 | **2,280** | git |
+| Lines of Go (code) | 15.5k | 20.9k | 119.4k | **119.7k** | git |
+| Lines of Go (comments) | 2.3k | 4.2k | 43.6k | **39.4k** | git |
+| Markdown (non-blank) | 14.3k | 14.0k | 58.3k | **69.0k** | git |
+| YAML (hand-written) | 1.5k | 2.3k | 13.6k | **16.9k** | git |
+| Scripts & web (shell/Python/Make/Docker/CSS/JS) | — | — | 58.0k | **85.9k** | git |
+| **Words authored** (Go + docs + hand-written YAML + scripts) | — | — | 2.35M | **2.79M** | git |
+| **Tokens per word** | — | — | 290 | **353** | both |
+| Model mix | mostly Sonnet 4.6 | Sonnet 43% / Opus 57% | Opus 5 55% / Opus 4.8 32% / … | **Opus 5 67% / Opus 4.8 22% / Fable 6% / Sonnet 3% / Opus 4.7 2%** | transcripts |
+| Mean concurrent sessions | — | — | 3.1 (peak 20) | **3.1** (peak 24) | transcripts, since Jul 26 |
+| Hours using Claude (wall-clock) | — | — | 285.5h | **574.3h** → 1,760.8h session-time | transcripts, since Jul 26 |
+| Prompts submitted by a person | — | — | 1,586 | **2,671** | transcripts, since Jul 26 |
+| └ of those, authored rather than machine-composed | — | — | 1,432 | **2,445** | transcripts, since Jul 26 |
+| └ time at the keyboard | — | — | ~128h (45%) | **~221h** (39%), width-dependent | transcripts, since Jul 26 |
 
-The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 678.8M.
+The headline tokens figure **includes the ~2.5M estimated backfill** for the archived first three days; the measured-only floor is 982.8M.
 Live totals (with the measured / estimated split) are always in [`data/summary.json`](data/summary.json).
 
+The Day 104 prompt figures are the old classifier's and are not comparable with Day 179's.
+From July to September the harness prepended `<system-reminder>` blocks to some submitted prompts, and the classifier rejected any record that opened with that tag, so 397 real prompts were missing until this snapshot read through them; the [predicate section](#the-predicate-for-a-prompt-a-person-actually-submitted) has the detail.
+
+**Two counts went down, and both are deletions rather than lost work.** Tests fell from 2,323 to 2,280 and Go comments from 43.6k to 39.4k because the v2.0.0 cleanup between 2 and 6 November removed the v1alpha1 APIs, classic acquisition and the conversion hub ([#2241](https://github.com/actions-gateway/github-actions-gateway/pull/2241), [#2243](https://github.com/actions-gateway/github-actions-gateway/pull/2243), [#2257](https://github.com/actions-gateway/github-actions-gateway/pull/2257), [#2261](https://github.com/actions-gateway/github-actions-gateway/pull/2261), [#2263](https://github.com/actions-gateway/github-actions-gateway/pull/2263)).
+Go code had reached 143.6k lines on 10-31 and stood at 117.5k on 11-05, and the series carries that step into every ratio with words or lines under it.
+
 Markdown is the count to read carefully, because it is a snapshot of the tree rather than a running total of lines ever written, and a reformat moves it.
-The daily series runs 66.6k non-blank lines on 08-08, 49.0k the next day, and 58.3k by 08-27: [#1357](https://github.com/actions-gateway/github-actions-gateway/pull/1357) reflowed every tracked doc to one sentence per line on 2026-08-09, which unwraps hard-wrapped paragraphs without removing a word.
-Twelve days after the last snapshot the series has recovered 4.9k of those lines and is still 8.3k short of its pre-reflow height, while the docs corpus in words has grown throughout.
+The daily series runs 66.6k non-blank lines on 08-08 and 49.0k the next day: [#1357](https://github.com/actions-gateway/github-actions-gateway/pull/1357) reflowed every tracked doc to one sentence per line on 2026-08-09, which unwraps hard-wrapped paragraphs without removing a word.
+It passed its pre-reflow height again on 10-26 and stands at 69.0k, while the docs corpus in words has grown throughout.
 The reflow date carries a grey dotted marker on the three lines-and-ratio charts, and `provenance.docs_reflow_date` in `summary.json`, so the step is never mistaken for lost docs.
 
 The Max 20x weekly token allowance also hit **100% for the first time**, in the seven-day window that ended when it reset on the morning of Monday 2026-08-10.
 That ceiling is not visible in anything here, and it is not this project's headline figure hitting a wall: the allowance meters Anthropic's own weighted accounting across every project on the account, and this project's 96.4M for that window was in fact *below* the preceding week's 98.6M.
-The week that followed the reset is this project's own largest at 103.7M, and the two since ran 39.6M and 33.0M.
+The week that followed the reset is still this project's largest at 103.7M, summed Monday to Sunday in UTC.
+No week since has passed 70M, and from September to the end of October none passed 33M, with the quietest at 5.7M in the week of 10-12; the week of 11-02 ran 53.0M.
 
 This snapshot spans a machine handover.
-`mac-1` measured everything through 2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over mid-morning that day and measuring through 2026-08-27.
+`mac-1` measured everything through 2026-07-26 and has since been **retired**; `mac-2` replaced it, taking over mid-morning that day and measuring through 2026-11-10.
 They overlap on 2026-07-26 alone, and the overlap is clean rather than double-counted: mac-1 recorded that morning, and every mac-2 record for the day starts at 10:26 local — the minute the replacement cloned the repo — so the day's total is their sum with no session counted on both.
 
 Because mac-1 is gone, its rows are final and 2026-07-27 onward is mac-2 only and **complete**, not a day awaiting a second reporter.
@@ -165,33 +172,38 @@ The standalone versions follow below.
 
 ### Daily token usage by model
 ![Daily token usage by model](charts/tokens_by_model.png) The Pro→Max 5x upgrade (first dashed line, 2026-05-23) is visible as the hand-off from Sonnet 4.6 (orange) to Opus 4.7 (purple), then Opus 4.8 (blue), with Fable 5 (green) appearing from June 9 and Opus 5 (vermillion) from July 25; the second dashed line (2026-07-05) marks the Max 5x→20x upgrade.
-Opus 5 takes over almost completely from the green dash-dot line (2026-07-26), where `mac-2` took over, on days around three times the height of the Opus 4.8 era (median 13.6M across the `mac-2` days against 4.6M across the days Opus 4.8 led).
-That jump is **not** more machines running at once: `mac-2` replaced `mac-1` rather than joining it.
+Opus 5 takes over almost completely from the green dash-dot line (2026-07-26), where `mac-2` took over; from 08-28 it leads 57 of the 59 days with spend (Fable 5 leads the other two) and is 92% of spend, Fable 5 7%, and Sonnet 4.6 the rest.
+For its first month the `mac-2` era ran days around three times the height of the Opus 4.8 era, a median of 13.6M across the 31 days with spend through 08-27 against 4.6M across the days Opus 4.8 led.
+That did not last: the 59 days with spend from 08-28 to 11-10 have a median of 3.6M, and 16 more days in that span had none.
+The August jump is **not** more machines running at once: `mac-2` replaced `mac-1` rather than joining it.
 The plan is a different question these series cannot answer: the Max 5x → 20x upgrade three weeks earlier moved none of them, but what both upgrades relieved was the 5-hour rolling limit, which nothing here measures.
 What it cannot be pinned on is either the model or the machine alone, since Opus 5 arrived the day before `mac-2` did.
 See the [velocity chart](#work-shipped-on-proxies-a-reformat-cant-move).
 Charts use the Okabe–Ito colourblind-safe palette, and each model also carries its own hatch pattern.
 
-Three kinds of event line, styled apart because they mean different things: a **black dashed** line is a plan upgrade (a higher ceiling on what one machine can spend), a **green dash-dot** line is a machine's rows beginning (a change in which machine is measuring), and a **grey dotted** line is the sentence-per-line reflow (a change in what a line *is*).
+Four kinds of event line, styled apart because they mean different things: a **black dashed** line is a plan upgrade (a higher ceiling on what one machine can spend), a **green dash-dot** line is a machine's rows beginning (a change in which machine is measuring), a **grey dotted** line is the sentence-per-line reflow (a change in what a line *is*), and a **purple dash-dot** line is the v2.0.0 cleanup from 2026-11-02 (about a fifth of the product's words deleted within the week).
+The last two are drawn only on charts built from the tree, because they moved the denominator and nothing about what was spent: the reflow where a lines series is drawn, the cleanup wherever words or lines are.
 The reflow line appears only on the three lines-and-ratio charts, because it moved the denominator and nothing about what was spent; marking it on a token chart would invite the reading that the reformat cost or saved something.
 Machine lines are derived from the first row each machine reports, so a third machine marks itself with no code change.
 They read "begins" rather than "joins" because the data can't tell a replacement from an addition: an old machine going quiet is not evidence it was retired.
 A label that would overlap one already placed drops a row instead, measured on the rendered figure: the two July markers shared a height comfortably at day 80 and collided at day 89, because every added day squeezes the timeline under a fixed figure width.
 
 ### Tokens spent vs. words authored (the magnitude)
-![Cumulative tokens far above cumulative words authored, log scale](charts/tokens_vs_words.png) Log y so both ends are visible at once. ~680M cumulative tokens ride well above ~2.35M words authored; a linear axis crushes the smaller series to a sliver.
-The gold-shaded gap between the two curves is the ~290 tokens/word; on a log axis a ratio is a vertical gap.
+![Cumulative tokens far above cumulative words authored, log scale](charts/tokens_vs_words.png) Log y so both ends are visible at once. ~985M cumulative tokens ride well above ~2.79M words authored; a linear axis crushes the smaller series to a sliver.
+The gold-shaded gap between the two curves is the ~353 tokens/word; on a log axis a ratio is a vertical gap.
 "Words authored" is all hand-written output: Go (code + tests), Markdown, hand-written YAML, and scripts & web, comments included; generated CRD YAML, binaries, and lockfiles excluded.
 The undistorted breakdown of those lines is in the next chart.
 
 ### Tokens per word authored (the trend & the breakdown)
 ![Cost per word over time above a stacked breakdown of the words](charts/tokens_per_word.png) **Top:** cumulative tokens ÷ words authored, by day (measured days only).
-It climbs from ~62 tokens/word in week one to ~290 by month three, each word costing ~4.7× more once the easy scaffolding is done and the work shifts to logic, tests, review, and debugging.
-Unlike its per-line predecessor it then **plateaus** from mid-June, hovering in the 225–290 band rather than climbing all cycle.
+It climbs from ~62 tokens/word in week one to ~240 by the end of June, then **plateaus** through July at 240–245, unlike its per-line predecessor, which climbed all cycle.
+It rises again from August, to 289 at the month's end and about 300 through September and October.
+The last step, 304 on 10-31 to 346 on 11-05, is the denominator shrinking rather than dearer work: the v2.0.0 cleanup deleted about 26k lines of Go in those five days, and a ratio over the current tree charges the tokens that wrote them to the words that remain.
+Over the whole project each word now costs ~5.7× what it did in week one.
 **Bottom:** the denominator itself, decomposed into Go, Markdown docs, hand-written YAML, and scripts & web.
-Its total height at any date *is* the divisor above, so "a word" is shown, not just named; docs alone very nearly match all of Go.
+Its total height at any date *is* the divisor above, so "a word" is shown, not just named; Markdown now outweighs all of Go, 1.23M words against 0.89M.
 There is no reflow marker on this chart, and that is the point of the switch: the 2026-08-09 reformat moved lines and not words, so neither the band nor the ratio above it notices.
-The marker now appears only where a lines series is drawn, following the same rule the other event markers do.
+The v2.0.0 cleanup is marked, because it deleted words as well as lines.
 
 ### Work shipped, on proxies a reformat can't move
 ![PRs merged, tests added, backlog rows closed per day, and when work landed](charts/velocity.png) Tokens are an input and lines carry the reflow, so neither is a velocity series.
@@ -208,6 +220,7 @@ The machine's side is measured elsewhere, though: a cold `make check` went from 
 A 12× faster gate is not something a model does.
 
 Bars are daily and every line is a **7-day centered mean**, which is what makes the inflection legible: all three top series sit flat through June and most of July, then climb from the 07-25/26 pair.
+The climb did not hold past August: PRs merged ran 23.9 a day that month, 6.0 in September and 5.5 in October, with neither model nor machine changing, so nothing these series measure accounts for it; the time-invested caveat under [Methodology](#methodology--caveats) is the input that could, and no file here records it.
 Centered rather than trailing, because a trailing mean lags by half its window and would slide every inflection three days later than the day it happened, straight into the confound.
 Each line stops three days short at either end rather than averaging a partial window.
 
@@ -217,7 +230,7 @@ No trend line is drawn inside them.
 Its trend line is broken either side of that marker rather than run through it, because the mean of a window spanning the switch averages two different units.
 The panel is unshaded, unlike the two below it, since commits are real on both sides and only counted differently.
 
-**The backlog panel draws filed against closed.** Closures alone cannot tell progress from treading water: the busiest stretch closed 15 rows a day while filing 21, so the backlog grew by 85 rows over the fortnight ending 2026-08-13, faster than in any earlier era.
+**The backlog panel draws filed against closed.** Closures alone cannot tell progress from treading water: the busiest stretch closed 15 rows a day while filing 21, so the backlog grew by 85 rows over the fortnight ending 2026-08-13, which no fortnight before or since has matched.
 That is not automatically bad, since filing more can mean finding more real work, but the direction is only visible with both lines.
 Both lines cross the backlog's own move from a table to one file per row on 2026-08-18, which is a change of home rather than of flow: the walk reads presence across the pair, so the table's disappearance books nothing by itself, and the 56 closures that day are rows whose own file was deleted.
 
@@ -228,18 +241,19 @@ Its bars and their trend cover the whole project; the commits-per-hour line star
 ![What the project does on each day of the week](charts/rhythm_weekday.png) ![The same, by local hour](charts/rhythm_hour.png) Aggregates rather than time series: every day of the project lands in one bucket.
 Built to look rather than to confirm, since which of these would differ by the clock was not known in advance.
 
-**Which day it is moves these series more than any tooling change did.** Commits per day range from 14.3 to 31.4 across the week, a wider spread than the step at any model or machine marker on the timeline charts.
+**Which day it is moves these series a long way.** Commits per active day range from 12.3 on Wednesdays to 21.5 on Saturdays.
 
-**Spend and output do not move together across that range.** The heaviest-spend day is not the heaviest-output day, and the days with the least time at the keyboard are the ones where the two diverge most.
+**Spend and output do not move together across that range.** Tuesday is the heaviest-spend day at 5.7M tokens, and the weekend has the least spend and the most commits.
+Spend per commit is highest on Wednesday, at 0.36M tokens against 0.16M on Saturday, and Wednesday is also the day with the least time at the keyboard: a person typed in 24% of its active buckets, against 48–49% at the weekend.
 That is what unattended running looks like from the outside: the machine keeps working when nobody is there to steer it or merge the result.
 It is also the clearest evidence here for the caveat in Methodology below, that the input none of these series measures is how many hours a person gave the project.
 
-**Weekends run 1.5× weekdays**, 29.3 commits a day against 19.7.
-A permutation test over 20,000 shuffles of the daily commit counts puts that gap at p = 0.007, so it is not the day-to-day variance.
-Sunday has the highest p25 of any day, meaning Sundays are reliably productive; Saturday is right-skewed, a few very large days.
+**Weekends run 1.3× weekdays**, 20.8 commits per active day against 15.8, down from 1.5× at the August snapshot.
+A permutation test over 20,000 shuffles of the 155 active days' commit counts puts that gap at p = 0.039: still unlikely to be day-to-day variance, though much less clear-cut than August's p = 0.007.
+Sunday has the highest p25 of any day, 9.75 commits, meaning Sundays are reliably productive; Saturday has the largest single day, 85 commits.
 This is the time-investment variable made visible: weekdays compete with paid work and weekends do not.
 
-By hour, the work runs 07:00 to 23:00 local with a sharp 09:00 peak in both commits and spend, a midday dip, and a long evening plateau.
+By hour, the work runs 07:00 to 23:00 local with a sharp 09:00 peak in both commits and spend, a midday dip at 12:00, and a long evening plateau.
 Presence is lowest just after midnight, which is where the unattended share is largest.
 
 Everything is bucketed in **local** time, and the offset comes from the repo's own git timestamps rather than a setting.
@@ -250,8 +264,8 @@ UTC would have moved most of an evening's work onto the following day and flatte
 These three can say something about it, each with a different blind spot, which is why they are drawn side by side rather than combined into a score.
 
 **Churn** is `fix` against `feat` commits over a rolling week, since a daily ratio has days with no denominator.
-Summed over each era rather than averaged, it ran 1.51 before the Max 20x upgrade, **1.04** under it, and 1.50 in the `mac-2` era.
-The busiest era is not the one fixing most, which is what the previous snapshot read: it took the mean of the rolling ratio and got 1.82 eighteen days in, where the summed figure for that same window was 1.72, and both have come down as the era lengthened.
+Summed over each era rather than averaged, it ran 1.51 before the Max 20x upgrade, **1.04** under it, and 1.37 in the `mac-2` era, which splits into 1.52 through August and 1.18 since.
+The busiest era is not the one fixing most, which an earlier snapshot misread: it took the mean of the rolling ratio and got 1.82 eighteen days into the `mac-2` era, where the summed figure for that same window was 1.72.
 Read it with both its blind spots in view, because they do not cancel: a `fix` may repair something written months earlier, and this repo added gates over the same window, so better detection raises the ratio without more defects existing.
 
 **Pull request open to merge** is **availability-bound, and not a speed measure**, which is worth stating twice because it was proposed as one.
@@ -260,17 +274,21 @@ The local gate runs before a PR is opened, so this never contained the 12× hard
 And merging here needs a human to enqueue, so a PR opened while nobody is at the machine waits exactly as long as that lasts.
 
 The distribution says how much that dominates.
-Across eras the p99 runs **33.7h, 90.0h, then 24.5h**: multi-day waits, which are days away rather than anything slow.
+Bucketed by merge date, the p99 runs **37.2h before Max 20x, 90.0h under it, 24.6h in `mac-2`'s first month, and 202.7h since 08-28**: multi-day waits, which are days away rather than anything slow.
+Treat any one of those as a rough figure, since a p99 over a few hundred PRs rests on its slowest three or four and moves several hours with the quantile method.
 So the panel draws two percentiles instead of a median.
 **p25** is the part availability cannot stretch and stands in for the loop itself; **p90** is mostly a record of being elsewhere.
 
-The median was the wrong statistic and it misled: it rose 0.35h to 0.54h across the handover while p10 held flat at 0.09h and both p90 and p99 **fell**.
+The median was the wrong statistic and it misled: it rose 0.35h to 0.55h across the handover while p10 held flat at 0.09h and p99 **fell**.
 The distribution tightened rather than slowed, and the median moved because the share merged inside 30 minutes fell from 60% to 47%, not because the slow end got slower.
 
+**Since 08-28 the whole distribution moved, not just its tail.** p10 is 0.23h, p25 0.59h, the median 1.67h and p90 28.5h, and only 21% of 497 PRs merged inside 30 minutes.
+A rising p10 is the part availability explains least, since it is the fastest tenth of merges; what changed under it is not something these series record.
+
 **Code survival** asks whether a week's output lasted: what share of the non-test Go written in a week was still present 14 days later.
-It runs 73–98% with no era trend, and the two `mac-2` weeks whose horizon has passed sit at 91% and 85%, both above the 73% low.
-So by this measure the doubled output is not less durable, and it is not presented alone because its blind spot is the churn ratio's strength and the reverse: survival cannot see a line rewritten twice inside the fortnight, and churn cannot see whether the fixing held.
-The horizon is fixed rather than measured to `HEAD` so every week is judged over the same window; the last three weeks are blank because theirs has not passed.
+It runs 73–100%, and since the week of 08-22 every week whose horizon has passed sits at 98% or above.
+So by this measure the `mac-2` era's output is not less durable, and it is not presented alone because its blind spot is the churn ratio's strength and the reverse: survival cannot see a line rewritten twice inside the fortnight, and churn cannot see whether the fixing held.
+The horizon is fixed rather than measured to `HEAD` so every week is judged over the same window; the last three weeks are blank because theirs has not passed, and the weeks of 10-03 and 10-17 because no non-test Go was authored in them.
 
 ### Why the headline is words, not lines
 ![Docs and cost ratios in lines and in words, log scale](charts/lines_vs_words.png) This is the chart that retires the per-line ratio.
@@ -285,14 +303,14 @@ A line there would mark something a reader cannot see and would then have to exp
 In words, the unit the headline now uses, the second reformat is 1.4% against the *first* reflow day's 1.9%: neither is visible, which is the whole point of the denominator.
 The line series reads as a catastrophe, the word series as an ordinary productive day.
 
-Log y, absolute counts, the same choice the tokens-vs-lines chart makes: words outnumber lines about 17 to 1, so a linear axis leaves the smaller series a sliver.
+Log y, absolute counts, the same choice the tokens-vs-lines chart makes: in the docs corpus words outnumber lines about 18 to 1, so a linear axis leaves the smaller series a sliver.
 **Top:** the docs corpus in each unit, with the shaded gap between them being the words-per-line ratio, since on a log axis a ratio is a vertical gap.
 **Bottom:** cumulative tokens ÷ line against tokens ÷ word.
 Only the per-line ratio steps on 2026-08-09, which is why the headline is now the other one.
 Words are also the unit closest to a token, which makes the ratio a comparison between two counts of the same kind rather than a count against a layout choice.
 The gap in the top panel is where the mechanism shows: sentence-per-line put the same words on fewer lines, so words per line went from 12.2 to 16.9 overnight and the band visibly widens.
 
-The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~4.7× over the project against ~7.0× per line, so the trend was never an artifact; only the 2026-08-09 jump in the per-line version was.
+The underlying climb is real in both units, which is the more interesting finding: cost per word still rose ~5.7× over the project against ~8.7× per line, so the trend was never an artifact; only the 2026-08-09 jump in the per-line version was.
 
 ### What the work was for, in both units
 ![The authored tree banded by what the work was for, in words above and lines below](charts/authored_bands.png) The language series say what was written; these say what it was written **for**.
@@ -300,68 +318,74 @@ The underlying climb is real in both units, which is the more interesting findin
 **Bottom:** the same split in lines, where the 2026-08-09 reflow is visible as a step and carries its marker.
 
 The two units disagree, which is why both are drawn.
-Per word of product the project has written **0.58 words of machinery** and, counting all three prose bands, 1.15 words of docs and backlog; per *line* the machinery figure is 0.63 and the prose one 0.58.
-Prose runs 14 to 21 words a line against code's 7, so a line count cuts every prose band by half or more against every code one.
+Per word of product the project has written **0.88 words of machinery** and, counting all three prose bands, 1.47 words of docs and backlog; per *line* the machinery figure is 0.92 and the prose one 0.67.
+Both rose steeply from August's 0.58 and 1.15 per word, because product ended slightly below its August size after the v2.0.0 cleanup, 111.9k lines against 112.5k, while machinery went from 71.3k lines to 103.4k over the same span.
+Prose runs 15 to 22 words a line against code's 7, so a line count cuts every prose band by half or more against every code one.
 The bands are cumulative tree snapshots like every other series here, so deleted work stops counting in both panels.
 
 ### Anatomy of token usage (log scale)
 ![Token usage anatomy on a log scale](charts/token_anatomy.png) Daily input / output / cache-creation / cache-read, log Y. Cache reads sit an order of magnitude above everything else, every day.
 
 ### Cumulative cache traffic
-![Cumulative cache traffic](charts/cumulative_cache.png) Cumulative cache reads (34.1B) vs writes (564M).
-Write once, replay ~60×.
+![Cumulative cache traffic](charts/cumulative_cache.png) Cumulative cache reads (52.9B) vs writes (820M), measured days only.
+Write once, replay ~64×.
 Both plan upgrades and the `mac-1`→`mac-2` handover are marked; the curve visibly steepens at the last of them.
 
 ### Parallel sessions
 ![Peak concurrent sessions per day, over the share of the day that was parallel](charts/parallel_sessions.png) How much of the work runs concurrently.
 **Top:** mean concurrency (line) against the day's peak (bars).
-The peak is the dramatic number, up to 20, but it lasts a single bucket; the **mean of 3.1** is what actually multiplies a day's output.
+The peak is the dramatic number, up to 24, but it lasts a single bucket; the **mean of 3.1** is what actually multiplies a day's output.
 **Bottom:** time on Claude each day, wall-clock against session-hours.
-The gap between the two bands *is* the mean concurrency: **285h elapsed produced 873h of session-time** over the window, a 3.1× multiplier.
+The gap between the two bands *is* the mean concurrency: **574h elapsed produced 1,761h of session-time** over the window, a 3.1× multiplier.
 63% of active time had two or more sessions running, on 1–58 sessions a day.
 
-The innermost band is time someone spent at the keyboard: **~128h against 285.5h**, or 45%.
+The innermost band is time someone spent at the keyboard: **~221h against 574.3h**, or 39%.
 A 10-minute bucket counts as attended when a person actually typed in it, which is the only unambiguous presence signal the transcripts carry.
 Everything else here, every assistant record and every tool result, is produced whether or not anyone is watching.
 
-**Treat that 128 as a scale, not a measurement.** Prompts are sparse point events, 1,586 of them, and crediting each one a whole bucket makes the total scale with the bucket: 22.5h at 1-minute buckets, 128.0h at 10, 300.0h at 60.
-A session-of-presence model instead of buckets does not rescue it, giving 26.6h to 171.5h as its idle threshold moves from 5 to 60 minutes.
-Any single figure here needs an arbitrary parameter and moves six- to thirteen-fold across defensible choices, which is worse than the wall-clock series it sits inside, where dense records make the width matter far less.
+**Treat that 221 as a scale, not a measurement.** Prompts are sparse point events, 2,671 of them, and crediting each one a whole bucket makes the total scale with the bucket: 37.8h at 1-minute buckets, 221.0h at 10, 586.0h at 60.
+A session-of-presence model instead of buckets does not rescue it: summing every gap between consecutive prompt minutes up to an idle threshold gives 44.8h at 5 minutes and 289.9h at 60.
+Any single figure here needs an arbitrary parameter and moves six- to fifteen-fold across defensible choices, which is worse than the wall-clock series it sits inside, where dense records make the width matter far less.
 
-Two things survive that and are worth more than the hours: the **count**, 1,586 prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
+Two things survive that and are worth more than the hours: the **count**, 2,671 prompts, which no parameter touches, and the **shape**, since every bucket in every chart uses the one width, so comparisons across days and hours hold even where the level does not.
 
-**Two of those counts are wanted, for different questions.** Accepting a parallel-dispatch chip is a keystroke, so all 1,586 count as presence.
-The brief that arrives with it was composed by the dispatcher, though, so only **1,432 were authored by a person**.
-Machine-composed openings are 10% of the prompts and **70% of all prompt characters**, which is why no character-based claim here may use the unsplit total.
-They are identified by their opening rather than by length, since 38 genuinely authored prompts run past 2,000 characters while the shortest dispatcher brief is 2,281.
-Two opening shapes exist, and both are still in use: a second-person persona brief (134 openings, median 4,773 characters, 2026-07-27 to 08-25) and prose naming the worker skill's `SKILL.md` (20 openings, median 2,827, 08-08 to 08-15).
-Matching only the first put the later dispatches in the authored column until this was corrected, with nothing to signal it, and the shape that looked retired at the last snapshot is the one that came back: a convention is not a contract in either direction.
+**Two of those counts are wanted, for different questions.** Accepting a parallel-dispatch chip is a keystroke, so all 2,671 count as presence.
+The brief that arrives with it was composed by the dispatcher, though, so only **2,445 were authored by a person**.
+Machine-composed openings are 8.5% of the prompts and **56% of all prompt characters**, which is why no character-based claim here may use the unsplit total.
+They are identified by their opening rather than by length, since 140 authored prompts run past 2,000 characters while the shortest dispatcher brief is 826.
+Three opening shapes exist: a second-person persona brief (171 openings, median 4,676 characters, 2026-07-27 to 09-18), prose naming the worker skill's `SKILL.md` (20 openings, median 2,827, 08-08 to 08-15), and the deliberate `[dispatched-session]` marker (35 openings, median 1,543, 09-17 to 10-10).
+Matching only the first put the later dispatches in the authored column until this was corrected, with nothing to signal it: a convention is not a contract in either direction.
+From October a session another session started opens with that session's brief and no human origin at all, so it is not a prompt here; the [session-kinds section](#who-opened-each-session) counts it as dispatched.
 **"Authored" here means "not a dispatcher brief", not "typed".** A pasted hook hint, log or error is indistinguishable from typing in a transcript, which carries only the submitted text and one timestamp, so the authored count still mixes writing with pasting and no split here can separate them.
+It also holds 42 prompts that open the way a reviewer brief does ("Review pull request #N …" or `/session-reviewer`) without the marker, which may be machine-composed; nothing in the record says.
 
 **These are submissions, not keystrokes.** A user record carries one timestamp and nothing about composition, so a prompt written over three minutes is a single instant here.
-The median authored prompt is 35 characters, but 10 run past 5,000, and a paste looks exactly like typing, so length cannot stand in for the missing time either.
-The bias runs one way: **1,350 distinct minutes, 22.5 hours, is a floor on presence** rather than a measure of effort, because every minute spent composing is invisible to it.
+The median authored prompt is 38 characters, but 20 run past 5,000, and a paste looks exactly like typing, so length cannot stand in for the missing time either.
+The bias runs one way: **2,270 distinct minutes, 37.8 hours, is a floor on presence** rather than a measure of effort, because every minute spent composing is invisible to it.
 
 ### The predicate for a prompt a person actually submitted
 
 Identifying a typed prompt takes more than the record's own marker.
 `origin.kind == "human"` also arrives on things nobody typed, and they are stripped by leading tag rather than trusted ([`NOT_A_PROMPT`](compute_metrics.py)).
-Four classes are observed in this corpus:
+The tag is read after any leading `<system-reminder>` blocks, which the harness prepends to some prompts.
+Three classes are observed in this corpus:
 
 | arrives as | what it is | count |
 |---|---|--:|
-| `<system-reminder>` | an injected reminder | 60 |
-| `<bash-input>` | a bash line typed into the session, and its output | 26 |
-| `<create-pr-command>` | a slash command's expansion | 9 |
+| `<bash-input>` | a bash line typed into the session, and its output | 32 |
+| `<create-pr-command>` | a slash command's expansion | 13 |
 | `<cross-session-message>` | a message from another Claude session | 8 |
 
-Without the predicate the count is 1,688 rather than 1,586, 6.5% too high, and every one of the 103 is a record nobody typed.
+Without the predicate the count is 53 records higher, 2.0% too high, and every one is a record nobody typed.
 
-**`<cross-session-message>` was the one missed**, and it is the interesting one.
-A peer session's message carries `origin.kind == "human"` because it enters the conversation the same way a person's prompt does, but nobody typed it.
-Eight were counted as submitted *and* authored before this was measured, and it is still eight a snapshot later while the other three classes have grown by a third or more.
-The class will grow as sessions message each other more, so it is worth re-checking rather than assuming this list is closed.
-That is the general point: the marker says how text arrived, not who wrote it.
+**The predicate itself was dropping real prompts until this snapshot.** At 08-27 this table had a fourth row, 60 records arriving as `<system-reminder>` and filed as injected reminders.
+None of those records is a reminder alone: each has text after a reminder the harness prepended, and reading past it finds a prompt in 397 records from July to September, typed ones like "status?" and dispatched briefs alike.
+A record that is reminders and nothing else is still rejected, and none occurs here.
+
+**`<cross-session-message>` was the one missed first**, and it is the interesting one.
+A peer session's message carried `origin.kind == "human"` because it entered the conversation the same way a person's prompt does, but nobody typed it.
+Eight were counted as submitted *and* authored before this was measured, and it is still eight, because from August the harness marks a peer message `origin.kind == "peer"`.
+That is the general point, made twice now: the marker says how text arrived, not who wrote it, and the harness changes how text arrives without notice.
 
 `<bash-stdout>`, `<bash-stderr>`, `<command-name>` and `<local-command` are also stripped but appear zero times here; they are defensive, not observed.
 
@@ -386,23 +410,28 @@ The series is never estimated, for the same reason: unlike token volume, concurr
 Sixteen sessions at once is equally consistent with one person driving them all and with a dispatcher fanning them out, and the two say opposite things about how the work was done.
 The only thing that separates them is who composed the opening prompt.
 
-**The parallelism is overwhelmingly hands-on.** Manual sessions are 56% of the count and **73% of the spend**; dispatched sessions are 28% of the count but only **19% of the spend**, at roughly half the tokens per session.
-The remaining 16% opened with no human prompt at all (resumed, or spawned and never driven) and account for 9%.
-So the multiplier is one person running many conversations at once, not a dispatcher running them for him.
-Dispatch is real and useful, and it is the smaller half by the measure that costs money.
+**The parallelism is mostly hands-on.** Manual sessions are 57% of the count and **68% of the spend**; dispatched sessions are 34% of the count but only **27% of the spend**, at two thirds of a manual session's tokens.
+The remaining 9% opened with no prompt from anyone (resumed, or spawned and never driven) and account for 5%.
+So the multiplier is mainly one person running many conversations at once, not a dispatcher running them for him.
+Dispatch is real and useful, and it is the smaller part by the measure that costs money.
 
-The third panel is the finding rather than the totals: the dispatched share of sessions runs above its share of spend on **24 of the 25 days** a full 7-day window fits, not just in aggregate.
-It is drawn as two shares because tokens-per-session is undefined on any day a kind has no sessions, which is most days for dispatch.
+These shares are new at this snapshot, and the old ones were wrong in the dispatcher's disfavour.
+The previous classifier read sessions that another session started as unprompted, because from October their opening brief carries no human origin, and it missed openings with a reminder prepended; reading both put the unprompted share at 34% of sessions and 26% of spend before the fix.
+
+The third panel is the finding rather than the totals: the dispatched share of sessions runs above its share of spend in **68 of the 78** full 7-day windows that hold any dispatch, not just in aggregate.
+The ten exceptions cluster in two spells, 09-20 to 09-21 and 10-07 to 10-13, plus 11-07.
+It is drawn as two shares because tokens-per-session is undefined on any day a kind has no sessions, which is most days for dispatch: 35 of the 90 days with any session had one.
 Each share is taken over its window's sums rather than as a mean of daily shares.
 A quiet day has no share to average, and feeding it in as 0% would read as "dispatch did nothing" when the answer is that nothing happened at all.
 
 Two clocks, deliberately: a session is counted on the day it **started**, since it has one opening and therefore one kind, while its tokens land on the day they were **spent**, so a session running past midnight doesn't move spend onto the wrong day.
 
-**Coverage is about half the project.** This needs session-level transcripts, so it starts 2026-07-26 like the concurrency chart, and covers 378.1M of the 678.8M measured total.
-Within its own window it accounts for 98.0% of measured spend; the missing 2.0% is days whose token rows were merge-preserved from sessions whose transcripts have since gone.
+**Coverage is about two thirds of the project.** This needs session-level transcripts, so it starts 2026-07-26 like the concurrency chart, and covers 682.0M of the 982.8M measured total.
+Within its own window it accounts for 98.9% of measured spend; the missing 1.1% is days whose token rows were merge-preserved from sessions whose transcripts have since gone.
+The rebuild that applied the fix dropped one zero-spend session on 07-27 for the same reason, and that day's row was restored from the previous file.
 
-**A session's kind is read from its opening prompt, which is a convention rather than a marker.** That convention has already changed once mid-window without notice — see the prompt section above — and the classifier had to be corrected after it did.
-Q883 is deferred on the dispatcher emitting something deliberate to read instead.
+**A session's kind is read from its opening, which is mostly a convention rather than a marker.** The dispatcher's `[dispatched-session]` marker is deliberate, but it appears only from 09-17 to 10-10; before it the wording changed once mid-window without notice, and after it the opening became the starting session's "Background (from the session that started this one)" brief.
+Each change was found by a classifier that stopped agreeing with the sessions it described, never by anything announcing it.
 
 ## Data files
 
@@ -437,18 +466,18 @@ Each has a `_words` twin (`band_product_words` and the rest) which sums to `word
 Both units are carried for the reason the language bands carry both: a rewrap moves a line count and leaves a word count alone, and a word is the unit closest to a token, so only the word bands can be put against spend.
 They are not the line bands converted: the line bands subtract line comments and the word bands count comment text, the same way `go_code` and `go_words` differ.
 
-**The two units rank the bands differently, which is the point of keeping both.** At the 2026-08-27 snapshot the split is:
+**The two units rank the bands differently, which is the point of keeping both.** At the 2026-11-10 snapshot the split is:
 
 | Band | Lines | Words | Words per line |
 |---|--:|--:|--:|
-| `product` | 112,488 (45.3%) | 860,484 (36.7%) | 7.6 |
-| `machinery` | 71,330 (28.7%) | 498,541 (21.3%) | 7.0 |
-| `project_mgmt` | 30,964 (12.5%) | 457,820 (19.5%) | 14.8 |
-| `product_docs` | 26,331 (10.6%) | 373,745 (15.9%) | 14.2 |
-| `machinery_docs` | 7,476 (3.0%) | 155,252 (6.6%) | 20.8 |
+| `product` | 111,948 (38.5%) | 831,046 (29.8%) | 7.4 |
+| `machinery` | 103,375 (35.6%) | 735,116 (26.4%) | 7.1 |
+| `project_mgmt` | 37,585 (12.9%) | 602,622 (21.6%) | 16.0 |
+| `product_docs` | 29,177 (10.0%) | 433,795 (15.5%) | 14.9 |
+| `machinery_docs` | 8,634 (3.0%) | 187,189 (6.7%) | 21.7 |
 
 Prose carries two to three times the words per line that code does, because docs are written sentence-per-line and code is not.
-So a line count understates every prose band against every code one: docs and project management are 26.1% of the tree in lines and 42.1% in words.
+So a line count understates every prose band against every code one: docs and project management are 25.9% of the tree in lines and 43.9% in words.
 Read the word column when comparing a band against token spend, and the line column only when comparing like with like.
 
 | Band | Covers |
@@ -464,7 +493,7 @@ Read the word column when comparing a band against token spend, and the line col
 The tool is authored and tokens were spent on it, so excluding it would understate the total by exactly the part it can measure best.
 
 Vendored dependencies are in no band at all.
-They cost no tokens to produce, and at 13,294 of 14,991 tracked files they would erase every other band on a shared axis.
+They cost no tokens to produce, and at 13,724 of 15,646 tracked files they would erase every other band on a shared axis.
 The one number for them is `vendor_files` in `summary.json`.
 
 Also cumulative: `prs` (commits whose subject ends in `(#N)`, this repo's squash-merge signature) and `queue_closed` / `queue_filed` (backlog rows leaving and entering, counted on a row's *first* removal so a re-filed id can't book the same work twice; a work proxy rather than a completion ledger, since it catches a declined or pruned row too).
@@ -506,7 +535,7 @@ Replays are ~3% of records here and shift one day's peak by one.
 
 ### `session_kinds.csv` — merge-preserved
 
-Per-day, per-`host`, per-`kind` sessions and spend: `kind` is `manual` (a person wrote the opening prompt), `dispatched` (a dispatcher composed it), or `unprompted` (no human prompt at all).
+Per-day, per-`host`, per-`kind` sessions and spend: `kind` is `manual` (a person wrote the opening prompt), `dispatched` (a dispatcher, or the session that started it, composed it), or `unprompted` (no human prompt at all).
 
 `sessions` counts on the day a session **started**, since a session has one opening and therefore one kind.
 `headline` lands on the day each record was **produced**, since a session running past midnight spends on both days.
@@ -523,7 +552,9 @@ One row per merged pull request: `number`, `merged_date`, `created_at`, `merged_
 The only series here whose source is a remote API rather than something recomputable offline, so it gets the same merge-preservation the token series does.
 
 Each run reads the highest number already stored and asks only for what is newer.
-Measured 2026-08-15: one 100-PR page costs 3 GraphQL points against a 5,000/hour budget, so the one-time 1,521-PR backfill was ~48 and every later run is 3.
+A 200-PR page that holds nothing already stored means the gap is wider than the page, so the fetch widens fourfold until it reaches stored rows or the 3,000-PR backfill cap; until 2026-11-10 it stopped at one page, and a 75-day gap recorded the newest 200 of 513 missing PRs with the rest below the next run's high-water mark.
+Measured 2026-08-15: one 100-PR page costs 3 GraphQL points against a 5,000/hour budget, so the one-time 1,521-PR backfill was ~48 and one 200-PR page is two of those.
+A PR merged after a higher-numbered one was stored falls below that mark and is never fetched; five did by 2026-11-10, filled that day by deleting the CSV and refetching all 2,208.
 The fetch is skipped entirely when the remaining budget is under 500, since that budget is shared with every other tool on the account.
 No `gh`, no network, an API error, or a low budget all leave the existing rows untouched and let the run continue, so every other series still works offline and the charts still rebuild from committed data alone.
 
@@ -550,7 +581,7 @@ The `head_snapshot` block counts the **working tree**, and the daily series coun
 Both exclude vendor and both exclude symlinks: `git grep` skips a symlink, so the series counts a linked file once under its real path, and `tracked_files` drops the same paths for the same reason.
 Counting them would credit the target twice, which put 623 Markdown lines into every snapshot before 2026-08-27: `AGENTS.md` points at `CLAUDE.md`, and two `testdata/` doc links do the same.
 
-Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades and the docs reflow).
+Totals split into `measured` / `estimated` / `combined` (summed from the persisted rows, so archival-safe), an `estimation` block documenting the per-commit method, a `sessions` block (bucket width, span, session-days, mean and peak concurrency, hours using Claude, session-hours, parallel share), per-model and per-machine (`by_host`) splits, an accurate HEAD working-tree snapshot (including `band_files`, the per-band file census the `band_*` series are cut from, `go_generated`, and the `vendor_files` / `authored_files` pair), and full provenance — including which machine took the snapshot, which machines are on record, and the dates that break a series (the two plan upgrades, the docs reflow, and the v2.0.0 cleanup).
 
 ## Methodology & caveats
 
@@ -563,11 +594,12 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
   A retired machine can never report again, so whatever it had not captured by its last run is gone rather than pending.
 - **Archived early days are estimated, not measured.** The project's first commits (2026-05-16 to -18) predate the earliest surviving transcript (2026-05-19), so their token usage is gone from the logs.
   Those days are **backfilled** from the Pro-era per-commit rate and flagged `estimated=1` (see "Backfilled (estimated) days" above).
-  The ~2.5M backfill is a modeled figure, not a measurement — the defensible measured-only floor is 678.8M.
+  The ~2.5M backfill is a modeled figure, not a measurement — the defensible measured-only floor is 982.8M.
   The git series is fully measured from 2026-05-16.
 - **"Concurrent" is a bucket width, not a fact.** A session counts as active in a 10-minute bucket if it produced a record there, so two sessions are "concurrent" when both worked within the same 10 minutes — not necessarily in the same second.
   The width is a judgement: wide enough that a session waiting on a build still counts as in flight, narrow enough that work hours apart never collides.
-  At 1-minute buckets the daily peaks come out 1–15 rather than 1–20, so the peak barely moves, while every figure with time in it does: the mean falls to 2.3, the parallel share to 51%, and wall-clock hours to 174 from 285, because the bucket *is* the unit of time.
+  At 1-minute buckets the daily peaks come out 1–15 rather than 1–24, and every figure with time in it moves too: the mean falls to 2.3, the parallel share to 51%, and wall-clock hours to 330 from 574, because the bucket *is* the unit of time.
+  At the August snapshot the peak was 15 against 20 and barely moved; it now falls by 37%, between the mean's 26% and the hours' 43%.
 - **The largest input is not in this data.** Every series here measures what the system produced.
   None measures how much time the maintainer chose to give it, which is the input they all sit downstream of.
   That choice rose over this window for reasons no file here records: the replacement machine is more enjoyable to work on, so more hours went to it, and the project started looking useful enough professionally to be worth pushing further.
@@ -583,7 +615,7 @@ Totals split into `measured` / `estimated` / `combined` (summed from the persist
 - **Tokens-per-word is a proxy, and it rewards length.** The denominator is all hand-authored output (Go code and tests, Markdown, hand-written YAML, and scripts & web, comments included), but tokens also go into review, debugging, and exploration that never lands as a word, so the ratio tracks overall effort-per-output, not the literal cost of one word.
   Its honest weakness is the one in the old saw about writing a shorter letter given more time: prose or code cut to say the same thing in fewer words scores as *less* output, so a session spent tightening reads as expensive.
   It replaced tokens-per-line on 2026-08-15 because a line is a layout choice and a word is not; the retired ratio is kept beside it in the lines-vs-words chart.
-  Generated YAML (CRDs/controller-gen, ~130k lines), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
+  Generated YAML (CRDs/controller-gen, ~46k lines at this snapshot, down from ~132k at the August one), binaries, lockfiles, and license boilerplate are excluded so non-authored content doesn't dilute it.
   Estimated (pre-transcript) days are excluded so it's measured-only.
   The denominator is still the current tree rather than everything ever written, so deleted work stops counting; what it no longer does is move on a reformat.
 - **Neither plan ceiling is in this data, and the binding one was never the weekly.** Both upgrades (Pro→Max 5x, Max 5x→20x) were made because the **5-hour rolling limit** was being hit; the weekly allowance only started binding much later, first running to 100% in the window that reset on 2026-08-10.
@@ -608,9 +640,9 @@ At the 07-16 edge three quantities move together:
 |---|--:|--:|--:|
 | before 06-02 | 0.18% | 47.3× | 2.06% |
 | 06-02 to 07-15 | **4.59%** | 45.3× | 2.15% |
-| after 07-16 | 0.14% | **68.4×** | 1.44% |
+| after 07-16 | 0.11% | **70.4×** | 1.40% |
 
-So the two edges are not one thing toggling: the onset moved fresh input alone, while the offset also lifted reuse from 45× to 68× and cut writes per unit of traffic by a third.
+So the two edges are not one thing toggling: the onset moved fresh input alone, while the offset also lifted reuse from 45× to 70× and cut writes per unit of traffic by a third.
 That combination is what a change in cache-breakpoint placement would look like, since fresh input is exactly the content after the last breakpoint.
 
 **The offset has a documented cause.** Claude Code 2.1.211, released 2026-07-15, records: "Fixed a prompt-caching regression on Bedrock, Vertex, Mantle, and Foundry that billed the trailing system context block as fresh input tokens on every request" ([changelog](https://code.claude.com/docs/en/changelog)).

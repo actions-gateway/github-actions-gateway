@@ -87,6 +87,9 @@ MAX_5X_TO_20X = "2026-07-05"
 # hard-wrapped paragraphs cut ~18.6k non-blank Markdown lines without deleting a
 # word, so `md` steps down here for a reason no reader could infer from the CSV.
 DOCS_REFLOW = "2026-08-09"
+# v2.0.0 retires the older API versions and classic acquisition, 11-02 to 11-06:
+# real deletion that steps the tree series down, so the ratios over it step up.
+V2_RETIREMENT = "2026-11-02"
 
 # Bucket width for session concurrency. Wide enough that a session waiting on a
 # build or a test run still counts as in flight, narrow enough that two sessions
@@ -570,15 +573,24 @@ def pr_series(existing_max):
         print(f"pr_series: skipped, graphql budget {remaining} below floor {PR_RATE_FLOOR}")
         return {}
 
+    # A page holding nothing already stored means the gap is wider than the page,
+    # and the next run's high-water mark would sit above the hole. Widen until the
+    # page reaches stored rows, the list runs out, or the backfill cap is hit.
     limit = PR_BACKFILL if existing_max == 0 else PR_PAGE
-    try:
-        out = subprocess.run(
-            ["gh", "pr", "list", "--state", "merged", "--limit", str(limit),
-             "--json", "number,createdAt,mergedAt"],
-            capture_output=True, text=True, timeout=300, cwd=REPO)
-        rows = json.loads(out.stdout or "[]")
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return {}
+    while True:
+        try:
+            out = subprocess.run(
+                ["gh", "pr", "list", "--state", "merged", "--limit", str(limit),
+                 "--json", "number,createdAt,mergedAt"],
+                capture_output=True, text=True, timeout=300, cwd=REPO)
+            rows = json.loads(out.stdout or "[]")
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return {}
+        overlaps = any(int(r["number"]) <= existing_max for r in rows)
+        if (existing_max == 0 or overlaps or len(rows) < limit
+                or limit >= PR_BACKFILL):
+            break
+        limit = min(limit * 4, PR_BACKFILL)
 
     fresh = {}
     for r in rows:
@@ -597,10 +609,11 @@ def pr_series(existing_max):
             "merged_at": r["mergedAt"],
             "cycle_hours": f"{(b - a).total_seconds() / 3600:.4f}",
         }
-    # Every row on the page was new, so the gap is wider than one page. Say so
-    # rather than silently recording a hole the next run cannot detect.
-    if fresh and len(fresh) == len(rows) and existing_max:
-        print(f"pr_series: {len(fresh)} new PRs filled a full page; re-run to catch any older gap")
+    # Even the widest page was all new: the hole is recorded and a later run
+    # cannot see it, so say so loudly.
+    if existing_max and not overlaps and len(rows) == limit:
+        print(f"pr_series: {len(fresh)} new PRs filled a {limit}-row page; "
+              "PRs older than it and newer than the stored rows are missing")
     return fresh
 
 
@@ -1127,6 +1140,16 @@ def record_text(rec):
     return ""
 
 
+# The harness prepends reminder blocks to some submitted prompts (measured from
+# 2026-07 to 2026-09), so a leading tag says nothing about what follows it.
+LEADING_REMINDERS = re.compile(r"\A\s*(?:<system-reminder>.*?</system-reminder>\s*)+", re.S)
+
+
+def prompt_body(rec):
+    """``record_text`` with any leading reminder blocks removed."""
+    return LEADING_REMINDERS.sub("", record_text(rec)).lstrip()
+
+
 def is_human_prompt(rec):
     """True when a person actually typed this.
 
@@ -1142,7 +1165,11 @@ def is_human_prompt(rec):
         return False
     if (rec.get("origin") or {}).get("kind") != "human":
         return False
-    return not record_text(rec).lstrip().startswith(NOT_A_PROMPT)
+    text = record_text(rec)
+    body = prompt_body(rec)
+    if not body:
+        return not LEADING_REMINDERS.match(text)   # an image-only prompt has no text
+    return not body.startswith(NOT_A_PROMPT)
 
 
 # A session opened by the dispatcher starts with a brief it composed rather than
@@ -1174,6 +1201,18 @@ MACHINE_BRIEF = re.compile(
     % "|".join(re.escape(s) for s in WORKER_SKILLS))
 
 
+# A session started by another session opens with the starter's brief, which
+# carries no ``origin.kind`` at all (measured from 2026-10 on Claude Code 2.1.30x),
+# so it is never a human prompt and needs its own test to file as dispatched.
+SESSION_BRIEF = ("Background (from the session that started this one)",
+                 "Task (from the session that started this one)")
+
+
+def is_session_brief(rec):
+    """True for a session opening composed by the session that started it."""
+    return rec.get("type") == "user" and prompt_body(rec).startswith(SESSION_BRIEF)
+
+
 def is_authored_prompt(rec):
     """A human prompt that is not a dispatcher-composed session opening.
 
@@ -1197,7 +1236,7 @@ def is_authored_prompt(rec):
     """
     if not is_human_prompt(rec):
         return False
-    text = record_text(rec).lstrip()
+    text = prompt_body(rec)
     if text.startswith(MACHINE_MARKER):
         return False
     return not (text.startswith(MACHINE_PERSONA) or MACHINE_BRIEF.search(text))
@@ -1426,7 +1465,9 @@ def session_kind_series(host):
                     continue
                 if start is None or dt < start:
                     start = dt
-                if kind is None and is_human_prompt(rec):
+                if kind is None and is_session_brief(rec):
+                    kind = "dispatched"
+                elif kind is None and is_human_prompt(rec):
                     kind = "manual" if is_authored_prompt(rec) else "dispatched"
                 if rec.get("type") != "assistant":
                     continue
@@ -1790,6 +1831,10 @@ def main():
             "docs_reflow_date": DOCS_REFLOW,
             "docs_reflow_note": ("every tracked doc reflowed to sentence-per-line; the `md` "
                                  "series steps down ~18.6k lines here with no words removed"),
+            "v2_retirement_date": V2_RETIREMENT,
+            "v2_retirement_note": ("v2.0.0 removes the older API versions and classic acquisition "
+                                   "through 11-06; product words fall ~20% and tokens per word "
+                                   "steps up with no change in spend"),
         },
         "estimation": {
             "method": "per-commit Pro-era rate x commits authored that day",
