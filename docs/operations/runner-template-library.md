@@ -76,9 +76,13 @@ So make the node hold as little as possible:
 2. **Turn Workload Identity on.** It does not stop an escape reading the node's identity.
    It does close the pod-network path to the node's credentials before any escape, and it lets a job that needs a cloud credential get its own, so nothing pushes you to widen the node identity in step 1.
    [Running DinD workloads under Kata](kata-dind-workloads.md#kata-does-not-close-the-metadata-server-path) has the GKE commands, and the AWS and Azure equivalents.
-3. **Taint the pool, and give the toleration to this template's workers alone.** The template ships with no toleration, so add one with a JSON 6902 patch ([why not a strategic merge](#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries)).
-   The GMC, AGC and egress-proxy pods carry no toleration unless you give them one (the chart's `tolerations` value, or `spec.scheduling`), so a tainted pool keeps them off by default, along with the Secrets their pods mount.
-   A toleration with `operator: Exists` and no key defeats every taint, and the [placement policies](admission-policies.md#the-taint-bypass--and-why-validation-alone-is-not-enough) close that bypass.
+3. **Taint the pool, and pin this template's workers to it.** The two halves do different jobs.
+   The taint keeps everything else off: the GMC, AGC and egress-proxy pods carry no toleration unless one is set (the chart's `tolerations` value, or `spec.scheduling`), so they stay off by default, along with the Secrets their pods mount.
+   A toleration only permits, though, so the workers also need a `nodeSelector` or required node affinity for the pool, or they can schedule beside the controllers on an untainted node.
+   The template ships with neither, so add both with a JSON 6902 patch ([why not a strategic merge](#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries)).
+   A tenant can set `spec.scheduling` on its own `ActionsGateway` and `EgressProxy`, and a toleration naming the pool's taint lets those pods onto it.
+   Denying a keyless `operator: Exists` toleration does not stop that.
+   [The taint bypass](admission-policies.md#the-taint-bypass--and-why-validation-alone-is-not-enough) explains why, and the mutating pin it recommends instead.
    A DaemonSet that tolerates every taint still lands on the pool, so check what its service account can do.
 4. **Use one pool per tenant.** Another tenant's worker on the same node is one more pod the escape reaches.
 
