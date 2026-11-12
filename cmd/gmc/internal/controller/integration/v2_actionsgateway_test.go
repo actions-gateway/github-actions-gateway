@@ -193,6 +193,7 @@ func TestV2_ActionsGateway_ProvisionsAGCControlPlane(t *testing.T) {
 		}
 	}
 	assert.True(t, foundCredVol, "GitHub App Secret must be mounted as a volume")
+	assertWorkerSeparation(t, &dep)
 
 	// ServiceAccounts (per-gateway names).
 	for _, sa := range []string{gwAGC, gwWorkerSA} {

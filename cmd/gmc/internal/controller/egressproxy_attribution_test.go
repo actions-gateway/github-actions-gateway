@@ -150,7 +150,7 @@ func TestEgressProxyReconcile_UnattributedPoolIsUnchanged(t *testing.T) {
 
 			var dep appsv1.Deployment
 			require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &dep))
-			want := buildEgressProxyDeployment(ep, "proxy:test", nil)
+			want := unattributedProxyDeployment(ep)
 			assert.Equal(t, want.Spec.Template, dep.Spec.Template)
 
 			var svc corev1.Service
@@ -501,8 +501,16 @@ func TestEgressProxyReconcile_HoldsOnPoolOptOutButNotOnRevokedGrant(t *testing.T
 	reconcilePoolAt(t, c, start.Add(defaultWorkerLifetime))
 	var d appsv1.Deployment
 	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &d))
-	assert.Equal(t, buildEgressProxyDeployment(ep, "proxy:test", nil).Spec.Template, d.Spec.Template,
+	assert.Equal(t, unattributedProxyDeployment(ep).Spec.Template, d.Spec.Template,
 		"once the hold ends the pool is back to its unattributed template")
+}
+
+// unattributedProxyDeployment is what the reconciler builds for a pool with no
+// attribution: the builder's Deployment plus the default worker separation term.
+func unattributedProxyDeployment(ep *gmcv2.EgressProxy) *appsv1.Deployment {
+	dep := buildEgressProxyDeployment(ep, "proxy:test", nil)
+	applyWorkerSeparation(&dep.Spec.Template.Spec, WorkerSeparationRequired)
+	return dep
 }
 
 // The consumer's egress to the range outlives its opt-out while a pool still

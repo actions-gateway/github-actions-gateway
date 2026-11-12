@@ -135,7 +135,9 @@ CHART_DIR    := $(REPO_ROOT)/charts/actions-gateway
 # Deploy the GMC via the Helm chart for dev/CI iteration.
 # allowFloatingImageTags=true relaxes the GMC's digest-pin requirement so the
 # locally-built, tag-only images (127.0.0.1:5000/*:e2e-<sha>) are accepted; it is
-# the documented DEV/TEST opt-out, never a production default. The {gmc,agc,proxy}
+# the documented DEV/TEST opt-out, never a production default.
+# controllerWorkerSeparation=none: kind runs one or two schedulable nodes, too few to
+# keep the controllers and the workers apart. The {gmc,agc,proxy}
 # image refs are split into repository + tag for the chart's image values (the
 # refs always carry a tag in dev/CI). CRDs ship with the chart, so no separate
 # install step is needed.
@@ -145,6 +147,7 @@ deploy: ## Deploy the GMC into the current kube-context via the Helm chart (dev/
 	helm upgrade --install $(HELM_RELEASE) "$(CHART_DIR)" \
 		--namespace gmc-system --create-namespace \
 		--set allowFloatingImageTags=true \
+		--set controllerWorkerSeparation=none \
 		--set gmc.image.repository="$${GMC_IMG%:*}",gmc.image.tag="$${GMC_IMG##*:}" \
 		--set agc.image.repository="$${AGC_IMG%:*}",agc.image.tag="$${AGC_IMG##*:}" \
 		--set proxy.image.repository="$${PROXY_IMG%:*}",proxy.image.tag="$${PROXY_IMG##*:}" \

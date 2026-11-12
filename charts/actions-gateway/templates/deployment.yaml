@@ -117,6 +117,9 @@ spec:
         # required where the post-DNAT apiserver IP is unpredictable.
         - --apiserver-cidrs={{ join "," . }}
         {{- end }}
+        # Keep the AGC and egress proxy pods the GMC builds off nodes that run
+        # worker pods (required | none).
+        - --controller-worker-separation={{ .Values.controllerWorkerSeparation }}
         env:
         # POD_NAMESPACE is read by the admission webhook to forbid ActionsGateway
         # CRs in the GMC's own install namespace. Downward API so custom installs
@@ -208,7 +211,18 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.affinity }}
+      {{- /* The worker separation term is appended to whatever .Values.affinity
+      sets, so a custom affinity never drops it; only controllerWorkerSeparation does. */}}
+      {{- $affinity := deepCopy (.Values.affinity | default dict) }}
+      {{- if eq .Values.controllerWorkerSeparation "required" }}
+      {{- $anti := get $affinity "podAntiAffinity" | default dict }}
+      {{- $required := get $anti "requiredDuringSchedulingIgnoredDuringExecution" | default list }}
+      {{- $workers := dict "actions-gateway/component" "workload" "app.kubernetes.io/component" "runner" }}
+      {{- $term := dict "labelSelector" (dict "matchLabels" $workers) "namespaceSelector" dict "topologyKey" "kubernetes.io/hostname" }}
+      {{- $_ := set $anti "requiredDuringSchedulingIgnoredDuringExecution" (append $required $term) }}
+      {{- $_ = set $affinity "podAntiAffinity" $anti }}
+      {{- end }}
+      {{- with $affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}

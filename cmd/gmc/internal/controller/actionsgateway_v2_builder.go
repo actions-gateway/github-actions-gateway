@@ -618,8 +618,9 @@ func buildAGCDeploymentV2(ag *gmcv2.ActionsGateway, agcImage string, proxy *gmcv
 	dep := buildAGCDeploymentFrom(ag.Namespace, names, v2GatewayLabels(ag), ag.Spec.GitHubAppSecretName(), proxyCA, agcImage, env, agcResources(ag.Spec.AGCResources))
 	// Placement pass-through (Q282). Applied here rather than threaded through the
 	// v1-shared buildAGCDeploymentFrom: spec.scheduling is a v2-only field, and the
-	// AGC pod carries no built-in affinity, so the block applies verbatim with no
-	// composition rules (unlike the EgressProxy's — see egressProxyAffinity).
+	// AGC pod carries no built-in spread, so the block applies verbatim with no
+	// composition rules (unlike the EgressProxy's — see egressProxyAffinity). The
+	// reconciler then appends the worker separation term (applyWorkerSeparation).
 	applyPodSchedulingV2(&dep.Spec.Template.Spec, ag.Spec.Scheduling)
 	// GHES private-CA trust (Q536), applied here for the same reason as scheduling:
 	// spec.githubCABundleRef is v2-only, and the mount composes with nothing the

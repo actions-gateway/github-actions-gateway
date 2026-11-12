@@ -712,8 +712,8 @@ spec:
                   Scheduling places this gateway's AGC control-plane pod on specific nodes — for
                   example onto the same tenant node pool as the proxy pool, or onto a
                   control-plane pool distinct from where workers run (Q282). Unlike the
-                  EgressProxy, the AGC pod carries no built-in affinity, so the block applies
-                  verbatim. See PodScheduling.
+                  EgressProxy, the AGC pod carries no built-in spread, so the block applies
+                  verbatim, plus the worker separation term PodScheduling describes.
                 properties:
                   affinity:
                     description: |-
@@ -732,7 +732,13 @@ spec:
                           otherwise strand every replica after the first in Pending. Lowering
                           minReplicas to 1 is the other way to get there.
 
-                      ActionsGateway has no built-in affinity, so the block applies verbatim there.
+                      ActionsGateway has no built-in spread, so the block applies verbatim there.
+
+                      Worker separation (both kinds). Unless the platform sets the GMC's
+                      --controller-worker-separation=none, the GMC also appends a REQUIRED
+                      podAntiAffinity term against worker pods in every namespace, so these pods
+                      never share a node with a worker. It is appended after the rules above and no
+                      value here removes it.
                     properties:
                       nodeAffinity:
                         description: Describes node affinity scheduling rules for

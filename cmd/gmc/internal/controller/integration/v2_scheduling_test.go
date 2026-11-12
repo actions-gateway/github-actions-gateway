@@ -93,7 +93,8 @@ func TestV2_EgressProxy_SchedulingPlumbedToDeployment(t *testing.T) {
 	require.NotNil(t, pod.Affinity)
 	require.NotNil(t, pod.Affinity.NodeAffinity, "supplied nodeAffinity reaches the pod")
 	require.NotNil(t, pod.Affinity.PodAntiAffinity, "built-in cross-node spread is preserved")
-	assert.Len(t, pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, 1)
+	assert.Len(t, spreadTerms(pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution), 1)
+	assertWorkerSeparation(t, &dep)
 }
 
 // TestV2_EgressProxy_EmptyPodAntiAffinityOptsOutOfSpread is the crux of the Q243
@@ -136,8 +137,9 @@ func TestV2_EgressProxy_EmptyPodAntiAffinityOptsOutOfSpread(t *testing.T) {
 	pod := dep.Spec.Template.Spec
 	require.NotNil(t, pod.Affinity)
 	require.NotNil(t, pod.Affinity.PodAntiAffinity)
-	assert.Empty(t, pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution,
+	assert.Empty(t, spreadTerms(pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution),
 		"explicit empty podAntiAffinity must suppress the built-in required cross-node spread")
+	assertWorkerSeparation(t, &dep)
 	assert.Empty(t, pod.Affinity.PodAntiAffinity.PreferredDuringSchedulingIgnoredDuringExecution)
 }
 
@@ -163,6 +165,7 @@ func TestV2_EgressProxy_NoSchedulingLeavesBuiltInSpread(t *testing.T) {
 	assert.Empty(t, pod.Tolerations)
 	require.NotNil(t, pod.Affinity)
 	require.NotNil(t, pod.Affinity.PodAntiAffinity)
-	assert.Len(t, pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution, 1)
+	assert.Len(t, spreadTerms(pod.Affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution), 1)
+	assertWorkerSeparation(t, &dep)
 	assert.Nil(t, pod.Affinity.NodeAffinity)
 }

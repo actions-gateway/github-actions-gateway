@@ -208,8 +208,8 @@ type ActionsGatewaySpec struct {
 	// Scheduling places this gateway's AGC control-plane pod on specific nodes — for
 	// example onto the same tenant node pool as the proxy pool, or onto a
 	// control-plane pool distinct from where workers run (Q282). Unlike the
-	// EgressProxy, the AGC pod carries no built-in affinity, so the block applies
-	// verbatim. See PodScheduling.
+	// EgressProxy, the AGC pod carries no built-in spread, so the block applies
+	// verbatim, plus the worker separation term PodScheduling describes.
 	//
 	// +optional
 	Scheduling *PodScheduling `json:"scheduling,omitempty"`
