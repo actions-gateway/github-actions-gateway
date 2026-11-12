@@ -662,8 +662,15 @@ const (
 	// outranked by ReasonRunnerNameConflict. A pod held terminating past its grace
 	// period usually sits on a lost node.
 	ReasonWorkerTerminating = "WorkerTerminating"
+	// ReasonJobSourceUnverified is the JobProvisionStalled=True reason when a stalled
+	// job is a pull request job on a set that refuses fork pull requests and its run
+	// could not be read from the GitHub REST API, so whether its head repository is a
+	// fork is unknown (Q1330). The job is held, not admitted, and re-read on a backoff.
+	// It outranks ReasonWorkerTerminating and ReasonWorkerCeilingReached and is
+	// outranked by ReasonRunnerNameConflict.
+	ReasonJobSourceUnverified = "JobSourceUnverified"
 	// ReasonJobsProvisioning is the JobProvisionStalled=False reason: no assigned job
-	// is waiting on a runner name, a terminating worker, or capacity — either none ever
+	// is waiting on a runner name, a terminating worker, a source check, or capacity — either none ever
 	// was (published when the listener starts) or the last stalled job provisioned or
 	// completed.
 	ReasonJobsProvisioning = "JobsProvisioning"

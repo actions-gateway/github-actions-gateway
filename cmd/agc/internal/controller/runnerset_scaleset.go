@@ -344,6 +344,22 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		CheckWorker: func(ctx context.Context, jobID string) error {
 			return listenerProvisionError(r.Provisioner.CheckScaleSetWorkerPod(ctx, target, jobID))
 		},
+		// Asked last before the mint, so a fork pull request's job on a set that refuses
+		// them registers no runner (Q1330). The policy is re-read per job, so an edit to
+		// spec.forkPullRequests applies to the next job without a listener restart.
+		CheckSource: func(ctx context.Context, job scalesetlistener.Job) error {
+			if r.acceptsForkPullRequests(ctx, key) {
+				return nil
+			}
+			return listenerProvisionError(r.Provisioner.RefuseForkJob(ctx, target, provisioner.ScaleSetJob{
+				JobID:      job.JobID,
+				Owner:      job.Owner,
+				Repository: job.Repository,
+				RunID:      job.RunID,
+				JobName:    job.JobName,
+				EventName:  job.EventName,
+			}))
+		},
 		Provision: func(ctx context.Context, job scalesetlistener.Job) error {
 			err := r.Provisioner.ProvisionScaleSetWorker(ctx, target, provisioner.ScaleSetJob{
 				JobID:     job.JobID,
@@ -439,6 +455,16 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	}
 	r.scaleSetListeners[key] = h
 	return h, nil
+}
+
+// acceptsForkPullRequests reports whether the live RunnerSet sets spec.forkPullRequests
+// to Accept. An unreadable set reads as Refuse, the secure default.
+func (r *RunnerSetReconciler) acceptsForkPullRequests(ctx context.Context, key types.NamespacedName) bool {
+	rs := &v2.RunnerSet{}
+	if err := r.Get(ctx, key, rs); err != nil {
+		return false
+	}
+	return rs.Spec.ForkPullRequests == v2.ForkPullRequestsAccept
 }
 
 // resolveRunnerGroupName returns the GitHub runner group a set's scale set belongs in:
@@ -725,6 +751,8 @@ func listenerProvisionError(err error) error {
 		return fmt.Errorf("%w: %w", scalesetlistener.ErrCapacityUnavailable, err)
 	case provisioner.IsWorkerTerminating(err):
 		return fmt.Errorf("%w: %w", scalesetlistener.ErrWorkerTerminating, err)
+	case provisioner.IsForkJobRefused(err):
+		return fmt.Errorf("%w: %w", scalesetlistener.ErrJobRefused, err)
 	default:
 		return err
 	}

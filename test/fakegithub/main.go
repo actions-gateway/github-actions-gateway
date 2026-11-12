@@ -19,6 +19,7 @@
 //	GET  /api/v3/repos/{o}/{r}/actions/workflows/{id}/runs — newer runs, always none (Q1181)
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/rerun-failed-jobs — eviction auto-retry
 //	POST /api/v3/repos/{o}/{r}/actions/runs/{id}/force-cancel — abandoned-run fast ending (Q683)
+//	POST /api/v3/repos/{o}/{r}/check-runs        — fork pull request refusal reason (Q1330)
 //	POST /api/v3/.../actions/runners/registration-token — scale-set bootstrap, hop 1
 //	POST /api/v3/actions/runner-registration     — scale-set bootstrap, hop 2 (RemoteAuth)
 //	     /_apis/runtime/...                      — scale-set Actions Service
@@ -488,6 +489,10 @@ func (s *server) handleRunnerAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasSuffix(path, "/force-cancel") && r.Method == http.MethodPost {
 		s.handleForceCancel(w, r)
+		return
+	}
+	if strings.HasSuffix(path, "/check-runs") && r.Method == http.MethodPost {
+		handleCreateCheckRun(w)
 		return
 	}
 	// The run read (Q811) is served on both prefixes for the same reason the two
@@ -1412,7 +1417,8 @@ func (s *server) handleJobStats(w http.ResponseWriter, r *http.Request) {
 
 // handleReposAPI routes the /repos/{owner}/{repo}/... REST endpoints the AGC
 // addresses directly off GITHUB_API_BASE_URL. Only the run read, the workflow-runs
-// list, rerun-failed-jobs and force-cancel are served; anything else 404s, as an
+// list, rerun-failed-jobs, force-cancel and check-run creation are served; anything
+// else 404s, as an
 // unimplemented endpoint should.
 func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	if strings.HasSuffix(r.URL.Path, "/rerun-failed-jobs") && r.Method == http.MethodPost {
@@ -1421,6 +1427,10 @@ func (s *server) handleReposAPI(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasSuffix(r.URL.Path, "/force-cancel") && r.Method == http.MethodPost {
 		s.handleForceCancel(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/check-runs") && r.Method == http.MethodPost {
+		handleCreateCheckRun(w)
 		return
 	}
 	if id, ok := runIDFromRunPath(r.URL.Path); ok && r.Method == http.MethodGet {
@@ -1565,6 +1575,19 @@ func (s *server) handleForceCancel(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]any{})
+}
+
+// handleCreateCheckRun serves the check run a fork pull request refusal writes (Q1330):
+//
+//	POST /api/v3/repos/{owner}/{repo}/check-runs
+//
+// It answers 201 and records nothing: every assignment the fake delivers names a
+// workflow_dispatch event, so no e2e job is refused and nothing reaches this route but
+// the parity probe.
+func handleCreateCheckRun(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{"id": 1})
 }
 
 // rerunRunID extracts the run_id segment from a rerun-failed-jobs path

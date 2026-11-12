@@ -228,7 +228,8 @@ type Job struct {
 	// for operator legibility. Best-effort like the identity triple.
 	JobName string
 	// EventName and WorkflowRef are the run's triggering event and the job's workflow
-	// file and ref, best-effort like the identity triple. Only Completed reads them.
+	// file and ref, best-effort like the identity triple. CheckSource reads EventName and
+	// Completed reads both.
 	EventName   string
 	WorkflowRef string
 }
@@ -251,6 +252,12 @@ var ErrCapacityUnavailable = errors.New("scalesetlistener: no worker capacity fo
 // the cursor: a graceful termination lasts seconds to minutes, and a pod on a lost node
 // stays terminating until the node is removed.
 var ErrWorkerTerminating = errors.New("scalesetlistener: the job's previous worker pod is still terminating")
+
+// ErrJobRefused means the job is never to get a worker: SourceCheckFunc signals it, by
+// an error wrapping it, for a fork pull request's job on a set that refuses them, once
+// the job's run has been ended (Q1330). The Listener acks past the job and records it
+// as abandoned, so a replay of the assignment is not checked, or refused, again.
+var ErrJobRefused = errors.New("scalesetlistener: the job is refused on this scale set")
 
 // ErrRunnerGroupNotFound means Config.RunnerGroupName names a runner group the GitHub
 // installation does not have. Start fails with an error wrapping it so the owning
@@ -300,6 +307,18 @@ type CapacityCheckFunc func(ctx context.Context) error
 //
 // Nil disables the pre-check.
 type WorkerCheckFunc func(ctx context.Context, jobID string) error
+
+// SourceCheckFunc decides whether the job may run on this set at all, by where it came
+// from (Q1330). The Listener calls it after WorkerCheckFunc and before minting the job's
+// JIT config, so a refused job registers no runner at GitHub.
+//
+// A nil return means provision. An error wrapping ErrJobRefused acks past the job for
+// good. Any other error means the check could not be made, and unlike the checks above
+// it does not fail open: the job is deferred under DeferReasonSourceUnverified and
+// re-checked on the backoff, because admitting it unchecked is the refusal failing.
+//
+// Nil disables the check.
+type SourceCheckFunc func(ctx context.Context, job Job) error
 
 // CleanupFunc releases the per-job resources ProvisionFunc staged — the worker's
 // JIT-config Secret — once the job is terminally complete (Q373). It is called with
@@ -462,6 +481,10 @@ const (
 	// DeferReasonWorkerTerminating: the job's previous worker pod is still being deleted
 	// and holds the pod name the job's worker needs (Q1199). Clears when that pod is gone.
 	DeferReasonWorkerTerminating = "worker_terminating"
+	// DeferReasonSourceUnverified: the set refuses fork pull request jobs and the job's
+	// run could not be read to tell whether it is one (Q1330). Clears when the read
+	// succeeds.
+	DeferReasonSourceUnverified = "source_unverified"
 )
 
 // PollErrorRecorder counts GetMessage failures into the cross-tier
@@ -513,6 +536,9 @@ type Config struct {
 	// CheckCapacity and before the mint, so a job whose previous worker is still
 	// terminating registers no runner at GitHub (Q1233). Nil disables the pre-check.
 	CheckWorker WorkerCheckFunc
+	// CheckSource reports whether the job may run on this set by where it came from,
+	// asked after CheckWorker and before the mint (Q1330). Nil disables the check.
+	CheckSource SourceCheckFunc
 	// Capacity returns the total worker capacity to advertise each poll. Required.
 	Capacity CapacityFunc
 	// Cleanup releases a completed job's staged worker resources (its JIT-config
@@ -657,10 +683,11 @@ type Listener struct {
 	// replay, and gates provisioning: a worker for a completed job would stall on the
 	// Secret that job's completion reclaimed (Q575).
 	completed map[string]bool
-	// abandoned holds the jobIDs concluded gone at GitHub (Q553). Without it the fix
-	// would be undone by the ordinary 404 heal: a re-created session polls from cursor 0
-	// and replays the very JobAssigned the check acted on, and a jobID is a job's UUID —
-	// one GitHub has stopped holding is not coming back under the same id.
+	// abandoned holds the jobIDs concluded gone at GitHub (Q553), and the jobs
+	// CheckSource refused (Q1330). Without it the fix would be undone by the ordinary 404
+	// heal: a re-created session polls from cursor 0 and replays the very JobAssigned the
+	// check acted on, and a jobID is a job's UUID — one GitHub has stopped holding is not
+	// coming back under the same id.
 	abandoned map[string]bool
 	// inFlight holds the run identity of every job whose worker this listener built and
 	// has not seen conclude, persisted with the guards so a later process can tell that
@@ -878,7 +905,7 @@ func (l *Listener) start(ctx context.Context) (<-chan struct{}, error) {
 	l.setCondition(v2.ConditionRateLimited, metav1.ConditionFalse,
 		v2.ReasonPollingHealthy, "message polling healthy")
 	l.setCondition(v2.ConditionJobProvisionStalled, metav1.ConditionFalse,
-		v2.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
+		v2.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, a source check, or worker capacity")
 
 	done := make(chan struct{})
 	go func() {
@@ -1544,7 +1571,7 @@ func (l *Listener) retryDeferred(ctx context.Context, ssID int) {
 		}
 		outcome := l.provisionAssigned(ctx, ssID, d.job)
 		if outcome == provisionAcked {
-			l.log.Info("scaleset: deferred job provisioned on re-offer",
+			l.log.Info("scaleset: deferred job provisioned or refused on re-offer",
 				"scaleSet", l.cfg.ScaleSetName, "jobID", d.job.JobID, "attempts", d.attempts)
 			l.resolveDeferred(d.job.JobID)
 			continue
@@ -1701,19 +1728,23 @@ func (l *Listener) refreshStalled() {
 			l.stalledCond = false
 			l.stalledEventReason = ""
 			l.setCondition(v2.ConditionJobProvisionStalled, metav1.ConditionFalse,
-				v2.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, or worker capacity")
+				v2.ReasonJobsProvisioning, "no assigned job is waiting on a runner name, a terminating worker, a source check, or worker capacity")
 		}
 		return
 	}
-	// A name conflict outranks a terminating worker, which outranks a full ceiling: a name
-	// conflict is the one an operator can act on, and a pod held terminating past its
-	// grace period is the next (a lost node), while a ceiling clears itself as workers
-	// finish.
+	// A name conflict outranks an unreadable run, which outranks a terminating worker,
+	// which outranks a full ceiling: a name conflict is the one an operator can act on, an
+	// unreadable run is the GitHub API failing, and a pod held terminating past its grace
+	// period is the next (a lost node), while a ceiling clears itself as workers finish.
 	reason := v2.ReasonWorkerCeilingReached
 	eventType, eventReason := corev1.EventTypeNormal, "WorkerCeilingReached"
 	if counts[DeferReasonWorkerTerminating] > 0 {
 		reason = v2.ReasonWorkerTerminating
 		eventReason = "WorkerTerminating"
+	}
+	if counts[DeferReasonSourceUnverified] > 0 {
+		reason = v2.ReasonJobSourceUnverified
+		eventType, eventReason = corev1.EventTypeWarning, "JobSourceUnverified"
 	}
 	if counts[DeferReasonNameConflict] > 0 {
 		reason = v2.ReasonRunnerNameConflict
@@ -1742,6 +1773,10 @@ func (l *Listener) stalledMessage(counts map[string]int) string {
 		clauses = append(clauses, fmt.Sprintf("%d cannot register a runner name, re-offered up to every %s (%s)",
 			n, maxDeferredRetryBackoff, strings.Join(l.deferredJobIDs(DeferReasonNameConflict), ", ")))
 	}
+	if n := counts[DeferReasonSourceUnverified]; n > 0 {
+		clauses = append(clauses, fmt.Sprintf("%d held because the run could not be read to check for a fork pull request, re-read up to every %s (%s)",
+			n, maxDeferredRetryBackoff, strings.Join(l.deferredJobIDs(DeferReasonSourceUnverified), ", ")))
+	}
 	if n := counts[DeferReasonWorkerTerminating]; n > 0 {
 		clauses = append(clauses, fmt.Sprintf("%d waiting for the previous worker pod to finish terminating, re-offered up to every %s (%s)",
 			n, maxDeferredRetryBackoff, strings.Join(l.deferredJobIDs(DeferReasonWorkerTerminating), ", ")))
@@ -1760,6 +1795,9 @@ func stalledEventNote(counts map[string]int) string {
 	if counts[DeferReasonNameConflict] > 0 {
 		return "one or more assigned jobs cannot register a runner name and are being re-offered on a backoff; the JobProvisionStalled condition names them"
 	}
+	if counts[DeferReasonSourceUnverified] > 0 {
+		return "one or more assigned jobs are held because their run could not be read to check for a fork pull request, which this set refuses, and are being re-read on a backoff; the JobProvisionStalled condition names them"
+	}
 	if counts[DeferReasonWorkerTerminating] > 0 {
 		return "one or more assigned jobs are waiting for their previous worker pod to finish terminating and are being re-offered on a backoff; the JobProvisionStalled condition names them"
 	}
@@ -1769,7 +1807,7 @@ func stalledEventNote(counts map[string]int) string {
 // deferredCounts tallies the held jobs by DeferReason*, carrying an explicit zero for
 // every reason so the gauge never leaves a series frozen at its last non-zero value.
 func (l *Listener) deferredCounts() map[string]int {
-	counts := map[string]int{DeferReasonCeiling: 0, DeferReasonNameConflict: 0, DeferReasonWorkerTerminating: 0}
+	counts := map[string]int{DeferReasonCeiling: 0, DeferReasonNameConflict: 0, DeferReasonWorkerTerminating: 0, DeferReasonSourceUnverified: 0}
 	for _, d := range l.deferred {
 		counts[d.reason]++
 	}
@@ -1810,6 +1848,9 @@ const (
 	// provisionDeferTerminating: the job's previous worker pod is still terminating — same
 	// cursor handling, on the conflict ladder (Q1199).
 	provisionDeferTerminating
+	// provisionDeferSource: the job's source could not be checked — same cursor handling,
+	// on the conflict ladder (Q1330).
+	provisionDeferSource
 )
 
 // deferReason maps an outcome to the DeferReason* the job is held under, or "" for an
@@ -1822,6 +1863,8 @@ func (o provisionOutcome) deferReason() string {
 		return DeferReasonCeiling
 	case provisionDeferTerminating:
 		return DeferReasonWorkerTerminating
+	case provisionDeferSource:
+		return DeferReasonSourceUnverified
 	default:
 		return ""
 	}
@@ -1867,6 +1910,9 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	// would register a runner for nothing (Q1233).
 	if l.workerTerminating(ctx, aj.JobID) {
 		return provisionDeferTerminating
+	}
+	if outcome, checked := l.checkSource(ctx, aj); !checked {
+		return outcome
 	}
 
 	jit, runnerName, outcome := l.generateJITConfig(ctx, ssID, aj.JobID)
@@ -1930,6 +1976,36 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	l.mu.Unlock()
 	l.metricsIncProvisioned()
 	return provisionAcked
+}
+
+// checkSource asks CheckSource whether aj may run on this set, reporting checked=true
+// when it may. A refusal records the job as abandoned and settles it, so the held
+// message can be deleted and a replay is acked without a second check, and returns
+// provisionAcked; a check that could not be made returns provisionDeferSource.
+func (l *Listener) checkSource(ctx context.Context, aj scaleset.JobMessage) (provisionOutcome, bool) {
+	if l.cfg.CheckSource == nil {
+		return provisionAcked, true
+	}
+	owner, repo, runID, _ := aj.RunIdentity()
+	err := l.cfg.CheckSource(ctx, Job{
+		JobID: aj.JobID, Owner: owner, Repository: repo, RunID: runID,
+		JobName: aj.JobDisplayName, EventName: aj.EventName, WorkflowRef: aj.JobWorkflowRef,
+	})
+	switch {
+	case err == nil:
+		return provisionAcked, true
+	case errors.Is(err, ErrJobRefused):
+		l.mu.Lock()
+		l.abandoned[aj.JobID] = true
+		l.guardsDirty = true
+		l.mu.Unlock()
+		l.settle(aj.JobID)
+		l.log.Info("scaleset: refused assigned job", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
+		return provisionAcked, false
+	default:
+		l.log.Warn("scaleset: could not check the assigned job's source; holding it", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "err", err)
+		return provisionDeferSource, false
+	}
 }
 
 // atCapacity reports whether the owner's worker ceiling has no room for another worker,

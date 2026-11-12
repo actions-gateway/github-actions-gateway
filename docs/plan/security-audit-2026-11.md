@@ -66,7 +66,7 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [Historical publish.yml copies at 28 v* tags have no validated-candidate gate and accept a free-form version name, under a signing identity verify-release accepts for any version](#release-and-ci-leads) | same-principal today, accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) |
 | [pages.yml publish job deploys dispatch-chosen content from any ref and serves the whole gh-pages branch](#release-and-ci-leads) | same-principal today, accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) |
 | [Dependabot sync and rebase writers compile and run a freshly bumped build tool in a job holding a contents:write token](#release-and-ci-leads) | confirmed from a run log; dispatch refuted, tag path an accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control); hardening [Q1341](../queue/Q1341.md) |
-| [No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on](#release-and-ci-leads) | held by GitHub's approval setting until Q1330 | [Q1330](../queue/Q1330.md) |
+| [No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on](#release-and-ci-leads) | closed by Q1330's default refusal once the dogfood cluster runs it; GitHub's approval setting holds it until then | Q1330 |
 | [go-throttle hook returns `allow` for single `go build`/`go test` commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path](#release-and-ci-leads) | confirmed against go1.27.1, fixed | Q1326 |
 | [AGC re-runs and force-cancels whatever run its namespace ConfigMaps and pod annotations name; docs/design/05-security.md line 200 describes only the pod annotation and says a run ID cannot be substituted](#agc-run-and-recovery-leads) | needs validation | [Q1327](../queue/Q1327.md) |
 | [One repository's OOM-killed jobs can fill the per-set failure ledger and withhold automatic re-runs for every repository on the RunnerSet](#agc-run-and-recovery-leads) | needs validation | [Q1327](../queue/Q1327.md) |
@@ -854,7 +854,7 @@ The sandboxed fixture-module test above was not run: the run log already shows t
 Starts at `.github/workflows/conflict-markers.yml:12`.
 
 Runner selection is by label alone, the dogfood scale sets are registered repo-scoped against a public repository so no runner group gates them, and on pull_request events the label is text in a workflow file the pull request can edit.
-The opt-in gate is an expression inside those same editable files, and the AGC does not distinguish a fork pull request's job from any other until the default refusal in docs/queue/Q1330.md ships.
+The opt-in gate is an expression inside those same editable files, and until Q1330 the AGC did not distinguish a fork pull request's job from any other; it now refuses one on every `RunnerSet` that does not set `spec.forkPullRequests: Accept`.
 
 **Blocked on:**
 
@@ -868,14 +868,14 @@ The opt-in gate is an expression inside those same editable files, and the AGC d
 - Which e2e overlay is live during a window (Kata by default, privileged dind by opt-in) and what a worker pod can reach inside the dogfood cluster are deployment facts that set the impact; neither is determined by source.
 
 **Local test.** No local test can settle this: the decisive step is GitHub's job assignment.
-A source-side guard can be tested locally once written: add a case to the existing scale-set fixture test file scaleset/types_test.go (its hand-written JobAssigned fixture already carries eventName at line 54) asserting the guard's decision for a fork pull_request job, once docs/queue/Q1330.md is built: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).
+The source-side guard Q1330 built is tested locally in cmd/agc/internal/provisioner/fork_refusal_internal_test.go: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).
 
 **Owner check.** Owner reads the repository's current fork pull request approval policy (Settings > Actions > General, or the actions/permissions/fork-pr-contributor-approval setting) and records its value and the date.
 Owner lists the runner scale sets registered for the repository and confirms whether each dogfood label (gag-ci-scaleset, gag-ci-e2e, the probe labels) is repo-scoped with no runner-group restriction.
 Owner checks the repository's existing Actions run history and the dogfood AGC's job records for any pull_request-event job from a fork head repository that was assigned to a dogfood scale set, and records which e2e overlay (Kata or dind) is applied during dogfood windows and for how long tenants stay up.
 
-**Outcome.** Open until [Q1330](../queue/Q1330.md) lands, which refuses fork jobs by default on every `RunnerSet`; no second control was built here.
-GitHub's fork approval policy read `first_time_contributors` on 2026-11-11, the same value Q1052 recorded, so until then that setting is what holds the lead, as [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) records.
+**Outcome.** Closed by Q1330, which refuses fork jobs by default on every `RunnerSet` unless it sets `spec.forkPullRequests: Accept`; it binds the dogfood sets once the dogfood cluster runs a release carrying it.
+GitHub's fork approval policy read `first_time_contributors` on 2026-11-11, the same value Q1052 recorded, so until that deploy that setting is what holds the lead, as [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) records.
 
 **Evidence.** `scripts/dogfood/start.sh:3`, `.github/workflows/unit-test.yml:262`, `.github/actionlint.yaml:15`, `docs/plan/archive/q468-jobcompleted-retention.md:66`, `docs/queue/Q1052.md:54`, `docs/operations/personas.md:93`, `deploy/dogfood-e2e/README.md:37`, `scripts/dogfood/e2e-start.sh:7`, `docs/development/testing.md:2224`.
 

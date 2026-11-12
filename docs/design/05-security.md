@@ -351,9 +351,9 @@ The precondition is a compromised tools module, and the `v*` tag ruleset above c
 Separating tool execution from the write into a second job is hardening tracked as [Q1341](../queue/Q1341.md).
 
 **A fork pull request can name a dogfood scale-set label in `runs-on`.** The label is text in a workflow file the pull request edits, and the dogfood scale sets are repository-scoped on a public repository, so no runner group sits in front of them.
-Until [Q1330](../queue/Q1330.md) ships the default refusal of fork jobs on every `RunnerSet`, GitHub's fork approval setting is the only thing holding it, and it read `first_time_contributors` on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval.
-Setting it to `all_external_contributors` is a cheap interim tightening, though it still exempts organization and repository members.
-The lead closes when Q1330 lands; the operator half is in [security-operations.md](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label).
+Since Q1330 every `RunnerSet` refuses fork jobs unless it sets `spec.forkPullRequests: Accept` ([the control](#fork-pull-request-jobs-choose-their-own-runner-set)), so the lead closes on the AGC side once the dogfood cluster runs a release carrying it, with no dogfood set accepting forks.
+Until that deploy, GitHub's fork approval setting holds it; it read `first_time_contributors` on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval, and `all_external_contributors` is a cheap tightening that still exempts organization and repository members.
+The operator half is in [security-operations.md](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label).
 
 ### GitHub-App-key exfiltration via AGC apiserver egress
 
@@ -714,6 +714,32 @@ See [tenant onboarding](../operations/tenant-onboarding.md#bind-a-runner-set-to-
 The field is tenant-authored, and the [whose-fact](../development/api-review.md#ask-whose-fact-it-is) question resolves benignly: a tenant naming a group that is not theirs volunteers *its own* runners to that group's repositories.
 It costs the tenant that lied and escalates nothing across tenants, which is why it is not gated by a platform allowlist the way `priorityClassName` is.
 **Closed (Q712).**
+
+### Fork pull request jobs choose their own runner set
+
+A `pull_request` run executes the pull request's merge commit, whose workflow file carries the fork's edits, so a fork can name any label the repository's runner group admits, a trusted set's included.
+The runner group cannot stop it: it scopes by repository, and a fork's job belongs to the base repository.
+GitHub's approval setting keys on the contributor rather than the fork, and exempts organization and repository members.
+So nothing at GitHub refuses a job because its head is a fork (Q1220).
+
+`RunnerSet.spec.forkPullRequests` is that refusal, on by default (Q1330).
+Before a runner is minted, the AGC reads the run of every `pull_request`, `pull_request_review` and `pull_request_review_comment` job, the three events that run the merge commit, and refuses the job when the run's head repository is not the job's own, compared by name and case-insensitively.
+The job message carries the event but no head repository, so the run read is the only source.
+The run's `fork` flag is not used: it is true for every pull request on a repository that is itself a fork, so it would refuse a repository's own pull requests there.
+An empty head repository, which a deleted fork leaves, is refused.
+`pull_request_target` runs the base repository's workflow, so a fork cannot retarget it, and it is never refused.
+
+**It fails closed at every step.** A run read that fails holds the job and retries rather than admitting it, so a GitHub API outage delays pull request jobs on a refusing set instead of letting them through.
+A message naming no event is read like a pull request job, an unreadable `RunnerSet` reads as `Refuse`, and a stale CRD that prunes the field stores nothing, which also reads as `Refuse`.
+
+**A refusal ends the whole run.** The AGC cannot fail a single job without a runner: the broker refuses a `failed` completion, and every completion value it accepts concludes the run `success` (Q645), a false green.
+So the run is force-cancelled, which ends its other jobs too.
+A cancelled run shows no reason, so the AGC writes a failed check run on the pull request's head commit naming the set and the field, where the GitHub App holds `Checks: Read and write`; the permission is optional, and without it the refusal still holds.
+
+**What stays outside it.** A set that sets `Accept` runs fork code by design, and its isolation is the template's (the Kata posture).
+Secrets a workflow grants to `pull_request_target` are the repository's decision.
+The refusal reads GitHub's own account of the run, so it is only as sound as that record.
+**Closed (Q1330).**
 
 ### Cross-tenant job acquisition via a shared scale-set name
 

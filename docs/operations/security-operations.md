@@ -537,7 +537,31 @@ Threat-model rationale: [design 5.2](../design/05-security.md).
 
 A `pull_request` run executes the pull request's merge commit (`refs/pull/N/merge`), whose workflow file carries the fork's edits, so a fork can rewrite `runs-on` to name any label your runner group admits for that repository.
 Routing fork jobs to an untrusted runner set by label is therefore a convention, not a control.
-GAG does not tell a fork job from any other today, so the controls that hold are GitHub's:
+GAG's control is the `RunnerSet`'s `spec.forkPullRequests`, and GitHub's controls sit beside it.
+
+**Every `RunnerSet` refuses fork pull request jobs unless it sets `spec.forkPullRequests: Accept`.** A job is a fork's when its run was triggered by `pull_request`, `pull_request_review` or `pull_request_review_comment` and the run's head repository is not the job's own repository, compared by name and case-insensitively.
+A deleted fork leaves the head repository empty, and that counts as a fork.
+`pull_request_target` runs the base repository's workflow, so a fork cannot retarget it, and it is never refused.
+
+What a refusal does:
+
+- **No runner is minted**, so nothing from the fork runs in the cluster.
+- **The run is force-cancelled.** GitHub has no call that cancels one job, so the run's other jobs end too, including ones on GitHub-hosted runners.
+  A cancelled run shows no reason on its own.
+- **A `ForkJobRefused` Warning Event** on the `RunnerSet` names the head repository and the run.
+- **A failed check run named `actions-gateway: fork pull request refused`** goes on the pull request's head commit and names the set and the field, when the GitHub App holds `Checks: Read and write`.
+  Without that permission it is skipped with a `ForkRefusalCheckRunSkipped` Normal Event; the refusal still happens.
+  Whether the check run shows on a pull request from a fork is unmeasured.
+
+Telling a fork's job from the repository's own takes a run read from the GitHub REST API, made before the runner is minted.
+Only those three events pay for it: `push`, `schedule` and the rest are decided from the job message alone, and a message naming no event is read like a pull request job.
+When the read fails, the job is held rather than admitted: the set reports `JobProvisionStalled=True`/`JobSourceUnverified` and re-reads on a backoff, so a GitHub API outage delays pull request jobs on a refusing set instead of letting them through ([troubleshooting](troubleshooting.md#scale-set-job-held-because-its-run-could-not-be-read-jobsourceunverified)).
+A job whose assignment carries no run identity cannot be read or cancelled, so it is refused and left for GitHub to end.
+
+Set `Accept` only on a set built to run untrusted code, such as one on the [Kata template](kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture).
+The policy is read for every job, so an edit takes effect on the next one.
+
+GitHub's controls still apply, and they answer different questions:
 
 - **Require approval for all external contributors** (repository or organization Settings → Actions → General).
   The two first-time settings stop asking once a user has had any commit or pull request merged into the repository, which one accepted typo fix earns.
@@ -546,8 +570,7 @@ GAG does not tell a fork job from any other today, so the controls that hold are
 - **Runner groups separate repositories, not forks.** `allows_public_repositories: false`, GitHub's default, keeps a group off every public repository, so its own pull requests lose it too.
   The selected-workflows restriction is documented for Enterprise Cloud and Server only, and pins an ordinary workflow to a branch; a `pull_request` run's ref is `refs/pull/N/merge`, so as documented it refuses every pull request, fork or not.
 
-So on a public repository GitHub's controls separate contributors and repositories, and none of them refuses a job because its head is a fork.
-A `RunnerSet` refusal of fork jobs, on by default with an explicit accept for an untrusted set, is [Q1330](../queue/Q1330.md).
+So on a public repository GitHub's controls separate contributors and repositories, and none of them refuses a job because its head is a fork, which is the gap `spec.forkPullRequests` closes.
 
 ## Tenant egress posture & deliberate widening
 

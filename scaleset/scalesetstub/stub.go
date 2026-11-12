@@ -93,6 +93,10 @@ type job struct {
 const (
 	DefaultJobOwner      = "acme"
 	DefaultJobRepository = "widgets"
+	// DefaultJobEvent is the eventName every assignment carries, as live ones do. It is
+	// not a pull request event, so a set refusing fork pull requests admits the job
+	// without reading its run (Q1330).
+	DefaultJobEvent = "workflow_dispatch"
 )
 
 // qmessage is one message in a scale set's queue log. The log is scale-set-scoped
@@ -1616,6 +1620,7 @@ func (s *Stub) claimLocked(ss *scaleSet, ids []int64) map[string]any {
 					RepositoryName:  j.repo,
 					WorkflowRunID:   j.runID,
 					JobDisplayName:  j.jobID,
+					EventName:       DefaultJobEvent,
 				}})
 				won = append(won, reqID)
 			}
@@ -1823,6 +1828,7 @@ func (ss *scaleSet) assignUnderCapacity(capacity int, nextID func() int64) {
 				RepositoryName: j.repo,
 				WorkflowRunID:  j.runID,
 				JobDisplayName: j.jobID,
+				EventName:      DefaultJobEvent,
 			}})
 			assigned++
 		}

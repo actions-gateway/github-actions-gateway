@@ -42,9 +42,10 @@ type Metrics struct {
 	// JobsDeferred is how many assigned jobs the listener is holding for a re-offer,
 	// labelled by the DeferReason* it is held under — the alertable mirror of the
 	// RunnerSet's JobProvisionStalled condition. Each one is a workflow run queued at
-	// GitHub with nothing running it, but the two reasons want different alerts: a
-	// runner name that will not register needs an operator (Q551), while a full worker
-	// ceiling is the set doing what its spec says and clears as workers finish (Q576).
+	// GitHub with nothing running it, but the reasons want different alerts: a runner
+	// name that will not register needs an operator (Q551), a run the fork check cannot
+	// read is the GitHub API failing (Q1330), while a full worker ceiling is the set doing
+	// what its spec says and clears as workers finish (Q576).
 	// Every reason is published on every update, zero included, so a series never
 	// freezes at its last non-zero reading.
 	JobsDeferred *prometheus.GaugeVec
@@ -125,7 +126,7 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		JobsDeferred: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "actions_gateway_scaleset_jobs_deferred",
-			Help: "Assigned jobs held for a later re-offer, by reason (name_conflict: the runner name will not register; ceiling: the set is at its worker ceiling); each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
+			Help: "Assigned jobs held for a later re-offer, by reason (name_conflict: the runner name will not register; ceiling: the set is at its worker ceiling; worker_terminating: the previous worker pod is still terminating; source_unverified: the run could not be read to check for a fork pull request); each is a queued workflow run with no worker (sets the JobProvisionStalled condition).",
 		}, []string{"namespace", "runner_set", "reason"}),
 
 		AvailableJobs: prometheus.NewGaugeVec(prometheus.GaugeOpts{
