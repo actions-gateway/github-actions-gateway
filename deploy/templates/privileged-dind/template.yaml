@@ -10,9 +10,13 @@
 # it needs nested virtualisation or bare metal, which excludes GPU builds (no
 # GPU passthrough into a nested guest), every AMD- and Arm-powered GCE machine
 # family, and every AWS instance outside the Intel families EC2 enables it on.
-# Where that is your situation, run this on a dedicated node pool with trusted
-# jobs only, never a fork's pull request. Detail:
-# docs/operations/runner-template-library.md#choosing-an-entry
+# Where that is your situation, assume a job escapes to the node, whoever wrote
+# it: a trusted repository still runs third-party actions and dependencies.
+# Refusing forks and narrowing egress lower the odds; they contain nothing. Make
+# the node hold little instead: a minimal node identity, Workload Identity on, a
+# tainted pool per tenant that only these workers tolerate (this template ships
+# no toleration; add one by JSON 6902 patch). Detail:
+# docs/operations/runner-template-library.md#running-privileged-dind-assume-the-node-is-lost
 #
 # ClusterRunnerTemplate rather than a namespaced RunnerTemplate is not a
 # stylistic choice: v2 refuses a privileged container in a tenant-authored
