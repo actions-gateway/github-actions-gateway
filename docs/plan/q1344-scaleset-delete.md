@@ -1,9 +1,7 @@
 # Q1344 — What deleting a scale set does to its jobs and runner records
 
-**Status:** the probe is built and unit-tested against the scale-set stub; it has not run against github.com.
+**Status:** the probe for [Q1344](../queue/Q1344.md) is built and unit-tested against the scale-set stub; it has not run against github.com.
 Nothing below is a finding yet.
-
-Queue item: [Q1344](../queue/Q1344.md).
 
 ## The question
 
