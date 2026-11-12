@@ -1,6 +1,6 @@
 module github.com/actions-gateway/github-actions-gateway/tools
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/elastic/crd-ref-docs v0.3.0
