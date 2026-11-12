@@ -38,6 +38,10 @@ type ssDeleteFixture struct {
 	conclusion string
 
 	refuseDelete atomic.Bool
+	// ignoreDelete answers the next delete 204 without deleting anything.
+	ignoreDelete atomic.Bool
+	// twoJobs makes the fixture run list two jobs where the fixture defines one.
+	twoJobs atomic.Bool
 }
 
 func newSSDeleteFixture(t *testing.T) *ssDeleteFixture {
@@ -58,6 +62,10 @@ func newSSDeleteFixture(t *testing.T) *ssDeleteFixture {
 		_, _ = fmt.Fprintf(w, `{"workflow_runs":[{"id":%d}]}`, f.runID)
 	})
 	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/runs/{runid}/jobs", func(w http.ResponseWriter, _ *http.Request) {
+		if f.twoJobs.Load() {
+			_, _ = fmt.Fprintf(w, `{"jobs":[{"id":%d},{"id":%d}]}`, ssDeleteTestJobID, ssDeleteTestJobID+1)
+			return
+		}
 		_, _ = fmt.Fprintf(w, `{"jobs":[{"id":%d}]}`, ssDeleteTestJobID)
 	})
 	mux.HandleFunc("GET /repos/{owner}/{repo}/actions/jobs/{jobid}", func(w http.ResponseWriter, _ *http.Request) {
@@ -68,6 +76,10 @@ func newSSDeleteFixture(t *testing.T) *ssDeleteFixture {
 	mux.HandleFunc("DELETE /_apis/runtime/runnerscalesets/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if f.refuseDelete.CompareAndSwap(true, false) {
 			http.Error(w, `{"message":"scale set has jobs"}`, http.StatusConflict)
+			return
+		}
+		if f.ignoreDelete.CompareAndSwap(true, false) {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		f.stub.Handler().ServeHTTP(w, r)
@@ -171,8 +183,19 @@ func TestParseSSDeleteConfig(t *testing.T) {
 	if _, err := parseSSDeleteConfig(env(map[string]string{"PROBE_SSDELETE_ARM": "drained"})); err == nil {
 		t.Fatal("an unknown arm parsed")
 	}
-	if _, err := parseSSDeleteConfig(env(map[string]string{"GITHUB_ORG_URL": "https://github.com/test-org"})); err == nil {
-		t.Fatal("an org URL parsed; the scenario needs a repository")
+	for name, over := range map[string]map[string]string{
+		"org URL, not a repository": {"GITHUB_ORG_URL": "https://github.com/test-org"},
+		"non-numeric app id":        {"GITHUB_APP_ID": "abc"},
+		"non-numeric installation":  {"GITHUB_APP_INSTALLATION_ID": "abc"},
+		"missing private key":       {"GITHUB_APP_PRIVATE_KEY": ""},
+		"missing repository URL":    {"GITHUB_ORG_URL": ""},
+		"bad timeout":               {"PROBE_SSDELETE_TIMEOUT": "soon"},
+		"bad window":                {"PROBE_SSDELETE_WINDOW": "soon"},
+		"bad interval":              {"PROBE_SSDELETE_INTERVAL": "soon"},
+	} {
+		if _, err := parseSSDeleteConfig(env(over)); err == nil {
+			t.Errorf("%s: parsed, want an error", name)
+		}
 	}
 }
 
@@ -226,16 +249,9 @@ func TestSSDelete_QueuedArm_SuccessorInheritsJob(t *testing.T) {
 	requireNoScaleSet(t, f, "gag-q1344-ssdelete")
 }
 
-// The assigned arm: the job is assigned through a real session, a JIT runner record
-// is minted for it, and the session is gone before T0. A record the stub keeps reads
-// RUNNER-LEFT, a job that concludes skips measurement 4, and cleanup deregisters the
-// record.
-func TestSSDelete_AssignedArm_RunnerLeft_JobConcluded(t *testing.T) {
-	f := newSSDeleteFixture(t)
-	var log bytes.Buffer
-	p := newSSDeleteProbeForTest(t, f, ssDeleteArmAssigned, &log)
-	p.afterDelete = func() { f.setJob("completed", "cancelled") }
-
+// enqueueOnceRegistered queues one fixture job on the probe's scale set as soon as
+// the probe has created it, as a dispatched workflow would land on it.
+func enqueueOnceRegistered(f *ssDeleteFixture) {
 	go func() {
 		for i := 0; i < 200; i++ {
 			if id, ok := f.stub.ScaleSetIDByName("gag-q1344-ssdelete"); ok {
@@ -245,20 +261,128 @@ func TestSSDelete_AssignedArm_RunnerLeft_JobConcluded(t *testing.T) {
 			time.Sleep(5 * time.Millisecond)
 		}
 	}()
+}
+
+// The assigned arm: the job is assigned through a real session, a JIT runner record
+// is minted for it, and the session is gone before T0. A record the stub keeps reads
+// RUNNER-LEFT, a job that concludes skips measurement 4, and cleanup deregisters the
+// record. It runs on both assignment flows: dotcom's direct assignment, and the GHES
+// offer the probe has to acquire first.
+func TestSSDelete_AssignedArm_RunnerLeft_JobConcluded(t *testing.T) {
+	for _, ghes := range []bool{false, true} {
+		t.Run(fmt.Sprintf("ghes=%v", ghes), func(t *testing.T) {
+			f := newSSDeleteFixture(t)
+			if ghes {
+				f.stub.EnableGHESAcquireFlow()
+			}
+			var log bytes.Buffer
+			p := newSSDeleteProbeForTest(t, f, ssDeleteArmAssigned, &log)
+			p.afterDelete = func() { f.setJob("completed", "cancelled") }
+			enqueueOnceRegistered(f)
+
+			if err := p.run(context.Background()); err != nil {
+				t.Fatalf("run: %v\n%s", err, log.String())
+			}
+			out := log.String()
+			if ghes {
+				requireLog(t, out, "acquired offered jobs")
+			}
+			requireLog(t, out, "runner record registered")
+			requireLog(t, out, "VERDICT 1 "+verdictSSDeleteAccepted)
+			requireLog(t, out, "VERDICT 2 "+verdictJobConcluded+" (cancelled)")
+			requireLog(t, out, "VERDICT 3 "+verdictRunnerLeft)
+			refuteLog(t, out, "VERDICT 4")
+			if got := f.stub.RegisteredRunners(); len(got) != 0 {
+				t.Fatalf("cleanup left runner records: %v", got)
+			}
+			requireNoScaleSet(t, f, "gag-q1344-ssdelete")
+		})
+	}
+}
+
+// With no fixture dispatched, both arms fail naming the workflow rather than
+// measuring a delete with no job on the scale set, and still clean up.
+func TestSSDelete_NoFixtureJob_FailsAndCleansUp(t *testing.T) {
+	for _, arm := range []string{ssDeleteArmQueued, ssDeleteArmAssigned} {
+		t.Run(arm, func(t *testing.T) {
+			f := newSSDeleteFixture(t)
+			var log bytes.Buffer
+			p := newSSDeleteProbeForTest(t, f, arm, &log)
+			p.cfg.Timeout = 200 * time.Millisecond
+
+			err := p.run(context.Background())
+			if err == nil || !strings.Contains(err.Error(), "q1344-ssdelete-probe.yml") {
+				t.Fatalf("run = %v; want a failure naming the fixture workflow", err)
+			}
+			refuteLog(t, log.String(), "VERDICT")
+			requireNoScaleSet(t, f, "gag-q1344-ssdelete")
+		})
+	}
+}
+
+// A queued job is waited for: a fixture job not yet queued is not taken as staged.
+func TestSSDelete_QueuedArm_WaitsForQueuedStatus(t *testing.T) {
+	f := newSSDeleteFixture(t)
+	f.setRun(555)
+	f.setJob("waiting", "")
+	var log bytes.Buffer
+	p := newSSDeleteProbeForTest(t, f, ssDeleteArmQueued, &log)
+	p.cfg.Recreate = false
+	go func() {
+		time.Sleep(60 * time.Millisecond)
+		f.setJob("queued", "")
+	}()
 
 	if err := p.run(context.Background()); err != nil {
 		t.Fatalf("run: %v\n%s", err, log.String())
 	}
 	out := log.String()
-	requireLog(t, out, "runner record registered")
-	requireLog(t, out, "VERDICT 1 "+verdictSSDeleteAccepted)
-	requireLog(t, out, "VERDICT 2 "+verdictJobConcluded+" (cancelled)")
-	requireLog(t, out, "VERDICT 3 "+verdictRunnerLeft)
+	requireLog(t, out, "fixture job not queued yet")
+	requireLog(t, out, "jobStatus=queued")
 	refuteLog(t, out, "VERDICT 4")
-	if got := f.stub.RegisteredRunners(); len(got) != 0 {
-		t.Fatalf("cleanup left runner records: %v", got)
+}
+
+// A delete that answers success while the scale set is still registered stops the
+// run: the later measurements would be about a scale set that still exists.
+func TestSSDelete_DeleteWithoutEffect_Stops(t *testing.T) {
+	f := newSSDeleteFixture(t)
+	f.setRun(555)
+	f.ignoreDelete.Store(true)
+	var log bytes.Buffer
+	p := newSSDeleteProbeForTest(t, f, ssDeleteArmQueued, &log)
+
+	if err := p.run(context.Background()); err != nil {
+		t.Fatalf("run: %v\n%s", err, log.String())
+	}
+	out := log.String()
+	requireLog(t, out, "VERDICT 1 "+verdictSSDeleteNoEffect)
+	refuteLog(t, out, "VERDICT 2")
+	requireNoScaleSet(t, f, "gag-q1344-ssdelete")
+}
+
+// A fixture run with more than one job is refused: the verdicts follow one job.
+func TestSSDelete_RunWithTwoJobs_Refused(t *testing.T) {
+	f := newSSDeleteFixture(t)
+	f.setRun(555)
+	f.twoJobs.Store(true)
+	var log bytes.Buffer
+	p := newSSDeleteProbeForTest(t, f, ssDeleteArmAssigned, &log)
+	enqueueOnceRegistered(f)
+
+	err := p.run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "has 2 jobs") {
+		t.Fatalf("run = %v; want a refusal of the two-job run", err)
 	}
 	requireNoScaleSet(t, f, "gag-q1344-ssdelete")
+}
+
+func TestShortID(t *testing.T) {
+	if got := shortID("1b2c3d4e-5f60-7182-93a4-b5c6d7e8f901"); got != "1b2c3d4e" {
+		t.Errorf("shortID(uuid) = %q", got)
+	}
+	if got := shortID("ab-c"); got != "abc" {
+		t.Errorf("shortID(short) = %q", got)
+	}
 }
 
 // A refused delete stops the run at measurement 1, since every later measurement is
