@@ -33,6 +33,7 @@ Two detection substrates are used:
 - [Posture scanning (preventive)](#posture-scanning-preventive)
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
+- [Keep GAG's control plane off worker nodes](#keep-gags-control-plane-off-worker-nodes)
 - [Job intake: bind every tenant to a GitHub runner group](#job-intake-bind-every-tenant-to-a-github-runner-group)
   - [Fork pull requests choose their own runner label](#fork-pull-requests-choose-their-own-runner-label)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
@@ -510,6 +511,85 @@ Triage the report against this operator's needs:
 - **Findings that don't apply** (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.
 
 The goal is **zero critical (`[FAIL]`) findings that this stack depends on** before the first production tenant (per [milestone-5.md § 3](../plan/milestone-5.md#3-posture-audit-kube-bench--polaris)).
+
+## Keep GAG's control plane off worker nodes
+
+A worker runs code from a workflow, so plan for one escaping its container onto the node.
+On that node it can read the credentials of every other pod there.
+If a GAG control-plane pod is one of them, one compromised node becomes access to GitHub or to the whole cluster:
+
+| Pod | What an escape on its node reaches |
+|---|---|
+| GMC | Its ServiceAccount, which can read every tenant's GitHub App Secret ([compromised GMC](#suspected-compromised-gmc-cluster-scoped-tier-0)) |
+| AGC | That tenant's GitHub App private key and its namespace-scoped ServiceAccount |
+| Egress proxy | That tenant's egress path and the proxy's private TLS key |
+| Cache and registry mirrors | The artifacts other jobs pull next, so a write poisons them |
+
+**GAG does not keep these pods apart for you.** None of the GMC, AGC, proxy, or worker pods carries a default node selector, toleration, or anti-affinity that separates controllers from workers.
+The proxy's built-in anti-affinity spreads its own replicas only.
+GAG never creates node pools, so the separation belongs to the cluster, and it takes two halves:
+
+1. **Taint the worker pool, and give no control-plane pod the toleration.** That keeps controllers off worker nodes.
+2. **Pin workers to that pool** with a `nodeSelector` or a required `nodeAffinity`.
+   That keeps workers off controller nodes.
+   A toleration only *permits* a pod onto a tainted node; on its own it does not keep a worker away from any untainted one.
+
+Most setups do the first half and skip the second.
+Workers that tolerate the pool's taint and set no selector still land on the system pool wherever it has room.
+
+Taint and label the pool when you create it (GKE shown; EKS and AKS take the same `key=value:NoSchedule` taint on the node group):
+
+```bash
+gcloud container node-pools create gag-workers \
+  --cluster=<cluster> \
+  --node-taints=dedicated=gag-workers:NoSchedule \
+  --node-labels=dedicated=gag-workers
+```
+
+Then put both halves on every worker shape, in each `RunnerTemplate` or `ClusterRunnerTemplate`:
+
+```yaml
+spec:
+  podTemplate:
+    spec:
+      nodeSelector:
+        dedicated: gag-workers
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: gag-workers
+          effect: NoSchedule
+```
+
+Do not add that toleration to `ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling`, the chart's `tolerations` value, or any cache or mirror.
+A tenant can set `spec.scheduling` on its own `ActionsGateway` and `EgressProxy` ([why it is tenant-settable](#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling)), so a tenant can put its own AGC onto the worker pool.
+If tenants author those objects, enforce the rule at admission rather than trusting it.
+
+This matters most for the `privileged-dind` template, where an escape lands directly on the host ([choosing a template](runner-template-library.md)).
+Kata narrows the risk without removing it, because a guest-to-host escape lands on the same node.
+
+**Check the separation on a live cluster.** This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran:
+
+```bash
+GMC_NS=gmc-system   # the namespace the chart is installed in
+kubectl get pods -A -o json | jq -r --arg gmc "$GMC_NS" '
+  [ .items[]
+    | select(.spec.nodeName != null)
+    | select(.metadata.namespace == $gmc
+             or .metadata.labels["app.kubernetes.io/part-of"] == "actions-gateway")
+    | { node: .spec.nodeName,
+        worker: (.metadata.labels["actions-gateway/component"] == "workload") } ]
+  | group_by(.node)[]
+  | select(any(.worker) and any(.worker | not))
+  | .[0].node'
+```
+
+The query finds the GMC by its namespace and the AGC, proxy, and worker pods by their `app.kubernetes.io/part-of` label.
+Cache and mirror deployments you installed yourself carry neither, so add their namespaces to the selection.
+It reads one moment: run it while jobs are running, because workers exist only for the length of a job.
+
+The [placement policy samples](admission-policies.md#governing-where-gag-pods-schedule) pin *every* pod in a tenant namespace to one pool, which puts the tenant's AGC and proxy on the same nodes as its workers.
+Do not use them as written on a cluster that keeps the control plane off worker nodes.
 
 ## Job intake: bind every tenant to a GitHub runner group
 

@@ -650,6 +650,20 @@ for kind in ActionsGateway RunnerTemplate RunnerSet; do
 	check "${kind}: every authored spec field exists on the v2 type" "" "${unknown}"
 done
 
+# Workers are pinned to the tainted pools, not only allowed onto them. The
+# toleration alone leaves default-pool open to a worker, beside the GMC and AGC.
+reset_stubs
+run_main
+runner_template="$(awk '
+	/^kind: RunnerTemplate$/ { keep = 1 }
+	keep && /^---$/ { exit }
+	keep { print }
+' "${MANIFESTS}")"
+check_contains "pins workers to the worker pools by node affinity" \
+	"key: cloud.google.com/gke-nodepool" "${runner_template}"
+check_contains "pins workers to exactly the two tainted worker pools" \
+	"values: [workers, workers-od]" "${runner_template}"
+
 # --- nothing is written to a cluster that is not the target ------------------
 
 reset_stubs

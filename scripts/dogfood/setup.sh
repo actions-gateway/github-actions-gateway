@@ -587,6 +587,17 @@ metadata:
 spec:
   podTemplate:
     spec:
+      # The toleration lets workers onto the tainted pools; the affinity keeps
+      # them off default-pool, where the GMC, AGC, proxies, and Athens run. A
+      # toleration alone does not.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-nodepool
+                    operator: In
+                    values: [workers, workers-od]
       tolerations:
         - key: dedicated
           value: workers
