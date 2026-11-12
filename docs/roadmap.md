@@ -27,6 +27,8 @@ No pill means no release is decided for that item yet.
 - **[Flaky-job detection, and auto-retry for more platform failures](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q1236,Q1317,Q1320,Q1318,Q1319,Q1315,Q1316 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
+- **[Worker templates that cannot skip the control-plane separation](operations/security-operations.md#keep-gags-control-plane-off-worker-nodes)** <!-- q:Q1347 --> GAG keeps its controllers off worker nodes by default, but a namespaced `RunnerTemplate` that sets `nodeName` or `schedulerName` can still place a worker beside one.
+  Neither field will be able to place a tenant's worker.
 
 
 ## Exploring / longer-term
