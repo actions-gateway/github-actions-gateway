@@ -22,7 +22,7 @@ Pick by what the job does, not by what the template is called.
 |---|---|---|
 | Unit tests, lint, deploys, anything that does not build images | `plain` | No daemon, no capabilities. The only entry that composes with the AGC's security gap-fill instead of opting out of it. |
 | Build container images, run a nested cluster (kind) | `kata-dind` | A real Docker daemon whose blast radius is a throwaway guest kernel. Needs nested virtualisation and a Kata runtime on the nodes. (`docker compose` needs a `workerImage` that ships the plugin — see below.) |
-| The same, where Kata is not available | `privileged-dind` | Same daemon, no isolation. Trusted jobs only. |
+| The same, where Kata is not available | `privileged-dind` | Same daemon, no isolation. Assume a job escapes to the node, whoever wrote it, and [make the node hold little](../../docs/operations/runner-template-library.md#running-privileged-dind-assume-the-node-is-lost). |
 | Build images without a daemon at all | none of these | Rootless BuildKit or Kaniko run under `plain`. See [in-runner-image-builds.md](../../docs/operations/in-runner-image-builds.md). |
 
 Reach for `kata-dind` first, and for a rootless builder before either: a privileged dockerd exposes the host kernel to every job that lands on it, so an escape reaches the node.

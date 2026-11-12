@@ -964,7 +964,9 @@ If finer granularity (per-RunnerGroup profile within one `ActionsGateway`) becom
 ### Pairing `privileged` with a sandbox runtime
 
 Selecting `privileged` removes the API-server-side admission guard but does not remove the option of sandbox-based isolation.
-For tenants who need privileged *semantics* (a real Docker daemon, full syscall surface) but don't trust the workload code, the recommended pattern is:
+For tenants who need privileged *semantics* (a real Docker daemon, full syscall surface), the recommended pattern is a sandbox runtime, whoever wrote the workload code.
+Trust in the author is not a kernel control: a trusted repository still runs third-party actions and dependencies, and a workflow pushed with a stolen token runs as its author.
+The pattern:
 
 ```yaml
 apiVersion: actions-gateway.github.com/v1alpha1
@@ -989,6 +991,9 @@ spec:
 Privileged-inside-Kata grants the workload full control of a microVM kernel, not the host kernel — a container escape lands in a throwaway guest kernel rather than on the node.
 See [Appendix B](appendix-b-worker-isolation.md) for the full tradeoff between `runc`, `gvisor`, and `kata-containers`.
 (The `RuntimeClass` name is whatever the platform admin registered; the Q226 reference architecture registers `kata` → handler `kata-qemu`.)
+
+Where no sandbox runtime is possible (GPU builds, machine families without nested virtualisation), a privileged worker's escape lands on the node, and fork refusal and egress limits lower its likelihood without containing it.
+The operator then limits what the node holds: [Running `privileged-dind`: assume the node is lost](../operations/runner-template-library.md#running-privileged-dind-assume-the-node-is-lost) lists the node identity, Workload Identity, and taint requirements.
 
 **Kata bounds the kernel, not the pod network.** A micro-VM does not isolate the cloud metadata server: Q226 measured the node's GCE service-account token endpoint returning `HTTP 200` from *inside* a Kata guest on GKE.
 Escaping the container is no longer a path to the node, but minting node credentials over the pod network still is.

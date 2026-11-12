@@ -32,7 +32,7 @@ Workload names are rows in this table, not template names: "kind end-to-end test
 |---|---|---|
 | Unit tests, lint, deploys, anything that does not build container images | `plain` | No Docker daemon, no elevated capabilities. The only entry that composes with GAG's security gap-fill rather than opting out of it. |
 | Build container images, run a nested cluster | `kata-dind` | A real Docker daemon inside a KVM micro-VM. An escape reaches a throwaway guest kernel, not your node. |
-| The same, where Kata is not an option (see below) | `privileged-dind` | The same daemon with no isolation. Trusted jobs only. |
+| The same, where Kata is not an option (see below) | `privileged-dind` | The same daemon with no isolation. Plan for a job escaping to the node, [whoever wrote it](#running-privileged-dind-assume-the-node-is-lost). |
 | Build images with no daemon at all | none of these | Rootless BuildKit or Kaniko run fine under `plain`. See [In-runner image builds](in-runner-image-builds.md). |
 
 Prefer `kata-dind` when you can have it, and a rootless builder before either.
@@ -48,7 +48,43 @@ A privileged dockerd exposes the host kernel to every job that lands on that tem
 
 So treat this as a real choice rather than a fallback with a bad reputation.
 If Kata is unavailable to you, the meaningful comparison is `privileged-dind` against a rootless builder, and the question is whether your jobs genuinely need a Docker daemon.
-Where you land on `privileged-dind`, confine it: a dedicated node pool, trusted jobs only, and never a fork's pull request.
+Where you land on `privileged-dind`, read the next section before you apply it.
+
+## Running `privileged-dind`: assume the node is lost
+
+Every `privileged-dind` deployment should assume that a job escapes to the node.
+Trusting the repository's authors does not prevent it.
+A trusted repository still runs third-party actions and dependencies, and a workflow pushed with a stolen token runs as its author, so a compromised job has root on the host kernel whoever wrote the workflow.
+Refusing fork pull requests and narrowing egress make that less likely, and both are worth having.
+Neither changes what the escape reaches.
+
+An escape from the privileged dockerd reaches everything the node holds:
+
+- **Every pod on the node**, with the Secrets and tokens mounted into it, including the runner credential of every other job running there.
+- **The kubelet's credential.** Under the [Node authorizer](https://kubernetes.io/docs/reference/access-authn-authz/node/) it can read the Secrets and ConfigMaps of every pod bound to that node, so whatever lands there widens what an escape can read.
+- **The node's cloud identity.** The worker NetworkPolicy keeps the metadata server off the pod network only, and an escaped process is on the host network.
+  On GKE, Workload Identity does not intercept host-network traffic, which goes to the Compute Engine metadata server and gets the node's service account ([GKE: About Workload Identity Federation](https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity), read 2026-11-11).
+- **The container runtime**, and through it every container on the node.
+
+A dedicated node pool keeps other tenants' workers off that node.
+It does not shrink what the node itself holds.
+So make the node hold as little as possible:
+
+1. **Give the pool a node identity with minimal permissions.** On GKE, that is a custom node service account holding `roles/container.defaultNodeServiceAccount` rather than the Compute Engine default account ([GKE: Configure node service accounts](https://cloud.google.com/kubernetes-engine/security/configure-node-service-accounts), read 2026-11-11).
+   On AWS, a restrictive instance profile.
+   This is the one control that bounds what the escape gets from the cloud.
+2. **Turn Workload Identity on.** It does not stop an escape reading the node's identity.
+   It does close the pod-network path to the node's credentials before any escape, and it lets a job that needs a cloud credential get its own, so nothing pushes you to widen the node identity in step 1.
+   [Running DinD workloads under Kata](kata-dind-workloads.md#kata-does-not-close-the-metadata-server-path) has the GKE commands, and the AWS and Azure equivalents.
+3. **Taint the pool, and pin this template's workers to it.** The two halves do different jobs.
+   The taint keeps everything else off: the GMC, AGC and egress-proxy pods carry no toleration unless one is set (the chart's `tolerations` value, or `spec.scheduling`), so they stay off by default, along with the Secrets their pods mount.
+   A toleration only permits, though, so the workers also need a `nodeSelector` or required node affinity for the pool, or they can schedule beside the controllers on an untainted node.
+   The template ships with neither, so add both with a JSON 6902 patch ([why not a strategic merge](#a-strategic-merge-patch-against-a-custom-resource-deletes-list-entries)).
+   A tenant can set `spec.scheduling` on its own `ActionsGateway` and `EgressProxy`, and a toleration naming the pool's taint lets those pods onto it.
+   Denying a keyless `operator: Exists` toleration does not stop that.
+   [The taint bypass](admission-policies.md#the-taint-bypass--and-why-validation-alone-is-not-enough) explains why, and the mutating pin it recommends instead.
+   A DaemonSet that tolerates every taint still lands on the pool, so check what its service account can do.
+4. **Use one pool per tenant.** Another tenant's worker on the same node is one more pod the escape reaches.
 
 ## Prerequisites you supply
 
