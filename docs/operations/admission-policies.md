@@ -181,6 +181,9 @@ kubectl apply -f docs/operations/examples/policies/gatekeeper/restrict-gag-place
 
 Namespaces without the label are left untouched, so the Kyverno policy is safe to apply before you have labelled anything.
 
+> **These samples put a tenant's AGC and proxy on the same nodes as its workers.** They pin every pod in the namespace to one pool, so a worker that escapes its container reaches the AGC's GitHub App key on the same node.
+> On a cluster that keeps GAG's control plane off worker nodes ([why, and how](security-operations.md#keep-gags-control-plane-off-worker-nodes)), do not apply them as written.
+
 ### The taint bypass — and why validation alone is not enough
 
 A toleration with `operator: Exists` and **no `key`** tolerates *every* taint in the cluster, including the taints that reserve a node pool for one tenant.
