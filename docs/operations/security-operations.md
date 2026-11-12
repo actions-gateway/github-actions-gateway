@@ -525,9 +525,19 @@ If a GAG control-plane pod is one of them, one compromised node becomes access t
 | Egress proxy | That tenant's egress path and the proxy's private TLS key |
 | Cache and registry mirrors | The artifacts other jobs pull next, so a write poisons them |
 
-**GAG does not keep these pods apart for you.** None of the GMC, AGC, proxy, or worker pods carries a default node selector, toleration, or anti-affinity that separates controllers from workers.
-The proxy's built-in anti-affinity spreads its own replicas only.
-GAG never creates node pools, so the separation belongs to the cluster, and it takes two halves:
+**GAG keeps its controllers off worker nodes by default.** The GMC pod, and every AGC and egress proxy pod the GMC builds, carry a required pod anti-affinity against worker pods in every namespace.
+The scheduler enforces it from both sides: a controller is not placed on a node running a worker, and a new worker is not placed on a node running a controller.
+`ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling` and the chart's `affinity` value cannot remove it, because the term is appended after them.
+The chart value `controllerWorkerSeparation: none` turns it off, for a cluster with one schedulable node; it then gives up this protection ([upgrade notes](upgrade.md#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes)).
+
+The default leaves three gaps:
+
+- **The cache and registry mirrors carry no such term.** You install them from `deploy/`, not through the GMC.
+- **A worker template that sets `nodeName` or `schedulerName` bypasses it.** Either one skips the default scheduler's checks, and a namespaced `RunnerTemplate` may set both today.
+- **On one shared pool, controllers and workers compete for whole nodes.** A node running any worker is closed to every controller, and the reverse, so a busy pool can leave a controller rollout `Pending`.
+
+Separate pools close the last gap and make placement predictable.
+GAG never creates node pools, so this belongs to the cluster, and it takes two halves:
 
 1. **Taint the worker pool, and give no control-plane pod the toleration.** That keeps controllers off worker nodes.
 2. **Pin workers to that pool** with a `nodeSelector` or a required `nodeAffinity`.
@@ -568,7 +578,8 @@ If tenants author those objects, enforce the rule at admission rather than trust
 This matters most for the `privileged-dind` template, where an escape lands directly on the host ([choosing a template](runner-template-library.md)).
 Kata narrows the risk without removing it, because a guest-to-host escape lands on the same node.
 
-**Check the separation on a live cluster.** This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran:
+**Check the separation on a live cluster.** This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran.
+A worker is a pod carrying `app.kubernetes.io/component: runner`; the AGC shares the `actions-gateway/component: workload` label with workers, so that label alone cannot tell them apart:
 
 ```bash
 GMC_NS=gmc-system   # the namespace the chart is installed in
@@ -578,7 +589,8 @@ kubectl get pods -A -o json | jq -r --arg gmc "$GMC_NS" '
     | select(.metadata.namespace == $gmc
              or .metadata.labels["app.kubernetes.io/part-of"] == "actions-gateway")
     | { node: .spec.nodeName,
-        worker: (.metadata.labels["actions-gateway/component"] == "workload") } ]
+        worker: (.metadata.labels["actions-gateway/component"] == "workload"
+                 and .metadata.labels["app.kubernetes.io/component"] == "runner") } ]
   | group_by(.node)[]
   | select(any(.worker) and any(.worker | not))
   | .[0].node'
