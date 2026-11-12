@@ -2712,7 +2712,7 @@ The probe pull request (<code>karlkfi/gag-q215-fork#1</code>) and its branch wer
   Only the three merge-commit events need it: <code>eventName</code> is on the job message itself (seen live on a <code>JobAssigned</code>, 2026-07-26), so a <code>push</code> or <code>schedule</code> job is decided without a lookup.
   The field is best-effort and <code>omitempty</code> (<code>scaleset/types.go:221:EventName      string</code>), so an absent <code>eventName</code> takes the lookup; skipping it would admit that job unchecked.</li>
 </ul>
-<p>The security audit's lead on a fork naming a dogfood scale-set label (<a href="../Q1326/">Q1326</a>) is the first consumer.</p>
+<p>The security audit's lead on a fork naming a dogfood scale-set label (<a href="../../plan/security-audit-2026-11/#no-source-visible-control-stops-a-fork-pull-request-from-naming-a-dogfood-scale-set-label-in-runs-on">its audit lead</a>) is the first consumer.</p>
 
 
 

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1326/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1341/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate seven release and CI pipeline leads from the security audit - GitHub Actions Gateway</title>
+        <title>Split Dependabot sync so tool code never shares a job with a write token - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-seven-release-and-ci-pipeline-leads-from-the-security-audit" class="md-skip">
+        <a href="#split-dependabot-sync-so-tool-code-never-shares-a-job-with-a-write-token" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate seven release and CI pipeline leads from the security audit
+              Split Dependabot sync so tool code never shares a job with a write token
             
           </span>
         </div>
@@ -2657,34 +2657,17 @@
   
 
 
-<h1 id="validate-seven-release-and-ci-pipeline-leads-from-the-security-audit">Validate seven release and CI pipeline leads from the security audit<a class="headerlink" href="#validate-seven-release-and-ci-pipeline-leads-from-the-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a severity.
-<a href="../../plan/security-audit-2026-11/#release-and-ci-leads">Each lead, with evidence, blockers and a validation plan</a>:</p>
-<ul>
-<li>publish.yml dispatch <code>tag</code> input is never compared with the dispatch ref, so one tag's source can be published and signed under another version name while the stop-ship gates evaluate the named version (needs validation).</li>
-<li>Release verification identity pattern accepts a publish.yml signature from any v* tag for any version (needs validation).</li>
-<li>Historical publish.yml copies at 28 v* tags have no validated-candidate gate and accept a free-form version name, under a signing identity verify-release accepts for any version (needs validation).</li>
-<li>pages.yml publish job deploys dispatch-chosen content from any ref and serves the whole gh-pages branch (needs validation).</li>
-<li>Dependabot sync and rebase writers compile and run a freshly bumped build tool in a job holding a contents:write token (needs validation).</li>
-<li>No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on (needs validation).</li>
-<li>go-throttle hook returns <code>allow</code> for single <code>go build</code>/<code>go test</code> commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path (needs validation).</li>
-</ul>
-<p><strong>The first four have no lower-trust human principal today, read 2026-11-09.</strong> The repository has one collaborator and the organisation one member, the same admin account, so nobody below a maintainer can create a <code>v*</code> tag or dispatch <code>publish.yml</code> or <code>pages.yml</code>.
-For a person, the four are same-principal and nothing needs fixing before the <code>v2.0.0</code> tag.</p>
-<p>What the same reading shows is that nothing but that headcount holds them closed: both rulesets target branches and none targets tags, and <code>publish.yml</code> runs under no deployment environment (<code>github-pages</code> has a branch policy and <code>dogfood-validation</code> has required reviewers).
-So the four reopen on either of two events:</p>
-<ul>
-<li><strong>Event:</strong> a second account gets write access.
-  Before that happens, add a tag ruleset restricting <code>v*</code> creation and put <code>publish.yml</code> behind an environment with required reviewers; the four leads are then closed by a control instead of by a count.</li>
-<li><strong>Event:</strong> an automated writer can reach them.
-  The default workflow token is read-only, but a job that asks for <code>contents: write</code> or <code>actions: write</code> holds a token no tag ruleset stops.
-  Whether such a token can create a <code>v*</code> tag that starts <code>publish.yml</code>, or dispatch it, was not tested; the Dependabot lead below is the job to trace it from.</li>
-</ul>
-<p>The fork-pull-request <code>runs-on</code> lead is closed by a control once <a href="../Q1330/">Q1330</a> lets a <code>RunnerSet</code> refuse fork jobs; until then GitHub's approval setting is what holds it (<a href="../../operations/security-operations/#fork-pull-requests-choose-their-own-runner-label">operator guidance</a>).</p>
-<p><strong>Ask (answered):</strong> the first four settled from the repository's collaborators, rulesets and environments, read with <code>gh api</code> on 2026-11-09.
-<strong>Measure:</strong> the other three have a local test in the plan doc.</p>
-<p><strong>Done when</strong> each lead is either confirmed and fixed, refuted with the measurement recorded, or written into <code>05-security.md</code> as an accepted residual with its bound.
-The plan doc gives each one a bounded local test and the fact an owner has to observe.</p>
+<h1 id="split-dependabot-sync-so-tool-code-never-shares-a-job-with-a-write-token">Split Dependabot sync so tool code never shares a job with a write token<a class="headerlink" href="#split-dependabot-sync-so-tool-code-never-shares-a-job-with-a-write-token" title="Permanent link">&para;</a></h1>
+<p><code>dependabot-go-sync.yml</code> and <code>dependabot-rebase-stale.yml</code> run <code>make deps-sync</code>, which builds and runs tools such as controller-gen from a freshly bumped <code>tools/vendor</code>, in the same job that holds the <code>contents: write</code> token it pushes with.
+So a malicious release of a module in the tools graph acts with that token.</p>
+<p><strong>Measured 2026-11-11 under Q1326</strong> on the Dependabot-triggered sync run <code>42702512168</code> (2026-11-09): the token was <code>Contents: write</code> and <code>Metadata: read</code>, checkout logged <code>persist-credentials: true</code>, and controller-gen was built and run under <code>make deps-sync</code> in that job.
+The rebase job exports <code>GH_TOKEN</code> (<code>contents: write</code>, <code>pull-requests: write</code>) to the script that runs the replay's <code>make deps-sync</code>.
+Neither job holds <code>actions: write</code>, so neither can dispatch <code>publish.yml</code>, and the reach that matters is creating a <code>v*</code> tag, which no ruleset stops today.
+The proposed <code>v*</code> tag ruleset in <a href="../../design/05-security/#who-can-start-a-release-is-held-by-a-headcount-not-a-control">05-security.md</a> closes that path whatever this row does; this row narrows what is left, such as pushes to other unprotected branches.</p>
+<p><strong>Why a second job and not a step-level fix.</strong> Dropping the persisted credential and adding the token only to the push step is not a boundary: tool code running earlier in the same job can write <code>.git/config</code> (a <code>core.fsmonitor</code> program runs on the next <code>git diff</code>) or <code>.git/hooks</code>, and so runs again inside the step that holds the token.
+The shape that separates them is a read-only job that runs <code>make deps-sync</code> and uploads the diff as an artifact, and a <code>contents: write</code> job that runs no repository code, applies the diff to a fresh checkout and pushes only <code>HEAD:&lt;head_ref&gt;</code>.
+The rebase replay force-pushes several branches per run, so its split is the larger half.</p>
+<p><strong>Done when</strong> no job that holds a write-scoped token builds or runs code taken from a Dependabot branch, with a test beside <code>scripts/ci/dependabot-rebase-stale-test.sh</code> asserting the replay's sync runs with no credential reachable.</p>
 
 
 

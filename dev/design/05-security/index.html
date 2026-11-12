@@ -1162,6 +1162,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#who-can-start-a-release-is-held-by-a-headcount-not-a-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who can start a release is held by a headcount, not a control
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3297,6 +3308,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#who-can-start-a-release-is-held-by-a-headcount-not-a-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who can start a release is held by a headcount, not a control
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4070,6 +4092,33 @@ The PR-time <code>security-scan.yml</code> already generates each SBOM as a buil
 <p>The publish pipeline itself is hardened against upstream-tag hijack: every <code>uses:</code> across <code>.github/workflows/</code> is pinned to a full commit SHA (the <code>publish</code> job holds <code>id-token: write</code>, so a mutable action tag repointed at malicious code could otherwise keyless-sign images as the release identity), runtime tool downloads are version-pinned (<code>cosign</code> via <code>cosign-installer</code>, <code>syft</code> via <code>syft-version</code>), and Dependabot's <code>github-actions</code> ecosystem bumps the SHA pins so they don't rot (Q123).</p>
 <p>The keyless signing identity is <strong>tags-only</strong>: <code>publish.yml</code> refuses to run from a non-tag ref and <code>make verify-release</code> anchors the cosign <code>--certificate-identity-regexp</code> to <code>…/publish.yml@refs/tags/v.*$</code>, so a signature minted from a branch (e.g. a <code>workflow_dispatch</code> from a scratch branch overwriting a released tag) is both prevented and rejected (Q124).
 See <a href="../../operations/security-operations/#image-provenance-signature--sbom-verification">security-operations.md § Image provenance</a> for the operator verification runbook and <a href="../../operations/release/#supply-chain-integrity-of-the-pipeline-itself">release.md § Supply-chain integrity of the pipeline</a> for the SHA-pin / signing-identity policy.</p>
+<h4 id="who-can-start-a-release-is-held-by-a-headcount-not-a-control">Who can start a release is held by a headcount, not a control<a class="headerlink" href="#who-can-start-a-release-is-held-by-a-headcount-not-a-control" title="Permanent link">&para;</a></h4>
+<p>Four release leads from the November 2026 audit (Q1326, <a href="../../plan/security-audit-2026-11/#release-and-ci-leads">plan</a>) need a principal who can create a <code>v*</code> tag or dispatch <code>publish.yml</code> or <code>pages.yml</code> without being able to land the same change on <code>main</code>.
+They are the dispatch <code>tag</code> input left unbound to the dispatch ref, a signing identity that accepts any <code>v*</code> tag for any version, the ungated <code>publish.yml</code> copies at older tags, and <code>pages.yml</code> deploying dispatch-chosen content.
+<strong>Accepted residual, bounded by who holds write.</strong> Read on 2026-11-11 with <code>gh api</code>: the repository has one collaborator and the organisation one member, the same admin account, so for a person all four are same-principal.
+Nothing else holds them closed.
+Both rulesets target only the default branch and none targets tags, and <code>publish.yml</code> runs under no deployment environment.
+Two events reopen them:</p>
+<ul>
+<li><strong>A second account gets write access.</strong> Before that, add a tag ruleset restricting <code>v*</code> creation and update to administrators, and put <code>publish.yml</code> behind an environment with required reviewers.
+  Both are repository settings, so neither is applied from source.</li>
+<li><strong>An automated writer can reach them.</strong> The default workflow token is read-only, so the reach is through a job that asks for more.
+  The Dependabot writers below are the two such jobs today.</li>
+</ul>
+<p><strong>The Dependabot writers run bumped build-tool code in a job holding <code>contents: write</code>.</strong> <code>dependabot-go-sync.yml</code> and <code>dependabot-rebase-stale.yml</code> both run <code>make deps-sync</code>, which builds and runs tools such as controller-gen from <code>tools/vendor</code>, in the same job that pushes.
+The sync job's checkout persists the credential in git config, and the rebase job exports <code>GH_TOKEN</code> to the script that runs the sync.
+Measured on the Dependabot-triggered sync run <code>42702512168</code> (2026-11-09): the token held <code>Contents: write</code> and <code>Metadata: read</code> only, and <code>make deps-sync</code> built and ran controller-gen in the same job.
+So a malicious release of a module in the tools graph can act with that token.
+It <strong>cannot dispatch <code>publish.yml</code></strong>, because neither job holds <code>actions: write</code>, which the dispatch endpoint requires.
+It <strong>can create a <code>v*</code> tag</strong> as far as the rulesets go, since none targets tags.
+Whether a tag pushed with that token starts <code>publish.yml</code> was not tested, because the test is the write.
+GitHub documents that a <code>GITHUB_TOKEN</code> event starts no workflow, but this repository measured <code>GITHUB_TOKEN</code> pushes creating <code>pull_request</code> runs that were then held for approval (<a href="../../development/go-workspaces/#both-bot-pushes-leave-the-checks-withheld-pending-approval">go-workspaces.md</a>), so the documented rule is not relied on as the bound.
+The precondition is a compromised tools module, and the <code>v*</code> tag ruleset above closes the tag path for this writer as well as for a person.
+Separating tool execution from the write into a second job is hardening tracked as <a href="../../queue/Q1341/">Q1341</a>.</p>
+<p><strong>A fork pull request can name a dogfood scale-set label in <code>runs-on</code>.</strong> The label is text in a workflow file the pull request edits, and the dogfood scale sets are repository-scoped on a public repository, so no runner group sits in front of them.
+Until <a href="../../queue/Q1330/">Q1330</a> ships the default refusal of fork jobs on every <code>RunnerSet</code>, GitHub's fork approval setting is the only thing holding it, and it read <code>first_time_contributors</code> on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval.
+Setting it to <code>all_external_contributors</code> is a cheap interim tightening, though it still exempts organization and repository members.
+The lead closes when Q1330 lands; the operator half is in <a href="../../operations/security-operations/#fork-pull-requests-choose-their-own-runner-label">security-operations.md</a>.</p>
 <h3 id="github-app-key-exfiltration-via-agc-apiserver-egress">GitHub-App-key exfiltration via AGC apiserver egress<a class="headerlink" href="#github-app-key-exfiltration-via-agc-apiserver-egress" title="Permanent link">&para;</a></h3>
 <p>The AGC pod holds the tenant's GitHub App private key, and its NetworkPolicy (<code>buildAGCNetworkPolicy</code>) admits egress on the Kubernetes API server ports (443 and 6443) with <strong>no <code>to:</code> destination restriction</strong> — so a compromised AGC could in principle exfiltrate the key over port 443 to an arbitrary external HTTPS endpoint, not just the apiserver.</p>
 <p>This breadth is the <strong>default</strong>, not an oversight: the <code>kubernetes</code> Service ClusterIP is DNAT'd by kube-proxy to provider-specific node/apiserver IPs <em>before</em> NetworkPolicy is evaluated, so a precise <code>ipBlock</code> is not portable and a wrong one silently severs the AGC's apiserver access (the post-DNAT trap that bit the proxy NP in PR #59) — so any-destination must stay the secure default where the post-DNAT apiserver IP is unpredictable.</p>

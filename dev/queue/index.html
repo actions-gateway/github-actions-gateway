@@ -3266,14 +3266,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
 </tr>
 <tr>
-<td><a href="Q1326/">Q1326</a></td>
-<td><a href="../plan/security-audit-2026-11/#release-and-ci-leads">Validate seven release and CI pipeline leads from the security audit</a></td>
-<td><code>security</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
-</tr>
-<tr>
 <td><a href="Q1327/">Q1327</a></td>
 <td><a href="../plan/security-audit-2026-11/#agc-run-and-recovery-leads">Validate five AGC run and recovery state leads from the security audit</a></td>
 <td><code>security</code> <code>open-question</code></td>
@@ -3288,6 +3280,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
+</tr>
+<tr>
+<td><a href="Q1341/">Q1341</a></td>
+<td><a href="../design/05-security/#who-can-start-a-release-is-held-by-a-headcount-not-a-control">Split Dependabot sync so tool code never shares a job with a write token</a></td>
+<td><code>security</code> <code>ci</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><code>dependabot-go-sync.yml</code> and <code>dependabot-rebase-stale.yml</code> run <code>make deps-sync</code>, which builds and runs tools such as controller-gen from a …</td>
 </tr>
 <tr>
 <td><a href="Q1168/">Q1168</a></td>
