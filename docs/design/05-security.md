@@ -351,9 +351,9 @@ The precondition is a compromised tools module, and the `v*` tag ruleset above c
 Separating tool execution from the write into a second job is hardening tracked as [Q1341](../queue/Q1341.md).
 
 **A fork pull request can name a dogfood scale-set label in `runs-on`.** The label is text in a workflow file the pull request edits, and the dogfood scale sets are repository-scoped on a public repository, so no runner group sits in front of them.
-Until [Q1330](../queue/Q1330.md) ships the default refusal of fork jobs on every `RunnerSet`, GitHub's fork approval setting is the only thing holding it, and it read `first_time_contributors` on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval.
-Setting it to `all_external_contributors` is a cheap interim tightening, though it still exempts organization and repository members.
-The lead closes when Q1330 lands; the operator half is in [security-operations.md](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label).
+Since Q1330 every `RunnerSet` refuses fork jobs unless it sets `spec.forkPullRequests: Accept` ([the control](#fork-pull-request-jobs-choose-their-own-runner-set)), so the lead closes on the AGC side once the dogfood cluster runs a release carrying it, with no dogfood set accepting forks.
+Until that deploy, GitHub's fork approval setting holds it; it read `first_time_contributors` on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval, and `all_external_contributors` is a cheap tightening that still exempts organization and repository members.
+The operator half is in [security-operations.md](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label).
 
 ### GitHub-App-key exfiltration via AGC apiserver egress
 

@@ -170,9 +170,9 @@ So the declared class in decision 3 carries no credential item from this list.
 
 Settled 2026-11-11 (Q1222), as a meaning and not an API: nothing below names a field, and nothing is built.
 
-**A `RunnerSet` declared untrusted is the set that accepts fork pull request jobs, and it accepts them only while the parts of the posture the platform can check still hold.** That is the whole difference from the default [Q1330](../queue/Q1330.md) ships, which is decided (Q1220) and not yet built.
-Under that default every set refuses fork jobs and a set accepts them through one explicit switch with no precondition, so a set on a `runc` template in a namespace with an allow-all egress rule accepts forks as readily as one on the Kata recipe.
-The class puts preconditions on that switch, and a set whose preconditions fail refuses fork jobs, through whatever refusal path Q1330 settles on.
+**A `RunnerSet` declared untrusted is the set that accepts fork pull request jobs, and it accepts them only while the parts of the posture the platform can check still hold.** That is the whole difference from the default Q1330 ships, `spec.forkPullRequests: Refuse` (decided in Q1220).
+Under that default every set refuses fork jobs and a set accepts them through one explicit switch, `Accept`, with no precondition, so a set on a `runc` template in a namespace with an allow-all egress rule accepts forks as readily as one on the Kata recipe.
+The class puts preconditions on that switch, and a set whose preconditions fail refuses fork jobs through Q1330's refusal path: no runner is minted, the run is force-cancelled, a failed check run names the reason where the App may write one, and a run that cannot be read holds the job under `JobSourceUnverified`.
 Its jobs from the repository's own branches are unaffected either way.
 
 **The class is meant to replace the precondition-free switch, not to sit beside it for good.** Accepting fork jobs is already the operator's claim that the set is fit for them, so checking the half of that claim the platform can check costs a set that really runs the Kata posture nothing.
