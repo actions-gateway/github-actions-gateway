@@ -3278,7 +3278,7 @@
 <p>Third full security audit, performed 2026-11-09 against <code>7b3f016ad</code>, ahead of <code>v2.0.0</code>.
 The first audit (2026-05) is <a href="../security/">security.md</a> and the second (2026-06) is <a href="../archive/security-audit-2026-06/">archive/security-audit-2026-06.md</a>; this doc records only the third audit's findings and where each one is tracked.</p>
 <blockquote>
-<p><strong>Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), and six of the seven release and CI leads settled (Q1326).</strong> 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 16 of which still are, one of them the release and CI lead that waits on Q1330.
+<p><strong>Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), six of the seven release and CI leads settled (Q1326), and the four scale-set identity leads confirmed, three fixed and one accepted as a residual (Q1325).</strong> 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 12 of which still are, one of them the release and CI lead that waits on Q1330.
 Nothing reached high or critical.
 Two rows gated <code>v2.0.0</code>, Q1321 and Q1322, and both have landed.
 The rest are <a href="../../queue/Q1323/">Q1323</a> to <a href="../../queue/Q1328/">Q1328</a>.</p>
@@ -3408,23 +3408,23 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 </tr>
 <tr>
 <td><a href="#scale-set-identity-leads">Worker-pod reaper deletes whichever GitHub runner the pod's runner-name annotation names, with no ownership test</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1325/">Q1325</a></td>
+<td>confirmed by a local test, fixed</td>
+<td>Q1325</td>
 </tr>
 <tr>
 <td><a href="#scale-set-identity-leads">Editing runnerLabels[0] releases the scale-set name claim while the AGC keeps its live session on the old name</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1325/">Q1325</a></td>
+<td>confirmed by a local test, fixed</td>
+<td>Q1325</td>
 </tr>
 <tr>
 <td><a href="#scale-set-identity-leads">Scale-set name uniqueness guard is check-then-act across two objects, so one tenant creating its RunnerSet and ActionsGateway concurrently may claim another tenant's scale-set name</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1325/">Q1325</a></td>
+<td>confirmed by a local test, accepted residual</td>
+<td>Q1325</td>
 </tr>
 <tr>
 <td><a href="#scale-set-identity-leads">AGC adopts the first scale set a server-side name filter returns without comparing its name, while admission compares first labels as exact case-sensitive strings</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1325/">Q1325</a></td>
+<td>confirmed by a local test, fixed</td>
+<td>Q1325</td>
 </tr>
 <tr>
 <td><a href="#release-and-ci-leads">publish.yml dispatch <code>tag</code> input is never compared with the dispatch ref, so one tag's source can be published and signed under another version name while the stop-ship gates evaluate the named version</a></td>
@@ -3902,7 +3902,8 @@ The proxy now refuses any dial that lands on one of its own listening ports at a
 The nested audit and failure-record tests the lead describes were not written, because the tunnel they depend on is now refused.</p>
 <p><strong>Evidence.</strong> <code>cmd/gmc/internal/controller/egressproxy_builder.go:187</code>, <code>cmd/proxy/main.go:96</code>, <code>cmd/proxy/proxy.go:420</code>, <code>cmd/proxy/proxy.go:760</code>, <code>cmd/proxy/audit.go:157</code>, <code>cmd/proxy/attribution.go:124</code>, <code>cmd/gmc/internal/controller/egressproxy_attribution.go:332</code>, <code>docs/design/05-security.md:401</code>.</p>
 <h2 id="scale-set-identity-leads">Scale-set identity leads<a class="headerlink" href="#scale-set-identity-leads" title="Permanent link">&para;</a></h2>
-<p>Four leads on which controller owns a GitHub scale set or runner record, tracked as <a href="../../queue/Q1325/">Q1325</a>.
+<p>Four leads on which controller owns a GitHub scale set or runner record, each confirmed by a local test under Q1325; three are fixed and one is an accepted residual in <code>05-security.md</code>, and the <strong>Outcome</strong> line under each says what was measured.
+The owner checks below were not run: each fix holds whatever GitHub turns out to do, and the residual's bound does not depend on it either.
 The first two are the class Q1290 gated: one tenant's edit can cost another a job with no visible failure.
 They are not gated here because both are unvalidated, they need two mutually untrusted tenants in one GitHub scope, and neither fix needs a major.</p>
 <h3 id="worker-pod-reaper-deletes-whichever-github-runner-the-pods-runner-name-annotation-names-with-no-ownership-test">Worker-pod reaper deletes whichever GitHub runner the pod's runner-name annotation names, with no ownership test<a class="headerlink" href="#worker-pod-reaper-deletes-whichever-github-runner-the-pods-runner-name-annotation-names-with-no-ownership-test" title="Permanent link">&para;</a></h3>
@@ -3923,6 +3924,10 @@ The ownership test the sweep applies (mintedRunnerSuffix, cmd/agc/internal/scale
 <p><strong>Local test.</strong> In cmd/agc/internal/controller/runnerset_reap_deregister_test.go add a case beside TestRunnerSetReaper_DeregistersReapedWorkersRunnerRecord, using the same scalesettest server and newReapScaleSetClient: seed a runner record named 'other-set-runner' that this set did not mint (a name without the set's '<scale set>-<UUID>' shape), create a terminal pod labelled actions-gateway.com/runner-set=<set> carrying actions-gateway.com/runner-name: other-set-runner, with a second variant that has no owner reference and no acquisition-protocol label, run the reaper past completedPodTTL and assert the server's delete-runner call count (the stub exposes DeleteRunnerCalls in scaleset/scalesetstub/stub.go).
 Current source predicts one DELETE for the foreign record; a fix that binds the name to the set's minted shape should issue none.</p>
 <p><strong>Owner check.</strong> Owner-observed on a disposable org with two RunnerSets and a ServiceAccount holding only pods/patch in the first set's namespace: register an idle persistent self-hosted runner and let the second set mint a not-yet-connected JIT runner, patch a first-set worker pod's actions-gateway.com/runner-name to each name in turn (back-dating actions-gateway.com/job-completed-at to trigger the reap), and record from the org runners page and the AGC log line 'reaper: deregistered worker runner record' whether each record was removed and whether the name filter returned a runner in a different runner group.</p>
+<p><strong>Outcome.</strong> Confirmed and fixed.
+With the plan's fixture, the reaper on <code>main</code> issued four REST deletes and removed a persistent runner's record, another set's minted record, and the record of a set whose first label extends this one's, as well as its own.
+It now deregisters only a name <code>scalesetlistener.MintedBy</code> accepts for the listener's own scale-set name, the test the start-up sweep applies, so the same fixture issues one delete (<code>TestRunnerSetReaper_LeavesRunnerRecordsItDidNotMint</code>).
+Whether GitHub deletes an idle online runner was not measured, and the fix does not depend on it.</p>
 <p><strong>Evidence.</strong> <code>cmd/agc/internal/controller/runner_shared.go:356</code>, <code>cmd/agc/internal/controller/runner_shared.go:324</code>, <code>cmd/agc/internal/controller/runner_shared.go:484</code>, <code>cmd/agc/internal/controller/runnerset_gateway_teardown.go:62</code>, <code>scaleset/client.go:741</code>, <code>cmd/agc/internal/scalesetlistener/listener.go:1057</code>, <code>docs/design/05-security.md:737</code>, <code>cmd/agc/internal/provisioner/target.go:51</code>, <code>docs/operations/observability-metrics.md:229</code>.</p>
 <h3 id="editing-runnerlabels0-releases-the-scale-set-name-claim-while-the-agc-keeps-its-live-session-on-the-old-name">Editing runnerLabels[0] releases the scale-set name claim while the AGC keeps its live session on the old name<a class="headerlink" href="#editing-runnerlabels0-releases-the-scale-set-name-claim-while-the-agc-keeps-its-live-session-on-the-old-name" title="Permanent link">&para;</a></h3>
 <p><code>agc/runnerset-scaleset/listener-name-not-reconciled-on-first-label-change</code>: needs validation.
@@ -3943,6 +3948,11 @@ The fake's 409 only mirrors the assumed GitHub behaviour, so this confirms the c
 <p><strong>Owner check.</strong> On a non-production GitHub org with two gateways bound to it in separate namespaces, the operator renames a live ScaleSet RunnerSet's first label, applies a second RunnerSet with the old first label in the other namespace, queues one workflow job with runs-on set to the old label, and records which namespace the worker pod appears in, what the second RunnerSet's status and its AGC log show, and whether the ScaleSetNameCollision condition or gauge fires.
 Then restart the first AGC and record that the session moves to the new name.
 Nothing is deleted; revert by removing the second RunnerSet and the test scale sets at GitHub.</p>
+<p><strong>Outcome.</strong> Confirmed and fixed.
+In the AGC envtest suite on <code>main</code>, editing a live set's first label left the listener on the old scale set: the new name was never registered within 20 seconds.
+The listener handle now records the scale-set name it registered, and a reconcile that finds the spec naming another restarts the listener as it does for a runner-group change (Q712), so the old session is deleted and the new name registered (<code>TestV2_RunnerSet_ScaleSet_FirstLabelChangeMovesTheSession</code>).
+The GMC half, a second tenant admitted onto the released name, was not tested, and whether GitHub refuses a second session was not measured; the fix removes the stale session that question was about.
+It does not remove the old scale set, which stays registered and is adopted by exact name by the next tenant admitted onto that name, filed as Q1344 (read from source).</p>
 <p><strong>Evidence.</strong> <code>cmd/agc/internal/controller/runnerset_scaleset.go:609</code>, <code>cmd/agc/internal/controller/runnerset_scaleset.go:285</code>, <code>cmd/agc/internal/controller/runnerset_scaleset.go:309</code>, <code>api/v2/runnerset_types.go:85</code>, <code>cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:54</code>, <code>docs/design/05-security.md:672</code>, <code>docs/operations/upgrade.md:331</code>, <code>docs/operations/troubleshooting.md:2439</code>.</p>
 <h3 id="scale-set-name-uniqueness-guard-is-check-then-act-across-two-objects-so-one-tenant-creating-its-runnerset-and-actionsgateway-concurrently-may-claim-another-tenants-scale-set-name">Scale-set name uniqueness guard is check-then-act across two objects, so one tenant creating its RunnerSet and ActionsGateway concurrently may claim another tenant's scale-set name<a class="headerlink" href="#scale-set-name-uniqueness-guard-is-check-then-act-across-two-objects-so-one-tenant-creating-its-runnerset-and-actionsgateway-concurrently-may-claim-another-tenants-scale-set-name" title="Permanent link">&para;</a></h3>
 <p><code>gmc-webhook-scaleset-scope:concurrent-pair-admission</code>: needs validation.
@@ -3960,6 +3970,12 @@ Assert that no iteration ends with both stored.
 Red on current code shows the race is reachable; the existing sequential cases in the same file are the control showing either order is rejected.
 A never-red result within the bound does not refute the race, so also record how many iterations ran.</p>
 <p><strong>Owner check.</strong> On a cluster where two tenants register against one GitHub org, the owner reads the actions_gateway_scale_set_name_collision gauge and the ScaleSetNameCollision condition on every ActionsGateway, reviews the apiserver audit log for a RunnerSet and an ActionsGateway created in one namespace within the same second, and confirms whether each tenant's GitHub App installation can manage scale sets across the whole shared scope.</p>
+<p><strong>Outcome.</strong> Confirmed, and accepted as a residual.
+The plan's envtest admitted both objects of a concurrently created pair onto the held name in 25 of 50 iterations on 2026-11-11.
+Admission cannot reserve a name across two objects, so the residual and its bound are in <code>05-security.md</code>.
+The bound turned out to be mostly the guard itself: the GMC's first write to the raced gateway, its finalizer, is an update the gateway webhook refuses while the pair collides, so none of the 25 raced gateways was provisioned, while the held tenant's gateway reported <code>ScaleSetNameCollision</code>; <code>TestV2_ScaleSetNameGuard_ConcurrentPairIsReported</code> asserts both, and goes red with the gateway webhook's update-path scope check removed.
+The same refusal blocks every update to the held tenant's gateway while the pair stands, filed as Q1342.
+The sentence in <code>05-security.md</code> saying both halves were complete in every apply order now says one object after the other.</p>
 <p><strong>Evidence.</strong> <code>cmd/gmc/internal/scalesetscope/scalesetscope.go:88</code>, <code>cmd/gmc/internal/webhook/v2/actionsgateway_webhook.go:129</code>, <code>cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:29</code>, <code>docs/design/05-security.md:672</code>, <code>docs/design/05-security.md:210</code>, <code>charts/actions-gateway/templates/webhook.yaml:31</code>.</p>
 <h3 id="agc-adopts-the-first-scale-set-a-server-side-name-filter-returns-without-comparing-its-name-while-admission-compares-first-labels-as-exact-case-sensitive-strings">AGC adopts the first scale set a server-side name filter returns without comparing its name, while admission compares first labels as exact case-sensitive strings<a class="headerlink" href="#agc-adopts-the-first-scale-set-a-server-side-name-filter-returns-without-comparing-its-name-while-admission-compares-first-labels-as-exact-case-sensitive-strings" title="Permanent link">&para;</a></h3>
 <p><code>scaleset-adopt-by-name-unverified-match</code>: needs validation.
@@ -3977,6 +3993,11 @@ Both are expected to fail on current code, which demonstrates the missing check 
 In scaleset/client_test.go add a GetRunnerScaleSetByName case where the server returns a differently named first value.
 In cmd/gmc/internal/scalesetscope/scalesetscope_test.go add a CollidesWith case for labels differing only by case to pin whichever policy is chosen.</p>
 <p><strong>Owner check.</strong> Ask the owner of a GitHub scope used with the gateway (github.com, and a supported GitHub Enterprise Server version) to observe and record these runtime facts of the Actions service: whether the runnerscalesets name filter matches exactly and case-sensitively or also returns sets whose names differ by case, prefix or substring; whether scale-set names are unique per scope case-insensitively (a set named "CI" is refused beside an existing "ci"); and whether one name can exist in two runner groups of a scope, and if so what count and order the by-name lookup without a runner group returns.</p>
+<p><strong>Outcome.</strong> Confirmed and fixed.
+With the stub's filter widened, the lookup on <code>main</code> returned <code>ci-linux</code> for <code>ci</code>, <code>ci</code> for <code>CI</code>, and the first of two sets named <code>ci</code>, and a listener for <code>CI</code> started on another group's <code>ci</code>.
+<code>GetRunnerScaleSetByName</code> now compares names itself: an exact match is returned, a looser one ignored, and a case-only match or two exact ones are refused, so the listener's start fails and the other set is untouched (<code>TestGetRunnerScaleSetByName_*</code>, <code>TestListener_RefusesAScaleSetWhoseNameDiffersOnlyByCase</code>).
+Admission keeps comparing first labels exactly, pinned by a <code>CollidesWith</code> case, since the AGC can no longer adopt one as the other.
+Whether github.com's filter is exact, and whether it refuses <code>CI</code> beside <code>ci</code>, was not measured, and the fix holds either way.</p>
 <p><strong>Evidence.</strong> <code>scaleset/client.go:740</code>, <code>scaleset/client.go:466</code>, <code>cmd/agc/internal/scalesetlistener/listener.go:938</code>, <code>docs/design/05-security.md:711</code>, <code>scaleset/scalesetstub/stub.go:1210</code>.</p>
 <h2 id="release-and-ci-leads">Release and CI leads<a class="headerlink" href="#release-and-ci-leads" title="Permanent link">&para;</a></h2>
 <p>Seven leads on the release pipeline and CI, tracked as Q1326 and closed under it.

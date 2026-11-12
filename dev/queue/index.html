@@ -3058,6 +3058,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Five boundary slips confirmed from source on 2026-11-09, each narrow and none needing a major to fix.</strong> Nothing was run, so each result …</td>
 </tr>
 <tr>
+<td><a href="Q1342/">Q1342</a></td>
+<td>A stored scale-set name collision refuses every update to either gateway</td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>While two stored RunnerSets in one GitHub scope share a first label, the ActionsGateway webhook refuses every update to either side's …</td>
+</tr>
+<tr>
+<td><a href="Q1344/">Q1344</a></td>
+<td>A renamed or deleted set's scale set is adopted by the next tenant</td>
+<td><code>security</code> <code>bug</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>When a set's first label is renamed, or a <code>RunnerSet</code> is deleted, the old scale set stays registered at GitHub, and the next tenant …</td>
+</tr>
+<tr>
 <td><a href="Q1335/">Q1335</a></td>
 <td>A consumer's unwritable projected Secret stalls a provider's EgressProxy</td>
 <td><code>security</code> <code>bug</code></td>
@@ -3240,14 +3256,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>A worker's job can read its runner's just-in-time (JIT) config, and what the job can do with it while its own job runs has never been run …</td>
-</tr>
-<tr>
-<td><a href="Q1325/">Q1325</a></td>
-<td><a href="../plan/security-audit-2026-11/#scale-set-identity-leads">Validate four scale-set identity leads from the security audit</a></td>
-<td><code>security</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
 </tr>
 <tr>
 <td><a href="Q1327/">Q1327</a></td>

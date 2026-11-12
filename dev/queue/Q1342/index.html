@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1325/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1342/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate four scale-set identity leads from the security audit - GitHub Actions Gateway</title>
+        <title>A stored scale-set name collision refuses every update to either gateway - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-four-scale-set-identity-leads-from-the-security-audit" class="md-skip">
+        <a href="#a-stored-scale-set-name-collision-refuses-every-update-to-either-gateway" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate four scale-set identity leads from the security audit
+              A stored scale-set name collision refuses every update to either gateway
             
           </span>
         </div>
@@ -2657,20 +2657,17 @@
   
 
 
-<h1 id="validate-four-scale-set-identity-leads-from-the-security-audit">Validate four scale-set identity leads from the security audit<a class="headerlink" href="#validate-four-scale-set-identity-leads-from-the-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a severity.
-<a href="../../plan/security-audit-2026-11/#scale-set-identity-leads">Each lead, with evidence, blockers and a validation plan</a>:</p>
-<ul>
-<li>Worker-pod reaper deletes whichever GitHub runner the pod's runner-name annotation names, with no ownership test (needs validation).</li>
-<li>Editing runnerLabels[0] releases the scale-set name claim while the AGC keeps its live session on the old name (needs validation).</li>
-<li>Scale-set name uniqueness guard is check-then-act across two objects, so one tenant creating its RunnerSet and ActionsGateway concurrently may claim another tenant's scale-set name (needs validation).</li>
-<li>AGC adopts the first scale set a server-side name filter returns without comparing its name, while admission compares first labels as exact case-sensitive strings (needs validation).</li>
-</ul>
-<p>The first two are the class Q1290 gated, where one tenant's edit can cost another a job with no visible failure: the worker-pod reaper has none of the ownership tests Q1290 gave the start-up sweep, and a listener stays on a scale-set name its RunnerSet has released.
-They are not gated because both are unvalidated and need two mutually untrusted tenants in one GitHub org or repository.</p>
-<p><strong>Measure:</strong> each lead's local test in the plan doc is an envtest or unit case that needs no cluster; the GitHub-side behaviour (two sessions on one scale set, a runner delete by name) needs a reading against github.com.</p>
-<p><strong>Done when</strong> each lead is either confirmed and fixed, refuted with the measurement recorded, or written into <code>05-security.md</code> as an accepted residual with its bound.
-The plan doc gives each one a bounded local test and the fact an owner has to observe.</p>
+<h1 id="a-stored-scale-set-name-collision-refuses-every-update-to-either-gateway">A stored scale-set name collision refuses every update to either gateway<a class="headerlink" href="#a-stored-scale-set-name-collision-refuses-every-update-to-either-gateway" title="Permanent link">&para;</a></h1>
+<p>While two stored RunnerSets in one GitHub scope share a first label, the ActionsGateway webhook refuses every update to either side's gateway, including the GMC's own finalizer write and the established tenant's edits to its own gateway.</p>
+<p><strong>Measured 2026-11-11 in the GMC envtest suite</strong>, while closing Q1325: a RunnerSet and an ActionsGateway created concurrently in a second namespace were both admitted onto a first label a first namespace already held (25 of 50 attempts).
+From then on, Q1325's reviewer edited the established gateway's labels and the webhook refused the edit with <code>RunnerSet "held" in this namespace would claim scale-set name "shared-race"</code>, though it changed only metadata (2026-11-11, at #2306 head <code>4b373bc</code>).
+An earlier run with the established gateway not yet reconciled showed its GMC finalizer update denied the same way on every reconcile.
+The raced gateway's finalizer write is denied the same way, which is what keeps it from being provisioned, so that half is wanted.</p>
+<p><strong>Mechanism, read from source.</strong> <code>validateScaleSetLabelsVsScope</code> runs on every update, and an update that leaves <code>githubURL</code> alone is judged with <code>CollidesAsWritten</code>, which only drops the public-GitHub alias fold: a genuinely colliding stored pair still fails it.
+So the second tenant, by racing a pair (or by any route into a stored collision: an upgrade from before Q791, a window with the webhook uninstalled), freezes the first tenant's gateway against its own edits until the second tenant's set is gone.
+The gateway's status subresource is not intercepted, so the <code>ScaleSetNameCollision</code> report still lands.</p>
+<p><strong>Fix direction, not decided.</strong> Exempt an update whose own namespace's claims are unchanged from the scope check, the way <code>scaleSetClaimUnchanged</code> exempts a RunnerSet edit, while keeping the refusal for a gateway that has never been reconciled (no GMC finalizer), since that refusal is what holds a raced gateway unprovisioned.
+<code>TestV2_ScaleSetNameGuard_ConcurrentPairIsReported</code> builds the state and requires that refusal for every raced gateway, so a fix that drops it reddens there; a case editing the held gateway's labels should go green with the fix.</p>
 
 
 

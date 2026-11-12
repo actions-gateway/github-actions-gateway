@@ -3505,7 +3505,7 @@ Four limits worth stating plainly before you conclude "Kata, therefore safe":</p
   No breakout was attempted.
   Treat the containment claim as "designed and structurally sound", not "empirically tested against an exploit".</li>
 </ul>
-<p>The honest recommendation: <strong>prefer Kata over privileged DinD for untrusted code</strong> — it is the only option here that puts a machine boundary around an inner Docker daemon, and it converts a kernel escape from node compromise into a discarded guest.
+<p>The honest recommendation: <strong>prefer Kata over privileged DinD for any job that needs a Docker daemon, whoever wrote it</strong> — it is the only option here that puts a machine boundary around an inner Docker daemon, and it converts a kernel escape from node compromise into a discarded guest.
 But deploy it <em>with</em> Workload Identity, <code>automountServiceAccountToken: false</code>, and ideally a NetworkPolicy denying egress to <code>169.254.169.254/32</code>.
 Kata alone is not the control.</p>
 <h2 id="untrusted-pull-requests--the-tight-egress-posture">Untrusted pull requests — the tight-egress posture<a class="headerlink" href="#untrusted-pull-requests--the-tight-egress-posture" title="Permanent link">&para;</a></h2>
