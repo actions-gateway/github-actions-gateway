@@ -90,11 +90,13 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2.WorkerSizing
 			c := &out.Spec.Containers[i]
 			rec := recommendationFor(recs, c.Name)
 			// Requests from the history; no CPU limit so jobs burst; memory
-			// limit = observed peak × headroom (never below the request).
+			// limit = observed peak × headroom, clamped like a request and never
+			// below one. The peak is the job's own, so an unclamped limit could
+			// climb by the headroom factor each generation (Q1327).
 			cpuReq := clampQuantity(rec.Requests[corev1.ResourceCPU], sizing, corev1.ResourceCPU)
 			memReq := clampQuantity(rec.Requests[corev1.ResourceMemory], sizing, corev1.ResourceMemory)
 			memPeak := rec.ObservedPeak[corev1.ResourceMemory]
-			memLimit := scaleQuantity(corev1.ResourceMemory, memPeak, headroom)
+			memLimit := clampQuantity(scaleQuantity(corev1.ResourceMemory, memPeak, headroom), sizing, corev1.ResourceMemory)
 			if memLimit.Cmp(memReq) < 0 {
 				memLimit = memReq
 			}
@@ -108,10 +110,9 @@ func applySizingProfile(template corev1.PodTemplateSpec, sizing *v2.WorkerSizing
 
 // memoryRetryPolicy is the out-of-memory retry rule of a profile that derives memory
 // limits from history (Q1183): the same headroom over the killed limit that the
-// profile puts over an observed peak, capped at maxRequests. Throughput's own limit is
-// not clamped by maxRequests; the bump is, so a retry never buys memory the profile's
-// clamp would refuse. Nil for every other profile, whose next pod gets the limit that
-// killed the job.
+// profile puts over an observed peak, capped at maxRequests like the profile's own
+// limit, so a retry never buys memory the profile's clamp would refuse. Nil for every
+// other profile, whose next pod gets the limit that killed the job.
 func memoryRetryPolicy(sizing *v2.WorkerSizing) *provisioner.MemoryRetryPolicy {
 	if sizing == nil {
 		return nil

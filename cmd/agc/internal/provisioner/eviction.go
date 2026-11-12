@@ -11,10 +11,11 @@ import (
 	"log/slog"
 	"net/http"
 	neturl "net/url"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/actions-gateway/github-actions-gateway/githubapp"
 )
 
 // evictionEntry is the value stored in evictionCounts. count is the number of
@@ -720,12 +721,12 @@ func (p *Provisioner) runConclusion(ctx context.Context, owner, repo, runID stri
 		return runState{}, err
 	case status >= 500:
 		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
-			status, strings.TrimSpace(string(body)), errRunConclusionUnreadable)
+			status, githubapp.SanitizeBody(bytes.TrimSpace(body), 512), errRunConclusionUnreadable)
 	case status == http.StatusNotFound || status == http.StatusGone:
 		return runState{}, fmt.Errorf("run-status API returned %d: %s: %w",
-			status, strings.TrimSpace(string(body)), errRunGone)
+			status, githubapp.SanitizeBody(bytes.TrimSpace(body), 512), errRunGone)
 	case status < 200 || status > 299:
-		return runState{}, fmt.Errorf("run-status API returned %d: %s", status, strings.TrimSpace(string(body)))
+		return runState{}, fmt.Errorf("run-status API returned %d: %s", status, githubapp.SanitizeBody(bytes.TrimSpace(body), 512))
 	}
 
 	var run struct {
@@ -855,9 +856,9 @@ func (p *Provisioner) rerunFailedJobs(ctx context.Context, owner, repo, runID st
 		if resp.StatusCode == http.StatusForbidden &&
 			bytes.Contains(bytes.ToLower(body), []byte("already running")) {
 			return fmt.Errorf("rerun API returned %d: %s: %w",
-				resp.StatusCode, strings.TrimSpace(string(body)), errRunNotConcluded)
+				resp.StatusCode, githubapp.SanitizeBody(bytes.TrimSpace(body), 512), errRunNotConcluded)
 		}
-		return fmt.Errorf("rerun API returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("rerun API returned %d: %s", resp.StatusCode, githubapp.SanitizeBody(bytes.TrimSpace(body), 512))
 	}
 	return nil
 }

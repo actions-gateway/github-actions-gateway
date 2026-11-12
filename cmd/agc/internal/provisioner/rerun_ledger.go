@@ -60,11 +60,18 @@ const failureRecordTTL = 7 * 24 * time.Hour
 const rerunLedgerMaxBytes = 512 << 10
 
 // failureRecordsCeiling is the encoded size past which failure records are evicted,
-// oldest first. It is half the cap, not the cap: v1.10.0 writes this ledger too, keeps
-// failure records it does not know, cannot evict them, and refuses a write past the
-// cap, so records filling the ledger would withhold every re-run it reserves during a
-// rollout or after a rollback.
+// oldest first, and then memory floors. It is half the cap, not the cap: v1.10.0
+// writes this ledger too, keeps failure records it does not know, cannot evict them,
+// and refuses a write past the cap, so records filling the ledger would withhold every
+// re-run it reserves during a rollout or after a rollback.
 const failureRecordsCeiling = rerunLedgerMaxBytes / 2
+
+// maxMergedPerAttempt bounds the disruptions and jobs one re-run attempt lists. A
+// budget record is never evicted, so an unbounded list let one run's matrix of killed
+// jobs fill the ledger and refuse every other repository's re-run (Q1327). A merged
+// disruption past the bound is not recorded, and replayed it merges again, which spends
+// no slot either.
+const maxMergedPerAttempt = 16
 
 // Re-run scopes: what one re-run covered. rerun-failed-jobs, the only call GAG makes
 // today, covers every failed job of the attempt; scopeJob is reserved for a
@@ -390,8 +397,10 @@ func (p *Provisioner) reserveScaleSetRerun(ctx context.Context, target Target, r
 		if a := r.Attempts[attemptKey]; a != nil &&
 			(a.Scope == rerunScopeFailedJobs || (d.job != "" && slices.Contains(a.Jobs, d.job))) {
 			outcome = rerunMerged
-			a.Disruptions = append(a.Disruptions, d.key)
-			if d.job != "" && !slices.Contains(a.Jobs, d.job) {
+			if len(a.Disruptions) < maxMergedPerAttempt {
+				a.Disruptions = append(a.Disruptions, d.key)
+			}
+			if d.job != "" && len(a.Jobs) < maxMergedPerAttempt && !slices.Contains(a.Jobs, d.job) {
 				a.Jobs = append(a.Jobs, d.job)
 			}
 			r.ExpiresAt = now.Add(rerunRecordTTL)
@@ -522,7 +531,7 @@ func (p *Provisioner) updateRerunLedger(ctx context.Context, target Target, muta
 		l.MinWriterVersion = max(l.MinWriterVersion, rerunLedgerMinWriterVersion)
 
 		data, err := json.Marshal(l)
-		for err == nil && len(data) > failureRecordsCeiling && evictOldestFailure(l) {
+		for err == nil && len(data) > failureRecordsCeiling && (evictOldestFailure(l) || evictOldestMemoryFloors(l, len(data)-failureRecordsCeiling)) {
 			data, err = json.Marshal(l)
 		}
 		if err != nil {

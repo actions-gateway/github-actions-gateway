@@ -323,7 +323,7 @@ next     = min(roundUp64Mi(killedLimit × headroom), ceiling)
 If `next <= killedLimit` (a ceiling reached, or `limitHeadroomPercent: 100`), the fire is withheld as `own_limit`.
 **A job gets one bump.** A second out-of-memory kill on the same job is `same_class_again`, so growth is bounded by the ceiling, at most 2× the limit that first failed when `maxRequests` is unset, whatever `maxEvictionRetries` and `limitHeadroomPercent` allow (up to 10 and 1000% respectively).
 Under `Binpack`, requests equal limits, so the request rises with it; under `Throughput`, only the limit.
-`Throughput`'s limit is not clamped by `maxRequests` today; clamping the bump is deliberate, because a retry must not buy memory a profile would refuse.
+Clamping the bump is deliberate, because a retry must not buy memory a profile would refuse; `Throughput`'s own limit is clamped by `maxRequests` too (Q1327).
 
 **The override needs a per-job hook, which does not exist.** `Target.Resolve(ctx)` takes no job, and `buildPod` uses the job only for annotations.
 Add a floor lookup after `Resolve` in `ProvisionScaleSetWorker`, keyed by the `ScaleSetJob`'s run id and job name, which `JobAssigned` already carries, against the ledger's in-memory copy.

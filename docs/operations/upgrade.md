@@ -41,6 +41,8 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
+  - [Action required if a Throughput RunnerSet sets maxRequests.memory: its memory limit now stops there](#action-required-if-a-throughput-runnerset-sets-maxrequestsmemory-its-memory-limit-now-stops-there)
+  - [Non-breaking: one repository's out-of-memory kills no longer fill the scale-set failure ledger](#non-breaking-one-repositorys-out-of-memory-kills-no-longer-fill-the-scale-set-failure-ledger)
   - [Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the -v2 webhooks](#action-required-if-you-copied-the-webhook-rejection-alert-or-imported-the-security-dashboard-both-now-see-the--v2-webhooks)
   - [Non-breaking: two `RunnerSet`s may share a name across namespaces](#non-breaking-two-runnersets-may-share-a-name-across-namespaces)
   - [Non-breaking: a worker deleted while still pulling its image is force-cancelled, then re-run](#non-breaking-a-worker-deleted-while-still-pulling-its-image-is-force-cancelled-then-re-run)
@@ -1030,6 +1032,25 @@ That gateway could not run before either, since the guard already denied its Dep
 
 **What to do.** Label the consumer namespace as a tenant ([tenant onboarding](tenant-onboarding.md)), or remove it from `allowedNamespaces`.
 If you apply `cmd/gmc/config/admission-policy/tenant-resource-guard.yaml` yourself and the GMC does not run in `gmc-system`, change the namespace in the `isInstallNamespaceConfigMap` expression as well as the ServiceAccount identity in `matchConditions`; the chart renders both from the release namespace.
+
+### Action required if a `Throughput` `RunnerSet` sets `maxRequests.memory`: its memory limit now stops there
+
+**Who is affected:** a `RunnerSet` with `spec.sizing.profile: Throughput` and a `maxRequests.memory` below its observed memory peak × `limitHeadroomPercent`.
+
+**What changed.** `maxRequests` already bounded the derived requests; the `Throughput` memory limit, derived from a peak the jobs themselves control, now stops at `maxRequests.memory` too, and never below the request (Q1327).
+Without the bound a job sampled near its limit raised the next limit by the headroom factor, generation after generation.
+
+**What you will see.** Worker pods built after the upgrade carry the lower limit, and a job that needed the difference is killed for memory where it was not before; on a scale-set set its out-of-memory retry is capped at `maxRequests.memory` as it already was.
+
+**What to do.** Compare `status.sizingRecommendation[].observedPeak.memory` × `limitHeadroomPercent` / 100 with `maxRequests.memory`, and raise the ceiling where the gap is headroom you meant to grant ([worker rightsizing](worker-rightsizing.md)).
+A set with no `maxRequests.memory` is unchanged.
+
+### Non-breaking: one repository's out-of-memory kills no longer fill the scale-set failure ledger
+
+**What changed.** Under `Binpack` and `Throughput`, each job a `RunnerSet` lost to an out-of-memory kill wrote a memory floor, a parked re-run and a merged disruption into `scaleset-failures-<set>`, none of which the 512 KiB cap evicted, so 564 killed jobs from one repository's matrix runs filled it and every other repository's automatic re-run was withheld as `eviction_rerun_failures_total{reason="budget_unrecorded"}` (Q1327).
+Now one parked re-run is kept per run attempt, since its release re-runs every failed job of the attempt; a re-run lists at most 16 merged disruptions and jobs; and memory floors are evicted oldest first, after failed-job records, before a budget write is refused.
+
+**What you will see.** Nothing, unless floors are evicted: a job whose floor is gone provisions at its resolved limit again, and a second kill of it reads as a first one, still inside the run's `maxEvictionRetries`.
 
 ### Action required if you copied the webhook-rejection alert or imported the security dashboard: both now see the `-v2` webhooks
 
