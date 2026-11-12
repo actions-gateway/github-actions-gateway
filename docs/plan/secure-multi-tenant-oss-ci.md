@@ -3,7 +3,7 @@
 > **Status: goal stated 2026-08-06, deliverables partly shipped.** This is a map and a definition of done, not a design.
 > The design for the network half is [q408-untrusted-pr-egress.md](q408-untrusted-pr-egress.md) and is not restated here.
 > Kernel isolation, the pod floor, the network layer, the metadata block and the egress evidence are shipped.
-> Definition of Done items 4 and 6 are open, and so is one of the three decisions at the end of this document.
+> Definition of Done items 4 and 6 are open; the three decisions at the end of this document are settled.
 
 ## Why this is the goal
 
@@ -136,10 +136,11 @@ Surfaced by drawing the whole picture; each is a decision before it is work:
    Secrets a workflow grants to `pull_request_target` stay the repository's decision, as the residual-risk list below says.
 2. **Runner-token scope for an untrusted job.** Settled 2026-11-09: no untrusted class gets a narrower credential, because GAG has none to issue.
    The reasoning and the list it rests on are in [Credentials a job can read](#credentials-a-job-can-read).
-3. **What "untrusted" is, as a declared thing** ([Q1222](../queue/Q1222.md)).
+3. **What "untrusted" is, as a declared thing.** Settled 2026-11-11 as a meaning, not an API.
    Today it is a posture an operator assembles.
-   A declared class would let the platform apply the whole set at once, but the moat review rejected building that surface while five of its dependencies are open or blocked, which is the correct order.
-   The decision this document owes is what the class would mean, not yet how to express it.
+   A declared untrusted set is the one that accepts fork jobs, and only while the checkable parts of the posture hold.
+   The meaning, item by item, is in [What a declared untrusted class would mean](#what-a-declared-untrusted-class-would-mean).
+   The moat review rejected building that surface while five of its dependencies are open or blocked, which is still the correct order, so how to express it waits.
 
 ## Credentials a job can read
 
@@ -163,3 +164,58 @@ The proxy env vars carry addresses and no credential, and attribution identifies
 Hiding it from the job is not on offer either: a job's steps run as the runner's own user, in the container the runner reads the credential from (the runner's behaviour, not measured here).
 If Q1329 finds that the credential can take a second job, that is a defect for every class, not a narrowing for one.
 So the declared class in decision 3 carries no credential item from this list.
+
+## What a declared untrusted class would mean
+
+Settled 2026-11-11 (Q1222), as a meaning and not an API: nothing below names a field, and nothing is built.
+
+**A `RunnerSet` declared untrusted is the set that accepts fork pull request jobs, and it accepts them only while the parts of the posture the platform can check still hold.** That is the whole difference from the default [Q1330](../queue/Q1330.md) ships, which is decided (Q1220) and not yet built.
+Under that default every set refuses fork jobs and a set accepts them through one explicit switch with no precondition, so a set on a `runc` template in a namespace with an allow-all egress rule accepts forks as readily as one on the Kata recipe.
+The class puts preconditions on that switch, and a set whose preconditions fail refuses fork jobs, through whatever refusal path Q1330 settles on.
+Its jobs from the repository's own branches are unaffected either way.
+
+**The class is meant to replace the precondition-free switch, not to sit beside it for good.** Accepting fork jobs is already the operator's claim that the set is fit for them, so checking the half of that claim the platform can check costs a set that really runs the Kata posture nothing.
+The override stays explicit: the micro-VM list the kernel row checks is the operator's, so an operator who accepts forks on another runtime says so by listing it.
+Q1220's reversal of an opt-in refusal is the parallel, not the source: there the exposed adopter had done nothing, while here the operator has accepted forks and the class checks that acceptance.
+**The bare form retires by deprecation, not by tightening.** Settled 2026-11-11.
+`v2.0.0` ships `Accept` as Q1330 builds it, and the release that builds the class adds a value beside it and deprecates bare `Accept`.
+That is not breaking, and bare `Accept` stays valid while its API version is served.
+A deprecated value is removable only at the next API version ([Removal needs a version increment](../development/api-review.md#removal-needs-a-version-increment-not-a-promise)), so the replacement completes there, and until then the class sits beside bare `Accept`.
+**That leaves a residual for the rest of that version:** a set left on bare `Accept` keeps accepting fork jobs with no precondition checked, and what points its operator at the class is the deprecation notice.
+Tightening `Accept` in place was the other shape, and would have cost nothing only before `Accept` ships in a stable tag ([Is this change breaking?](../development/api-review.md#is-this-change-breaking), question 1).
+
+The class is drawn per `RunnerSet` and marks one set, so it does not revive the cluster-default template that Definition of Done #1 declines: a set that never declares it gets nothing new.
+
+### What the class adds, against today's assembly
+
+Each row starts from what an operator does today in [kata-dind-workloads.md](../operations/kata-dind-workloads.md), and says whether the platform could check it.
+
+| Part of the posture | What the operator does today | What the class would require | Can the platform enforce it? |
+| --- | --- | --- | --- |
+| Kernel boundary | Applies `deploy/templates/kata-dind` and points the set's `templateRef` at it ([Configure the worker podTemplate](../operations/kata-dind-workloads.md#configure-the-worker-podtemplate)) | The set's resolved template names a micro-VM `runtimeClassName` and runs no privileged container | **Yes, against a list the operator supplies.** The AGC's `resolveTemplateChain` (`cmd/agc/internal/controller/runnerset_target.go`) is the one place that sees the spec a worker actually gets, a `ClusterRunnerTemplate` included, so a check there also catches a template edited after the set was admitted. Nothing checks a runtime class today: a `ClusterRunnerTemplate` may name any class and may run privileged containers (`cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go`). A class name does not say whether it is a micro-VM, so which names count is the operator's list, the same shape as `--allowed-priority-classes` |
+| Egress closed to DNS, GitHub and the mirrors | Deletes every allow-all egress policy from the tenant namespace and confirms it is gone from the live rules ([Adopting it](../operations/kata-dind-workloads.md#adopting-it), step 4) | No other NetworkPolicy opens egress for the set's workers | **Its documented failure, yes; the posture itself, no.** The GMC's worker policy (`buildWorkloadNetworkPolicyV2` in `cmd/gmc/internal/controller/actionsgateway_v2_builder.go`) selects every worker in the gateway's namespace, so egress belongs to the namespace and not to one set: an additive rule a trusted set needs reaches the untrusted set's workers too. The GMC already list-watches every NetworkPolicy in the cluster (`Owns(&networkingv1.NetworkPolicy{})` in `cmd/gmc/internal/controller/egressproxy_controller.go`, with no cache scope), so it could report a namespace where a policy selecting the workers carries an allow-all rule. The AGC, where the fork refusal runs, holds no NetworkPolicy access, so the reading reaches it from the GMC or the AGC gains a read. A refusal on this row names the policy that tripped it, because the trip comes from another set's rule and would otherwise read as this set's fault. It cannot tell a narrower additive rule from the mirror's own, and it cannot see whether the CNI enforces any of them. [`egress-negatives.sh`](../../scripts/e2e/egress-negatives.sh), run inside the job, stays the proof |
+| Image pulls through the mirrors | Renders the mirrors for the measured upstreams and wires the job's image clients ([Adopting it](../operations/kata-dind-workloads.md#adopting-it), steps 1 to 3) | Nothing | **No, and it needs no enforcing.** The mirrors are the operator's deployment outside GAG's resources, and the wiring lives in the template. With egress closed, a missing mirror fails the job's pulls rather than opening a path |
+| Fork jobs accepted | Nothing before Q1330 ships, because no set refuses them ([What this posture does not cover](../operations/kata-dind-workloads.md#what-this-posture-does-not-cover)) | The set accepts them, gated on the kernel and egress rows | **Yes.** It is Q1330's switch with preconditions added, and the refusal compares the run's head repository with its own as [decision 1](#open-decisions-the-map-surfaced) records |
+| A bound on compute abuse | Nothing; `maxWorkerLifetime` defaults to 12 hours and `"0s"` disables it (`api/v2/runnerset_types.go`) | Whether to refuse a worker with no lifetime bound is open | **Yes, on the resolved spec only.** A template's own `activeDeadlineSeconds` wins over `maxWorkerLifetime` (`cmd/agc/internal/provisioner/pod.go`), so refusing `"0s"` at `RunnerSet` admission bounds nothing a template can override. The check belongs where the kernel row's does, on the spec the worker gets. The residual-risk list counts this bound as part of what contains a hostile job |
+
+### What the class carries nothing for
+
+Three layers already hold for every set, so a class would add nothing.
+Credentials are settled in [the list above](#credentials-a-job-can-read): the one GAG issues is scoped to one runner already.
+The `actions/cache` server is one per tenant, whichever set the job ran on ([in-cluster-cache.md](../operations/in-cluster-cache.md)).
+The pod identity floor is stamped onto every worker.
+
+### What stays the operator's
+
+These are cluster facts no `RunnerSet` can declare:
+
+- Nested-virtualization nodes and the Kata `RuntimeClass` ([Prerequisite](../operations/kata-dind-workloads.md#prerequisite--nested-virtualization-nodes)).
+- A policy-enforcing CNI, without which every NetworkPolicy above is text.
+- Workload Identity, which the metadata block needs anyway ([What this posture does not cover](../operations/kata-dind-workloads.md#what-this-posture-does-not-cover)).
+- The mirror topology, which is cluster-wide ([Choosing a mirror topology](../operations/kata-dind-workloads.md#choosing-a-mirror-topology)).
+- Which runtime class names count as micro-VMs, the list the kernel row checks against.
+
+### What stays the repository's
+
+GitHub's approval setting for external contributors, any secret a workflow grants to `pull_request_target`, the `GITHUB_TOKEN` permissions a workflow declares, and the label its `runs-on` names.
+The class decides what GAG does with a fork job that reaches an untrusted set; GitHub decides what that job carries when it arrives.
