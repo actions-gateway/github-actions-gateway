@@ -7,7 +7,7 @@ The first audit (2026-05) is [security.md](security.md) and the second (2026-06)
 > The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md) and [Q1343](../queue/Q1343.md) are open; the Azure range lead is tracked by [Q1253](../queue/Q1253.md).
+> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1342](../queue/Q1342.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead is tracked by [Q1253](../queue/Q1253.md).
 
 ## Method and limits
 
