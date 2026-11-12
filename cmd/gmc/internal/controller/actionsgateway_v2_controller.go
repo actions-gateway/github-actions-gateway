@@ -132,6 +132,9 @@ type ActionsGatewayV2Reconciler struct {
 	// APIServerCIDRs optionally scopes the AGC NetworkPolicy's apiserver egress
 	// rule (Q145); empty keeps it any-destination (the secure default).
 	APIServerCIDRs []string
+	// WorkerSeparation keeps the AGC pod off nodes running worker pods
+	// (--controller-worker-separation). The zero value is required.
+	WorkerSeparation WorkerSeparation
 	// IPCache supplies the current GitHub IP CIDRs for the direct-egress AGC and
 	// workload NetworkPolicies (Q168). Shared with the IPRangeReconciler, which keeps
 	// those policies current as GitHub rotates ranges. nil is tolerated (the direct
@@ -471,6 +474,7 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 
 	step("AGC Deployment")
 	dep := buildAGCDeploymentV2(ag, r.AGCImage, proxy, securityProfile, r.AGCExtraEnv)
+	applyWorkerSeparation(&dep.Spec.Template.Spec, r.WorkerSeparation)
 	if err := r.applyDeployment(ctx, ag, dep); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}

@@ -110,6 +110,7 @@ func TestV2_EgressProxy_ReconcilesOwnedProxyPool(t *testing.T) {
 	assert.Equal(t, apilabels.PartOfValue, dep.Labels[apilabels.PartOf])
 	assert.Equal(t, "actions-gateway-gmc", dep.Labels[apilabels.ManagedBy])
 	assert.Equal(t, "proxy", dep.Spec.Template.Labels[apilabels.Component], "pods carry the recommended labels too")
+	assertWorkerSeparation(t, &dep)
 
 	// Service: created, owned, identity selector, proxy port.
 	var svc corev1.Service

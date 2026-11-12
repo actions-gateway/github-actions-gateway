@@ -128,7 +128,8 @@ Relabel before upgrading, as [upgrade](../../docs/operations/upgrade.md#before-u
 | `priorityClassName` | `system-cluster-critical` | GMC PriorityClass (`""` to disable). |
 | `systemCriticalPriorityQuota.enabled` | `true` | Ship a scoped `ResourceQuota` that **permits** the `system-*-critical` `priorityClassName` under GKE's restricted PriorityClass admission (without it GKE rejects the GMC pods with `insufficient quota to match these scopes`). Permit-only (generous ceiling, scoped to the system-critical classes), inert elsewhere, and rendered only while `priorityClassName` is a system-critical class. Set `false` to manage it out-of-band. |
 | `systemCriticalPriorityQuota.maxPods` | `100` | Pod ceiling for that scoped quota; generous so it only satisfies admission, never caps scheduling. |
-| `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | GMC pod scheduling. |
+| `controllerWorkerSeparation` | `required` | Keep the GMC, AGC and egress proxy pods off nodes that run worker pods, with a required pod anti-affinity against workers in every namespace. `none` stamps nothing; use it only on a cluster with one schedulable node. See [upgrade notes](../../docs/operations/upgrade.md#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes). |
+| `nodeSelector` / `tolerations` / `affinity` | `{}` / `[]` / `{}` | GMC pod scheduling. The worker separation term is appended to `affinity`, never replaced by it. |
 | `topologySpreadConstraints.enabled` | `true` | Spread the GMC replicas across nodes (soft, `ScheduleAnyway`) so one node failure can't evict both. Set `false` to drop it. |
 | `topologySpreadConstraints.{maxSkew,topologyKey,whenUnsatisfiable}` | `1` / `kubernetes.io/hostname` / `ScheduleAnyway` | Spread tuning; raise to `topology.kubernetes.io/zone` on multi-zone clusters. |
 

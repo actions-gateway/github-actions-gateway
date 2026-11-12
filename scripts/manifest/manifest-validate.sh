@@ -309,4 +309,34 @@ if ! grep -q $'^ValidatingAdmissionPolicyBinding\t' <<<"$policy_retention"; then
 fi
 echo "OK: no admission-policy binding survives uninstall"
 
+echo "==> helm template: the GMC pod keeps off worker nodes by default, and the opt-out removes it"
+# The term and the GMC flag both ship on; controllerWorkerSeparation=none drops both.
+# A custom affinity composes with the term rather than replacing it.
+separation_render() {
+	helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" -s templates/deployment.yaml "$@"
+}
+separation_term_lines() {
+	# The term's two distinctive lines: its worker selector and its all-namespaces scope.
+	# Its hostname topologyKey is not counted: the GMC's spread constraint has one too.
+	grep -cE '^ +(app\.kubernetes\.io/component: runner|namespaceSelector: \{\})$' <<<"$1" || true
+}
+sep_default="$(separation_render)"
+if [[ "$(separation_term_lines "$sep_default")" != 2 ]] ||
+	! grep -q -- '--controller-worker-separation=required' <<<"$sep_default"; then
+	echo "ERROR: the default render lacks the GMC's worker anti-affinity term or --controller-worker-separation=required" >&2
+	exit 1
+fi
+sep_custom="$(separation_render --set-json 'affinity={"podAntiAffinity":{"requiredDuringSchedulingIgnoredDuringExecution":[{"labelSelector":{"matchLabels":{"probe":"custom"}},"topologyKey":"topology.kubernetes.io/zone"}]}}')"
+if [[ "$(separation_term_lines "$sep_custom")" != 2 ]] || ! grep -q 'probe: custom' <<<"$sep_custom"; then
+	echo "ERROR: a custom affinity dropped the worker anti-affinity term, or the term dropped the custom one" >&2
+	exit 1
+fi
+sep_none="$(separation_render --set controllerWorkerSeparation=none)"
+if [[ "$(separation_term_lines "$sep_none")" != 0 ]] ||
+	! grep -q -- '--controller-worker-separation=none' <<<"$sep_none"; then
+	echo "ERROR: controllerWorkerSeparation=none still renders the worker anti-affinity term, or does not pass none to the GMC" >&2
+	exit 1
+fi
+echo "OK: worker separation renders by default, composes with a custom affinity, and turns off"
+
 echo "OK: install artifact validates"

@@ -361,7 +361,20 @@ systemCriticalPriorityQuota:
   # requirement, never caps scheduling.
   maxPods: 100
 
-# nodeSelector / tolerations / affinity for the GMC pod (optional).
+# controllerWorkerSeparation keeps GAG's control plane off nodes that run worker
+# pods: required | none. A worker that escapes its container reaches what its node
+# holds, so a controller on that node gives up its credentials. "required" (the
+# default) puts a required pod anti-affinity against worker pods in every
+# namespace on the GMC pod, and passes --controller-worker-separation to the GMC,
+# which puts the same term on every AGC and egress proxy pod it builds. The
+# scheduler enforces it from both sides: a new worker is also kept off a node
+# where one of these pods runs. "none" stamps nothing; set it only on a cluster
+# with one schedulable node, where "required" leaves the controllers or the
+# workers Pending. See docs/operations/security-operations.md.
+controllerWorkerSeparation: required
+
+# nodeSelector / tolerations / affinity for the GMC pod (optional). The worker
+# separation term above is appended to affinity, never replaced by it.
 nodeSelector: {}
 tolerations: []
 affinity: {}

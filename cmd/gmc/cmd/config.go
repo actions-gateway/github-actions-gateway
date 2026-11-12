@@ -31,6 +31,7 @@ type resolvedConfig struct {
 	infraPriorityClassAllowlist *allowlist.PriorityClassAllowlist
 	egressDestinationAllowlist  *allowlist.EgressDestinationAllowlist
 	fqdnBackend                 controller.FQDNBackend
+	workerSeparation            controller.WorkerSeparation
 	podNamespace                string
 	podServiceAccount           string
 	deploymentName              string
@@ -94,6 +95,11 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 		return nil, fmt.Errorf("invalid --fqdn-policy-backend: %w", err)
 	}
 
+	workerSeparation, err := controller.ParseWorkerSeparation(cfg.controllerWorkerSeparation)
+	if err != nil {
+		return nil, err
+	}
+
 	podNamespace := getenv("POD_NAMESPACE")
 
 	cacheOptions, err := buildCacheOptions(cfg, podNamespace)
@@ -106,6 +112,7 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 		infraPriorityClassAllowlist: infraPriorityClassAllowlist,
 		egressDestinationAllowlist:  egressDestinationAllowlist,
 		fqdnBackend:                 fqdnBackend,
+		workerSeparation:            workerSeparation,
 		podNamespace:                podNamespace,
 		podServiceAccount:           getenv("POD_SERVICE_ACCOUNT"),
 		deploymentName:              getenv("DEPLOYMENT_NAME"),

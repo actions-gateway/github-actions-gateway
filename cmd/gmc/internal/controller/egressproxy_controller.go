@@ -81,6 +81,9 @@ const allowlistPendingRequeue = 2 * time.Second
 type EgressProxyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// WorkerSeparation keeps the proxy pods off nodes running worker pods
+	// (--controller-worker-separation). The zero value is required.
+	WorkerSeparation WorkerSeparation
 	// IPCache supplies cached GitHub IP CIDRs for the proxy NetworkPolicy egress
 	// allowlist. Populated and refreshed by IPRangeReconciler; reads here never
 	// perform network I/O. A nil cache or empty snapshot is tolerated — the
@@ -216,6 +219,7 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	}
 	dep := buildEgressProxyDeployment(ep, r.ProxyImage, gitHubHosts)
 	applyAttributionToDeployment(dep, ep, attribution)
+	applyWorkerSeparation(&dep.Spec.Template.Spec, r.WorkerSeparation)
 	if err := r.applyDeployment(ctx, ep, dep); err != nil {
 		return &provisioningError{step: "apply proxy Deployment", err: err}
 	}

@@ -64,6 +64,9 @@ func TestAddFlags(t *testing.T) {
 		if f.allowUncheckedRunnerTemplatePodShape {
 			t.Error("--allow-unchecked-runner-template-pod-shape must default to false: the pod-shape rules are on unless the platform opts out")
 		}
+		if f.controllerWorkerSeparation != string(controller.WorkerSeparationRequired) {
+			t.Errorf("controllerWorkerSeparation default = %q, want required", f.controllerWorkerSeparation)
+		}
 	})
 
 	t.Run("overrides", func(t *testing.T) {
@@ -126,6 +129,9 @@ func TestResolveConfig(t *testing.T) {
 		if rc.fqdnBackend != controller.FQDNBackendNone {
 			t.Errorf("fqdnBackend = %q, want none", rc.fqdnBackend)
 		}
+		if rc.workerSeparation != controller.WorkerSeparationRequired {
+			t.Errorf("workerSeparation = %q, want required for an unset flag", rc.workerSeparation)
+		}
 		if rc.podNamespace != "gmc-system" {
 			t.Errorf("podNamespace = %q, want gmc-system", rc.podNamespace)
 		}
@@ -163,6 +169,13 @@ func TestResolveConfig(t *testing.T) {
 		}
 		if _, err := resolveConfig(cfg, fakeGetenv(nil)); err == nil {
 			t.Error("a malformed --allowed-egress-cidrs must fail startup")
+		}
+	})
+
+	t.Run("unrecognized worker separation fails closed", func(t *testing.T) {
+		cfg := &gmcFlags{controllerWorkerSeparation: "off"}
+		if _, err := resolveConfig(cfg, fakeGetenv(nil)); err == nil {
+			t.Error("an unrecognized --controller-worker-separation must fail startup")
 		}
 	})
 

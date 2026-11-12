@@ -25,6 +25,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required after v2.0.0: delete what an owner deleted during the upgrade left behind](#action-required-after-v200-delete-what-an-owner-deleted-during-the-upgrade-left-behind)
   - [Action required if you alert on or chart the classic acquisition series: they are no longer exported](#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported)
   - [Action required if a RunnerSet runs fork pull request jobs: they are now refused](#action-required-if-a-runnerset-runs-fork-pull-request-jobs-they-are-now-refused)
+  - [Action required if controllers and workers share nodes: the controllers now keep off worker nodes](#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes)
   - [Action required if a RunnerSet's priorityTiers do not ascend: the list is now rejected](#action-required-if-a-runnersets-prioritytiers-do-not-ascend-the-list-is-now-rejected)
   - [Action required if a query reads tier on a disruption series: the label is gone](#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone)
   - [Action required if spec.tracing.endpoint does not parse as a URL: the value is now rejected](#action-required-if-spectracingendpoint-does-not-parse-as-a-url-the-value-is-now-rejected)
@@ -567,6 +568,42 @@ kubectl get runnerset <name> -n <tenant-namespace> -o jsonpath='{.spec.forkPullR
 `Accept` is the answer that keeps fork CI; an empty answer means the set refuses fork jobs.
 To show contributors why a job was refused, also grant the GitHub App `Checks: Read and write` ([onboarding](tenant-onboarding.md#0a-create-the-app-web-ui)).
 Without it the refusal still happens, and the run reads only as cancelled.
+
+### Action required if controllers and workers share nodes: the controllers now keep off worker nodes
+
+**Who is affected:** clusters where the Gateway Manager Controller (GMC), an Actions Gateway Controller (AGC) or an egress proxy can run on a node that also runs worker pods.
+That is any cluster without a separate worker pool, and every cluster with one schedulable node.
+
+**What changed.** The GMC pod, and every AGC and egress proxy pod the GMC builds, now carry a required pod anti-affinity against worker pods in every namespace.
+A worker that escapes its container can read the credentials of every pod on its node, so a controller beside it gives those up ([why](security-operations.md#keep-gags-control-plane-off-worker-nodes)).
+The scheduler enforces the rule from both sides: a controller pod is not placed on a node running a worker, and a new worker is not placed on a node running a controller.
+The chart value `controllerWorkerSeparation` turns it on and off, and defaults to `required`.
+
+The upgrade rolls the GMC and, as the new GMC reconciles, every AGC and egress proxy Deployment.
+Each rolls one new pod at a time and keeps the old pod serving until the new one is ready.
+A new controller pod that finds no node free of workers stays `Pending`, and its rollout stops there.
+Its `FailedScheduling` event names the reason `node(s) didn't match pod anti-affinity rules`.
+
+Once the controllers are placed, a new worker that finds only controller nodes stays `Pending` with `node(s) didn't satisfy existing pods anti-affinity rules`.
+On a cluster with one schedulable node, one side is always stranded.
+A `helm upgrade --wait` on such a cluster times out on the GMC rollout.
+
+**Before you upgrade,** pick one of these:
+
+- **Run workers on their own pool**, tainted, with workers pinned to it ([procedure](security-operations.md#keep-gags-control-plane-off-worker-nodes)).
+  The controllers then already sit apart from the workers, and the new rule changes nothing.
+- **Keep today's placement** by setting the opt-out, which leaves every pod as it was before this release:
+
+  ```bash
+  helm upgrade <release> <chart> --namespace gmc-system --reuse-values \
+    --set controllerWorkerSeparation=none
+  ```
+
+  This gives up the separation, so a worker escape can reach the controllers on its node.
+  Use it on a single-node cluster, or until a separate worker pool exists.
+
+`ActionsGateway.spec.scheduling` and `EgressProxy.spec.scheduling` cannot remove the term: it is appended after them.
+The chart's `affinity` value cannot remove it either, for the same reason.
 
 ### Action required if a `RunnerSet`'s `priorityTiers` do not ascend: the list is now rejected
 

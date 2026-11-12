@@ -47,6 +47,8 @@ type gmcFlags struct {
 
 	fqdnPolicyBackend string
 	apiServerCIDRs    string
+
+	controllerWorkerSeparation string
 }
 
 // addFlags declares the GMC's flags into fs and returns the struct they bind to.
@@ -183,5 +185,12 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"apiserver endpoint exposes a stable CIDR (Q145). Empty (default) keeps the "+
 			"any-destination rule, required where the post-DNAT apiserver IP is not "+
 			"predictable. Each entry must be a valid CIDR; a malformed value fails startup.")
+	fs.StringVar(&f.controllerWorkerSeparation, "controller-worker-separation", string(controller.WorkerSeparationRequired),
+		"How the GMC keeps the AGC and egress proxy pods it builds off nodes that run worker "+
+			"pods: required|none. The secure default 'required' stamps a required pod "+
+			"anti-affinity against worker pods in every namespace, so a worker that escapes "+
+			"its container cannot reach a controller's credentials on the same node. 'none' "+
+			"stamps nothing, for clusters with one schedulable node. An unrecognized value "+
+			"fails startup.")
 	return f
 }
