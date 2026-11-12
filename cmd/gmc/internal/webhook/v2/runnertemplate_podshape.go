@@ -133,6 +133,25 @@ func isAPICredentialCertificate(p *corev1.PodCertificateProjection) bool {
 	return p != nil && strings.HasPrefix(p.SignerName, reservedSignerPrefix)
 }
 
+// validateNoSchedulerBypass rejects a namespaced RunnerTemplate that places its
+// worker without the default scheduler. A pod with nodeName set is bound to that node
+// with no scheduler involved, and one naming another schedulerName is placed by a
+// scheduler that need not honour the control-plane pods' required anti-affinity
+// against workers, so either lets a tenant put a worker on a controller's node. The
+// cluster-scoped kind is platform-authored and keeps both.
+func validateNoSchedulerBypass(spec *corev1.PodSpec) error {
+	if spec.NodeName != "" {
+		return fmt.Errorf(
+			"podTemplate.spec.nodeName: a namespaced RunnerTemplate may not bind its worker to a node, since that bypasses the scheduler and the rule keeping workers off control-plane nodes; constrain placement with nodeSelector or affinity, or use a platform-owned ClusterRunnerTemplate")
+	}
+	if spec.SchedulerName != "" && spec.SchedulerName != corev1.DefaultSchedulerName {
+		return fmt.Errorf(
+			"podTemplate.spec.schedulerName: %q: a namespaced RunnerTemplate may use only %s, since another scheduler need not keep workers off control-plane nodes; use a platform-owned ClusterRunnerTemplate for a worker placed by another scheduler",
+			spec.SchedulerName, corev1.DefaultSchedulerName)
+	}
+	return nil
+}
+
 // podTemplateUnchanged reports whether an update leaves podTemplate as stored. The
 // pod-shape rules that arrived in v2.0.0 are skipped when it does, so a template
 // stored before them is not refused over an edit elsewhere in the object.

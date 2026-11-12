@@ -848,7 +848,22 @@ func resolveTemplate(ctx context.Context, c client.Client, ns string, ref v2.Obj
 		}
 		return nil, nil, refResolution{err: fmt.Errorf("read RunnerTemplate: %w", err)}
 	}
+	clearSchedulerBypass(&rt.Spec.PodTemplate.Spec)
 	return &rt.Spec, rt.Annotations, refResolution{}
+}
+
+// clearSchedulerBypass drops the two fields that place a pod without the default
+// scheduler, nodeName and a non-default schedulerName, from a namespaced
+// RunnerTemplate's pod spec. Either would let the tenant put a worker on a
+// control-plane node past the required anti-affinity the default scheduler
+// enforces. Admission refuses a new one; this holds the invariant for a template
+// stored before that rule. A ClusterRunnerTemplate is platform-authored and keeps
+// both.
+func clearSchedulerBypass(spec *corev1.PodSpec) {
+	spec.NodeName = ""
+	if spec.SchedulerName != corev1.DefaultSchedulerName {
+		spec.SchedulerName = ""
+	}
 }
 
 // runnerSetTierThresholds converts v2 priority tiers to the neutral TierThreshold

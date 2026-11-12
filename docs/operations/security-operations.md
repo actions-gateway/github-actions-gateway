@@ -530,10 +530,13 @@ The scheduler enforces it from both sides: a controller is not placed on a node 
 `ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling` and the chart's `affinity` value cannot remove it, because the term is appended after them.
 The chart value `controllerWorkerSeparation: none` turns it off, for a cluster with one schedulable node; it then gives up this protection ([upgrade notes](upgrade.md#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes)).
 
-The default leaves three gaps:
+A worker template that sets `nodeName`, or a `schedulerName` other than `default-scheduler`, would skip the scheduler that enforces the term.
+A namespaced `RunnerTemplate` may set neither: admission refuses both, and the AGC clears both from a worker built from a template stored earlier.
+A `ClusterRunnerTemplate` keeps both, so a platform that sets one there places those workers itself.
+
+The default leaves two gaps:
 
 - **The cache and registry mirrors carry no such term.** You install them from `deploy/`, not through the GMC.
-- **A worker template that sets `nodeName` or `schedulerName` bypasses it.** Either one skips the default scheduler's checks, and a namespaced `RunnerTemplate` may set both today.
 - **On one shared pool, controllers and workers compete for whole nodes.** A node running any worker is closed to every controller, and the reverse, so a busy pool can leave a controller rollout `Pending`.
 
 Separate pools close the last gap and make placement predictable.

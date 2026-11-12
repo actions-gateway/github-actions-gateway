@@ -448,6 +448,16 @@ So responsibilities split by what admission is actually good at:
   The per-container checks that exceed the CEL cost budget — an unbounded containers-array walk — are the GMC-hosted validating webhook (M2): it rejects the AGC-injected egress-proxy env vars (`HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY`/`PROXY_CA_CERT_PATH`, the variables v1 silently overwrote at pod-build time) on every container of **both** template kinds.
   **Privileged containers** are rejected on the namespaced `RunnerTemplate` (a tenant must not self-author a privileged worker shape) but **allowed** on the cluster-scoped `ClusterRunnerTemplate` — that kind is platform-authored (tenants cannot create cluster-scoped objects) and exists precisely to hold golden privileged templates (DinD/sysbox, §H.6).
   A `RunnerTemplate` carries no `securityProfile`, so a v1-style *profile-aware* privileged decision is impossible at the template layer; Pod Security Admission — which stamps the namespace's enforcement level from the effective `securityProfile` (§H.16 #7) — stays the runtime backstop for both kinds, so allowing privileged on the cluster-scoped kind is no weaker than v1.
+
+  *Scheduler bypass (Q1347, 2026-11-12).* The namespaced `RunnerTemplate` also rejects `podTemplate.spec.nodeName` and any `schedulerName` other than `default-scheduler`, and the AGC clears both when it resolves a namespaced template, which covers one stored before the rule.
+  Either places the worker past the default scheduler, the only thing enforcing the controllers' required anti-affinity against workers, and a tenant can read its own AGC's node name, so it could put a worker beside the pod holding its GitHub App key.
+  Both layers enforce it because the webhook skips its newer rules while a stored `podTemplate` is unchanged, and the namespaced kind has shipped since `v1.10.0`.
+  The `ClusterRunnerTemplate` keeps both fields, for three reasons.
+  Only the platform can author one, so the bypass is the platform placing its own workers, the same grant as privileged containers.
+  A platform can legitimately run workers under its own scheduler, and the AGC's capacity verdict already reads a pod's own `schedulerName`.
+  And clearing in `buildPod` instead would strip both kinds alike, since the pod builder does not know which kind supplied the template.
+  Unlike the baseline and volume-type rules, this one stays on under `--allow-unchecked-runner-template-pod-shape`: Pod Security Admission checks neither field, so the platform policy that flag defers to need not cover it.
+  What would reverse the cluster-kind choice: a route by which a tenant can make a `ClusterRunnerTemplate` carry a node name it chose.
 - **Runtime condition (existence/referential):** does the template exist, does the proxy exist, does the cross-namespace grant exist.
   The controller watches referents and re-reconciles when they appear:
 

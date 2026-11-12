@@ -3782,7 +3782,16 @@ podTemplate.spec.volumes["creds"]: a projected serviceAccountToken source is
 reserved: worker pods carry no Kubernetes API credential; remove the source
 ```
 
+```
+admission webhook "vrunnertemplate-v2.kb.io" denied the request:
+podTemplate.spec.nodeName: a namespaced RunnerTemplate may not bind its worker to
+a node, since that bypasses the scheduler and the rule keeping workers off
+control-plane nodes; constrain placement with nodeSelector or affinity, or use a
+platform-owned ClusterRunnerTemplate
+```
+
 The third also comes from `vclusterrunnertemplate-v2.kb.io`, for a `ClusterRunnerTemplate`.
+A `schedulerName` other than `default-scheduler` is refused the same way as the fourth, with a message that names the scheduler.
 
 **Likely cause.** Each message is one rule, and the text in parentheses names the container, volume and value that tripped it.
 
@@ -3793,6 +3802,8 @@ The third also comes from `vclusterrunnertemplate-v2.kb.io`, for a `ClusterRunne
 - **ServiceAccount token.** Neither kind may project a ServiceAccount token.
   `automountServiceAccountToken: false` does not stop a `projected` volume from carrying one.
   The same rule refuses a `podCertificate` source whose signer begins with `kubernetes.io`, with a message that names the signer.
+- **Node placement.** A namespaced `RunnerTemplate` may not set `nodeName`, or a `schedulerName` other than `default-scheduler`.
+  Either places the worker past the default scheduler, which is what keeps workers off the nodes running the GMC, AGC and egress proxies ([why](security-operations.md#keep-gags-control-plane-off-worker-nodes)).
 
 **Resolution.**
 
@@ -3803,9 +3814,11 @@ The third also comes from `vclusterrunnertemplate-v2.kb.io`, for a `ClusterRunne
 - For shared or network storage a tenant owns, mount a `persistentVolumeClaim` instead ([shared worker storage](worker-shared-storage.md)).
 - Remove a `serviceAccountToken` source, or a `podCertificate` source with a `kubernetes.io` signer.
   No template kind may carry one, and the AGC removes it from the worker pod regardless.
+- Replace `nodeName` with a `nodeSelector` or a required node affinity, and drop a non-default `schedulerName`.
+  A worker shape that needs either belongs in a `ClusterRunnerTemplate`; the AGC clears both from a namespaced template's workers regardless.
 
 A template stored before `v2.0.0` keeps working: an edit that leaves `podTemplate` alone is accepted.
-The first change to `podTemplate` is checked against all three rules ([finding the affected templates](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
+The first change to `podTemplate` is checked against all four rules ([finding the affected templates](upgrade.md#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)).
 
 ---
 

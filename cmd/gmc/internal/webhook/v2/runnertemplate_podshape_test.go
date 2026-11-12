@@ -53,12 +53,22 @@ const (
 	errBaseline   = "exceeds the Pod Security Standards baseline level"
 	errSAToken    = "projected serviceAccountToken source is reserved"
 	errPodCert    = "projected podCertificate source with signer"
+	errNodeName   = "may not bind its worker to a node"
+	errScheduler  = "a namespaced RunnerTemplate may use only default-scheduler"
 )
 
 // bindsBothKinds reports whether wantErr comes from the API-credential rule, the
 // one pod-shape rule the cluster-scoped kind is held to as well.
 func bindsBothKinds(wantErr string) bool {
 	return wantErr == errSAToken || wantErr == errPodCert
+}
+
+// survivesOptOut reports whether wantErr comes from a rule the
+// --allow-unchecked-runner-template-pod-shape opt-out leaves in force: the
+// API-credential rule and the scheduler-bypass rule, neither of which Pod Security
+// Admission checks.
+func survivesOptOut(wantErr string) bool {
+	return bindsBothKinds(wantErr) || wantErr == errNodeName || wantErr == errScheduler
 }
 
 // podShapeCases is the shared table: wantErr is the namespaced kind's verdict.
@@ -131,6 +141,11 @@ func podShapeCases() []podShapeCase {
 			}}
 		}, errBaseline},
 		{"root user", runnerSecurityContext(&corev1.SecurityContext{RunAsUser: &root}), ""},
+
+		// Placement past the default scheduler (Q1347).
+		{"nodeName", func(t *corev1.PodTemplateSpec) { t.Spec.NodeName = "controller-node" }, errNodeName},
+		{"another schedulerName", func(t *corev1.PodTemplateSpec) { t.Spec.SchedulerName = "other-scheduler" }, errScheduler},
+		{"schedulerName default-scheduler", func(t *corev1.PodTemplateSpec) { t.Spec.SchedulerName = corev1.DefaultSchedulerName }, ""},
 	}
 }
 
@@ -158,8 +173,8 @@ func TestRunnerTemplate_PodShape_Create(t *testing.T) {
 }
 
 // TestClusterRunnerTemplate_PodShape_Create: the platform-authored kind keeps every
-// shape the namespaced kind loses, except a projected API credential, which is a
-// floor on both.
+// shape the namespaced kind loses, nodeName and schedulerName included, except a
+// projected API credential, which is a floor on both.
 func TestClusterRunnerTemplate_PodShape_Create(t *testing.T) {
 	v := &ClusterRunnerTemplateCustomValidator{}
 	for _, tc := range podShapeCases() {
@@ -179,7 +194,7 @@ func TestClusterRunnerTemplate_PodShape_Create(t *testing.T) {
 
 // TestRunnerTemplate_PodShape_Unchecked covers the platform opt-out: the baseline and
 // volume-type rules are skipped, and the rules that are floors on every install
-// (a projected API credential, a privileged container) are not.
+// (a projected API credential, scheduler bypass, a privileged container) are not.
 func TestRunnerTemplate_PodShape_Unchecked(t *testing.T) {
 	v := &RunnerTemplateCustomValidator{AllowUncheckedPodShape: true}
 	for _, tc := range podShapeCases() {
@@ -187,11 +202,11 @@ func TestRunnerTemplate_PodShape_Unchecked(t *testing.T) {
 			rt := newRunnerTemplate("team-a", "rt", nil)
 			rt.Spec = shapedSpec(tc.mutate)
 			_, err := v.ValidateCreate(context.Background(), rt)
-			if !bindsBothKinds(tc.wantErr) {
+			if !survivesOptOut(tc.wantErr) {
 				require.NoError(t, err, "the opt-out admits what the baseline and volume-type rules refuse")
 				return
 			}
-			require.Error(t, err, "the API-credential rule is not part of the opt-out")
+			require.Error(t, err, "the API-credential and scheduler-bypass rules are not part of the opt-out")
 			assert.Contains(t, err.Error(), tc.wantErr)
 		})
 	}
@@ -226,7 +241,7 @@ func TestRunnerTemplate_PodShape_StoredValuePassesUnchanged(t *testing.T) {
 	}
 	for _, name := range []string{
 		"nfs volume", "projected serviceAccountToken", "projected podCertificate, the apiserver client signer",
-		"capability outside the baseline set",
+		"capability outside the baseline set", "nodeName", "another schedulerName",
 	} {
 		tc := stored[name]
 		require.NotEmpty(t, tc.wantErr, "the case must be one a create refuses")
