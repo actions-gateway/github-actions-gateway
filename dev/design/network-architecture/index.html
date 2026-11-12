@@ -3624,13 +3624,14 @@ The GMC reads that ClusterIP from its own pod environment rather than assuming a
 This means the proxy pods must have egress access to the cluster's DNS resolver in addition to GitHub's IP ranges.</p>
 <p>DNS egress on all three policies is <strong>confined to cluster DNS</strong> rather than left open to any resolver (Q105).
 An unrestricted port-53 rule (<code>to: []</code>) would let any pod smuggle data to an attacker-controlled resolver — an unattributed side-channel that bypasses the per-tenant egress-IP attribution every other egress path enforces.
-Confining DNS to the in-cluster resolver keeps resolution on the attributable path: <code>kube-dns</code> recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.</p>
+<code>kube-dns</code> recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.
+The rule confines the resolver, not the names: a query for an attacker's zone is recursed like any other, which <a href="../05-security/#dns-exfiltration-side-channel-containment">05-security.md records as a residual</a> (Q1328).</p>
 <p>Each DNS rule allows two OR'd peers, covering the two ways a pod reaches cluster DNS:</p>
 <ul>
 <li><strong>Direct path</strong> — the <code>kube-dns</code> / <code>CoreDNS</code> Service in <code>kube-system</code>, matched by <code>namespaceSelector</code> on the well-known <code>kubernetes.io/metadata.name: kube-system</code> label plus a <code>podSelector</code> on the conventional <code>k8s-app: kube-dns</code> label.</li>
 <li><strong>NodeLocal DNSCache path</strong> — the IPv4 link-local block <code>169.254.0.0/16</code>, matched by an <code>ipBlock</code> (Q136).
   On clusters running <a href="https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/">NodeLocal DNSCache</a> (<code>node-local-dns</code>), pods send DNS to a link-local address (<code>169.254.20.10</code> by the kube-standard <code>__PILLAR__LOCAL__DNS__</code> convention) served by a per-node <code>hostNetwork</code> DNSCache pod, which no pod/namespace selector can match.
-  Allowing the whole link-local block is the simplest correct rule and <strong>preserves Q105's attribution property</strong>: <code>169.254.0.0/16</code> is non-routable and node-scoped, so it cannot reach an external resolver — the DNS-exfiltration channel Q105 closed stays closed.</li>
+  Allowing the whole link-local block is the simplest correct rule and <strong>preserves Q105's property</strong>: <code>169.254.0.0/16</code> is non-routable and node-scoped, so it cannot reach an external resolver directly.</li>
 </ul>
 <p>Operators running a DNS service under a non-standard namespace or pod label must adjust the selector accordingly (or supply their own equivalent rule under <code>spec.proxy.managedNetworkPolicy: false</code>).</p>
 <hr />

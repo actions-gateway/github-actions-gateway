@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1328/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1343/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate five worker pod and NetworkPolicy leads from security audit - GitHub Actions Gateway</title>
+        <title>GMC may mint ServiceAccount token Secrets in tenant namespaces - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-five-worker-pod-and-networkpolicy-leads-from-security-audit" class="md-skip">
+        <a href="#gmc-may-mint-serviceaccount-token-secrets-in-tenant-namespaces" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate five worker pod and NetworkPolicy leads from security audit
+              GMC may mint ServiceAccount token Secrets in tenant namespaces
             
           </span>
         </div>
@@ -2657,21 +2657,14 @@
   
 
 
-<h1 id="validate-five-worker-pod-and-networkpolicy-leads-from-security-audit">Validate five worker pod and NetworkPolicy leads from security audit<a class="headerlink" href="#validate-five-worker-pod-and-networkpolicy-leads-from-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a severity.
-<a href="../../plan/security-audit-2026-11/#worker-pod-and-networkpolicy-leads">Each lead, with evidence, blockers and a validation plan</a>:</p>
-<ul>
-<li>Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive (needs validation).</li>
-<li>Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there (needs validation).</li>
-<li>namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label (needs validation).</li>
-<li>DNS egress rule confines which resolver a pod may contact, not which names it resolves; the design states the DNS exfiltration channel is closed (needs validation).</li>
-<li>GitHub CIDR allowlist admits /meta <code>actions</code> ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only (needs validation).</li>
-</ul>
-<p>The Azure-ranges lead is already open as <a href="../Q1253/">Q1253</a>, which holds a dogfood measurement this audit did not have; Q1253 owns it and it is listed here only so the audit's record is whole.
-Of the other four, start with gateway teardown deleting the workload NetworkPolicy while job pods may still be running.</p>
-<p><strong>Measure:</strong> each lead's local test in the plan doc is an envtest or unit case that needs no cluster; the network leads also need a reading on an enforcing CNI.</p>
-<p><strong>Done when</strong> each lead is either confirmed and fixed, refuted with the measurement recorded, or written into <code>05-security.md</code> as an accepted residual with its bound.
-The plan doc gives each one a bounded local test and the fact an owner has to observe.</p>
+<h1 id="gmc-may-mint-serviceaccount-token-secrets-in-tenant-namespaces">GMC may mint ServiceAccount token Secrets in tenant namespaces<a class="headerlink" href="#gmc-may-mint-serviceaccount-token-secrets-in-tenant-namespaces" title="Permanent link">&para;</a></h1>
+<p><strong>A GMC compromised while a namespace is marked may be able to mint a token for any ServiceAccount there, and keep it after the unmark.</strong> Found while bounding the unmark lead closed by Q1328, whose fix stops the GMC writing a RoleBinding that would keep its Secret reads after an unmark.</p>
+<p>The GMC holds Secret <code>create</code>/<code>update</code> cluster-wide, and <code>gmc-tenant-resource-guard</code> confines those writes to marked tenant namespaces without looking at the Secret's <code>type</code>.
+Kubernetes' token controller fills a Secret of type <code>kubernetes.io/service-account-token</code> annotated <code>kubernetes.io/service-account.name: &lt;sa&gt;</code> with a long-lived token for that ServiceAccount, and the GMC can read the Secret back through its <code>gmc-tenant-secret-reader</code> binding.
+The GMC writes no Secret of that type, so a guard rule denying it costs nothing in normal operation.</p>
+<p><strong>Unverified.</strong> That the token controller fills a GMC-written Secret on a supported Kubernetes version was not measured: envtest runs no controller manager, and no kind cluster was available in the Q1328 session.
+Measure it on kind before writing the rule, and say which ServiceAccounts a tenant namespace carries that hold more than <code>agc-tenant-role</code> (a tenant's own ServiceAccounts are the case that matters).</p>
+<p><strong>Done when</strong> the GMC ServiceAccount is denied creating or updating a Secret of type <code>kubernetes.io/service-account-token</code>, with an envtest case in <code>cmd/gmc/internal/controller/integration/tenant_resource_guard_test.go</code>, or the measurement shows the controller does not fill such a Secret and that is written into <code>docs/design/05-security.md</code> §5.1 Residuals.</p>
 
 
 

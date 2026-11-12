@@ -3266,14 +3266,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>The placement policy samples co-schedule a tenant's AGC and egress proxy with its workers.</strong> Both <code>kyverno/restrict-gag-placement.yaml</code> …</td>
 </tr>
 <tr>
-<td><a href="Q1328/">Q1328</a></td>
-<td><a href="../plan/security-audit-2026-11/#worker-pod-and-networkpolicy-leads">Validate five worker pod and NetworkPolicy leads from security audit</a></td>
-<td><code>security</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
-</tr>
-<tr>
 <td><a href="Q1341/">Q1341</a></td>
 <td><a href="../design/05-security/#who-can-start-a-release-is-held-by-a-headcount-not-a-control">Split Dependabot sync so tool code never shares a job with a write token</a></td>
 <td><code>security</code> <code>ci</code></td>
@@ -3288,6 +3280,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Separate from <a href="Q1165/">Q1165</a>: that row's page made no load-blocking off-host request, and this one is a page that does.</td>
+</tr>
+<tr>
+<td><a href="Q1343/">Q1343</a></td>
+<td>GMC may mint ServiceAccount token Secrets in tenant namespaces</td>
+<td><code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A GMC compromised while a namespace is marked may be able to mint a token for any ServiceAccount there, and keep it after the unmark.</strong> …</td>
 </tr>
 <tr>
 <td><a href="Q401/">Q401</a></td>
