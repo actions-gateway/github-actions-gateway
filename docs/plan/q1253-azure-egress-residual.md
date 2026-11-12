@@ -4,7 +4,7 @@
 Q1253 closed on that basis, and the narrowing is [Q1350](../queue/Q1350.md).
 
 Q1253 asked whether a storage account nobody at GitHub owns resolves into the ranges a direct-mode worker may reach on 443.
-It does, and the admitted set is wider than storage: the `actions` key of GitHub's `/meta` covers at least 97.5% of Azure's public IPv4 space in 14 regions, East US and West Europe among them.
+It does, and the admitted set is wider than storage: the `actions` key of GitHub's `/meta` covers at least 97% of Azure's public IPv4 space in 14 regions, East US and West Europe among them.
 The residual is recorded in [05-security.md](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges).
 
 ## What public data settles
@@ -15,9 +15,9 @@ The comparison is IPv4 only; the 2,728 IPv6 ranges under `actions` were not comp
 | Measurement | Value |
 | --- | --- |
 | Ranges under `/meta` `actions` | 8,350 IPv4 and IPv6, 28,648,329 IPv4 addresses |
-| Share of those IPv4 addresses inside the `AzureCloud` tag | 100% |
+| Share of those IPv4 addresses inside the `AzureCloud` tag | 99.954%; 13,267 addresses in 172 ranges fall outside it |
 | Share of all `AzureCloud` IPv4 addresses inside `actions` | 28,635,062 of 65,446,795, about 44% |
-| `AzureCloud.<region>` tags at least 97.5% inside `actions` | 14: West US, West US 2, West US 3, West Central US, North Central US, South Central US, Central US, East US, East US 2, East US 3, Canada Central, Mexico Central, West Europe, North Europe; Canada East is at 91.3% |
+| `AzureCloud.<region>` tags at least 97% inside `actions` | 14 (East US 2 is the lowest, at 97.47%): West US, West US 2, West US 3, West Central US, North Central US, South Central US, Central US, East US, East US 2, East US 3, Canada Central, Mexico Central, West Europe, North Europe; Canada East is at 91.3% |
 | `Storage` tag IPv4 addresses inside `actions` | 268,016 of 563,553, 47.6% |
 | `Storage.<region>` tags wholly inside `actions` | 14, among them East US 2, Central US, West US, West Europe and North Europe; East US is at 96.7% and 62 regions at 0% |
 
@@ -32,7 +32,7 @@ A storage account's blob name points at its storage cluster's addresses rather t
 
 ## What source settles
 
-Every backend admits the same set or a wider one.
+Direct mode and the CIDR-mode proxy admit the address set above; the FQDN backends admit no CIDRs, but every storage account by name.
 
 - **Direct mode and the CIDR-mode proxy pool.** The GMC merges `/meta` `api`, `actions` and `web` into one CIDR list (`cmd/gmc/internal/controller/ipranges.go:231:	combined = append(combined, meta.Actions...)`) and patches it into both the direct-mode workload policy and the proxy pool's policy, with no per-key filter.
 - **The FQDN backends.** `githubEgressFQDNs` names `*.blob.core.windows.net` (`cmd/gmc/internal/controller/egressproxy_fqdn.go:123:	"*.blob.core.windows.net",`), which matches every account by construction.
@@ -110,5 +110,6 @@ Whether any runner feature writes to a blob account outside that list is also un
 The closest CIDR form resolves the published `domains.actions` names and admits only the answers, which drops most of the 28.6 million addresses.
 It inherits DNS churn as job failures, it cannot expand the wildcard entries (`*.actions.githubusercontent.com`, `*.github.com`), and the storage clusters it does admit still serve other customers' accounts, so it bounds the residual rather than closing it.
 
-**What closes it** is routing workers through an FQDN-mode proxy with the narrowed list, or an in-cluster mirror for what jobs fetch, both of which exist today as opt-ins.
+**What bounds it furthest** is routing workers through an FQDN-mode proxy with the narrowed list, plus an in-cluster mirror for what jobs fetch.
+Neither closes it: a CNI FQDN policy admits the addresses the names resolve to, and those storage clusters also serve other customers' accounts.
 Changing the default is a security-posture decision the row leaves open.
