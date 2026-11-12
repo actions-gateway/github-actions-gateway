@@ -16,7 +16,7 @@ The `actions-gateway.com` kinds live in the neutral `api/` module shared by both
 From the repo root, either target covers all three modules — you do not need to know which module a type change reaches:
 
 ```bash
-make generate    # manifests + DeepCopy, for all of api, cmd/gmc, cmd/agc
+make generate    # manifests + DeepCopy for all of api, cmd/gmc, cmd/agc, then the chart CRD sync
 make manifests   # manifests only, for all three (the `make codegen-check` remedy)
 ```
 
@@ -115,7 +115,8 @@ They live in a **separate chart** because the `RunnerTemplate`/`ClusterRunnerTem
 The main chart ships one CRD, `PriorityClassAllowlist`, in its chart-root `crds/` directory.
 
 `scripts/manifest/sync-chart-crds.sh` writes the chart copies in one pass.
-After regenerating manifests, re-sync:
+`make generate` runs it as its last step, so a type change needs nothing more.
+`make manifests` does not run it, so run it by hand after that one:
 
 ```bash
 make chart-crds   # scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources
