@@ -2688,6 +2688,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#keep-gags-control-plane-off-worker-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keep GAG's control plane off worker nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#job-intake-bind-every-tenant-to-a-github-runner-group" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3557,6 +3568,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#keep-gags-control-plane-off-worker-nodes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keep GAG's control plane off worker nodes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#job-intake-bind-every-tenant-to-a-github-runner-group" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4036,6 +4058,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <li><a href="#posture-scanning-preventive">Posture scanning (preventive)</a></li>
 <li><a href="#manifest-posture--polaris-automated-in-ci">Manifest posture — polaris (automated, in CI)</a></li>
 <li><a href="#cis-benchmark-posture--kube-bench-manual-pre-production">CIS-benchmark posture — kube-bench (manual, pre-production)</a></li>
+<li><a href="#keep-gags-control-plane-off-worker-nodes">Keep GAG's control plane off worker nodes</a></li>
 <li><a href="#job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group</a></li>
 <li><a href="#fork-pull-requests-choose-their-own-runner-label">Fork pull requests choose their own runner label</a></li>
 <li><a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a></li>
@@ -4579,6 +4602,88 @@ Those are the province of the <a href="https://www.cisecurity.org/benchmark/kube
 <li><strong>Findings that don't apply</strong> (managed control plane hides the file, a check for a component you don't run) — record the justification alongside the cluster's onboarding ticket.</li>
 </ul>
 <p>The goal is <strong>zero critical (<code>[FAIL]</code>) findings that this stack depends on</strong> before the first production tenant (per <a href="../../plan/milestone-5/#3-posture-audit-kube-bench--polaris">milestone-5.md § 3</a>).</p>
+<h2 id="keep-gags-control-plane-off-worker-nodes">Keep GAG's control plane off worker nodes<a class="headerlink" href="#keep-gags-control-plane-off-worker-nodes" title="Permanent link">&para;</a></h2>
+<p>A worker runs code from a workflow, so plan for one escaping its container onto the node.
+On that node it can read the credentials of every other pod there.
+If a GAG control-plane pod is one of them, one compromised node becomes access to GitHub or to the whole cluster:</p>
+<table>
+<thead>
+<tr>
+<th>Pod</th>
+<th>What an escape on its node reaches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GMC</td>
+<td>Its ServiceAccount, which can read every tenant's GitHub App Secret (<a href="#suspected-compromised-gmc-cluster-scoped-tier-0">compromised GMC</a>)</td>
+</tr>
+<tr>
+<td>AGC</td>
+<td>That tenant's GitHub App private key and its namespace-scoped ServiceAccount</td>
+</tr>
+<tr>
+<td>Egress proxy</td>
+<td>That tenant's egress path and the proxy's private TLS key</td>
+</tr>
+<tr>
+<td>Cache and registry mirrors</td>
+<td>The artifacts other jobs pull next, so a write poisons them</td>
+</tr>
+</tbody>
+</table>
+<p><strong>GAG does not keep these pods apart for you.</strong> None of the GMC, AGC, proxy, or worker pods carries a default node selector, toleration, or anti-affinity that separates controllers from workers.
+The proxy's built-in anti-affinity spreads its own replicas only.
+GAG never creates node pools, so the separation belongs to the cluster, and it takes two halves:</p>
+<ol>
+<li><strong>Taint the worker pool, and give no control-plane pod the toleration.</strong> That keeps controllers off worker nodes.</li>
+<li><strong>Pin workers to that pool</strong> with a <code>nodeSelector</code> or a required <code>nodeAffinity</code>.
+   That keeps workers off controller nodes.
+   A toleration only <em>permits</em> a pod onto a tainted node; on its own it does not keep a worker away from any untainted one.</li>
+</ol>
+<p>Most setups do the first half and skip the second.
+Workers that tolerate the pool's taint and set no selector still land on the system pool wherever it has room.</p>
+<p>Taint and label the pool when you create it (GKE shown; EKS and AKS take the same <code>key=value:NoSchedule</code> taint on the node group):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>gcloud<span class="w"> </span>container<span class="w"> </span>node-pools<span class="w"> </span>create<span class="w"> </span>gag-workers<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--cluster<span class="o">=</span>&lt;cluster&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--node-taints<span class="o">=</span><span class="nv">dedicated</span><span class="o">=</span>gag-workers:NoSchedule<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>--node-labels<span class="o">=</span><span class="nv">dedicated</span><span class="o">=</span>gag-workers
+</code></pre></div>
+<p>Then put both halves on every worker shape, in each <code>RunnerTemplate</code> or <code>ClusterRunnerTemplate</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">podTemplate</span><span class="p">:</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">        </span><span class="nt">dedicated</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-workers</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">      </span><span class="nt">tolerations</span><span class="p">:</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dedicated</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">          </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Equal</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">          </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-workers</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">          </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NoSchedule</span>
+</code></pre></div>
+<p>Do not add that toleration to <code>ActionsGateway.spec.scheduling</code>, <code>EgressProxy.spec.scheduling</code>, the chart's <code>tolerations</code> value, or any cache or mirror.
+A tenant can set <code>spec.scheduling</code> on its own <code>ActionsGateway</code> and <code>EgressProxy</code> (<a href="#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling">why it is tenant-settable</a>), so a tenant can put its own AGC onto the worker pool.
+If tenants author those objects, enforce the rule at admission rather than trusting it.</p>
+<p>This matters most for the <code>privileged-dind</code> template, where an escape lands directly on the host (<a href="../runner-template-library/">choosing a template</a>).
+Kata narrows the risk without removing it, because a guest-to-host escape lands on the same node.</p>
+<p><strong>Check the separation on a live cluster.</strong> This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">GMC_NS</span><span class="o">=</span>gmc-system<span class="w">   </span><span class="c1"># the namespace the chart is installed in</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span>--arg<span class="w"> </span>gmc<span class="w"> </span><span class="s2">"</span><span class="nv">$GMC_NS</span><span class="s2">"</span><span class="w"> </span><span class="s1">'</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="s1">  [ .items[]</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="s1">    | select(.spec.nodeName != null)</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="s1">    | select(.metadata.namespace == $gmc</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s1">             or .metadata.labels["app.kubernetes.io/part-of"] == "actions-gateway")</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">    | { node: .spec.nodeName,</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">        worker: (.metadata.labels["actions-gateway/component"] == "workload") } ]</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">  | group_by(.node)[]</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">  | select(any(.worker) and any(.worker | not))</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">  | .[0].node'</span>
+</code></pre></div>
+<p>The query finds the GMC by its namespace and the AGC, proxy, and worker pods by their <code>app.kubernetes.io/part-of</code> label.
+Cache and mirror deployments you installed yourself carry neither, so add their namespaces to the selection.
+It reads one moment: run it while jobs are running, because workers exist only for the length of a job.</p>
+<p>The <a href="../admission-policies/#governing-where-gag-pods-schedule">placement policy samples</a> pin <em>every</em> pod in a tenant namespace to one pool, which puts the tenant's AGC and proxy on the same nodes as its workers.
+Do not use them as written on a cluster that keeps the control plane off worker nodes.</p>
 <h2 id="job-intake-bind-every-tenant-to-a-github-runner-group">Job intake: bind every tenant to a GitHub runner group<a class="headerlink" href="#job-intake-bind-every-tenant-to-a-github-runner-group" title="Permanent link">&para;</a></h2>
 <p>Everything else on this page bounds what a tenant's workers may reach.
 This bounds who may reach <em>them</em>, and it is the one control that lives at GitHub, outside anything the cluster can enforce.</p>
@@ -4645,30 +4750,30 @@ See <a href="../service-mesh-coexistence/">Running GAG Alongside a Service Mesh<
 <li><code>actions-gateway/component: workload</code> — every worker (and the AGC) in the tenant</li>
 <li><code>actions-gateway.com/runner-set: &lt;name&gt;</code> — workers of one specific <code>RunnerSet</code></li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Applied by a platform admin (requires NetworkPolicy write in the tenant</span>
-<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># namespace) — grants ONE runner type extra egress. CIDR + port + protocol.</span>
-<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
-<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NetworkPolicy</span>
-<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-builders-extra-egress</span>
-<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span>
-<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
-<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">      </span><span class="nt">actions-gateway/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">workload</span>
-<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">      </span><span class="nt">actions-gateway.com/runner-set</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-builders</span><span class="w">   </span><span class="c1"># omit this line for tenant-wide</span>
-<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span><span class="nt">policyTypes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Egress</span><span class="p p-Indicator">]</span>
-<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">  </span><span class="nt">egress</span><span class="p">:</span>
-<a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
-<a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ipBlock</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cidr</span><span class="p">:</span><span class="w"> </span><span class="nv">10.50.0.0/24</span><span class="p p-Indicator">}</span><span class="w">            </span><span class="c1"># internal registry / artifact store</span>
-<a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
-<a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">443</span><span class="p p-Indicator">}</span>
-<a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">5432</span><span class="p p-Indicator">}</span><span class="w">              </span><span class="c1"># e.g. Postgres</span>
-<a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
-<a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ipBlock</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cidr</span><span class="p">:</span><span class="w"> </span><span class="nv">10.50.0.53/32</span><span class="p p-Indicator">}</span><span class="w">           </span><span class="c1"># custom DNS resolver</span>
-<a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
-<a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">UDP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">53</span><span class="p p-Indicator">}</span>
-<a id="__codelineno-8-24" name="__codelineno-8-24" href="#__codelineno-8-24"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">53</span><span class="p p-Indicator">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Applied by a platform admin (requires NetworkPolicy write in the tenant</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># namespace) — grants ONE runner type extra egress. CIDR + port + protocol.</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">networking.k8s.io/v1</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NetworkPolicy</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-builders-extra-egress</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">      </span><span class="nt">actions-gateway/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">workload</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">      </span><span class="nt">actions-gateway.com/runner-set</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-builders</span><span class="w">   </span><span class="c1"># omit this line for tenant-wide</span>
+<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">  </span><span class="nt">policyTypes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Egress</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">  </span><span class="nt">egress</span><span class="p">:</span>
+<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
+<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ipBlock</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cidr</span><span class="p">:</span><span class="w"> </span><span class="nv">10.50.0.0/24</span><span class="p p-Indicator">}</span><span class="w">            </span><span class="c1"># internal registry / artifact store</span>
+<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-11-18" name="__codelineno-11-18" href="#__codelineno-11-18"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">443</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-11-19" name="__codelineno-11-19" href="#__codelineno-11-19"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">5432</span><span class="p p-Indicator">}</span><span class="w">              </span><span class="c1"># e.g. Postgres</span>
+<a id="__codelineno-11-20" name="__codelineno-11-20" href="#__codelineno-11-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">to</span><span class="p">:</span>
+<a id="__codelineno-11-21" name="__codelineno-11-21" href="#__codelineno-11-21"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ipBlock</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">cidr</span><span class="p">:</span><span class="w"> </span><span class="nv">10.50.0.53/32</span><span class="p p-Indicator">}</span><span class="w">           </span><span class="c1"># custom DNS resolver</span>
+<a id="__codelineno-11-22" name="__codelineno-11-22" href="#__codelineno-11-22"></a><span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
+<a id="__codelineno-11-23" name="__codelineno-11-23" href="#__codelineno-11-23"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">UDP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">53</span><span class="p p-Indicator">}</span>
+<a id="__codelineno-11-24" name="__codelineno-11-24" href="#__codelineno-11-24"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">53</span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <p><strong>This is a deliberate, documented trade-off, not a routine knob.</strong> Egress to the listed destinations leaves with the worker's own pod IP and therefore <strong>bypasses the per-tenant proxy egress-IP attribution</strong> for those flows.
 Untrusted job code (e.g. fork-PR workflows) can use any hole you open, so:</p>
@@ -4717,16 +4822,16 @@ If your cluster enforces DNS-based egress, you can instead have the GMC express 
   The tenant does <strong>not</strong> name Cilium/Calico/GKE.</li>
 <li><strong>The operator picks the mechanism</strong>, once per cluster, via the GMC <code>--fqdn-policy-backend</code> flag (chart: <code>fqdnPolicyBackend</code>).</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
-<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
-<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
-<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">  </span><span class="nt">egressPolicyMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FQDN</span><span class="w">   </span><span class="c1"># intent only; default is CIDR</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">  </span><span class="nt">egressPolicyMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FQDN</span><span class="w">   </span><span class="c1"># intent only; default is CIDR</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># values.yaml — the platform operator picks how FQDN intent is enforced, cluster-wide.</span>
-<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="nt">fqdnPolicyBackend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cilium</span><span class="w">   </span><span class="c1"># none (default) | cilium | calico | gke</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># values.yaml — the platform operator picks how FQDN intent is enforced, cluster-wide.</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nt">fqdnPolicyBackend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cilium</span><span class="w">   </span><span class="c1"># none (default) | cilium | calico | gke</span>
 </code></pre></div>
 <p><strong>Operator backend selector (<code>--fqdn-policy-backend</code>):</strong></p>
 <table>
@@ -4799,23 +4904,23 @@ Direct-egress (proxy-less) gateways stay on the CIDR path; if you need FQDN egre
 So the pod's <strong>node</strong> decides which IP its traffic leaves by, and pinning the tenant's proxy pool to the tenant's node pool is what binds the two.</p>
 <p><code>EgressProxy.spec.scheduling</code> carries the standard <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, and <code>priorityClassName</code>; <code>ActionsGateway.spec.scheduling</code> does the same for the AGC control-plane pod.
 (Worker pods have always had the full surface via <code>RunnerTemplate.spec.podTemplate</code>.)</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
-<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
-<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
-<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
-<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
-<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="nt">scheduling</span><span class="p">:</span>
-<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">    </span><span class="c1"># Pin to tenant-a's node pool -&gt; tenant-a's Cloud NAT -&gt; tenant-a's egress IP.</span>
-<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="nt">nodeSelector</span><span class="p">:</span>
-<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">      </span><span class="nt">cloud.google.com/gke-nodepool</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pool-tenant-a</span>
-<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="w">    </span><span class="c1"># Tolerate the taint that keeps other workloads off that pool.</span>
-<a id="__codelineno-11-13" name="__codelineno-11-13" href="#__codelineno-11-13"></a><span class="w">    </span><span class="nt">tolerations</span><span class="p">:</span>
-<a id="__codelineno-11-14" name="__codelineno-11-14" href="#__codelineno-11-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dedicated</span>
-<a id="__codelineno-11-15" name="__codelineno-11-15" href="#__codelineno-11-15"></a><span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Equal</span>
-<a id="__codelineno-11-16" name="__codelineno-11-16" href="#__codelineno-11-16"></a><span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
-<a id="__codelineno-11-17" name="__codelineno-11-17" href="#__codelineno-11-17"></a><span class="w">        </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NoSchedule</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">  </span><span class="nt">minReplicas</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="nt">scheduling</span><span class="p">:</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="c1"># Pin to tenant-a's node pool -&gt; tenant-a's Cloud NAT -&gt; tenant-a's egress IP.</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">    </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">      </span><span class="nt">cloud.google.com/gke-nodepool</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pool-tenant-a</span>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">    </span><span class="c1"># Tolerate the taint that keeps other workloads off that pool.</span>
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a><span class="w">    </span><span class="nt">tolerations</span><span class="p">:</span>
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">dedicated</span>
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a><span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Equal</span>
+<a id="__codelineno-14-16" name="__codelineno-14-16" href="#__codelineno-14-16"></a><span class="w">        </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tenant-a</span>
+<a id="__codelineno-14-17" name="__codelineno-14-17" href="#__codelineno-14-17"></a><span class="w">        </span><span class="nt">effect</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NoSchedule</span>
 </code></pre></div>
 <p><strong>Anti-affinity precedence.</strong> The GMC stamps a <strong>required</strong> cross-node <code>podAntiAffinity</code> on every proxy pool, so replicas land on distinct nodes and one node failure cannot take the pool down.
 Composition with <code>spec.scheduling.affinity</code>:</p>
@@ -4843,22 +4948,22 @@ Composition with <code>spec.scheduling.affinity</code>:</p>
 </table>
 <p>That last row is the escape hatch a <strong>single-node tenant pool</strong> needs: the required built-in term would otherwise strand every replica after the first in <code>Pending</code>.
 Either opt out of spreading explicitly —</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">scheduling</span><span class="p">:</span>
-<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">affinity</span><span class="p">:</span>
-<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">      </span><span class="nt">podAntiAffinity</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">   </span><span class="c1"># explicit empty: no spreading at all</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">scheduling</span><span class="p">:</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">affinity</span><span class="p">:</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">      </span><span class="nt">podAntiAffinity</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span><span class="w">   </span><span class="c1"># explicit empty: no spreading at all</span>
 </code></pre></div>
 <p>— or set <code>minReplicas: 1</code>.
 A soft spread (<code>preferredDuringScheduling…</code>) is the middle ground: it prefers distinct nodes but still schedules on a one-node pool.</p>
 <p><strong>Spreading across zones: <code>topologySpreadConstraints</code>.</strong> For zonal (or any failure-domain) spread, use <code>spec.scheduling.topologySpreadConstraints</code> — the modern successor to the cross-node <code>podAntiAffinity</code>, able to express "spread across zones, tolerate a skew of 1" that anti-affinity cannot:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">scheduling</span><span class="p">:</span>
-<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">topologySpreadConstraints</span><span class="p">:</span>
-<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">maxSkew</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">        </span><span class="nt">topologyKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology.kubernetes.io/zone</span>
-<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">        </span><span class="nt">whenUnsatisfiable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ScheduleAnyway</span>
-<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">        </span><span class="nt">labelSelector</span><span class="p">:</span>
-<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">          </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app</span><span class="p">:</span><span class="w"> </span><span class="nv">proxy</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">scheduling</span><span class="p">:</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">topologySpreadConstraints</span><span class="p">:</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">maxSkew</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">        </span><span class="nt">topologyKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology.kubernetes.io/zone</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">        </span><span class="nt">whenUnsatisfiable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ScheduleAnyway</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">        </span><span class="nt">labelSelector</span><span class="p">:</span>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">          </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> app</span><span class="p">:</span><span class="w"> </span><span class="nv">proxy</span><span class="w"> </span><span class="p p-Indicator">}</span>
 </code></pre></div>
 <p>Unlike <code>affinity</code>, this field <strong>composes</strong> with the built-in cross-node anti-affinity — it never replaces it.
 <code>podAntiAffinity: {}</code> stays the single opt-out for the built-in cross-node spread; <code>topologySpreadConstraints</code> adds a second axis on top.
@@ -4915,22 +5020,22 @@ The <code>EgressProxy</code> is a tenant-authorable CR, so a tenant may <em>requ
 </ul>
 <p><strong>Both empty (the default) forbids every non-GitHub destination</strong> — the secure default.
 GitHub is always allowed implicitly; the lists only add.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># values.yaml — platform admin opens proxy.golang.org/sum.golang.org for Go builds.</span>
-<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nt">allowedEgressFQDNs</span><span class="p">:</span>
-<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">golang.org</span><span class="w">          </span><span class="c1"># covers proxy.golang.org, sum.golang.org (subdomain match)</span>
-<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="nt">allowedEgressCIDRs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">  </span><span class="c1"># none permitted</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># values.yaml — platform admin opens proxy.golang.org/sum.golang.org for Go builds.</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nt">allowedEgressFQDNs</span><span class="p">:</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">golang.org</span><span class="w">          </span><span class="c1"># covers proxy.golang.org, sum.golang.org (subdomain match)</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="nt">allowedEgressCIDRs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">  </span><span class="c1"># none permitted</span>
 </code></pre></div>
 <p>A tenant then requests the destination on their <code>EgressProxy</code>.
 FQDN destinations require an FQDN <code>egressPolicyMode</code> (the CRD rejects <code>destinationFQDNs</code> in CIDR mode, since the pod-egress layer expresses them as <code>toFQDNs</code> rules); CIDR destinations work in any mode:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
-<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
-<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
-<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">  </span><span class="nt">egressPolicyMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FQDN</span><span class="w">   </span><span class="c1"># requires an operator --fqdn-policy-backend</span>
-<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">  </span><span class="nt">destinationFQDNs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">proxy.golang.org</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sum.golang.org</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># rejected unless covered by --allowed-egress-fqdns</span>
-<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">  </span><span class="nt">destinationCIDRs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">                                   </span><span class="c1"># rejected unless contained in --allowed-egress-cidrs</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">  </span><span class="nt">egressPolicyMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">FQDN</span><span class="w">   </span><span class="c1"># requires an operator --fqdn-policy-backend</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">  </span><span class="nt">destinationFQDNs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">proxy.golang.org</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">sum.golang.org</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># rejected unless covered by --allowed-egress-fqdns</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">  </span><span class="nt">destinationCIDRs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[]</span><span class="w">                                   </span><span class="c1"># rejected unless contained in --allowed-egress-cidrs</span>
 </code></pre></div>
 <p>The GMC then (1) adds the destinations to the proxy pool's egress policy — FQDNs to the CNI-native <code>toFQDNs</code>/<code>domains</code> set, CIDRs as <code>ipBlock</code> peers on the standard NetworkPolicy — and (2) injects them into the proxy's CONNECT allowlist so the proxy permits exactly the GitHub set plus these destinations (an <code>EgressProxy</code> with no extra destinations stays transport-only, unchanged).
 A denied CONNECT increments <code>actions_gateway_proxy_connect_denied_total</code>.</p>
@@ -4940,21 +5045,21 @@ The Private-Google-Access VIPs in particular require subnet-level Private Google
 </blockquote>
 <h3 id="self-service-additions-via-a-watched-configmap">Self-service additions via a watched ConfigMap<a class="headerlink" href="#self-service-additions-via-a-watched-configmap" title="Permanent link">&para;</a></h3>
 <p>To add a permitted destination without editing the flags and rolling out the GMC, point the GMC at a ConfigMap in its own namespace whose <code>fqdns</code>/<code>cidrs</code> keys <strong>augment</strong> the static flags (additive and fail-safe — a missing or malformed ConfigMap leaves the flag allowlists in force):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># values.yaml</span>
-<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nt">egressDestinationAllowlist</span><span class="p">:</span>
-<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">  </span><span class="nt">configMapName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-egress-destination-allowlist</span><span class="w">   </span><span class="c1"># renders --egress-destination-allowlist-configmap</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># values.yaml</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nt">egressDestinationAllowlist</span><span class="p">:</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">  </span><span class="nt">configMapName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-egress-destination-allowlist</span><span class="w">   </span><span class="c1"># renders --egress-destination-allowlist-configmap</span>
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
-<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
-<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-egress-destination-allowlist</span>
-<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gmc-namespace&gt;</span>
-<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="nt">data</span><span class="p">:</span>
-<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span><span class="nt">fqdns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">    </span><span class="no">proxy.golang.org</span>
-<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">    </span><span class="no">sum.golang.org</span>
-<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">  </span><span class="nt">cidrs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
-<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">    </span><span class="no">199.36.153.8/30</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ConfigMap</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-egress-destination-allowlist</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gmc-namespace&gt;</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="nt">data</span><span class="p">:</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">  </span><span class="nt">fqdns</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">    </span><span class="no">proxy.golang.org</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="w">    </span><span class="no">sum.golang.org</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="w">  </span><span class="nt">cidrs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="w">    </span><span class="no">199.36.153.8/30</span>
 </code></pre></div>
 <p>Setting <code>configMapName</code> also renders a namespaced Role/RoleBinding granting the GMC get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read).
 The effective allowlist is the union of the flags and the ConfigMap, enforced by the EgressProxy validating webhook on every create/update — a destination outside it is rejected with a message naming the effective allowlist.</p>
@@ -4970,27 +5075,27 @@ One proxy pool can serve several namespaces (a platform-operated central pool, o
 <h3 id="consent-lives-on-the-provider">Consent lives on the provider<a class="headerlink" href="#consent-lives-on-the-provider" title="Permanent link">&para;</a></h3>
 <p>Naming a proxy from the consumer side authorizes nothing.
 The proxy owner lists the namespaces permitted to use it:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
-<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
-<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
-<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform-egress</span>
-<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">  </span><span class="nt">sharing</span><span class="p">:</span>
-<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="nt">allowedNamespaces</span><span class="p">:</span>
-<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">EgressProxy</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform-egress</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="w">  </span><span class="nt">sharing</span><span class="p">:</span>
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a><span class="w">    </span><span class="nt">allowedNamespaces</span><span class="p">:</span>
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-b</span>
 </code></pre></div>
 <p>A consumer then names the proxy and its namespace:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
-<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
-<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway</span>
-<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
-<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
-<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
-<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform-egress</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="w">  </span><span class="nt">defaultProxyRef</span><span class="p">:</span>
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">shared-pool</span>
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="w">    </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">platform-egress</span>
 </code></pre></div>
 <p>The same <code>namespace</code> field is available on <code>RunnerSet.spec.proxyRef</code>.
 Omitting it means the referrer's own namespace, which is what every pre-existing manifest does, so nothing changes for them.</p>
@@ -5002,11 +5107,11 @@ The same limit reaches the <a href="#per-connection-egress-audit">per-connection
 The private key stays in the provider namespace.
 That ConfigMap is GMC-owned: do not edit or delete it, and do not create one by hand expecting it to grant access, since the GMC reconciles it back.</p>
 <h3 id="verifying-a-grant-took-effect">Verifying a grant took effect<a class="headerlink" href="#verifying-a-grant-took-effect" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway/proxy-share<span class="o">=</span><span class="nb">true</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>configmap<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>-l<span class="w"> </span>actions-gateway/proxy-share<span class="o">=</span><span class="nb">true</span>
 </code></pre></div>
 <p>One entry per proxy <code>team-a</code> is entitled to.
 If it is missing, the grant has not been accepted; check the consumer's condition:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>gateway<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">'{.status.conditions}'</span>
 </code></pre></div>
 <p><code>Degraded</code> with reason <code>ProxyShareNotGranted</code> means the proxy exists but does not list this namespace.
 Reason <code>ProxyNotFound</code> means the name or namespace is wrong.
@@ -5015,7 +5120,7 @@ Both fail closed: no worker pods run and no traffic is permitted while either is
 For the few seconds after you create a gateway naming a granted proxy, it reports <code>ProxyShareNotGranted</code> with a message saying the certificate "has not yet been projected here", and it re-checks every 10 seconds.
 That message persisting means the ConfigMap is not being written: check the provider's <code>EgressProxy</code> status and the GMC logs.</p>
 <p>Confirm the provider side admits the consumer:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>platform-egress<span class="w"> </span>shared-pool-proxy<span class="w"> </span>-o<span class="w"> </span>yaml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>networkpolicy<span class="w"> </span>-n<span class="w"> </span>platform-egress<span class="w"> </span>shared-pool-proxy<span class="w"> </span>-o<span class="w"> </span>yaml
 </code></pre></div>
 <p>The ingress rules should carry one peer per granted namespace, each with <strong>both</strong> a <code>namespaceSelector</code> and a <code>podSelector</code> inside the same list entry.
 Two separate entries would mean "any pod in that namespace, or any workload pod anywhere".
@@ -5037,10 +5142,10 @@ By default that rule has <strong>no destination restriction</strong> (any-dest):
 That breadth is a documented residual (<a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>): a compromised AGC could in principle reach an arbitrary external HTTPS endpoint on 443, not just the apiserver.</p>
 <p><strong>If your platform exposes the apiserver on a <em>stable</em> CIDR</strong>, you can close that residual by scoping the rule to it.
 Set the chart value <code>apiServerCIDRs</code> (passed to the GMC as <code>--apiserver-cidrs</code>) to the apiserver CIDR set:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># values.yaml — opt-in tightening of the AGC apiserver-egress rule.</span>
-<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="nt">apiServerCIDRs</span><span class="p">:</span>
-<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"10.0.0.1/32"</span><span class="w">        </span><span class="c1"># the apiserver's post-DNAT endpoint (single IP)</span>
-<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"172.16.0.0/12"</span><span class="w">      </span><span class="c1"># or a CIDR covering the control-plane node pool</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># values.yaml — opt-in tightening of the AGC apiserver-egress rule.</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">apiServerCIDRs</span><span class="p">:</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"10.0.0.1/32"</span><span class="w">        </span><span class="c1"># the apiserver's post-DNAT endpoint (single IP)</span>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"172.16.0.0/12"</span><span class="w">      </span><span class="c1"># or a CIDR covering the control-plane node pool</span>
 </code></pre></div>
 <p>When set, the GMC scopes every tenant's AGC NetworkPolicy 443/6443 rule to these CIDRs via <code>ipBlock</code> peers (ports unchanged); when <strong>empty (the default)</strong> the rule stays any-destination — no behavior change.
 This is an <strong>opt-in tightening, never a loosening</strong>, applied cluster-wide (the apiserver is the same endpoint for every tenant).
@@ -5049,9 +5154,9 @@ The GMC <strong>validates each entry as a CIDR at startup and refuses to start o
 <p>The value must cover the destination the AGC's apiserver traffic carries <strong>after</strong> kube-proxy DNAT — <strong>not</strong> the <code>kubernetes</code> Service ClusterIP (that virtual IP is DNAT'd away <em>before</em> NetworkPolicy is evaluated, so an <code>ipBlock</code> naming the ClusterIP matches nothing and severs apiserver access).
 The post-DNAT destinations are exactly the <strong>endpoints</strong> of the <code>kubernetes</code> Service in the <code>default</code> namespace.
 On every platform, confirm them before you scope:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>kubernetes<span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>-o<span class="w"> </span>wide
-<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># NAME         ENDPOINTS                          AGE</span>
-<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># kubernetes   10.0.12.34:443,10.0.34.56:443      90d</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>endpoints<span class="w"> </span>kubernetes<span class="w"> </span>-n<span class="w"> </span>default<span class="w"> </span>-o<span class="w"> </span>wide
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="c1"># NAME         ENDPOINTS                          AGE</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># kubernetes   10.0.12.34:443,10.0.34.56:443      90d</span>
 </code></pre></div>
 <p>Those <code>ENDPOINTS</code> IP:port pairs are the literal targets the policy evaluator matches against.
 Your <code>apiServerCIDRs</code> must contain a CIDR covering <strong>all</strong> of them, and <strong>stay</strong> covering them as the platform rotates.
@@ -5130,9 +5235,9 @@ Both the JWT (signed with the tenant's private key) and the returned token are c
 <p>The endpoint host is taken from the <strong><code>GITHUB_API_BASE_URL</code></strong> environment variable, defaulting to <code>https://api.github.com</code> when unset.
 On a GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's <code>spec.githubURL</code> and injects it on the AGC <code>Deployment</code> — <code>https://api.github.com</code> for a <code>github.com</code> gateway, <code>https://&lt;host&gt;/api/v3</code> for GitHub Enterprise Server.
 The token provider <strong>rejects a non-HTTPS <code>GITHUB_API_BASE_URL</code> at startup</strong> — the AGC (and the <code>probe</code>) will refuse to start with a clear error rather than leak credentials on the first token mint:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>githubapp: refusing non-HTTPS GITHUB_API_BASE_URL "http://…":
-<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>GitHub App token exchange must use HTTPS to protect credentials in transit;
-<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>plaintext is permitted only under an explicit dev/test opt-in
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>githubapp: refusing non-HTTPS GITHUB_API_BASE_URL "http://…":
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>GitHub App token exchange must use HTTPS to protect credentials in transit;
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>plaintext is permitted only under an explicit dev/test opt-in
 </code></pre></div>
 <p>This is <strong>secure-by-default</strong>: HTTPS is required with no configuration, an HTTPS value (including a GitHub Enterprise Server base such as <code>https://ghe.example.com/api/v3</code>) and the unset default both work, and the error names the offending URL but never any token or JWT material.</p>
 <p><strong>Operator action:</strong> on a GMC-provisioned gateway there is nothing to set — <code>spec.githubURL</code> is validated <code>https://</code> at admission, so the derived base is always HTTPS.
@@ -5176,21 +5281,21 @@ Leave it unset (the default) unless you mean to grant it.</p>
 <li><strong>The platform pre-creates the <code>PriorityClass</code> objects.</strong> The GMC never creates cluster-scoped objects (same platform-ownership model as the <code>ResourceQuota</code>, Q130).
    Create allowlisted classes with <strong><code>preemptionPolicy: Never</code></strong> unless cross-tenant preemption is genuinely intended for that tier — <code>PriorityClass</code> is global, so a <code>PreemptLowerPriority</code> class lets <em>any</em> tenant that uses it evict <em>any</em> lower-priority pod cluster-wide, across tenant boundaries.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
-<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
-<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
-<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
-<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">   </span><span class="c1"># orders ahead in scheduling without evicting others</span>
-<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"Standard</span><span class="nv"> </span><span class="s">self-hosted</span><span class="nv"> </span><span class="s">runner</span><span class="nv"> </span><span class="s">worker</span><span class="nv"> </span><span class="s">pods."</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-standard</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100000</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">   </span><span class="c1"># orders ahead in scheduling without evicting others</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"Standard</span><span class="nv"> </span><span class="s">self-hosted</span><span class="nv"> </span><span class="s">runner</span><span class="nv"> </span><span class="s">worker</span><span class="nv"> </span><span class="s">pods."</span>
 </code></pre></div>
 <ol>
 <li><strong>The platform allowlists the names on the GMC.</strong> Set the <code>--allowed-priority-classes</code> flag (comma-separated) on the GMC controller.
    The validating webhook rejects — naming both the offending class and the permitted set — any <code>RunnerTemplate</code> whose <code>podTemplate.spec.priorityClassName</code> is off the list, and any <code>RunnerSet</code> whose <code>priorityTiers[].priorityClassName</code> is off the list.</li>
 </ol>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
-<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="nt">args</span><span class="p">:</span>
-<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
 </code></pre></div>
 <p><strong>An empty/unset allowlist forbids every named PriorityClass</strong> (secure default): out of the box no tenant can set one.
    An <em>unset</em> <code>podTemplate.spec.priorityClassName</code> is always admitted — the default forbids named classes, not ordinary unprioritized worker pods.
@@ -5208,36 +5313,36 @@ The two allowlists exist precisely so an infra class is unreachable from any wor
 <p><strong>The GMC enforces disjointness at startup.</strong> If a class appears in both <code>--allowed-priority-classes</code> and <code>--allowed-infra-priority-classes</code>, the GMC <strong>refuses to boot</strong> — converting a silent priority inversion into a loud configuration error.
 Keep the two sets separate; a good convention is an <code>infra-</code> name prefix.
 The flags are not the only route to an overlap once the watched CR is in play; see <a href="#disjointness-is-enforced-on-every-edit-not-only-at-startup">Disjointness is enforced on every edit</a>.</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
-<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="nt">args</span><span class="p">:</span>
-<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
-<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-infra-priority-classes=gag-infra-critical</span><span class="w">   </span><span class="c1"># DISJOINT from the above</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># GMC Deployment / Helm values — args on the controller-manager container</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="nt">args</span><span class="p">:</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-infra-priority-classes=gag-infra-critical</span><span class="w">   </span><span class="c1"># DISJOINT from the above</span>
 </code></pre></div>
 <p>Create the infra class with a value <strong>above</strong> the worker classes so the scheduler keeps infra pods when a node is contended:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
-<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
-<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-critical</span>
-<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000000</span><span class="w">            </span><span class="c1"># well above the runner-* classes</span>
-<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">      </span><span class="c1"># order ahead without evicting others, unless you mean to</span>
-<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"GAG</span><span class="nv"> </span><span class="s">per-tenant</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">AGC</span><span class="nv"> </span><span class="s">control-plane</span><span class="nv"> </span><span class="s">pods."</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-critical</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1000000000</span><span class="w">            </span><span class="c1"># well above the runner-* classes</span>
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">      </span><span class="c1"># order ahead without evicting others, unless you mean to</span>
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"GAG</span><span class="nv"> </span><span class="s">per-tenant</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">AGC</span><span class="nv"> </span><span class="s">control-plane</span><span class="nv"> </span><span class="s">pods."</span>
 </code></pre></div>
 <h3 id="upgrading-previously-ungated-priorityclassname-fields-are-now-gated">Upgrading: previously ungated <code>priorityClassName</code> fields are now gated<a class="headerlink" href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated" title="Permanent link">&para;</a></h3>
 <p>Two of the tenant-reachable routes shipped before their gate did: <code>podTemplate.spec.priorityClassName</code> was accepted unvalidated on <code>RunnerTemplate</code>, and <code>priorityTiers[].priorityClassName</code> was accepted unvalidated on <code>RunnerSet</code>.
 Both are now rejected unless allowlisted, so <strong>an existing CR that names an off-allowlist class will fail its next <code>create</code>/<code>update</code></strong> (admission webhooks do not re-validate already-stored objects, so nothing breaks until the CR is edited).</p>
 <p>Before upgrading, find the affected objects and either add their class to <code>--allowed-priority-classes</code> or remove the field:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># RunnerTemplates</span>
-<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">"</span><span class="nv">$CTX</span><span class="s2">"</span><span class="w"> </span>get<span class="w"> </span>runnertemplates<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'</span>
-<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="s1">  | select(.spec.podTemplate.spec.priorityClassName != null)</span>
-<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="s1">  | "\(.metadata.namespace)/\(.metadata.name) -&gt; \(.spec.podTemplate.spec.priorityClassName)"'</span>
-<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>
-<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="c1"># RunnerSets (each priorityTiers[] entry names a class)</span>
-<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">"</span><span class="nv">$CTX</span><span class="s2">"</span><span class="w"> </span>get<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'</span>
-<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="s1">  .items[]</span>
-<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
-<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a><span class="s1">  | (.spec.priorityTiers // [])[]</span>
-<a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a><span class="s1">  | "\($ns)/\($name) -&gt; \(.priorityClassName)"'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># RunnerTemplates</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">"</span><span class="nv">$CTX</span><span class="s2">"</span><span class="w"> </span>get<span class="w"> </span>runnertemplates<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="s1">  | select(.spec.podTemplate.spec.priorityClassName != null)</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="s1">  | "\(.metadata.namespace)/\(.metadata.name) -&gt; \(.spec.podTemplate.spec.priorityClassName)"'</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>
+<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="c1"># RunnerSets (each priorityTiers[] entry names a class)</span>
+<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a>kubectl<span class="w"> </span>--context<span class="w"> </span><span class="s2">"</span><span class="nv">$CTX</span><span class="s2">"</span><span class="w"> </span>get<span class="w"> </span>runnersets.actions-gateway.com<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'</span>
+<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="s1">  .items[]</span>
+<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="s1">  | .metadata.namespace as $ns | .metadata.name as $name</span>
+<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="s1">  | (.spec.priorityTiers // [])[]</span>
+<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="s1">  | "\($ns)/\($name) -&gt; \(.priorityClassName)"'</span>
 </code></pre></div>
 <p>Any class these print that is <strong>not</strong> in your <code>--allowed-priority-classes</code> was an open cross-tenant preemption lever; treat a <code>system-cluster-critical</code> or <code>system-node-critical</code> result as an incident, not a config change.</p>
 <h3 id="self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions via the <code>PriorityClassAllowlist</code> CR (Q188, Q298)<a class="headerlink" href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298" title="Permanent link">&para;</a></h3>
@@ -5275,18 +5380,18 @@ A ConfigMap could not remain the policy's <code>paramKind</code> — a kube-apis
 Migration steps: <a href="../upgrade/#priorityclass-allowlist-configmap-to-cr">upgrade.md</a>.</p>
 </div>
 <p><strong>Add a class without a restart.</strong> Edit the object in place:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>kubectl<span class="w"> </span>edit<span class="w"> </span>priorityclassallowlist<span class="w"> </span>gmc-priorityclass-allowlist
 </code></pre></div>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
-<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
-<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="nt">metadata</span><span class="p">:</span>
-<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
-<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
-<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
-<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
-<a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a><span class="w">  </span><span class="nt">allowedInfraPriorityClasses</span><span class="p">:</span><span class="w">      </span><span class="c1"># DISJOINT from the list above</span>
-<a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-high</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClassAllowlist</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="nt">metadata</span><span class="p">:</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gmc-priorityclass-allowlist</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="nt">spec</span><span class="p">:</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="w">  </span><span class="nt">allowedPriorityClasses</span><span class="p">:</span>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-bursty</span>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">runner-batch</span>
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a><span class="w">  </span><span class="nt">allowedInfraPriorityClasses</span><span class="p">:</span><span class="w">      </span><span class="c1"># DISJOINT from the list above</span>
+<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gag-infra-high</span>
 </code></pre></div>
 <p>The <strong>effective allowlist for each webhook is the union</strong> of its static flag and the matching list here: the CR can only <em>widen</em> an allowlist, never remove a flag-pinned class.
 You still pre-create each <code>PriorityClass</code> object first (step 1 of the previous section) — the allowlist only governs which <em>names</em> a tenant may reference.</p>
@@ -5398,8 +5503,8 @@ The GMC surfaces this as provisioning errors on affected gateways; recreate the 
 Deleting it does not affect running workloads.</p>
 <h4 id="param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492">Param resolution used to break cluster-wide (Q444, fixed in Q492)<a class="headerlink" href="#param-resolution-used-to-break-cluster-wide-q444-fixed-in-q492" title="Permanent link">&para;</a></h4>
 <p>Releases before the <code>PriorityClassAllowlist</code> migration used a <strong>ConfigMap</strong> as the policy's <code>paramKind</code>, and were exposed to a kube-apiserver defect that denied every matched write cluster-wide:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>denied request: failed to configure binding: no params found for policy binding
-<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>with `Deny` parameterNotFoundAction
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>denied request: failed to configure binding: no params found for policy binding
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>with `Deny` parameterNotFoundAction
 </code></pre></div>
 <p>…while the ConfigMap plainly existed at the referenced name and namespace.
 Because <code>parameterNotFoundAction: Deny</code> resolves parameters <strong>before</strong> any per-object matching, that denied <em>every</em> matched write — <code>runnergroups</code>, <code>runnersets</code>, <code>runnertemplates</code>, class-naming or not.
@@ -5430,11 +5535,11 @@ Each of the four production images therefore ships its license attribution under
 <li><strong>Inspect it on a running pod.</strong> The files are plain text at <code>/licenses/</code>.
   The worker image ships a shell + coreutils + tar, so <code>exec</code>-cat and <code>kubectl cp</code> work on a worker pod:</li>
 </ul>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
-<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
-<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
-<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
-<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>kubectl<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>&lt;tenant-ns&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>/licenses/LICENSE
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>kubectl<span class="w"> </span>cp<span class="w"> </span>&lt;tenant-ns&gt;/&lt;worker-pod&gt;:/licenses/THIRD-PARTY-NOTICES<span class="w"> </span>./THIRD-PARTY-NOTICES
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="c1"># The agc/gmc/proxy images are distroless (no shell, cat, or tar), so neither</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="c1"># exec-cat nor kubectl cp works on them — read their /licenses from the repo</span>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="c1"># root (THIRD-PARTY-NOTICES) or from the image with an OCI tool (crane/skopeo).</span>
 </code></pre></div>
 <ul>
 <li><strong>How it is kept current.</strong> <code>THIRD-PARTY-NOTICES</code> lives at the repo root and is <strong>generated and committed</strong> by <code>make third-party-notices</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/gen-third-party-notices.sh"><code>scripts/release/gen-third-party-notices.sh</code></a>), which concatenates the <code>LICENSE</code>/<code>NOTICE</code>/<code>COPYING</code> files of every module under the committed, version-pinned <code>vendor/</code> tree — offline, no network or module cache.
@@ -5457,12 +5562,12 @@ Each one is:</p>
 </ul>
 <h3 id="verify-a-signature">Verify a signature<a class="headerlink" href="#verify-a-signature" title="Permanent link">&para;</a></h3>
 <p>Before deploying — or as a forensic step when investigating a suspected image swap (the "Verify the image" step in the <a href="#suspected-compromised-agc-tenant-scoped">compromised-AGC</a> and <a href="#suspected-compromised-gmc-cluster-scoped-tier-0">compromised-GMC</a> playbooks) — confirm the image was signed by <em>this project's</em> publish workflow:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
-<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="c1"># GitHub's OIDC provider. A signature from any other identity (or none) fails.</span>
-<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">'https://token.actions.githubusercontent.com'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Pin the identity to the publish workflow on a release tag, and the issuer to</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="c1"># GitHub's OIDC provider. A signature from any other identity (or none) fails.</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>cosign<span class="w"> </span>verify<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">'https://token.actions.githubusercontent.com'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;
 </code></pre></div>
 <ul>
 <li><strong>A <code>cosign verify</code> failure is a stop-ship / incident signal.</strong> It means the image was not signed by the publish workflow — a locally built, tampered, or third-party image.
@@ -5475,11 +5580,11 @@ Each one is:</p>
 <p>The build-provenance attestation answers <em>how and where</em> the image was built — the complement to the signature's <em>who signed it</em>.
 It is bound to the <strong>index</strong> digest (unlike the per-arch SBOM attestations), so a tag or index-digest reference verifies directly.
 The one-command check uses the GitHub CLI:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project's publish</span>
-<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
-<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Confirms the signed SLSA provenance was minted by this project's publish</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># workflow. Resolve the tag to the index digest first for a workload check.</span>
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>oci://ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="w">  </span>--repo<span class="w"> </span>actions-gateway/github-actions-gateway<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="w">  </span>--signer-workflow<span class="w"> </span>actions-gateway/github-actions-gateway/.github/workflows/publish.yml
 </code></pre></div>
 <blockquote>
 <p><strong>Scripting this check?</strong> <code>gh attestation verify</code> prints its summary only to a terminal.
@@ -5487,11 +5592,11 @@ Redirected or captured it emits nothing while still exiting 0, so a passing veri
 In a pipeline, add <code>--format json</code> and assert on the result — <code>.[0].verificationResult.signature.certificate.buildSignerURI</code> must name this repo's <code>publish.yml</code> at a <code>refs/tags/v*</code> ref.</p>
 </blockquote>
 <p><code>cosign</code> verifies the same attestation against the keyless identity, matching the signature/SBOM commands above (the predicate type is the SLSA provenance v1 in-toto type):</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">'https://token.actions.githubusercontent.com'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters'</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>slsaprovenance1<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">'https://token.actions.githubusercontent.com'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a><span class="w">  </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.payload | @base64d | fromjson | .predicate.buildDefinition.externalParameters'</span>
 </code></pre></div>
 <ul>
 <li><strong>A provenance verification failure is a stop-ship / incident signal</strong>, exactly like a <code>cosign verify</code> failure: the image was not built-and-attested by the publish workflow.
@@ -5501,19 +5606,19 @@ In a pipeline, add <code>--format json</code> and assert on the result — <code
 <h3 id="retrieve-and-inspect-the-sbom">Retrieve and inspect the SBOM<a class="headerlink" href="#retrieve-and-inspect-the-sbom" title="Permanent link">&para;</a></h3>
 <p>The SBOMs ride with the image as signed attestations — <strong>one per architecture, attached to that architecture's manifest digest</strong> (not to the index, so the SBOM you audit is exactly what your nodes run) — and are also uploaded as build artifacts on each publish run.
 To pull and inspect one from the registry, resolve the per-arch digest from the index first:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
-<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest'</span><span class="k">)</span><span class="s2">"</span>
-<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a>
-<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="c1"># Download that arch's SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
-<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">'https://token.actions.githubusercontent.com'</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="w">  </span><span class="s2">"ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.payload | @base64d | fromjson | .predicate'</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
-<a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a>
-<a id="__codelineno-38-12" name="__codelineno-38-12" href="#__codelineno-38-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
-<a id="__codelineno-38-13" name="__codelineno-38-13" href="#__codelineno-38-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.packages[].name'</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="c1"># Resolve the manifest digest for the architecture you are auditing.</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="nv">digest</span><span class="o">=</span><span class="s2">"</span><span class="k">$(</span>docker<span class="w"> </span>buildx<span class="w"> </span>imagetools<span class="w"> </span>inspect<span class="w"> </span>ghcr.io/actions-gateway/gmc:&lt;tag-or-digest&gt;<span class="w"> </span>--raw<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest'</span><span class="k">)</span><span class="s2">"</span>
+<a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a>
+<a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="c1"># Download that arch's SPDX-JSON SBOM attestation, verifying its keyless signature first.</span>
+<a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a>cosign<span class="w"> </span>verify-attestation<span class="w"> </span>--type<span class="w"> </span>spdxjson<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s1">'^https://github.com/actions-gateway/github-actions-gateway/\.github/workflows/publish\.yml@refs/tags/v.*$'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-41-8" name="__codelineno-41-8" href="#__codelineno-41-8"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s1">'https://token.actions.githubusercontent.com'</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-41-9" name="__codelineno-41-9" href="#__codelineno-41-9"></a><span class="w">  </span><span class="s2">"ghcr.io/actions-gateway/gmc@</span><span class="si">${</span><span class="nv">digest</span><span class="si">}</span><span class="s2">"</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-41-10" name="__codelineno-41-10" href="#__codelineno-41-10"></a><span class="w">  </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.payload | @base64d | fromjson | .predicate'</span><span class="w"> </span>&gt;<span class="w"> </span>gmc.spdx.json
+<a id="__codelineno-41-11" name="__codelineno-41-11" href="#__codelineno-41-11"></a>
+<a id="__codelineno-41-12" name="__codelineno-41-12" href="#__codelineno-41-12"></a><span class="c1"># Then audit packages, e.g. grep for a CVE-affected library, or feed to a scanner:</span>
+<a id="__codelineno-41-13" name="__codelineno-41-13" href="#__codelineno-41-13"></a>jq<span class="w"> </span>-r<span class="w"> </span><span class="s1">'.packages[].name'</span><span class="w"> </span>gmc.spdx.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
 </code></pre></div>
 <p>PR CI (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml"><code>security-scan.yml</code></a>) builds each image and generates the same SBOM as a build artifact, so SBOM generation is exercised on every code PR — but <strong>signing and attestation run only on publish</strong> (they need a registry push and the publish workflow's OIDC identity).
 A green PR therefore proves the image builds and the SBOM generates; it does not exercise the cosign sign/attest path.</p>

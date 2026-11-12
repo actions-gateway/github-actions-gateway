@@ -3320,6 +3320,10 @@ The worst a hostile author achieves is an unschedulable pod (<code>Pending</code
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/gatekeeper/restrict-gag-placement.yaml
 </code></pre></div>
 <p>Namespaces without the label are left untouched, so the Kyverno policy is safe to apply before you have labelled anything.</p>
+<blockquote>
+<p><strong>These samples put a tenant's AGC and proxy on the same nodes as its workers.</strong> They pin every pod in the namespace to one pool, so a worker that escapes its container reaches the AGC's GitHub App key on the same node.
+On a cluster that keeps GAG's control plane off worker nodes (<a href="../security-operations/#keep-gags-control-plane-off-worker-nodes">why, and how</a>), do not apply them as written.</p>
+</blockquote>
 <h3 id="the-taint-bypass--and-why-validation-alone-is-not-enough">The taint bypass — and why validation alone is not enough<a class="headerlink" href="#the-taint-bypass--and-why-validation-alone-is-not-enough" title="Permanent link">&para;</a></h3>
 <p>A toleration with <code>operator: Exists</code> and <strong>no <code>key</code></strong> tolerates <em>every</em> taint in the cluster, including the taints that reserve a node pool for one tenant.
 No GAG-emitted pod needs one, so both samples deny it.</p>
