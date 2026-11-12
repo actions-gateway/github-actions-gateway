@@ -619,11 +619,14 @@ doctor: ## Check required CLI tools are installed and on PATH (install/PATH-fix 
 # manifests of the one module whose CRD embeds another module's types — the
 # exact miss behind Q440 (Q458). A module whose `generate` stops covering its
 # `manifests` silently reopens that hole; `make codegen-check` is what notices.
+# The chart CRD templates are copies of api/config/crd, so the sync runs last
+# rather than leaving `make chart-crds-check` to fail on the next `make check`.
 .PHONY: generate
-generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests and DeepCopy methods (all modules)
+generate: $(CONTROLLER_GEN) ## Regenerate CRD/RBAC manifests, DeepCopy methods (all modules) and the chart CRD templates
 	$(MAKE) -C api generate
 	$(MAKE) -C cmd/gmc generate
 	$(MAKE) -C cmd/agc generate
+	$(MAKE) chart-crds
 
 # The manifests half alone, for a change that alters no Go type — adding or
 # removing a +kubebuilder:rbac / +kubebuilder:webhook marker. Prefer `make
@@ -983,7 +986,6 @@ vendor-sync: ## Re-sync module files + vendor trees + THIRD-PARTY-NOTICES (the v
 deps-sync: ## Re-sync vendoring AND regenerate everything derived from it (the dependency-change / Dependabot remedy)
 	$(MAKE) vendor-sync
 	$(MAKE) generate
-	$(MAKE) chart-crds
 	$(MAKE) api-reference-sync
 
 ##@ Security
