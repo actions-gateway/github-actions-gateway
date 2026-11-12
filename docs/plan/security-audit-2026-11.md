@@ -3,10 +3,11 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), six of the seven release and CI leads settled (Q1326), the four scale-set identity leads confirmed, three fixed and one accepted as a residual (Q1325), and the five AGC run and recovery leads settled (Q1327).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 7 of which still are, one of them the release and CI lead that waits on Q1330.
+> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), six of the seven release and CI leads settled (Q1326), the four scale-set identity leads confirmed, three fixed and one accepted as a residual (Q1325), the five AGC run and recovery leads settled (Q1327), and four worker pod and NetworkPolicy leads closed (Q1328).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 2 of which still are.
+> The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> The rest are [Q1323](../queue/Q1323.md) and [Q1328](../queue/Q1328.md).
+> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1342](../queue/Q1342.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead is tracked by [Q1253](../queue/Q1253.md).
 
 ## Method and limits
 
@@ -73,11 +74,11 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [Throughput sizing profile derives the worker memory limit from job-controlled peak usage with no maxRequests clamp, so the limit can exceed the operator's envelope and may ratchet](#agc-run-and-recovery-leads) | confirmed by a local test, fixed | Q1327 |
 | [Tenant-chosen workerImage host (and registry redirects) steer AGC GETs to in-cluster 443/6443 endpoints off the egress proxy, with the outcome reported in RunnerSet status](#agc-run-and-recovery-leads) | bound measured by a local test, accepted residual | Q1327 |
 | [AGC run-status, re-run and force-cancel errors carry the raw upstream body into logs, and run-status and re-run errors into a tenant-namespace Event, bypassing SanitizeBody](#agc-run-and-recovery-leads) | confirmed by a local test, fixed | Q1327 |
-| [Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1328](../queue/Q1328.md) |
-| [Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1328](../queue/Q1328.md) |
-| [namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1328](../queue/Q1328.md) |
-| [DNS egress rule confines which resolver a pod may contact, not which names it resolves; the design states the DNS exfiltration channel is closed](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1328](../queue/Q1328.md) |
-| [GitHub CIDR allowlist admits /meta `actions` ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1328](../queue/Q1328.md) |
+| [Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328 |
+| [Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328; token route [Q1343](../queue/Q1343.md) |
+| [namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328 |
+| [DNS egress rule confines which resolver a pod may contact, not which names it resolves; the design states the DNS exfiltration channel is closed](#worker-pod-and-networkpolicy-leads) | claim corrected, accepted residual | Q1328, in [05-security.md](../design/05-security.md#dns-exfiltration-side-channel-containment) |
+| [GitHub CIDR allowlist admits /meta `actions` ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1253](../queue/Q1253.md) |
 
 ## Confinement claim
 
@@ -1108,7 +1109,7 @@ No upstream was observed echoing a credential; the fix does not depend on one do
 
 ## Worker pod and NetworkPolicy leads
 
-Five leads on worker pods and the policies around them, tracked as [Q1328](../queue/Q1328.md).
+Five leads on worker pods and the policies around them, tracked as Q1328 and closed under it, the first three fixed and the fourth an accepted residual.
 The last is already open as [Q1253](../queue/Q1253.md), which holds a dogfood measurement this audit did not have; its entry stays here so the audit's record is whole, and Q1253 owns the work.
 
 ### Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive
@@ -1133,6 +1134,15 @@ Envtest: extend TestV2_Teardown_FailClosedUntilChildrenGone in cmd/gmc/internal/
 Enforcement needs the kind + Calico e2e lane: run a job that sleeps and ignores SIGTERM, scale the AGC to zero, delete the gateway, and after WorkerDrainTimeout probe from the worker pod to an address outside the proxy and GitHub ranges, and to the worker pod from another namespace.
 
 **Owner check.** Owner-observed, non-destructive: in a tenant namespace with one gateway, list NetworkPolicies and confirm whether any platform-owned policy selects pods labelled actions-gateway/component=workload besides <gateway>-workload; confirm whether tenant admins can write NetworkPolicies or scale the AGC Deployment; for any past gateway delete that emitted WorkerDrainTimeout, check from events and pod timestamps whether pods with that label were still Running after the policy was gone.
+
+**Outcome.** Confirmed by a local test, fixed.
+Source shows both paths the lead names: the AGC zeroes `activeJobs`/`pendingJobs` as soon as it issues its pod deletes (`runnerset_gateway_teardown.go`), no code caps the template's `terminationGracePeriodSeconds`, and the `WorkerDrainTimeout` branch went on to delete the policy.
+Two unit cases in `actionsgateway_v2_worker_drain_test.go`, a Running pod past the deadline and a terminating pod with zero counts, went red on `main` with the policy deleted.
+Teardown now keeps `<gateway>-workload`, and the finalizer, while any pod of a bound RunnerSet remains, from an uncached metadata Pod list granted through `gmc-tenant-secret-reader` (which gains `list` on Pods); a neighbour gateway's pods do not hold it.
+`TestGMC_Teardown_HoldsWorkloadPolicyForWorkerPod` pins it under the shipped RBAC and goes red with the hold removed.
+Review found two gaps in that first fix, each now a test that went red on it: a RunnerSet deleted with its gateway left its terminating pods unheld, so a pod whose RunnerSet is gone now holds too; and deleting the namespace wedged teardown on a Pod list its revoked binding refused, so a terminating namespace now skips the hold.
+Not observed: how a CNI treats a pod whose policy is deleted, since no kind cluster was available (Docker was not running); the fix no longer depends on it, because the policy now outlives the pods.
+The owner check was not run.
 
 **Evidence.** `cmd/gmc/internal/controller/actionsgateway_v2_builder.go:298`, `cmd/agc/internal/provisioner/pod.go:314`, `cmd/agc/internal/provisioner/pod.go:347`, `cmd/gmc/internal/controller/actionsgateway_v2_controller.go:1259`, `cmd/agc/internal/controller/runner_shared.go:402`, `cmd/agc/internal/controller/runnerset_controller.go:373`, `cmd/gmc/internal/controller/egressproxy_controller.go:182`, `docs/design/05-security.md:120`, `docs/design/04-operational-flows.md:69`, `docs/operations/troubleshooting.md:1785`.
 
@@ -1162,6 +1172,12 @@ Stop at that one Get.
 
 **Owner check.** Owner-observed, read-only: for each namespace without actions-gateway.com/tenant=managed, list RoleBindings whose roleRef is ClusterRole gmc-tenant-secret-reader or agc-tenant-role (kubectl get rolebindings -A -o json, filtered on roleRef.name and joined to namespace labels) and confirm that none exist beyond AGC bindings awaiting a documented blocked teardown; and run kubectl auth can-i get secrets --as=system:serviceaccount:<gmc-namespace>:<gmc-sa> -n <ex-tenant-namespace>, expecting 'no'.
 
+**Outcome.** Confirmed by a local test, fixed.
+`TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding`, run as the plan describes against `main`'s guard, admitted both `extra-reader` and `extra-agc`, and after the unmark the GMC's Get of the Secret still succeeded.
+`gmc-tenant-resource-guard` now admits a GMC RoleBinding write only in the two shapes the GMC provisions: its own reader binding naming itself, or an `agc-tenant-role` binding whose subjects are ServiceAccounts of that namespace; both creates are denied by the guard and the Secret read is Forbidden after the unmark.
+What unmarking cannot do, recall what a GMC compromised while the namespace was marked already read, is recorded in [05-security.md §5.1 Residuals](../design/05-security.md#51-gmc-level-threats-cluster-scoped).
+Bounding it found one more route, a ServiceAccount token Secret the GMC creates and reads back, unmeasured and filed as [Q1343](../queue/Q1343.md).
+
 **Evidence.** `charts/actions-gateway/templates/tenant-resource-guard.yaml:10`, `docs/design/05-security.md:54`, `docs/operations/upgrade.md:595`, `charts/actions-gateway/templates/tenant-resource-guard.yaml:98`, `charts/actions-gateway/files/agc-tenant-role-rules.yaml:61`, `cmd/gmc/internal/controller/integration/tenant_secret_access_test.go:217`, `docs/operations/tenant-onboarding.md:25`.
 
 ### namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label
@@ -1187,6 +1203,11 @@ Step 3: after adding a namespace-psa-guard validation that each written enforce/
 
 **Owner check.** Read-only on an installed cluster: list tenant namespaces whose pod-security.kubernetes.io/enforce is privileged without actions-gateway.com/privileged-profile=allowed (kubectl get namespaces -l 'actions-gateway.com/tenant=managed,pod-security.kubernetes.io/enforce=privileged,actions-gateway.com/privileged-profile!=allowed'), and establish whether tenant worker nodes are shared with platform or other-tenant workloads and whether a second pod-spec policy layer exists.
 
+**Outcome.** Confirmed by a local test, fixed.
+Step 1 ran: as the GMC ServiceAccount, `enforce=privileged` on a `restricted` tenant namespace with no eligibility label was admitted by `main`'s guard.
+Step 3 is done: `namespace-psa-guard` now pins each mode label to the profile derived from `oldObject`'s `security-profile` (`baseline` when absent) at version `latest`, refuses a dropped mode label, and requires `privileged-profile=allowed` for `privileged`; `TestGMC_NamespacePSAGuard_PinsStampToDerivedProfile` covers the deny and the reconciler's own stamps, and the reconciler suites still pass.
+Step 2, a privileged pod reaching Pod Security admission on kind, was not run (no kind cluster), and is not needed once the stamp itself is refused.
+
 **Evidence.** `charts/actions-gateway/templates/namespace-security-profile-guard.yaml:61`, `cmd/gmc/internal/controller/namespace_psa_controller.go:83`, `docs/design/05-security.md:805`, `docs/design/05-security.md:783`.
 
 ### DNS egress rule confines which resolver a pod may contact, not which names it resolves; the design states the DNS exfiltration channel is closed
@@ -1210,6 +1231,13 @@ Use only dummy data and the in-cluster fixture.
 **Owner check.** Owner inspects the cluster DNS Corefile (forward, stub domains, any acl/view/policy plugin scoped to tenant pods) and the source address upstream DNS queries carry, and states whether, on the cloud in use, a recursive resolver answers port 53 on a link-local address from a pod network namespace.
 No live probing by the auditor.
 If recursion is confirmed, either reword 05-security.md:310-319, network-architecture.md:368/375 and the shared_networkpolicy.go comment to claim only removal of direct any-resolver access and record recursion through cluster DNS as an accepted residual, or add a resolver-side name policy.
+
+**Outcome.** The claim was wrong; corrected and recorded as an accepted residual, with no code change.
+No live probe ran: Docker was not running, so neither the CoreDNS fixture nor a kind cluster was available, and the GKE cluster was not touched.
+The recursion does not need one, because the product requires it: the proxy and direct-mode workers resolve GitHub names through the same `dnsEgressRule`, and `E2E_V2_DirectEgress_ReachesGitHub` resolves `api.github.com` from a workload-labelled pod under that rule.
+Whether that spec ran on the Calico lane could not be read from the run log (run `42934709398` on `34254e3` ran 72 of 79 specs and does not name them).
+A NetworkPolicy cannot match names, so a recursed query for an attacker's zone leaves the same way.
+`05-security.md`, `network-architecture.md`, `security-operations.md` and the `dnsEgressRule` comment now claim only that a pod cannot pick its resolver, and [05-security.md](../design/05-security.md#dns-exfiltration-side-channel-containment) bounds the residual and names the resolver-side controls that would close it.
 
 **Evidence.** `docs/design/05-security.md:310`, `docs/design/05-security.md:319`, `docs/design/05-security.md:201`, `cmd/gmc/internal/controller/shared_networkpolicy.go:112`, `docs/design/network-architecture.md:368`, `cmd/gmc/internal/controller/shared_networkpolicy_test.go:78`.
 

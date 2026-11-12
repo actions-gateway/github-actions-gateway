@@ -146,7 +146,7 @@ func TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope(t *testing.T) {
 			if ns.Labels == nil {
 				ns.Labels = map[string]string{}
 			}
-			ns.Labels["pod-security.kubernetes.io/enforce"] = "restricted"
+			ns.Labels["pod-security.kubernetes.io/enforce"] = "baseline"
 			ns.Labels["pod-security.kubernetes.io/enforce-version"] = "latest"
 		})
 		require.NoError(t, err, "GMC SA must be allowed to set PSA labels on a marked tenant namespace")
@@ -182,4 +182,65 @@ func TestGMC_NamespacePSAGuard_EnforcesMarkerAndFieldScope(t *testing.T) {
 		})
 		require.NoError(t, err)
 	})
+}
+
+// TestGMC_NamespacePSAGuard_PinsStampToDerivedProfile pins Q1328: the GMC may write
+// only the Pod Security values its reconciler derives from the namespace's own
+// security-profile label (baseline when absent), so its namespace grant cannot make
+// a tenant namespace privileged without the platform's eligibility label, or drop a
+// mode label so the cluster default applies.
+func TestGMC_NamespacePSAGuard_PinsStampToDerivedProfile(t *testing.T) {
+	installNamespacePSAGuard(t)
+
+	const restrictedNS = "psa-pin-restricted"
+	const privilegedNS = "psa-pin-privileged"
+	createNamespaceWithLabels(t, restrictedNS, map[string]string{
+		gmcv2.TenantNamespaceMarkerLabel:     gmcv2.TenantNamespaceMarkerValue,
+		gmcv2.SecurityProfileLabel:           gmcv2.SecurityProfileRestricted,
+		"pod-security.kubernetes.io/enforce": gmcv2.SecurityProfileRestricted,
+	})
+	createNamespaceWithLabels(t, privilegedNS, map[string]string{
+		gmcv2.TenantNamespaceMarkerLabel:         gmcv2.TenantNamespaceMarkerValue,
+		gmcv2.SecurityProfileLabel:               gmcv2.SecurityProfilePrivileged,
+		"actions-gateway.com/privileged-profile": "allowed",
+	})
+
+	gmc := newImpersonatedClient(t, gmcSANamespace, gmcSAName)
+	stamp := func(profile string) func(*corev1.Namespace) {
+		return func(ns *corev1.Namespace) {
+			for _, mode := range []string{"enforce", "warn", "audit"} {
+				ns.Labels["pod-security.kubernetes.io/"+mode] = profile
+				ns.Labels["pod-security.kubernetes.io/"+mode+"-version"] = "latest"
+			}
+		}
+	}
+
+	// Gate on enforcement, as the neighbouring test does: VAP takes effect a moment
+	// after its binding, so wait for the reconciler's own stamp to be admitted and
+	// for the escalation to be denied.
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		return setNamespaceLabel(gmc, restrictedNS, stamp(gmcv2.SecurityProfileRestricted)) == nil
+	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "the derived stamp is admitted")
+
+	err := setNamespaceLabel(gmc, restrictedNS, stamp(gmcv2.SecurityProfilePrivileged))
+	require.True(t, apierrors.IsForbidden(err), "enforce=privileged without eligibility must be denied; got: %v", err)
+
+	err = setNamespaceLabel(gmc, restrictedNS, func(ns *corev1.Namespace) {
+		ns.Labels["pod-security.kubernetes.io/enforce"] = gmcv2.SecurityProfileBaseline
+	})
+	require.True(t, apierrors.IsForbidden(err), "a weaker value than the derived profile must be denied; got: %v", err)
+
+	err = setNamespaceLabel(gmc, restrictedNS, func(ns *corev1.Namespace) {
+		delete(ns.Labels, "pod-security.kubernetes.io/enforce")
+	})
+	require.True(t, apierrors.IsForbidden(err), "dropping the enforce label must be denied; got: %v", err)
+
+	err = setNamespaceLabel(gmc, restrictedNS, func(ns *corev1.Namespace) {
+		ns.Labels["pod-security.kubernetes.io/enforce-version"] = "v1.0"
+	})
+	require.True(t, apierrors.IsForbidden(err), "a pinned older policy version must be denied; got: %v", err)
+
+	require.NoError(t, setNamespaceLabel(gmc, privilegedNS, stamp(gmcv2.SecurityProfilePrivileged)),
+		"an eligible privileged namespace still takes its privileged stamp")
 }

@@ -715,7 +715,7 @@ Untrusted job code (e.g. fork-PR workflows) can use any hole you open, so:
 - Keep the allowlist as narrow as the use case requires — specific CIDRs and ports, never a `0.0.0.0/0` catch-all.
 - Authoring it requires namespace NetworkPolicy-write, so it is inherently a platform/admin decision — which is the correct authority for relaxing attribution.
   Track each grant in the tenant's onboarding ticket.
-- **For a custom DNS resolver specifically, prefer a cluster-level CoreDNS `forward` zone** over reopening worker DNS: that keeps resolution on the attributable in-cluster path while still resolving the names you need.
+- **For a custom DNS resolver specifically, prefer a cluster-level CoreDNS `forward` zone** over reopening worker DNS: that keeps worker port-53 confined to cluster DNS while still resolving the names you need.
 
 If instead you want to express the **proxy's own** GitHub egress as FQDN rules under a DNS-aware CNI, you have two supported options:
 

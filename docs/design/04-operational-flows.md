@@ -67,6 +67,12 @@ So the two controllers split it:
 2. Teardown's **first** act is to check `status.activeJobs`/`pendingJobs` across the bound sets and requeue while any are non-zero, before the first `del`.
    The counts fall as soon as the AGC issues its deletes (a pod carrying a deletion timestamp is finished by the kubelet with no controller involved), so the healthy path costs one requeue.
    A 90-second deadline measured from the CR's own `deletionTimestamp` — stateless, so it survives a GMC restart mid-teardown — bounds the case where no AGC is running to reap at all; past it teardown proceeds and emits a `WorkerDrainTimeout` Warning naming what it is leaving to the kubelet's `maxWorkerLifetime` deadline.
+3. The workload `NetworkPolicy` waits for the pods rather than the counts (Q1328).
+   It is a worker pod's only egress restriction, and a pod still runs job code after the counts fall: through its template's `terminationGracePeriodSeconds`, which nothing caps, on the healthy path, and until `maxWorkerLifetime` past the deadline.
+   So teardown deletes every other child, keeps that policy and the gateway's finalizer while any pod of a bound set remains, terminating ones included, and names the pods in a `TeardownIncomplete` event.
+   A pod whose RunnerSet is already gone counts too, because a set deleted with its gateway sheds its finalizer before its pods exit.
+   It reads them with an uncached Pod list through the namespace's `gmc-tenant-secret-reader` binding, and a failed list holds the policy too.
+   A terminating namespace skips the hold: the namespace controller deletes the policy and the pods itself, and revokes the binding the list needs.
 
 The trigger is a *terminating* gateway, never a missing one: a gateway that is gone is both the resting state after teardown and the gap between a delete and a re-apply, so reaping there would destroy live workers on a recreate.
 

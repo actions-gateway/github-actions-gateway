@@ -31,7 +31,7 @@ import (
 )
 
 // TenantSecretReaderName names both the singleton ClusterRole the chart ships
-// (get/list/watch on Secrets) and the RoleBinding to it that the GMC creates in
+// (get/list/watch on Secrets, list on Pods) and the RoleBinding to it that the GMC creates in
 // each tenant namespace. The GMC holds `bind` on this one name and no
 // cluster-wide Secret read, so it can read Secrets only where the binding
 // exists; gmc-tenant-resource-guard confines the binding's creation to tenant

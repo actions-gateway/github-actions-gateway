@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -251,4 +252,159 @@ func TestGMC_TenantSecretAccess_DeletesReaderBindingOutsideTenants(t *testing.T)
 	require.NoError(t, k8sClient.Update(ctx, &ns))
 	g.Eventually(bindingGone(tenantNS), 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(),
 		"unmarking a tenant namespace removes the GMC's reader binding")
+}
+
+// TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding pins Q1328: unmarking a
+// tenant namespace has to leave the GMC with no Secret read there. The unmark
+// removes one binding by name, so the guard must stop the GMC writing any other
+// RoleBinding that would grant it Secret reads: a second binding to its reader, or
+// one to agc-tenant-role naming its own ServiceAccount.
+func TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	const tenantNS = "reader-unmark-tenant"
+	createNamespaceWithLabels(t, tenantNS, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	require.NoError(t, k8sClient.Create(ctx, newSecret(tenantNS, "dummy")))
+
+	startGMCAsServiceAccount(t)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: controller.TenantSecretReaderName}, &rbacv1.RoleBinding{})
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.Succeed())
+
+	gmc, err := client.New(gmcServiceAccountConfig(), client.Options{Scheme: testScheme})
+	require.NoError(t, err)
+	self := []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: gmcSAName, Namespace: gmcSANamespace}}
+	for name, role := range map[string]string{"extra-reader": controller.TenantSecretReaderName, "extra-agc": "agc-tenant-role"} {
+		err := gmc.Create(ctx, &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Namespace: tenantNS, Name: name},
+			RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: role},
+			Subjects:   self,
+		})
+		require.True(t, apierrors.IsForbidden(err), "a GMC RoleBinding %s to %s naming itself must be denied; got: %v", name, role, err)
+		require.ErrorContains(t, err, "may only write its own gmc-tenant-secret-reader RoleBinding", "denied by the guard, not by RBAC")
+	}
+	agcBinding := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Namespace: tenantNS, Name: "agc-shape"},
+		RoleRef:    rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: "ClusterRole", Name: "agc-tenant-role"},
+		Subjects:   []rbacv1.Subject{{Kind: rbacv1.ServiceAccountKind, Name: "some-agc", Namespace: tenantNS}},
+	}
+	require.NoError(t, gmc.Create(ctx, agcBinding), "the AGC binding shape stays writable")
+	require.NoError(t, gmc.Delete(ctx, agcBinding))
+
+	var ns corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: tenantNS}, &ns))
+	delete(ns.Labels, gmcv2.TenantNamespaceMarkerLabel)
+	require.NoError(t, k8sClient.Update(ctx, &ns))
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: controller.TenantSecretReaderName}, &rbacv1.RoleBinding{})
+		return apierrors.IsNotFound(err)
+	}, 15*time.Second, 25*time.Millisecond).Should(gomega.BeTrue())
+
+	g.Eventually(func() bool {
+		err := gmc.Get(ctx, types.NamespacedName{Namespace: tenantNS, Name: "dummy"}, &corev1.Secret{})
+		return apierrors.IsForbidden(err)
+	}, 5*time.Second, 25*time.Millisecond).Should(gomega.BeTrue(), "an ex-tenant namespace must grant the GMC no Secret read")
+}
+
+// TestGMC_Teardown_HoldsWorkloadPolicyForWorkerPod pins Q1328 under the GMC's
+// shipped RBAC: deleting a gateway keeps its workload NetworkPolicy, and its
+// finalizer, while a worker pod of a bound RunnerSet is still present. The
+// RunnerSet reports no jobs, as it does once the AGC has issued its deletes, and a
+// finalizer holds the pod in Terminating as the kubelet's grace period would.
+func TestGMC_Teardown_HoldsWorkloadPolicyForWorkerPod(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	const ns = "teardown-hold-tenant"
+	const gwName = "gw-hold"
+	createNamespaceWithLabels(t, ns, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	createGitHubAppSecret(t, ns, "github-app")
+	ag := newV2GatewayWired(gwName, ns, "github-app", "")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), ag) })
+	rs := newBoundRunnerSet("hold-set", ns)
+	rs.Spec.GatewayRef.Name = gwName
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+
+	startGMCAsServiceAccount(t)
+	g := gomega.NewWithT(t)
+	npKey := types.NamespacedName{Namespace: ns, Name: gwName + "-workload"}
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, npKey, &networkingv1.NetworkPolicy{})
+	}, 20*time.Second, 50*time.Millisecond).Should(gomega.Succeed())
+
+	const hold = "test.actions-gateway.com/kubelet-grace"
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "hold-set-w1", Namespace: ns, Finalizers: []string{hold},
+			Labels: map[string]string{"actions-gateway/component": "workload", "actions-gateway.com/runner-set": "hold-set"},
+		},
+		Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "runner", Image: "runner:test"}}},
+	}
+	require.NoError(t, k8sClient.Create(ctx, pod))
+	release := func() {
+		var p corev1.Pod
+		if k8sClient.Get(context.Background(), client.ObjectKeyFromObject(pod), &p) == nil {
+			p.Finalizers = nil
+			_ = k8sClient.Update(context.Background(), &p)
+		}
+	}
+	t.Cleanup(release)
+	require.NoError(t, k8sClient.Delete(ctx, pod))
+	require.NoError(t, k8sClient.Delete(ctx, ag))
+
+	g.Eventually(func() bool {
+		err := k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwName + controller.AGCResourceSuffix}, &appsv1.Deployment{})
+		return apierrors.IsNotFound(err)
+	}, 20*time.Second, 50*time.Millisecond).Should(gomega.BeTrue(), "the rest of the control plane is torn down")
+	g.Consistently(func() error {
+		return k8sClient.Get(ctx, npKey, &networkingv1.NetworkPolicy{})
+	}, 3*time.Second, 100*time.Millisecond).Should(gomega.Succeed(), "the workload NetworkPolicy outlives a terminating worker pod")
+	require.NoError(t, k8sClient.Get(ctx, client.ObjectKeyFromObject(ag), &gmcv2.ActionsGateway{}), "the gateway is held by its finalizer")
+
+	release()
+	g.Eventually(func() bool {
+		return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(ag), &gmcv2.ActionsGateway{}))
+	}, 20*time.Second, 50*time.Millisecond).Should(gomega.BeTrue(), "the gateway finalizes away once the pod is gone")
+	require.True(t, apierrors.IsNotFound(k8sClient.Get(ctx, npKey, &networkingv1.NetworkPolicy{})))
+}
+
+// TestGMC_Teardown_FinalizesInTerminatingNamespace pins the Q1328 review finding:
+// deleting a tenant namespace revokes the reader binding the teardown hold lists
+// Pods through, so the hold must not apply there or the gateway never finalizes.
+// envtest runs no namespace controller, so the namespace's binding delete is done by
+// hand and the namespace stays Terminating.
+func TestGMC_Teardown_FinalizesInTerminatingNamespace(t *testing.T) {
+	installTenantResourceGuard(t)
+	installGMCShippedRBAC(t)
+
+	const ns = "teardown-ns-terminating"
+	const gwName = "gw-ns-gone"
+	createNamespaceWithLabels(t, ns, map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue})
+	createGitHubAppSecret(t, ns, "github-app")
+	ag := newV2GatewayWired(gwName, ns, "github-app", "")
+	require.NoError(t, k8sClient.Create(ctx, ag))
+	rs := newBoundRunnerSet("ns-gone-set", ns)
+	rs.Spec.GatewayRef.Name = gwName
+	require.NoError(t, k8sClient.Create(ctx, rs))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), rs) })
+
+	startGMCAsServiceAccount(t)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() error {
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: gwName + "-workload"}, &networkingv1.NetworkPolicy{})
+	}, 20*time.Second, 50*time.Millisecond).Should(gomega.Succeed())
+
+	var n corev1.Namespace
+	require.NoError(t, k8sClient.Get(ctx, types.NamespacedName{Name: ns}, &n))
+	require.NoError(t, k8sClient.Delete(ctx, &n))
+	require.NoError(t, k8sClient.Delete(ctx, &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: controller.TenantSecretReaderName}}))
+	require.NoError(t, k8sClient.Delete(ctx, ag))
+
+	g.Eventually(func() bool {
+		return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(ag), &gmcv2.ActionsGateway{}))
+	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(), "the gateway finalizes in a terminating namespace")
 }

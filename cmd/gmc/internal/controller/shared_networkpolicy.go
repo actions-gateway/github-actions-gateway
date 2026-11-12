@@ -112,14 +112,12 @@ func metricsScrapeIngressRule() networkingv1.NetworkPolicyIngressRule {
 // An unrestricted port-53 rule (To: nil ≡ any server) is an unattributed
 // data-exfiltration side-channel: DNS queries can smuggle data to an
 // attacker-controlled resolver, bypassing the per-tenant egress-IP attribution
-// that is a headline isolation property of this system (Q105). Every other
-// egress path forces traffic through the tenant proxy, whose source IPs are
-// attributable; confining DNS to the in-cluster resolver keeps it on that
-// attributable path — kube-dns recurses upstream on the pod's behalf, so the
-// proxy can still resolve GitHub hostnames to do its job. Both peers preserve
-// that property: link-local 169.254.0.0/16 is non-routable and node-scoped, so
-// it cannot reach an external resolver. Only the open "any resolver" breadth is
-// removed, not legitimate resolution.
+// that is a headline isolation property of this system (Q105). kube-dns
+// recurses upstream on the pod's behalf, so the proxy can still resolve GitHub
+// hostnames; link-local 169.254.0.0/16 is non-routable and node-scoped, so it
+// cannot reach an external resolver directly. The rule confines the resolver,
+// not the names: a recursed query for an attacker's zone still leaves, the
+// residual docs/design/05-security.md records (Q1328).
 //
 // kindnet does not enforce egress NetworkPolicy (see Q7b, worker-egress
 // isolation), so this restriction is guarded at the

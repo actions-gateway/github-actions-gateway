@@ -368,14 +368,15 @@ This means the proxy pods must have egress access to the cluster's DNS resolver 
 
 DNS egress on all three policies is **confined to cluster DNS** rather than left open to any resolver (Q105).
 An unrestricted port-53 rule (`to: []`) would let any pod smuggle data to an attacker-controlled resolver — an unattributed side-channel that bypasses the per-tenant egress-IP attribution every other egress path enforces.
-Confining DNS to the in-cluster resolver keeps resolution on the attributable path: `kube-dns` recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.
+`kube-dns` recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.
+The rule confines the resolver, not the names: a query for an attacker's zone is recursed like any other, which [05-security.md records as a residual](05-security.md#dns-exfiltration-side-channel-containment) (Q1328).
 
 Each DNS rule allows two OR'd peers, covering the two ways a pod reaches cluster DNS:
 
 - **Direct path** — the `kube-dns` / `CoreDNS` Service in `kube-system`, matched by `namespaceSelector` on the well-known `kubernetes.io/metadata.name: kube-system` label plus a `podSelector` on the conventional `k8s-app: kube-dns` label.
 - **NodeLocal DNSCache path** — the IPv4 link-local block `169.254.0.0/16`, matched by an `ipBlock` (Q136).
   On clusters running [NodeLocal DNSCache](https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/) (`node-local-dns`), pods send DNS to a link-local address (`169.254.20.10` by the kube-standard `__PILLAR__LOCAL__DNS__` convention) served by a per-node `hostNetwork` DNSCache pod, which no pod/namespace selector can match.
-  Allowing the whole link-local block is the simplest correct rule and **preserves Q105's attribution property**: `169.254.0.0/16` is non-routable and node-scoped, so it cannot reach an external resolver — the DNS-exfiltration channel Q105 closed stays closed.
+  Allowing the whole link-local block is the simplest correct rule and **preserves Q105's property**: `169.254.0.0/16` is non-routable and node-scoped, so it cannot reach an external resolver directly.
 
 Operators running a DNS service under a non-standard namespace or pod label must adjust the selector accordingly (or supply their own equivalent rule under `spec.proxy.managedNetworkPolicy: false`).
 
