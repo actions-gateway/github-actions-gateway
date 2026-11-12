@@ -3666,6 +3666,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
 </tr>
 <tr>
+<td><a href="Q1347/">Q1347</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/internal/webhook/v2">Refuse nodeName and schedulerName on namespaced worker templates</a></td>
+<td><code>security</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A tenant's <code>RunnerTemplate</code> can put a worker on a controller's node, past the GMC's worker separation term.</strong> The GMC, AGC and egress …</td>
+</tr>
+<tr>
 <td><a href="Q1107/">Q1107</a></td>
 <td><a href="../plan/v2-ga/#phase-3--the-storage-advance-and-the-coupled-removals">The <code>v2.0.0</code> cut</a></td>
 <td><code>milestone</code> <code>2.0-gate</code></td>
@@ -4552,14 +4560,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>**The cache server and the registry mirrors GAG ships can still land beside a worker, where a worker that escapes its container can write …</td>
-</tr>
-<tr>
-<td><a href="Q1347/">Q1347</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/internal/webhook/v2">Refuse nodeName and schedulerName on namespaced worker templates</a></td>
-<td><code>security</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>A tenant's <code>RunnerTemplate</code> can put a worker on a controller's node, past the GMC's worker separation term.</strong> The GMC, AGC and egress …</td>
 </tr>
 <tr>
 <td><a href="Q1334/">Q1334</a></td>

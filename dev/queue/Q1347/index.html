@@ -2667,6 +2667,8 @@ The tenant needs a node name, which <code>kubectl get pods -o wide</code> in its
 <p>The fix is to refuse both fields on a namespaced <code>RunnerTemplate</code> at admission, or to clear them in <code>buildPod</code> the way it already clears <code>hostPID</code> and the host namespaces.
 A <code>ClusterRunnerTemplate</code> is platform-authored, so whether it may keep them is a choice to make and write down.
 Clearing in <code>buildPod</code> also covers templates stored before the rule, as <code>dropAPICredentialProjections</code> does for projected tokens.</p>
+<p><strong>Gates <code>v2.0.0</code></strong> (2026-11-12), because refusing the fields at admission is a stricter rule, and after the tag a stricter rule waits for <code>v3</code>.
+Landing it before the tag keeps both fixes open; clearing in <code>buildPod</code> alone would ship in a patch.</p>
 <p><strong>Done when</strong> a namespaced template cannot place a worker by <code>nodeName</code> or <code>schedulerName</code>, a test drives a template carrying each, and <code>security-operations.md § Keep GAG's control plane off worker nodes</code> drops the gap from its list.</p>
 
 
