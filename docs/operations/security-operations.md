@@ -909,6 +909,7 @@ The full per-tenant egress-IP reference architecture — cloud-by-cloud primitiv
 ## Worker egress destinations: the egress allowlist
 
 By default a worker can reach **only GitHub** through its per-tenant egress proxy — the proxy pool's NetworkPolicy permits the GitHub endpoints and nothing else.
+That holds by hostname: the ranges GitHub publishes for Actions are Azure's, and they take in most of Azure's address space in 14 regions, so a worker can also reach an endpoint anyone rents there ([the residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges)).
 Jobs that fetch off-platform build dependencies (Go modules from `proxy.golang.org`, an internal artifact host, a cloud private-API endpoint) therefore fail on egress, not toolchain.
 The egress allowlist (Q242 G.1) lets a **platform admin** open a small, explicit set of non-GitHub destinations while keeping per-tenant egress-IP attribution and the DNS-exfil containment intact.
 
