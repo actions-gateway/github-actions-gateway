@@ -93,7 +93,14 @@ spec:
                   AGC removes either from every worker pod it builds: worker pods carry no
                   Kubernetes API credential.
 
-                  A template stored before these three rules is not re-checked against them until
+                  On the namespaced RunnerTemplate it rejects podTemplate.spec.nodeName and any
+                  schedulerName other than default-scheduler, and the AGC clears both from a worker
+                  built from one: either places the pod past the default scheduler, and with it past
+                  the rule keeping workers off control-plane nodes. The ClusterRunnerTemplate keeps
+                  both, and the --allow-unchecked-runner-template-pod-shape opt-out leaves the rule
+                  in force.
+
+                  A template stored before these four rules is not re-checked against them until
                   podTemplate changes.
                 properties:
                   metadata:

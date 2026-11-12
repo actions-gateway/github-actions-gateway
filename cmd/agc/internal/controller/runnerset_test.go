@@ -164,6 +164,45 @@ func TestResolveRunnerSetRefs_Branches(t *testing.T) {
 	})
 }
 
+// TestResolveTemplate_SchedulerBypass pins Q1347: a namespaced RunnerTemplate stored
+// with nodeName or a non-default schedulerName resolves without them, so its worker
+// goes through the default scheduler and the control-plane anti-affinity, while a
+// ClusterRunnerTemplate keeps both.
+func TestResolveTemplate_SchedulerBypass(t *testing.T) {
+	scheme := runnerSetTestScheme(t)
+	ns := "team-a"
+	bypass := func(spec *corev1.PodSpec, scheduler string) {
+		spec.NodeName = "controller-node"
+		spec.SchedulerName = scheduler
+	}
+
+	for _, scheduler := range []string{"other-scheduler", corev1.DefaultSchedulerName} {
+		t.Run("namespaced, schedulerName "+scheduler, func(t *testing.T) {
+			rt := tmplObj("tmpl", ns)
+			bypass(&rt.Spec.PodTemplate.Spec, scheduler)
+			c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(rt).Build()
+			spec, _, res := resolveTemplate(context.Background(), c, ns, v2.ObjectRef{Name: "tmpl"})
+			require.True(t, res.resolved())
+			assert.Empty(t, spec.PodTemplate.Spec.NodeName)
+			want := ""
+			if scheduler == corev1.DefaultSchedulerName {
+				want = scheduler
+			}
+			assert.Equal(t, want, spec.PodTemplate.Spec.SchedulerName)
+		})
+	}
+
+	t.Run("cluster-scoped keeps both", func(t *testing.T) {
+		crt := crtObj("golden", "golden:test", false)
+		bypass(&crt.Spec.PodTemplate.Spec, "other-scheduler")
+		c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(crt).Build()
+		spec, _, res := resolveTemplate(context.Background(), c, ns, v2.ObjectRef{Name: "golden", Kind: "ClusterRunnerTemplate"})
+		require.True(t, res.resolved())
+		assert.Equal(t, "controller-node", spec.PodTemplate.Spec.NodeName)
+		assert.Equal(t, "other-scheduler", spec.PodTemplate.Spec.SchedulerName)
+	})
+}
+
 // crtObj builds a ClusterRunnerTemplate, marking it the cluster default
 // (IsDefaultTemplateAnnotation) when isDefault is set.
 func crtObj(name, workerImage string, isDefault bool) *v2.ClusterRunnerTemplate {

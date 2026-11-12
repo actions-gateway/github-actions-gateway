@@ -157,7 +157,8 @@ func logRejection(ctx context.Context, kind, op, namespace, name string, err err
 // RunnerTemplateCustomValidator validates the namespaced RunnerTemplate data kind.
 // It rejects the reserved per-container pod fields, including privileged containers,
 // gates podTemplate.spec.priorityClassName against the platform allowlist (Q289), and
-// holds podTemplate to the pod-shape rules in runnertemplate_podshape.go (Q1322).
+// holds podTemplate to the pod-shape rules in runnertemplate_podshape.go (Q1322,
+// Q1347).
 //
 // +kubebuilder:object:generate=false
 type RunnerTemplateCustomValidator struct {
@@ -168,8 +169,9 @@ type RunnerTemplateCustomValidator struct {
 
 	// AllowUncheckedPodShape skips the baseline and volume-type rules, leaving
 	// tenant pod shape to the platform's own admission policy
-	// (--allow-unchecked-runner-template-pod-shape). The API-credential rule and the
-	// older rules still apply. False is the secure default.
+	// (--allow-unchecked-runner-template-pod-shape). The API-credential and
+	// scheduler-bypass rules and the older rules still apply. False is the secure
+	// default.
 	AllowUncheckedPodShape bool
 }
 
@@ -211,6 +213,9 @@ func (v *RunnerTemplateCustomValidator) validate(oldSpec, spec *agcv2.RunnerTemp
 		return nil
 	}
 	if err := validateNoAPICredentialProjection(&spec.PodTemplate.Spec); err != nil {
+		return err
+	}
+	if err := validateNoSchedulerBypass(&spec.PodTemplate.Spec); err != nil {
 		return err
 	}
 	if v.AllowUncheckedPodShape {

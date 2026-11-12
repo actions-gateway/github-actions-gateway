@@ -38,6 +38,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a namespaced RunnerTemplate goes past Pod Security baseline: the shape is now rejected](#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected)
   - [Action required if a namespaced RunnerTemplate declares an nfs, iscsi or similar volume: the type is now rejected](#action-required-if-a-namespaced-runnertemplate-declares-an-nfs-iscsi-or-similar-volume-the-type-is-now-rejected)
   - [Action required if a template projects a ServiceAccount token: the source is now rejected, and removed from worker pods](#action-required-if-a-template-projects-a-serviceaccount-token-the-source-is-now-rejected-and-removed-from-worker-pods)
+  - [Action required if a namespaced `RunnerTemplate` sets `nodeName` or `schedulerName`: both are now rejected, and cleared from worker pods](#action-required-if-a-namespaced-runnertemplate-sets-nodename-or-schedulername-both-are-now-rejected-and-cleared-from-worker-pods)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
@@ -967,6 +968,27 @@ kubectl get runnertemplates.actions-gateway.com,clusterrunnertemplates.actions-g
 ```
 
 Remove the source from each, and give a job that needs a cloud or cluster credential one through its workflow, for example GitHub's OpenID Connect token exchanged with the provider.
+
+### Action required if a namespaced `RunnerTemplate` sets `nodeName` or `schedulerName`: both are now rejected, and cleared from worker pods
+
+**Who is affected:** anyone with a namespaced `RunnerTemplate` whose `podTemplate.spec` sets `nodeName`, or a `schedulerName` other than `default-scheduler`.
+A `ClusterRunnerTemplate` is not affected.
+
+**What changed.** The GMC, AGC and egress proxy pods carry a required anti-affinity against worker pods, which the default scheduler enforces ([why](security-operations.md#keep-gags-control-plane-off-worker-nodes)).
+A worker with `nodeName` set skips the scheduler, and one naming another scheduler is placed by something that need not read the term, so either could put a tenant's worker beside a controller.
+The admission webhook now refuses both on a namespaced `RunnerTemplate`, and the AGC clears both from every worker it builds from one.
+The `allowUncheckedRunnerTemplatePodShape` opt-out does not turn this rule off.
+
+**This one takes effect at the upgrade, for stored templates too.** A stored template is still accepted while `podTemplate` is unchanged, but its workers are placed by the default scheduler once the AGC upgrades.
+
+**Before you upgrade,** list the namespaced templates that set either field:
+
+```bash
+kubectl get runnertemplates.actions-gateway.com -A -o json \
+  | jq -r '.items[] | select((.spec.podTemplate.spec.nodeName // "") != "" or ((.spec.podTemplate.spec.schedulerName // "default-scheduler") != "default-scheduler")) | "\(.metadata.namespace)/\(.metadata.name)"'
+```
+
+Move each one's placement to a `nodeSelector` or a required node affinity, or have a platform administrator publish the shape as a `ClusterRunnerTemplate`.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 
