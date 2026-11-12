@@ -3057,6 +3057,11 @@ Each has inline ✓ markers per item.</p>
 <td>✅ Done 2026-08-04 — five live runs: <code>abandoned</code> and <code>canceled</code> conclude the run <strong><code>success</code></strong> in one second (false green, job orphaned <code>in_progress</code>), <code>failed</code> is refused 401, and told-nothing gets an honest run+job <code>cancelled</code> at ~15 min. Remedies shipped: the listener reports nothing for its own unrun delivery, and the provisioner force-cancels the run (measured 2026-08-05, run+job <code>cancelled</code> in ~1 s, Q683). The sibling <code>skipped</code> arm (Q682) was retired unmeasured when Q264 removed the classic fan-out</td>
 </tr>
 <tr>
+<td><a href="q1344-scaleset-delete/">q1344-scaleset-delete.md</a></td>
+<td>Investigation J (Q1344): whether deleting a scale set at GitHub concludes or keeps its queued job, removes its runner records, and stops a same-name successor taking the job, which decides drain-then-delete on rename versus an accepted residual</td>
+<td>ⓘ Probe built and stub-tested 2026-11-12; live run pending</td>
+</tr>
+<tr>
 <td><a href="q710-overlong-paragraphs/">q710-overlong-paragraphs.md</a></td>
 <td>Split the docset's multi-idea paragraphs without losing a qualifier, phased worst-first, plus the parse-layer measurement a blank-line heuristic gets wrong, and the token reconciliation that proves nothing was dropped</td>
 <td>⚠️ Phase 1 done (2026-08-06): three top-level prose paragraphs ≥140 words are left in design chapters <code>01</code>–<code>08</code>, deliberately, taking the corpus from 154 to 127. Phases 2–5 (long list items, <code>appendix-h</code>, <code>docs/operations/</code>, admonition blocks) are <a href="../queue/Q710/">Q710</a></td>

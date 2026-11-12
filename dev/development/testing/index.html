@@ -7625,7 +7625,9 @@ The Q583 fix rests on both, and the <code>DeleteMessage</code> wire shape is the
 Q726 registers labels at create and never rewrites them, and whether it could was the unknown that decided report-vs-reconcile.
 <strong>Answered 2026-08-24: no</strong>.
 A labels <code>PATCH</code> answers 200, stores nothing, and returns the <em>stored</em> set rather than an echo, and a live session is undisturbed.
-Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every <code>PATCH</code> verdict unreadable. | <a href="../../plan/archive/q793-labels-patch/">q793-labels-patch.md</a> |</p>
+Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every <code>PATCH</code> verdict unreadable. | <a href="../../plan/archive/q793-labels-patch/">q793-labels-patch.md</a> | | Investigation J | <code>PROBE_SSDELETE_TEST=true</code> | Does the Actions Service delete a scale set holding a queued or assigned job, what becomes of that job and the runner record minted under it, and does a scale set re-created under the same name receive the job?
+Decides whether deleting on rename or delete can close Q1344's adoption.
+<strong>Not yet run live.</strong> | <a href="../../plan/q1344-scaleset-delete/">q1344-scaleset-delete.md</a> |</p>
 <p>Investigation I is one run against one throwaway scale set, with no job and no wall clock, which makes it the cheapest of the five to re-run against a future GitHub.
 Its verdicts come from an independent <code>GET</code> rather than the <code>PATCH</code> response, because a service echoing its input is byte-identical to one that stored it, and reading the response instead is exactly what its <code>LabelPatchEcho</code> unit case fails on.</p>
 <p>Investigation G is one run, three session generations, so it needs no state file and no multi-hour gap.

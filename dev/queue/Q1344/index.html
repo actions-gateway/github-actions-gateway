@@ -2670,7 +2670,8 @@ Q1325 removed the stale session a rename used to leave on the old scale set, whi
 That is a records leak rather than a boundary.</p>
 <p><strong>Fix direction, not decided.</strong> Delete the old scale set when a listener stops for a rename or its set is deleted, once its jobs have drained, so the name is released at GitHub as well as in the cluster; that would also take its runner records with it, which is unmeasured.
 Otherwise state the adoption in <code>05-security.md</code> as an accepted residual with the operator step that closes it.
-A measurement first: whether deleting a scale set at github.com removes its runner records and fails or requeues its queued jobs.</p>
+A measurement first: whether deleting a scale set at github.com removes its runner records and fails or requeues its queued jobs.
+Investigation J (<a href="../../plan/q1344-scaleset-delete/">q1344-scaleset-delete.md</a>) takes it, and also whether a scale set re-created under the same name receives the deleted one's queued job: a job targets a label, so if it does, deleting releases nothing a successor cannot take and only draining protects the queue.</p>
 
 
 
