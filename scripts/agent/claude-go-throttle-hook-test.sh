@@ -329,7 +329,7 @@ fi
 # peel is an allowlist over words, so both directions matter: an unrecognised
 # wrapper must stay silent rather than have the prefix guessed into the wrong
 # place, and a wrapped run must never take the auto-allow path — `timeout … go
-# test` is not the bare shape the `Bash(go test *)` allowlist trusts.
+# test` is not the bare shape the auto-allow is held to.
 expect_decision 'wrapper: timeout … -race  -> ask + prefix before go' \
 	'timeout 900 go test -race ./...' ask "timeout 900 $PREFIX go test -race ./..."
 expect_decision 'wrapper: nested           -> ask + prefix before go' \
@@ -348,6 +348,15 @@ expect_decision 'newline: cd then -race    -> ask + prefix before go' \
 	"$(printf 'cd cmd/agc\n%s go test -race ./...' "$PREFIX")"
 expect_decision 'chain: cd && -race        -> ask + prefix before go' \
 	'cd cmd/agc && go test -race ./...' ask "cd cmd/agc && $PREFIX go test -race ./..."
+
+# --- Q1326: a flag that runs a caller-named program never rides the allow -----
+#
+# `go test -exec PROG` runs PROG (measured on go1.27.1), so the bare shape alone
+# cannot earn an allow; gothrottle's table carries the rest of the flag set.
+expect_unchanged 'exec flag: no -race      -> unchanged (normal flow)' \
+	'go test -exec /bin/echo ./api/...'
+expect_decision 'exec flag: with -race     -> ask + prefix before go' \
+	'go test -race -exec /bin/echo ./api/...' ask "$PREFIX go test -race -exec /bin/echo ./api/..."
 
 # --- Cases the hook must leave untouched --------------------------------------
 

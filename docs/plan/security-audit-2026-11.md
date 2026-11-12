@@ -3,7 +3,7 @@
 Third full security audit, performed 2026-11-09 against `7b3f016ad`, ahead of `v2.0.0`.
 The first audit (2026-05) is [security.md](security.md) and the second (2026-06) is [archive/security-audit-2026-06.md](archive/security-audit-2026-06.md); this doc records only the third audit's findings and where each one is tracked.
 
-> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), and the four egress proxy sharing leads confirmed and fixed (Q1324).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 26 of which still are.
+> **Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), and six of the seven release and CI leads settled (Q1326).** 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 16 of which still are, one of them the release and CI lead that waits on Q1330.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
 > The rest are [Q1323](../queue/Q1323.md) to [Q1328](../queue/Q1328.md).
@@ -61,13 +61,13 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [Editing runnerLabels[0] releases the scale-set name claim while the AGC keeps its live session on the old name](#scale-set-identity-leads) | needs validation | [Q1325](../queue/Q1325.md) |
 | [Scale-set name uniqueness guard is check-then-act across two objects, so one tenant creating its RunnerSet and ActionsGateway concurrently may claim another tenant's scale-set name](#scale-set-identity-leads) | needs validation | [Q1325](../queue/Q1325.md) |
 | [AGC adopts the first scale set a server-side name filter returns without comparing its name, while admission compares first labels as exact case-sensitive strings](#scale-set-identity-leads) | needs validation | [Q1325](../queue/Q1325.md) |
-| [publish.yml dispatch `tag` input is never compared with the dispatch ref, so one tag's source can be published and signed under another version name while the stop-ship gates evaluate the named version](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
-| [Release verification identity pattern accepts a publish.yml signature from any v* tag for any version](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
-| [Historical publish.yml copies at 28 v* tags have no validated-candidate gate and accept a free-form version name, under a signing identity verify-release accepts for any version](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
-| [pages.yml publish job deploys dispatch-chosen content from any ref and serves the whole gh-pages branch](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
-| [Dependabot sync and rebase writers compile and run a freshly bumped build tool in a job holding a contents:write token](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
-| [No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
-| [go-throttle hook returns `allow` for single `go build`/`go test` commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path](#release-and-ci-leads) | needs validation | [Q1326](../queue/Q1326.md) |
+| [publish.yml dispatch `tag` input is never compared with the dispatch ref, so one tag's source can be published and signed under another version name while the stop-ship gates evaluate the named version](#release-and-ci-leads) | same-principal today, accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) |
+| [Release verification identity pattern accepts a publish.yml signature from any v* tag for any version](#release-and-ci-leads) | same-principal today, accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) |
+| [Historical publish.yml copies at 28 v* tags have no validated-candidate gate and accept a free-form version name, under a signing identity verify-release accepts for any version](#release-and-ci-leads) | same-principal today, accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) |
+| [pages.yml publish job deploys dispatch-chosen content from any ref and serves the whole gh-pages branch](#release-and-ci-leads) | same-principal today, accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) |
+| [Dependabot sync and rebase writers compile and run a freshly bumped build tool in a job holding a contents:write token](#release-and-ci-leads) | confirmed from a run log; dispatch refuted, tag path an accepted residual | Q1326, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control); hardening [Q1341](../queue/Q1341.md) |
+| [No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on](#release-and-ci-leads) | held by GitHub's approval setting until Q1330 | [Q1330](../queue/Q1330.md) |
+| [go-throttle hook returns `allow` for single `go build`/`go test` commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path](#release-and-ci-leads) | confirmed against go1.27.1, fixed | Q1326 |
 | [AGC re-runs and force-cancels whatever run its namespace ConfigMaps and pod annotations name; docs/design/05-security.md line 200 describes only the pod annotation and says a run ID cannot be substituted](#agc-run-and-recovery-leads) | needs validation | [Q1327](../queue/Q1327.md) |
 | [One repository's OOM-killed jobs can fill the per-set failure ledger and withhold automatic re-runs for every repository on the RunnerSet](#agc-run-and-recovery-leads) | needs validation | [Q1327](../queue/Q1327.md) |
 | [Throughput sizing profile derives the worker memory limit from job-controlled peak usage with no maxRequests clamp, so the limit can exceed the operator's envelope and may ratchet](#agc-run-and-recovery-leads) | needs validation | [Q1327](../queue/Q1327.md) |
@@ -705,10 +705,13 @@ In cmd/gmc/internal/scalesetscope/scalesetscope_test.go add a CollidesWith case 
 
 ## Release and CI leads
 
-Seven leads on the release pipeline and CI, tracked as [Q1326](../queue/Q1326.md).
+Seven leads on the release pipeline and CI, tracked as Q1326 and closed under it.
 The first four turn on repository settings that source does not show: who may create a `v*` tag, who may dispatch `publish.yml` and `pages.yml`, and whether a deployment environment protects either.
 Read on 2026-11-09, they are: the repository has one collaborator and the organisation one member, the same admin account, so for a person the four are same-principal today.
-Nothing but that headcount holds them closed, since no ruleset targets tags and `publish.yml` runs under no deployment environment, and [Q1326](../queue/Q1326.md) names the two events that reopen them.
+Nothing but that headcount holds them closed, since no ruleset targets tags and `publish.yml` runs under no deployment environment.
+The 2026-11-11 re-read under Q1326 found the same, and the four are recorded as an accepted residual, with the two events that reopen them, in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control).
+The remedy, a `v*` tag ruleset and an environment with required reviewers on `publish.yml`, is a repository settings change and was not applied.
+The other three each carry an **Outcome** line below.
 
 ### publish.yml dispatch `tag` input is never compared with the dispatch ref, so one tag's source can be published and signed under another version name while the stop-ship gates evaluate the named version
 
@@ -836,6 +839,13 @@ Then add a case beside the replay cases in scripts/ci/dependabot-rebase-stale-te
 **Owner check.** Owner opens a past dependabot-go-sync run for a PR that changed tools/go.mod and reads two things from the log: the `GITHUB_TOKEN Permissions` block in Set up job shows Contents: write, and the `make deps-sync` step shows controller-gen being built from tools/vendor.
 Owner then reads the repository rulesets and release settings to state whether github-actions[bot] may create tags, push branches other than main, and edit published releases or their assets.
 
+**Outcome.** Confirmed from a run log; the dispatch path is refuted and the tag path is an accepted residual.
+The Dependabot-triggered sync run `42702512168` (2026-11-09) logged `Contents: write` and `Metadata: read` as its whole token, `persist-credentials: true` at checkout, and controller-gen built from `tools/vendor` and run under `make deps-sync`, all in the job that pushes.
+Neither writer holds `actions: write`, so neither token can dispatch `publish.yml`.
+Neither ruleset targets tags (read 2026-11-11), so as far as the rulesets go either token can create a `v*` tag; whether that tag would start `publish.yml` was not tested, because the test is the write.
+The bound and the control, the same `v*` tag ruleset the first four need, are in [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control); moving tool execution out of the writing job is [Q1341](../queue/Q1341.md).
+The sandboxed fixture-module test above was not run: the run log already shows tool code executing beside the credential, which is what it would establish.
+
 **Evidence.** `.github/workflows/dependabot-go-sync.yml:63`, `.github/workflows/dependabot-rebase-stale.yml:84`, `scripts/ci/dependabot-rebase-stale.sh:473`, `Makefile:670`, `.github/workflows/dependabot-go-sync.yml:11`, `docs/development/go-workspaces.md:259`.
 
 ### No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on
@@ -864,6 +874,9 @@ A source-side guard can be tested locally once written: add a case to the existi
 Owner lists the runner scale sets registered for the repository and confirms whether each dogfood label (gag-ci-scaleset, gag-ci-e2e, the probe labels) is repo-scoped with no runner-group restriction.
 Owner checks the repository's existing Actions run history and the dogfood AGC's job records for any pull_request-event job from a fork head repository that was assigned to a dogfood scale set, and records which e2e overlay (Kata or dind) is applied during dogfood windows and for how long tenants stay up.
 
+**Outcome.** Open until [Q1330](../queue/Q1330.md) lands, which refuses fork jobs by default on every `RunnerSet`; no second control was built here.
+GitHub's fork approval policy read `first_time_contributors` on 2026-11-11, the same value Q1052 recorded, so until then that setting is what holds the lead, as [05-security.md](../design/05-security.md#who-can-start-a-release-is-held-by-a-headcount-not-a-control) records.
+
 **Evidence.** `scripts/dogfood/start.sh:3`, `.github/workflows/unit-test.yml:262`, `.github/actionlint.yaml:15`, `docs/plan/archive/q468-jobcompleted-retention.md:66`, `docs/queue/Q1052.md:54`, `docs/operations/personas.md:93`, `deploy/dogfood-e2e/README.md:37`, `scripts/dogfood/e2e-start.sh:7`, `docs/development/testing.md:2224`.
 
 ### go-throttle hook returns `allow` for single `go build`/`go test` commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path
@@ -889,6 +902,14 @@ Mirror one case in scripts/agent/claude-go-throttle-hook-test.sh.
 **Owner check.** Owner-observed, non-destructive: on a contributor machine with no Bash(go ...) permission rule in any settings scope and Claude Code in its default permission mode, open this repo and have the session issue `go test -exec 'sh -c "touch tmp/gothrottle-marker"' -run XXX ./api/...`.
 Record whether a permission prompt appears before tmp/gothrottle-marker is created.
 Repeat with the go-throttle entry removed from .claude/settings.json to confirm the hook is the difference, and once more with workspace-guard installed using `go build -o` to a path outside the worktree to observe how the allow composes with that guard.
+
+**Outcome.** Confirmed and fixed.
+Against the real toolchain (go1.27.1, a scratch module), `go test -exec PROG`, `go build -toolexec PROG` and `GOFLAGS=-toolexec=PROG go build` each ran the named program, and `go build -o PATH` and `go test -cpuprofile PATH` wrote outside the module; `-vettool` is no longer a `go test` flag there.
+The real hook returned `allow` for all of them, and for `go test $FLAGS` and `CC=PROG go build` too.
+The comment justifying the allow cited a repository `Bash(go test *)` allowlist that no committed settings file carries, so the allow was a grant of its own.
+The auto-allow now also requires literal words with no shell escape, neither a backslash nor ANSI-C quoting (review found `go test \-exec PROG` still allowed, and it ran PROG), no package path that leaves the working directory, flags from `safeFlags`, and only `GOFLAGS` (checked the same way), `GOWORK=off` or `CGO_ENABLED` as leading assignments; the same commands now get no decision, or an ask when they carry `-race`.
+Twenty-five new `TestDecide` cases go red with the checks removed.
+The owner check above was not run, because the fix holds whatever Claude Code does with an allow.
 
 **Evidence.** `devtools/agent/gothrottle/decide_test.go:48`, `devtools/agent/gothrottle/main.go:19`, `.claude/settings.json:6`, `devtools/agent/gothrottle/decide.go:273`, `devtools/agent/gothrottle/main.go:27`, `scripts/agent/local-throttle.sh:297`, `docs/development/testing.md:277`.
 

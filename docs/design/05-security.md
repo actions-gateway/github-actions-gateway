@@ -325,6 +325,36 @@ The publish pipeline itself is hardened against upstream-tag hijack: every `uses
 The keyless signing identity is **tags-only**: `publish.yml` refuses to run from a non-tag ref and `make verify-release` anchors the cosign `--certificate-identity-regexp` to `…/publish.yml@refs/tags/v.*$`, so a signature minted from a branch (e.g. a `workflow_dispatch` from a scratch branch overwriting a released tag) is both prevented and rejected (Q124).
 See [security-operations.md § Image provenance](../operations/security-operations.md#image-provenance-signature--sbom-verification) for the operator verification runbook and [release.md § Supply-chain integrity of the pipeline](../operations/release.md#supply-chain-integrity-of-the-pipeline-itself) for the SHA-pin / signing-identity policy.
 
+#### Who can start a release is held by a headcount, not a control
+
+Four release leads from the November 2026 audit (Q1326, [plan](../plan/security-audit-2026-11.md#release-and-ci-leads)) need a principal who can create a `v*` tag or dispatch `publish.yml` or `pages.yml` without being able to land the same change on `main`.
+They are the dispatch `tag` input left unbound to the dispatch ref, a signing identity that accepts any `v*` tag for any version, the ungated `publish.yml` copies at older tags, and `pages.yml` deploying dispatch-chosen content.
+**Accepted residual, bounded by who holds write.** Read on 2026-11-11 with `gh api`: the repository has one collaborator and the organisation one member, the same admin account, so for a person all four are same-principal.
+Nothing else holds them closed.
+Both rulesets target only the default branch and none targets tags, and `publish.yml` runs under no deployment environment.
+Two events reopen them:
+
+- **A second account gets write access.** Before that, add a tag ruleset restricting `v*` creation and update to administrators, and put `publish.yml` behind an environment with required reviewers.
+  Both are repository settings, so neither is applied from source.
+- **An automated writer can reach them.** The default workflow token is read-only, so the reach is through a job that asks for more.
+  The Dependabot writers below are the two such jobs today.
+
+**The Dependabot writers run bumped build-tool code in a job holding `contents: write`.** `dependabot-go-sync.yml` and `dependabot-rebase-stale.yml` both run `make deps-sync`, which builds and runs tools such as controller-gen from `tools/vendor`, in the same job that pushes.
+The sync job's checkout persists the credential in git config, and the rebase job exports `GH_TOKEN` to the script that runs the sync.
+Measured on the Dependabot-triggered sync run `42702512168` (2026-11-09): the token held `Contents: write` and `Metadata: read` only, and `make deps-sync` built and ran controller-gen in the same job.
+So a malicious release of a module in the tools graph can act with that token.
+It **cannot dispatch `publish.yml`**, because neither job holds `actions: write`, which the dispatch endpoint requires.
+It **can create a `v*` tag** as far as the rulesets go, since none targets tags.
+Whether a tag pushed with that token starts `publish.yml` was not tested, because the test is the write.
+GitHub documents that a `GITHUB_TOKEN` event starts no workflow, but this repository measured `GITHUB_TOKEN` pushes creating `pull_request` runs that were then held for approval ([go-workspaces.md](../development/go-workspaces.md#both-bot-pushes-leave-the-checks-withheld-pending-approval)), so the documented rule is not relied on as the bound.
+The precondition is a compromised tools module, and the `v*` tag ruleset above closes the tag path for this writer as well as for a person.
+Separating tool execution from the write into a second job is hardening tracked as [Q1341](../queue/Q1341.md).
+
+**A fork pull request can name a dogfood scale-set label in `runs-on`.** The label is text in a workflow file the pull request edits, and the dogfood scale sets are repository-scoped on a public repository, so no runner group sits in front of them.
+Until [Q1330](../queue/Q1330.md) ships the default refusal of fork jobs on every `RunnerSet`, GitHub's fork approval setting is the only thing holding it, and it read `first_time_contributors` on 2026-11-11, so a fork author GitHub no longer counts as a first-time contributor runs with no maintainer approval.
+Setting it to `all_external_contributors` is a cheap interim tightening, though it still exempts organization and repository members.
+The lead closes when Q1330 lands; the operator half is in [security-operations.md](../operations/security-operations.md#fork-pull-requests-choose-their-own-runner-label).
+
 ### GitHub-App-key exfiltration via AGC apiserver egress
 
 The AGC pod holds the tenant's GitHub App private key, and its NetworkPolicy (`buildAGCNetworkPolicy`) admits egress on the Kubernetes API server ports (443 and 6443) with **no `to:` destination restriction** — so a compromised AGC could in principle exfiltrate the key over port 443 to an arbitrary external HTTPS endpoint, not just the apiserver.

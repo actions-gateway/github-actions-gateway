@@ -49,6 +49,47 @@ func TestDecide(t *testing.T) {
 			want: allow, wantCmd: "GOFLAGS=-mod=mod " + testPrefix + " go test -race ./...",
 		},
 		{name: "quoted head is one command", cmd: `"go" test ./...`, want: allow},
+		{
+			name: "everyday flags stay allowed", cmd: "go test -count=1 -run 'TestA|TestB' -timeout 10m -v ./api/...",
+			want: allow,
+		},
+		{name: "GOWORK=off stays allowed", cmd: "GOWORK=off go test ./agent/...", want: allow},
+
+		// --- Q1326: go runs a program or writes a path the caller names -------
+		//
+		// Each of these ran the named program or wrote the named path under
+		// go1.27.1, so none may ride the allow. Without -race they stay on the
+		// normal permission flow; with it they are throttled and asked.
+		{name: "go test -exec", cmd: "go test -exec /bin/echo ./api/..."},
+		{name: "go build -toolexec", cmd: "go build -toolexec /bin/echo ./cmd/proxy"},
+		{name: "GOFLAGS carrying -toolexec", cmd: "GOFLAGS=-toolexec=/bin/echo go build ./cmd/proxy"},
+		{name: "go build -o", cmd: "go build -o /tmp/outside ./cmd/proxy"},
+		{name: "go test -cpuprofile", cmd: "go test -cpuprofile /tmp/outside ./api/..."},
+		{name: "double-dash form", cmd: "go test --exec=/bin/echo ./api/..."},
+		{name: "go -C", cmd: "go build -C /tmp/elsewhere ./..."},
+		{name: "ldflags can name a linker", cmd: "go build -ldflags=-extld=/bin/echo ./cmd/proxy"},
+		{name: "a compiler named by assignment", cmd: "CC=/bin/echo go build ./cmd/proxy"},
+		{name: "GOWORK naming a file", cmd: "GOWORK=/tmp/go.work go test ./..."},
+		{name: "flags from a parameter", cmd: "go test $FLAGS ./api/..."},
+		{name: "flags from a quoted parameter", cmd: `go test "$FLAGS" ./api/...`},
+		{name: "brace expansion into a flag", cmd: "go test {-exec,/bin/echo} ./api/..."},
+		{name: "test binary flags after -args", cmd: "go test ./api/... -args -test.cpuprofile=/tmp/outside"},
+		// The shell removes the escape before go reads the word, so these are
+		// `-exec`, `-toolexec` and `-o` to go (each ran or wrote under go1.27.1).
+		{name: "backslash-escaped -exec", cmd: `go test \-exec /bin/echo ./api/...`},
+		{name: "ANSI-C quoted -exec", cmd: `go test $'\x2dexec' /bin/echo ./api/...`},
+		{name: "backslash-escaped -toolexec", cmd: `go build \-toolexec=/bin/echo ./cmd/proxy`},
+		{name: "backslash-escaped -o", cmd: `go build \-o /tmp/outside ./cmd/proxy`},
+		{name: "backslash-escaped -overlay", cmd: `go build \-overlay=/tmp/o.json ./cmd/proxy`},
+		{name: "backslash-escaped -modfile", cmd: `go test \-modfile=/tmp/go.mod ./api/...`},
+		{name: "backslash inside double quotes", cmd: `go test "\-exec" /bin/echo ./api/...`},
+		{name: "absolute package path", cmd: "go test /abs/x_test.go"},
+		{name: "home-relative package path", cmd: "go test ~/elsewhere/..."},
+		{name: "package path climbing out", cmd: "go test ../../../tmp/x/..."},
+		{
+			name: "-exec with -race is throttled and asked", cmd: "go test -race -exec /bin/echo ./api/...",
+			want: ask, wantCmd: testPrefix + " go test -race -exec /bin/echo ./api/...",
+		},
 
 		// --- Compound / redirected -race: rewritten and asked -----------------
 		{

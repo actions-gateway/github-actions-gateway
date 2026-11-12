@@ -56,7 +56,7 @@ type invocation struct {
 	args string
 	// wrapped reports that `go` was reached by peeling a wrapper (Q696). Such a
 	// call is throttled but never auto-allowed: `taskpolicy … timeout … go test`
-	// is not the bare shape the repo's `Bash(go test *)` allowlist trusts.
+	// is not the bare shape the allow is held to (see simple).
 	wrapped bool
 }
 
@@ -273,7 +273,8 @@ var assignWord = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
 // simple reports whether the command is a single unadorned call — the only
 // shape that can be auto-allowed, because it holds nothing another hook would
 // want to see: no second segment, no redirect whose target could sit outside
-// the workspace, no substitution that runs a command of its own.
+// the workspace, no substitution that runs a command of its own, and nothing
+// that has go run a program or write a path the caller names (Q1326).
 func simple(f *syntax.File) bool {
 	if len(f.Stmts) != 1 {
 		return false
@@ -294,7 +295,112 @@ func simple(f *syntax.File) bool {
 		}
 		return !expands
 	})
-	return !expands
+	return !expands && plainCall(call)
+}
+
+// safeFlags are the go build/test flags that neither run a program nor write a
+// path the caller names. An allowlist for the reason wrappers is one: a flag
+// absent here costs the auto-allow and leaves the command on the normal
+// permission flow, while a flag wrongly present lets `-exec`, `-toolexec`,
+// `-o` or `-cpuprofile` ride the allow (measured against go1.27.1).
+var safeFlags = map[string]bool{
+	"a": true, "bench": true, "benchmem": true, "benchtime": true, "buildvcs": true,
+	"count": true, "cover": true, "covermode": true, "coverpkg": true, "cpu": true,
+	"failfast": true, "fullpath": true, "json": true, "list": true, "mod": true,
+	"n": true, "p": true, "parallel": true, "race": true, "run": true,
+	"short": true, "shuffle": true, "skip": true, "tags": true, "timeout": true,
+	"trimpath": true, "v": true, "vet": true, "work": true, "x": true,
+}
+
+// plainCall reports whether every word of a go invocation is literal text the
+// hook can read, every flag is in safeFlags, and every leading assignment is
+// one go reads as a setting rather than a program: GOFLAGS (its flags checked
+// the same way), GOWORK=off and CGO_ENABLED. `CC=…` names a compiler to run,
+// and `$FLAGS` expands to whatever the caller set.
+func plainCall(call *syntax.CallExpr) bool {
+	for _, a := range call.Assigns {
+		if a.Append || a.Array != nil || a.Index != nil || a.Value == nil || !readable(a.Value) {
+			return false
+		}
+		v := literal(a.Value)
+		switch a.Name.Value {
+		case "GOFLAGS":
+			for _, flag := range strings.Fields(v) {
+				if !safeFlag(flag) {
+					return false
+				}
+			}
+		case "GOWORK":
+			if v != "off" {
+				return false
+			}
+		case "CGO_ENABLED":
+		default:
+			return false
+		}
+	}
+	words, _ := peelWrappers(call.Args)
+	for _, w := range words {
+		if !readable(w) {
+			return false
+		}
+		s := literal(w)
+		if strings.HasPrefix(s, "-") && !safeFlag(s) || outsidePath(s) {
+			return false
+		}
+	}
+	return true
+}
+
+// outsidePath reports whether a word names a path that can leave the working
+// directory: absolute, home-relative, or climbing through `..`.
+func outsidePath(s string) bool {
+	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~") {
+		return true
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// safeFlag reports whether a `-name`, `--name` or `-name=value` word is in
+// safeFlags.
+func safeFlag(word string) bool {
+	name := strings.TrimPrefix(strings.TrimPrefix(word, "-"), "-")
+	name, _, _ = strings.Cut(name, "=")
+	return word != "-" && word != "--" && safeFlags[name]
+}
+
+// readable reports whether a word reaches go as the text literal renders: only
+// literals and quoted literals, with no backslash or `$'…'` escape the shell
+// would rewrite (`\-exec` reaches go as `-exec`), and no unquoted glob or brace
+// character the shell would expand into words of its own.
+func readable(w *syntax.Word) bool {
+	for _, part := range w.Parts {
+		switch p := part.(type) {
+		case *syntax.Lit:
+			if strings.ContainsAny(p.Value, `*?[{\`) {
+				return false
+			}
+		case *syntax.SglQuoted:
+			if p.Dollar {
+				return false
+			}
+		case *syntax.DblQuoted:
+			for _, dp := range p.Parts {
+				lit, ok := dp.(*syntax.Lit)
+				if !ok || strings.Contains(lit.Value, `\`) {
+					return false
+				}
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // alreadyThrottled reports whether the text before an invocation already
