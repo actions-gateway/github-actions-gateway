@@ -3622,6 +3622,7 @@ Q726 registers labels at create and never rewrites them, and whether it could wa
 **Answered 2026-08-24: no**.
 A labels `PATCH` answers 200, stores nothing, and returns the *stored* set rather than an echo, and a live session is undisturbed.
 Five arms, gated on a create-arm control that stops the run when a backend drops extra labels at create and would make every `PATCH` verdict unreadable. | [q793-labels-patch.md](../plan/archive/q793-labels-patch.md) |
+| Investigation J | `PROBE_SSDELETE_TEST=true` | Does the Actions Service delete a scale set holding a queued or assigned job, what becomes of that job and the runner record minted under it, and does a scale set re-created under the same name receive the job? Decides whether deleting on rename or delete can close Q1344's adoption. **Not yet run live.** | [q1344-scaleset-delete.md](../plan/q1344-scaleset-delete.md) |
 
 Investigation I is one run against one throwaway scale set, with no job and no wall clock, which makes it the cheapest of the five to re-run against a future GitHub.
 Its verdicts come from an independent `GET` rather than the `PATCH` response, because a service echoing its input is byte-identical to one that stored it, and reading the response instead is exactly what its `LabelPatchEcho` unit case fails on.

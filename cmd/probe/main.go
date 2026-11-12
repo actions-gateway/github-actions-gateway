@@ -28,6 +28,9 @@
 //
 // Set PROBE_LABELPATCH_TEST=true to run Investigation I (Q793) — whether the
 // Actions Service honours a scale-set labels PATCH. See labelpatch.go.
+//
+// Set PROBE_SSDELETE_TEST=true to run Investigation J (Q1344) — what deleting a
+// scale set does to its queued job and runner records. See ssdelete.go.
 package main
 
 import (
@@ -162,6 +165,26 @@ func run(logger *slog.Logger) error {
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
 		return runLabelPatchProbe(ctx, logger, iCfg, provider, "https://api.github.com")
+	}
+
+	// ── Investigation J (Q1344): what does deleting a scale set do? ────────
+	// One arm per run, one throwaway scale set and one fixture job. See ssdelete.go.
+	if os.Getenv("PROBE_SSDELETE_TEST") == "true" {
+		jCfg, err := parseSSDeleteConfig(os.Getenv)
+		if err != nil {
+			return err
+		}
+		provider, err := githubapp.NewInstallationTokenProvider(githubapp.Credentials{
+			AppID:          jCfg.AppID,
+			PrivateKeyPEM:  jCfg.PrivateKeyPEM,
+			InstallationID: jCfg.InstallationID,
+		}, nil, false)
+		if err != nil {
+			return fmt.Errorf("create token provider: %w", err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runSSDeleteProbe(ctx, logger, jCfg, provider, "https://api.github.com")
 	}
 
 	// ── 1. Read credentials from environment ────────────────────────────────
