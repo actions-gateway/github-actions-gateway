@@ -446,7 +446,7 @@ Not measured: a request from a cluster worker to an endpoint outside GitHub's ac
 The plan carries the probe, which needs no Azure account, and run 41371432425 already showed GitHub's own accounts answering from a Kata worker.
 
 Blob storage and the `actions` ranges cannot simply be dropped, because the runner reaches GitHub's broker, results service and storage accounts through them.
-The FQDN backends can be narrowed from source to the `productionresultssa<N>` names `/meta` publishes under `domains.actions` (140 on 2026-11-12), at the cost of job failures whenever GitHub adds an account before the next refresh.
+The FQDN backends can be narrowed from source to the `productionresultssa<N>` names `/meta` publishes under `domains.actions` (140 on 2026-11-12), at the cost of job failures whenever GitHub adds an account before the next refresh; that is [Q1350](../queue/Q1350.md), with a ConfigMap to add accounts ahead of GitHub's list and an opt-out back to the wildcard.
 Direct mode and the CIDR-mode proxy cannot be narrowed by address without the same churn, since a storage cluster's addresses serve every account on it.
 Until one of those lands, the opt-ins that already exist shrink it without closing it: an FQDN-mode proxy admits names rather than Azure's address space, which leaves every storage account reachable through the wildcard, and an [in-cluster mirror](network-architecture.md#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1) for what jobs fetch.
 

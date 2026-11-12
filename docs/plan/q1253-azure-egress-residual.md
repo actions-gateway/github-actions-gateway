@@ -1,8 +1,9 @@
 # Q1253: what GitHub's published ranges let a worker reach on Azure
 
-**Status:** public data and source settled on 2026-11-12; the in-cluster confirmation probe below is written and not yet run, and both it and the narrowing decision are [Q1253](../queue/Q1253.md).
+**Status:** public data and source settled on 2026-11-12; the in-cluster confirmation probe below was written and skipped, so the residual rests on public data and the 2026-11-01 run.
+Q1253 closed on that basis, and the narrowing is [Q1350](../queue/Q1350.md).
 
-[Q1253](../queue/Q1253.md) asked whether a storage account nobody at GitHub owns resolves into the ranges a direct-mode worker may reach on 443.
+Q1253 asked whether a storage account nobody at GitHub owns resolves into the ranges a direct-mode worker may reach on 443.
 It does, and the admitted set is wider than storage: the `actions` key of GitHub's `/meta` covers at least 97.5% of Azure's public IPv4 space in 14 regions, East US and West Europe among them.
 The residual is recorded in [05-security.md](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges).
 
