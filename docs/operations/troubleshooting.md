@@ -48,6 +48,7 @@ The recommended `app.kubernetes.io/name` label is `actions-gateway-controller` o
 - [Reconcile or Token Mint Hangs on a Slow GitHub Endpoint](#reconcile-or-token-mint-hangs-on-a-slow-github-endpoint)
 - [Proxy NetworkPolicy Has an Empty GitHub Allowlist](#proxy-networkpolicy-has-an-empty-github-allowlist)
 - ["Runner Lost Communication" and No Worker Pod Was Ever Created](#runner-lost-communication-and-no-worker-pod-was-ever-created)
+- [GMC, AGC or Proxy Pod Stuck Pending Beside Workers](#gmc-agc-or-proxy-pod-stuck-pending-beside-workers)
 - [Worker Pods Stuck Pending](#worker-pods-stuck-pending)
 - [Worker Pod Reaped While Pending (WorkerPodStuckPending)](#worker-pod-reaped-while-pending-workerpodstuckpending)
 - [Worker Pod Reaped While Pending After Its Job Completed (WorkerPodCompletedPending)](#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending)
@@ -1453,6 +1454,30 @@ kubectl logs -n <namespace> deploy/<gateway>-agc | grep -i "rejected worker pod"
 
 ---
 
+## GMC, AGC or Proxy Pod Stuck Pending Beside Workers
+
+**Symptoms.** A GMC, AGC or egress proxy pod stays `Pending`, often straight after an upgrade, while the pod it replaces keeps running.
+`kubectl describe pod` shows a `FailedScheduling` event with `node(s) didn't match pod anti-affinity rules`.
+
+**Cause.** These pods carry a required pod anti-affinity against worker pods in every namespace, so they cannot be placed on a node that runs a worker.
+Every node that fits the pod is running at least one worker.
+The rule exists because a worker escape reaches the credentials of every pod on its node ([security operations](security-operations.md#keep-gags-control-plane-off-worker-nodes)).
+
+**Diagnostics.**
+
+```sh
+# Which nodes run worker pods right now
+kubectl get pods -A -l actions-gateway/component=workload,app.kubernetes.io/component=runner \
+  -o custom-columns=NAMESPACE:.metadata.namespace,POD:.metadata.name,NODE:.spec.nodeName
+```
+
+**Resolution.**
+- Give workers a pool of their own, tainted, with workers pinned to it ([procedure](security-operations.md#keep-gags-control-plane-off-worker-nodes)), so other nodes stay free for the controllers.
+- On a cluster with one schedulable node, set the chart value `controllerWorkerSeparation: none`.
+  This gives up the separation; [upgrade notes](upgrade.md#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes) say what it costs.
+
+---
+
 ## Worker Pods Stuck Pending
 
 **Symptoms.** Jobs are assigned (`actions_gateway_scaleset_jobs_assigned_total` increments) but worker pods remain in `Pending` state for more than 60 seconds.
@@ -1462,6 +1487,8 @@ kubectl logs -n <namespace> deploy/<gateway>-agc | grep -i "rejected worker pod"
 - Namespace `ResourceQuota` is exhausted — no pod slot, CPU request, or memory request available.
 - No node has enough capacity for the pod's requested resources (GPU nodes may be at capacity).
 - `PriorityClass` referenced in `priorityTiers` does not exist.
+- Every node that fits the pod runs a GMC, AGC or egress proxy pod, which keep workers off their nodes (the event says `node(s) didn't satisfy existing pods anti-affinity rules`).
+  Pin workers to their own pool, or see [the controller-side runbook](#gmc-agc-or-proxy-pod-stuck-pending-beside-workers).
 - Image pull is slow due to a large image on a cold node (expected; see SLO targets in [Appendix A](../design/appendix-a-capacity-slos.md)).
 
 **Diagnostics.**
