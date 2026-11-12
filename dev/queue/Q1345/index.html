@@ -2664,7 +2664,7 @@ A worker that escapes onto one of those nodes can then read the AGC's GitHub App
 That section, and a caution in <code>admission-policies.md</code>, now say not to apply the samples as written; the samples themselves are unchanged.</p>
 <p>The fix is two pins rather than one, keyed on what each pod is.
 The proxy pins to the tenant's egress pool, because its node decides the tenant's egress IP.
-Workers pin to a worker pool, keyed on the controller-stamped <code>actions-gateway/component: workload</code> label.
+Workers pin to a worker pool, keyed on the controller-stamped <code>app.kubernetes.io/component: runner</code> label; <code>actions-gateway/component: workload</code> alone also matches the AGC pod.
 In the default proxied mode a worker's GitHub traffic leaves through the proxy, so its own node does not decide the IP.
 Direct-egress mode (no <code>proxyRef</code>) is the case to design for: there the worker's node does pick the IP, so the tenant pool has to carry workers, and the AGC needs somewhere else to run.
 Whether the AGC's own GitHub traffic is proxied in every mode is unverified for this row; <code>migration-from-arc.md</code> says it is in proxied mode.</p>

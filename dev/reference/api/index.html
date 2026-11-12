@@ -3939,7 +3939,7 @@ docs/operations/security-operations.md.</p>
 </tr>
 <tr>
 <td><code>scheduling</code> <em><a href="#podscheduling">PodScheduling</a></em></td>
-<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in affinity, so the block applies verbatim. See PodScheduling.</td>
+<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in spread, so the block applies verbatim, plus the worker separation term PodScheduling describes.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -4774,7 +4774,7 @@ is purely additive — no conversion work, no breaking change. Tracked as Q284.<
 </tr>
 <tr>
 <td><code>affinity</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#affinity-v1-core">Affinity</a></em></td>
-<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in affinity, so the block applies verbatim there.</td>
+<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in spread, so the block applies verbatim there.<br />Worker separation (both kinds). Unless the platform sets the GMC's --controller-worker-separation=none, the GMC also appends a REQUIRED podAntiAffinity term against worker pods in every namespace, so these pods never share a node with a worker. It is appended after the rules above and no value here removes it.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>

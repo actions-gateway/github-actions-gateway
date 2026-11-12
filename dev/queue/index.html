@@ -3266,14 +3266,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>The placement policy samples co-schedule a tenant's AGC and egress proxy with its workers.</strong> Both <code>kyverno/restrict-gag-placement.yaml</code> …</td>
 </tr>
 <tr>
-<td><a href="Q1327/">Q1327</a></td>
-<td><a href="../plan/security-audit-2026-11/#agc-run-and-recovery-leads">Validate five AGC run and recovery state leads from the security audit</a></td>
-<td><code>security</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>M</td>
-<td><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a …</td>
-</tr>
-<tr>
 <td><a href="Q1328/">Q1328</a></td>
 <td><a href="../plan/security-audit-2026-11/#worker-pod-and-networkpolicy-leads">Validate five worker pod and NetworkPolicy leads from security audit</a></td>
 <td><code>security</code> <code>open-question</code></td>
@@ -4552,6 +4544,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>**A gateway whose <code>githubURL</code> names a GitHub Enterprise Cloud data-residency tenant, such as <code>https://octocorp.ghe.com/acme</code>, is addressed …</td>
+</tr>
+<tr>
+<td><a href="Q1346/">Q1346</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/gha-cache/base/deployment.yaml">Keep the shipped cache and mirror Deployments off worker nodes</a></td>
+<td><code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**The cache server and the registry mirrors GAG ships can still land beside a worker, where a worker that escapes its container can write …</td>
+</tr>
+<tr>
+<td><a href="Q1347/">Q1347</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/internal/webhook/v2">Refuse nodeName and schedulerName on namespaced worker templates</a></td>
+<td><code>security</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A tenant's <code>RunnerTemplate</code> can put a worker on a controller's node, past the GMC's worker separation term.</strong> The GMC, AGC and egress …</td>
 </tr>
 <tr>
 <td><a href="Q1334/">Q1334</a></td>

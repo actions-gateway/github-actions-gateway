@@ -3278,10 +3278,10 @@
 <p>Third full security audit, performed 2026-11-09 against <code>7b3f016ad</code>, ahead of <code>v2.0.0</code>.
 The first audit (2026-05) is <a href="../security/">security.md</a> and the second (2026-06) is <a href="../archive/security-audit-2026-06/">archive/security-audit-2026-06.md</a>; this doc records only the third audit's findings and where each one is tracked.</p>
 <blockquote>
-<p><strong>Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), six of the seven release and CI leads settled (Q1326), and the four scale-set identity leads confirmed, three fixed and one accepted as a residual (Q1325).</strong> 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 12 of which still are, one of them the release and CI lead that waits on Q1330.
+<p><strong>Status: findings filed, the medium one fixed, the eight stricter admission rules landed (Q1322), the four egress proxy sharing leads confirmed and fixed (Q1324), six of the seven release and CI leads settled (Q1326), the four scale-set identity leads confirmed, three fixed and one accepted as a residual (Q1325), and the five AGC run and recovery leads settled (Q1327).</strong> 9 findings are confirmed from source (one medium, eight low) and 30 were leads that source alone cannot settle, 7 of which still are, one of them the release and CI lead that waits on Q1330.
 Nothing reached high or critical.
 Two rows gated <code>v2.0.0</code>, Q1321 and Q1322, and both have landed.
-The rest are <a href="../../queue/Q1323/">Q1323</a> to <a href="../../queue/Q1328/">Q1328</a>.</p>
+The rest are <a href="../../queue/Q1323/">Q1323</a> and <a href="../../queue/Q1328/">Q1328</a>.</p>
 </blockquote>
 <h2 id="method-and-limits">Method and limits<a class="headerlink" href="#method-and-limits" title="Permanent link">&para;</a></h2>
 <p>The audit read source and ran nothing.
@@ -3463,28 +3463,28 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 </tr>
 <tr>
 <td><a href="#agc-run-and-recovery-leads">AGC re-runs and force-cancels whatever run its namespace ConfigMaps and pod annotations name; docs/design/05-security.md line 200 describes only the pod annotation and says a run ID cannot be substituted</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1327/">Q1327</a></td>
+<td>confirmed by a local test, accepted residual</td>
+<td>Q1327, doc corrected</td>
 </tr>
 <tr>
 <td><a href="#agc-run-and-recovery-leads">One repository's OOM-killed jobs can fill the per-set failure ledger and withhold automatic re-runs for every repository on the RunnerSet</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1327/">Q1327</a></td>
+<td>confirmed by a local test, fixed</td>
+<td>Q1327</td>
 </tr>
 <tr>
 <td><a href="#agc-run-and-recovery-leads">Throughput sizing profile derives the worker memory limit from job-controlled peak usage with no maxRequests clamp, so the limit can exceed the operator's envelope and may ratchet</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1327/">Q1327</a></td>
+<td>confirmed by a local test, fixed</td>
+<td>Q1327</td>
 </tr>
 <tr>
 <td><a href="#agc-run-and-recovery-leads">Tenant-chosen workerImage host (and registry redirects) steer AGC GETs to in-cluster 443/6443 endpoints off the egress proxy, with the outcome reported in RunnerSet status</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1327/">Q1327</a></td>
+<td>bound measured by a local test, accepted residual</td>
+<td>Q1327</td>
 </tr>
 <tr>
 <td><a href="#agc-run-and-recovery-leads">AGC run-status, re-run and force-cancel errors carry the raw upstream body into logs, and run-status and re-run errors into a tenant-namespace Event, bypassing SanitizeBody</a></td>
-<td>needs validation</td>
-<td><a href="../../queue/Q1327/">Q1327</a></td>
+<td>confirmed by a local test, fixed</td>
+<td>Q1327</td>
 </tr>
 <tr>
 <td><a href="#worker-pod-and-networkpolicy-leads">Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive</a></td>
@@ -4163,7 +4163,9 @@ Twenty-five new <code>TestDecide</code> cases go red with the checks removed.
 The owner check above was not run, because the fix holds whatever Claude Code does with an allow.</p>
 <p><strong>Evidence.</strong> <code>devtools/agent/gothrottle/decide_test.go:48</code>, <code>devtools/agent/gothrottle/main.go:19</code>, <code>.claude/settings.json:6</code>, <code>devtools/agent/gothrottle/decide.go:273</code>, <code>devtools/agent/gothrottle/main.go:27</code>, <code>scripts/agent/local-throttle.sh:297</code>, <code>docs/development/testing.md:277</code>.</p>
 <h2 id="agc-run-and-recovery-leads">AGC run and recovery leads<a class="headerlink" href="#agc-run-and-recovery-leads" title="Permanent link">&para;</a></h2>
-<p>Five leads on state the Actions Gateway Controller (AGC) acts on, tracked as <a href="../../queue/Q1327/">Q1327</a>.</p>
+<p>Five leads on state the Actions Gateway Controller (AGC) acts on, each settled under Q1327 by a local test; the <strong>Outcome</strong> line under each says what was measured.
+Three are fixed and two are accepted residuals in <a href="../../design/05-security/">05-security.md</a>, with their bounds.
+No owner check was run.</p>
 <h3 id="agc-re-runs-and-force-cancels-whatever-run-its-namespace-configmaps-and-pod-annotations-name-docsdesign05-securitymd-line-200-describes-only-the-pod-annotation-and-says-a-run-id-cannot-be-substituted">AGC re-runs and force-cancels whatever run its namespace ConfigMaps and pod annotations name; docs/design/05-security.md line 200 describes only the pod annotation and says a run ID cannot be substituted<a class="headerlink" href="#agc-re-runs-and-force-cancels-whatever-run-its-namespace-configmaps-and-pod-annotations-name-docsdesign05-securitymd-line-200-describes-only-the-pod-annotation-and-says-a-run-id-cannot-be-substituted" title="Permanent link">&para;</a></h3>
 <p><code>agc-recovery-state-unauthenticated-run-identity</code>: needs validation.
 Starts at <code>cmd/agc/internal/controller/scaleset_guards.go:84</code>.</p>
@@ -4185,6 +4187,12 @@ For the envtest tier, extend cmd/agc/internal/controller/integration/q844_orphan
 <p><strong>Owner check.</strong> Owner-observed, no probing: for each tenant namespace, list the subjects holding update or patch on configmaps and patch on pods (review the RoleBindings, or kubectl auth can-i --list per bound subject) and compare with the subjects that can get the App key Secret, create or exec pods, or assume the AGC ServiceAccount.
 A subject in the first set and not the second can drive rerun and force-cancel across the installation.
 Also confirm which repositories each tenant's App installation covers, and state whether line 200 is meant to hold against namespace writers.</p>
+<p><strong>Outcome.</strong> Confirmed, and recorded as an accepted residual.
+A parked re-run written into the failure ledger, naming run 99 in another repository with a budget stored beside it as spent, was re-run there (<code>TestPendingRerun_ActsOnTheRunTheLedgerNames</code>).
+Re-derived on <code>main</code> after Q1321: the writers in source are the AGC's ServiceAccount, the GMC (whose tenant-resource-guard admits any ConfigMap write in a marked tenant namespace) and the operator's tenant RBAC; worker pods hold no token.
+The call carries the tenant's own installation token, so a writer reaches only repositories that installation covers.
+The 05-security claim that a run ID cannot be substituted now says the identity is trusted on read, and <a href="../../design/05-security/#recovery-state-in-the-tenant-namespace-is-trusted-on-read">Recovery state in the tenant namespace is trusted on read</a> records the residual and its bound.
+Binding a stored identity to the set's scope needs that scope in the provisioner, which it does not hold; who holds ConfigMap update without the App key in a real install was not established.</p>
 <p><strong>Evidence.</strong> <code>docs/design/05-security.md:200</code>, <code>cmd/agc/internal/provisioner/pending_rerun.go:285</code>, <code>cmd/agc/internal/provisioner/pending_rerun.go:132</code>, <code>cmd/agc/internal/provisioner/eviction_scaleset.go:436</code>, <code>cmd/agc/internal/provisioner/abandoned_scaleset.go:218</code>, <code>cmd/agc/internal/provisioner/abandoned.go:138</code>, <code>cmd/agc/internal/provisioner/rerun_ledger.go:400</code>, <code>cmd/agc/internal/provisioner/rerun_futility.go:45</code>, <code>cmd/agc/internal/provisioner/naming.go:12</code>, <code>cmd/agc/internal/scalesetlistener/listener.go:2323</code>.</p>
 <h3 id="one-repositorys-oom-killed-jobs-can-fill-the-per-set-failure-ledger-and-withhold-automatic-re-runs-for-every-repository-on-the-runnerset">One repository's OOM-killed jobs can fill the per-set failure ledger and withhold automatic re-runs for every repository on the RunnerSet<a class="headerlink" href="#one-repositorys-oom-killed-jobs-can-fill-the-per-set-failure-ledger-and-withhold-automatic-re-runs-for-every-repository-on-the-runnerset" title="Permanent link">&para;</a></h3>
 <p><code>agc/rerun-ledger/unevictable-per-job-records-fill-shared-cap</code>: needs validation.
@@ -4205,6 +4213,12 @@ Then call reserveScaleSetRerun for a fresh run ID with a short job name and caus
 Extend TestRerunLedger_CapHoldsEnoughBudgets with a case that includes floors, pending entries and multi-job attempts so the documented capacity reflects them.
 A fix is demonstrated when the second repository's reservation still succeeds, for example with a per-run cap on floors and merged jobs/disruptions, a length cap on stored display names, and size-driven eviction of floors and pending entries ahead of refusing a budget write.</p>
 <p><strong>Owner check.</strong> On a non-production cluster with a RunnerSet on the Throughput or Binpack profile that has usage history, the owner runs one matrix workflow whose jobs allocate past the runner memory limit, confirms the pods report the runner container as OOMKilled, reads kubectl get configmap scaleset-failures-<set> -o jsonpath='{.data.failures.json}' to measure bytes added per killed job and the longest display name stored, and checks whether actions_gateway_eviction_rerun_failures_total{reason="budget_unrecorded"} is reachable before the breaker pauses the class.</p>
+<p><strong>Outcome.</strong> Confirmed and fixed.
+Killing every job of 256-job matrix runs in one repository filled the 512 KiB ledger after 564 jobs, and every later write, another repository's budget included, was refused.
+Each job had written a memory floor, a parked re-run and a merged disruption, none evictable.
+Now one parked re-run is kept per run attempt, since its release re-runs every failed job of the attempt; a re-run attempt lists at most 16 merged disruptions and jobs; and memory floors are evicted oldest first, after failure records, before a budget write is refused.
+With the fix, 768 such jobs left 228.7 KiB (234,204 bytes) and the other repository's reservation succeeded; that measurement took 44 s, so the shipped tests are smaller: 40 killed jobs of one attempt add one parked re-run and 16 merged entries (<code>TestRerunLedger_KilledJobsOfOneAttemptAddNoBudgetState</code>), and a ledger past the cap with floors alone gives up its oldest floors, freed in one batch, rather than the re-run (<code>TestRerunLedger_FloorsAreEvictedBeforeABudgetIsRefused</code>); each of the three mechanisms, deleted, turns one of the two red.
+Budget records stay unevictable by design, so one repository can still spend the documented budget capacity over 30 days.</p>
 <p><strong>Evidence.</strong> <code>cmd/agc/internal/provisioner/rerun_ledger.go:525</code>, <code>cmd/agc/internal/provisioner/flaky_jobs.go:344</code>, <code>cmd/agc/internal/provisioner/eviction.go:268</code>, <code>cmd/agc/internal/provisioner/oom_class.go:378</code>, <code>cmd/agc/internal/provisioner/oom_class.go:134</code>, <code>cmd/agc/internal/provisioner/oom_class.go:197</code>, <code>cmd/agc/internal/provisioner/pending_rerun.go:349</code>, <code>cmd/agc/internal/controller/runnerset_sizing_profile.go:120</code>, <code>cmd/agc/internal/provisioner/rerun_ledger_internal_test.go:523</code>, <code>docs/operations/upgrade.md:770</code>, <code>docs/design/04-operational-flows.md:617</code>.</p>
 <h3 id="throughput-sizing-profile-derives-the-worker-memory-limit-from-job-controlled-peak-usage-with-no-maxrequests-clamp-so-the-limit-can-exceed-the-operators-envelope-and-may-ratchet">Throughput sizing profile derives the worker memory limit from job-controlled peak usage with no maxRequests clamp, so the limit can exceed the operator's envelope and may ratchet<a class="headerlink" href="#throughput-sizing-profile-derives-the-worker-memory-limit-from-job-controlled-peak-usage-with-no-maxrequests-clamp-so-the-limit-can-exceed-the-operators-envelope-and-may-ratchet" title="Permanent link">&para;</a></h3>
 <p><code>agc/sizing-profile/throughput-memory-limit-unclamped-ratchet</code>: needs validation.
@@ -4225,6 +4239,11 @@ Starts at <code>cmd/agc/internal/usage/sampler.go:229</code>.</p>
 In the same file add a ratchet test (applySizingProfile is unexported in package controller, so it cannot live in package usage): start from confidentRec("runner"), and for five generations set rec.ObservedPeak[memory] to the previous generation's derived memory limit (the most a job could be sampled at), call applySizingProfile again, and assert the derived limit never exceeds MaxRequests.memory instead of growing by the headroom factor each generation.
 In cmd/agc/internal/usage/sampler_internal_test.go, using the existing fakeLister, add a test that records 20 ordinary pods, then one pod with a much larger memory reading, then 20 more ordinary pods, and reads SizingStatus to pin whether ObservedPeak[memory] ever comes back down (current source: it does not).</p>
 <p><strong>Owner check.</strong> The owner of a deployment using profile Throughput reports, without running any new workload: for an existing Throughput RunnerSet, the values of spec.sizing.maxRequests.memory, status.sizingRecommendation[].observedPeak.memory and the memory limit on its recent worker pods, and whether that limit exceeds maxRequests.memory or has grown over time; whether the tenant namespace has a LimitRange max or a limits.memory ResourceQuota; whether worker nodes are shared with other tenants; and whether the people who can author workflows on the tenant's repositories are a different principal from the tenant admin who sets spec.sizing.</p>
+<p><strong>Outcome.</strong> Confirmed and fixed.
+With <code>maxRequests.memory: 2Gi</code> and an observed peak of 1536Mi the derived limit was 2304Mi.
+The <code>Throughput</code> memory limit is now clamped like a request, and never below one, so five generations each sampling the job at its last limit stay at 2Gi (<code>TestApplySizingProfileThroughputMemoryLimitHonoursMaxRequests</code>).
+A set with no <code>maxRequests.memory</code> keeps the unbounded limit; the CRD description and the operator page already name <code>maxRequests</code> as the bound.
+The sampler's undecayed peak was not changed or tested.</p>
 <p><strong>Evidence.</strong> <code>cmd/agc/internal/controller/runnerset_sizing_profile.go:94</code>, <code>cmd/agc/internal/controller/runnerset_sizing_profile.go:111</code>, <code>cmd/agc/internal/controller/runnerset_sizing_profile_test.go:137</code>, <code>docs/operations/worker-rightsizing.md:134</code>, <code>api/v2/runnerset_types.go:390</code>, <code>docs/plan/q555-automatic-recovery-design.md:326</code>, <code>docs/plan/runner-sizing-profiles.md:439</code>, <code>api/v2/runnerset_types.go:380</code>.</p>
 <h3 id="tenant-chosen-workerimage-host-and-registry-redirects-steer-agc-gets-to-in-cluster-4436443-endpoints-off-the-egress-proxy-with-the-outcome-reported-in-runnerset-status">Tenant-chosen workerImage host (and registry redirects) steer AGC GETs to in-cluster 443/6443 endpoints off the egress proxy, with the outcome reported in RunnerSet status<a class="headerlink" href="#tenant-chosen-workerimage-host-and-registry-redirects-steer-agc-gets-to-in-cluster-4436443-endpoints-off-the-egress-proxy-with-the-outcome-reported-in-runnerset-status" title="Permanent link">&para;</a></h3>
 <p><code>runnerimage-tenant-steered-agc-fetch</code>: needs validation.
@@ -4246,6 +4265,12 @@ In reference_test.go assert ParseReference's Registry for 'kubernetes.default.sv
 In cmd/gmc/internal/controller add a unit test feeding buildNoProxy's output to golang.org/x/net/http/httpproxy.Config.ProxyFunc and asserting those hosts resolve to no proxy.</p>
 <p><strong>Owner check.</strong> On a non-production cluster with a policy-enforcing CNI and the default install, the platform owner creates a RunnerTemplate in a test tenant with workerImage 'kubernetes.default.svc/x/y:1' and reads the RunnerSet's RunnerVersionTooOld message: an HTTP status or x509 text (rather than a proxy CONNECT denial or dial timeout) shows the AGC dialled the apiserver directly on the tenant's instruction.
 Repeat with a dummy Service on 443 in another namespace to see whether its ingress policy or the AGC policy stops it, and confirm from tenant RBAC that the template author cannot otherwise place an unrestricted pod in the namespace.</p>
+<p><strong>Outcome.</strong> Bound measured, and recorded as an accepted residual.
+The registry read follows a redirect to another host and reports only its status code (<code>manifest latest: HTTP 418</code>), never its body; <code>net/http</code> drops the pull secret on a redirect to another hostname and keeps it on the registry's own hostname at another port (go1.27.3 and go1.27.4) and on a subdomain of it (go1.27.4) (<code>TestInspectFollowsRedirectOffRegistry</code>).
+A TLS name mismatch reports the certificate's names, for example <code>x509: certificate is valid for example.com, *.example.com, not localhost</code> (<code>TestInspectNamesTheCertificatesHostsOnAMismatch</code>).
+So a template author gets a reachability and status-code oracle for in-cluster endpoints on 443 and 6443, with no Kubernetes or GitHub credential attached.
+Refusing cluster-internal hosts would break in-cluster registries; the residual is in <a href="../../design/05-security/#the-registry-read-behind-runnerversiontooold">05-security.md</a>.
+The <code>ParseReference</code> and <code>NO_PROXY</code> unit cases were not written; the <code>NO_PROXY</code> set is the one 05-security already lists.</p>
 <p><strong>Evidence.</strong> <code>cmd/agc/main.go:804</code>, <code>cmd/agc/internal/runnerimage/resolver.go:208</code>, <code>cmd/agc/internal/runnercore/runnerversion.go:133</code>, <code>cmd/agc/internal/runnerimage/client.go:121</code>, <code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go:279</code>, <code>cmd/agc/main.go:549</code>, <code>docs/design/05-security.md:345</code>, <code>docs/design/05-security.md:298</code>.</p>
 <h3 id="agc-run-status-re-run-and-force-cancel-errors-carry-the-raw-upstream-body-into-logs-and-run-status-and-re-run-errors-into-a-tenant-namespace-event-bypassing-sanitizebody">AGC run-status, re-run and force-cancel errors carry the raw upstream body into logs, and run-status and re-run errors into a tenant-namespace Event, bypassing SanitizeBody<a class="headerlink" href="#agc-run-status-re-run-and-force-cancel-errors-carry-the-raw-upstream-body-into-logs-and-run-status-and-re-run-errors-into-a-tenant-namespace-event-bypassing-sanitizebody" title="Permanent link">&para;</a></h3>
 <p><code>agc-rest-error-body-unsanitized</code>: needs validation.
@@ -4263,6 +4288,10 @@ The sibling scale-set client routes the same kind of body through githubapp.Sani
 Repeat for rerunFailedJobs (a 403 without 'already running') and, in cmd/agc/internal/provisioner/abandoned_rerun_internal_test.go, for forceCancelRun's returned error.
 Expected today by source reading: the token and padding are present.</p>
 <p><strong>Owner check.</strong> Owner check: on a GHES or proxied deployment, capture one non-2xx response body from /actions/runs/{id}, /rerun-failed-jobs and /force-cancel and confirm whether it ever reflects request headers or tokens; and confirm who can read Events in tenant namespaces and the AGC's logs.</p>
+<p><strong>Outcome.</strong> Confirmed and fixed.
+A non-2xx body echoing a <code>ghs_</code>-shaped token plus 100 KiB of padding reached the run-status, re-run and force-cancel errors whole, and the run-status and re-run ones feed the <code>EvictionRerunFailed</code> Event.
+All six sites now pass the body through <code>githubapp.SanitizeBody</code> with a 512-byte cap, so the token and padding are gone, and reverting any one site turns a case of <code>TestRESTErrors_UpstreamBodyIsSanitized</code> red.
+No upstream was observed echoing a credential; the fix does not depend on one doing so.</p>
 <p><strong>Evidence.</strong> <code>docs/design/05-security.md:199</code>, <code>cmd/agc/internal/provisioner/abandoned.go:162</code>, <code>cmd/agc/internal/provisioner/eviction.go:860</code>, <code>scaleset/client.go:413</code>, <code>cmd/agc/internal/controller/runnerset_controller.go:538</code>, <code>cmd/agc/internal/controller/runnerset_target.go:152</code>.</p>
 <h2 id="worker-pod-and-networkpolicy-leads">Worker pod and NetworkPolicy leads<a class="headerlink" href="#worker-pod-and-networkpolicy-leads" title="Permanent link">&para;</a></h2>
 <p>Five leads on worker pods and the policies around them, tracked as <a href="../../queue/Q1328/">Q1328</a>.

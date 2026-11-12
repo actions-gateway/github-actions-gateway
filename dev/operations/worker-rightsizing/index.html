@@ -3114,7 +3114,7 @@ The template stays authoritative unless you opt in.</p>
 </tr>
 <tr>
 <td><code>Throughput</code></td>
-<td><code>requests</code> from the p95 of per-job peaks; <strong>no CPU limit</strong> (jobs burst into idle node capacity); memory limit = observed peak × <code>limitHeadroomPercent</code> (default 150).</td>
+<td><code>requests</code> from the p95 of per-job peaks; <strong>no CPU limit</strong> (jobs burst into idle node capacity); memory limit = observed peak × <code>limitHeadroomPercent</code> (default 150), clamped by <code>maxRequests.memory</code>.</td>
 <td>Job latency matters more than packing density.</td>
 </tr>
 <tr>
@@ -3131,7 +3131,8 @@ The template stays authoritative unless you opt in.</p>
   Declaring just one of the two is fine — the other keeps the template's ask.</li>
 <li><strong>History-based profiles fall back to <code>Static</code> until confident</strong> — <code>Binpack</code> and <code>Throughput</code> apply only once <em>every</em> template container has a recommendation with ≥20 sampled jobs (whole-pod, so QoS stays predictable).
   <code>status.sizingProfileState</code> reports which side you're on: <code>Active</code> (derived values applied) or <code>AwaitingSamples</code> (template values, history accumulating).</li>
-<li><strong>Clamps</strong> — <code>minRequests</code>/<code>maxRequests</code> bound every derived request, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
+<li><strong>Clamps</strong> — <code>minRequests</code>/<code>maxRequests</code> bound every derived request, and <code>Throughput</code>'s derived memory limit, so a skewed history (one pathological job) cannot push pods beyond an operator-set envelope.
+  The limit needs the bound most: it follows a peak the jobs control, so without <code>maxRequests.memory</code> a job held near its limit raises the next one by the headroom factor each generation (Q1327).
   Size the ceiling against the namespace <code>ResourceQuota</code> and any <code>LimitRange</code>: derived values are still subject to both at admission, and the existing <code>WorkerQuota*</code> conditions and quota retries surface a conflict at runtime.
   An admission mutation that cancels <code>Throughput</code> rejects nothing, so it gets its own condition — <a href="#when-something-re-injects-the-cpu-limit-throughput-removes"><code>SizingProfileOverridden</code></a>.</li>
 </ul>

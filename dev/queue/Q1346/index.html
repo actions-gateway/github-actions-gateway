@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1327/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1346/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Validate five AGC run and recovery state leads from the security audit - GitHub Actions Gateway</title>
+        <title>Keep the shipped cache and mirror Deployments off worker nodes - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#validate-five-agc-run-and-recovery-state-leads-from-the-security-audit" class="md-skip">
+        <a href="#keep-the-shipped-cache-and-mirror-deployments-off-worker-nodes" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Validate five AGC run and recovery state leads from the security audit
+              Keep the shipped cache and mirror Deployments off worker nodes
             
           </span>
         </div>
@@ -2657,20 +2657,16 @@
   
 
 
-<h1 id="validate-five-agc-run-and-recovery-state-leads-from-the-security-audit">Validate five AGC run and recovery state leads from the security audit<a class="headerlink" href="#validate-five-agc-run-and-recovery-state-leads-from-the-security-audit" title="Permanent link">&para;</a></h1>
-<p><strong>Leads, not confirmed vulnerabilities.</strong> Source supports each path and something outside the repository decides the outcome, so none has a severity.
-<a href="../../plan/security-audit-2026-11/#agc-run-and-recovery-leads">Each lead, with evidence, blockers and a validation plan</a>:</p>
-<ul>
-<li>AGC re-runs and force-cancels whatever run its namespace ConfigMaps and pod annotations name; docs/design/05-security.md line 200 describes only the pod annotation and says a run ID cannot be substituted (needs validation).</li>
-<li>One repository's OOM-killed jobs can fill the per-set failure ledger and withhold automatic re-runs for every repository on the RunnerSet (needs validation).</li>
-<li>Throughput sizing profile derives the worker memory limit from job-controlled peak usage with no maxRequests clamp, so the limit can exceed the operator's envelope and may ratchet (needs validation).</li>
-<li>Tenant-chosen workerImage host (and registry redirects) steer AGC GETs to in-cluster 443/6443 endpoints off the egress proxy, with the outcome reported in RunnerSet status (needs validation).</li>
-<li>AGC run-status, re-run and force-cancel errors carry the raw upstream body into logs, and run-status and re-run errors into a tenant-namespace Event, bypassing SanitizeBody (needs validation).</li>
-</ul>
-<p>The first decides the most: the controller re-runs or force-cancels whatever run its namespace ConfigMaps and pod annotations name, so anyone who can write those steers an installation-token call.</p>
-<p><strong>Measure:</strong> each lead's local test in the plan doc is an envtest or unit case that needs no cluster; who can write the tenant ConfigMaps and pod annotations in a real install is the owner-observed half.</p>
-<p><strong>Done when</strong> each lead is either confirmed and fixed, refuted with the measurement recorded, or written into <code>05-security.md</code> as an accepted residual with its bound.
-The plan doc gives each one a bounded local test and the fact an owner has to observe.</p>
+<h1 id="keep-the-shipped-cache-and-mirror-deployments-off-worker-nodes">Keep the shipped cache and mirror Deployments off worker nodes<a class="headerlink" href="#keep-the-shipped-cache-and-mirror-deployments-off-worker-nodes" title="Permanent link">&para;</a></h1>
+<p><strong>The cache server and the registry mirrors GAG ships can still land beside a worker, where a worker that escapes its container can write the artifacts other jobs pull next.</strong> The GMC now keeps the pods it builds (its own, the AGC and the egress proxy) off nodes running worker pods, with a required pod anti-affinity against workers in every namespace and an opt-out for single-node clusters (chart value <code>controllerWorkerSeparation</code>, GMC flag <code>--controller-worker-separation</code>).
+The cache and the mirrors are not built by the GMC: they are kustomize bases an operator applies, so that change does not reach them.
+Read at <code>b3e802656</code>: <code>deploy/gha-cache/base/deployment.yaml</code>, <code>deploy/registry-mirror/base/deployment.yaml</code>, and the <code>deploy/athens/</code> and <code>deploy/dragonfly-core/</code> manifests carry no <code>affinity</code> at all.</p>
+<p>The term to copy is <code>workerSeparationTerm</code> in <code>cmd/gmc/internal/controller/worker_separation.go</code>: it selects <code>actions-gateway/component: workload</code> together with <code>app.kubernetes.io/component: runner</code>, because the AGC pod carries the component label too.</p>
+<p>The open question is the opt-out.
+A kustomize base has no chart value, so a required term in the base strands the pod on a single-node cluster unless the operator patches it out.
+Options are a component the operator adds to turn it on, or the term in the base plus a documented patch to drop it; the second is the secure default and matches the GMC.
+The e2e and dogfood scripts reference these bases (<code>scripts/e2e/mirror-timing.sh</code>, <code>scripts/dogfood/e2e-mirror-validate.sh</code> among others), so whichever shape is chosen has to keep those lanes scheduling; which clusters they apply them to, and how many schedulable nodes those have, was not read for this row.</p>
+<p><strong>Done when</strong> each shipped cache and mirror Deployment carries the worker separation term or a documented component that adds it, the single-node opt-out is documented beside it, and the dogfood lanes still schedule.</p>
 
 
 

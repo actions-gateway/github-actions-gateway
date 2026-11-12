@@ -3451,7 +3451,7 @@ So the class sets the next attempt's limit directly from the killed pod's:</p>
 <p>If <code>next &lt;= killedLimit</code> (a ceiling reached, or <code>limitHeadroomPercent: 100</code>), the fire is withheld as <code>own_limit</code>.
 <strong>A job gets one bump.</strong> A second out-of-memory kill on the same job is <code>same_class_again</code>, so growth is bounded by the ceiling, at most 2× the limit that first failed when <code>maxRequests</code> is unset, whatever <code>maxEvictionRetries</code> and <code>limitHeadroomPercent</code> allow (up to 10 and 1000% respectively).
 Under <code>Binpack</code>, requests equal limits, so the request rises with it; under <code>Throughput</code>, only the limit.
-<code>Throughput</code>'s limit is not clamped by <code>maxRequests</code> today; clamping the bump is deliberate, because a retry must not buy memory a profile would refuse.</p>
+Clamping the bump is deliberate, because a retry must not buy memory a profile would refuse; <code>Throughput</code>'s own limit is clamped by <code>maxRequests</code> too (Q1327).</p>
 <p><strong>The override needs a per-job hook, which does not exist.</strong> <code>Target.Resolve(ctx)</code> takes no job, and <code>buildPod</code> uses the job only for annotations.
 Add a floor lookup after <code>Resolve</code> in <code>ProvisionScaleSetWorker</code>, keyed by the <code>ScaleSetJob</code>'s run id and job name, which <code>JobAssigned</code> already carries, against the ledger's in-memory copy.
 The floor is the failure entry's <code>memoryFloor</code>, pinned against the cap until the re-run completes, and consumed by the pairing that deletes the entry.</p>

@@ -4632,9 +4632,18 @@ If a GAG control-plane pod is one of them, one compromised node becomes access t
 </tr>
 </tbody>
 </table>
-<p><strong>GAG does not keep these pods apart for you.</strong> None of the GMC, AGC, proxy, or worker pods carries a default node selector, toleration, or anti-affinity that separates controllers from workers.
-The proxy's built-in anti-affinity spreads its own replicas only.
-GAG never creates node pools, so the separation belongs to the cluster, and it takes two halves:</p>
+<p><strong>GAG keeps its controllers off worker nodes by default.</strong> The GMC pod, and every AGC and egress proxy pod the GMC builds, carry a required pod anti-affinity against worker pods in every namespace.
+The scheduler enforces it from both sides: a controller is not placed on a node running a worker, and a new worker is not placed on a node running a controller.
+<code>ActionsGateway.spec.scheduling</code>, <code>EgressProxy.spec.scheduling</code> and the chart's <code>affinity</code> value cannot remove it, because the term is appended after them.
+The chart value <code>controllerWorkerSeparation: none</code> turns it off, for a cluster with one schedulable node; it then gives up this protection (<a href="../upgrade/#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes">upgrade notes</a>).</p>
+<p>The default leaves three gaps:</p>
+<ul>
+<li><strong>The cache and registry mirrors carry no such term.</strong> You install them from <code>deploy/</code>, not through the GMC.</li>
+<li><strong>A worker template that sets <code>nodeName</code> or <code>schedulerName</code> bypasses it.</strong> Either one skips the default scheduler's checks, and a namespaced <code>RunnerTemplate</code> may set both today.</li>
+<li><strong>On one shared pool, controllers and workers compete for whole nodes.</strong> A node running any worker is closed to every controller, and the reverse, so a busy pool can leave a controller rollout <code>Pending</code>.</li>
+</ul>
+<p>Separate pools close the last gap and make placement predictable.
+GAG never creates node pools, so this belongs to the cluster, and it takes two halves:</p>
 <ol>
 <li><strong>Taint the worker pool, and give no control-plane pod the toleration.</strong> That keeps controllers off worker nodes.</li>
 <li><strong>Pin workers to that pool</strong> with a <code>nodeSelector</code> or a required <code>nodeAffinity</code>.
@@ -4666,7 +4675,8 @@ A tenant can set <code>spec.scheduling</code> on its own <code>ActionsGateway</c
 If tenants author those objects, enforce the rule at admission rather than trusting it.</p>
 <p>This matters most for the <code>privileged-dind</code> template, where an escape lands directly on the host (<a href="../runner-template-library/">choosing a template</a>).
 Kata narrows the risk without removing it, because a guest-to-host escape lands on the same node.</p>
-<p><strong>Check the separation on a live cluster.</strong> This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran:</p>
+<p><strong>Check the separation on a live cluster.</strong> This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran.
+A worker is a pod carrying <code>app.kubernetes.io/component: runner</code>; the AGC shares the <code>actions-gateway/component: workload</code> label with workers, so that label alone cannot tell them apart:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nv">GMC_NS</span><span class="o">=</span>gmc-system<span class="w">   </span><span class="c1"># the namespace the chart is installed in</span>
 <a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-A<span class="w"> </span>-o<span class="w"> </span>json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>-r<span class="w"> </span>--arg<span class="w"> </span>gmc<span class="w"> </span><span class="s2">"</span><span class="nv">$GMC_NS</span><span class="s2">"</span><span class="w"> </span><span class="s1">'</span>
 <a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="s1">  [ .items[]</span>
@@ -4674,10 +4684,11 @@ Kata narrows the risk without removing it, because a guest-to-host escape lands 
 <a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="s1">    | select(.metadata.namespace == $gmc</span>
 <a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="s1">             or .metadata.labels["app.kubernetes.io/part-of"] == "actions-gateway")</span>
 <a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="s1">    | { node: .spec.nodeName,</span>
-<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">        worker: (.metadata.labels["actions-gateway/component"] == "workload") } ]</span>
-<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">  | group_by(.node)[]</span>
-<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">  | select(any(.worker) and any(.worker | not))</span>
-<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">  | .[0].node'</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="s1">        worker: (.metadata.labels["actions-gateway/component"] == "workload"</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="s1">                 and .metadata.labels["app.kubernetes.io/component"] == "runner") } ]</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="s1">  | group_by(.node)[]</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="s1">  | select(any(.worker) and any(.worker | not))</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="s1">  | .[0].node'</span>
 </code></pre></div>
 <p>The query finds the GMC by its namespace and the AGC, proxy, and worker pods by their <code>app.kubernetes.io/part-of</code> label.
 Cache and mirror deployments you installed yourself carry neither, so add their namespaces to the selection.
