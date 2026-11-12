@@ -1223,6 +1223,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker exfiltration to Azure-hosted endpoints inside GitHub's published ranges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-registry-read-behind-runnerversiontooold" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3391,6 +3402,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worker exfiltration to Azure-hosted endpoints inside GitHub's published ranges
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-registry-read-behind-runnerversiontooold" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3900,7 +3922,7 @@ Operators who attribute traffic by source IP (a downstream firewall allowlist, a
 Note that a validating <em>allowlist</em> of <code>nodeSelector</code> values is unsound — <code>affinity.nodeAffinity</code> supports <code>NotIn</code>/<code>DoesNotExist</code>, so "any pool but mine" is expressible — whereas pinning <code>nodeSelector</code> by <strong>mutation</strong> is sound, since Kubernetes ANDs it with <code>nodeAffinity</code> and affinity can only narrow.
 Ready-to-apply Kyverno and Gatekeeper samples: <a href="../../operations/admission-policies/#governing-where-gag-pods-schedule">admission-policies.md § Governing where GAG pods schedule</a>.
 The same layer is where a cluster that grants tenants <code>pods: create</code> must constrain placement anyway — GAG's NetworkPolicies select GAG-labelled pods, so an unlabelled tenant-created pod is selected by none of them.</p>
-<p><strong>Worker egress beyond GitHub is a platform-gated, deny-by-default opt-in (Q242 G.1).</strong> By default the proxy carries GitHub only.
+<p><strong>Worker egress beyond GitHub is a platform-gated, deny-by-default opt-in (Q242 G.1).</strong> By default the proxy carries GitHub's published endpoints only; in CIDR mode that set also takes in most of Azure's address space in 14 regions by address, and in FQDN mode every Azure storage account by name (<a href="#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">the residual</a>).
 A platform admin can allow a small, explicit set of <strong>non-GitHub</strong> destinations a v2 <code>EgressProxy</code> may forward to — by DNS host suffix (<code>spec.destinationFQDNs</code>) and CIDR (<code>spec.destinationCIDRs</code>) — so CI jobs reach their build dependencies without forfeiting per-tenant egress-IP attribution or the DNS-exfil containment.
 Because the <code>EgressProxy</code> is tenant-authorable, the destinations are <strong>governed by a platform-owned allowlist</strong>, not the CR's ownership: the GMC <code>--allowed-egress-fqdns</code> (suffix match) / <code>--allowed-egress-cidrs</code> (subnet containment) flags — optionally augmented by a watched ConfigMap — plus a validating webhook that <strong>rejects</strong> any destination not on the allowlist.
 <strong>Both empty ⇒ deny-all-non-GitHub</strong>, identical in spirit to the empty <code>--allowed-priority-classes</code> default (Q132/Q188).
@@ -3965,7 +3987,7 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <tr>
 <td><strong>Node Escape Reaching a Co-Scheduled Control-Plane Pod</strong></td>
 <td>Critical</td>
-<td>A worker that escapes onto its node can read every credential on that node. If the GMC, an AGC, a proxy, or a cache shares the node, one compromised node becomes cluster-wide or GitHub-level access. The GMC pod, and every AGC and egress proxy pod the GMC builds, carry a required pod anti-affinity against worker pods (<code>actions-gateway/component: workload</code> with <code>app.kubernetes.io/component: runner</code>) in every namespace, appended after any tenant <code>spec.scheduling</code> so a tenant cannot remove it. The scheduler enforces a required term from both sides, so a new worker also avoids a controller's node. The platform can turn it off with the chart value <code>controllerWorkerSeparation: none</code> (GMC flag <code>--controller-worker-separation</code>), for clusters with one schedulable node. Residual: the shipped cache and mirror manifests carry no such term, and a worker template setting <code>nodeName</code> or <code>schedulerName</code> bypasses the default scheduler and with it the rule. Separate pools remain the recommendation, since GAG creates none: taint the worker pool, give no control-plane pod the toleration, and pin workers to that pool with a <code>nodeSelector</code>. Operator procedure and a live check: <a href="../../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">security-operations.md § Keep GAG's control plane off worker nodes</a>.</td>
+<td>A worker that escapes onto its node can read every credential on that node. If the GMC, an AGC, a proxy, or a cache shares the node, one compromised node becomes cluster-wide or GitHub-level access. The GMC pod, and every AGC and egress proxy pod the GMC builds, carry a required pod anti-affinity against worker pods (<code>actions-gateway/component: workload</code> with <code>app.kubernetes.io/component: runner</code>) in every namespace, appended after any tenant <code>spec.scheduling</code> so a tenant cannot remove it. The scheduler enforces a required term from both sides, so a new worker also avoids a controller's node. The platform can turn it off with the chart value <code>controllerWorkerSeparation: none</code> (GMC flag <code>--controller-worker-separation</code>), for clusters with one schedulable node. A worker template setting <code>nodeName</code> or another <code>schedulerName</code> would bypass the default scheduler and with it the rule, so a namespaced <code>RunnerTemplate</code> may set neither: the GMC webhook refuses both and the AGC clears both from a stored one (Q1347). A <code>ClusterRunnerTemplate</code> is platform-authored and keeps both. Residual: the shipped cache and mirror manifests carry no such term. Separate pools remain the recommendation, since GAG creates none: taint the worker pool, give no control-plane pod the toleration, and pin workers to that pool with a <code>nodeSelector</code>. Operator procedure and a live check: <a href="../../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">security-operations.md § Keep GAG's control plane off worker nodes</a>.</td>
 </tr>
 <tr>
 <td><strong>Supply-Chain Compromise of Worker Image</strong></td>
@@ -4026,6 +4048,11 @@ See <a href="../appendix-h-v2-api-decomposition/#h9-cross-namespace-proxy-sharin
 <td><strong>Worker Exfiltration via an Allowlisted Non-GitHub Destination</strong> (deliberate, bounded relaxation — Q242 G.1)</td>
 <td>Medium</td>
 <td>Exists <strong>only</strong> when a platform admin opts in to non-GitHub worker egress; the tenant-authorable destinations are gated by a <strong>platform-owned</strong> allowlist (both empty = deny-all-non-GitHub) enforced by webhook plus dual-surface NetworkPolicy/CONNECT gates, with per-tenant attribution and the port-53 confinement preserved. Full trade-off record: <a href="#worker-exfiltration-via-an-allowlisted-non-github-destination">see below</a>.</td>
+</tr>
+<tr>
+<td><strong>Worker Exfiltration to Azure-Hosted Endpoints inside GitHub's Published Ranges</strong> (default posture, accepted residual, Q1253)</td>
+<td>High</td>
+<td>Not mitigated by default. In direct and CIDR mode, GitHub's <code>/meta</code> <code>actions</code> key is admitted on 443 and covers at least 97% of Azure's public IPv4 space in 14 regions, so a compromised worker can reach an endpoint any Azure customer rents there; in FQDN mode, <code>*.blob.core.windows.net</code> admits every storage account. Read from public data on 2026-11-12, not probed from a cluster. Bound and narrowing options: <a href="#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">see below</a>.</td>
 </tr>
 <tr>
 <td><strong>Cross-Tenant Proxy CA Trust</strong></td>
@@ -4212,13 +4239,31 @@ The channel carries at most a 253-character name per query, at whatever rate clu
 <p>Like the other egress negatives, this is enforced only by a policy-aware CNI; the reliable CI guard is the authoring-level test <code>TestBuildNetworkPolicy_DNSEgressRestrictedToKubeDNS</code>, which asserts every policy's DNS rule selects kube-dns, node-local-dns, <strong>and</strong> the link-local block and is never open.
 The node-local-dns peer's runtime effect was verified end-to-end on a live GKE Dataplane V2 cluster (Q229).</p>
 <h3 id="worker-exfiltration-via-an-allowlisted-non-github-destination">Worker exfiltration via an allowlisted non-GitHub destination<a class="headerlink" href="#worker-exfiltration-via-an-allowlisted-non-github-destination" title="Permanent link">&para;</a></h3>
-<p>By default the proxy carries GitHub only, so this risk does not exist; it appears <strong>only</strong> when a platform admin opts in to widening worker egress to specific non-GitHub destinations (<code>EgressProxy.spec.destinationFQDNs</code> / <code>destinationCIDRs</code>).
+<p>By default no operator-chosen destination is admitted, so this risk does not exist; the default set is itself wider than GitHub by address, which is <a href="#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">the next section</a>.
+This one appears <strong>only</strong> when a platform admin opts in to widening worker egress to specific non-GitHub destinations (<code>EgressProxy.spec.destinationFQDNs</code> / <code>destinationCIDRs</code>).
 The residual is honestly stated: a compromised worker (malicious dependency, job RCE) can exfiltrate to any <strong>allowlisted</strong> destination — the allowlist bounds the hole, it does not eliminate it; this is the core trade the feature accepts.</p>
 <p><strong>It is never tenant-openable:</strong> the <code>EgressProxy</code> is tenant-authorable, so the destinations are gated by a <strong>platform-owned</strong> allowlist (GMC <code>--allowed-egress-fqdns</code> suffix match / <code>--allowed-egress-cidrs</code> subnet containment, optionally a watched ConfigMap) enforced by a validating webhook that rejects any off-allowlist entry — <strong>both empty = deny-all-non-GitHub</strong>, the secure default (mirrors <code>--allowed-priority-classes</code>, Q132/Q188).</p>
 <p>The properties the cheap alternatives throw away are <strong>preserved</strong>: traffic still exits the per-tenant proxy IPs (attribution intact) and DNS still resolves through cluster DNS (the allowlist opens no new resolver).
 Enforcement is dual-surface from one source of truth — CIDR <code>ipBlock</code> / FQDN <code>toFQDNs</code> on the pod-egress policy (the hard gate; fail-closed if the CNI can't enforce an FQDN rule, same as Q208) <strong>and</strong> the proxy CONNECT allowlist as defense-in-depth (with resolve-and-dial-the-validated-IP closing the DNS-rebinding window on the CIDR path; denials counted on <code>actions_gateway_proxy_connect_denied_total</code>).</p>
 <p>The admin footgun (a too-broad suffix/CIDR — <code>*.googleapis.com</code>, a CDN, the IMDS endpoint) is bounded by guidance, not code: the docs <strong>lead with an in-cluster caching mirror</strong> as the recommended path and reserve the allowlist for what a mirror genuinely can't proxy.
 See <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">network-architecture.md § Worker egress to allowlisted non-GitHub destinations</a>, <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a>, and the <a href="../../plan/archive/q242-g1-proxy-destination-allowlist/">Q242 plan</a> for the full trade-off record.</p>
+<h3 id="worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">Worker exfiltration to Azure-hosted endpoints inside GitHub's published ranges<a class="headerlink" href="#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges" title="Permanent link">&para;</a></h3>
+<p>GitHub serves Actions from Azure, and the ranges it publishes for Actions are Azure's, not addresses only GitHub answers on.
+Direct mode and the CIDR-mode proxy admit them, and the FQDN backends admit every Azure storage account by name, so in every mode a compromised worker (malicious dependency, job RCE) can send data on 443 to an endpoint its attacker rents on Azure, and the GitHub-only description of the default posture holds for hostnames, not for addresses.</p>
+<p>The bound, read from GitHub's <code>/meta</code> and Microsoft's published service tags on 2026-11-12 (<a href="../../plan/q1253-azure-egress-residual/#what-public-data-settles">Q1253 plan</a>), IPv4 only:</p>
+<ul>
+<li>The <code>actions</code> key holds 28.6 million IPv4 addresses, 99.95% of them inside Azure's <code>AzureCloud</code> tag, and about 44% of that tag.</li>
+<li>In 14 regions, East US, East US 2, Central US, West US 2 and West Europe among them, at least 97% of the region's public address space is admitted in direct and CIDR mode, so anything rented there is reachable.</li>
+<li>Storage accounts GitHub does not operate resolve inside it: two of Microsoft's open-dataset accounts answered addresses in admitted East US ranges.</li>
+<li>The FQDN backends name <code>*.blob.core.windows.net</code>, and the proxy's opt-in CONNECT allowlist carries the same suffix, so every storage account passes there by name.</li>
+</ul>
+<p>Not measured: a request from a cluster worker to an endpoint outside GitHub's accounts.
+The plan carries the probe, which needs no Azure account, and run 41371432425 already showed GitHub's own accounts answering from a Kata worker.</p>
+<p>Blob storage and the <code>actions</code> ranges cannot simply be dropped, because the runner reaches GitHub's broker, results service and storage accounts through them.
+The FQDN backends can be narrowed from source to the <code>productionresultssa&lt;N&gt;</code> names <code>/meta</code> publishes under <code>domains.actions</code> (140 on 2026-11-12), at the cost of job failures whenever GitHub adds an account before the next refresh; that is <a href="../../queue/Q1350/">Q1350</a>, with a ConfigMap to add accounts ahead of GitHub's list and an opt-out back to the wildcard.
+Direct mode and the CIDR-mode proxy cannot be narrowed by address without the same churn, since a storage cluster's addresses serve every account on it.
+Q1350 bounds FQDN mode to the storage clusters that host GitHub's accounts rather than closing it: a CNI FQDN policy admits the addresses those names resolve to, and the same clusters serve other customers' accounts.
+Today the opt-ins that exist shrink the residual without closing it: an FQDN-mode proxy admits names rather than Azure's address space, which still leaves every storage account reachable through the wildcard, and an <a href="../network-architecture/#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">in-cluster mirror</a> covers what jobs fetch.</p>
 <h3 id="the-registry-read-behind-runnerversiontooold">The registry read behind <code>RunnerVersionTooOld</code><a class="headerlink" href="#the-registry-read-behind-runnerversiontooold" title="Permanent link">&para;</a></h3>
 <p>The AGC reads the worker image out of its registry to learn the runner version it ships (Q988): a manifest GET, an index GET for a multi-arch reference, and a streamed blob GET per layer scanned, topmost first, until <code>bin/Runner.Listener.deps.json</code> turns up.
 It is the attestable counterpart of the wrapper's self-report (<code>observedRunnerVersion</code>, Q792), and the trust argument is the one the tag already rests on: both are tenant-authored, and the registry copy is the stronger, because it is immutable once addressed by digest and nothing running inside the container can rewrite it.

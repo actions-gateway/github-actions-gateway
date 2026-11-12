@@ -4636,10 +4636,12 @@ If a GAG control-plane pod is one of them, one compromised node becomes access t
 The scheduler enforces it from both sides: a controller is not placed on a node running a worker, and a new worker is not placed on a node running a controller.
 <code>ActionsGateway.spec.scheduling</code>, <code>EgressProxy.spec.scheduling</code> and the chart's <code>affinity</code> value cannot remove it, because the term is appended after them.
 The chart value <code>controllerWorkerSeparation: none</code> turns it off, for a cluster with one schedulable node; it then gives up this protection (<a href="../upgrade/#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes">upgrade notes</a>).</p>
-<p>The default leaves three gaps:</p>
+<p>A worker template that sets <code>nodeName</code>, or a <code>schedulerName</code> other than <code>default-scheduler</code>, would skip the scheduler that enforces the term.
+A namespaced <code>RunnerTemplate</code> may set neither: admission refuses both, and the AGC clears both from a worker built from a template stored earlier.
+A <code>ClusterRunnerTemplate</code> keeps both, so a platform that sets one there places those workers itself.</p>
+<p>The default leaves two gaps:</p>
 <ul>
 <li><strong>The cache and registry mirrors carry no such term.</strong> You install them from <code>deploy/</code>, not through the GMC.</li>
-<li><strong>A worker template that sets <code>nodeName</code> or <code>schedulerName</code> bypasses it.</strong> Either one skips the default scheduler's checks, and a namespaced <code>RunnerTemplate</code> may set both today.</li>
 <li><strong>On one shared pool, controllers and workers compete for whole nodes.</strong> A node running any worker is closed to every controller, and the reverse, so a busy pool can leave a controller rollout <code>Pending</code>.</li>
 </ul>
 <p>Separate pools close the last gap and make placement predictable.
@@ -4996,6 +4998,8 @@ See <a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority 
 <hr />
 <h2 id="worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist<a class="headerlink" href="#worker-egress-destinations-the-egress-allowlist" title="Permanent link">&para;</a></h2>
 <p>By default a worker can reach <strong>only GitHub</strong> through its per-tenant egress proxy — the proxy pool's NetworkPolicy permits the GitHub endpoints and nothing else.
+That describes which endpoints are named, not everything they admit: the ranges GitHub publishes for Actions are Azure's, and they take in most of Azure's address space in 14 regions, so in direct and CIDR mode a worker can also reach an endpoint anyone rents there, and in FQDN mode any Azure storage account.
+This is read from public data and has not been probed from a cluster (<a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">the residual</a>).
 Jobs that fetch off-platform build dependencies (Go modules from <code>proxy.golang.org</code>, an internal artifact host, a cloud private-API endpoint) therefore fail on egress, not toolchain.
 The egress allowlist (Q242 G.1) lets a <strong>platform admin</strong> open a small, explicit set of non-GitHub destinations while keeping per-tenant egress-IP attribution and the DNS-exfil containment intact.</p>
 <h3 id="prefer-an-in-cluster-caching-mirror-first">Prefer an in-cluster caching mirror first<a class="headerlink" href="#prefer-an-in-cluster-caching-mirror-first" title="Permanent link">&para;</a></h3>

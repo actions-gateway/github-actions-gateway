@@ -3282,7 +3282,7 @@ The first audit (2026-05) is <a href="../security/">security.md</a> and the seco
 The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 Nothing reached high or critical.
 Two rows gated <code>v2.0.0</code>, Q1321 and Q1322, and both have landed.
-Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1333/">Q1333</a>, <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1342/">Q1342</a>, <a href="../../queue/Q1343/">Q1343</a> and <a href="../../queue/Q1344/">Q1344</a> are open; the Azure range lead is tracked by <a href="../../queue/Q1253/">Q1253</a>.</p>
+Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1333/">Q1333</a>, <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1342/">Q1342</a>, <a href="../../queue/Q1343/">Q1343</a> and <a href="../../queue/Q1344/">Q1344</a> are open; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
 </blockquote>
 <h2 id="method-and-limits">Method and limits<a class="headerlink" href="#method-and-limits" title="Permanent link">&para;</a></h2>
 <p>The audit read source and ran nothing.
@@ -3510,7 +3510,7 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 <tr>
 <td><a href="#worker-pod-and-networkpolicy-leads">GitHub CIDR allowlist admits /meta <code>actions</code> ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only</a></td>
 <td>needs validation</td>
-<td><a href="../../queue/Q1253/">Q1253</a></td>
+<td>Q1253, closed as a residual; <a href="../../queue/Q1350/">Q1350</a></td>
 </tr>
 </tbody>
 </table>
@@ -4296,7 +4296,8 @@ No upstream was observed echoing a credential; the fix does not depend on one do
 <p><strong>Evidence.</strong> <code>docs/design/05-security.md:199</code>, <code>cmd/agc/internal/provisioner/abandoned.go:162</code>, <code>cmd/agc/internal/provisioner/eviction.go:860</code>, <code>scaleset/client.go:413</code>, <code>cmd/agc/internal/controller/runnerset_controller.go:538</code>, <code>cmd/agc/internal/controller/runnerset_target.go:152</code>.</p>
 <h2 id="worker-pod-and-networkpolicy-leads">Worker pod and NetworkPolicy leads<a class="headerlink" href="#worker-pod-and-networkpolicy-leads" title="Permanent link">&para;</a></h2>
 <p>Five leads on worker pods and the policies around them, tracked as Q1328 and closed under it, the first three fixed and the fourth an accepted residual.
-The last is already open as <a href="../../queue/Q1253/">Q1253</a>, which holds a dogfood measurement this audit did not have; its entry stays here so the audit's record is whole, and Q1253 owns the work.</p>
+The last was already open as Q1253, which held a dogfood measurement this audit did not have; its entry stays here so the audit's record is whole.
+Q1253 closed it as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and <a href="../../queue/Q1350/">Q1350</a> owns the narrowing.</p>
 <h3 id="gateway-teardown-deletes-the-workload-networkpolicy-while-worker-pods-running-job-code-can-still-be-alive">Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive<a class="headerlink" href="#gateway-teardown-deletes-the-workload-networkpolicy-while-worker-pods-running-job-code-can-still-be-alive" title="Permanent link">&para;</a></h3>
 <p><code>gmc/actionsgateway-v2/reconcileDelete/workload-netpol-removed-under-live-workers</code>: needs validation.
 Starts at <code>cmd/gmc/internal/controller/actionsgateway_v2_controller.go:216</code>.</p>

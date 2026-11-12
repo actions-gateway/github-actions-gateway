@@ -2908,7 +2908,7 @@ This milestone adds an adversary that model does not carry: <strong>a contributo
 <tr>
 <td>Cross-job cache</td>
 <td>One in-cluster <code>actions/cache</code> server per tenant, its scope taken from GitHub's token per job</td>
-<td><strong>Shipped (Q215, validated 2026-11-01)</strong> on kind, under Kata with this posture, and with a fork pull request, whose entries the base branch could not restore. See <a href="../../operations/in-cluster-cache/">in-cluster-cache.md</a>. The posture does not make GitHub's own cache unreachable: a Kata worker reached Azure blob storage inside GitHub's published ranges, and what that admits is <a href="../../queue/Q1253/">Q1253</a></td>
+<td><strong>Shipped (Q215, validated 2026-11-01)</strong> on kind, under Kata with this posture, and with a fork pull request, whose entries the base branch could not restore. See <a href="../../operations/in-cluster-cache/">in-cluster-cache.md</a>. The posture does not make GitHub's own cache unreachable: a Kata worker reached Azure blob storage inside GitHub's published ranges, and what that admits is a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a> (Q1253), narrowed for FQDN mode by <a href="../../queue/Q1350/">Q1350</a></td>
 </tr>
 <tr>
 <td>Evidence</td>
@@ -2983,7 +2983,7 @@ The claim is checkable and a wrong one costs more than the feature is worth.</p>
 <h2 id="deliverables">Deliverables<a class="headerlink" href="#deliverables" title="Permanent link">&para;</a></h2>
 <p>Shipped: Kata validation, the pod isolation floor, default-deny NetworkPolicy, per-tenant proxy pools, the opt-in per-pool egress audit record (Q564) and the two further opt-ins that make it attributable to a tenant and a job (Q986, which is what satisfies Definition of Done #5: see the Evidence row), TLS on the proxy hop, and the untrusted-PR egress posture itself (Q408: the in-cluster registry mirror plus the deletion of the tenant's allow-all rule, validated on the dogfood cluster 2026-08-28), and per-runner-set proxy pools (Q567).</p>
 <p>Shipped since: the per-tenant <code>actions/cache</code> server (Q215, <a href="../q215-worker-cache/">q215-worker-cache.md</a>).</p>
-<p>Open, with rows: <a href="../../queue/Q1253/">Q1253</a> (what admitting Azure blob storage lets a worker reach), and the open decision below.</p>
+<p>Open, with rows: <a href="../../queue/Q1350/">Q1350</a> (narrowing the blob storage a worker may reach to GitHub's published accounts), and the open decision below.</p>
 <h2 id="open-decisions-the-map-surfaced">Open decisions the map surfaced<a class="headerlink" href="#open-decisions-the-map-surfaced" title="Permanent link">&para;</a></h2>
 <p>Surfaced by drawing the whole picture; each is a decision before it is work:</p>
 <ol>

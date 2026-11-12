@@ -3034,12 +3034,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Decision:</strong> whether a withheld PR is surfaced at all, or the maintainer finds it at their own cadence.</td>
 </tr>
 <tr>
-<td><a href="Q1253/">Q1253</a></td>
-<td><a href="../design/05-security/">Worker egress admits any Azure storage account, not only GitHub's</a></td>
-<td><code>security</code> <code>open-question</code></td>
+<td><a href="Q1350/">Q1350</a></td>
+<td><a href="../plan/q1253-azure-egress-residual/">Narrow FQDN-mode blob egress to GitHub's published storage accounts</a></td>
+<td><code>security</code></td>
 <td>🔲</td>
-<td>S</td>
-<td>Every worker egress mode admits Azure blob storage, and nothing in <a href="../design/05-security/">05-security.md</a> records what that lets an …</td>
+<td>M</td>
+<td>Every FQDN-mode egress backend admits <code>*.blob.core.windows.net</code>, which is every Azure storage account, and the proxy's opt-in CONNECT …</td>
 </tr>
 <tr>
 <td><a href="Q1264/">Q1264</a></td>
@@ -3264,6 +3264,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td><strong>The placement policy samples co-schedule a tenant's AGC and egress proxy with its workers.</strong> Both <code>kyverno/restrict-gag-placement.yaml</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1351/">Q1351</a></td>
+<td><a href="../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">A worker's priority class may preempt an AGC or proxy off its node</a></td>
+<td><code>security</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>A worker whose priority class outranks an AGC or egress proxy may be able to evict that pod from a node the worker wants, which the …</td>
 </tr>
 <tr>
 <td><a href="Q1341/">Q1341</a></td>
@@ -3664,14 +3672,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
-</tr>
-<tr>
-<td><a href="Q1347/">Q1347</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/cmd/gmc/internal/webhook/v2">Refuse nodeName and schedulerName on namespaced worker templates</a></td>
-<td><code>security</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>A tenant's <code>RunnerTemplate</code> can put a worker on a controller's node, past the GMC's worker separation term.</strong> The GMC, AGC and egress …</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>
@@ -4584,6 +4584,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>When one row is split into parallel streams, every stream edits the same append-only docs, so the PRs conflict pairwise from the start and …</td>
+</tr>
+<tr>
+<td><a href="Q1348/">Q1348</a></td>
+<td>Gate a plan doc's restated open-lead count against its disposition table</td>
+<td><code>debt</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**The 2026-11 audit plan restates its open-lead count and its list of open follow-up rows by hand, and nothing checks either against the …</td>
 </tr>
 </tbody>
 </table>

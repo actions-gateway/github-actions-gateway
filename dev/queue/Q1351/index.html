@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1347/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1351/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Refuse nodeName and schedulerName on namespaced worker templates - GitHub Actions Gateway</title>
+        <title>A worker's priority class may preempt an AGC or proxy off its node - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#refuse-nodename-and-schedulername-on-namespaced-worker-templates" class="md-skip">
+        <a href="#a-workers-priority-class-may-preempt-an-agc-or-proxy-off-its-node" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Refuse nodeName and schedulerName on namespaced worker templates
+              A worker's priority class may preempt an AGC or proxy off its node
             
           </span>
         </div>
@@ -2657,19 +2657,21 @@
   
 
 
-<h1 id="refuse-nodename-and-schedulername-on-namespaced-worker-templates">Refuse nodeName and schedulerName on namespaced worker templates<a class="headerlink" href="#refuse-nodename-and-schedulername-on-namespaced-worker-templates" title="Permanent link">&para;</a></h1>
-<p><strong>A tenant's <code>RunnerTemplate</code> can put a worker on a controller's node, past the GMC's worker separation term.</strong> The GMC, AGC and egress proxy pods carry a required pod anti-affinity against worker pods, and the default scheduler enforces it from both sides, so a worker it places never lands beside a controller.
-A worker pod with <code>spec.nodeName</code> set is bound to that node without the scheduler, and one naming another <code>spec.schedulerName</code> is placed by a scheduler that need not read the term.
-Read at <code>0bd9dfb60</code>: <code>api/v2/scheduling_types.go:72:// priorityClassName, schedulerName, runtimeClassName, and nodeName; these pods cannot.</code> says worker templates can express both, and <code>git grep -n NodeName</code> over <code>cmd/gmc/internal/webhook/v2</code> and <code>cmd/agc/internal/provisioner</code> finds no rule refusing or clearing either.
-Whether the AGC copies a template's <code>nodeName</code> onto the worker pod unchanged was not driven for this row; <code>buildPod</code> takes <code>template.Spec</code> as the pod spec, which suggests it does.</p>
-<p>A worker that escapes beside the AGC can read that tenant's GitHub App private key, and beside the GMC every tenant's.
-The tenant needs a node name, which <code>kubectl get pods -o wide</code> in its own namespace shows for its own AGC.</p>
-<p>The fix is to refuse both fields on a namespaced <code>RunnerTemplate</code> at admission, or to clear them in <code>buildPod</code> the way it already clears <code>hostPID</code> and the host namespaces.
-A <code>ClusterRunnerTemplate</code> is platform-authored, so whether it may keep them is a choice to make and write down.
-Clearing in <code>buildPod</code> also covers templates stored before the rule, as <code>dropAPICredentialProjections</code> does for projected tokens.</p>
-<p><strong>Gates <code>v2.0.0</code></strong> (2026-11-12), because refusing the fields at admission is a stricter rule, and after the tag a stricter rule waits for <code>v3</code>.
-Landing it before the tag keeps both fixes open; clearing in <code>buildPod</code> alone would ship in a patch.</p>
-<p><strong>Done when</strong> a namespaced template cannot place a worker by <code>nodeName</code> or <code>schedulerName</code>, a test drives a template carrying each, and <code>security-operations.md § Keep GAG's control plane off worker nodes</code> drops the gap from its list.</p>
+<h1 id="a-workers-priority-class-may-preempt-an-agc-or-proxy-off-its-node">A worker's priority class may preempt an AGC or proxy off its node<a class="headerlink" href="#a-workers-priority-class-may-preempt-an-agc-or-proxy-off-its-node" title="Permanent link">&para;</a></h1>
+<p>A worker whose priority class outranks an AGC or egress proxy may be able to evict that pod from a node the worker wants, which the control-plane separation does not cover.
+The separation is a required pod anti-affinity that the GMC, AGC and egress proxy pods carry against workers, and the default scheduler enforces it from both sides.
+Once a namespaced <code>RunnerTemplate</code> can no longer set <code>nodeName</code> or another <code>schedulerName</code> (Q1347), preemption is the remaining scheduler path past that term.</p>
+<p>What the code shows, read 2026-11-12 at <code>7b7dce5da</code>: an AGC pod gets a priority class only when <code>ActionsGateway.spec.scheduling.priorityClassName</code> sets one (<code>cmd/gmc/internal/controller/actionsgateway_v2_builder.go:703: if s.PriorityClassName != "" {</code>), and an egress proxy only when <code>EgressProxy.spec.scheduling.priorityClassName</code> does (<code>egressProxyPriorityClassName</code>).
+Both run at priority 0 by default.
+A worker can carry any class on the platform allowlist (<code>--allowed-priority-classes</code>, empty by default), from <code>podTemplate.spec.priorityClassName</code> or a <code>priorityTiers</code> tier.
+The GMC defaults to <code>system-cluster-critical</code> (<code>charts/actions-gateway/values.yaml</code>), so no worker can preempt it.</p>
+<p><strong>The mechanism is unverified.</strong> It rests on the PR #2319 reviewer's reading of kube-scheduler: a node blocked by an existing pod's required anti-affinity is reported <code>Unschedulable</code> rather than <code>UnschedulableAndUnresolvable</code>, so preemption may evict that pod to make room.
+Nobody has run it.
+If it holds, the result is disruption, not co-residence: the controller is evicted before the worker binds, so the worker never runs beside it.
+It still takes a tenant's own gateway or egress path down, and it needs the platform to have allowlisted a class above 0.</p>
+<p><strong>Measure:</strong> on kind, allowlist a class above 0, fill a single node with an AGC pod at priority 0, then create a worker pod carrying that class, and record whether the scheduler evicts the AGC.</p>
+<p>Done when that answer is recorded.
+Either the residual goes into <code>security-operations.md § Keep GAG's control plane off worker nodes</code> and the <code>05-security.md</code> threat row, or the controller pods get a default priority class that keeps them above every allowlisted worker class, and the row says what that costs.</p>
 
 
 

@@ -405,6 +405,10 @@
          <lastmod>2026-11-12</lastmod>
     </url>
     <url>
+         <loc>https://actions-gateway.com/dev/plan/q1253-azure-egress-residual/</loc>
+         <lastmod>2026-11-12</lastmod>
+    </url>
+    <url>
          <loc>https://actions-gateway.com/dev/plan/q215-worker-cache/</loc>
          <lastmod>2026-11-12</lastmod>
     </url>
@@ -1481,10 +1485,6 @@
          <lastmod>2026-11-12</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q1253/</loc>
-         <lastmod>2026-11-12</lastmod>
-    </url>
-    <url>
          <loc>https://actions-gateway.com/dev/queue/Q1255/</loc>
          <lastmod>2026-11-12</lastmod>
     </url>
@@ -1733,7 +1733,15 @@
          <lastmod>2026-11-12</lastmod>
     </url>
     <url>
-         <loc>https://actions-gateway.com/dev/queue/Q1347/</loc>
+         <loc>https://actions-gateway.com/dev/queue/Q1348/</loc>
+         <lastmod>2026-11-12</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1350/</loc>
+         <lastmod>2026-11-12</lastmod>
+    </url>
+    <url>
+         <loc>https://actions-gateway.com/dev/queue/Q1351/</loc>
          <lastmod>2026-11-12</lastmod>
     </url>
     <url>

@@ -2815,6 +2815,11 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>⚠️ Findings filed, the medium one fixed (Q1321): nine confirmed (one medium, eight low) and 30 leads that source cannot settle, of which 28 are now settled and two remain open. Q1322's eight stricter admission rules, which gated <code>v2.0.0</code>, have landed; of the rows filed from it, <a href="../queue/Q1323/">Q1323</a> and the follow-ups <a href="../queue/Q1333/">Q1333</a>, <a href="../queue/Q1334/">Q1334</a>, <a href="../queue/Q1341/">Q1341</a>, <a href="../queue/Q1342/">Q1342</a>, <a href="../queue/Q1343/">Q1343</a> and <a href="../queue/Q1344/">Q1344</a> are open</td>
 </tr>
 <tr>
+<td><a href="q1253-azure-egress-residual/">q1253-azure-egress-residual.md</a></td>
+<td>What GitHub's published Actions ranges let a worker reach on Azure: the bound from <code>/meta</code> against Azure's service tags, the in-cluster probe, and which backends can be narrowed</td>
+<td>⚠️ Q1253 closed 2026-11-12 with the residual recorded in 05-security.md from public data; the cluster probe was skipped. Narrowing the FQDN backends to GitHub's published accounts is <a href="../queue/Q1350/">Q1350</a></td>
+</tr>
+<tr>
 <td><a href="q243-egress-ip-reference-arch/">q243-egress-ip-reference-arch.md</a></td>
 <td>Per-tenant egress-IP reference architecture: how the proxy pool's per-tenant choke point is bound to a distinct, stable source IP at GitHub — Cilium Egress Gateway vs per-tenant cloud NAT — plus single-tenant-direct (dogfood) vs production multi-tenant topology, cost model, and a deferred live-validation plan</td>
 <td>ⓘ Design reference — design + full live validation done: per-range Cloud NAT gives distinct+stable per-tenant IPs (<a href="q243-q245-q230-live-validation-campaign/">campaign</a>), and a real GMC-provisioned EgressProxy pins to a single per-tenant egress IP (live PASS 2026-07-13, <code>scripts/dev/validate-egress-ip.sh</code>). Approach-A (Cilium EG) fail-open/kill-switch/SNAT-headroom validation stays deferred</td>
@@ -2837,7 +2842,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="secure-multi-tenant-oss-ci/">secure-multi-tenant-oss-ci.md</a></td>
 <td>The umbrella goal: a map, a threat model for the untrusted contributor, a definition of done, and the residual risk accepted. Delegates all design to q408 and does not restate it</td>
-<td>ⓘ Ongoing goal doc. Kernel isolation, the pod floor, the metadata assertion and now the network layer are shipped (Q408, validated 2026-08-28), taking Definition of Done items 1 to 3; the evidence layer closed with Q986 (Definition of Done #5), and the cache layer's per-tenant server shipped with Q215, though whether tight egress reaches GitHub's own cache is open on <a href="../queue/Q1253/">Q1253</a>. The runner-credential decision is settled (2026-11-09): no class gets a narrower credential. So is the fork decision (2026-11-10), and it shipped in Q1330: every <code>RunnerSet</code> refuses fork pull request jobs by default. So is the meaning of a declared untrusted class (2026-11-11): the set that accepts fork jobs, only while its checkable posture holds</td>
+<td>ⓘ Ongoing goal doc. Kernel isolation, the pod floor, the metadata assertion and now the network layer are shipped (Q408, validated 2026-08-28), taking Definition of Done items 1 to 3; the evidence layer closed with Q986 (Definition of Done #5), and the cache layer's per-tenant server shipped with Q215, and tight egress does reach Azure blob storage, recorded as a residual in <a href="../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">05-security.md</a> (Q1253). The runner-credential decision is settled (2026-11-09): no class gets a narrower credential. So is the fork decision (2026-11-10), and it shipped in Q1330: every <code>RunnerSet</code> refuses fork pull request jobs by default. So is the meaning of a declared untrusted class (2026-11-11): the set that accepts fork jobs, only while its checkable posture holds</td>
 </tr>
 <tr>
 <td><a href="caching-and-worker-storage/">caching-and-worker-storage.md</a></td>
