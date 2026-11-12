@@ -2868,7 +2868,7 @@ See <a href="#the-generated-api-reference">§ The generated API reference</a>.</
 <p>The <code>actions-gateway.com</code> kinds live in the neutral <code>api/</code> module shared by both controllers, the Actions Gateway Controller (AGC) and the Gateway Manager Controller (GMC) (Q164).</p>
 <h2 id="the-root-targets-regenerate-everything-start-here">The root targets regenerate everything (start here)<a class="headerlink" href="#the-root-targets-regenerate-everything-start-here" title="Permanent link">&para;</a></h2>
 <p>From the repo root, either target covers all three modules — you do not need to know which module a type change reaches:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>generate<span class="w">    </span><span class="c1"># manifests + DeepCopy, for all of api, cmd/gmc, cmd/agc</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>generate<span class="w">    </span><span class="c1"># manifests + DeepCopy for all of api, cmd/gmc, cmd/agc, then the chart CRD sync</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>make<span class="w"> </span>manifests<span class="w">   </span><span class="c1"># manifests only, for all three (the `make codegen-check` remedy)</span>
 </code></pre></div>
 <p><strong><code>make generate</code> is the one to reach for after a type change</strong>, and it supersets <code>make manifests</code> — every module's <code>generate</code> is <code>manifests deepcopy</code>, so there is no second controller-gen pass to pay for.
@@ -2936,7 +2936,8 @@ The chart copies are <em>generated</em> from those sources — do not hand-edit 
 They live in a <strong>separate chart</strong> because the <code>RunnerTemplate</code>/<code>ClusterRunnerTemplate</code> CRDs each embed a full <code>PodTemplateSpec</code> (~600 KB), and adding them to the main chart pushed its Helm release Secret past the hard <strong>1 MiB</strong> limit (Helm stores the rendered manifest <em>plus</em> a copy of the chart source, gzipped, in one Secret) (<a href="../../queue/">Q149</a>).
 The main chart ships one CRD, <code>PriorityClassAllowlist</code>, in its chart-root <code>crds/</code> directory.</p>
 <p><code>scripts/manifest/sync-chart-crds.sh</code> writes the chart copies in one pass.
-After regenerating manifests, re-sync:</p>
+<code>make generate</code> runs it as its last step, so a type change needs nothing more.
+<code>make manifests</code> does not run it, so run it by hand after that one:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>make<span class="w"> </span>chart-crds<span class="w">   </span><span class="c1"># scripts/manifest/sync-chart-crds.sh — regenerates the chart CRD templates from the sources</span>
 </code></pre></div>
 <p><code>make chart-crds-check</code> (run by <code>make check</code>, <code>make manifest-validate</code>, and CI's <code>manifest-validate.yml</code>) fails if a chart copy drifted from its source (<a href="../../queue/">Q73</a>).</p>
