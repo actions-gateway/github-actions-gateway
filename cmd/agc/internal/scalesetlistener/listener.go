@@ -1072,8 +1072,7 @@ func (l *Listener) sweepUnclaimedRunners(ctx context.Context) {
 		return
 	}
 
-	prefix := l.cfg.ScaleSetName + "-"
-	records, err := l.cfg.Client.ListRunnersWithPrefix(ctx, prefix)
+	records, err := l.cfg.Client.ListRunnersWithPrefix(ctx, l.cfg.ScaleSetName+"-")
 	if err != nil {
 		l.log.Warn("scaleset: list runner records for sweep", "scaleSet", l.cfg.ScaleSetName, "err", err)
 		return
@@ -1081,7 +1080,7 @@ func (l *Listener) sweepUnclaimedRunners(ctx context.Context) {
 
 	swept, foreign := 0, 0
 	for _, rec := range records {
-		if !mintedRunnerSuffix.MatchString(strings.TrimPrefix(rec.Name, prefix)) {
+		if !MintedBy(l.cfg.ScaleSetName, rec.Name) {
 			foreign++
 			continue
 		}
@@ -2629,6 +2628,15 @@ func (l *Listener) deleteSession(ssID int, sess *scaleset.RunnerScaleSetSession)
 // leaves this set's records unswept, and the isolation needs the other set's job ID to be
 // a UUID too (05-security.md).
 var mintedRunnerSuffix = regexp.MustCompile(`^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}(-[0-9]+)?$`)
+
+// MintedBy reports whether runnerName is one a listener on scaleSetName mints:
+// "<scale set>-<job UUID>[-attempt]". It is the ownership test for any delete of a
+// runner record by name, since the REST name lookup spans every runner in the org or
+// repo, other scale sets' and persistent runners' included.
+func MintedBy(scaleSetName, runnerName string) bool {
+	rest, ok := strings.CutPrefix(runnerName, scaleSetName+"-")
+	return ok && scaleSetName != "" && mintedRunnerSuffix.MatchString(rest)
+}
 
 // runnerName derives a deterministic runner name from a jobID: attempt 0 is the base
 // name, so a replay of the same job (attempt 0 again) names the same runner and stays

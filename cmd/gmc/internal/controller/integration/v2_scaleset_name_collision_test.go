@@ -27,11 +27,12 @@ const admissionBypassLabel = "actions-gateway.test/skip-v2-admission"
 // across two tenants in one GitHub scope is reported on both gateways at reconcile,
 // not only rejected at admission.
 //
-// The pair has to be built with the two v2 webhooks bypassed, and that is the finding
-// rather than a testing convenience: Q791's guard is complete against validated writes
-// in every apply order, so the only ways into this state are an upgrade from a release
-// that predates the guard and a window with the webhook uninstalled. This test models
-// the second, which produces the same stored objects as the first.
+// The pair is built with the two v2 webhooks bypassed so it is deterministic: Q791's
+// guard catches a pair applied one object after the other in either order, so the
+// ways into this state are an upgrade from a release that predates the guard, a
+// window with the webhook uninstalled, and a concurrent create
+// (TestV2_ScaleSetNameGuard_ConcurrentPairIsReported, Q1325). This test models the
+// second, which produces the same stored objects as the other two.
 //
 // The bypass is a namespaceSelector on the two webhook entries keyed to a label only
 // this test's namespaces carry, rather than deleting the entries: a restore that does

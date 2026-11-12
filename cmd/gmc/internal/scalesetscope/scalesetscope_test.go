@@ -221,6 +221,16 @@ func TestClaimCollidesWith(t *testing.T) {
 		assert.False(t, a.CollidesWith(b))
 	})
 
+	t.Run("labels differing only by case are distinct names", func(t *testing.T) {
+		// The AGC refuses to adopt a set whose name differs from its own only by case
+		// (scaleset.Client.GetRunnerScaleSetByName), so the pair can never drive one
+		// scale set; which of them a runs-on reaches is the runner group's question,
+		// as it is for any overlapping label (Q1325).
+		a := claim("tenant-a", "a", "gw-a", "ci", acme)
+		b := claim("tenant-b", "b", "gw-b", "CI", acme)
+		assert.False(t, a.CollidesWith(b))
+	})
+
 	t.Run("different scopes do not collide", func(t *testing.T) {
 		a := claim("tenant-a", "a", "gw-a", "linux", acme)
 		b := claim("tenant-b", "b", "gw-b", "linux", "github.com/other")

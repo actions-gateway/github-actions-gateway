@@ -93,8 +93,13 @@ type scaleSetListenerHandle struct {
 	// a reaped worker's runner record through it (Q550) — the reaper runs outside the
 	// listener and has no other route to GitHub.
 	client *scaleset.Client
-	cancel context.CancelFunc
-	done   <-chan struct{}
+	// scaleSetName is the name this listener registered and sessions on, the first
+	// runnerLabel when it started. A later reconcile compares it with the spec, since
+	// admission releases the old name's claim as soon as the edit is stored (Q1325),
+	// and the reaper deregisters only runner names minted under it.
+	scaleSetName string
+	cancel       context.CancelFunc
+	done         <-chan struct{}
 	// runnerGroup is the GitHub runner group this listener registered its scale set
 	// into, kept so a later reconcile can tell that the declared group changed. The
 	// group is read once, at registration, so without this a live listener holds the
@@ -149,29 +154,30 @@ func (c *capacityRecord) last() (provisioner.CapacityAdvertisement, bool) {
 	return c.adv, c.seen
 }
 
-// scaleSetClientFor returns the scale-set client of the listener running for key, or
-// nil when none is running. The reaper runs before the listener is ensured on any given
-// reconcile, so a nil here is ordinary on the first pass for a set — the records a reap
-// could not deregister then are collected by the next listener start's sweep.
-func (r *RunnerSetReconciler) scaleSetClientFor(key types.NamespacedName) *scaleset.Client {
+// scaleSetClientFor returns the scale-set client of the listener running for key and
+// the scale-set name it runs on, or a nil client when none is running. The reaper runs
+// before the listener is ensured on any given reconcile, so a nil here is ordinary on
+// the first pass for a set — the records a reap could not deregister then are
+// collected by the next listener start's sweep.
+func (r *RunnerSetReconciler) scaleSetClientFor(key types.NamespacedName) (*scaleset.Client, string) {
 	r.scaleSetListenersMu.Lock()
 	defer r.scaleSetListenersMu.Unlock()
 	if h, ok := r.scaleSetListeners[key]; ok {
-		return h.client
+		return h.client, h.scaleSetName
 	}
-	return nil
+	return nil, ""
 }
 
-// scaleSetListenerRunnerGroup returns the runner group the listener running for key
-// registered its scale set into, and whether a listener is running at all. The empty
-// string is a meaningful value (GitHub's default group), hence the second result.
-func (r *RunnerSetReconciler) scaleSetListenerRunnerGroup(key types.NamespacedName) (string, bool) {
+// scaleSetListenerRegistration returns the scale-set name and runner group the
+// listener running for key registered, and whether a listener is running at all. The
+// empty group is a meaningful value (GitHub's default group), hence the third result.
+func (r *RunnerSetReconciler) scaleSetListenerRegistration(key types.NamespacedName) (name, group string, ok bool) {
 	r.scaleSetListenersMu.Lock()
 	defer r.scaleSetListenersMu.Unlock()
 	if h, ok := r.scaleSetListeners[key]; ok {
-		return h.runnerGroup, true
+		return h.scaleSetName, h.runnerGroup, true
 	}
-	return "", false
+	return "", "", false
 }
 
 // reconcileScaleSetListener drives a ScaleSet-protocol RunnerSet: it ensures exactly
@@ -276,15 +282,17 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 	}
 
 	runnerGroup := resolveRunnerGroupName(rs, refs.gateway)
+	scaleSetName := scaleSetNameOf(rs)
 
-	// The scale set's group is settled at registration, so re-registering it under a
-	// newly declared group means a fresh listener. Stopping the stale one here rather
-	// than waiting for the next AGC rollout is what makes narrowing the boundary take
-	// effect when the operator asks for it (Q712). Outside the lock: the stop waits for
-	// the poll loop to exit.
-	if group, ok := r.scaleSetListenerRunnerGroup(key); ok && group != runnerGroup {
-		log.Info("scale-set runner group changed; restarting the listener",
-			"from", group, "to", runnerGroup)
+	// The scale set's name and group are settled at registration, so a change to
+	// either means a fresh listener. Stopping the stale one here rather than waiting
+	// for the next AGC rollout is what makes narrowing the boundary take effect when
+	// the operator asks for it (Q712), and what releases a renamed set's old scale set,
+	// whose name admission frees for another tenant once the edit is stored (Q1325).
+	// Outside the lock: the stop waits for the poll loop to exit.
+	if name, group, ok := r.scaleSetListenerRegistration(key); ok && (name != scaleSetName || group != runnerGroup) {
+		log.Info("scale-set registration changed; restarting the listener",
+			"fromScaleSet", name, "toScaleSet", scaleSetName, "fromGroup", group, "toGroup", runnerGroup)
 		r.stopScaleSetListener(key)
 	}
 
@@ -306,7 +314,6 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 
 	// The first runs-on label names the scale set; the rest are registered on it as
 	// additional match targets (Q726).
-	scaleSetName := scaleSetNameOf(rs)
 	var extraLabels []string
 	if len(rs.Spec.RunnerLabels) > 1 {
 		extraLabels = rs.Spec.RunnerLabels[1:]
@@ -450,8 +457,8 @@ func (r *RunnerSetReconciler) ensureScaleSetListener(ctx context.Context, log *s
 		return nil, err
 	}
 	h := &scaleSetListenerHandle{
-		listener: l, client: ssClient, cancel: cancel, done: done, runnerGroup: runnerGroup,
-		capacity: capacity,
+		listener: l, client: ssClient, scaleSetName: scaleSetName, cancel: cancel, done: done,
+		runnerGroup: runnerGroup, capacity: capacity,
 	}
 	r.scaleSetListeners[key] = h
 	return h, nil
