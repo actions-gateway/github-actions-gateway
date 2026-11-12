@@ -3486,11 +3486,13 @@ See <a href="../../design/05-security/">security §5</a> for the full credential
    The gateway polls GitHub; it does not receive webhooks, so no webhook URL or secret is needed.</li>
 <li><strong>Permissions</strong> — grant these; the access levels are from GitHub's <a href="https://docs.github.com/en/rest/authentication/permissions-required-for-github-apps">permissions required for GitHub Apps</a> reference:</li>
 <li><strong>Repository permissions → Actions: Read and write.</strong> Read is what observes a workflow run.
-     Write is used only for automatic recovery: re-running a job whose worker pod was lost (<code>rerun-failed-jobs</code>), and force-cancelling the run of a job abandoned before its worker started (<code>force-cancel</code>).</li>
+     Write is used for automatic recovery, re-running a job whose worker pod was lost (<code>rerun-failed-jobs</code>) and force-cancelling the run of a job abandoned before its worker started (<code>force-cancel</code>), and for force-cancelling the run of a fork pull request job a <code>RunnerSet</code> refuses.</li>
 <li><strong>Runner registration: Read and write</strong> on the permission that matches the scope of the <code>githubURL</code> you set in <a href="#step-2-create-the-gateway-and-its-runner-set">Step 2</a>.
      For an organization URL that is <strong>Organization permissions → Self-hosted runners</strong>; for a repository URL it is <strong>Repository permissions → Administration</strong>.
      GitHub has no read-only way to register a runner: <code>generate-jitconfig</code> and <code>registration-token</code> both require write.</li>
 <li><strong>Repository permissions → Metadata: Read-only</strong> is added by GitHub automatically.</li>
+<li><strong>Optional: Repository permissions → Checks: Read and write.</strong> Used only to write a failed check run on a pull request whose fork job a <code>RunnerSet</code> refused, naming the set and <code>spec.forkPullRequests</code>, because the cancelled run shows no reason (<a href="../security-operations/#fork-pull-requests-choose-their-own-runner-label">what a refusal does</a>).
+     Without it the refusal still happens.</li>
 <li>Leave <strong>Contents</strong>, <strong>Pull requests</strong>, and the rest at <strong>No access</strong>: the gateway never reads tenant code or writes to repositories.</li>
 <li><strong>Where can this GitHub App be installed?</strong> — <strong>Only on this account</strong> is the typical choice for a single-org deployment.</li>
 <li>Click <strong>Create GitHub App</strong>.</li>

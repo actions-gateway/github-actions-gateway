@@ -3234,14 +3234,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every PR in a release batch rewrites the same cell, so each merge leaves the next PR conflicted and the batch can only merge one at a time.</td>
 </tr>
 <tr>
-<td><a href="Q1330/">Q1330</a></td>
-<td><a href="../plan/secure-multi-tenant-oss-ci/#open-decisions-the-map-surfaced">Refuse fork pull request jobs by default on every RunnerSet</a></td>
-<td><code>security</code> <code>feature</code> <code>2.0-gate</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>A fork pull request can rewrite <code>runs-on</code> to reach a trusted <code>RunnerSet</code>, because a <code>pull_request</code> run executes the pull request's merge …</td>
-</tr>
-<tr>
 <td><a href="Q1329/">Q1329</a></td>
 <td><a href="../plan/secure-multi-tenant-oss-ci/#credentials-a-job-can-read">Measure what a JIT runner credential permits from inside its own job</a></td>
 <td><code>security</code></td>
@@ -3671,7 +3663,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>milestone</code> <code>2.0-gate</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>Everything else under <code>v2.0.0</code> has landed but the tag and <a href="Q1330/">Q1330</a>: the coupled removals (Q273, Q264, Q1167), the storage advance …</td>
+<td>Everything else under <code>v2.0.0</code> has landed but the tag: the coupled removals (Q273, Q264, Q1167), the storage advance (Q1086), Q1330's …</td>
 </tr>
 <tr>
 <td><a href="Q1282/">Q1282</a></td>

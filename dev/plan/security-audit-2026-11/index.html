@@ -3453,8 +3453,8 @@ A coverage critic after the first wave accepted eight gaps, which became the sec
 </tr>
 <tr>
 <td><a href="#release-and-ci-leads">No source-visible control stops a fork pull request from naming a dogfood scale-set label in runs-on</a></td>
-<td>held by GitHub's approval setting until Q1330</td>
-<td><a href="../../queue/Q1330/">Q1330</a></td>
+<td>closed by Q1330's default refusal once the dogfood cluster runs it; GitHub's approval setting holds it until then</td>
+<td>Q1330</td>
 </tr>
 <tr>
 <td><a href="#release-and-ci-leads">go-throttle hook returns <code>allow</code> for single <code>go build</code>/<code>go test</code> commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path</a></td>
@@ -4094,7 +4094,7 @@ The sandboxed fixture-module test above was not run: the run log already shows t
 <p><code>ci/pr-editable-runs-on-reaches-dogfood-scaleset</code>: needs validation.
 Starts at <code>.github/workflows/conflict-markers.yml:12</code>.</p>
 <p>Runner selection is by label alone, the dogfood scale sets are registered repo-scoped against a public repository so no runner group gates them, and on pull_request events the label is text in a workflow file the pull request can edit.
-The opt-in gate is an expression inside those same editable files, and the AGC does not distinguish a fork pull request's job from any other until the default refusal in docs/queue/Q1330.md ships.</p>
+The opt-in gate is an expression inside those same editable files, and until Q1330 the AGC did not distinguish a fork pull request's job from any other; it now refuses one on every <code>RunnerSet</code> that does not set <code>spec.forkPullRequests: Accept</code>.</p>
 <p><strong>Blocked on:</strong></p>
 <ul>
 <li>The current value of the repository's fork pull request approval setting is GitHub-side state.
@@ -4107,12 +4107,12 @@ The opt-in gate is an expression inside those same editable files, and the AGC d
 <li>Which e2e overlay is live during a window (Kata by default, privileged dind by opt-in) and what a worker pod can reach inside the dogfood cluster are deployment facts that set the impact; neither is determined by source.</li>
 </ul>
 <p><strong>Local test.</strong> No local test can settle this: the decisive step is GitHub's job assignment.
-A source-side guard can be tested locally once written: add a case to the existing scale-set fixture test file scaleset/types_test.go (its hand-written JobAssigned fixture already carries eventName at line 54) asserting the guard's decision for a fork pull_request job, once docs/queue/Q1330.md is built: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).</p>
+The source-side guard Q1330 built is tested locally in cmd/agc/internal/provisioner/fork_refusal_internal_test.go: the refusal compares the run object's head repository name with the run's own repository for a pull_request event (the job message has no head-repository field, decided under Q1220).</p>
 <p><strong>Owner check.</strong> Owner reads the repository's current fork pull request approval policy (Settings &gt; Actions &gt; General, or the actions/permissions/fork-pr-contributor-approval setting) and records its value and the date.
 Owner lists the runner scale sets registered for the repository and confirms whether each dogfood label (gag-ci-scaleset, gag-ci-e2e, the probe labels) is repo-scoped with no runner-group restriction.
 Owner checks the repository's existing Actions run history and the dogfood AGC's job records for any pull_request-event job from a fork head repository that was assigned to a dogfood scale set, and records which e2e overlay (Kata or dind) is applied during dogfood windows and for how long tenants stay up.</p>
-<p><strong>Outcome.</strong> Open until <a href="../../queue/Q1330/">Q1330</a> lands, which refuses fork jobs by default on every <code>RunnerSet</code>; no second control was built here.
-GitHub's fork approval policy read <code>first_time_contributors</code> on 2026-11-11, the same value Q1052 recorded, so until then that setting is what holds the lead, as <a href="../../design/05-security/#who-can-start-a-release-is-held-by-a-headcount-not-a-control">05-security.md</a> records.</p>
+<p><strong>Outcome.</strong> Closed by Q1330, which refuses fork jobs by default on every <code>RunnerSet</code> unless it sets <code>spec.forkPullRequests: Accept</code>; it binds the dogfood sets once the dogfood cluster runs a release carrying it.
+GitHub's fork approval policy read <code>first_time_contributors</code> on 2026-11-11, the same value Q1052 recorded, so until that deploy that setting is what holds the lead, as <a href="../../design/05-security/#who-can-start-a-release-is-held-by-a-headcount-not-a-control">05-security.md</a> records.</p>
 <p><strong>Evidence.</strong> <code>scripts/dogfood/start.sh:3</code>, <code>.github/workflows/unit-test.yml:262</code>, <code>.github/actionlint.yaml:15</code>, <code>docs/plan/archive/q468-jobcompleted-retention.md:66</code>, <code>docs/queue/Q1052.md:54</code>, <code>docs/operations/personas.md:93</code>, <code>deploy/dogfood-e2e/README.md:37</code>, <code>scripts/dogfood/e2e-start.sh:7</code>, <code>docs/development/testing.md:2224</code>.</p>
 <h3 id="go-throttle-hook-returns-allow-for-single-go-buildgo-test-commands-whose-flags-or-goflags-run-a-caller-named-program-or-write-to-a-caller-named-path">go-throttle hook returns <code>allow</code> for single <code>go build</code>/<code>go test</code> commands whose flags or GOFLAGS run a caller-named program or write to a caller-named path<a class="headerlink" href="#go-throttle-hook-returns-allow-for-single-go-buildgo-test-commands-whose-flags-or-goflags-run-a-caller-named-program-or-write-to-a-caller-named-path" title="Permanent link">&para;</a></h3>
 <p><code>gothrottle-auto-allow-go-exec-flags</code>: needs validation.

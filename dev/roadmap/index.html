@@ -2808,8 +2808,6 @@ No pill means no release is decided for that item yet.</p>
 <li><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <span class="gag-release-chip" title="Blocks the 2.1 release">2.1</span> <!-- q:Q1236,Q1317,Q1320,Q1318,Q1319,Q1315,Q1316 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.</li>
-<li><strong><a href="../operations/security-operations/#fork-pull-requests-choose-their-own-runner-label">Fork pull requests refused by default</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q1330 --> A fork can rewrite <code>runs-on</code> to reach any runner set its repository admits.
-  Every runner set will refuse a fork's job unless it is set to accept one, as a set for untrusted pull requests would be.</li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate.
