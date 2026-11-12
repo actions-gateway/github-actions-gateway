@@ -7,7 +7,7 @@ The first audit (2026-05) is [security.md](security.md) and the second (2026-06)
 > The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1342](../queue/Q1342.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead is tracked by [Q1253](../queue/Q1253.md).
+> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1342](../queue/Q1342.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
 
 ## Method and limits
 
@@ -78,7 +78,7 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328; token route [Q1343](../queue/Q1343.md) |
 | [namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328 |
 | [DNS egress rule confines which resolver a pod may contact, not which names it resolves; the design states the DNS exfiltration channel is closed](#worker-pod-and-networkpolicy-leads) | claim corrected, accepted residual | Q1328, in [05-security.md](../design/05-security.md#dns-exfiltration-side-channel-containment) |
-| [GitHub CIDR allowlist admits /meta `actions` ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only](#worker-pod-and-networkpolicy-leads) | needs validation | [Q1253](../queue/Q1253.md) |
+| [GitHub CIDR allowlist admits /meta `actions` ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only](#worker-pod-and-networkpolicy-leads) | needs validation | Q1253, closed as a residual; [Q1350](../queue/Q1350.md) |
 
 ## Confinement claim
 
@@ -1110,7 +1110,8 @@ No upstream was observed echoing a credential; the fix does not depend on one do
 ## Worker pod and NetworkPolicy leads
 
 Five leads on worker pods and the policies around them, tracked as Q1328 and closed under it, the first three fixed and the fourth an accepted residual.
-The last is already open as [Q1253](../queue/Q1253.md), which holds a dogfood measurement this audit did not have; its entry stays here so the audit's record is whole, and Q1253 owns the work.
+The last was already open as Q1253, which held a dogfood measurement this audit did not have; its entry stays here so the audit's record is whole.
+Q1253 closed it as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and [Q1350](../queue/Q1350.md) owns the narrowing.
 
 ### Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive
 

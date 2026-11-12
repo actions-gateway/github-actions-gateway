@@ -87,7 +87,7 @@ Stating it the current way concedes a loss that has not happened, and it hides t
 Q408 Phase 1 closes untrusted-PR egress down to GitHub, the registry mirror, and DNS.
 The Actions cache data plane was read as a **non-GitHub host**, so closing that egress was taken to remove `actions/cache`.
 GAG's own self-hosted CI lane skips every `actions/cache` step on that reading, by a `runner.environment` gate rather than a measured refusal ([testing.md](../development/testing.md#the-e2e-workflows-kindnet-and-calico), [q408 §3](q408-untrusted-pr-egress.md)).
-The reading does not hold for blob storage: on 2026-11-01 a Kata worker under this posture reached Azure blob storage on 443, inside GitHub's published ranges ([the Kata run](q215-worker-cache.md#the-kata-run-2026-11-01)), so the consequences below rest on a premise [Q1253](../queue/Q1253.md) has to settle.
+The reading does not hold for blob storage: on 2026-11-01 a Kata worker under this posture reached Azure blob storage on 443, inside GitHub's published ranges ([the Kata run](q215-worker-cache.md#the-kata-run-2026-11-01)), so the consequences below rest on a premise that does not hold; Q1253 recorded what that admits as a residual in [05-security.md](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges).
 
 The consequences run one way:
 
@@ -144,7 +144,7 @@ Do not repeat that `actions/cache` has no home.
 
 Shipped: per-tenant egress that admits the Actions cache data plane; the registry-mirror contract and the Athens pattern it derives from; the RWX validation and the reference-architecture stance (Q719, [worker-shared-storage.md](../operations/worker-shared-storage.md)); the mirror itself and the tight egress policy that rides it (Q408, validated 2026-08-28); the per-tenant job cache server (Q215, [q215-worker-cache.md](q215-worker-cache.md), validated 2026-11-01).
 
-Open, with rows: [Q1225](../queue/Q1225.md) (sharing that server across tenants), [Q1253](../queue/Q1253.md) (what admitting Azure blob storage lets a worker reach), [Q1224](../queue/Q1224.md) (retiring the runner patch that design rests on), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
+Open, with rows: [Q1225](../queue/Q1225.md) (sharing that server across tenants), [Q1350](../queue/Q1350.md) (narrowing the blob storage a worker may reach to GitHub's published accounts), [Q1224](../queue/Q1224.md) (retiring the runner patch that design rests on), [Q268](../queue/Q268.md) (warm worker pool, the competing lever for the latency half of the same complaint).
 
 **Scope note for Q539 and Q540.** Both are currently written as image-only validations.
 Because the candidate backend is a general file distributor, both should also answer whether *one* deployment serves the artifact class as well, and at what cost to the §3.5 contract.
