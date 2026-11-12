@@ -17,3 +17,4 @@ self-hosted-runner:
     - gag-q468-retention
     - gag-q583-replay
     - gag-q645-abandoned
+    - gag-q1344-ssdelete

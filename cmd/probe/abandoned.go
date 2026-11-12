@@ -1148,7 +1148,13 @@ func (p *abandonedProbe) postJSON(ctx context.Context, url string) (int, []byte,
 
 // getJSON issues one authorized REST GET and decodes the response.
 func (p *abandonedProbe) getJSON(ctx context.Context, url string, out any) error {
-	token, err := p.tokens.Token(ctx)
+	return restGetJSON(ctx, p.hc, p.tokens, url, out)
+}
+
+// restGetJSON issues one REST GET authorized by an installation token and decodes
+// the response.
+func restGetJSON(ctx context.Context, hc *http.Client, tokens githubapp.TokenProvider, url string, out any) error {
+	token, err := tokens.Token(ctx)
 	if err != nil {
 		return fmt.Errorf("installation token: %w", err)
 	}
@@ -1158,7 +1164,7 @@ func (p *abandonedProbe) getJSON(ctx context.Context, url string, out any) error
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	resp, err := p.hc.Do(req)
+	resp, err := hc.Do(req)
 	if err != nil {
 		return err
 	}

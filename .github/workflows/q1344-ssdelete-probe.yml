@@ -1,0 +1,34 @@
+# Q1344 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Queues one job on runs-on: gag-q1344-ssdelete so the cmd/probe Investigation J
+# run (PROBE_SSDELETE_TEST=true) has a real job on the scale set it deletes.
+# Nothing ever runs it: the probe measures what the delete does to the queued job,
+# then cancels the run. See the Q1344 plan doc.
+#
+# Dispatch this BEFORE starting the probe: a job queued against a
+# not-yet-registered scale-set label waits server-side and lands on the scale set
+# the moment it appears.
+name: q1344-ssdelete-probe
+on:
+  workflow_dispatch: {}
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the job from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q1344-ssdelete-probe.yml"]
+
+# The job exists to be queued against the scale-set label and cancelled; it never
+# touches the repo, so it gets no token scopes at all.
+permissions: {}
+
+# Jobs run only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q1344-probe]". A plain push touching this file skips
+# the job, so the run concludes green instead of leaving a queued job on the PR.
+jobs:
+  ssdelete-job:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q1344-probe]')
+    runs-on: gag-q1344-ssdelete
+    timeout-minutes: 10
+    steps:
+      - run: echo "This job is never expected to run — the Q1344 probe cancels it (Q1344)."
