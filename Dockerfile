@@ -226,7 +226,7 @@ ENTRYPOINT ["/proxy"]
 ##   3. Update this FROM line AND RunnerVersion + WorkerImageDigest in
 ##      cmd/agc/names/names.go to the same X.Y.Z@sha256:… (provisioner's
 ##      DefaultWorkerImage follows automatically).
-FROM ghcr.io/actions/actions-runner:2.338.2@sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232 AS worker
+FROM ghcr.io/actions/actions-runner:2.338.2@sha256:6d0b2d80d80f143f77dcb676e50920100bbb547e39e883454d57f45ab8c31300 AS worker
 ENV PATH=/home/runner/bin:$PATH
 ARG REVISION="unknown"
 ARG VERSION="dev"
@@ -314,7 +314,7 @@ ENTRYPOINT ["/wrapper"]
 ##   docker buildx imagetools inspect docker:29-cli
 ## Re-check the source plugin paths when bumping the major: they are set by
 ## docker-library/docker's own Dockerfile, not by the CLI.
-FROM docker:29-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb AS docker-cli
+FROM docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS docker-cli
 
 ## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
 ## the lockstep test over it — is inherited from `worker`, so this image runs
