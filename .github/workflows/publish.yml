@@ -253,7 +253,7 @@ jobs:
         with:
           driver-opts: image=${{ steps.pins.outputs.BUILDKIT_IMAGE }}
       - name: Log in to GHCR
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -405,7 +405,7 @@ jobs:
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           # Pin the signer version (the action otherwise floats to latest).
           # `make cosign-pin-check` holds pins.env's COSIGN_VERSION to the
@@ -581,7 +581,7 @@ jobs:
           go-version-file: go.work
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         with:
           # Pin the signer version (the action otherwise floats to latest).
           # `make cosign-pin-check` holds pins.env's COSIGN_VERSION to the
@@ -594,7 +594,7 @@ jobs:
         # own login to read the manifest and push the signature. Without this,
         # `cosign sign` fails with "UNAUTHORIZED: authentication required" even
         # though `helm push` (which uses the helm login below) succeeds.
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
