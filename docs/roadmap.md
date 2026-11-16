@@ -27,6 +27,8 @@ No pill means no release is decided for that item yet.
 - **[Flaky-job detection, and auto-retry for more platform failures](design/appendix-g-future-enhancements.md#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions)** <!-- q:Q1236,Q1317,Q1320,Q1318,Q1319,Q1315,Q1316 --> A job the cluster disrupts already [re-runs itself](operations/troubleshooting.md#which-disruptions-auto-re-run-a-job-and-which-never-do); a flaky failure does not.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.
+- **[Controllers that outrank every worker](operations/security-operations.md#keep-gags-control-plane-off-worker-nodes)** <!-- q:Q1351 --> A worker priority class above a controller's may let a worker evict another tenant's gateway or egress proxy.
+  GAG will give its controllers a non-preempting class above every allowed worker class, and refuse an allowlist that breaks the order.
 
 
 ## Exploring / longer-term
