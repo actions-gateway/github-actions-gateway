@@ -23,6 +23,8 @@ For the full chart reference (every value, the templates it renders, offline val
 - **Node architecture: `linux/amd64` or `linux/arm64`.** Published images are multi-arch — one pinned digest (the OCI index digest) serves both, so mixed amd64/arm64 (e.g.
   Graviton) node pools need no per-arch configuration.
   Other architectures are not published.
+- **Node pools for production: a system pool, an egress pool, and a tainted worker pool.** The GMC and every AGC run on the system pool, the egress proxies on the egress pool that owns each tenant's public IP, and workers on their own pool and nowhere else.
+  GAG never creates pools, and runs on one shared pool with weaker separation ([recommended topology](security-operations.md#recommended-separate-pools-for-the-control-plane-egress-and-workers)).
 - **A CNI that enforces `NetworkPolicy`** (Calico, Cilium) for the egress/ingress isolation controls to take effect.
   `kindnet` does not enforce egress, so the tenant-isolation guarantees do not hold under it.
   **GKE Dataplane V2** (Cilium) is supported and tested; if the cluster also runs **NodeLocal DNSCache**, use a GAG build that includes the Q229 fix (its DNS egress rule allows the `node-local-dns` redirect backend) — older builds drop DNS under Dataplane V2 and the tenant AGC crash-loops on its first GitHub token fetch (see [Troubleshooting → DNS Times Out Under the Egress NetworkPolicy](troubleshooting.md#dns-times-out-under-the-egress-networkpolicy-gke-dataplane-v2--nodelocal-dnscache)).

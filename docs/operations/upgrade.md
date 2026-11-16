@@ -596,7 +596,7 @@ A `helm upgrade --wait` on such a cluster times out on the GMC rollout.
 
 **Before you upgrade,** pick one of these:
 
-- **Run workers on their own pool**, tainted, with workers pinned to it ([procedure](security-operations.md#keep-gags-control-plane-off-worker-nodes)).
+- **Run workers on their own pool**, tainted, with workers pinned to it ([procedure](security-operations.md#recommended-separate-pools-for-the-control-plane-egress-and-workers)).
   The controllers then already sit apart from the workers, and the new rule changes nothing.
 - **Keep today's placement** by setting the opt-out, which leaves every pod as it was before this release:
 
