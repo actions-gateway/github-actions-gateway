@@ -2921,6 +2921,12 @@ With more cluster budget, from a sponsor for instance, more profiles could join 
 <h2 id="gated-every-release">Gated every release<a class="headerlink" href="#gated-every-release" title="Permanent link">&para;</a></h2>
 <p>All three run on the dogfood cluster: Google Kubernetes Engine (GKE) with Dataplane V2, its Cilium-based CNI.
 Each is a leg of the release gate, which dispatches the e2e matrix onto GAG runners and fails the release on a red run (<a href="../release/#the-legs-the-gate-runs">the legs the gate runs</a>).</p>
+<p>All three also run on <a href="../security-operations/#recommended-separate-pools-for-the-control-plane-egress-and-workers">separate node pools</a>.
+The GMC is pinned to the system pool, <code>default-pool</code>.
+The AGCs pin to nothing, and land there because every other pool is tainted.
+Workers run on tainted pools and are pinned to them: the e2e legs' workers to the <code>e2e</code> pool, and the standing tenant's to <code>workers</code> and <code>workers-od</code>.
+The cluster has no egress pool, because its tenants run direct egress with no egress proxy.
+The egress-pool half of the topology was validated on throwaway GKE clusters instead (<a href="../../plan/q243-egress-ip-reference-arch/">per-tenant egress IP reference architecture</a>).</p>
 <table>
 <thead>
 <tr>

@@ -5802,7 +5802,7 @@ On a cluster with one schedulable node, one side is always stranded.
 A <code>helm upgrade --wait</code> on such a cluster times out on the GMC rollout.</p>
 <p><strong>Before you upgrade,</strong> pick one of these:</p>
 <ul>
-<li><strong>Run workers on their own pool</strong>, tainted, with workers pinned to it (<a href="../security-operations/#keep-gags-control-plane-off-worker-nodes">procedure</a>).
+<li><strong>Run workers on their own pool</strong>, tainted, with workers pinned to it (<a href="../security-operations/#recommended-separate-pools-for-the-control-plane-egress-and-workers">procedure</a>).
   The controllers then already sit apart from the workers, and the new rule changes nothing.</li>
 <li><strong>Keep today's placement</strong> by setting the opt-out, which leaves every pod as it was before this release:</li>
 </ul>
