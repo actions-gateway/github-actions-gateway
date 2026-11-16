@@ -121,7 +121,7 @@ That cost is what makes "enough" a real bar rather than a formality — it is al
 ### 1. Pre-flight
 
 **A recorded verdict covers the commit it was measured at, so record that commit with it.** Each step below ends in a verdict written to the release's plan doc, and a verdict reads as done long after the scope it covered has moved.
-When scope reopens, every verdict taken before it is stale by default and re-runs unless someone can say why not.
+When scope reopens, every verdict taken before it is stale by default, and its recorded commit is what makes re-checking it cheap: re-read what merged since that commit, not the whole surface.
 
 1.5 is the worked example, and it went both ways.
 The API surface review had been recorded over `v1.4.0..feabacdc4`; scope then reopened on eight rows, one of which published a new condition and two new series, and the review was re-run only because someone thought to ask what the recorded window covered.
@@ -130,18 +130,21 @@ Both reviews were correct when written.
 Neither knew its scope had moved.
 
 **Which of these bind when the tag is a release candidate.** The first two bind at every tag: an RC cut from a red `main` validates nothing, and the version you pick fixes the stable tag's.
-The last four are stable-tag obligations, because a prerelease deploys no docs and its GitHub Release body is generated rather than curated, so there is no published surface for them to be wrong on yet.
+**The rest run at the first RC.** A prerelease deploys no docs, so the stable tag is their deadline, not their best time: anything decided after the validated candidate is published costs a new RC and another hour-long dogfood run.
+The API surface review and the notes' interrogation come before the cut, because their findings change artifacts.
+The docs-only rest fill the approval wait and ~80-minute validation: the marketing reconciliation's first two questions, the operator caveats, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the other three [prose passes](#the-prose-passes).
 
-**Two are worth pulling forward to the first RC anyway**, on the same argument: the RC is the artifact that gets validated, so anything decided after it is published costs a new candidate and another hour-long dogfood run.
+**At the stable tag each becomes a delta re-read from its recorded commit**, which is what the 1.5 story argues for: a delta is what would have asked the marketing pass's first question of the eight reopened rows.
+`api-surface-since.sh <sha>` and `operator-caveats-since.sh <sha>` take the commit directly; the prose verdicts read `git log <sha>..origin/main`.
+Two do not reduce to a diff of this repo and run in full at the stable tag: competitor claims (`scripts/docs/check-comparison-stamps.sh --report`), which go stale with upstream releases rather than with commits here, and `make roadmap-check`, because the queue moves independently.
+Four can only follow validation: the notes' Validation section, the image digests, the pin bump, and the versioned docs deploy.
 
-The **API surface review is the exception worth pulling forward to the first RC**.
-Its deadline really is the stable tag, but the RC is the artifact that gets validated, and a rename decided after the candidate is published costs a new RC and another hour-long dogfood run.
-Reviewing it at the first RC and recording the verdict then is what keeps that cheap.
+**A docs edit merged during validation must not touch `charts/actions-gateway/README.md`**, which ships inside the chart tarball, so the stable tag would ship a chart no candidate validated; `scripts/release/check-artifact-unchanged.sh` is the check ([§ 2](#2-tag-and-push)).
 
 **A draft of the notes belongs at the first RC too, for the same reason and a stronger one.** Writing the notes is what forces the release's claims to be *stated*, and a stated claim is the only kind anyone can check.
 Reviewing that draft is therefore a discovery step, not a formatting pass: it is reliably where the release's remaining defects surface, because nothing else in pre-flight asks the product to describe itself.
 
-Interrogate the draft with three questions, through [`verify-claims`](../development/skills.md#verify-claims); the other three prose passes bind at the stable tag, when the text publishes.
+Interrogate the draft with three questions, through [`verify-claims`](../development/skills.md#verify-claims), before the other three prose passes edit it.
 Each of them found something real in the 1.5 cycle, and each found it *after* the candidate was cut, which is what made it expensive:
 
 1. **Does every claim in it still hold?** The 1.5 draft said multi-label registration closed a gap, and checking the neighbouring claims found `why-gag.md` asserting a capability was classic-only that had reached both tiers a release earlier.
@@ -150,7 +153,7 @@ Each of them found something real in the 1.5 cycle, and each found it *after* th
 3. **Is every completeness or parity claim backed by something derived, or by a list someone maintains?** A curated inventory answers "nothing that someone recorded is missing" ([testing.md](../development/testing.md#generate-a-fixture-with-the-producers-own-code-never-by-hand)), and a release note is where that distinction becomes a published promise.
 
 Record the verdict in the release's plan doc as with the other pre-flight steps, and file what it turns up as gating rows.
-The point of doing it here rather than at the tag is that the answers are free before a candidate exists and cost a new RC afterwards: in 1.5 they arrived after `rc.1` had been cut, published and validated, and superseded it.
+In 1.5 the answers arrived after `rc.1` had been cut, published and validated, and superseded it.
 
 - `main` is green: every required gate passing on the commit you are about to tag.
 
@@ -1177,7 +1180,7 @@ Each owns a different defect class, so none of them substitutes for another, and
    It runs after the other three rather than beside them, because editing is what introduces the defects it looks for.
 
 The mechanical checks below settle what a machine can settle.
-These four are the half it cannot, and running them is not optional on a stable tag.
+These four are the half it cannot: they run at the first RC, and the stable tag re-runs them over the text that changed since, the Validation and Container images sections above all.
 
 ##### Before publishing: the mechanical checks
 
