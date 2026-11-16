@@ -35,6 +35,7 @@ Two detection substrates are used:
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Keep GAG's control plane off worker nodes](#keep-gags-control-plane-off-worker-nodes)
   - [Recommended: separate pools for the control plane, egress, and workers](#recommended-separate-pools-for-the-control-plane-egress-and-workers)
+  - [The exception: node-layer image clients](#the-exception-node-layer-image-clients)
   - [Fallback for a shared pool: anti-affinity and priority](#fallback-for-a-shared-pool-anti-affinity-and-priority)
   - [Check the separation on a live cluster](#check-the-separation-on-a-live-cluster)
 - [Job intake: bind every tenant to a GitHub runner group](#job-intake-bind-every-tenant-to-a-github-runner-group)
@@ -595,7 +596,7 @@ Pin each egress proxy with `EgressProxy.spec.scheduling` to the egress pool whos
 That node choice is what makes the IP controllable, and [Pinning a tenant's proxy pool to its egress IP](#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling) covers it, including the replica spread a small egress pool has to allow for.
 In direct-egress mode, with no proxy, the worker's own node picks the IP instead, so pin those workers to a per-tenant worker pool.
 
-Do not add the worker toleration to `ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling`, the chart's `tolerations` value, or any cache or mirror.
+Do not add the worker toleration to `ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling`, the chart's `tolerations` value, or any cache or mirror, except a node-layer image client ([below](#the-exception-node-layer-image-clients)).
 The cache and registry mirrors you install from `deploy/` have no anti-affinity term of their own, so on separate pools the taint and the worker pin are what keep them apart from workers.
 
 A tenant can set `spec.scheduling` on its own `ActionsGateway` and `EgressProxy` ([why it is tenant-settable](#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling)), so a tenant can move its own AGC onto the worker pool or off the system pool.
@@ -605,6 +606,26 @@ Do not use them as written with separate pools; splitting them into per-componen
 
 This matters most for the `privileged-dind` template, where an escape lands directly on the host ([choosing a template](runner-template-library.md)).
 Kata narrows the risk without removing it, because a guest-to-host escape lands on the same node.
+
+### The exception: node-layer image clients
+
+A node-layer peer-to-peer client is the proxy containerd on each node pulls images through, so it has to run on the worker nodes it serves and takes the worker toleration.
+[Dragonfly's node client](p2p-image-distribution.md#gags-dragonfly-node-client-recipe) is the one GAG ships a recipe for.
+Its DaemonSet runs on the host network and in the host PID and IPC namespaces, with a privileged init container that restarts containerd and `hostPath` mounts of `/var/run/dragonfly` and `/etc/containerd`.
+
+A workflow that escapes onto one of those nodes reaches:
+
+- **That node's client:** its blob cache, its `dfdaemon` config, and containerd's config, all on the node's own disk.
+- **Every other node's client**, on the unauthenticated upload port, 4000, which accepts task download and delete calls ([what it exposes](p2p-image-distribution.md#gags-dragonfly-node-client-recipe)).
+- **A peer's seat in the mesh.** By rewriting that node's cache, it can offer other nodes' pulls a blob of its choosing (inferred, not tested).
+
+It cannot make another node run that blob.
+Only blob requests take the peer path, and containerd checks every blob against the digest its manifest names before storing it, failing the pull with `unexpected commit digest` otherwise.
+That reading is from the containerd v2.2.7 source, the version the recipe was validated on: both pull paths store a blob through `remotes.Fetch`, which commits it against the expected digest.
+So a poisoned blob costs another node that pull, not its integrity.
+Whether Dragonfly keeps handing the same bad blob to that node's retries is not measured.
+
+Spegel, the other node-layer option, sits in the same place on the node; containerd checks its blobs the same way, and its tag lookups need `resolveTags: false` ([operational notes](p2p-image-distribution.md#operational-notes)).
 
 ### Fallback for a shared pool: anti-affinity and priority
 
@@ -649,7 +670,7 @@ kubectl get pods -A -o json | jq -r --arg gmc "$GMC_NS" '
 ```
 
 The query finds the GMC by its namespace and the AGC, proxy, and worker pods by their `app.kubernetes.io/part-of` label.
-Cache and mirror deployments you installed yourself carry neither, so add their namespaces to the selection.
+Cache and mirror deployments you installed yourself carry neither, so add their namespaces to the selection, but not a node-layer client's, which runs on every worker node by design.
 It reads one moment: run it while jobs are running, because workers exist only for the length of a job.
 
 ## Job intake: bind every tenant to a GitHub runner group
