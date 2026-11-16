@@ -3169,6 +3169,7 @@ It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</co
   A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one, and so did a DinD worker whose tenant adds an allow-all egress policy (<a href="#on-privileged-dind">below</a>).
   So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.</li>
 <li><strong>The proxy is bound to loopback</strong>, so only the node's own containerd can use it, and it never reaches a worker.</li>
+<li><strong>It runs on worker nodes, so a workflow that escapes its container onto the node reaches it.</strong> That makes it the exception to keeping GAG's pods off worker nodes; <a href="../security-operations/#the-exception-node-layer-image-clients">what such an escape reaches</a> includes a peer's seat, from which it can make another node's pull fail but cannot change what that node stores.</li>
 </ul>
 <p><strong>Set three values before applying it:</strong> the node selector and toleration in <code>client.yaml</code> (your worker nodes), the CIDR in <code>scheduler-from-nodes.yaml</code> (your node subnet), and the registries in the <code>dfinit</code> config.</p>
 <p><strong>Not yet measured:</strong> UDP 4006, and more than one fresh-node startup order, where <code>dfinit</code> and <code>kata-deploy</code> race to edit containerd's config on a new node.</p>
