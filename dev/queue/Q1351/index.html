@@ -23,7 +23,7 @@
     
     
       
-        <title>A worker's priority class may preempt an AGC or proxy off its node - GitHub Actions Gateway</title>
+        <title>Keep the AGC and egress proxy above every allowlisted worker priority - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-workers-priority-class-may-preempt-an-agc-or-proxy-off-its-node" class="md-skip">
+        <a href="#keep-the-agc-and-egress-proxy-above-every-allowlisted-worker-priority" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A worker's priority class may preempt an AGC or proxy off its node
+              Keep the AGC and egress proxy above every allowlisted worker priority
             
           </span>
         </div>
@@ -2657,7 +2657,7 @@
   
 
 
-<h1 id="a-workers-priority-class-may-preempt-an-agc-or-proxy-off-its-node">A worker's priority class may preempt an AGC or proxy off its node<a class="headerlink" href="#a-workers-priority-class-may-preempt-an-agc-or-proxy-off-its-node" title="Permanent link">&para;</a></h1>
+<h1 id="keep-the-agc-and-egress-proxy-above-every-allowlisted-worker-priority">Keep the AGC and egress proxy above every allowlisted worker priority<a class="headerlink" href="#keep-the-agc-and-egress-proxy-above-every-allowlisted-worker-priority" title="Permanent link">&para;</a></h1>
 <p>A worker whose priority class outranks an AGC or egress proxy may be able to evict that pod from a node the worker wants, which the control-plane separation does not cover.
 The separation is a required pod anti-affinity that the GMC, AGC and egress proxy pods carry against workers, and the default scheduler enforces it from both sides.
 Once a namespaced <code>RunnerTemplate</code> can no longer set <code>nodeName</code> or another <code>schedulerName</code> (Q1347), preemption is the remaining scheduler path past that term.</p>
@@ -2666,12 +2666,22 @@ Both run at priority 0 by default.
 A worker can carry any class on the platform allowlist (<code>--allowed-priority-classes</code>, empty by default), from <code>podTemplate.spec.priorityClassName</code> or a <code>priorityTiers</code> tier.
 The GMC defaults to <code>system-cluster-critical</code> (<code>charts/actions-gateway/values.yaml</code>), so no worker can preempt it.</p>
 <p><strong>The mechanism is unverified.</strong> It rests on the PR #2319 reviewer's reading of kube-scheduler: a node blocked by an existing pod's required anti-affinity is reported <code>Unschedulable</code> rather than <code>UnschedulableAndUnresolvable</code>, so preemption may evict that pod to make room.
-Nobody has run it.
 If it holds, the result is disruption, not co-residence: the controller is evicted before the worker binds, so the worker never runs beside it.
-It still takes a tenant's own gateway or egress path down, and it needs the platform to have allowlisted a class above 0.</p>
-<p><strong>Measure:</strong> on kind, allowlist a class above 0, fill a single node with an AGC pod at priority 0, then create a worker pod carrying that class, and record whether the scheduler evicts the AGC.</p>
-<p>Done when that answer is recorded.
-Either the residual goes into <code>security-operations.md § Keep GAG's control plane off worker nodes</code> and the <code>05-security.md</code> threat row, or the controller pods get a default priority class that keeps them above every allowlisted worker class, and the row says what that costs.</p>
+Preemption picks victims on a node regardless of namespace, so the controller it evicts can be another tenant's, not only the worker's own.
+It needs the platform to have allowlisted a worker class above 0; with the allowlist empty, every worker runs at 0, and a pod cannot preempt one of equal priority.</p>
+<p><strong>Gates <code>v2.0.0</code></strong> (decided 2026-11-16), because both enforcement steps below are stricter than today, and after the tag a stricter rule waits for <code>v3</code>.
+The design already says the control-plane pods sit above workers (the <code>allowedInfraPriorityClasses</code> comment in <code>charts/actions-gateway/values.yaml</code>), but the GMC checks only that the two allowlists share no class name, never their values.</p>
+<p><strong>Approach.</strong></p>
+<ol>
+<li><strong>Measure first:</strong> on kind, allowlist a class above 0, fill a single node with an AGC pod at priority 0, then create a worker pod carrying that class, and record whether the scheduler evicts the AGC.
+   The answer goes into the row's closing PR whichever way it comes out; the steps below hold either way, because node-pressure eviction by the kubelet also ranks by priority.</li>
+<li><strong>The GMC refuses a misordered allowlist:</strong> it refuses to start, and refuses to apply a <code>PriorityClassAllowlist</code> update, when an allowed worker class has a value at or above the lowest control-plane class.</li>
+<li><strong>Controllers get a default class:</strong> an AGC or egress proxy whose spec names no priority class gets the platform's default control-plane class instead of 0.
+   Applying it whatever the worker allowlist holds keeps an allowlist edit from rolling every controller in the cluster.</li>
+<li><strong>The chart ships that default class with <code>preemptionPolicy: Never</code>,</strong> so the controllers never evict another workload in a shared cluster, while no lower-priority worker can evict them.</li>
+</ol>
+<p>Step 2 can stop an install whose classes are misordered from upgrading, and step 3 rolls every AGC and proxy whose spec names no class, so <code>upgrade.md</code> names both.</p>
+<p><strong>Done when</strong> the measurement is recorded, the GMC enforces the order with a test that drives each refusal, the default class reaches an AGC and a proxy that name none, and <code>security-operations.md § Keep GAG's control plane off worker nodes</code> states the guarantee.</p>
 
 
 

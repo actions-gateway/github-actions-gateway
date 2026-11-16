@@ -3266,14 +3266,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>The placement policy samples co-schedule a tenant's AGC and egress proxy with its workers.</strong> Both <code>kyverno/restrict-gag-placement.yaml</code> …</td>
 </tr>
 <tr>
-<td><a href="Q1351/">Q1351</a></td>
-<td><a href="../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">A worker's priority class may preempt an AGC or proxy off its node</a></td>
-<td><code>security</code> <code>open-question</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A worker whose priority class outranks an AGC or egress proxy may be able to evict that pod from a node the worker wants, which the …</td>
-</tr>
-<tr>
 <td><a href="Q1341/">Q1341</a></td>
 <td><a href="../design/05-security/#who-can-start-a-release-is-held-by-a-headcount-not-a-control">Split Dependabot sync so tool code never shares a job with a write token</a></td>
 <td><code>security</code> <code>ci</code></td>
@@ -3672,6 +3664,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>The GMC half of Q273 deleted the suite files holding 58 envtest functions that drove the v1 <code>ActionsGateway</code> reconciler, and a name-level …</td>
+</tr>
+<tr>
+<td><a href="Q1351/">Q1351</a></td>
+<td><a href="../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">Keep the AGC and egress proxy above every allowlisted worker priority</a></td>
+<td><code>security</code> <code>2.0-gate</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A worker whose priority class outranks an AGC or egress proxy may be able to evict that pod from a node the worker wants, which the …</td>
 </tr>
 <tr>
 <td><a href="Q1107/">Q1107</a></td>
