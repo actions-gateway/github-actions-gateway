@@ -135,6 +135,9 @@ type ActionsGatewayV2Reconciler struct {
 	// WorkerSeparation keeps the AGC pod off nodes running worker pods
 	// (--controller-worker-separation). The zero value is required.
 	WorkerSeparation WorkerSeparation
+	// ControlPlanePriorityClass is the PriorityClass an AGC pod gets when its
+	// gateway names none (--control-plane-priority-class). Empty leaves it unset.
+	ControlPlanePriorityClass string
 	// IPCache supplies the current GitHub IP CIDRs for the direct-egress AGC and
 	// workload NetworkPolicies (Q168). Shared with the IPRangeReconciler, which keeps
 	// those policies current as GitHub rotates ranges. nil is tolerated (the direct
@@ -475,6 +478,7 @@ func (r *ActionsGatewayV2Reconciler) reconcileResources(ctx context.Context, ag 
 	step("AGC Deployment")
 	dep := buildAGCDeploymentV2(ag, r.AGCImage, proxy, securityProfile, r.AGCExtraEnv)
 	applyWorkerSeparation(&dep.Spec.Template.Spec, r.WorkerSeparation)
+	applyControlPlanePriorityClass(&dep.Spec.Template.Spec, r.ControlPlanePriorityClass)
 	if err := r.applyDeployment(ctx, ag, dep); err != nil {
 		return fmt.Errorf("AGC Deployment: %w", err)
 	}

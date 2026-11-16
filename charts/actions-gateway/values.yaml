@@ -373,6 +373,24 @@ systemCriticalPriorityQuota:
 # workers Pending. See docs/operations/security-operations.md.
 controllerWorkerSeparation: required
 
+# controlPlanePriorityClass keeps every AGC and egress proxy pod above every worker
+# priority, so no worker can preempt a controller off a node, in any tenant
+# namespace (Q1351). The GMC gives the class to each AGC and proxy pod whose
+# spec.scheduling names none, and refuses to start if an allowedPriorityClasses
+# entry or a globalDefault class is not below it and below every
+# allowedInfraPriorityClasses entry.
+#   create: true renders <namePrefix>-control-plane with this value and
+#     preemptionPolicy: Never, so the controllers schedule ahead of workers without
+#     evicting anything themselves.
+#   name: a class the platform created instead; create is then ignored.
+#   create: false with no name gives the controllers no class (priority 0), which
+#     a worker class above 0 can preempt. See docs/operations/security-operations.md.
+controlPlanePriorityClass:
+  create: true
+  name: ""
+  # The highest value a non-system PriorityClass may take.
+  value: 1000000000
+
 # nodeSelector / tolerations / affinity for the GMC pod (optional). The worker
 # separation term above is appended to affinity, never replaced by it.
 nodeSelector: {}

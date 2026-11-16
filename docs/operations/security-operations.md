@@ -56,6 +56,7 @@ Two detection substrates are used:
 - [GitHub API base URL must be HTTPS](#github-api-base-url-must-be-https)
 - [Priority classes: the `allowed-priority-classes` allowlist](#priority-classes-the-allowed-priority-classes-allowlist)
   - [Infra pods: the separate allowed-infra-priority-classes allowlist](#infra-pods-the-separate-allowed-infra-priority-classes-allowlist)
+  - [The controllers outrank every worker class](#the-controllers-outrank-every-worker-class)
   - [Upgrading: previously ungated priorityClassName fields are now gated](#upgrading-previously-ungated-priorityclassname-fields-are-now-gated)
   - [Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)](#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298)
   - [Narrowing the allowlist: drain stored references first](#narrowing-the-allowlist-drain-stored-references-first)
@@ -533,6 +534,9 @@ The chart value `controllerWorkerSeparation: none` turns it off, for a cluster w
 A worker template that sets `nodeName`, or a `schedulerName` other than `default-scheduler`, would skip the scheduler that enforces the term.
 A namespaced `RunnerTemplate` may set neither: admission refuses both, and the AGC clears both from a worker built from a template stored earlier.
 A `ClusterRunnerTemplate` keeps both, so a platform that sets one there places those workers itself.
+
+Preemption is the other way past the term: a worker whose PriorityClass outranks a controller, and whose class has `preemptionPolicy: PreemptLowerPriority`, has the scheduler evict that controller from the node the worker wants, in any tenant's namespace (measured on kind 1.35.5, 2026-11-16).
+GAG keeps every AGC and egress proxy above every class a worker can reach, and refuses to start when the classes say otherwise ([the controllers outrank every worker class](#the-controllers-outrank-every-worker-class)).
 
 The default leaves two gaps:
 
@@ -1292,7 +1296,7 @@ args:
   - --allowed-infra-priority-classes=gag-infra-critical   # DISJOINT from the above
 ```
 
-Create the infra class with a value **above** the worker classes so the scheduler keeps infra pods when a node is contended:
+Create the infra class with a value **above** the worker classes so the scheduler keeps infra pods when a node is contended; the GMC refuses to start when one is not ([below](#the-controllers-outrank-every-worker-class)):
 
 ```yaml
 apiVersion: scheduling.k8s.io/v1
@@ -1303,6 +1307,35 @@ value: 1000000000            # well above the runner-* classes
 preemptionPolicy: Never      # order ahead without evicting others, unless you mean to
 description: "GAG per-tenant egress proxy and AGC control-plane pods."
 ```
+
+### The controllers outrank every worker class
+
+A pod can preempt any pod of lower priority on a node, whatever namespace it is in.
+So a preempting worker class above an AGC's or proxy's lets one tenant's workers evict another tenant's controllers, which stalls every job that tenant runs.
+Measured on kind 1.35.5 on 2026-11-16: a worker at `100000` with `PreemptLowerPriority` evicted a priority-0 AGC in another namespace whose anti-affinity was all that blocked its node; the same class with `preemptionPolicy: Never` evicted nothing, and an AGC at `1000000000` kept its node.
+An allowlisted class with `preemptionPolicy: Never` cannot do this, but the order is still checked, because the node-pressure evictions the kubelet makes rank pods by priority too.
+GAG holds the order in two ways:
+
+- **Every AGC and egress proxy gets a class.** One whose `spec.scheduling.priorityClassName` is empty gets the GMC's `--control-plane-priority-class`.
+  The chart creates that class as `<namePrefix>-control-plane`, with value `1000000000` (the highest a non-system class may take) and `preemptionPolicy: Never`, so the controllers schedule ahead of workers without evicting anything themselves.
+- **The GMC compares values, not only names.** Every class a worker can reach sits below every control-plane class.
+  A worker can reach each `allowedPriorityClasses` entry, and the cluster's `globalDefault` class if one exists, because a pod naming no class runs at that value.
+  The control-plane classes are `--control-plane-priority-class` and each `allowedInfraPriorityClasses` entry.
+  An equal value counts as out of order.
+
+| Where the order breaks | What you see |
+|---|---|
+| At startup | The GMC **refuses to boot** with `verify PriorityClass order:`, naming each worker class and the control-plane class it is not below |
+| At startup, the control-plane class does not exist | The GMC **refuses to boot**: `--control-plane-priority-class "<name>" names no PriorityClass` |
+| A `PriorityClassAllowlist` edit | **Both dynamic sets are dropped** and the GMC logs `WARNING: PriorityClassAllowlist would let a worker class reach control-plane priority` |
+| A PriorityClass created or deleted after startup | The same check re-runs. If the flags alone are now out of order, the GMC logs `WARNING: the static PriorityClass allowlists let a worker class reach control-plane priority` and keeps running, because only you can change a class value or a flag |
+
+A class named on an allowlist but not yet created is skipped, because the apiserver refuses a pod naming an absent class.
+
+To use a class you created yourself, set `controlPlanePriorityClass.name`; the chart then creates none.
+`controlPlanePriorityClass.create: false` with no name gives the controllers no class, so a worker class above 0 can preempt them again.
+
+A `ClusterRunnerTemplate` may still name any class, as it may name a privileged container: only the platform can write one.
 
 ### Upgrading: previously ungated `priorityClassName` fields are now gated
 

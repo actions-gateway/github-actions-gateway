@@ -143,6 +143,14 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		return fmt.Errorf("verify installed CRD schemas: %w", err)
 	}
 
+	// A worker class at or above a controller's lets the scheduler preempt that
+	// controller in any tenant namespace (Q1351). Refuse to start on one; the
+	// priorityclass-allowlist reconciler keeps the order on every later edit.
+	if err := controller.VerifyPriorityOrder(crdCtx, mgr.GetAPIReader(),
+		rc.priorityClassAllowlist, rc.infraPriorityClassAllowlist, rc.controlPlanePriorityClass); err != nil {
+		return fmt.Errorf("verify PriorityClass order: %w", err)
+	}
+
 	// Register the GMC's custom metrics. The scrape-time collectors list the
 	// relevant CRs from the manager cache, so they must be given a cached reader;
 	// v2Enabled gates the v2 ActionsGateway/EgressProxy passes (Q320).
@@ -216,18 +224,19 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		// ActionsGateway reconciler (v2 M3a): provisions the per-tenant AGC control
 		// plane and wires its egress through the EgressProxy named by defaultProxyRef.
 		if err := (&controller.ActionsGatewayV2Reconciler{
-			Client:               mgr.GetClient(),
-			Scheme:               mgr.GetScheme(),
-			AGCImage:             img.agcImage,
-			AGCExtraEnv:          img.agcExtraEnv,
-			APIServerCIDRs:       parsedAPIServerCIDRs,
-			WorkerSeparation:     rc.workerSeparation,
-			IPCache:              ipCache,
-			EgressStaleThreshold: egressStaleThreshold,
-			EnableServiceMonitor: cfg.enableTenantServiceMonitors,
-			Recorder:             mgr.GetEventRecorder("actionsgateway-v2-controller"),
-			Reader:               mgr.GetAPIReader(),
-			SecretWatches:        secretWatches,
+			Client:                    mgr.GetClient(),
+			Scheme:                    mgr.GetScheme(),
+			AGCImage:                  img.agcImage,
+			AGCExtraEnv:               img.agcExtraEnv,
+			APIServerCIDRs:            parsedAPIServerCIDRs,
+			WorkerSeparation:          rc.workerSeparation,
+			ControlPlanePriorityClass: rc.controlPlanePriorityClass,
+			IPCache:                   ipCache,
+			EgressStaleThreshold:      egressStaleThreshold,
+			EnableServiceMonitor:      cfg.enableTenantServiceMonitors,
+			Recorder:                  mgr.GetEventRecorder("actionsgateway-v2-controller"),
+			Reader:                    mgr.GetAPIReader(),
+			SecretWatches:             secretWatches,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create actionsgateway-v2 controller: %w", err)
 		}
@@ -237,18 +246,19 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		// NetworkPolicy's GitHub-CIDR egress allowlist stays current, and the platform
 		// egress allowlist that gates which referrer GitHub hosts it emits (Q1322).
 		if err := (&controller.EgressProxyReconciler{
-			EgressAllowlist:      rc.egressDestinationAllowlist,
-			AllowlistChanged:     egressAllowlistChanged,
-			Client:               mgr.GetClient(),
-			APIReader:            mgr.GetAPIReader(),
-			Scheme:               mgr.GetScheme(),
-			IPCache:              ipCache,
-			ProxyImage:           img.proxyImage,
-			FQDNBackend:          rc.fqdnBackend,
-			WorkerSeparation:     rc.workerSeparation,
-			EnableServiceMonitor: cfg.enableTenantServiceMonitors,
-			EgressStaleThreshold: egressStaleThreshold,
-			Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
+			EgressAllowlist:           rc.egressDestinationAllowlist,
+			AllowlistChanged:          egressAllowlistChanged,
+			Client:                    mgr.GetClient(),
+			APIReader:                 mgr.GetAPIReader(),
+			Scheme:                    mgr.GetScheme(),
+			IPCache:                   ipCache,
+			ProxyImage:                img.proxyImage,
+			FQDNBackend:               rc.fqdnBackend,
+			WorkerSeparation:          rc.workerSeparation,
+			ControlPlanePriorityClass: rc.controlPlanePriorityClass,
+			EnableServiceMonitor:      cfg.enableTenantServiceMonitors,
+			EgressStaleThreshold:      egressStaleThreshold,
+			Recorder:                  mgr.GetEventRecorder("egressproxy-controller"),
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create egressproxy controller: %w", err)
 		}

@@ -120,6 +120,10 @@ spec:
         # Keep the AGC and egress proxy pods the GMC builds off nodes that run
         # worker pods (required | none).
         - --controller-worker-separation={{ .Values.controllerWorkerSeparation }}
+        {{- with include "actions-gateway.controlPlanePriorityClassName" . }}
+        # Q1351: the class every AGC and egress proxy pod gets when its spec names none.
+        - --control-plane-priority-class={{ . }}
+        {{- end }}
         env:
         # POD_NAMESPACE is read by the admission webhook to forbid ActionsGateway
         # CRs in the GMC's own install namespace. Downward API so custom installs

@@ -8,6 +8,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -32,6 +33,7 @@ type resolvedConfig struct {
 	egressDestinationAllowlist  *allowlist.EgressDestinationAllowlist
 	fqdnBackend                 controller.FQDNBackend
 	workerSeparation            controller.WorkerSeparation
+	controlPlanePriorityClass   string
 	podNamespace                string
 	podServiceAccount           string
 	deploymentName              string
@@ -65,11 +67,24 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 	// --allowed-infra-priority-classes flag. It is a SEPARATE instance from the worker
 	// allowlist and MUST be disjoint from it. A boot-time intersection check converts
 	// that silent priority inversion into a hard startup failure.
-	infraPriorityClassAllowlist := allowlist.New(parseAllowedPriorityClasses(cfg.allowedInfraPriorityClasses))
+	// The control-plane class (Q1351) joins the infra set, so the same disjointness
+	// checks keep it off every worker surface.
+	controlPlanePriorityClass := strings.TrimSpace(cfg.controlPlanePriorityClass)
+	if controlPlanePriorityClass != "" {
+		if errs := validation.IsDNS1123Subdomain(controlPlanePriorityClass); len(errs) > 0 {
+			return nil, fmt.Errorf("invalid --control-plane-priority-class %q: %s",
+				controlPlanePriorityClass, strings.Join(errs, "; "))
+		}
+	}
+	infraNames := parseAllowedPriorityClasses(cfg.allowedInfraPriorityClasses)
+	if controlPlanePriorityClass != "" {
+		infraNames = append(infraNames, controlPlanePriorityClass)
+	}
+	infraPriorityClassAllowlist := allowlist.New(infraNames)
 	if shared := allowlist.Intersection(priorityClassAllowlist, infraPriorityClassAllowlist); len(shared) > 0 {
 		return nil, fmt.Errorf("PriorityClass allowlists intersect (%v): --allowed-priority-classes (worker) and "+
-			"--allowed-infra-priority-classes must be disjoint: a class on both would let a tenant lift its worker "+
-			"pods to infra priority and preempt other tenants' proxy pods", shared)
+			"--allowed-infra-priority-classes plus --control-plane-priority-class must be disjoint: a class on both "+
+			"would let a tenant lift its worker pods to infra priority and preempt other tenants' proxy pods", shared)
 	}
 	// Both allowlists also take a watched dynamic half (Q188/Q298), so the flags are
 	// no longer the only route to an overlap. Pairing makes the invariant hold at
@@ -113,6 +128,7 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 		egressDestinationAllowlist:  egressDestinationAllowlist,
 		fqdnBackend:                 fqdnBackend,
 		workerSeparation:            workerSeparation,
+		controlPlanePriorityClass:   controlPlanePriorityClass,
 		podNamespace:                podNamespace,
 		podServiceAccount:           getenv("POD_SERVICE_ACCOUNT"),
 		deploymentName:              getenv("DEPLOYMENT_NAME"),
