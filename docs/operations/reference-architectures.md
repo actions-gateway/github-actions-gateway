@@ -21,6 +21,13 @@ A combination in neither tier may well work, and [the last section](#combination
 All three run on the dogfood cluster: Google Kubernetes Engine (GKE) with Dataplane V2, its Cilium-based CNI.
 Each is a leg of the release gate, which dispatches the e2e matrix onto GAG runners and fails the release on a red run ([the legs the gate runs](release.md#the-legs-the-gate-runs)).
 
+All three also run on [separate node pools](security-operations.md#recommended-separate-pools-for-the-control-plane-egress-and-workers).
+The GMC is pinned to the system pool, `default-pool`.
+The AGCs pin to nothing, and land there because every other pool is tainted.
+Workers run on tainted pools and are pinned to them: the e2e legs' workers to the `e2e` pool, and the standing tenant's to `workers` and `workers-od`.
+The cluster has no egress pool, because its tenants run direct egress with no egress proxy.
+The egress-pool half of the topology was validated on throwaway GKE clusters instead ([per-tenant egress IP reference architecture](../plan/q243-egress-ip-reference-arch.md)).
+
 | Profile | Worker isolation | Egress posture | Mirror topology | Mirror back end | Node-layer P2P | Gate leg |
 |---|---|---|---|---|---|---|
 | **Untrusted pull requests** | Kata micro-VM | Tight: mirrors, GitHub and DNS only | Per tenant, ephemeral | Distribution | None | `kata` |

@@ -34,6 +34,9 @@ Two detection substrates are used:
   - [Manifest posture — polaris (automated, in CI)](#manifest-posture--polaris-automated-in-ci)
   - [CIS-benchmark posture — kube-bench (manual, pre-production)](#cis-benchmark-posture--kube-bench-manual-pre-production)
 - [Keep GAG's control plane off worker nodes](#keep-gags-control-plane-off-worker-nodes)
+  - [Recommended: separate pools for the control plane, egress, and workers](#recommended-separate-pools-for-the-control-plane-egress-and-workers)
+  - [Fallback for a shared pool: anti-affinity and priority](#fallback-for-a-shared-pool-anti-affinity-and-priority)
+  - [Check the separation on a live cluster](#check-the-separation-on-a-live-cluster)
 - [Job intake: bind every tenant to a GitHub runner group](#job-intake-bind-every-tenant-to-a-github-runner-group)
   - [Fork pull requests choose their own runner label](#fork-pull-requests-choose-their-own-runner-label)
 - [Tenant egress posture & deliberate widening](#tenant-egress-posture--deliberate-widening)
@@ -526,33 +529,34 @@ If a GAG control-plane pod is one of them, one compromised node becomes access t
 | Egress proxy | That tenant's egress path and the proxy's private TLS key |
 | Cache and registry mirrors | The artifacts other jobs pull next, so a write poisons them |
 
-**GAG keeps its controllers off worker nodes by default.** The GMC pod, and every AGC and egress proxy pod the GMC builds, carry a required pod anti-affinity against worker pods in every namespace.
-The scheduler enforces it from both sides: a controller is not placed on a node running a worker, and a new worker is not placed on a node running a controller.
-`ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling` and the chart's `affinity` value cannot remove it, because the term is appended after them.
-The chart value `controllerWorkerSeparation: none` turns it off, for a cluster with one schedulable node; it then gives up this protection ([upgrade notes](upgrade.md#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes)).
+### Recommended: separate pools for the control plane, egress, and workers
 
-A worker template that sets `nodeName`, or a `schedulerName` other than `default-scheduler`, would skip the scheduler that enforces the term.
-A namespaced `RunnerTemplate` may set neither: admission refuses both, and the AGC clears both from a worker built from a template stored earlier.
-A `ClusterRunnerTemplate` keeps both, so a platform that sets one there places those workers itself.
+Run GAG on three node pools, so a worker never shares a node with anything in the table above:
 
-Preemption is the other way past the term: a worker whose PriorityClass outranks a controller, and whose class has `preemptionPolicy: PreemptLowerPriority`, has the scheduler evict that controller from the node the worker wants, in any tenant's namespace (measured on kind 1.35.5, 2026-11-16).
-GAG keeps every AGC and egress proxy above every class a worker can reach, and refuses to start when the classes say otherwise ([the controllers outrank every worker class](#the-controllers-outrank-every-worker-class)).
+| Pool | Runs | What puts a pod there |
+|---|---|---|
+| System | The GMC and every tenant's AGC | The chart's `nodeSelector` value for the GMC, and `ActionsGateway.spec.scheduling` for each AGC |
+| Egress | Every egress proxy | `EgressProxy.spec.scheduling`, which also decides the tenant's public egress IP |
+| Worker | Workers only | A taint on the pool, plus a `nodeSelector` or required `nodeAffinity` on every worker template |
 
-The default leaves two gaps:
+The controllers are the pods a tenant can least afford to lose.
+Each tenant runs one AGC pod: the GMC builds its Deployment with `replicas: 1` and no PodDisruptionBudget, so while it is evicted, no new job starts for that tenant.
+The egress proxy defaults to `minReplicas: 2` behind a PodDisruptionBudget of `minAvailable: 1`, and every replica it loses narrows the tenant's only path to GitHub.
 
-- **The cache and registry mirrors carry no such term.** You install them from `deploy/`, not through the GMC.
-- **On one shared pool, controllers and workers compete for whole nodes.** A node running any worker is closed to every controller, and the reverse, so a busy pool can leave a controller rollout `Pending`.
+Separate pools also take worker preemption off the table.
+The scheduler preempts only on a node where the pending pod could run once its victims are gone ([Kubernetes: preemption](https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#preemption)).
+A worker pinned to the worker pool cannot run on a system or egress node, so whatever its priority, it has no node there on which to evict a controller.
 
-Separate pools close the last gap and make placement predictable.
-GAG never creates node pools, so this belongs to the cluster, and it takes two halves:
+GAG never creates node pools, so this belongs to the cluster.
+The worker pool takes two halves, and each closes a different direction:
 
 1. **Taint the worker pool, and give no control-plane pod the toleration.** That keeps controllers off worker nodes.
 2. **Pin workers to that pool** with a `nodeSelector` or a required `nodeAffinity`.
-   That keeps workers off controller nodes.
+   That keeps workers off system and egress nodes.
    A toleration only *permits* a pod onto a tainted node; on its own it does not keep a worker away from any untainted one.
 
 Most setups do the first half and skip the second.
-Workers that tolerate the pool's taint and set no selector still land on the system pool wherever it has room.
+Workers that tolerate the pool's taint and set no selector still land on the system pool wherever it has room, and there they can preempt a controller again.
 
 Taint and label the pool when you create it (GKE shown; EKS and AKS take the same `key=value:NoSchedule` taint on the node group):
 
@@ -578,14 +582,55 @@ spec:
           effect: NoSchedule
 ```
 
-Do not add that toleration to `ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling`, the chart's `tolerations` value, or any cache or mirror.
-A tenant can set `spec.scheduling` on its own `ActionsGateway` and `EgressProxy` ([why it is tenant-settable](#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling)), so a tenant can put its own AGC onto the worker pool.
-If tenants author those objects, enforce the rule at admission rather than trusting it.
+Pin the GMC to the system pool with the chart's `nodeSelector` value, and each AGC with the same selector on its `ActionsGateway`:
+
+```yaml
+spec:
+  scheduling:
+    nodeSelector:
+      dedicated: gag-system
+```
+
+Pin each egress proxy with `EgressProxy.spec.scheduling` to the egress pool whose NAT or subnet owns that tenant's public IP.
+That node choice is what makes the IP controllable, and [Pinning a tenant's proxy pool to its egress IP](#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling) covers it, including the replica spread a small egress pool has to allow for.
+In direct-egress mode, with no proxy, the worker's own node picks the IP instead, so pin those workers to a per-tenant worker pool.
+
+Do not add the worker toleration to `ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling`, the chart's `tolerations` value, or any cache or mirror.
+The cache and registry mirrors you install from `deploy/` have no anti-affinity term of their own, so on separate pools the taint and the worker pin are what keep them apart from workers.
+
+A tenant can set `spec.scheduling` on its own `ActionsGateway` and `EgressProxy` ([why it is tenant-settable](#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling)), so a tenant can move its own AGC onto the worker pool or off the system pool.
+If tenants author those objects, enforce the placement at admission rather than trusting it.
+The [placement policy samples](admission-policies.md#governing-where-gag-pods-schedule) pin *every* pod in a tenant namespace to one pool, which puts the tenant's AGC and proxy on the same nodes as its workers.
+Do not use them as written with separate pools; splitting them into per-component pins is [Q1345](../queue/Q1345.md).
 
 This matters most for the `privileged-dind` template, where an escape lands directly on the host ([choosing a template](runner-template-library.md)).
 Kata narrows the risk without removing it, because a guest-to-host escape lands on the same node.
 
-**Check the separation on a live cluster.** This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran.
+### Fallback for a shared pool: anti-affinity and priority
+
+A cluster that runs everything on one pool still keeps controllers and workers on different nodes, by default.
+Both mechanisms below stay on with separate pools too, where they are a second layer.
+
+**The controllers carry a required anti-affinity against workers.** The GMC pod, and every AGC and egress proxy pod the GMC builds, carry a required pod anti-affinity against worker pods in every namespace.
+The scheduler enforces it from both sides: a controller is not placed on a node running a worker, and a new worker is not placed on a node running a controller.
+`ActionsGateway.spec.scheduling`, `EgressProxy.spec.scheduling` and the chart's `affinity` value cannot remove it, because the term is appended after them.
+The chart value `controllerWorkerSeparation: none` turns it off, for a cluster with one schedulable node; it then gives up this protection ([upgrade notes](upgrade.md#action-required-if-controllers-and-workers-share-nodes-the-controllers-now-keep-off-worker-nodes)).
+
+A worker template that sets `nodeName`, or a `schedulerName` other than `default-scheduler`, would skip the scheduler that enforces the term.
+A namespaced `RunnerTemplate` may set neither: admission refuses both, and the AGC clears both from a worker built from a template stored earlier.
+A `ClusterRunnerTemplate` keeps both, so a platform that sets one there places those workers itself.
+
+**The controllers outrank every worker PriorityClass.** Preemption is the other way past the term: a worker whose PriorityClass outranks a controller, and whose class has `preemptionPolicy: PreemptLowerPriority`, has the scheduler evict that controller from the node the worker wants, in any tenant's namespace (measured on kind 1.35.5, 2026-11-16).
+GAG keeps every AGC and egress proxy above every class a worker can reach, and refuses to start when the classes say otherwise ([the controllers outrank every worker class](#the-controllers-outrank-every-worker-class)).
+
+A shared pool still leaves two gaps that separate pools close:
+
+- **The cache and registry mirrors carry no anti-affinity term.** You install them from `deploy/`, not through the GMC, so a worker can land on their nodes.
+- **Controllers and workers compete for whole nodes.** A node running any worker is closed to every controller, and the reverse, so a busy pool can leave a controller rollout `Pending`.
+
+### Check the separation on a live cluster
+
+This lists every node that runs a GAG worker and a GAG control-plane pod at the same time; empty output means none did when it ran.
 A worker is a pod carrying `app.kubernetes.io/component: runner`; the AGC shares the `actions-gateway/component: workload` label with workers, so that label alone cannot tell them apart:
 
 ```bash
@@ -606,9 +651,6 @@ kubectl get pods -A -o json | jq -r --arg gmc "$GMC_NS" '
 The query finds the GMC by its namespace and the AGC, proxy, and worker pods by their `app.kubernetes.io/part-of` label.
 Cache and mirror deployments you installed yourself carry neither, so add their namespaces to the selection.
 It reads one moment: run it while jobs are running, because workers exist only for the length of a job.
-
-The [placement policy samples](admission-policies.md#governing-where-gag-pods-schedule) pin *every* pod in a tenant namespace to one pool, which puts the tenant's AGC and proxy on the same nodes as its workers.
-Do not use them as written on a cluster that keeps the control plane off worker nodes.
 
 ## Job intake: bind every tenant to a GitHub runner group
 
@@ -832,6 +874,7 @@ Confirm your CNI actually enforces DNS-based egress before relying on it (see th
 
 A per-tenant egress IP is realized *below* Kubernetes: a node pool whose egress path (a per-range cloud NAT gateway, a dedicated subnet, a SNAT-ing gateway node) owns that IP.
 So the pod's **node** decides which IP its traffic leaves by, and pinning the tenant's proxy pool to the tenant's node pool is what binds the two.
+This is the egress pool of the [recommended topology](#recommended-separate-pools-for-the-control-plane-egress-and-workers).
 
 `EgressProxy.spec.scheduling` carries the standard `nodeSelector`, `tolerations`, `affinity`, `topologySpreadConstraints`, and `priorityClassName`; `ActionsGateway.spec.scheduling` does the same for the AGC control-plane pod.
 (Worker pods have always had the full surface via `RunnerTemplate.spec.podTemplate`.)
