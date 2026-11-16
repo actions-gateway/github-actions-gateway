@@ -2808,8 +2808,6 @@ No pill means no release is decided for that item yet.</p>
 <li><strong><a href="../design/appendix-g-future-enhancements/#g17-opt-in-auto-retry-for-flaky-jobs-beyond-disruptions">Flaky-job detection, and auto-retry for more platform failures</a></strong> <span class="gag-release-chip" title="Blocks the 2.1 release">2.1</span> <!-- q:Q1236,Q1317,Q1320,Q1318,Q1319,Q1315,Q1316 --> A job the cluster disrupts already <a href="../operations/troubleshooting/#which-disruptions-auto-re-run-a-job-and-which-never-do">re-runs itself</a>; a flaky failure does not.
   Detection already counts flaky jobs per runner set.
   Then the same re-run machinery learns more failures that come from the platform rather than your code, so fewer need a manual re-run.</li>
-<li><strong><a href="../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">Controllers that outrank every worker</a></strong> <span class="gag-release-chip" title="Blocks the 2.0 release">2.0</span> <!-- q:Q1351 --> A worker priority class above a controller's may let a worker evict another tenant's gateway or egress proxy.
-  GAG will give its controllers a non-preempting class above every allowed worker class, and refuse an allowlist that breaks the order.</li>
 </ul>
 <h2 id="exploring--longer-term">Exploring / longer-term<a class="headerlink" href="#exploring--longer-term" title="Permanent link">&para;</a></h2>
 <p>Directions we expect to pursue as demand and validated evidence accumulate.

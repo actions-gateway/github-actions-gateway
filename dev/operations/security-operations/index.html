@@ -2972,6 +2972,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-controllers-outrank-every-worker-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The controllers outrank every worker class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3852,6 +3863,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#the-controllers-outrank-every-worker-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The controllers outrank every worker class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4081,6 +4103,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <li><a href="#github-api-base-url-must-be-https">GitHub API base URL must be HTTPS</a></li>
 <li><a href="#priority-classes-the-allowed-priority-classes-allowlist">Priority classes: the <code>allowed-priority-classes</code> allowlist</a></li>
 <li><a href="#infra-pods-the-separate-allowed-infra-priority-classes-allowlist">Infra pods: the separate allowed-infra-priority-classes allowlist</a></li>
+<li><a href="#the-controllers-outrank-every-worker-class">The controllers outrank every worker class</a></li>
 <li><a href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated">Upgrading: previously ungated priorityClassName fields are now gated</a></li>
 <li><a href="#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Self-service additions via the PriorityClassAllowlist CR (Q188, Q298)</a></li>
 <li><a href="#narrowing-the-allowlist-drain-stored-references-first">Narrowing the allowlist: drain stored references first</a></li>
@@ -4639,6 +4662,8 @@ The chart value <code>controllerWorkerSeparation: none</code> turns it off, for 
 <p>A worker template that sets <code>nodeName</code>, or a <code>schedulerName</code> other than <code>default-scheduler</code>, would skip the scheduler that enforces the term.
 A namespaced <code>RunnerTemplate</code> may set neither: admission refuses both, and the AGC clears both from a worker built from a template stored earlier.
 A <code>ClusterRunnerTemplate</code> keeps both, so a platform that sets one there places those workers itself.</p>
+<p>Preemption is the other way past the term: a worker whose PriorityClass outranks a controller, and whose class has <code>preemptionPolicy: PreemptLowerPriority</code>, has the scheduler evict that controller from the node the worker wants, in any tenant's namespace (measured on kind 1.35.5, 2026-11-16).
+GAG keeps every AGC and egress proxy above every class a worker can reach, and refuses to start when the classes say otherwise (<a href="#the-controllers-outrank-every-worker-class">the controllers outrank every worker class</a>).</p>
 <p>The default leaves two gaps:</p>
 <ul>
 <li><strong>The cache and registry mirrors carry no such term.</strong> You install them from <code>deploy/</code>, not through the GMC.</li>
@@ -5333,7 +5358,7 @@ The flags are not the only route to an overlap once the watched CR is in play; s
 <a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-priority-classes=runner-standard,runner-opportunistic</span>
 <a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">--allowed-infra-priority-classes=gag-infra-critical</span><span class="w">   </span><span class="c1"># DISJOINT from the above</span>
 </code></pre></div>
-<p>Create the infra class with a value <strong>above</strong> the worker classes so the scheduler keeps infra pods when a node is contended:</p>
+<p>Create the infra class with a value <strong>above</strong> the worker classes so the scheduler keeps infra pods when a node is contended; the GMC refuses to start when one is not (<a href="#the-controllers-outrank-every-worker-class">below</a>):</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">scheduling.k8s.io/v1</span>
 <a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PriorityClass</span>
 <a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="nt">metadata</span><span class="p">:</span>
@@ -5342,6 +5367,50 @@ The flags are not the only route to an overlap once the watched CR is in play; s
 <a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="nt">preemptionPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Never</span><span class="w">      </span><span class="c1"># order ahead without evicting others, unless you mean to</span>
 <a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="s">"GAG</span><span class="nv"> </span><span class="s">per-tenant</span><span class="nv"> </span><span class="s">egress</span><span class="nv"> </span><span class="s">proxy</span><span class="nv"> </span><span class="s">and</span><span class="nv"> </span><span class="s">AGC</span><span class="nv"> </span><span class="s">control-plane</span><span class="nv"> </span><span class="s">pods."</span>
 </code></pre></div>
+<h3 id="the-controllers-outrank-every-worker-class">The controllers outrank every worker class<a class="headerlink" href="#the-controllers-outrank-every-worker-class" title="Permanent link">&para;</a></h3>
+<p>A pod can preempt any pod of lower priority on a node, whatever namespace it is in.
+So a preempting worker class above an AGC's or proxy's lets one tenant's workers evict another tenant's controllers, which stalls every job that tenant runs.
+Measured on kind 1.35.5 on 2026-11-16: a worker at <code>100000</code> with <code>PreemptLowerPriority</code> evicted a priority-0 AGC in another namespace whose anti-affinity was all that blocked its node; the same class with <code>preemptionPolicy: Never</code> evicted nothing, and an AGC at <code>1000000000</code> kept its node.
+An allowlisted class with <code>preemptionPolicy: Never</code> cannot do this, but the order is still checked, because the node-pressure evictions the kubelet makes rank pods by priority too.
+GAG holds the order in two ways:</p>
+<ul>
+<li><strong>Every AGC and egress proxy gets a class.</strong> One whose <code>spec.scheduling.priorityClassName</code> is empty gets the GMC's <code>--control-plane-priority-class</code>.
+  The chart creates that class as <code>&lt;namePrefix&gt;-control-plane</code>, with value <code>1000000000</code> (the highest a non-system class may take) and <code>preemptionPolicy: Never</code>, so the controllers schedule ahead of workers without evicting anything themselves.</li>
+<li><strong>The GMC compares values, not only names.</strong> Every class a worker can reach sits below every control-plane class.
+  A worker can reach each <code>allowedPriorityClasses</code> entry, and the cluster's <code>globalDefault</code> class if one exists, because a pod naming no class runs at that value.
+  The control-plane classes are <code>--control-plane-priority-class</code> and each <code>allowedInfraPriorityClasses</code> entry.
+  An equal value counts as out of order.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Where the order breaks</th>
+<th>What you see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>At startup</td>
+<td>The GMC <strong>refuses to boot</strong> with <code>verify PriorityClass order:</code>, naming each worker class and the control-plane class it is not below</td>
+</tr>
+<tr>
+<td>At startup, the control-plane class does not exist</td>
+<td>The GMC <strong>refuses to boot</strong>: <code>--control-plane-priority-class "&lt;name&gt;" names no PriorityClass</code></td>
+</tr>
+<tr>
+<td>A <code>PriorityClassAllowlist</code> edit</td>
+<td><strong>Both dynamic sets are dropped</strong> and the GMC logs <code>WARNING: PriorityClassAllowlist would let a worker class reach control-plane priority</code></td>
+</tr>
+<tr>
+<td>A PriorityClass created or deleted after startup</td>
+<td>The same check re-runs. If the flags alone are now out of order, the GMC logs <code>WARNING: the static PriorityClass allowlists let a worker class reach control-plane priority</code> and keeps running, because only you can change a class value or a flag</td>
+</tr>
+</tbody>
+</table>
+<p>A class named on an allowlist but not yet created is skipped, because the apiserver refuses a pod naming an absent class.</p>
+<p>To use a class you created yourself, set <code>controlPlanePriorityClass.name</code>; the chart then creates none.
+<code>controlPlanePriorityClass.create: false</code> with no name gives the controllers no class, so a worker class above 0 can preempt them again.</p>
+<p>A <code>ClusterRunnerTemplate</code> may still name any class, as it may name a privileged container: only the platform can write one.</p>
 <h3 id="upgrading-previously-ungated-priorityclassname-fields-are-now-gated">Upgrading: previously ungated <code>priorityClassName</code> fields are now gated<a class="headerlink" href="#upgrading-previously-ungated-priorityclassname-fields-are-now-gated" title="Permanent link">&para;</a></h3>
 <p>Two of the tenant-reachable routes shipped before their gate did: <code>podTemplate.spec.priorityClassName</code> was accepted unvalidated on <code>RunnerTemplate</code>, and <code>priorityTiers[].priorityClassName</code> was accepted unvalidated on <code>RunnerSet</code>.
 Both are now rejected unless allowlisted, so <strong>an existing CR that names an off-allowlist class will fail its next <code>create</code>/<code>update</code></strong> (admission webhooks do not re-validate already-stored objects, so nothing breaks until the CR is edited).</p>

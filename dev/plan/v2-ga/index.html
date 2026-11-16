@@ -2856,7 +2856,7 @@ It is deliberately unhurried: General Availability (GA) signs a permanent backwa
 <p><strong>Status: Phases 1 and 2 are done.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), and Q413 then shipped Phase 2 for 1.9: <code>v2</code> served beside <code>v2beta1</code> on every kind, storage unmoved.
 <strong>Scoped 2026-10-09</strong>, after <code>v1.9.0</code> tagged on 2026-10-05: the <a href="#scope-ledger">scope ledger</a> is the release's record.
 Phase 3's storage advance ships first, in its own release: Q1086 landed it for <a href="../archive/release-1.10/">1.10</a>, <code>v2</code> storing on every kind and <code>gag-migrate storage-version</code> rewriting what is stored, decided by the maintainer on 2026-10-09 (<a href="#the-storage-advance-needs-a-state-between-two-applies">why it cannot share an apply with the removals</a>).
-The removals follow in <code>v2.0.0</code>: Q273 removed <code>v1alpha1</code> and Q264 removed classic on <code>main</code>, and Q1167 removed <code>v2alpha1</code>, <code>v2beta1</code> and the hub; Phase 4's docs landed, Q1284 set one Kubernetes floor at 1.35, Q1312 added two stricter admission rules, the 2026-11-09 security audit gated Q1321, which extended the GMC's confinement policy, and Q1322, which added eight stricter admission rules, Q1220's decision gated Q1330, which refuses fork pull request jobs by default, Q1347 refused worker templates that bypass the worker separation, <a href="../../queue/Q1351/">Q1351</a> is gated to keep the controllers above every allowlisted worker priority, and the tag is <a href="../../queue/Q1107/">Q1107</a>.
+The removals follow in <code>v2.0.0</code>: Q273 removed <code>v1alpha1</code> and Q264 removed classic on <code>main</code>, and Q1167 removed <code>v2alpha1</code>, <code>v2beta1</code> and the hub; Phase 4's docs landed, Q1284 set one Kubernetes floor at 1.35, Q1312 added two stricter admission rules, the 2026-11-09 security audit gated Q1321, which extended the GMC's confinement policy, and Q1322, which added eight stricter admission rules, Q1220's decision gated Q1330, which refuses fork pull request jobs by default, Q1347 refused worker templates that bypass the worker separation, Q1351 put the controllers above every worker priority, and the tag is <a href="../../queue/Q1107/">Q1107</a>.
 The Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The phase table below is the real state.</p>
 </blockquote>
@@ -3051,10 +3051,10 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: gated 2026-11-12, because a template setting either field places a worker beside a controller past the default worker separation, and refusing it at admission is a stricter rule, which after the tag waits for <code>v3</code>; a namespaced <code>RunnerTemplate</code> that sets either is refused at admission, the AGC clears both from one stored earlier, and a <code>ClusterRunnerTemplate</code> keeps both</td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1351/">Q1351</a></td>
+<td>Q1351</td>
 <td>Keep the AGC and egress proxy above every allowlisted worker priority</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open: gated 2026-11-16, because a worker class above a controller's may let a worker evict another tenant's AGC or proxy, and both enforcement steps are stricter rules, which after the tag wait for <code>v3</code></td>
+<td>✅ landed: gated 2026-11-16, because kind measured a preempting worker class evicting another namespace's AGC, and both enforcement steps are stricter rules, which after the tag wait for <code>v3</code>; every AGC and proxy naming no class gets a chart-created non-preempting class at <code>1000000000</code>, and the GMC refuses to start, or to apply an allowlist edit, while a worker-reachable class is not below every control-plane class</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q1107/">Q1107</a></td>
