@@ -49,6 +49,7 @@ type gmcFlags struct {
 	apiServerCIDRs    string
 
 	controllerWorkerSeparation string
+	controlPlanePriorityClass  string
 }
 
 // addFlags declares the GMC's flags into fs and returns the struct they bind to.
@@ -192,5 +193,12 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"its container cannot reach a controller's credentials on the same node. 'none' "+
 			"stamps nothing, for clusters with one schedulable node. An unrecognized value "+
 			"fails startup.")
+	fs.StringVar(&f.controlPlanePriorityClass, "control-plane-priority-class", "",
+		"PriorityClass the GMC gives an AGC or egress proxy pod whose spec.scheduling names "+
+			"none (Q1351). The class must exist, and every class a worker can reach (the "+
+			"--allowed-priority-classes set and any globalDefault class) must sit below it and "+
+			"below every --allowed-infra-priority-classes entry, or the GMC refuses to start. "+
+			"It joins the infra allowlist, so it can never be on the worker allowlist. The chart "+
+			"creates and sets one with preemptionPolicy: Never. Empty leaves those pods unprioritized.")
 	return f
 }

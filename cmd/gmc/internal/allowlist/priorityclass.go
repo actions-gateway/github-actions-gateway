@@ -175,6 +175,19 @@ func (a *PriorityClassAllowlist) SetDynamic(names []string) {
 	a.dynamic = toSet(names)
 }
 
+// StaticNames returns the static (flag) set as a sorted slice.
+func (a *PriorityClassAllowlist) StaticNames() []string {
+	if a == nil {
+		return nil
+	}
+	names := make([]string, 0, len(a.static))
+	for n := range a.static {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
+}
+
 // DynamicNames returns the current dynamic set as a sorted slice. It exists for
 // observability (logging/tests); the effective allowlist callers should consult
 // is Allowed/Names.

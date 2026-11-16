@@ -1,0 +1,19 @@
+{{- if and .Values.controlPlanePriorityClass.create (not .Values.controlPlanePriorityClass.name) }}
+# The PriorityClass the GMC gives every AGC and egress proxy pod whose spec names
+# none (Q1351). Its value sits above any class a platform allowlists for workers,
+# so no worker can preempt a controller off a node, in any tenant namespace; the
+# GMC refuses to start if an allowlisted worker class or a globalDefault class is
+# not below it. preemptionPolicy: Never keeps the controllers from evicting
+# anything themselves: they schedule ahead of lower classes without displacing
+# another workload in a shared cluster.
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ include "actions-gateway.controlPlanePriorityClassName" . }}
+  labels:
+    {{- include "actions-gateway.labels" . | nindent 4 }}
+value: {{ .Values.controlPlanePriorityClass.value | int }}
+preemptionPolicy: Never
+globalDefault: false
+description: "GitHub Actions Gateway AGC and egress proxy pods. Keep every worker PriorityClass below this value."
+{{- end }}

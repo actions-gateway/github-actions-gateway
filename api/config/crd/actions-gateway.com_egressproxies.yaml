@@ -1309,6 +1309,9 @@ spec:
 
                       The empty string (the default) names no class and is always permitted, so an
                       unset allowlist forbids every NAMED class without forbidding unprioritized pods.
+                      The GMC then gives the pod the platform's control-plane class
+                      (--control-plane-priority-class), which the chart creates by default, so it
+                      still sits above every worker class.
                     type: string
                   tolerations:
                     description: |-

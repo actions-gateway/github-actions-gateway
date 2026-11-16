@@ -7,12 +7,14 @@ import (
 	"sort"
 	"strings"
 
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -33,6 +35,10 @@ import (
 // overlap the startup flag check cannot see. Both lists are therefore applied
 // through allowlist.ApplyDynamicPair, which refuses the pair wholesale when the
 // resulting effective sets would share a class.
+//
+// The allowlists must also stay ordered (Q1351): every class a worker can reach sits
+// below every control-plane class. A pair that would break the order is refused the
+// same way, and a PriorityClass created or deleted re-runs the check.
 //
 // The same object is the `paramKind` of the priorityclass-allowlist-guard
 // ValidatingAdmissionPolicy, so the webhook and the policy read one source and
@@ -77,6 +83,14 @@ type PriorityClassAllowlistReconciler struct {
 // allowlists. See the type doc for the fail-safe contract.
 func (r *PriorityClassAllowlistReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	// Read the class values before touching either allowlist, so a failed read
+	// leaves the applied sets as they were.
+	classes, err := ReadPriorityClassValues(ctx, r.Client)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	defer r.warnIfStaticMisordered(ctx, classes)
 
 	var pca v2.PriorityClassAllowlist
 	key := types.NamespacedName{Name: r.Name}
@@ -127,6 +141,19 @@ func (r *PriorityClassAllowlistReconciler) Reconcile(ctx context.Context, _ ctrl
 		return ctrl.Result{}, nil
 	}
 
+	if inv := allowlist.CheckOrder(classes, r.Allowlist, r.InfraAllowlist); len(inv) > 0 {
+		// A worker class at or above a control-plane class would let a worker preempt
+		// a controller. Refuse the pair rather than offer that class.
+		r.failSafe()
+		log.Info("WARNING: PriorityClassAllowlist would let a worker class reach control-plane priority; "+
+			"ignoring it and using the static flag allowlists only",
+			"priorityClassAllowlist", r.Name,
+			"reason", allowlist.MisorderedError(inv).Error(),
+			"effectiveAllowlist", r.Allowlist.Names(),
+			"effectiveInfraAllowlist", r.InfraAllowlist.Names())
+		return ctrl.Result{}, nil
+	}
+
 	log.Info("applied PriorityClass allowlists from PriorityClassAllowlist",
 		"priorityClassAllowlist", r.Name,
 		"dynamicEntries", names,
@@ -134,6 +161,19 @@ func (r *PriorityClassAllowlistReconciler) Reconcile(ctx context.Context, _ ctrl
 		"effectiveAllowlist", r.Allowlist.Names(),
 		"effectiveInfraAllowlist", r.InfraAllowlist.Names())
 	return ctrl.Result{}, nil
+}
+
+// warnIfStaticMisordered logs when the static flag allowlists alone break the
+// order. The startup check proved them ordered, so this means a PriorityClass was
+// created or deleted since, and only a platform edit can fix it.
+func (r *PriorityClassAllowlistReconciler) warnIfStaticMisordered(ctx context.Context, classes allowlist.ClassValues) {
+	worker := allowlist.New(r.Allowlist.StaticNames())
+	infra := allowlist.New(r.InfraAllowlist.StaticNames())
+	if inv := allowlist.CheckOrder(classes, worker, infra); len(inv) > 0 {
+		logf.FromContext(ctx).Info("WARNING: the static PriorityClass allowlists let a worker class reach "+
+			"control-plane priority; fix the PriorityClass values or the GMC flags",
+			"reason", allowlist.MisorderedError(inv).Error())
+	}
 }
 
 // failSafe drops both dynamic sets, leaving the two static flag allowlists — which
@@ -184,6 +224,11 @@ func (r *PriorityClassAllowlistReconciler) SetupWithManager(mgr ctrl.Manager) er
 	runUnconditionally := false
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2.PriorityClassAllowlist{}, builder.WithPredicates(r.namePredicate())).
+		// Any PriorityClass change can break the order, so each one re-runs the check.
+		Watches(&schedulingv1.PriorityClass{}, handler.EnqueueRequestsFromMapFunc(
+			func(context.Context, client.Object) []reconcile.Request {
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: r.Name}}}
+			})).
 		Named("priorityclass-allowlist").
 		WithOptions(controller.Options{NeedLeaderElection: &runUnconditionally}).
 		Complete(r)

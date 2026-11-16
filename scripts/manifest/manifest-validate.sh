@@ -339,4 +339,30 @@ if [[ "$(separation_term_lines "$sep_none")" != 0 ]] ||
 fi
 echo "OK: worker separation renders by default, composes with a custom affinity, and turns off"
 
+echo "==> helm template: the controllers get a non-preempting PriorityClass by default (Q1351)"
+# The chart creates the class and names it on the GMC; a platform class replaces it,
+# and create=false with no name passes nothing.
+cp_render() {
+	helm template ag "$chart" "${RENDER_DIGEST_ARGS[@]}" "$@"
+}
+cp_default="$(cp_render)"
+if ! grep -q -- '--control-plane-priority-class=gmc-control-plane' <<<"$cp_default" ||
+	! grep -qx 'preemptionPolicy: Never' <<<"$cp_default" ||
+	! grep -qx 'value: 1000000000' <<<"$cp_default"; then
+	echo "ERROR: the default render lacks the gmc-control-plane PriorityClass (preemptionPolicy: Never, value 1000000000) or the GMC flag naming it" >&2
+	exit 1
+fi
+cp_platform="$(cp_render --set controlPlanePriorityClass.name=platform-cp)"
+if ! grep -q -- '--control-plane-priority-class=platform-cp' <<<"$cp_platform" ||
+	grep -q '^kind: PriorityClass$' <<<"$cp_platform"; then
+	echo "ERROR: controlPlanePriorityClass.name did not replace the chart's class, or the chart still created one" >&2
+	exit 1
+fi
+cp_off="$(cp_render --set controlPlanePriorityClass.create=false)"
+if grep -q -- '--control-plane-priority-class' <<<"$cp_off" || grep -q '^kind: PriorityClass$' <<<"$cp_off"; then
+	echo "ERROR: controlPlanePriorityClass.create=false still renders a class or passes the GMC flag" >&2
+	exit 1
+fi
+echo "OK: the control-plane PriorityClass renders by default, yields to a platform class, and turns off"
+
 echo "OK: install artifact validates"

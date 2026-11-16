@@ -39,6 +39,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a namespaced RunnerTemplate declares an nfs, iscsi or similar volume: the type is now rejected](#action-required-if-a-namespaced-runnertemplate-declares-an-nfs-iscsi-or-similar-volume-the-type-is-now-rejected)
   - [Action required if a template projects a ServiceAccount token: the source is now rejected, and removed from worker pods](#action-required-if-a-template-projects-a-serviceaccount-token-the-source-is-now-rejected-and-removed-from-worker-pods)
   - [Action required if a namespaced `RunnerTemplate` sets `nodeName` or `schedulerName`: both are now rejected, and cleared from worker pods](#action-required-if-a-namespaced-runnertemplate-sets-nodename-or-schedulername-both-are-now-rejected-and-cleared-from-worker-pods)
+  - [Action required if a worker PriorityClass is not below the controllers': the GMC now refuses to start](#action-required-if-a-worker-priorityclass-is-not-below-the-controllers-the-gmc-now-refuses-to-start)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
@@ -989,6 +990,26 @@ kubectl get runnertemplates.actions-gateway.com -A -o json \
 ```
 
 Move each one's placement to a `nodeSelector` or a required node affinity, or have a platform administrator publish the shape as a `ClusterRunnerTemplate`.
+
+### Action required if a worker PriorityClass is not below the controllers': the GMC now refuses to start
+
+**Who is affected:** anyone whose `allowedPriorityClasses`, or whose cluster's `globalDefault` PriorityClass, has a value at or above `1000000000`, or at or above an `allowedInfraPriorityClasses` entry.
+Every other install sees one rollout of each AGC and egress proxy, and nothing else.
+
+**What changed.** A worker whose preempting class outranks a controller has the scheduler evict that controller, in any tenant's namespace ([why](security-operations.md#the-controllers-outrank-every-worker-class)).
+The chart now creates a `<namePrefix>-control-plane` PriorityClass (value `1000000000`, `preemptionPolicy: Never`), and the GMC gives it to every AGC and egress proxy whose `spec.scheduling.priorityClassName` is empty.
+The GMC now refuses to start unless every class a worker can reach is below every control-plane class, and refuses a `PriorityClassAllowlist` edit that would break the order.
+
+**On the upgrade,** each AGC and each egress proxy that names no class rolls once to take the new class.
+
+**Before you upgrade,** list the classes and their values, and compare each worker class against the lowest of `1000000000` and your `allowedInfraPriorityClasses` entries:
+
+```bash
+kubectl get priorityclasses -o custom-columns=NAME:.metadata.name,VALUE:.value,GLOBAL_DEFAULT:.globalDefault
+```
+
+Lower a worker class that is too high by creating a replacement at a lower value and moving its `RunnerSet`s and templates onto it; a PriorityClass value cannot be edited.
+To keep the controllers unprioritized instead, set `controlPlanePriorityClass.create: false`; a worker class above 0 can then preempt them.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 

@@ -67,6 +67,9 @@ func TestAddFlags(t *testing.T) {
 		if f.controllerWorkerSeparation != string(controller.WorkerSeparationRequired) {
 			t.Errorf("controllerWorkerSeparation default = %q, want required", f.controllerWorkerSeparation)
 		}
+		if f.controlPlanePriorityClass != "" {
+			t.Errorf("controlPlanePriorityClass default = %q, want empty: the class must exist, so the chart names it", f.controlPlanePriorityClass)
+		}
 	})
 
 	t.Run("overrides", func(t *testing.T) {
@@ -176,6 +179,34 @@ func TestResolveConfig(t *testing.T) {
 		cfg := &gmcFlags{controllerWorkerSeparation: "off"}
 		if _, err := resolveConfig(cfg, fakeGetenv(nil)); err == nil {
 			t.Error("an unrecognized --controller-worker-separation must fail startup")
+		}
+	})
+
+	t.Run("control-plane class joins the infra allowlist", func(t *testing.T) {
+		cfg := &gmcFlags{controlPlanePriorityClass: "gag-control-plane"}
+		rc, err := resolveConfig(cfg, fakeGetenv(nil))
+		if err != nil {
+			t.Fatalf("resolveConfig: %v", err)
+		}
+		if rc.controlPlanePriorityClass != "gag-control-plane" {
+			t.Errorf("controlPlanePriorityClass = %q, want gag-control-plane", rc.controlPlanePriorityClass)
+		}
+		if !rc.infraPriorityClassAllowlist.Allowed("gag-control-plane") {
+			t.Error("the control-plane class must be on the infra allowlist, so the disjointness checks cover it")
+		}
+	})
+
+	t.Run("control-plane class on the worker allowlist fails startup", func(t *testing.T) {
+		cfg := &gmcFlags{controlPlanePriorityClass: "gag-control-plane", allowedPriorityClasses: "gag-control-plane"}
+		if _, err := resolveConfig(cfg, fakeGetenv(nil)); err == nil {
+			t.Error("a worker allowlist naming the control-plane class must fail startup")
+		}
+	})
+
+	t.Run("malformed control-plane class fails startup", func(t *testing.T) {
+		cfg := &gmcFlags{controlPlanePriorityClass: "Not A Class"}
+		if _, err := resolveConfig(cfg, fakeGetenv(nil)); err == nil {
+			t.Error("an invalid --control-plane-priority-class must fail startup")
 		}
 	})
 

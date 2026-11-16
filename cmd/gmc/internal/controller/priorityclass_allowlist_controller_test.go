@@ -9,6 +9,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	schedulingv1 "k8s.io/api/scheduling/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -74,12 +75,13 @@ func TestParsePriorityClassNames_RejectsUppercase(t *testing.T) {
 	}
 }
 
-// pcaScheme is a scheme carrying only the watched kind — the reconciler reads
-// nothing else.
+// pcaScheme is a scheme carrying the watched kind and the PriorityClasses the
+// order check reads.
 func pcaScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 	s := runtime.NewScheme()
 	require.NoError(t, v2.AddToScheme(s))
+	require.NoError(t, schedulingv1.AddToScheme(s))
 	return s
 }
 
@@ -160,4 +162,49 @@ func TestSetupWithManager_RequiresBothAllowlists(t *testing.T) {
 	// CR's infra list into nothing while reporting success.
 	r := &PriorityClassAllowlistReconciler{Name: "x", Allowlist: allowlist.New(nil)}
 	require.Error(t, r.SetupWithManager(nil))
+}
+
+func priorityClass(name string, value int32, globalDefault bool) *schedulingv1.PriorityClass {
+	return &schedulingv1.PriorityClass{ObjectMeta: metav1.ObjectMeta{Name: name}, Value: value, GlobalDefault: globalDefault}
+}
+
+func TestReconcile_WorkerClassAtControlPlanePriorityIsRefused(t *testing.T) {
+	// Q1351: a dynamic worker class at or above a control-plane class would let a
+	// worker preempt an AGC or proxy, so the pair is refused like an overlap.
+	worker, infra := newPairedAllowlists()
+	reconcilePCA(t, worker, infra,
+		pcaObject([]string{"runner-bursty"}, nil),
+		priorityClass("runner-standard", 100000, false),
+		priorityClass("runner-bursty", 1000000000, false),
+		priorityClass("gag-infra-critical", 1000000000, false))
+
+	assert.False(t, worker.Allowed("runner-bursty"), "a worker class at control-plane priority must not be offered")
+	assert.True(t, worker.Allowed("runner-standard"), "the refused pair must fall back to the static flags")
+}
+
+func TestReconcile_InfraClassBelowAWorkerClassIsRefused(t *testing.T) {
+	// The floor is the LOWEST control-plane class: a new infra class under an
+	// existing worker class breaks the order as surely as a high worker class.
+	worker, infra := newPairedAllowlists()
+	reconcilePCA(t, worker, infra,
+		pcaObject(nil, []string{"gag-infra-low"}),
+		priorityClass("runner-standard", 100000, false),
+		priorityClass("gag-infra-critical", 1000000000, false),
+		priorityClass("gag-infra-low", 1000, false))
+
+	assert.False(t, infra.Allowed("gag-infra-low"), "an infra class below a worker class must not be offered")
+	assert.True(t, infra.Allowed("gag-infra-critical"), "the refused pair must fall back to the static flags")
+}
+
+func TestReconcile_OrderedClassesApply(t *testing.T) {
+	worker, infra := newPairedAllowlists()
+	reconcilePCA(t, worker, infra,
+		pcaObject([]string{"runner-bursty"}, []string{"gag-infra-high"}),
+		priorityClass("runner-standard", 100000, false),
+		priorityClass("runner-bursty", 200000, false),
+		priorityClass("gag-infra-critical", 1000000000, false),
+		priorityClass("gag-infra-high", 1000000, false))
+
+	assert.True(t, worker.Allowed("runner-bursty"), "an ordered worker class must apply")
+	assert.True(t, infra.Allowed("gag-infra-high"), "an ordered infra class must apply")
 }

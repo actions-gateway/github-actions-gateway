@@ -10,6 +10,19 @@ Override only if you must run two GMCs in one cluster.
 {{- end -}}
 
 {{/*
+The PriorityClass the GMC gives AGC and egress proxy pods (Q1351): the platform's
+own class when controlPlanePriorityClass.name is set, else the one this chart
+creates, else none.
+*/}}
+{{- define "actions-gateway.controlPlanePriorityClassName" -}}
+{{- if .Values.controlPlanePriorityClass.name -}}
+{{- .Values.controlPlanePriorityClass.name -}}
+{{- else if .Values.controlPlanePriorityClass.create -}}
+{{- printf "%s-control-plane" (include "actions-gateway.namePrefix" .) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Fully-qualified controller-manager name, e.g. "gmc-controller-manager".
 */}}
 {{- define "actions-gateway.managerName" -}}
