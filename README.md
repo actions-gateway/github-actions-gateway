@@ -234,7 +234,7 @@ The [Installation guide](docs/operations/install.md) covers prerequisites, image
 
 > [!IMPORTANT]
 > **Upgrading is not `helm upgrade` alone.** Helm installs the chart-root `crds/` directory on a fresh install only, so every upgrade starts by pulling the target chart and applying its CRDs with `kubectl apply`.
-> Upgrading from an old enough release also moves a `priorityClassAllowlist.configMapName` into the cluster-scoped `PriorityClassAllowlist` CR, which fails closed; the upgrade guide says which releases that covers.
+> `v2.0.0` also removes `egressDestinationAllowlist.configMapName`, as an earlier release removed `priorityClassAllowlist.configMapName`, and a render that still sets either fails, naming the values that replace it.
 > Both steps are guarded, and the [upgrade guide](docs/operations/upgrade.md) covers rolling back.
 
 For day-2 operations (`helm upgrade` and rollback, per-component upgrades, runbooks) see the [operations docs](docs/operations/).
