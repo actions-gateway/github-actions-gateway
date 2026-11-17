@@ -299,6 +299,13 @@ registry-mirror-wiring-check: ## Fail when the registry mirrors and the e2e tena
 webhook-versions-check: ## Fail when an admission webhook or policy rule names only API versions no CRD serves
 	scripts/manifest/check-webhook-versions.sh
 
+# A chart README ships inside the chart tarball, so a values key it never
+# documents is published by every release, and a fix after a candidate is cut
+# costs a new candidate.
+.PHONY: chart-values-docs-check
+chart-values-docs-check: ## Fail when a chart values.yaml key has no row in its README's Values table, or a row names a removed key
+	scripts/manifest/check-chart-values-docs.sh
+
 # The webhook rejection counter carries only the webhook's name, so the security
 # alert and dashboard select ours by an alternation of names nothing tied to the
 # webhooks: Q1150's -v2alpha1 → -v2 rename left both blind through two releases
