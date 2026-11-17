@@ -69,17 +69,19 @@ Check the recorded window against the tag target before trusting it.
 In the 1.5 cycle the API surface review had been recorded over an earlier window, scope reopened on eight rows, and one of them published a new condition type, two reasons and two metrics that no review had seen.
 The marketing reconciliation from the same day was *not* re-checked, and a shipped cross-tenant guard reached no marketing surface at all.
 
-At a candidate, these bind:
+Before the cut, the ones whose findings change an artifact:
 
 - **`main` green and the version chosen**: every tag.
-- **API surface review**: pulled forward, because a rename decided after publication costs a new candidate.
+- **API surface review**: a rename decided after publication costs a new candidate.
+- **Both chart READMEs against the tree being tagged** (`charts/actions-gateway/README.md`, `charts/actions-gateway-crds-v2/README.md`): they ship inside the tarballs, so a fix after the cut costs a candidate.
+  Every `values.yaml` key has a table row, and the install and upgrade commands, the Kubernetes floor, and links into `docs/operations/` still hold.
+  No gate checks the table yet, and none can check the prose; at `v2.0.0-rc.1`'s target six top-level keys had no row.
 - **The notes draft, interrogated** through `verify-claims`: the discovery step, not a formatting pass.
   Ask what each claim rests on; re-derive every number rather than copying it forward.
   Every wrong figure in the 1.5 notes was a *derived* value gone stale, not a typo.
-  The other three prose passes (`readability`, `deslop`, `semantic-remediation`) bind at the stable tag, when the text publishes.
 
-The rest are stable-tag obligations.
-Say which you are deferring and why.
+The docs-only rest wait for step 5, where the validation run leaves the time idle.
+On a later candidate, re-read each recorded verdict from its commit rather than redoing it.
 
 ## 3. Cut the tag, and check where it points before pushing
 
@@ -178,6 +180,14 @@ It names the tag, the commit and one `leg <name>` line per leg that passed; a fa
 Want the commit to equal the tag target and every leg in `scripts/dogfood/lib/gate-legs.sh` present.
 `scripts/release/check-validated-candidate.sh vX.Y.Z` answers the same question across runs, but only once the stable tag exists.
 
+### While the gate runs, do the stable tag's docs work
+
+The approval wait and ~80 minutes of dogfood are idle time, so spend them on the first candidate's docs-only pre-flight: the marketing reconciliation's first two questions, `operator-caveats-since.sh`, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the notes' `readability`, `deslop` and `semantic-remediation` passes.
+Record each verdict in the release plan doc with the commit it was measured at, so the stable tag re-reads only the delta ([release.md § 1](../../../docs/operations/release.md#1-pre-flight)).
+
+**A docs edit merged now must not touch `charts/actions-gateway/README.md`.** It ships inside the chart tarball, so a pure-docs pull request moves an artifact the gate is validating.
+`scripts/release/check-artifact-unchanged.sh <candidate-sha> origin/main` is the check; exit 1 means the stable tag would ship something no candidate validated.
+
 ### Locally, for diagnosis only
 
 Run the gate locally to iterate on the gate itself or to diagnose a failed CI leg, never as the candidate's validation:
@@ -201,25 +211,12 @@ The teardown trap misses `kill -9` and a killed parent, which leave billable nod
 
 Record the verdict in the release plan doc either way, then:
 
-### What may land between a validated candidate and the stable tag
-
-A candidate's validation covers the tree it was cut from, so anything merged after it that moves an artifact makes the verdict cover something other than what ships.
-That is how `v1.5.0-rc.1` was superseded: it validated, eight rows merged on top, and its verdict stopped describing `main`.
-
-**The rule is byte-identical artifacts, not "docs only".** Documentation changes are expected in this window and cannot be avoided, because the validation verdict does not exist until the candidate is tagged, so the notes' Validation section is necessarily written afterwards.
-But the labels do not line up: `charts/actions-gateway/README.md` is a markdown file that **ships inside the chart tarball**, so a pure-docs pull request can change a published chart's bytes.
-
-Check rather than classify, before tagging the stable release:
-
-```bash
-scripts/release/check-artifact-unchanged.sh <validated-candidate-sha> origin/main
-```
-
-Exit 1 means the stable tag would ship something no candidate validated: revert it, or cut and validate a new candidate.
+**The freeze runs from the candidate to the stable tag, and its rule is byte-identical artifacts, not "docs only".** That is how `v1.5.0-rc.1` was superseded: it validated, eight rows merged on top, and its verdict stopped describing `main`.
+The step 5 check covers the whole window, so re-run it before the stable tag.
 
 **Green.** Report the evidence (e2e counts, sizing legs, CRD smoke, the artifact checks) and **ask whether to promote**.
 Do not tag a stable release, and do not treat the question as rhetorical.
-Name what still binds at the stable tag but not at a candidate: the marketing reconciliation, the operator-caveat pass, the roadmap and `features.md` reconciliation, the announce-bar highlight, and substituting this run's verdict for the previous candidate's in the notes' Validation section.
+Name what still binds at the stable tag: the delta re-read of each verdict from its recorded commit, the full competitor-stamp report and `make roadmap-check`, and what only validation unlocks (the Validation section, the image digests, the pin bump, the versioned docs deploy).
 If the answer is yes, the [`release`](../release/SKILL.md) skill carries those out; this one ends here.
 
 **Red.** Report what failed, and separate the two questions that look alike:

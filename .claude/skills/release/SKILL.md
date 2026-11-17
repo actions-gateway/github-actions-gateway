@@ -16,20 +16,15 @@ A broken chart publish on a prerelease affects nobody; on a stable tag it redden
 
 ## 1. The pre-flight that binds only here
 
-A candidate defers these because a prerelease deploys no docs and its Release body is generated.
-At a stable tag they publish, so run each and record the verdict in the release plan doc.
+The first candidate ran these during its validation wait and recorded each verdict with its commit.
+Here they publish, so **re-read each from that commit**: a recorded verdict reads as done long after the thing it checked has changed, which is how the 1.5 marketing reconciliation missed a shipped cross-tenant guard that reached no surface at all.
+Record the re-read in the release plan doc.
 
-**Re-run any verdict recorded before the scope moved.** A recorded verdict reads as done long after the thing it checked has changed; that is how the 1.5 marketing reconciliation missed a shipped cross-tenant guard that reached no surface at all.
-
-- **Marketing reconciliation** across `docs/index.md`, `why-gag.md`, `README.md`, `features.md`.
-  Ask what shipped that no surface mentions, then whether every claim still describes the product, then whether every competitor claim still holds.
-  `make comparison-stamps-check` gates the last one's stamps, not their truth.
-- **Operator caveats**: `scripts/release/operator-caveats-since.sh <last-tag>`.
-  Read the **new sections** rather than the bullet count, and confirm each is in the notes.
-- **Roadmap and `features.md`** against `docs/queue/`: `make roadmap-check`.
-  Work that shipped this cycle needs a `features.md` line.
-- **Announce bar**: `overrides/main.html`'s `highlight_for` names this version.
-  `publish.yml` fails the release if the rendered banner does not.
+- **API surface and operator caveats**: `api-surface-since.sh <sha>` and `operator-caveats-since.sh <sha>`.
+  Read the **new sections** rather than the bullet count, and confirm each caveat is in the notes.
+- **Marketing questions 1–2, roadmap and `features.md`, announce-bar highlight**: `git log <sha>..origin/main`.
+  Work that shipped since needs a `features.md` line; `publish.yml` fails the release if the rendered banner does not name this version.
+- **In full, because neither reduces to a diff here**: competitor claims (`scripts/docs/check-comparison-stamps.sh --report`), which age with upstream releases, and `make roadmap-check`, since the queue moves on its own.
 - **The notes' Validation section names the candidate that actually passed**, not an earlier one.
 
 ## 2. Check the freeze before tagging
@@ -108,8 +103,7 @@ Land that in `docs/releases/vX.Y.Z.md`, then reconcile it against what actually 
 scripts/release/check-release-digests.sh vX.Y.Z
 ```
 
-**Four prose passes over the draft before it publishes**, in order: `verify-claims`, `readability`, `deslop`, then `semantic-remediation` last, since the editing passes are what introduce the defects it looks for.
-[release.md § The prose passes](../../../docs/operations/release.md#the-prose-passes) says what each one owns.
+**The four prose passes ran at the first candidate; re-run them over what changed since**, the Validation and `Container images` sections above all, in order: `verify-claims`, `readability`, `deslop`, then `semantic-remediation` last ([release.md § The prose passes](../../../docs/operations/release.md#the-prose-passes)).
 
 Then publish the body.
 This works because immutability freezes assets and the tag but leaves title and notes editable:
