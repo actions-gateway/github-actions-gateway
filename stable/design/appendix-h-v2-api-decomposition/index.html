@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/design/appendix-h-v2-api-decomposition/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/design/appendix-h-v2-api-decomposition/">
       
       
         <link rel="prev" href="../appendix-g-future-enhancements/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1894,6 +1894,8 @@
       
         
       
+        
+      
     
     
     
@@ -2291,6 +2293,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2458,10 +2488,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2479,8 +2509,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3064,7 +3094,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3574,10 +3604,12 @@
 <p>← <a href="../appendix-g-future-enhancements/">Optional Future Enhancements</a> | <a href="../">Back to index</a></p>
 <hr />
 <blockquote>
-<p><strong>Status: shipped — <code>v2alpha1</code>, served beside <code>v1alpha1</code>.</strong> This appendix is the design source of truth for the <code>v2alpha1</code> API (<code>actions-gateway.com</code> group) that replaces the monolithic <code>ActionsGateway</code> + <code>RunnerGroup</code> model.
-<strong>All milestones M1–M5 have landed</strong>: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool are all built.
-<code>v2alpha1</code> is an <strong>alpha</strong> API served side by side with <code>v1alpha1</code> during the coexistence window — nothing in the shipped <code>v1alpha1</code> API changes, and tenants migrate on their own schedule via the migration tool, a deliberate tool-assisted fan-out (see <a href="#h11-migration-v2-tool-assisted">§H.11</a>).
-Milestone sequencing and the itemized task record are in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/v2-api.md">v2 API plan</a>.</p>
+<p><strong>Status: shipped.
+<code>v2.0.0</code> serves <code>actions-gateway.com/v2</code> alone.</strong> This appendix is the design source of truth for the v2 API (<code>actions-gateway.com</code> group) that replaced the monolithic <code>ActionsGateway</code> + <code>RunnerGroup</code> model.
+It was designed and shipped as <code>v2alpha1</code>, then graduated through <code>v2beta1</code> to <code>v2</code>; <code>v2.0.0</code> removed <code>v1alpha1</code>, <code>v2alpha1</code> and <code>v2beta1</code>.
+A version name in the sections below is the version current when the decision was made.
+<strong>All milestones M1–M5 landed</strong>: the five kinds, their GMC/AGC reconcilers, multiple gateways per namespace, the namespace-scoped security profile, and the one-shot v1→v2 migration tool (a deliberate tool-assisted fan-out, see <a href="#h11-migration-v2-tool-assisted">§H.11</a>) that 1.x carried.
+Milestone sequencing and the itemized task record are in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/v2-api.md">v2 API plan</a>.</p>
 </blockquote>
 <hr />
 <h2 id="h1-why-decompose">H.1. Why decompose<a class="headerlink" href="#h1-why-decompose" title="Permanent link">&para;</a></h2>
@@ -3994,7 +4026,7 @@ These CR names become both selector label values <em>and</em> <code>&lt;name&gt;
 <p><strong>Shipped, and the v1 gap this closed.</strong> The 52-char cap is enforced by CEL on every v2 CR name, so v2 derivations are bounded at the input.
 <code>v1alpha1</code> has no equivalent — an <code>ActionsGateway</code> name may be 253 characters — and its derived <code>&lt;gateway&gt;-&lt;runner-label&gt;</code> <code>RunnerGroup</code> name was never bounded at the output either.
 Past 63 characters that name is a legal object name and an <strong>illegal label value</strong>, so the <code>RunnerGroup</code> reconciled while every worker pod carrying it as <code>actions-gateway/runner-group</code> was rejected: the tenant ran no jobs and GitHub reported only that the runner had lost communication (Q473). v1 therefore applies the bound where the name is derived, through the shared <code>api/apinames</code> helpers that also own the worker-pod budget (Q467).
-The rule generalises: <strong>budget against the tightest consumer of a name (63), not the limit of the object being created (253)</strong> — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
+The rule generalises: <strong>budget against the tightest consumer of a name (63), not the limit of the object being created (253)</strong> — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/kubernetes-conventions.md#derive-every-name-through-apiapinames-q467-q473">kubernetes-conventions.md</a>.</p>
 <h3 id="field-naming-freezes-at-ga--do-the-pass-now">Field naming freezes at GA — do the pass now<a class="headerlink" href="#field-naming-freezes-at-ga--do-the-pass-now" title="Permanent link">&para;</a></h3>
 <p>JSON field names are part of the API contract and become permanent at <code>v2</code>.
 Do the naming pass during M1 while names are still cheap to change under <code>v2alpha1</code>:</p>
@@ -4049,7 +4081,16 @@ So responsibilities split by what admission is actually good at:</p>
 <p><em>Reserved-pod-field split (M2, implemented).</em> The scalar pod-level reserved fields (<code>serviceAccountName</code>, <code>host{PID,Network,IPC}</code>, <code>automountServiceAccountToken</code>) are CRD CEL rules (M1).
   The per-container checks that exceed the CEL cost budget — an unbounded containers-array walk — are the GMC-hosted validating webhook (M2): it rejects the AGC-injected egress-proxy env vars (<code>HTTP_PROXY</code>/<code>HTTPS_PROXY</code>/<code>NO_PROXY</code>/<code>PROXY_CA_CERT_PATH</code>, the variables v1 silently overwrote at pod-build time) on every container of <strong>both</strong> template kinds.
   <strong>Privileged containers</strong> are rejected on the namespaced <code>RunnerTemplate</code> (a tenant must not self-author a privileged worker shape) but <strong>allowed</strong> on the cluster-scoped <code>ClusterRunnerTemplate</code> — that kind is platform-authored (tenants cannot create cluster-scoped objects) and exists precisely to hold golden privileged templates (DinD/sysbox, §H.6).
-  A <code>RunnerTemplate</code> carries no <code>securityProfile</code>, so a v1-style <em>profile-aware</em> privileged decision is impossible at the template layer; Pod Security Admission — which stamps the namespace's enforcement level from the effective <code>securityProfile</code> (§H.16 #7) — stays the runtime backstop for both kinds, so allowing privileged on the cluster-scoped kind is no weaker than v1.
+  A <code>RunnerTemplate</code> carries no <code>securityProfile</code>, so a v1-style <em>profile-aware</em> privileged decision is impossible at the template layer; Pod Security Admission — which stamps the namespace's enforcement level from the effective <code>securityProfile</code> (§H.16 #7) — stays the runtime backstop for both kinds, so allowing privileged on the cluster-scoped kind is no weaker than v1.</p>
+<p><em>Scheduler bypass (Q1347, 2026-11-12).</em> The namespaced <code>RunnerTemplate</code> also rejects <code>podTemplate.spec.nodeName</code> and any <code>schedulerName</code> other than <code>default-scheduler</code>, and the AGC clears both when it resolves a namespaced template, which covers one stored before the rule.
+  Either places the worker past the default scheduler, the only thing enforcing the controllers' required anti-affinity against workers, and a tenant can read its own AGC's node name, so it could put a worker beside the pod holding its GitHub App key.
+  Both layers enforce it because the webhook skips its newer rules while a stored <code>podTemplate</code> is unchanged, and the namespaced kind has shipped since <code>v1.10.0</code>.
+  The <code>ClusterRunnerTemplate</code> keeps both fields, for three reasons.
+  Only the platform can author one, so the bypass is the platform placing its own workers, the same grant as privileged containers.
+  A platform can legitimately run workers under its own scheduler, and the AGC's capacity verdict already reads a pod's own <code>schedulerName</code>.
+  And clearing in <code>buildPod</code> instead would strip both kinds alike, since the pod builder does not know which kind supplied the template.
+  Unlike the baseline and volume-type rules, this one stays on under <code>--allow-unchecked-runner-template-pod-shape</code>: Pod Security Admission checks neither field, so the platform policy that flag defers to need not cover it.
+  What would reverse the cluster-kind choice: a route by which a tenant can make a <code>ClusterRunnerTemplate</code> carry a node name it chose.
 - <strong>Runtime condition (existence/referential):</strong> does the template exist, does the proxy exist, does the cross-namespace grant exist.
   The controller watches referents and re-reconciles when they appear:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>RunnerSet status:
@@ -4126,7 +4167,7 @@ Instead the AGC marks each profile-derived pod (<code>actions-gateway.com/sizing
 Worker pods are already granted, listed, and watched, so this needs <strong>no new RBAC, no LimitRange informer, and no polling</strong> — and the existing worker-pod watch makes it event-driven for free: the pod event carrying the injected limit is itself what re-reconciles the set.
 The trade is that the signal is post-hoc — it arrives with the first pod the profile builds, since a pod is what it reads.
 While a profile is <code>Active</code>, <code>SizingDrift</code> reports <code>False/SizingProfileActive</code> (the template ask is not what pods run with).</p>
-<p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/api-review.md">pre-release API review</a> asked of <code>sizing.profile</code> the question Q470 asked of <code>capacityGate.mode</code> — <em>does this enum answer exactly one question?</em> — and mechanically it does not.
+<p><strong>Why <code>profile</code> bundles two mechanisms deliberately (Q481).</strong> The 1.3 <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/api-review.md">pre-release API review</a> asked of <code>sizing.profile</code> the question Q470 asked of <code>capacityGate.mode</code> — <em>does this enum answer exactly one question?</em> — and mechanically it does not.
 Two axes run through it: where the request comes from (the template, the usage history, a declared node envelope) and what limits follow (the template's, <code>requests == limits</code>, or no CPU limit plus a memory headroom).
 The tell the review names is present twice over: <code>nodeShare</code> is only meaningful under <code>NodeShare</code>, <code>limitHeadroomPercent</code> only under <code>Throughput</code>.
 Two cells of the cross-product have no profile of their own and are plausible wants — a <strong>Guaranteed node share</strong> (the GPU case, where predictable packing is the whole point) and <strong>history-derived requests under hand-set limits</strong>.
@@ -4147,6 +4188,12 @@ That is also the rule for extending it: a new value must name a <em>distinct ope
 Nothing is reserved on either axis today, the other contrast with the gate, which had <code>Probe</code>/<code>Provision</code> waiting on axis 1 and <code>ProvisioningRequest</code> availability on axis 2 before Q470 split it.
 In-place pod resize — the one extension the plan anticipates — changes <em>when</em> actuation happens, not where values come from or what limits follow, so it is a sibling field rather than a fifth profile.
 If the intent framing ever fails, <code>v2.0.0</code> is already a scheduled break.</p>
+<p><strong>Fork pull request refusal: <code>spec.forkPullRequests</code> (Q1220, Q1330).</strong> A <code>RunnerSet</code> refuses a job from a fork pull request unless the field is <code>Accept</code>; <code>Refuse</code> is the default and what an empty value means, defaulted in the controller rather than the CRD so a stored object carries no value it did not ask for.
+It is an enum rather than a <code>bool</code> because it is a policy, and the values name the action, so a later value such as one that accepts only with GitHub's approval has room beside them.
+The tenant owns the answer: accepting exposes the tenant's own namespace, quota and egress identity, never another tenant's, so the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/api-review.md#ask-whose-fact-it-is">whose-fact</a> question resolves as it does for <code>runnerGroup</code>.
+The default is a refusal because nothing at GitHub refuses a job for coming from a fork, so an opt-in would leave every adopter who never set the field exposed.
+It also fails safe on a stale CRD: a schema that prunes the field stores nothing, and nothing reads as <code>Refuse</code>, so unlike <code>runnerGroup</code> it needs no startup schema probe.
+What a refusal does, and why it ends the run: <a href="../05-security/#fork-pull-request-jobs-choose-their-own-runner-set">05-security.md</a>.</p>
 <p><strong>Opt-in intake gating: <code>spec.capacityGate</code> (Q405, Q406, Q470).</strong> A <code>RunnerSet</code> may opt into the placeability rung of the admission ladder — the AGC refuses to take on jobs whose worker pod the cluster cannot currently place, instead of claiming them and stalling.
 <code>capacityGate.mode</code> selects <code>Off</code> (the default, today's behavior exactly) or <code>Observe</code>.</p>
 <p>The values name <em>how the AGC learns</em> the cluster cannot place a worker, not merely whether the gate is enabled (Q476).
@@ -4199,7 +4246,7 @@ Three properties make the read safe rather than merely correct:</p>
   An unattributable event does not clear that bar.</li>
 <li><strong>The verdict is the newest relevant event, not merely the existence of a declination.</strong> An autoscaler that declined on one loop and scaled up on the next is rescuing the tenant, and a stale declination must not gate against that.
   Recency is asymmetric, because one loop can emit both verdicts for one pod: a scale-up supersedes a declination immediately, while a declination supersedes a scale-up only from more than a second later — inside that window the pair is one loop's own output, and resolves open.
-  Measured, not assumed: cluster-autoscaler v1.36.1 emitted <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
+  Measured, not assumed: cluster-autoscaler v1.36.1 emitted <code>TriggeredScaleUp</code> and then <code>NotTriggerScaleUp</code> for the same pod 4ms apart (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/capacity-aware-intake.md#9c-the-live-autoscaler-harness-and-what-it-measured-q474">plan §9c</a>).
   The window is what makes that read a property of the autoscaler's behavior rather than of its recorder's resolution, which is the difference between the two generations in the field.</li>
 <li><strong>Reads are uncached and doubly scoped</strong> — field-selected to one pod, and only for pods the <code>WorkersUnschedulable</code> evaluation already found stuck past the scheduling grace, bounded per reconcile.
   There is no Event informer: Events are the highest-churn object in a cluster, and caching them would tax every AGC to serve a mode most sets never enable.
@@ -4310,6 +4357,8 @@ See <a href="../07-test-plan/#73-end-to-end-tests">§7.3 of the test plan</a>.</
 <li><strong>Direct egress is a structurally explicit state.</strong> An unset <code>proxyRef</code> resolves to direct egress, and the gateway/runner-set status records <code>proxyMode: Direct</code> rather than leaving "no proxy" to be inferred from an absent field.</li>
 <li><strong>Surface the attribution trade.</strong> The proxy-less gateway and runner set carry an advisory <code>EgressUnattributed</code> condition (True), so an operator sees at a glance that this workload has no per-tenant egress identity — the property they opted out of — without grepping specs.
   It is advisory only and never gates Ready.</li>
+<li><strong>Report the allowlist's freshness where it lives (Q1249).</strong> In direct egress the GitHub allowlist sits on the gateway's own AGC and workload NetworkPolicies, so the gateway carries the <code>EgressRulesStale</code> condition the CIDR-mode <code>EgressProxy</code> carries, exported on its own gauge, <code>actions_gateway_direct_egress_rules_stale</code>.
+  While the GMC serves no ranges it keeps an already-programmed policy's rules (Q246), so the condition's message reads the policies to say whether GitHub egress is denied, rather than inferring it from the empty cache.</li>
 </ul>
 <p><strong>Composition bonus.</strong> §H.9 and §H.10 combine: a platform team runs one shared <code>EgressProxy</code> in a central namespace, grants it to the EMU/allowlist tenants who need stable IPs, and everyone else runs proxy-less.</p>
 <h2 id="h11-migration-v2-tool-assisted">H.11. Migration (v2, tool-assisted)<a class="headerlink" href="#h11-migration-v2-tool-assisted" title="Permanent link">&para;</a></h2>
@@ -4352,17 +4401,17 @@ The transport-error signatures are kept identical to the e2e helper's (Q392) so 
 </code></pre></div>
 <p>A conversion webhook can't create those sibling objects — which is exactly why the migration is a tool, not a webhook.</p>
 <p>The v1→v2 fan-out is one-time.
-Once on <code>v2alpha1</code>, the API graduates <strong>in place</strong> <code>v2alpha1 → v2beta1 → v2</code> via a conversion webhook (a thing a conversion webhook <em>can</em> do, since the kinds no longer change shape) — see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a> in the implementation plan for the per-hop mechanics.
-The superseded versions do not linger indefinitely: <code>v2alpha1</code> is dropped at <strong><code>v2.0.0</code></strong>, the same release that removes <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead in <code>v1.3.0</code>.
-That coupling and the operator-facing contract are the <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release sequencing is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/v2-ga.md">v2-ga.md</a>.</p>
+Once on <code>v2alpha1</code>, the API graduated <strong>in place</strong> <code>v2alpha1 → v2beta1 → v2</code> through 1.x via a conversion webhook (a thing a conversion webhook <em>can</em> do, since the kinds no longer change shape) — see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/v2-api.md#api-maturity--graduation-v2alpha1--v2beta1--v2">graduation path</a> in the implementation plan for the per-hop mechanics.
+The superseded versions did not linger: <code>v2alpha1</code> and <code>v2beta1</code> were dropped at <strong><code>v2.0.0</code></strong>, with the conversion webhook, in the same release that removed <code>v1alpha1</code> and the classic acquisition machinery, announced one release ahead in <code>v1.3.0</code>.
+That coupling and the operator-facing contract are the <a href="../../operations/v1alpha1-deprecation/">deprecation and removal notice</a>; the release sequencing is <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/v2-ga.md">v2-ga.md</a>.</p>
 <p><strong><code>gag-migrate storage-version</code> rewrites what is stored when the storage version advances (Q1086).</strong> 1.10 marks <code>v2</code> the storage version of all six <code>actions-gateway.com</code> kinds, which changes only what the apiserver writes next.
 The subcommand lists every object of each kind at <code>v2</code> and writes it back unchanged: the apiserver persists the bytes at the new storage version, so a write of an object stored at <code>v2beta1</code> changes its <code>resourceVersion</code>, while one already stored at <code>v2</code> is a no-op it skips.
 Once every object of a kind is rewritten it sets that CRD's <code>status.storedVersions</code> to <code>["v2"]</code>, which <code>v2.0.0</code> needs before its CRDs can stop serving the older versions.
 It is a read-write sweep rather than Kubernetes' <code>StorageVersionMigration</code> API, which is beta from 1.35 and so reaches only the newest clusters this release supports.
 It refuses to start while any <code>EgressProxy</code> names a <code>CiliumFQDN</code>/<code>CalicoFQDN</code> alias, because <code>v2</code> stores one only as <code>FQDN</code> plus a conversion annotation no served version reads once <code>v2.0.0</code> removes <code>v2beta1</code>.
-An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/release-1.10.md#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version">release-1.10.md</a>).</p>
+An operator runs it rather than the GMC: the GMC's role cannot write four of the six kinds or any CRD status, and granting that to a long-lived controller for a one-time job widens it for good (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/archive/release-1.10.md#decided-an-operator-runs-the-sweep-as-gag-migrate-storage-version">release-1.10.md</a>).</p>
 <h2 id="h12-folding-in-the-grandfathered-label-value-alignment-q147">H.12. Folding in the grandfathered label-value alignment (Q147)<a class="headerlink" href="#h12-folding-in-the-grandfathered-label-value-alignment-q147" title="Permanent link">&para;</a></h2>
-<p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/kubernetes-conventions.md">no-boolean label convention</a> and are grandfathered only because changing them is breaking:</p>
+<p>Two shipped keys still carry boolean-looking <code>"true"</code> values that predate the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/kubernetes-conventions.md">no-boolean label convention</a> and are grandfathered only because changing them is breaking:</p>
 <ul>
 <li><code>actions-gateway.github.com/tenant: "true"</code> — the managed-tenant marker, matched as <code>== 'true'</code> by the <code>namespace-psa-guard</code> and <code>tenant-resource-guard</code> <code>ValidatingAdmissionPolicy</code> objects, the onboarding scripts, and operator runbooks.</li>
 <li><code>actions-gateway.github.com/allow-profile-downgrade: "true"</code> — the downgrade opt-in annotation, matched by the GMC validating webhook.</li>
@@ -4397,12 +4446,12 @@ Non-exhaustive impact list, to be turned into plan-doc scope when scheduled:</p>
 <li><strong>API:</strong> new <code>v2alpha1</code> group <code>actions-gateway.com</code> with five CRD kinds (<code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, <code>ClusterRunnerTemplate</code>, <code>EgressProxy</code>) + generated CRDs/deepcopy/RBAC.</li>
 <li><strong>GMC:</strong> multi-gateway-per-namespace requires every derived resource to be keyed by gateway name (not the namespace-singleton assumption today); the <code>gmc-tenant-resource-guard</code> policy must still confine writes; new <code>EgressProxy</code> reconciler; cross-namespace CA distribution.</li>
 <li><strong>AGC:</strong> <code>RunnerSet</code> reconciler resolves <code>templateRef</code>/<code>proxyRef</code> at runtime with watches; reserved-field webhook moves to <code>RunnerTemplate</code>.</li>
-<li><strong>Docs:</strong> <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1 CRD schemas</a>, <a href="../appendix-e-capacity-planning/">Appendix E (RunnerGroup design)</a>, and the operator-facing docs per the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/doc-update-matrix.md">doc-update matrix</a>.</li>
+<li><strong>Docs:</strong> <a href="../03-api-contracts/#31-kubernetes-crd-schemas">§3.1 CRD schemas</a>, <a href="../appendix-e-capacity-planning/">Appendix E (RunnerGroup design)</a>, and the operator-facing docs per the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/doc-update-matrix.md">doc-update matrix</a>.</li>
 <li><strong>Migration tool</strong> + its tests.</li>
 <li><strong>Label keys + values (Q147 + group rename):</strong> both the domain <em>prefix</em> (<code>actions-gateway.github.com/*</code> → <code>actions-gateway.com/*</code>, plus finalizer names) and the grandfathered <code>tenant</code>/<code>allow-profile-downgrade</code> <code>"true"</code> <em>values</em> migrate during the cutover (<a href="#h12-folding-in-the-grandfathered-label-value-alignment-q147">§H.12</a>) — VAP CEL, onboarding scripts, runbooks, and the convention doc's "grandfathered" note all update, and one dual-read window covers both, riding the v1alpha1 serving window.</li>
 </ul>
 <h3 id="h131-crd-packaging-and-conditional-gmc-startup">H.13.1. CRD packaging and conditional GMC startup<a class="headerlink" href="#h131-crd-packaging-and-conditional-gmc-startup" title="Permanent link">&para;</a></h3>
-<p>The five <code>actions-gateway.com/v2alpha1</code> CRDs ship in a <strong>separate, opt-in Helm chart</strong> (<code>actions-gateway-crds-v2</code>), not the main <code>actions-gateway</code> chart.
+<p>The five <code>actions-gateway.com/v2</code> CRDs ship in a <strong>separate, opt-in Helm chart</strong> (<code>actions-gateway-crds-v2</code>), not the main <code>actions-gateway</code> chart.
 The split keeps the main chart's Helm release Secret under Kubernetes' 1 MiB object limit — the five v2 CRDs' OpenAPI schemas are large enough that bundling them would push it over.</p>
 <p>So a supported install can have the GMC running without the v2 CRDs present.
 The GMC makes the opt-in real on the controller side: at startup it queries the REST mapper for the <code>ActionsGateway</code> and <code>EgressProxy</code> v2 kinds and only registers the v2 controllers (<code>ActionsGatewayV2Reconciler</code>, <code>EgressProxyReconciler</code>, <code>NamespacePSAReconciler</code>) and the IP-range reconciler's v2 NetworkPolicy refresh passes when both are served.
@@ -4419,12 +4468,12 @@ Reconstructing that encoding for the five-CRD chart lands at <strong>~1.10 MiB s
 <p><strong>Decision: apply-render is the supported, deliberate install/upgrade path — not a stopgap.</strong> Server-side apply is declarative and idempotent, so install and upgrade are the <em>same</em> command (re-run it to carry CRD field changes); it also clears kubectl's 256 KB client-side-apply annotation ceiling, which the two ~1.16 MB <code>RunnerTemplate</code> CRDs blow past on their own.
 This is the mainstream practice for large CRDs (cert- manager, Crossplane, Istio, Gateway API all ship CRDs to be applied out-of-band and warn against Helm-managing them).
 The templates carry <code>helm.sh/resource-policy: keep</code> so an operator who fronts them with a GitOps tool that <em>does</em> build a Helm release keeps the CRDs on prune/uninstall.</p>
-<p>To keep the <em>manual</em> path a single command with no helm or chart checkout, each release attaches a <strong>pre-rendered, cosign-signed <code>actions-gateway-crds-v2.yaml</code></strong> (rendered for the default <code>gmc-system</code> namespace) to its GitHub Release, so a manual install is just <code>kubectl apply --server-side -f &lt;release-url&gt;/actions-gateway-crds-v2.yaml</code>.
+<p>To keep the <em>manual</em> path a single command with no helm or chart checkout, each release attaches a <strong>pre-rendered, cosign-signed <code>actions-gateway-crds-v2.yaml</code></strong> to its GitHub Release, so a manual install is just <code>kubectl apply --server-side -f &lt;release-url&gt;/actions-gateway-crds-v2.yaml</code>.
 It is keyless-signed via the same Fulcio/Rekor path as the images and charts (<code>sign-blob</code> → a Sigstore bundle verified with <code>cosign verify-blob --bundle</code>), which also answers the "release assets are mutable" caveat.
-The asset covers the default-namespace case; a GMC in a non-default namespace, or a GitOps render, still uses the <code>helm template --set … | kubectl apply --server-side</code> path (the conversion webhook <code>clientConfig</code> namespace bakes in at render time).
+A GitOps render uses the <code>helm template … | kubectl apply --server-side</code> path.
 Argo CD renders the chart itself and never builds a release Secret, so it is unaffected by the 1 MiB limit; Flux <code>HelmRelease</code> <em>does</em> build one and uses the rendered manifest or a Kustomization instead.</p>
 <p>The properties this forgoes — <code>helm upgrade</code> revision history, <code>helm rollback</code>, <code>helm uninstall</code> cleanup — are <strong>low-value for CRDs specifically</strong> and partly anti-patterns: rolling a CRD schema <em>backward</em> can strand stored objects (removing a served/storage version or field is a deliberate migration, never a casual rollback), and cascading <code>helm uninstall</code> of a CRD deletes every custom resource with it (data loss — exactly what <code>resource-policy: keep</code> prevents).
-The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operations/install/#optional-the-v2-api-crds">install.md § the v2 API CRDs</a>.</p>
+The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operations/install/#the-v2-api-crds">install.md § the v2 API CRDs</a>.</p>
 <p>Alternatives, each measured by reconstructing Helm's stored-Secret encoding:</p>
 <table>
 <thead>
@@ -4477,8 +4526,8 @@ The operator-facing upgrade/rollback/uninstall runbook is <a href="../../operati
 <p><strong>Fold-back into the main chart is gated on v2 reaching a <em>single served version</em>, not on <code>v1alpha1</code> removal.</strong> Measured against the same encoding: with v2 down to one version (<code>v2beta1</code> only — <code>v2alpha1</code> and the conversion webhook retired), the folded main chart stores at <strong>~0.65 MiB, ~0.4 MiB under the ceiling.</strong> It fits because a single-version v2 CRD set (~1.3 MB) is about the same footprint as the two v1 CRDs it replaces (~1.3 MB), and today's main chart already carries those and installs cleanly (<strong>~0.62 MiB stored</strong>).
 The trap is the coexistence window: while v2 serves <em>both</em> <code>v2beta1</code> and <code>v2alpha1</code> (which is what forces the conversion webhook), that set alone stores at <strong>~1.26 MiB</strong> — over the limit before a single controller is added, which is exactly why the v2 CRDs live in their own chart today.
 So the clean fold-back sequence is two removals, both required: retire <code>v1alpha1</code>, <strong>and</strong> drop <code>v2alpha1</code> (retiring the conversion webhook), leaving one served version — then the now single-version v2 CRDs fold into the main chart with headroom to spare.
-Both of those removals land at <strong><code>v2.0.0</code></strong> (<a href="../../operations/v1alpha1-deprecation/">notice</a>), which is therefore the earliest the fold-back can be reconsidered, and only once v2 is genuinely down to one served version.
-Until then, the opt-in chart plus apply-render stands.</p>
+Both of those removals landed at <strong><code>v2.0.0</code></strong> (<a href="../../operations/v1alpha1-deprecation/">notice</a>), so v2 is down to one served version and the fold-back can be reconsidered.
+Until it is, the opt-in chart plus apply-render stands.</p>
 <h2 id="h14-admin-policy-layer--deferred-until-tiering-is-real">H.14. Admin policy layer — deferred until tiering is real<a class="headerlink" href="#h14-admin-policy-layer--deferred-until-tiering-is-real" title="Permanent link">&para;</a></h2>
 <p>The decomposition above mirrors Gateway API's <code>Gateway → route attachment</code> but stops one level short: there is no cluster-scoped, <strong>admin-owned</strong> object — no <code>GatewayClass</code> equivalent.
 Today the admin/tenant boundary is real but lives <em>outside the API</em>, scattered across mechanisms that cannot be RBAC'd, audited, or GitOps'd as objects:</p>
@@ -4611,7 +4660,7 @@ A few small changes are only <em>possible</em> at a major break, or are awkward 
   <strong><code>workloadIdentity</code> (Q197) shipped as the second member</strong>: an external signer signs the App JWT so the App private key never enters the cluster (MVP = HashiCorp Vault transit + Vault Kubernetes auth, behind a <code>githubapp.Signer</code> interface so cloud KMS providers add without another breaking change).
   Adding it validated the shape against a real second consumer, the whole point of fixing the shape before the freeze.
   See <a href="../05-security/#57-workload-identity-the-no-pem-delegation-model">05-security.md §5.7</a> for the trust model.
-  Plan + schema sketch: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/v2beta1.md">v2beta1.md</a>.</p>
+  Plan + schema sketch: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/v2beta1.md">v2beta1.md</a>.</p>
 </li>
 </ul>
 <p><strong>Explicitly NOT now (shape for additive later, do not build):</strong></p>
@@ -4826,10 +4875,10 @@ The proxy-default regression and the <code>securityProfile</code> composition ga
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

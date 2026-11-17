@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/reference-architectures/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/reference-architectures/">
       
       
         <link rel="prev" href="../p2p-image-distribution/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -1805,6 +1807,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2111,10 +2141,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -2132,8 +2162,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2717,7 +2747,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2890,6 +2920,12 @@ With more cluster budget, from a sponsor for instance, more profiles could join 
 <h2 id="gated-every-release">Gated every release<a class="headerlink" href="#gated-every-release" title="Permanent link">&para;</a></h2>
 <p>All three run on the dogfood cluster: Google Kubernetes Engine (GKE) with Dataplane V2, its Cilium-based CNI.
 Each is a leg of the release gate, which dispatches the e2e matrix onto GAG runners and fails the release on a red run (<a href="../release/#the-legs-the-gate-runs">the legs the gate runs</a>).</p>
+<p>All three also run on <a href="../security-operations/#recommended-separate-pools-for-the-control-plane-egress-and-workers">separate node pools</a>.
+The GMC is pinned to the system pool, <code>default-pool</code>.
+The AGCs pin to nothing, and land there because every other pool is tainted.
+Workers run on tainted pools and are pinned to them: the e2e legs' workers to the <code>e2e</code> pool, and the standing tenant's to <code>workers</code> and <code>workers-od</code>.
+The cluster has no egress pool, because its tenants run direct egress with no egress proxy.
+The egress-pool half of the topology was validated on throwaway GKE clusters instead (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q243-egress-ip-reference-arch.md">per-tenant egress IP reference architecture</a>).</p>
 <table>
 <thead>
 <tr>
@@ -2939,7 +2975,7 @@ Setup and the reasoning are in <a href="../kata-dind-workloads/#untrusted-pull-r
 Nodes need nested virtualization.</p>
 <h3 id="untrusted-pull-requests-at-scale">Untrusted pull requests at scale<a class="headerlink" href="#untrusted-pull-requests-at-scale" title="Permanent link">&para;</a></h3>
 <p>The same posture with Dragonfly, a P2P image distribution system, in two places: the registry mirrors fetch layer blobs through a Dragonfly seed peer, and a Dragonfly client on each node serves the kubelet's pulls of the worker image.
-The mirror half is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#dragonfly-back-end"><code>deploy/registry-mirror/</code> § Dragonfly back end</a>; the node half is <a href="../p2p-image-distribution/#gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe</a>.</p>
+The mirror half is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/registry-mirror/README.md#dragonfly-back-end"><code>deploy/registry-mirror/</code> § Dragonfly back end</a>; the node half is <a href="../p2p-image-distribution/#gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe</a>.</p>
 <p>The node client joined the leg on 2026-10-23, after the last release candidate, so no candidate has run it yet: <code>v1.9.0</code>'s gate ran the Dragonfly back end without it.
 The next candidate's gate is the first to run the profile as the table shows it.</p>
 <p>A green matrix proves little here, because the mirrors serve whether or not Dragonfly does.
@@ -2993,12 +3029,12 @@ It ran once, in <a href="https://github.com/actions-gateway/github-actions-gatew
 Each line says how far the evidence goes, read from the scripts and manifests on 2026-10-23.</p>
 <ul>
 <li><strong>A persistent mirror cache</strong>, under either topology.
-  <code>overlays/persistent</code> and <code>overlays/shared-tenants-persistent</code> are render-checked on every change to the mirror tree and have not run on the dogfood cluster (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md#what-is-proven-and-what-is-not">what is proven</a>).</li>
+  <code>overlays/persistent</code> and <code>overlays/shared-tenants-persistent</code> are render-checked on every change to the mirror tree and have not run on the dogfood cluster (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/registry-mirror/README.md#what-is-proven-and-what-is-not">what is proven</a>).</li>
 <li><strong>One mirror set shared by every tenant.</strong> Its NetworkPolicy peer is driven on every merge that touches the mirror tree, by the Calico e2e lane on a kind cluster.
-  Whether real workers on GKE carry the label that peer admits has not yet produced a graded reading (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/Q1048.md">Q1048</a>).
+  The e2e tenant's Kata workers on GKE Dataplane V2 carry the label that peer admits: the release gate's client census graded a pass in the <code>v1.9.0-rc.2</code> and <code>v1.10.0-rc.2</code> windows (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/registry-mirror/README.md#what-is-proven-and-what-is-not">what that covers</a>).
   The dogfood cluster runs one tenant, so the gated profiles use one set per tenant.</li>
 <li><strong>The Dragonfly back end with a persistent cache, or with a shared set.</strong> No overlay renders either, and <code>scripts/dogfood/e2e-start.sh</code> refuses <code>E2E_MIRROR_BACKEND=dragonfly</code> together with <code>REGISTRY_MIRROR_PERSISTENT=1</code>.</li>
-<li><strong>Spegel as the node layer.</strong> Graded on kind against Dragonfly, and not yet a supported recipe (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/Q1192.md">Q1192</a>).</li>
+<li><strong>Spegel as the node layer.</strong> Graded on kind against Dragonfly, and not yet a supported recipe (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/queue/Q1192.md">Q1192</a>).</li>
 <li><strong>A CNI other than GKE Dataplane V2.</strong> The kindnet and Calico e2e lanes run the controller suite on merges whose diff touches the paths each lane covers.
   They run on GitHub-hosted runners, so they test the controllers rather than any profile's worker or mirror wiring.</li>
 </ul>
@@ -3126,10 +3162,10 @@ New legs join the release gate only on demand, because each one adds node time t
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

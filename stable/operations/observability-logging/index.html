@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/observability-logging/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/observability-logging/">
       
       
         <link rel="prev" href="../observability-dashboards/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -1805,6 +1807,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1977,10 +2007,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" checked>
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1998,8 +2028,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2304,6 +2334,17 @@
     <span class="md-ellipsis">
       
         Enabling tracing on GMC-managed AGCs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reaching-the-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaching the collector
       
     </span>
   </a>
@@ -2730,7 +2771,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2872,6 +2913,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#reaching-the-collector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reaching the collector
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2916,7 +2968,7 @@ Flipping it rolls the AGC and proxy Deployments — it is a rolling restart, not
 On the v2 (<code>actions-gateway.com</code>) API the knob is split per kind: <code>ActionsGateway.spec.logLevel</code> covers the AGC, and each proxy pool carries its own <code>EgressProxy.spec.logLevel</code> (same values, default, and rolling-restart semantics).
 See <a href="../tenant-onboarding/#per-tenant-log-level">tenant onboarding — per-tenant log level</a>.</p>
 <h3 id="debug-diagnostics-for-otherwise-silent-paths">Debug diagnostics for otherwise-silent paths<a class="headerlink" href="#debug-diagnostics-for-otherwise-silent-paths" title="Permanent link">&para;</a></h3>
-<p>Several paths that can stall a tenant or a session emit <strong>debug</strong>-level diagnostics (suppressed at the default info level).
+<p>Several paths that can stall a tenant or a job emit <strong>debug</strong>-level diagnostics (suppressed at the default info level).
 Raise the component to debug to surface them — for a GMC-managed tenant, set <code>spec.logLevel: debug</code> on the <code>ActionsGateway</code> (the GMC threads it to the AGC and proxy); for a standalone controller, <code>--zap-log-level=debug</code>; for a standalone proxy/worker, <code>LOG_LEVEL=debug</code>.
 Useful <code>grep</code> anchors:</p>
 <table>
@@ -2929,16 +2981,6 @@ Useful <code>grep</code> anchors:</p>
 </thead>
 <tbody>
 <tr>
-<td>Session waiting on a worker pod that never reaches a terminal phase (top "stuck session" cause)</td>
-<td>AGC</td>
-<td><code>pod already terminal at registration</code>, <code>registered for pod completion</code>, <code>pod completion observed</code>, <code>pod wait cancelled before completion</code></td>
-</tr>
-<tr>
-<td>Permanent baseline listener crash/restart backoff (otherwise only the <code>exited with error</code> warning is visible)</td>
-<td>AGC</td>
-<td><code>restarting after backoff</code>, <code>restart aborted</code></td>
-</tr>
-<tr>
 <td>Which of the ~12 per-tenant provisioning steps a stalled reconcile is on</td>
 <td>GMC</td>
 <td><code>reconcileResources step</code></td>
@@ -2946,22 +2988,22 @@ Useful <code>grep</code> anchors:</p>
 <tr>
 <td>Per-tenant TLS cert issuance / renewal</td>
 <td>GMC</td>
-<td><code>issuing proxy TLS cert</code>, <code>generating metrics mTLS bundle</code></td>
+<td><code>issuing EgressProxy TLS cert</code>, <code>generating EgressProxy metrics mTLS bundle</code></td>
 </tr>
 <tr>
-<td>Per-session / per-job lifecycle (one line per listener spawn, job pickup, heal, and worker pod)</td>
+<td>One job's path through a scale set (replayed assignment, capacity hold, worker pod, start, and completion)</td>
 <td>AGC</td>
-<td><code>listener goroutine started</code>, <code>job message received</code>, <code>idle shutdown</code>, <code>healing stale session</code>, <code>job finished; recycling single-use JIT agent</code>, <code>job Secret created</code>, <code>worker pod created</code>, <code>worker pod completed</code></td>
+<td><code>scaleset: skipping replayed assignment</code>, <code>job admission deferred</code>, <code>scale-set worker pod created</code>, <code>recorded job start on worker pod</code>, <code>stamped job completion on worker pod</code>, <code>scale-set job Secret reclaimed</code></td>
 </tr>
 </tbody>
 </table>
-<p>These per-session/per-job lines are at <strong>debug</strong> by design: at thousands of concurrent sessions they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
+<p>These per-job lines are at <strong>debug</strong> by design: on a busy gateway they dominate log volume, so the default info stream carries only the operator-relevant lifecycle events (concurrency-ceiling holds, quota and eviction retries, errors).
 Raise the AGC to debug — <code>spec.logLevel: debug</code> for a GMC-managed tenant, or <code>--zap-log-level=debug</code> standalone — to follow an individual job.</p>
-<p><strong>Correlation fields.</strong> AGC log lines carry structured fields that let you follow one session→job→pod through a log pipeline.
-Filter on <code>namespace</code> and <code>group</code> (RunnerGroup name) to scope to a tenant's RunnerGroup; <code>agentIndex</code> and <code>sessionId</code> identify a single listener goroutine and its current broker session (the <code>sessionId</code> is rebound when a session is healed or an agent recycled, so it always names the live session); <code>podName</code> appears on the provisioner lines for an acquired job's worker pod.
-On the scale-set tier those lines also carry <code>jobID</code> and <code>runID</code>: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.</p>
-<p>Admission <strong>rejections</strong> (reserved-namespace, cross-namespace <code>gitHubAppRef</code>, privileged container, disallowed PriorityClass, silent securityProfile downgrade) are logged server-side at <strong>info</strong> — they need no debug flag — as <code>ActionsGateway admission denied</code> with the <code>operation</code>, <code>namespace</code>, <code>name</code>, and <code>reason</code> fields, giving an audit trail of denied attempts.</p>
-<p><strong>API server warnings</strong> (e.g. the <a href="../upgrade/#non-breaking-v1alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v1alpha1</code></a> and <a href="../upgrade/#non-breaking-v2alpha1-is-deprecated-and-the-apiserver-now-warns"><code>v2alpha1</code></a> deprecation warnings) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers.
+<p><strong>Correlation fields.</strong> AGC log lines carry structured fields that let you follow one job to its pod through a log pipeline.
+Filter provisioner lines on <code>namespace</code> and <code>owner</code> (the <code>RunnerSet</code> name) to scope to one set; listener lines name their scale set in <code>scaleSet</code>; <code>podName</code> appears on the provisioner lines for an assigned job's worker pod.
+Those lines also carry <code>jobID</code> and <code>runID</code>: one workflow run has many jobs, so the pair is what separates sibling jobs of one run from a redelivered assignment for a single job.</p>
+<p>Admission <strong>rejections</strong> (reserved-namespace, privileged container, disallowed PriorityClass) are logged server-side at <strong>info</strong> — they need no debug flag — as <code>ActionsGateway admission denied</code> with the <code>operation</code>, <code>namespace</code>, <code>name</code>, and <code>reason</code> fields, giving an audit trail of denied attempts.</p>
+<p><strong>API server warnings</strong> (for example, the deprecation warning the apiserver attaches to a deprecated API version) are logged at info, <strong>deduplicated to one line per unique message per process</strong> in both controllers.
 The apiserver attaches such a warning to every read and write of a deprecated API version, so without dedup a set reconciling under churn would drown the log in repeats; expect the first occurrence only, not one per API call.</p>
 <h3 id="proxy-egress-audit-record">Proxy egress audit record<a class="headerlink" href="#proxy-egress-audit-record" title="Permanent link">&para;</a></h3>
 <p>A proxy pool can write one structured line per <strong>accepted</strong> CONNECT, answering "which destination did this pool reach, when, and how much moved" without reconstructing it from cluster flow logs or GitHub's own audit log.</p>
@@ -3094,7 +3136,7 @@ Closing both takes two records, from two processes, joined on the source address
 </tr>
 <tr>
 <td><code>runID</code> / <code>repository</code></td>
-<td>The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose payload carried no run identity</td>
+<td>The GitHub run and repository of the job on that pod, from the annotations the AGC stamps at creation. Omitted, never empty, for a worker whose assignment carried no run identity</td>
 </tr>
 </tbody>
 </table>
@@ -3114,7 +3156,7 @@ The window matters because addresses are reused: a worker pod is deleted when it
 </ul>
 <h3 id="what-never-appears-in-logs">What never appears in logs<a class="headerlink" href="#what-never-appears-in-logs" title="Permanent link">&para;</a></h3>
 <p>Ship AGC and proxy logs to a shared aggregator without a scrubbing pipeline in front: <strong>credential material is redacted before a log line is emitted</strong>, not by the log stack afterward.</p>
-<p>Every GitHub response body — broker and runner-scale-set protocol alike — passes through a single redaction path before it can reach a log line or an error message.
+<p>Every GitHub response body passes through a single redaction path before it can reach a log line or an error message.
 It replaces:</p>
 <ul>
 <li>JSON credential fields (<code>access_token</code>, <code>refresh_token</code>, <code>token</code>, <code>encoded_jit_config</code>, <code>client_secret</code>, <code>private_key</code>, <code>password</code>, <code>secret</code>);</li>
@@ -3125,19 +3167,17 @@ It replaces:</p>
 See <a href="../../design/05-security/">security §5 — credential handling</a>.</p>
 <hr />
 <h2 id="distributed-tracing-agc">Distributed Tracing (AGC)<a class="headerlink" href="#distributed-tracing-agc" title="Permanent link">&para;</a></h2>
-<p>The per-tenant AGC emits <strong>OpenTelemetry traces</strong> for its two hottest operational paths:</p>
-<ul>
-<li><strong><code>RunnerGroup.Reconcile</code></strong> — one span per reconcile, attributed with <code>k8s.namespace.name</code> / <code>gateway.runnergroup.name</code>.
-  Errors set the span status.</li>
-<li><strong><code>Provisioner.provision</code></strong> — one span per acquired job (the job-to-pod path), with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, <code>createPod</code>, and <code>waitForCompletion</code>.
-  The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code>, <code>gateway.plan.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, <code>gateway.priority_class</code>, and the final <code>gateway.pod.phase</code> / <code>gateway.pod.reason</code> / <code>gateway.provision.duration_seconds</code>.
-  <code>waitForCompletion</code> is usually the long pole, so its child span tells you whether latency is in scheduling/runtime versus the controller.</li>
-</ul>
+<p>The per-tenant AGC emits <strong>OpenTelemetry traces</strong> for the job-to-pod path: one root span per provisioning attempt, <strong><code>Provisioner.ProvisionScaleSetWorker</code></strong>, with child spans <code>stageJobSecret</code>, <code>countActivePods</code>, and <code>createPod</code>.
+The root span carries <code>k8s.namespace.name</code>, <code>gateway.owner.name</code> (the RunnerSet), <code>gateway.job.id</code>, <code>k8s.pod.name</code>, <code>gateway.active_pods</code>, <code>gateway.ceiling_held</code>, and <code>gateway.priority_class</code>.
+Any failing exit after the span opens sets the root span's status to error, and a failed phase also records the error on its own child span.
+The listener's capacity check normally stops a job the concurrency ceiling would hold before provisioning starts, so that job has no trace; only one that loses the race reaches this span, with <code>gateway.ceiling_held</code> true.
+Time between <code>countActivePods</code> ending and <code>createPod</code> starting is spent in the scale-up rate limit's wait, when one is configured.
+The AGC does not wait for the job to run, so the trace ends once the worker pod exists, and the job's own run time is not in it.</p>
 <blockquote>
 <p>Span attribute names follow the <a href="https://opentelemetry.io/docs/specs/semconv/">OpenTelemetry semantic conventions</a>: Kubernetes-native attributes use the <code>k8s.*</code> keys (<code>k8s.namespace.name</code>, <code>k8s.pod.name</code>); project-specific attributes are namespaced under <code>gateway.</code>.
 These keys were renamed in the Q205 naming audit — see <a href="../observability-metrics/#breaking-observability-changes-q205">Breaking observability changes</a> for the old→new mapping.</p>
 </blockquote>
-<p>Each reconcile and each job provision is its own root trace — there is no inbound trace context to continue, and the per-job spans run on the listener goroutines independently of the reconcile that started the pool.</p>
+<p>Each attempt is its own root trace, because nothing in the AGC ahead of the provision path starts a span or carries an inbound trace context, so a replayed job has more than one.</p>
 <p><strong>Tracing is opt-in and off by default.</strong> With no OTLP endpoint configured the AGC installs no exporter and the spans are no-ops (near-zero cost), so production runs without tracing unless you point it at a collector.</p>
 <h3 id="enabling-tracing">Enabling tracing<a class="headerlink" href="#enabling-tracing" title="Permanent link">&para;</a></h3>
 <p>The AGC reads the <strong>standard OpenTelemetry SDK environment variables</strong> — there is no bespoke flag.
@@ -3152,7 +3192,7 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <tbody>
 <tr>
 <td><code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code> or <code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td>
-<td>OTLP/gRPC collector address (e.g. <code>otel-collector.observability:4317</code>). Setting either one enables tracing.</td>
+<td>OTLP/gRPC collector address, with its scheme (e.g. <code>http://otel-collector.observability.svc.cluster.local:4317</code>). Setting either one enables tracing.</td>
 </tr>
 <tr>
 <td><code>OTEL_SDK_DISABLED=true</code></td>
@@ -3171,22 +3211,32 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <p>On shutdown the AGC flushes buffered spans (5 s budget) before exiting.</p>
 <h3 id="enabling-tracing-on-gmc-managed-agcs">Enabling tracing on GMC-managed AGCs<a class="headerlink" href="#enabling-tracing-on-gmc-managed-agcs" title="Permanent link">&para;</a></h3>
 <p>The GMC builds the AGC Deployment, so for a GMC-provisioned tenant you do <strong>not</strong> set these env vars by hand — you declare tracing on the <code>ActionsGateway</code> CR and the GMC translates <code>spec.tracing</code> into the standard <code>OTEL_*</code> env on the AGC Deployment:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.github.com/v1alpha1</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions-gateway.com/v2</span>
 <a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ActionsGateway</span>
 <a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="nt">metadata</span><span class="p">:</span>
 <a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a</span>
 <a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="nt">spec</span><span class="p">:</span>
-<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">gitHubAppRef</span><span class="p">:</span>
-<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
-<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="nt">gitHubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
-<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
-<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
-<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                    </span><span class="c1"># optional</span>
-<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
-<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
-<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
-<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="c1"># insecure: true   # only for a plaintext in-cluster collector; TLS is the default</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">  </span><span class="nt">credentials</span><span class="p">:</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GitHubApp</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">    </span><span class="nt">githubApp</span><span class="p">:</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">team-a-github-app</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">  </span><span class="nt">githubURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/team-a-org</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="nt">tracing</span><span class="p">:</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">endpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://otel-collector.observability.svc.cluster.local:4317</span><span class="w">  </span><span class="c1"># enables tracing</span>
+<a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">    </span><span class="nt">caBundleRef</span><span class="p">:</span><span class="w">                                          </span><span class="c1"># the collector's private CA</span>
+<a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">otel-collector-ca</span>
+<a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">    </span><span class="nt">networkPolicy</span><span class="p">:</span><span class="w">                                        </span><span class="c1"># lets the AGC reach the collector</span>
+<a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">      </span><span class="nt">namespaceSelector</span><span class="p">:</span>
+<a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">        </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">          </span><span class="nt">kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">observability</span>
+<a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">      </span><span class="nt">podSelector</span><span class="p">:</span>
+<a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">        </span><span class="nt">matchLabels</span><span class="p">:</span>
+<a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">          </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">otel-collector</span>
+<a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">    </span><span class="nt">sampler</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">parentbased_traceidratio</span><span class="w">                     </span><span class="c1"># optional</span>
+<a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">    </span><span class="nt">samplerArg</span><span class="p">:</span><span class="w"> </span><span class="s">"0.1"</span><span class="w">                                     </span><span class="c1"># optional — 10% of traces</span>
+<a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">    </span><span class="nt">resourceAttributes</span><span class="p">:</span><span class="w">                                   </span><span class="c1"># optional</span>
+<a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">      </span><span class="nt">deployment.environment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prod</span>
 </code></pre></div>
 <table>
 <thead>
@@ -3205,7 +3255,17 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 <tr>
 <td><code>insecure</code></td>
 <td><code>OTEL_EXPORTER_OTLP_TRACES_INSECURE</code></td>
-<td>Defaults to <code>false</code> (TLS). Set <code>true</code> only for a plaintext in-cluster collector.</td>
+<td>Defaults to <code>false</code> (TLS). Set <code>true</code> only for a plaintext collector, with an <code>http://</code> endpoint. Admission rejects it with an <code>https://</code> one, where it would win over the scheme.</td>
+</tr>
+<tr>
+<td><code>caBundleRef</code></td>
+<td><code>OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE</code></td>
+<td>A ConfigMap in this namespace with the collector's CA under <code>ca.crt</code>. Admission requires an <code>https://</code> endpoint with <code>insecure</code> unset or <code>false</code>.</td>
+</tr>
+<tr>
+<td><code>networkPolicy</code></td>
+<td>None; a NetworkPolicy rule</td>
+<td>The collector as an egress peer, which the GMC opens for the AGC alone. Admission requires an <code>endpoint</code>, and a <code>cidr</code> peer no broader than <code>/16</code> (IPv4) or <code>/48</code> (IPv6) and not link-local.</td>
 </tr>
 <tr>
 <td><code>sampler</code></td>
@@ -3226,11 +3286,121 @@ Tracing turns on as soon as an OTLP endpoint is configured:</p>
 </table>
 <blockquote>
 <p><strong>No auth headers via env.</strong> <code>spec.tracing</code> deliberately has no field for <code>OTEL_EXPORTER_OTLP_HEADERS</code>: those can carry bearer tokens, and this project keeps secrets out of environment variables (they leak into process listings and child processes).
-Authenticate the collector at the <strong>network layer</strong> instead — an in-cluster collector reached over the tenant's egress path, mutual TLS, or a service mesh.</p>
+Authenticate the collector at the <strong>network layer</strong> instead: an in-cluster collector <a href="#reaching-the-collector">the AGC is allowed to reach</a>, or a service mesh.</p>
 <p><strong>Testing-only passthrough.</strong> The <code>AGC_EXTRA_*</code> mechanism (<code>--allow-agc-extra-env</code> on the GMC, then <code>AGC_EXTRA_OTEL_EXPORTER_OTLP_ENDPOINT=…</code> in the GMC pod env) still exists but is gated for tests only and not for production use.
 When both are present, <code>AGC_EXTRA_*</code> wins (it is appended last).
 Prefer <code>spec.tracing</code>.</p>
 </blockquote>
+<h3 id="reaching-the-collector">Reaching the collector<a class="headerlink" href="#reaching-the-collector" title="Permanent link">&para;</a></h3>
+<p><strong>Setting <code>endpoint</code> does not open a network path to the collector.</strong> The GMC does not derive a peer from the endpoint's host, so the AGC's default-deny egress policy stays closed, and on a CNI that enforces NetworkPolicy the spans go nowhere until <code>spec.tracing.networkPolicy</code> names the collector.
+The GMC then adds one rule to the AGC's policy, to that peer on the endpoint's port, and worker pods gain nothing.
+An endpoint with no port is dialled on 443, gRPC's default rather than OTLP's 4317, and that is the port the rule opens; set <code>networkPolicy.port</code> to override it.</p>
+<p>The name you give the collector matters as much: its <strong>full name</strong> is <code>otel-collector.observability.svc.cluster.local:4317</code>, and its <strong>short name</strong> is <code>otel-collector.observability:4317</code>.
+Measured with a real collector over plaintext gRPC on kind with Calico, at one job per setup, with a hand-written NetworkPolicy allowing the same peer and port:</p>
+<table>
+<thead>
+<tr>
+<th>Tenant</th>
+<th>Name</th>
+<th>Peer allowed</th>
+<th>Spans at the collector</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Proxied</td>
+<td>Full</td>
+<td>Yes</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td>Full</td>
+<td>No</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td>Short</td>
+<td>Yes</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Proxied</td>
+<td>Short</td>
+<td>No</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Direct</td>
+<td>Either</td>
+<td>Yes</td>
+<td>Delivered</td>
+</tr>
+<tr>
+<td>Direct</td>
+<td>Short</td>
+<td>No</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>A proxied tenant needs both: the full <code>.svc.cluster.local</code> name, which is what <code>NO_PROXY</code> exempts from the egress proxy, and a peer that lets the AGC reach the collector directly.
+Anything shorter is sent through the proxy, including <code>otel-collector.observability.svc:4317</code>, and the proxy's own NetworkPolicy blocks it, so no rule on the AGC changes that.</p>
+<p><strong>A collector with a private CA needs that CA named.</strong> Public CAs do not issue certificates for <code>.svc.cluster.local</code> names, so the AGC's image cannot validate an in-cluster collector on its own.
+Publish the CA in the gateway's namespace and name it in <code>caBundleRef</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>create<span class="w"> </span>configmap<span class="w"> </span>otel-collector-ca<span class="w"> </span>--from-file<span class="o">=</span>ca.crt<span class="o">=</span>/path/to/collector-ca.pem
+</code></pre></div>
+<p>The GMC mounts the ConfigMap on the AGC and points the exporter at it.
+The bundle replaces the system roots for the export connection and touches nothing else, so it is not added to the trust the AGC uses for GitHub, and it never reaches a worker pod.
+Measured with a real collector over TLS on kind with Calico, on a proxied tenant: without <code>caBundleRef</code> the AGC logs <code>x509: certificate signed by unknown authority</code> and the collector receives nothing, and naming the bundle delivers the spans.
+<strong>A bundle that does not resolve stops the traces and nothing else</strong>, because a lost telemetry bundle should not stop CI.
+A ConfigMap that is missing, or whose <code>ca.crt</code> holds no PEM certificate, sets the advisory <code>TracingCABundleUnresolved</code> condition with reason <code>CABundleNotFound</code> or <code>CABundleInvalid</code>, and the gateway stays <code>Ready</code> and keeps reconciling.
+The AGC starts without the file and its exporter verifies against the system roots, so a private-CA collector receives nothing and the AGC logs <code>x509: certificate signed by unknown authority</code>; no span crosses an unverified connection.
+Fix the ConfigMap and restart the AGC, because the condition clears within about a minute but the exporter only reads the file when it starts:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deploy/team-a-agc
+</code></pre></div>
+<p><strong>To rotate the collector's CA, restart the AGC at both ends of the overlap</strong>, so it trusts both CAs before the certificate changes:</p>
+<ol>
+<li>Publish the new CA beside the old one in <code>ca.crt</code>.</li>
+<li>Restart the AGC with the command above, so it reads both.</li>
+<li>Swap the collector's certificate.</li>
+<li>Remove the old CA from <code>ca.crt</code> and restart the AGC again.</li>
+</ol>
+<p>Plaintext still works, with <code>http://</code> and <code>insecure: true</code>, for a collector that does not serve TLS.
+The cost is that spans cross the cluster network unencrypted, carrying the namespace, RunnerSet, job ID, pod name, any <code>resourceAttributes</code> you set, and the error text of a failed attempt.
+None of those attributes is a credential; the error text names the Secret or Pod and quotes the API server's message, which has not been audited for what it can echo.</p>
+<p><strong>An export that fails is reported only in the AGC's log</strong>, as a <code>traces export:</code> line at <code>info</code>, with no metric or status condition.
+Check for it after a job has run:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>team-a<span class="w"> </span>deploy/team-a-agc<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">'traces export'</span>
+</code></pre></div>
+<p><code>reading server HTTP response: unexpected EOF</code> means the export went through the egress proxy, so the name is too short; a pool with a destination allowlist refuses it with <code>failed to do connect handshake</code> instead.
+<code>DeadlineExceeded</code> means the direct connection never opened, so <code>spec.tracing.networkPolicy</code> is missing or wrong, or a policy of your own blocks the path.</p>
+<p>Three more come from the TLS settings, measured against an in-process OTLP server:</p>
+<table>
+<thead>
+<tr>
+<th>Log text</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>x509: certificate signed by unknown authority</code></td>
+<td><code>https://</code> to a collector whose certificate the AGC does not trust; <code>caBundleRef</code> is unset, or names the wrong CA</td>
+</tr>
+<tr>
+<td><code>first record does not look like a TLS handshake</code></td>
+<td><code>https://</code> to a plaintext collector, without <code>insecure: true</code></td>
+</tr>
+<tr>
+<td><code>error reading server preface: EOF</code></td>
+<td>Plaintext to a collector serving TLS</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Include the scheme in <code>endpoint</code>.</strong> A bare IP needs one: admission rejects <code>10.0.0.5:4317</code> because it does not parse as a URL, and the exporter would send spans to <code>127.0.0.1:4317</code> with no error (<a href="../troubleshooting/#tracing-endpoint-rejected-by-admission">Tracing Endpoint Rejected by Admission</a>).
+Admission accepts a name without a scheme, since <code>otel-collector.observability:4317</code> parses and dials that name.</p>
 <hr />
 <p>← Back to <a href="../observability/">Observability</a></p>
 
@@ -3355,10 +3525,10 @@ Prefer <code>spec.tracing</code>.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/design/appendix-e-capacity-planning/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/design/appendix-e-capacity-planning/">
       
       
         <link rel="prev" href="../appendix-d-alternatives-considered/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1290,10 +1290,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#e4-sizing-maxlisteners" class="md-nav__link">
+  <a href="#e4-sizing-maxworkers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        E.4. Sizing maxListeners
+        E.4. Sizing maxWorkers
       
     </span>
   </a>
@@ -1583,6 +1583,8 @@
       
         
           
+        
+      
         
       
         
@@ -2040,6 +2042,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2207,10 +2237,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2228,8 +2258,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2813,7 +2843,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2894,10 +2924,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#e4-sizing-maxlisteners" class="md-nav__link">
+  <a href="#e4-sizing-maxworkers" class="md-nav__link">
     <span class="md-ellipsis">
       
-        E.4. Sizing maxListeners
+        E.4. Sizing maxWorkers
       
     </span>
   </a>
@@ -3074,7 +3104,9 @@
 <p>This appendix is a practical guide for operators and tenant teams deciding how to structure their <code>RunnerGroup</code>s, size their <code>maxListeners</code> counts, and plan for growth.
 The raw constraint numbers live in <a href="../03-api-contracts/#35-github-api-rate-limit-budget">§3.5</a> and <a href="../appendix-a-capacity-slos/">Appendix A</a>; this appendix explains how to reason about them in practice.</p>
 <blockquote>
-<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/archive/milestone-1.md#8-investigation-findings">docs/plan/archive/milestone-1.md §8</a>):</p>
+<p><strong>Scope.</strong> This appendix sizes the 1.x <code>v1alpha1</code> <code>RunnerGroup</code>, which <code>v2.0.0</code> removed along with <code>maxListeners</code>.
+The <code>v2</code> API has no <code>maxListeners</code> field: every <code>RunnerSet</code> runs one scale-set session.</p>
+<p><strong>Milestone 1 protocol findings</strong> (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/archive/milestone-1.md#8-investigation-findings">docs/plan/archive/milestone-1.md §8</a>):</p>
 <p><em>Session reuse confirmed</em> (Investigation C) — a session remains live after <code>acquirejob</code>; goroutines loop without a delete→create cycle.
 The steady-state cost remains <strong>one session per RunnerGroup</strong>.</p>
 <p><em>One session per registered runner agent enforced</em> (Investigation D) — <code>POST /sessions</code> returns 409 if the agentId already has a session.
@@ -3160,21 +3192,19 @@ At very high RunnerGroup counts this becomes a maintenance surface.</p>
 <p><strong>The practical guidance:</strong> per-workflow RunnerGroups are a reasonable default for teams with meaningfully different resource requirements between workflows.
 Consolidate by pod shape only when workflows are resource-identical — there is no longer a strong rate-limit reason to force consolidation.</p>
 <hr />
-<h2 id="e4-sizing-maxlisteners">E.4. Sizing <code>maxListeners</code><a class="headerlink" href="#e4-sizing-maxlisteners" title="Permanent link">&para;</a></h2>
-<p><code>RunnerGroup.maxListeners</code> caps the number of listener goroutines that can run concurrently during a burst.
-The AGC always maintains at least one listener; additional goroutines spawn as jobs arrive and shut down when the queue drains.</p>
-<p>This field is a <strong>burst ceiling, not a steady-state count.</strong> Setting it higher than needed costs nothing at rest — idle listener goroutines do not exist.
-The cost of setting it too low is missed job acquisitions: if 20 jobs arrive simultaneously and <code>maxListeners</code> is 5, only 5 can be acquired in the first wave; the remaining 15 must wait for sessions to free up, potentially timing out the 2-minute acquisition window if the burst is sustained.</p>
+<h2 id="e4-sizing-maxworkers">E.4. Sizing <code>maxWorkers</code><a class="headerlink" href="#e4-sizing-maxworkers" title="Permanent link">&para;</a></h2>
+<p><code>maxWorkers</code> caps the worker pods a <code>RunnerSet</code> runs at once, and it is the ceiling the set advertises to GitHub on every long poll as <code>X-ScaleSetMaxCapacity</code>, the total number of jobs GitHub may keep assigned to the set.
+With <code>priorityTiers</code> set, the last threshold is the ceiling instead.
+A set declaring neither advertises <code>defaultScaleSetMaxCapacity</code> from <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/cmd/agc/internal/controller/runnerset_scaleset.go"><code>runnerset_scaleset.go</code></a>.</p>
+<p>The advertisement can only fall below that ceiling: namespace <code>ResourceQuota</code> headroom, the opt-in capacity gate and the opt-in scale-up limit each lower it (<a href="../../operations/troubleshooting/#why-is-my-runnerset-not-being-offered-jobs">why a set is not being offered jobs</a>).</p>
+<p>This field is a <strong>soft, in-process ceiling.</strong> Pair it with a namespace <code>ResourceQuota</code> for a hard limit.
+The cost of setting it too low is queueing rather than lost work: GitHub assigns nothing beyond the advertisement, so surplus jobs stay queued at GitHub until a slot frees.</p>
 <p>A practical starting approach:</p>
 <ol>
-<li><strong>Estimate peak simultaneous job arrivals</strong> for this RunnerGroup.
-   A team that pushes to many PRs at once at the start of the day may see 20–30 jobs arrive in a few seconds; a team with staggered pipelines may never exceed 5.</li>
-<li><strong>Set <code>maxListeners</code> to cover that peak</strong> with a small margin (e.g. peak + 2–3).</li>
-<li><strong>Monitor <code>actions_gateway_active_sessions</code></strong> relative to <code>maxListeners</code>.
-   If it consistently hits the ceiling during burst periods and jobs are being cancelled for acquisition timeout, increase it.
-   If it never exceeds 3–4, the default of 10 is more than sufficient.</li>
+<li><strong>Estimate peak concurrent jobs</strong> for this <code>RunnerSet</code>.</li>
+<li><strong>Set <code>maxWorkers</code> to cover that peak</strong>, and <a href="../../operations/resourcequota-sizing/">size the namespace <code>ResourceQuota</code></a> to admit that many workers at full cost.</li>
+<li><strong>Compare <code>actions_gateway_scaleset_jobs_available</code> with <code>actions_gateway_scaleset_advertised_capacity</code>.</strong> Jobs waiting while <code>actions_gateway_scaleset_capacity_withheld</code> reads zero on every rung mean the ceiling is what binds, so raise it if the cluster has room.</li>
 </ol>
-<p>For most RunnerGroups the default of 10 is the right starting point and requires no tuning.</p>
 <hr />
 <h2 id="e5-multi-repo-usage">E.5. Multi-Repo Usage<a class="headerlink" href="#e5-multi-repo-usage" title="Permanent link">&para;</a></h2>
 <p>A GitHub App installation is scoped to an organization or a specific set of repositories.
@@ -3273,7 +3303,7 @@ The AGC handles VPA-initiated restarts gracefully: when killed, in-flight listen
 <p>Under v2 this is a first-class opt-in rather than something the operator hand-rolls: see <a href="#e11-managed-vertical-right-sizing-of-the-control-planes">E.11</a> for the two managed opt-ins the system ships, the precedence rules against <code>agcResources</code>, and what happens on a cluster where the VPA CRDs are not installed.</p>
 <blockquote>
 <p><strong>v2 promotes AGC sizing to a CR field — <code>spec.agcResources</code> (Q171).</strong> This appendix describes the v1 API (<code>actions-gateway.github.com/v1alpha1</code>), where AGC sizing is platform-applied on the Deployment as above.
-The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2alpha1</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged.
+The v2 <code>ActionsGateway</code> (<code>actions-gateway.com/v2</code>) instead exposes an optional <code>agcResources</code> field of the standard <code>corev1.ResourceRequirements</code> shape for tenant-controlled per-gateway sizing, and makes the <a href="../appendix-a-capacity-slos/">Appendix A</a> sizing (requests <code>cpu: 500m</code> / <code>memory: 2Gi</code>, limits <code>cpu: 2</code> / <code>memory: 4Gi</code>) the GMC-stamped default: the override is additive per key, so setting one knob keeps the default for the rest and omitting the field reproduces the default unchanged.
 See <a href="../appendix-h-v2-api-decomposition/">Appendix H</a> for the v2 decomposition and <a href="../../operations/tenant-onboarding/#tuning-agc-control-plane-resources">tenant-onboarding</a> for the operator-facing how-to and the recommended floor.</p>
 </blockquote>
 <p><strong>Horizontal sharding.</strong> When the number of RunnerGroups or their aggregate <code>maxListeners</code> exceeds what a single vertically-scaled AGC pod can comfortably handle — or when rate-limit pressure appears (see <a href="#e6-when-to-shard-across-installations">E.6</a>) — the correct scale path is to shard into a second <code>ActionsGateway</code> CR in a new namespace with a separate GitHub App installation.
@@ -3624,10 +3654,10 @@ The GMC probes its RESTMapper for the <code>VerticalPodAutoscaler</code> kind an
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

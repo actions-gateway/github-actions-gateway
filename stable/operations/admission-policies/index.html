@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/admission-policies/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/admission-policies/">
       
       
         <link rel="prev" href="../security-operations/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -1805,6 +1807,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1975,10 +2005,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1996,8 +2026,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2756,7 +2786,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2965,6 +2995,9 @@ If one of those rules rejects a GAG worker, egress-proxy, Actions Gateway Contro
 <p>GAG uses in-tree <a href="https://kubernetes.io/docs/concepts/security/pod-security-admission/">Pod Security Admission</a> (PSA) as its <strong>floor</strong>, not as a replacement for your policy engine — the GMC stamps a <code>pod-security.kubernetes.io/enforce</code> level on every tenant namespace (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3 of the security design</a>).
 A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page is how to make the two layers agree.</p>
 </blockquote>
+<p>One GAG rule sits in front of your engine and not beside it.
+The GMC webhook refuses a tenant-authored <code>RunnerTemplate</code> whose pod shape goes past Pod Security <code>baseline</code> or uses a volume type the <code>restricted</code> level forbids, and a policy that permits such a shape cannot override that refusal.
+If your engine is where tenant pod shape is decided, set the chart value <code>allowUncheckedRunnerTemplatePodShape</code> so the webhook steps aside, and make sure a policy of yours then covers both things it stops refusing (<a href="../upgrade/#action-required-if-a-namespaced-runnertemplate-goes-past-pod-security-baseline-the-shape-is-now-rejected">what they are</a>).</p>
 <h2 id="gag-pod-classes">GAG pod classes<a class="headerlink" href="#gag-pod-classes" title="Permanent link">&para;</a></h2>
 <p>The matrix distinguishes seven pod classes because their security posture differs by design:</p>
 <table>
@@ -3002,16 +3035,10 @@ A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page i
 <td>Long-running per-tenant <code>Deployment</code></td>
 </tr>
 <tr>
-<td><strong>AGC (v1alpha1)</strong></td>
+<td><strong>AGC</strong></td>
 <td>GMC</td>
 <td>tenant</td>
-<td>Long-running per-tenant control plane</td>
-</tr>
-<tr>
-<td><strong>AGC (v2alpha1)</strong></td>
-<td>GMC</td>
-<td>tenant</td>
-<td>As above; adds resource defaults</td>
+<td>Long-running per-tenant control plane; the GMC gap-fills resource defaults</td>
 </tr>
 <tr>
 <td><strong>GMC manager</strong></td>
@@ -3021,7 +3048,7 @@ A Kyverno/Gatekeeper layer on top is fully supported and encouraged; this page i
 </tr>
 </tbody>
 </table>
-<p>The worker profile is the tenant's <code>ActionsGateway.spec.securityProfile</code> (<code>baseline</code> default, <code>restricted</code>, or <code>privileged</code>); the GMC mirrors it onto the worker pods and the namespace PSA level.
+<p>The worker profile is the namespace's <code>actions-gateway.com/security-profile</code> label (<code>baseline</code> default, <code>restricted</code>, or <code>privileged</code>); the GMC mirrors it onto the worker pods and the namespace PSA level.
 The proxy, AGC, and GMC pods are <strong>uniformly hardened</strong> and not tenant-tunable.</p>
 <h2 id="compatibility-matrix">Compatibility matrix<a class="headerlink" href="#compatibility-matrix" title="Permanent link">&para;</a></h2>
 <p>Legend: ✅ already complies · ⚠️ complies by default but a tenant override or profile can change it · ❌ does <strong>not</strong> comply — you must allow it (exempt the pod, or pick a stricter worker profile).</p>
@@ -3142,7 +3169,7 @@ The proxy, AGC, and GMC pods are <strong>uniformly hardened</strong> and not ten
 </tbody>
 </table>
 <h3 id="row-notes-the-why-grounded-in-the-pod-specs">Row notes (the <em>why</em>, grounded in the pod specs)<a class="headerlink" href="#row-notes-the-why-grounded-in-the-pod-specs" title="Permanent link">&para;</a></h3>
-<p><strong><code>runAsNonRoot: true</code></strong> — On <code>baseline</code>/<code>restricted</code> the AGC gap-fills pod-level <code>runAsNonRoot: true</code> <em>and</em> a numeric <code>runAsUser: 1001</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a> <code>applySecurityDefaults</code>).
+<p><strong><code>runAsNonRoot: true</code></strong> — On <code>baseline</code>/<code>restricted</code> the AGC gap-fills pod-level <code>runAsNonRoot: true</code> <em>and</em> a numeric <code>runAsUser: 1001</code> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/cmd/agc/internal/provisioner/provisioner.go"><code>provisioner.go</code></a> <code>applySecurityDefaults</code>).
 The numeric UID matters: kubelet cannot verify <code>runAsNonRoot</code> against the runner image's non-numeric <code>USER runner</code>, so without it the pod is rejected with <code>CreateContainerConfigError</code> (Q115).
 The <code>privileged</code> profile stamps <strong>no</strong> securityContext defaults — that is its whole purpose (DinD, root-requiring builds) — so a <code>runAsNonRoot</code> policy will reject it; that is correct, and those tenants need an explicit exception.
 Proxy, AGC, and GMC containers set <code>runAsNonRoot: true</code> directly.</p>
@@ -3153,7 +3180,7 @@ The <code>baseline</code> worker profile <strong>deliberately does not</strong> 
 A cluster policy that requires <code>drop: [ALL]</code> on <em>all</em> pods will therefore <strong>reject default workers</strong>.
 Your options, in order of preference:</p>
 <ul>
-<li>Tell tenants to set <code>securityProfile: restricted</code> — that profile gap-fills <code>allowPrivilegeEscalation: false</code> + <code>drop: [ALL]</code> on every worker container, satisfying the policy with no exception needed.</li>
+<li>Have the tenant namespace labelled <code>actions-gateway.com/security-profile=restricted</code> — that profile gap-fills <code>allowPrivilegeEscalation: false</code> + <code>drop: [ALL]</code> on every worker container, satisfying the policy with no exception needed.</li>
 <li>Or scope the cluster policy to exclude tenant namespaces (see the <a href="#sample-policies">exception samples</a>) so <code>baseline</code> keeps working.</li>
 </ul>
 <p><code>restricted</code>, proxy, AGC, and GMC pods already drop all capabilities.</p>
@@ -3163,10 +3190,10 @@ Your options, in order of preference:</p>
 The runner writes to its working tree (<code>_work</code>), tool cache, and temp dirs on the root filesystem; a read-only root would break virtually every job.
 If your cluster requires <code>readOnlyRootFilesystem</code>, you <strong>must</strong> exempt worker pods.
 The proxy, AGC, and GMC containers all run with <code>readOnlyRootFilesystem: true</code>.</p>
-<p><strong>No privileged containers / no host namespaces</strong> — The AGC unconditionally forces <code>hostPID/hostNetwork/hostIPC: false</code> and <code>automountServiceAccountToken: false</code> on every worker pod (all three profiles), overwriting any tenant <code>PodTemplate</code> value.
+<p><strong>No privileged containers / no host namespaces</strong> — The AGC unconditionally forces <code>hostPID/hostNetwork/hostIPC: false</code> and <code>automountServiceAccountToken: false</code> on every worker pod (all three profiles), overwriting any tenant <code>PodTemplate</code> value, and removes any projected <code>serviceAccountToken</code> volume source.
 <code>baseline</code>/<code>restricted</code> also forbid privileged containers via PSA.
 Only the <code>privileged</code> profile permits a privileged container — by design, and gated behind an admission webhook that requires an explicit per-tenant opt-in (<a href="../../design/05-security/#53-security-profiles-and-the-privileged-opt-in">§5.3</a>).</p>
-<p><strong>Block <code>:latest</code> / require digest pin</strong> — All GAG-managed images are pinned by <code>@sha256:</code> digest: the GMC, AGC, and proxy images are digest-pinned and the Helm chart <strong>refuses to render</strong> without a digest (<code>validateImageDigest</code>); the default worker image is also digest-pinned (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/agc/names/names.go"><code>names.go</code></a>).
+<p><strong>Block <code>:latest</code> / require digest pin</strong> — All GAG-managed images are pinned by <code>@sha256:</code> digest: the GMC, AGC, and proxy images are digest-pinned and the Helm chart <strong>refuses to render</strong> without a digest (<code>validateImageDigest</code>); the default worker image is also digest-pinned (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/cmd/agc/names/names.go"><code>names.go</code></a>).
 The ⚠️ is only because a tenant <em>may</em> override <code>spec.workerImage</code> (or a <code>PodTemplate</code> container image) with a floating tag — a tenant choice, not a GAG default.
 A "require digest" policy scoped to tenant namespaces is a good way to force tenants to pin too.</p>
 <p><strong>Registry allowlist</strong> — ⚠️ for every class because you must add GAG's registries to your allowlist:</p>
@@ -3177,7 +3204,7 @@ A "require digest" policy scoped to tenant namespaces is a good way to force ten
 </ul>
 <p><strong>Require CPU/memory requests + limits</strong> — Workers are gap-filled with <code>500m</code> CPU / <code>1Gi</code> memory as <em>both</em> requests and limits when a container sets neither.
 The proxy sets requests+limits.
-<strong>AGC v1alpha1 stamps no resources</strong> — a "require limits" policy will reject AGC v1 pods; either move the tenant to a v2alpha1 <code>ActionsGateway</code> (which gap-fills <code>500m</code>/<code>2Gi</code> requests, <code>2</code>/<code>4Gi</code> limits) or exempt AGC pods.
+The AGC gets <code>500m</code>/<code>2Gi</code> requests and <code>2</code>/<code>4Gi</code> limits unless <code>ActionsGateway.spec.agcResources</code> overrides them, so a "require limits" policy admits it.
 The GMC's resources come from the chart's <code>resources</code> value, which ships with a sane default (<code>10m</code>/<code>64Mi</code> request, <code>500m</code>/<code>128Mi</code> limit).</p>
 <h2 id="sample-policies">Sample policies<a class="headerlink" href="#sample-policies" title="Permanent link">&para;</a></h2>
 <p>Ready-to-apply samples live in <a href="../examples/policies/"><code>examples/policies/</code></a>.
@@ -3225,7 +3252,7 @@ Two complementary kinds, for both engines:</p>
 </table>
 <p>All samples key off two stable signals so they keep working as tenants come and go:</p>
 <ul>
-<li>The <strong>tenant-namespace marker</strong> <code>actions-gateway.github.com/tenant: "true"</code>, which the GMC requires on every namespace it provisions into (worker, proxy, and AGC pods all live in marked namespaces).</li>
+<li>The <strong>tenant-namespace marker</strong> <code>actions-gateway.com/tenant: managed</code>, which the GMC requires on every namespace it provisions into (worker, proxy, and AGC pods all live in marked namespaces).</li>
 <li>The <strong>GMC install namespace</strong>, where only the GMC manager pod runs.</li>
 </ul>
 <h3 id="apply-the-enforce-policies">Apply the enforce policies<a class="headerlink" href="#apply-the-enforce-policies" title="Permanent link">&para;</a></h3>
@@ -3292,6 +3319,10 @@ The worst a hostile author achieves is an unschedulable pod (<code>Pending</code
 <a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>docs/operations/examples/policies/gatekeeper/restrict-gag-placement.yaml
 </code></pre></div>
 <p>Namespaces without the label are left untouched, so the Kyverno policy is safe to apply before you have labelled anything.</p>
+<blockquote>
+<p><strong>These samples put a tenant's AGC and proxy on the same nodes as its workers.</strong> They pin every pod in the namespace to one pool, so a worker that escapes its container reaches the AGC's GitHub App key on the same node.
+On a cluster that keeps GAG's control plane off worker nodes (<a href="../security-operations/#keep-gags-control-plane-off-worker-nodes">why, and how</a>), do not apply them as written.</p>
+</blockquote>
 <h3 id="the-taint-bypass--and-why-validation-alone-is-not-enough">The taint bypass — and why validation alone is not enough<a class="headerlink" href="#the-taint-bypass--and-why-validation-alone-is-not-enough" title="Permanent link">&para;</a></h3>
 <p>A toleration with <code>operator: Exists</code> and <strong>no <code>key</code></strong> tolerates <em>every</em> taint in the cluster, including the taints that reserve a node pool for one tenant.
 No GAG-emitted pod needs one, so both samples deny it.</p>
@@ -3439,10 +3470,10 @@ See <a href="../../design/05-security/#52-agc--proxy-level-threats-namespace-sco
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

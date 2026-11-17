@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/reference/api/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/reference/api/">
       
       
         <link rel="prev" href="../">
@@ -21,18 +21,18 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
-        <title>API reference (v2beta1) - GitHub Actions Gateway</title>
+        <title>API reference (v2) - GitHub Actions Gateway</title>
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -175,7 +175,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              API reference (v2beta1)
+              API reference (v2)
             
           </span>
         </div>
@@ -1401,6 +1401,8 @@
       
         
       
+        
+      
     
     
     
@@ -1798,6 +1800,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1965,10 +1995,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1986,8 +2016,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2585,7 +2615,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2603,7 +2633,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3682,34 +3712,22 @@
   
 
 
-<!-- GENERATED by crd-ref-docs from the kubebuilder markers in api/v2beta1; regenerate with `make api-reference`. Do not edit by hand. -->
+<!-- GENERATED by crd-ref-docs from the kubebuilder markers in api/v2; regenerate with `make api-reference`. Do not edit by hand. -->
 <h1 id="api-reference">API reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h1>
-<p>Every field of every <code>actions-gateway.com/v2beta1</code> kind, generated from the Go
-types the CRD schemas are generated from. For what the kinds are and how they fit
-together, start at the <a href="../">reference overview</a>; for the deprecated
-<code>v1alpha1</code> and <code>v2alpha1</code> versions, see <a href="../../operations/v1alpha1-deprecation/">Deprecations &amp; the v2.0.0
-removal</a>.</p>
+<p>Every field of every <code>actions-gateway.com/v2</code> kind, generated from the Go types
+the CRD schemas are generated from. For what the kinds are and how they fit
+together, start at the <a href="../">reference overview</a>; for the versions <code>v2.0.0</code>
+removed, see <a href="../../operations/v1alpha1-deprecation/">Deprecations &amp; the v2.0.0 removal</a>.</p>
 <h2 id="packages">Packages<a class="headerlink" href="#packages" title="Permanent link">&para;</a></h2>
 <ul>
 <li><a href="#actions-gatewaycomv2">actions-gateway.com/v2</a></li>
 </ul>
 <h2 id="actions-gatewaycomv2">actions-gateway.com/v2<a class="headerlink" href="#actions-gatewaycomv2" title="Permanent link">&para;</a></h2>
 <p>Package v2 contains the API Schema definitions for the actions-gateway.com v2
-API group, the General Availability (GA) version: the five converted v2 kinds —
-the GMC-reconciled ActionsGateway (control) and EgressProxy (data) kinds, and the
-AGC-reconciled RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate
-(data) kinds — plus the platform-owned PriorityClassAllowlist and their shared
-types.</p>
-<p>v2 is the storage version from 1.10 (Q1086). It was served beside v2beta1 a release
-earlier, in 1.9, because Kubernetes' deprecation policy (rule #4b) will not let the
-storage version advance in the release that introduces its successor (Q413).</p>
-<p>v2 is a conversion <strong>spoke</strong> of the v2beta1 hub (see conversion.go), like
-v2alpha1. The shape is identical to v2beta1 with one exception: EgressProxy's
-egressPolicyMode enum is CIDR;FQDN, without the deprecated CiliumFQDN/CalicoFQDN
-aliases (Q452); a stored alias reads at v2 as FQDN with the alias carried in a
-conversion annotation (see conversion.go).
-PriorityClassAllowlist has no conversion webhook: its schema is identical at
-every version, so the apiserver converts it by rewriting apiVersion alone.</p>
+API group, the General Availability (GA) version and the only one served: the
+GMC-reconciled ActionsGateway (control) and EgressProxy (data) kinds, the
+AGC-reconciled RunnerSet (control) and RunnerTemplate / ClusterRunnerTemplate (data)
+kinds, the platform-owned PriorityClassAllowlist, and their shared types.</p>
 <h3 id="resource-types">Resource Types<a class="headerlink" href="#resource-types" title="Permanent link">&para;</a></h3>
 <ul>
 <li><a href="#actionsgateway">ActionsGateway</a></li>
@@ -3920,7 +3938,7 @@ docs/operations/security-operations.md.</p>
 </tr>
 <tr>
 <td><code>scheduling</code> <em><a href="#podscheduling">PodScheduling</a></em></td>
-<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in affinity, so the block applies verbatim. See PodScheduling.</td>
+<td>Scheduling places this gateway's AGC control-plane pod on specific nodes — for example onto the same tenant node pool as the proxy pool, or onto a control-plane pool distinct from where workers run (Q282). Unlike the EgressProxy, the AGC pod carries no built-in spread, so the block applies verbatim, plus the worker separation term PodScheduling describes.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -3949,7 +3967,7 @@ uniform v2 status/condition contract (§H.7).</p>
 <tbody>
 <tr>
 <td><code>conditions</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#condition-v1-meta">Condition</a> array</em></td>
-<td>Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, CredentialUnavailable, Degraded, EgressUnattributed, RunnerSetsDegraded.</td>
+<td>Conditions are the observed conditions of the gateway. Known types: Ready, AGCAvailable, AGCAutoscalingUnavailable, CredentialUnavailable, Degraded, EgressAuditUnattributed, EgressRulesStale, EgressUnattributed, TracingCABundleUnresolved, RunnerSetsDegraded, ScaleSetNameCollision.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -4177,13 +4195,18 @@ discriminated-union shape was fixed before the v2beta1 cut (§H.15).</p>
 <p>EgressPeer identifies a single destination the GMC may open in an otherwise default-deny
 per-tenant NetworkPolicy: a pod/namespace selector for an in-cluster peer, or a CIDR for an
 external one. Exactly one peer form must be given — a CIDR cannot carry a selector and vice
-versa — so the rule the GMC emits is always scoped to one peer, never a broaden-to-all-egress.</p>
+versa — so the rule the GMC emits has one peer on one port.</p>
+<p>The gateway's author writes the peer, and admission bounds only the CIDR form: its size and
+the ranges it may name (see CIDR). A selector is not bounded, since its reach is whatever
+pods carry the labels, and an empty namespaceSelector reaches pods in every namespace. The
+rule is added beside the operator's API-server scoping, not inside it.</p>
 <p>This is the shared egress-peer descriptor that current and future NetworkPolicy egress holes
 reference, so the v2 API freezes one consistent shape rather than a per-feature near-duplicate
-(Q204). Today the Vault signer (VaultSigner.NetworkPolicy) is its only consumer; foreseen
-future consumers — cloud KMS signers, AGC telemetry endpoints — reuse it additively. See
-docs/design/appendix-g-future-enhancements.md §G.9.</p>
+(Q204). Today the Vault signer (VaultSigner.NetworkPolicy) and the trace collector
+(TracingConfig.NetworkPolicy) consume it; foreseen future consumers such as cloud KMS
+signers reuse it additively. See docs/design/appendix-g-future-enhancements.md §G.9.</p>
 <p><em>Appears in:</em>
+- <a href="#tracingconfig">TracingConfig</a>
 - <a href="#vaultsigner">VaultSigner</a></p>
 <table>
 <thead>
@@ -4209,7 +4232,7 @@ docs/design/appendix-g-future-enhancements.md §G.9.</p>
 </tr>
 <tr>
 <td><code>cidr</code> <em>string</em></td>
-<td>CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually exclusive with the pod/namespace selectors.</td>
+<td>CIDR is the IP block of an external (out-of-cluster) peer, e.g. "10.0.5.7/32". Mutually exclusive with the pod/namespace selectors.<br />It must parse as a CIDR no broader than /16 for IPv4 or /48 for IPv6: the largest network one external service spans, an AWS VPC or one IPv6 site, and far short of 0.0.0.0/0. It must not be link-local (169.254.0.0/16, fe80::/10), where most clouds serve node metadata, or cover one of the metadata and platform addresses clouds serve elsewhere: 100.100.100.200 (Alibaba Cloud), 168.63.129.16 (Azure), fd00:ec2::254 (AWS) and fd20:ce::254 (Google Cloud). That list is the addresses known when it was written, not every address that serves node credentials. A value already stored is not re-checked until it changes.</td>
 <td></td>
 <td>MaxLength: 43<br />Pattern: <code>^([0-9]\{1,3\}\.)\{3\}[0-9]\{1,3\}/[0-9]\{1,2\}$\|^([0-9a-fA-F:]+)/[0-9]\{1,3\}$</code><br />Optional: {}</td>
 </tr>
@@ -4240,11 +4263,6 @@ FQDN mechanisms proliferate (Q245).</p>
     cluster declares no backend (--fqdn-policy-backend=none, the default) — fail-
     closed and loud, never a silent runtime Degraded.</li>
 </ul>
-<p>v2 does not define the deprecated CiliumFQDN / CalicoFQDN aliases that v2alpha1 and
-v2beta1 still carry (Q452). An EgressProxy stored with one cannot be read at v2:
-its conversion fails, and so does every other object batched into the same
-request. Migrate it to FQDN plus --fqdn-policy-backend first. See
-docs/operations/v1alpha1-deprecation.md.</p>
 <p>FQDN mode is fail-closed: the standard NetworkPolicy still
 default-denies GitHub egress (it drops the GitHub-CIDR rule but keeps a DNS-only
 allow), so if the CNI cannot enforce the native policy — or the additive-allow GKE
@@ -4544,7 +4562,8 @@ same namespace. It is distinct from LocalObjectRef because the referent is a cor
 object, not a v2 one: its name budget is the full 253-character DNS subdomain
 rather than the 52-character v2 object budget (§H.6).</p>
 <p><em>Appears in:</em>
-- <a href="#actionsgatewayspec">ActionsGatewaySpec</a></p>
+- <a href="#actionsgatewayspec">ActionsGatewaySpec</a>
+- <a href="#tracingconfig">TracingConfig</a></p>
 <table>
 <thead>
 <tr>
@@ -4754,7 +4773,7 @@ is purely additive — no conversion work, no breaking change. Tracked as Q284.<
 </tr>
 <tr>
 <td><code>affinity</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#affinity-v1-core">Affinity</a></em></td>
-<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in affinity, so the block applies verbatim there.</td>
+<td>Affinity is the standard pod/node affinity and anti-affinity block.<br />Precedence against the built-in anti-affinity (EgressProxy only). The GMC stamps a REQUIRED cross-node podAntiAffinity on every proxy pool so one node failure cannot take the whole pool down. Composition with this field is:<br />- nodeAffinity and podAffinity are applied as given, alongside the built-in anti-affinity, which is preserved.<br />- podAntiAffinity, when set to any non-nil value, REPLACES the built-in term entirely — set it and you own it. An explicit empty value (podAntiAffinity: {}) therefore opts out of cross-node spreading, which is what a single-node tenant pool needs: the required built-in term would otherwise strand every replica after the first in Pending. Lowering minReplicas to 1 is the other way to get there.<br />ActionsGateway has no built-in spread, so the block applies verbatim there.<br />Worker separation (both kinds). Unless the platform sets the GMC's --controller-worker-separation=none, the GMC also appends a REQUIRED podAntiAffinity term against worker pods in every namespace, so these pods never share a node with a worker. It is appended after the rules above and no value here removes it.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -4766,7 +4785,7 @@ is purely additive — no conversion work, no breaking change. Tracked as Q284.<
 </tr>
 <tr>
 <td><code>priorityClassName</code> <em>string</em></td>
-<td>PriorityClassName names a cluster-scoped PriorityClass for these pods, raising them above best-effort workloads under node pressure. It matters because an evicted proxy pod takes that tenant's ENTIRE egress path down, and an evicted AGC pod takes that tenant's control plane down; without a priority class both are as evictable as any best-effort pod.<br />Gated by a SEPARATE, infra-only allowlist. This field is validated against the GMC --allowed-infra-priority-classes flag, which is DISJOINT by construction from the worker-facing --allowed-priority-classes that gates priorityTiers and RunnerTemplate podTemplate.spec.priorityClassName. The two must not intersect, and the GMC refuses to start if they do.<br />Why a second allowlist rather than reusing the worker one. Infra pods must sit ABOVE workers — that is the whole point of prioritizing them. If the worker allowlist were reused and a high class added so a proxy could name it, that same class would become nameable from a worker pod, and any tenant could lift its WORKERS to infra priority and preempt OTHER tenants' proxy pods. The gate meant to protect the proxy would become the mechanism for evicting it.<br />Why gated at all, when nodeSelector/tolerations/affinity are not. Placement is a choice about the tenant's own traffic; it weakens attribution, not isolation. Priority is a cluster-wide, cross-tenant preemption lever: a pod naming a preempting class can evict OTHER tenants' pods off a node. And <code>system-*</code> PriorityClasses are NOT kube-system-scoped — a pod in any namespace may name system-cluster-critical (value 2000000000, PreemptLowerPriority), with no built-in admission check restricting it (verified against a real apiserver). So an ungated priorityClassName on a tenant-writable CR is a cluster-wide preemption escape, which is why it is the one PodScheduling field behind a gate.<br />The empty string (the default) names no class and is always permitted, so an unset allowlist forbids every NAMED class without forbidding unprioritized pods.</td>
+<td>PriorityClassName names a cluster-scoped PriorityClass for these pods, raising them above best-effort workloads under node pressure. It matters because an evicted proxy pod takes that tenant's ENTIRE egress path down, and an evicted AGC pod takes that tenant's control plane down; without a priority class both are as evictable as any best-effort pod.<br />Gated by a SEPARATE, infra-only allowlist. This field is validated against the GMC --allowed-infra-priority-classes flag, which is DISJOINT by construction from the worker-facing --allowed-priority-classes that gates priorityTiers and RunnerTemplate podTemplate.spec.priorityClassName. The two must not intersect, and the GMC refuses to start if they do.<br />Why a second allowlist rather than reusing the worker one. Infra pods must sit ABOVE workers — that is the whole point of prioritizing them. If the worker allowlist were reused and a high class added so a proxy could name it, that same class would become nameable from a worker pod, and any tenant could lift its WORKERS to infra priority and preempt OTHER tenants' proxy pods. The gate meant to protect the proxy would become the mechanism for evicting it.<br />Why gated at all, when nodeSelector/tolerations/affinity are not. Placement is a choice about the tenant's own traffic; it weakens attribution, not isolation. Priority is a cluster-wide, cross-tenant preemption lever: a pod naming a preempting class can evict OTHER tenants' pods off a node. And <code>system-*</code> PriorityClasses are NOT kube-system-scoped — a pod in any namespace may name system-cluster-critical (value 2000000000, PreemptLowerPriority), with no built-in admission check restricting it (verified against a real apiserver). So an ungated priorityClassName on a tenant-writable CR is a cluster-wide preemption escape, which is why it is the one PodScheduling field behind a gate.<br />The empty string (the default) names no class and is always permitted, so an unset allowlist forbids every NAMED class without forbidding unprioritized pods. The GMC then gives the pod the platform's control-plane class (--control-plane-priority-class), which the chart creates by default, so it still sits above every worker class.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -4843,7 +4862,7 @@ lift its workers to infra priority and preempt other tenants' proxy pods.</p>
 <tbody>
 <tr>
 <td><code>allowedPriorityClasses</code> <em>string array</em></td>
-<td>AllowedPriorityClasses is the set of cluster-scoped PriorityClass names tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName and RunnerTemplate.spec.podTemplate.spec.priorityClassName (and, while v1alpha1 is served, RunnerGroup.spec.priorityTiers[].priorityClassName).<br />A PriorityClass sets cluster-wide scheduling preemption order, so a tenant naming a high-priority class could evict another tenant's worker pods. The platform admin pre-creates each class (with preemptionPolicy: Never unless a tier is genuinely meant to preempt across tenants) and lists its name here.<br />Unset or empty forbids every named class — the secure default. This list is additive to the GMC's static --allowed-priority-classes flag for the admission webhook, and is the SOLE source for the priorityclass-allowlist-guard ValidatingAdmissionPolicy, which cannot read a controller flag. Keep it a superset of the flag, or direct writes naming a flag-only class are denied by the policy.</td>
+<td>AllowedPriorityClasses is the set of cluster-scoped PriorityClass names tenants may reference from RunnerSet.spec.priorityTiers[].priorityClassName and RunnerTemplate.spec.podTemplate.spec.priorityClassName.<br />A PriorityClass sets cluster-wide scheduling preemption order, so a tenant naming a high-priority class could evict another tenant's worker pods. The platform admin pre-creates each class (with preemptionPolicy: Never unless a tier is genuinely meant to preempt across tenants) and lists its name here.<br />Unset or empty forbids every named class — the secure default. This list is additive to the GMC's static --allowed-priority-classes flag for the admission webhook, and is the SOLE source for the priorityclass-allowlist-guard ValidatingAdmissionPolicy, which cannot read a controller flag. Keep it a superset of the flag, or direct writes naming a flag-only class are denied by the policy.</td>
 <td></td>
 <td>MaxItems: 128<br />items:MaxLength: 253<br />items:Pattern: <code>^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$</code><br />Optional: {}</td>
 </tr>
@@ -4948,18 +4967,8 @@ ships the inline allowlist only; ReferenceGrant support is additive later.</p>
 shape (templateRef) and an optional egress proxy (proxyRef) to a GitHub gateway
 (gatewayRef), and carries the scheduling/quota knobs that were RunnerGroup's in
 v1alpha1. Worker pods are provisioned per acquired job and released on completion.</p>
-<p>The .spec.gatewayRef.name selectable field (KEP-4358, used by the AGC to scope its
-RunnerSet watch server-side) is deliberately declared ONLY on v2alpha1, NOT here.
-The apiserver hoists per-version selectableFields to spec level when they are
-identical across all served versions, but leaves the schema per-version when the
-versions' schemas differ (v2beta1 drops acquisitionProtocol/maxListeners). A
-spec-level selectableFields with a nil spec-level schema is rejected
-("selectableFields may only be set when validations.schema is included"), so
-declaring the field on both versions makes the RunnerSet CRD un-installable. The
-AGC operates on v2alpha1 during coexistence, so v2alpha1 is the version that needs
-the field selector; when v2beta1 becomes the sole served version (the v2alpha1
-removal at the ScaleSet-only cut) the marker moves here and v2alpha1's is dropped —
-so the two are never declared simultaneously. See Q74.</p>
+<p>The .spec.gatewayRef.name selectable field (KEP-4358) is how the AGC scopes its
+RunnerSet watch server-side.</p>
 <table>
 <thead>
 <tr>
@@ -5059,7 +5068,7 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 </tr>
 <tr>
 <td><code>priorityTiers</code> <em><a href="#prioritytier">PriorityTier</a> array</em></td>
-<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order.</td>
+<td>PriorityTiers defines PriorityClass assignments and cumulative pod-count thresholds. Tiers must be in strictly ascending threshold order, and admission rejects a list that is not: the AGC assigns the first tier whose threshold the active-pod count is below, so a tier at or under an earlier one never receives a pod. A list already stored is not re-checked until it changes.</td>
 <td></td>
 <td>MaxItems: 10<br />Optional: {}</td>
 </tr>
@@ -5123,6 +5132,12 @@ lifecycle fields are carried over from RunnerGroup unchanged in meaning.</p>
 <td></td>
 <td>Optional: {}</td>
 </tr>
+<tr>
+<td><code>forkPullRequests</code> <em>string</em></td>
+<td>ForkPullRequests decides whether this set runs a job from a fork pull request: Refuse (the default) or Accept. A pull_request run executes the pull request's merge commit, whose workflow file carries the fork's edits, so a fork can name any set's label in runs-on; GitHub's runner groups scope by repository and cannot tell a fork's job from the repository's own (Q1220).<br />A job is a fork's when its run was triggered by pull_request, pull_request_review, or pull_request_review_comment and the run's head repository is not the repository the job belongs to, compared by name and case-insensitively. An empty head repository (a deleted fork) counts as a fork's. pull_request_target runs the base repository's workflow and is never refused. Refusing reads the run from the GitHub REST API before a runner is minted, so a job of those three events costs one extra call; a read that fails holds the job (JobProvisionStalled=True/JobSourceUnverified) and retries it, never admitting it unread.<br />A refused job gets no runner. Its run is force-cancelled, the only way the AGC can end a job it will not run, which also ends the run's other jobs, and the AGC records a ForkJobRefused Event. Where the GitHub App holds Checks: Read and write, it also writes a failed check run on the pull request's head commit naming this set and this field, because a cancelled run shows no reason. Accept is for a set built for untrusted code, such as one on the Kata template. Empty means Refuse.</td>
+<td></td>
+<td>Enum: [Refuse Accept]<br />Optional: {}</td>
+</tr>
 </tbody>
 </table>
 <h4 id="runnersetstatus">RunnerSetStatus<a class="headerlink" href="#runnersetstatus" title="Permanent link">&para;</a></h4>
@@ -5170,13 +5185,13 @@ missing object.</p>
 </tr>
 <tr>
 <td><code>advertisedCapacity</code> <em>integer</em></td>
-<td>AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from <code>kubectl describe</code> alone: the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a classic-tier set, which decides per delivered job and never states a capacity, and on a scale-set set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises.</td>
+<td>AdvertisedCapacity is the X-ScaleSetMaxCapacity this set most recently advertised: the total jobs GitHub may keep assigned to it at once, recomputed every long-poll from the admission ladder. Together with WithheldCapacity it answers "why is intake throttled?" from <code>kubectl describe</code> alone: the same accounting previously reachable only through Prometheus, which a tenant without metrics access cannot read (Q721).<br />A pointer because zero is a meaningful advertisement (intake fully withheld) and has to be distinguishable from "no advertisement": nil on a set whose listener has not polled yet.<br />Lags the live value by up to one reconcile, because the advertisement is recomputed per poll and published per reconcile. It is an observation of intake, never an input: setting it does not change what the listener advertises.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>withheldCapacity</code> <em><a href="#withheldcapacity">WithheldCapacity</a> array</em></td>
-<td>WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding. That is the same explicit-zero contract the withheld gauge carries.<br />Empty on a classic-tier set and before the first poll, alongside a nil AdvertisedCapacity.</td>
+<td>WithheldCapacity attributes the gap between the declared worker ceiling and AdvertisedCapacity to the rung of the admission ladder that took each slot, so a tenant can tell "my own maxWorkers" from "the namespace ResourceQuota" from "the cluster cannot place my workers" without reading metrics or the AGC's logs (Q721). Every rung the poll evaluated appears, including the ones withholding nothing, so a reason absent from the list was not evaluated rather than not binding. That is the same explicit-zero contract the withheld gauge carries.<br />Empty before the first poll, alongside a nil AdvertisedCapacity.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -5292,7 +5307,7 @@ webhook in M2 (the milestone that adds the data-kind reconcilers).</p>
 <tbody>
 <tr>
 <td><code>podTemplate</code> <em><a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.37/#podtemplatespec-v1-core">PodTemplateSpec</a></em></td>
-<td>PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the large field this kind exists to isolate.<br />On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName is gated by the GMC validating webhook against the platform PriorityClass allowlist (--allowed-priority-classes; empty forbids every named class). PriorityClass is cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped ClusterRunnerTemplate is platform-authored and therefore exempt.</td>
+<td>PodTemplate is the standard Kubernetes PodTemplateSpec for worker pods — the large field this kind exists to isolate.<br />On the namespaced (tenant-authored) RunnerTemplate, podTemplate.spec.priorityClassName is gated by the GMC validating webhook against the platform PriorityClass allowlist (--allowed-priority-classes; empty forbids every named class). PriorityClass is cluster-scoped and sets the scheduler's preemption order cluster-wide, so it is the platform's to grant, not the tenant's (Q132/Q289). The cluster-scoped ClusterRunnerTemplate is platform-authored and therefore exempt.<br />The same webhook holds the namespaced RunnerTemplate to the Pod Security Standards baseline level and to the volume types the restricted level allows (configMap, csi, downwardAPI, emptyDir, ephemeral, image, persistentVolumeClaim, projected, secret), whatever security profile the namespace is on. A worker shape past either belongs in a ClusterRunnerTemplate, which is exempt. A platform that decides tenant pod shape with its own admission policy can turn these two rules off on the GMC (--allow-unchecked-runner-template-pod-shape).<br />On both kinds it rejects a projected volume with a serviceAccountToken source, or with a podCertificate source whose signerName begins with kubernetes.io, and the AGC removes either from every worker pod it builds: worker pods carry no Kubernetes API credential.<br />On the namespaced RunnerTemplate it rejects podTemplate.spec.nodeName and any schedulerName other than default-scheduler, and the AGC clears both from a worker built from one: either places the pod past the default scheduler, and with it past the rule keeping workers off control-plane nodes. The ClusterRunnerTemplate keeps both, and the --allow-unchecked-runner-template-pod-shape opt-out leaves the rule in force.<br />A template stored before these four rules is not re-checked against them until podTemplate changes.</td>
 <td></td>
 <td></td>
 </tr>
@@ -5340,11 +5355,9 @@ no condition type is set on a template today (Q309).</p>
 <p>ScaleUpRateLimit configures the opt-in per-RunnerSet worker-pod creation-rate
 limit (Q223): a token bucket where MaxPerSecond is the sustained refill rate and
 Burst is the bucket depth (the largest instantaneous batch before throttling
-engages). An empty bucket withholds intake rather than delaying an acquired job:
-on the classic acquisition tier the AGC declines to claim the next job, leaving it
-queued at GitHub for redelivery, and on the ScaleSet tier it advertises less
-capacity so GitHub assigns less. A ScaleSet worker can still wait briefly at pod
-creation when an advertisement was stale; the classic tier never waits at all.</p>
+engages). An empty bucket withholds intake rather than delaying an assigned job:
+the AGC advertises less capacity so GitHub assigns less. A worker can still wait
+briefly at pod creation when an advertisement was stale.</p>
 <p><em>Appears in:</em>
 - <a href="#runnersetspec">RunnerSetSpec</a></p>
 <table>
@@ -5397,7 +5410,7 @@ interface, by extending this enum and the union — no breaking change.</p>
 </table>
 <h4 id="tracingconfig">TracingConfig<a class="headerlink" href="#tracingconfig" title="Permanent link">&para;</a></h4>
 <p>TracingConfig configures opt-in OpenTelemetry distributed tracing for this
-tenant's AGC. Tracing stays off unless Endpoint is set. Unchanged from v1alpha1.</p>
+tenant's AGC. Tracing stays off unless Endpoint is set.</p>
 <p>Authentication headers are intentionally not exposed: they can carry bearer
 tokens, and this project keeps secrets out of environment variables. Authenticate
 the collector at the network layer instead. See docs/operations/observability.md.</p>
@@ -5415,13 +5428,25 @@ the collector at the network layer instead. See docs/operations/observability.md
 <tbody>
 <tr>
 <td><code>endpoint</code> <em>string</em></td>
-<td>Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.</td>
+<td>Endpoint is the OTLP/gRPC collector address. Setting it enables tracing on the AGC; leaving it empty keeps tracing off. Maps to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT.<br />A value the exporter cannot parse as a URL is rejected, because the exporter ignores it and sends spans to 127.0.0.1:4317 with no error (otlptracegrpc v1.47.0). A bare IP with a port is the common case, so write https://10.0.0.5:4317. A name with a port parses and needs no scheme, and the exporter trims surrounding whitespace. A value already stored is not re-checked until it changes.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
 <tr>
 <td><code>insecure</code> <em>boolean</em></td>
-<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.</td>
+<td>Insecure disables TLS for the OTLP/gRPC connection. Defaults to false (TLS required). Maps to OTEL_EXPORTER_OTLP_TRACES_INSECURE.<br />It cannot be true with an https:// endpoint: the exporter applies it after the scheme, so the pair exports in plaintext (otlptracegrpc v1.47.0). A stored pair is not re-checked until the endpoint or this field changes.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>caBundleRef</code> <em><a href="#localconfigmapreference">LocalConfigMapReference</a></em></td>
+<td>CABundleRef names a ConfigMap in this namespace holding, under the key "ca.crt", the PEM certificate bundle the AGC verifies the collector against. Set it for a collector behind a private certificate authority, which is any collector addressed by a .svc.cluster.local name, since public authorities do not issue for those. Maps to OTEL_EXPORTER_OTLP_TRACES_CERTIFICATE.<br />The bundle replaces the system roots for this connection and touches no other: it is not added to the trust the AGC uses for GitHub. Certificates are public material, which is why the carrier is a ConfigMap rather than a Secret.<br />Resolved at runtime, not at admission (§H.7), and advisory, because traces are telemetry and a lost bundle must not stop CI: a ref naming a ConfigMap that is missing, or whose ca.crt holds no parseable certificate, sets the TracingCABundleUnresolved condition (reason CABundleNotFound / CABundleInvalid) and the gateway keeps reconciling. The exporter then verifies against the system roots, so a private-CA collector receives nothing rather than an unverified connection. The AGC reads the file once at startup, so a new or rotated bundle takes effect when the AGC restarts.<br />Unset (the default) verifies the collector against the system roots.</td>
+<td></td>
+<td>Optional: {}</td>
+</tr>
+<tr>
+<td><code>networkPolicy</code> <em><a href="#egresspeer">EgressPeer</a></em></td>
+<td>NetworkPolicy optionally tells the GMC how to reach the collector as a NetworkPolicy egress peer. On a policy-enforcing CNI the per-tenant AGC NetworkPolicy default-denies egress, and Endpoint is an opaque URL the GMC does not derive a peer from, so tracing delivers nothing until this names one. Set it and the GMC emits a scoped AGC→collector egress rule on the port parsed from Endpoint. Worker pods gain nothing: the rule is on the AGC-only policy. Leave it unset on a non-enforcing CNI (e.g. kindnet) or when the egress rule is managed out of band.<br />Port is normally left unset, since it is derived from Endpoint; set it to override that port. A proxied gateway also needs Endpoint to use the collector's full .svc.cluster.local name, the only in-cluster form NO_PROXY exempts from the egress proxy.</td>
 <td></td>
 <td>Optional: {}</td>
 </tr>
@@ -5784,10 +5809,10 @@ enters the cluster (§H.15, docs/design/05-security.md).</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

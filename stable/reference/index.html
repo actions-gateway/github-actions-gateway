@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/reference/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/reference/">
       
       
         <link rel="prev" href="../operations/kata-ci-spike-runbook/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1403,6 +1403,8 @@
       
         
       
+        
+      
     
     
     
@@ -1800,6 +1802,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1967,10 +1997,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -1988,8 +2018,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2578,7 +2608,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2689,51 +2719,15 @@
 <p>For what the kinds are <em>for</em> — how an <code>ActionsGateway</code>, <code>RunnerSet</code>, <code>RunnerTemplate</code>, and <code>EgressProxy</code> compose into a working tenant — read <a href="../design/03-api-contracts/">design § API &amp; data contracts</a> and <a href="../operations/tenant-onboarding/">operations § Tenant onboarding</a> first.
 The reference answers "what does this field do?", not "which objects do I need?".</p>
 <h2 id="which-api-versions-this-covers">Which API versions this covers<a class="headerlink" href="#which-api-versions-this-covers" title="Permanent link">&para;</a></h2>
-<p><strong><code>actions-gateway.com/v2</code> only</strong>: the General Availability (GA) version, the storage version from 1.10, and the one every new install should use.</p>
-<p>The cluster serves four versions today, and the other three are removed in v2.0.0:</p>
-<table>
-<thead>
-<tr>
-<th>Version</th>
-<th>Status</th>
-<th>Where to go</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>actions-gateway.com/v2</code></td>
-<td>Served, storage version, current</td>
-<td><a href="api/">api.md</a></td>
-</tr>
-<tr>
-<td><code>actions-gateway.com/v2beta1</code></td>
-<td>Served, removed in v2.0.0</td>
-<td><a href="../operations/v1alpha1-deprecation/">Deprecations &amp; the v2.0.0 removal</a></td>
-</tr>
-<tr>
-<td><code>actions-gateway.com/v2alpha1</code></td>
-<td>Deprecated, removed in v2.0.0</td>
-<td><a href="../operations/v1alpha1-deprecation/">Deprecations &amp; the v2.0.0 removal</a></td>
-</tr>
-<tr>
-<td><code>actions-gateway.github.com/v1alpha1</code></td>
-<td>Deprecated, removed in v2.0.0</td>
-<td><a href="../operations/migration-v1-to-v2/">Migrate v1 → v2</a></td>
-</tr>
-</tbody>
-</table>
-<p>A version on its way out documented field by field beside the current one reads as a supported choice.
-<code>v2beta1</code>'s shape is <code>v2</code>'s apart from the deprecated <code>CiliumFQDN</code>/<code>CalicoFQDN</code> <code>egressPolicyMode</code> values, and <code>v2alpha1</code>'s adds two RunnerSet fields the conversion webhook round-trips.
-Operators still on either deprecated version get their field docs from <code>kubectl explain</code>, which reads the schema the running cluster serves:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>kubectl<span class="w"> </span>explain<span class="w"> </span>actionsgateway.spec<span class="w"> </span>--api-version<span class="o">=</span>actions-gateway.com/v2alpha1
-</code></pre></div>
+<p><strong><code>actions-gateway.com/v2</code> only</strong>: the General Availability (GA) version, and the only version the cluster serves.
+<code>v2.0.0</code> removed <code>v2beta1</code>, <code>v2alpha1</code> and <code>actions-gateway.github.com/v1alpha1</code> (<a href="../operations/v1alpha1-deprecation/">removal notice</a>).</p>
 <h2 id="how-it-stays-current">How it stays current<a class="headerlink" href="#how-it-stays-current" title="Permanent link">&para;</a></h2>
 <p><a href="api/">api.md</a> is generated by <a href="https://github.com/elastic/crd-ref-docs"><code>crd-ref-docs</code></a> from the Go doc comments and <code>+kubebuilder</code> validation markers in <code>api/v2</code> — the same source <code>controller-gen</code> turns into the CustomResourceDefinition (CRD) schemas.
 It cannot describe a field the API does not have, and it cannot go stale silently: <code>make check</code> runs <code>make api-reference-check</code>, which regenerates the page and fails when the committed copy differs.</p>
 <p>Fixing a wrong description means editing the Go doc comment, then:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>make<span class="w"> </span>api-reference
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>make<span class="w"> </span>api-reference
 </code></pre></div>
-<p>Details, including which knobs the generation takes and when to bump the Kubernetes version its embedded-type links point at, are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/code-generation.md#the-generated-api-reference">code-generation.md § The generated API reference</a>.</p>
+<p>Details, including which knobs the generation takes and when to bump the Kubernetes version its embedded-type links point at, are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/code-generation.md#the-generated-api-reference">code-generation.md § The generated API reference</a>.</p>
 
 
 
@@ -2788,13 +2782,13 @@ It cannot describe a field the API does not have, and it cannot go stale silentl
         
         
           
-          <a href="api/" class="md-footer__link md-footer__link--next" aria-label="Next: API reference (v2beta1)">
+          <a href="api/" class="md-footer__link md-footer__link--next" aria-label="Next: API reference (v2)">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                API reference (v2beta1)
+                API reference (v2)
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -2856,10 +2850,10 @@ It cannot describe a field the API does not have, and it cannot go stale silentl
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../javascripts/extra.js"></script>
       

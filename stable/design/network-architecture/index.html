@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/design/network-architecture/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/design/network-architecture/">
       
       
         <link rel="prev" href="../02-architecture/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1699,6 +1699,8 @@
       
         
       
+        
+      
     
     
     
@@ -2096,6 +2098,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2263,10 +2293,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2284,8 +2314,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2869,7 +2899,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3261,7 +3291,8 @@ Kubernetes API traffic from the AGC travels directly in-cluster and bypasses the
 The GMC generates a per-tenant self-signed cert for the proxy at provisioning time and pins it into the AGC's trust store (W7 / M-5).
 This protects the AGC↔proxy hop from in-cluster eavesdropping or impersonation by any tenant whose pods can reach the Service ClusterIP.</p>
 <p>The GMC also makes one additional outbound call: <code>GET https://api.github.com/meta</code> every 24 hours to refresh the GitHub IP ranges used in tenant <code>NetworkPolicy</code> egress rules.
-This call originates from the GMC's own egress path in the system namespace, not through any tenant's proxy pool.</p>
+This call originates from the GMC's own egress path in the system namespace, not through any tenant's proxy pool.
+The call is unauthenticated, so it shares GitHub's 60-an-hour budget with everything else behind the same egress IP; a rate-limited fetch waits for the reset GitHub's headers name rather than retrying on its 30 s backoff.</p>
 <h3 id="github-endpoints-reached-via-proxy">GitHub Endpoints Reached via Proxy<a class="headerlink" href="#github-endpoints-reached-via-proxy" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3303,7 +3334,7 @@ That is a prerequisite for the per-tenant egress-IP claim, but <strong>it is not
 On a stock cloud cluster, proxy-pod egress SNATs to the <strong>node's</strong> shared cloud egress IP (GKE Cloud NAT, an EKS NAT gateway, an AKS outbound rule), which is shared across tenants on that node and not stable across proxy-pod reschedules.</p>
 <p>Delivering a <strong>distinct, stable, per-tenant</strong> source IP at GitHub — the property that makes GitHub-side IP allowlisting, per-tenant audit attribution, incident containment, and the per-tenant kill-switch coherent — requires an explicit <strong>egress-IP mechanism</strong> underneath the proxy pool: <strong>Cilium Egress Gateway</strong> (per-tenant egress IP via a gateway node) or <strong>per-tenant cloud NAT</strong> (dedicated subnet/node-pool + reserved static IP).
 The mechanism binds a source IP to the proxy's choke point; it does not change the proxy pool or the <code>NetworkPolicy</code> rules below, which stay orthogonal and complementary.
-The comparison of the two mechanisms, the single-tenant-direct (dogfood) vs production multi-tenant topology, the cost model, and the live-validation results are specified in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q243-egress-ip-reference-arch.md">the per-tenant egress-IP reference architecture</a> (Q243).
+The comparison of the two mechanisms, the single-tenant-direct (dogfood) vs production multi-tenant topology, the cost model, and the live-validation results are specified in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q243-egress-ip-reference-arch.md">the per-tenant egress-IP reference architecture</a> (Q243).
 That live validation has now landed: a real GMC-provisioned egress proxy pins to a single <strong>distinct, stable</strong> per-tenant Cloud NAT IP (live PASS 2026-07-13), so the distinct-per-tenant-egress-IP property is <strong>live-substantiated</strong>, not just designed.
 The dogfood cluster itself runs single-tenant-direct and does not exercise it.</p>
 <hr />
@@ -3314,7 +3345,7 @@ Only the AGC Deployment has API-server egress.</p>
 <p>The policies below are the v1 (<code>actions-gateway.github.com</code>) shape, whose names and selectors are fixed because v1 permits one gateway and one proxy pool per namespace.
 <strong>v2 emits the same three policies with the same posture</strong>, per-object rather than per-namespace: the workload and AGC policies are named for the gateway (<code>&lt;gateway&gt;-workload</code>, <code>&lt;gateway&gt;-agc</code>), the proxy policy for the <code>EgressProxy</code>.
 The <em>selectors</em> move less than the names do, and only one of the three reaches for an identity label.
-Read off <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>:</p>
+Read off <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/cmd/gmc/internal/controller/actionsgateway_v2_builder.go"><code>actionsgateway_v2_builder.go</code></a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/cmd/gmc/internal/controller/egressproxy_builder.go"><code>egressproxy_builder.go</code></a>:</p>
 <table>
 <thead>
 <tr>
@@ -3412,7 +3443,7 @@ NetworkPolicy port matches are evaluated against the <strong>post-DNAT</strong> 
 Most production clusters expose the apiserver via the <code>kubernetes</code> Service at 443 → backends on 443, so a 443-only rule works.
 Kind (and any cluster where the apiserver Endpoints listen on 6443) translates ClusterIP <code>10.96.0.1:443</code> → <code>&lt;node-ip&gt;:6443</code>, and the policy evaluator sees 6443 — a 443-only rule silently drops every k8s API call.
 Allowing both ports keeps the rule precise (only apiserver-style ports) while working in both topologies.
-See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/development/networkpolicy-port-matching.md"><code>docs/development/networkpolicy-port-matching.md</code></a> for the diagnosis and a worked repro.</p>
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/development/networkpolicy-port-matching.md"><code>docs/development/networkpolicy-port-matching.md</code></a> for the diagnosis and a worked repro.</p>
 <p>By default this rule has <strong>no destination restriction</strong> (any-dest): the post-DNAT apiserver IP is provider-specific and not predictable at deploy time, so a portable <code>ipBlock</code> cannot be hard-coded and any-dest is the secure default (the breadth is the <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a> residual).
 Operators whose platform exposes a <strong>stable</strong> apiserver CIDR can opt in to scoping it: the GMC's <code>--apiserver-cidrs</code> flag (Helm value <code>apiServerCIDRs</code>) attaches an <code>ipBlock</code> peer per CIDR to this rule (ports unchanged) — an opt-in tightening, validated as CIDRs at GMC startup (Q145).
 Empty (the default) leaves the rule any-destination.
@@ -3529,18 +3560,20 @@ The choice is <strong>split across two roles</strong> (Q245) so the tenant API s
     Works on every CNI, needs no operator backend.</li>
 <li><code>FQDN</code> — "express my GitHub allowlist by hostname."
     The tenant does <strong>not</strong> name a CNI; the mechanism is the operator's choice.</li>
-<li><code>CiliumFQDN</code> / <code>CalicoFQDN</code> — <strong>deprecated</strong> aliases that pin their namesake mechanism regardless of the operator backend (retained for backward compatibility; the admission webhook warns).
-    Removed at <code>v2.0.0</code>: they are enum members of <code>v2alpha1</code> and <code>v2beta1</code>, both of which that release removes, and the GA <code>v2</code> version does not define them (<a href="../../operations/v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).</li>
+<li><code>CiliumFQDN</code> / <code>CalicoFQDN</code> — per-CNI aliases that, through 1.10, pinned their namesake mechanism regardless of the operator backend.
+    Removed at <code>v2.0.0</code>: the GA <code>v2</code> version does not define them (<a href="../../operations/v1alpha1-deprecation/#the-ciliumfqdn--calicofqdn-aliases-ride-the-v200-clock">why</a>).</li>
 <li><strong>Operator backend</strong> — the GMC <code>--fqdn-policy-backend</code> flag (<code>none</code> | <code>cilium</code> | <code>calico</code> | <code>gke</code>) resolves an <code>FQDN</code> intent to a concrete emitter, once per cluster:</li>
 <li><code>cilium</code> → a <code>CiliumNetworkPolicy</code> (<code>cilium.io/v2</code>) with <code>toFQDNs</code> rules on TCP/443 plus a DNS-visibility rule so Cilium's DNS proxy learns the resolved IPs.</li>
 <li><code>calico</code> → a Calico <code>NetworkPolicy</code> (<code>projectcalico.org/v3</code>) with the GitHub hostnames as destination <code>domains</code>.</li>
 <li><code>gke</code> → a GKE Dataplane V2 <code>FQDNNetworkPolicy</code> (<code>networking.gke.io/v1alpha1</code>) with <code>matches</code> on TCP/443 (no DNS rule — DNS bypasses GKE FQDN enforcement and is carried by the base NetworkPolicy).</li>
 <li><code>none</code> (default) → <strong>no backend</strong>; an <code>FQDN</code>-intent <code>EgressProxy</code> is <strong>rejected at admission</strong>, fail-closed and loud, never a silent <code>Degraded</code>.</li>
 </ul>
-<p>The GitHub hostname set is the same across backends: <code>api.github.com</code>, <code>github.com</code>, <code>codeload.github.com</code>, <code>objects.githubusercontent.com</code>, <code>*.actions.githubusercontent.com</code>, <code>*.blob.core.windows.net</code> — <strong>plus every referring gateway's <code>gitHubURL</code> host</strong> (Q506).
+<p>The GitHub hostname set is the same across backends: <code>api.github.com</code>, <code>github.com</code>, <code>codeload.github.com</code>, <code>objects.githubusercontent.com</code>, <code>*.actions.githubusercontent.com</code>, <code>*.blob.core.windows.net</code> — <strong>plus every referring gateway's <code>gitHubURL</code> host that the platform egress allowlist covers</strong> (Q506, Q1322).
 That addition is what makes an FQDN mode work for GitHub Enterprise Server: the appliance's hostname lives on the referring <code>ActionsGateway</code>, not on the <code>EgressProxy</code>, so the reconciler resolves the referrer graph (gateways whose <code>defaultProxyRef</code> names the proxy, <code>RunnerSet</code>s whose <code>proxyRef</code> does, contributing their gateway's host) and feeds both the CNI policy and the CONNECT suffix list.
 A referrer applied after the proxy requeues it through a watch on both kinds.
 Hosts the public set already covers are dropped and the result is sorted, so a public-GitHub-only pool emits exactly the policy it did before.
+<code>gitHubURL</code> is tenant-authored, so its host is held to the allowlist that gates <code>destinationFQDNs</code>: one <code>--allowed-egress-fqdns</code> does not cover, or one that is not a DNS name, reaches neither surface and is named on <code>GitHubEgressIncomplete</code> with reason <code>GitHubHostNotAllowlisted</code>.
+The allowlist is fixed when the GMC starts, so a change reaches every pool through the rolled-out GMC reconciling it.
 In any FQDN mode the standard NetworkPolicy keeps its DNS + ingress rules but <strong>drops the GitHub-CIDR egress rule</strong>, and the IP-range reconcile skips the proxy.</p>
 <blockquote>
 <p><strong>CIDR mode cannot do the same, and says so.</strong> The default mode programs the ranges <code>api.github.com/meta</code> publishes, and a GHES appliance on the customer's own address space appears in none of them — so the NetworkPolicy denies the proxy's traffic to the one host it exists to reach.
@@ -3557,11 +3590,11 @@ FQDN mode is scoped to the v2 <code>EgressProxy</code>; the v1 proxy and v2 dire
 Cilium/Calico FQDN policies, by contrast, are self-default-denying.
 GAG's fail-closed guarantee for <code>gke</code> therefore depends on the base standard NetworkPolicy always being present (it default-denies GitHub egress with the CIDR rule dropped, and carries the DNS-only allow including the Q229 node-local-dns peer): the <code>FQDNNetworkPolicy</code> only widens the union to permit GitHub, and if it is absent or unenforced GitHub egress stays denied by the base NP.
 The <code>gke</code> reconcile branch is reached only when the base NP is managed, so a backend that opens egress without a default-deny base is never emitted.
-<code>gke</code>-backend <strong>enforcement is not yet live-validated</strong> on a real GKE cluster (deferred; see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>).</p>
+<code>gke</code>-backend <strong>enforcement is not yet live-validated</strong> on a real GKE cluster (deferred; see the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>).</p>
 <p><strong>A managed "Cilium" platform usually does NOT accept the <code>cilium</code> backend.</strong> The CRD test is literal: <code>kubectl get crd ciliumnetworkpolicies.cilium.io</code> must succeed.
 <strong>GKE Dataplane V2's managed Cilium does NOT install that CRD</strong> (dropped since GKE 1.21.5-gke.1300) — there, use <code>--fqdn-policy-backend=gke</code>, not <code>cilium</code>.
 If a selected backend's CRD is absent the <code>EgressProxy</code> goes <code>Degraded</code> (<code>no matches for kind …</code>) and GitHub egress stays denied (fail-closed).
-The cluster-scoped backends still deferred (AKS <code>CiliumClusterwideNetworkPolicy</code> via Advanced Container Networking Services, EKS DNS-based <code>ClusterNetworkPolicy</code> on Auto Mode) and OpenShift OVN <code>EgressFirewall</code> <code>dnsName</code> need a different ownership/GC model; tracked in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.
+The cluster-scoped backends still deferred (AKS <code>CiliumClusterwideNetworkPolicy</code> via Advanced Container Networking Services, EKS DNS-based <code>ClusterNetworkPolicy</code> on Auto Mode) and OpenShift OVN <code>EgressFirewall</code> <code>dnsName</code> need a different ownership/GC model; tracked in the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q245-fqdn-intent-backend-split.md">Q245 plan</a>.
 Until a matching backend ships, use an <strong>in-cluster caching mirror</strong> (the recommended path for remote dependencies anyway) or <code>managedNetworkPolicy: false</code> and layer your own policy.</p>
 </blockquote>
 <h4 id="worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1">Worker egress to allowlisted non-GitHub destinations (opt-in, Q242 G.1)<a class="headerlink" href="#worker-egress-to-allowlisted-non-github-destinations-opt-in-q242-g1" title="Permanent link">&para;</a></h4>
@@ -3576,7 +3609,7 @@ The destinations widen two surfaces, derived from the one CR:</p>
   The proxy matches a CONNECT host against the allowed suffixes, and for the CIDR path resolves the host and dials the <strong>validated IP</strong> (closing the DNS-rebinding window).
   A denied CONNECT returns <code>403</code> and increments <code>actions_gateway_proxy_connect_denied_total</code>.</li>
 </ul>
-<p>Because the <code>EgressProxy</code> is tenant-authorable, <strong>what</strong> may be requested is gated by a platform-owned allowlist (<code>--allowed-egress-fqdns</code> suffix match / <code>--allowed-egress-cidrs</code> subnet containment, optionally augmented by a watched ConfigMap), enforced by an admission webhook — <strong>both empty ⇒ deny-all-non-GitHub</strong> (the secure default).
+<p>Because the <code>EgressProxy</code> is tenant-authorable, <strong>what</strong> may be requested is gated by a platform-owned allowlist (<code>--allowed-egress-fqdns</code> suffix match / <code>--allowed-egress-cidrs</code> subnet containment, set from Helm values), enforced by an admission webhook — <strong>both empty ⇒ deny-all-non-GitHub</strong> (the secure default).
 Operators should prefer an <strong>in-cluster caching mirror</strong> for remote third-party dependencies and reserve the allowlist for what a mirror can't proxy; see <a href="../../operations/security-operations/#worker-egress-destinations-the-egress-allowlist">security-operations.md § Worker egress destinations</a> and the threat row in <a href="../05-security/#52-agc--proxy-level-threats-namespace-scoped">§5.2</a>.
 For untrusted pull requests the mirror is not merely preferred but load-bearing: it is what lets a tenant carry no additive egress policy at all, leaving a worker cluster DNS, GitHub, and the mirror Services (<a href="../../operations/kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">the tight-egress posture</a>).</p>
 <h3 id="dns-resolution">DNS Resolution<a class="headerlink" href="#dns-resolution" title="Permanent link">&para;</a></h3>
@@ -3589,13 +3622,14 @@ The GMC reads that ClusterIP from its own pod environment rather than assuming a
 This means the proxy pods must have egress access to the cluster's DNS resolver in addition to GitHub's IP ranges.</p>
 <p>DNS egress on all three policies is <strong>confined to cluster DNS</strong> rather than left open to any resolver (Q105).
 An unrestricted port-53 rule (<code>to: []</code>) would let any pod smuggle data to an attacker-controlled resolver — an unattributed side-channel that bypasses the per-tenant egress-IP attribution every other egress path enforces.
-Confining DNS to the in-cluster resolver keeps resolution on the attributable path: <code>kube-dns</code> recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.</p>
+<code>kube-dns</code> recurses upstream on the pod's behalf, so external GitHub names still resolve while no pod can reach an arbitrary DNS server directly.
+The rule confines the resolver, not the names: a query for an attacker's zone is recursed like any other, which <a href="../05-security/#dns-exfiltration-side-channel-containment">05-security.md records as a residual</a> (Q1328).</p>
 <p>Each DNS rule allows two OR'd peers, covering the two ways a pod reaches cluster DNS:</p>
 <ul>
 <li><strong>Direct path</strong> — the <code>kube-dns</code> / <code>CoreDNS</code> Service in <code>kube-system</code>, matched by <code>namespaceSelector</code> on the well-known <code>kubernetes.io/metadata.name: kube-system</code> label plus a <code>podSelector</code> on the conventional <code>k8s-app: kube-dns</code> label.</li>
 <li><strong>NodeLocal DNSCache path</strong> — the IPv4 link-local block <code>169.254.0.0/16</code>, matched by an <code>ipBlock</code> (Q136).
   On clusters running <a href="https://kubernetes.io/docs/tasks/administer-cluster/nodelocaldns/">NodeLocal DNSCache</a> (<code>node-local-dns</code>), pods send DNS to a link-local address (<code>169.254.20.10</code> by the kube-standard <code>__PILLAR__LOCAL__DNS__</code> convention) served by a per-node <code>hostNetwork</code> DNSCache pod, which no pod/namespace selector can match.
-  Allowing the whole link-local block is the simplest correct rule and <strong>preserves Q105's attribution property</strong>: <code>169.254.0.0/16</code> is non-routable and node-scoped, so it cannot reach an external resolver — the DNS-exfiltration channel Q105 closed stays closed.</li>
+  Allowing the whole link-local block is the simplest correct rule and <strong>preserves Q105's property</strong>: <code>169.254.0.0/16</code> is non-routable and node-scoped, so it cannot reach an external resolver directly.</li>
 </ul>
 <p>Operators running a DNS service under a non-standard namespace or pod label must adjust the selector accordingly (or supply their own equivalent rule under <code>spec.proxy.managedNetworkPolicy: false</code>).</p>
 <hr />
@@ -3606,7 +3640,7 @@ Instead, schedule a short-lived <code>curlimages/curl</code> pod and apply the s
 <p><strong>The negative checks below only hold on a CNI that enforces egress NetworkPolicy</strong> (Calico, Cilium, …).
 NetworkPolicy objects are inert without a CNI enforcer, and kind's default kindnet demonstrably does <em>not</em> drop egress for these cases — a "blocked" expectation will spuriously succeed there.
 Production clusters must run an egress-enforcing CNI for the workload isolation described in this document to exist at runtime.
-The workload-pod negatives below are automated as the cluster-only specs <code>E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> and <code>E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI</code>, observed enforcing on a Calico kind cluster (<code>make e2e-cluster KIND_CNI=calico</code>) on 2026-06-11 — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/archive/worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11">the worker-egress-proxy plan</a>.</p>
+The workload-pod negatives below are automated as the cluster-only specs <code>E2E_GMC_TenantProvisioning_WorkloadEgressBlockedToNonProxyPod</code> and <code>E2E_GMC_TenantProvisioning_WorkerCannotReachK8sAPI</code>, observed enforcing on a Calico kind cluster (<code>make e2e-cluster KIND_CNI=calico</code>) on 2026-06-11 — see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/archive/worker-egress-proxy.md#runtime-negative-case-enforcement-validated-on-calico-q7b-2026-06-11">the worker-egress-proxy plan</a>.</p>
 </blockquote>
 <h3 id="confirm-a-workload-pod-can-reach-github-via-the-proxy">Confirm a workload pod can reach GitHub via the proxy<a class="headerlink" href="#confirm-a-workload-pod-can-reach-github-via-the-proxy" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>kubectl<span class="w"> </span>run<span class="w"> </span>nettest-workload<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>--rm<span class="w"> </span>-it<span class="w"> </span>--restart<span class="o">=</span>Never<span class="w"> </span><span class="se">\</span>
@@ -3828,10 +3862,10 @@ Verified at runtime on a Calico kind cluster on 2026-06-18 (Q83) and codified as
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

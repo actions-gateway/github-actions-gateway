@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/cost-attribution/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/cost-attribution/">
       
       
         <link rel="prev" href="../observability-logging/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -1805,6 +1807,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1975,10 +2005,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1996,8 +2026,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2705,7 +2735,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -2910,7 +2940,7 @@ That is the live, measured version of the idle-floor saving the calculator estim
 <a href="#how-zero-idle-compute-shows-up-in-the-reports">How zero-idle shows up</a> below shows what to look for.</p>
 <hr />
 <h2 id="the-labels-and-namespaces-to-query">The labels and namespaces to query<a class="headerlink" href="#the-labels-and-namespaces-to-query" title="Permanent link">&para;</a></h2>
-<p>These are the labels GAG actually stamps (verified against the code in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/api/apilabels/labels.go"><code>api/apilabels/labels.go</code></a> and the AGC/GMC builders).
+<p>These are the labels GAG actually stamps (verified against the code in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/api/apilabels/labels.go"><code>api/apilabels/labels.go</code></a> and the AGC/GMC builders).
 They are <strong>additive metadata</strong> — never build an allocation <em>filter you depend on for billing</em> around the controllers' functional selectors (<code>app:</code>, <code>actions-gateway/component: workload</code>); those exist for NetworkPolicy/Service wiring and may change.
 Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract for tooling.</p>
 <table>
@@ -2943,7 +2973,7 @@ Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract
 </tr>
 <tr>
 <td><code>app.kubernetes.io/instance</code></td>
-<td>owning <code>RunnerGroup</code> / <code>RunnerSet</code> name</td>
+<td>owning <code>RunnerSet</code> name</td>
 <td>owning <code>EgressProxy</code> / <code>ActionsGateway</code> name</td>
 <td>owning <code>ActionsGateway</code> name</td>
 </tr>
@@ -2964,9 +2994,13 @@ Use the <code>app.kubernetes.io/*</code> set below, which is the stable contract
 <p><strong>Namespace = tenant.</strong> GAG places a tenant's worker pods, proxy pool, and AGC all in that tenant's namespace (the <code>ActionsGateway</code> CR's namespace).
 The namespace name is operator-chosen — GAG does not derive or rename it — so use whatever namespace your team assigned the tenant.
 There is no separate proxy or worker namespace to reconcile.</p>
-<p><strong>Per-RunnerGroup / per-RunnerSet drill-down.</strong> To split a tenant's worker cost by runner shape (e.g.
-<code>gpu-a100</code> vs <code>cpu-standard</code>), aggregate by <code>app.kubernetes.io/instance</code>, which carries the owning RunnerGroup/RunnerSet name.
-(GAG also sets project-specific <code>actions-gateway/runner-group</code> and <code>actions-gateway.com/runner-set</code> labels for <code>kubectl</code> selection — see <a href="../observability-metrics/#drilling-down-to-individual-runner-pods">observability.md</a> — but for cost queries prefer the recommended <code>instance</code> label.)</p>
+<p><strong>Per-RunnerSet drill-down.</strong> To split a tenant's worker cost by runner shape (e.g.
+<code>gpu-a100</code> vs <code>cpu-standard</code>), aggregate by <code>app.kubernetes.io/instance</code>, which carries the owning RunnerSet name.
+(GAG also sets the project-specific <code>actions-gateway.com/runner-set</code> label for <code>kubectl</code> selection — see <a href="../observability-metrics/#drilling-down-to-individual-runner-pods">observability.md</a> — but for cost queries prefer the recommended <code>instance</code> label.)</p>
+<p><strong>Re-run compute by cause.</strong> A scale-set worker built for a run GAG has re-run carries the annotation <code>actions-gateway.com/rerun-cause</code>, valued with the cause of GAG's latest re-run of that run: <code>eviction</code>, <code>preemption</code>, <code>node_shutdown</code>, <code>deletion</code>, <code>abandoned</code>, <code>vanished</code> or <code>oom</code> (Q1245).
+Its values are few, so aggregating worker cost by it is safe where your cost tool reads pod annotations; a worker with no such annotation is not part of a GAG re-run.
+The AGC records re-runs by run and not by attempt, so a worker the original attempt builds after GAG has reserved the run's re-run carries it too: a long matrix still scheduling jobs when one of them is disrupted over-counts by those jobs.
+An <code>oom</code> re-run reserves its slot when the job is killed and then waits, up to 24 hours, for the run to conclude, so every sibling scheduled in that wait is stamped <code>oom</code>, even when the wait expires and no re-run happens.</p>
 <blockquote>
 <p><strong>Cardinality caution.</strong> Do not aggregate cost by a label whose value is per-job or per-run (there is none in the recommended set, but worker pods <em>also</em> carry per-job annotations like <code>actions-gateway.com/run-id</code>).
 Aggregating allocation by a unique-per-job key explodes the result set the same way it would explode Prometheus — see the <a href="../observability-metrics/#label-cardinality-warning">label cardinality warning</a>.</p>
@@ -3056,7 +3090,7 @@ On a managed cloud they read real instance pricing automatically; on-prem or wit
   The <code>app.kubernetes.io/instance</code> breakdown lets you bill by runner shape if a tenant runs both cheap CPU and expensive GPU groups.</li>
 </ul>
 <p>Cross-check the allocation against GAG's own metrics for a sanity test: <code>actions_gateway_job_duration_seconds</code> (per <code>namespace</code>, <code>runner_group</code>) × the runner shape's GPU/CPU node fraction should land in the same ballpark as the <code>runner</code>-component allocation for that tenant.
-The series is worker pod lifetime on both acquisition tiers, so it is directly comparable to a cost tool's own pod-hours.
+The series is worker pod lifetime, so it is directly comparable to a cost tool's own pod-hours.
 The <a href="../observability-dashboards/#budget-dashboard">budget dashboard</a>'s <strong>Worker pod-hours</strong> stat is that left-hand side already computed, over whatever window the time picker holds.
 A large divergence usually means oversized resource requests — the <a href="../../design/appendix-f-cost-model/#worker-resource-right-sizing">worker right-sizing lever</a> in Appendix F.</p>
 <hr />
@@ -3183,10 +3217,10 @@ A large divergence usually means oversized resource requests — the <a href="..
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

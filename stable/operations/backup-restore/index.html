@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/backup-restore/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/backup-restore/">
       
       
         <link rel="prev" href="../runbook/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -1805,6 +1807,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -1975,10 +2005,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -1996,8 +2026,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2783,7 +2813,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3081,7 +3111,7 @@ For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.m
 </thead>
 <tbody>
 <tr>
-<td>GitHub App credential <code>Secret</code> (<code>spec.gitHubAppRef</code>)</td>
+<td>GitHub App credential <code>Secret</code> (<code>spec.credentials.githubApp</code>)</td>
 <td>Operator/tenant-supplied; the GMC only <em>reads</em> it (no owner reference), so it <strong>survives</strong> a CR-only deletion but is lost if the Secret or namespace is deleted. Without it the gateway sits <code>Ready=False</code>/<code>CredentialUnavailable</code>.</td>
 <td>Recreate from your secret backup before re-applying the CR. See <a href="../../getting-started/#3-create-a-github-app-credential-secret">Getting Started §3</a>.</td>
 </tr>
@@ -3113,8 +3143,8 @@ For symptom-driven diagnosis see <a href="../troubleshooting/">troubleshooting.m
 </tbody>
 </table>
 <blockquote>
-<p><strong>In-flight jobs are not recoverable.</strong> Running jobs whose renew loop lapses during the outage are cancelled by GitHub and require a manual re-run.
-Queued (not-yet-acquired) jobs are redelivered to the next healthy session within ~2 minutes.
+<p><strong>An AGC outage does not stop a running job, but deleting the gateway does.</strong> Worker pods keep running while the AGC is down, and gateway teardown deletes them (see the <code>RunnerSet</code> row above), so any job they were running needs a manual re-run.
+Queued jobs stay queued at GitHub until the AGC returns and advertises capacity.
 This matches <a href="../runbook/#agc-total-failure">Runbook — AGC Total Failure</a>.</p>
 </blockquote>
 <hr />
@@ -3198,7 +3228,7 @@ To also capture live status and resources not in Git, add one of:</p>
    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>actionsgateway,deploy,svc,networkpolicy,sa,rolebinding<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;
 </code></pre></div></li>
 <li><strong>Confirm the credential Secret survived</strong> (it is not owned by the CR, so a CR-only deletion leaves it in place):
-   <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;gitHubAppRef-name&gt;
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>kubectl<span class="w"> </span>get<span class="w"> </span>secret<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;github-app-secret-name&gt;
 </code></pre></div>
    If it is missing, recreate it first — see <a href="#scenario-b-whole-tenant-namespace-lost">Scenario B</a> step 3.</li>
 <li><strong>Re-apply the CR</strong> from version control (or your stripped CR export):
@@ -3234,7 +3264,7 @@ After restore:</p>
 <li><strong><a href="#verification">Verify</a></strong> each tenant namespace.</li>
 </ol>
 <h3 id="cr-stuck-terminating">CR Stuck Terminating<a class="headerlink" href="#cr-stuck-terminating" title="Permanent link">&para;</a></h3>
-<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.github.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
+<p>If a deleted CR hangs in <code>Terminating</code>, the GMC's cleanup finalizer (<code>actions-gateway.com/gmc-cleanup</code>) is retained because teardown of an owned or cluster-scoped child could not be confirmed (for example, the GMC is down).
 The finalizer exists precisely to avoid orphaning the cluster-scoped <code>ClusterRoleBinding</code>.</p>
 <ol>
 <li>Check the GMC is running and reconciling — restart it if needed (<code>kubectl rollout restart deploy/gmc-controller-manager -n gmc-system</code>); it will complete teardown and clear the finalizer.</li>
@@ -3261,7 +3291,7 @@ The finalizer exists precisely to avoid orphaning the cluster-scoped <code>Clust
 </code></pre></div>
    Expect <code>True</code>.
    If <code>CredentialUnavailable</code> or <code>ProxyNotFound</code>, the credential Secret or <code>EgressProxy</code> is still missing — recheck the relevant scenario step.</li>
-<li>Sessions are polling — <code>actions_gateway_active_sessions</code> should reach ≥ 1 per RunnerGroup within seconds.
+<li>Listeners hold their sessions — <code>actions_gateway_scaleset_session_open</code> should read <code>1</code> for every <code>runner_set</code> within seconds.
    See <a href="../observability/">Observability</a>.</li>
 <li>Trigger a test workflow and confirm a worker pod is provisioned and the job completes.</li>
 </ol>
@@ -3397,10 +3427,10 @@ The finalizer exists precisely to avoid orphaning the cluster-scoped <code>Clust
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

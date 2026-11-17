@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/design/04-operational-flows/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/design/04-operational-flows/">
       
       
         <link rel="prev" href="../03-api-contracts/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1141,6 +1141,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Futile re-runs are withheld before a slot is spent (scale-set)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#detecting-a-disruption-is-not-the-same-as-claiming-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1161,6 +1172,28 @@
     <span class="md-ellipsis">
       
         An eviction for the pod's own limit is not a disruption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of memory under right-sizing: the first retry class (scale-set, Q1183)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
       
     </span>
   </a>
@@ -1700,6 +1733,8 @@
       
         
       
+        
+      
     
     
     
@@ -2097,6 +2132,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2264,10 +2327,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
             
   
   
@@ -2285,8 +2348,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2870,7 +2933,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3054,6 +3117,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Futile re-runs are withheld before a slot is spent (scale-set)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#detecting-a-disruption-is-not-the-same-as-claiming-it" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3074,6 +3148,28 @@
     <span class="md-ellipsis">
       
         An eviction for the pod's own limit is not a disruption
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Out of memory under right-sizing: the first retry class (scale-set, Q1183)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)
       
     </span>
   </a>
@@ -3225,11 +3321,11 @@
 <li><strong>The cleanup finalizer is the primary path.</strong> It is ordered and fail-closed (Q125): the GMC deletes the <code>RunnerGroup</code>s first and waits for them to be gone — so listeners and worker pods drain before the AGC <code>Deployment</code> and its credentials are removed — then deletes the remaining children, and only removes the finalizer once <em>every</em> delete is confirmed.
   A delete that keeps failing retains the finalizer and requeues rather than abandoning a live, credentialed AGC.
   It also reaches objects the current reconciler no longer applies (the pre-v0.X per-tenant <code>Role</code>, the legacy <code>actions-gateway</code> <code>NetworkPolicy</code>), which nothing else would reclaim.</li>
-<li><strong>Owner-reference cascade garbage collection is the backstop.</strong> Every namespaced child the GMC applies carries a controller <code>OwnerReference</code> to its <code>ActionsGateway</code> — in both <code>v1alpha1</code> and <code>v2alpha1</code> (Q394).
-  Because a <code>ResourceQuota</code>-style platform-owned object is never a GMC child, and because both API versions place their children in the CR's own namespace, the reference is always valid.
+<li><strong>Owner-reference cascade garbage collection is the backstop.</strong> Every namespaced child the GMC applies carries a controller <code>OwnerReference</code> to its <code>ActionsGateway</code> (Q394).
+  Because a <code>ResourceQuota</code>-style platform-owned object is never a GMC child, and because the GMC places the children in the CR's own namespace, the reference is always valid.
   It costs nothing in the normal path (the CR is not removed from etcd until the finalizer clears, so the ordered drain always runs first) and it is what makes an operator force-removing the finalizer a recoverable mistake rather than a leak of credentialed <code>ServiceAccount</code>s, the AGC <code>RoleBinding</code>, the egress <code>NetworkPolicy</code>s, and the proxy <code>HPA</code>/<code>PDB</code>/<code>Service</code> into a namespace the tenant still controls.</li>
 </ul>
-<p>The one intentional exception is a <strong>cluster-scoped</strong> child: a namespaced <code>ActionsGateway</code> cannot own one (the apiserver rejects the cross-scope reference and never collects it), so <code>v2alpha1</code>'s per-gateway <code>ClusterRoleBinding</code> is un-owned and reclaimed by the finalizer alone.
+<p>The one intentional exception is a <strong>cluster-scoped</strong> child: a namespaced <code>ActionsGateway</code> cannot own one (the apiserver rejects the cross-scope reference and never collects it), so the per-gateway <code>ClusterRoleBinding</code> is un-owned and reclaimed by the finalizer alone.
 Any new cluster-scoped child inherits that constraint and must be deleted explicitly in <code>reconcileDelete</code>.</p>
 <p><strong>v2 needs a third mechanism for the tenant's worker pods</strong> (Q547).
 The ordered drain above works in v1 because <code>RunnerGroup</code>s <em>are</em> the gateway's children: deleting them first cascades to their worker pods. v2 decomposed them into standalone <code>RunnerSet</code>s that only reference the gateway and are deliberately <strong>not</strong> deleted with it — a tenant re-applies the gateway and its sets resume — which leaves worker pods owned by a live object whose only reaper is about to be torn down.
@@ -3241,13 +3337,19 @@ So the two controllers split it:</p>
 <li>Teardown's <strong>first</strong> act is to check <code>status.activeJobs</code>/<code>pendingJobs</code> across the bound sets and requeue while any are non-zero, before the first <code>del</code>.
    The counts fall as soon as the AGC issues its deletes (a pod carrying a deletion timestamp is finished by the kubelet with no controller involved), so the healthy path costs one requeue.
    A 90-second deadline measured from the CR's own <code>deletionTimestamp</code> — stateless, so it survives a GMC restart mid-teardown — bounds the case where no AGC is running to reap at all; past it teardown proceeds and emits a <code>WorkerDrainTimeout</code> Warning naming what it is leaving to the kubelet's <code>maxWorkerLifetime</code> deadline.</li>
+<li>The workload <code>NetworkPolicy</code> waits for the pods rather than the counts (Q1328).
+   It is a worker pod's only egress restriction, and a pod still runs job code after the counts fall: through its template's <code>terminationGracePeriodSeconds</code>, which nothing caps, on the healthy path, and until <code>maxWorkerLifetime</code> past the deadline.
+   So teardown deletes every other child, keeps that policy and the gateway's finalizer while any pod of a bound set remains, terminating ones included, and names the pods in a <code>TeardownIncomplete</code> event.
+   A pod whose RunnerSet is already gone counts too, because a set deleted with its gateway sheds its finalizer before its pods exit.
+   It reads them with an uncached Pod list through the namespace's <code>gmc-tenant-secret-reader</code> binding, and a failed list holds the policy too.
+   A terminating namespace skips the hold: the namespace controller deletes the policy and the pods itself, and revokes the binding the list needs.</li>
 </ol>
 <p>The trigger is a <em>terminating</em> gateway, never a missing one: a gateway that is gone is both the resting state after teardown and the gap between a delete and a re-apply, so reaping there would destroy live workers on a recreate.</p>
 <hr />
 <h2 id="42-job-execution-flow-agc">4.2. Job Execution Flow (AGC)<a class="headerlink" href="#42-job-execution-flow-agc" title="Permanent link">&para;</a></h2>
 <p>This flow runs per-job inside the tenant namespace, entirely managed by the AGC.</p>
 <blockquote>
-<p><strong>This is the classic acquisition flow.</strong> A <code>RunnerSet</code> with <code>spec.acquisitionProtocol: ScaleSet</code> — the default, and <code>v2beta1</code>'s only option — does not run steps 2a–5 as written: the runner pulls and completes its own job through its own session, and the AGC advertises a single capacity integer (<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job.
+<p><strong>This is the classic acquisition flow.</strong> A <code>RunnerSet</code>, which always acquires through a scale set, does not run steps 2a–5 as written: the runner pulls and completes its own job through its own session, and the AGC advertises a single capacity integer (<code>X-ScaleSetMaxCapacity</code>) instead of deciding per delivered job.
 Two consequences are called out where they arise.
 Eviction auto-retry is ported to this tier (Q417, <a href="#on-the-scale-set-tier-q417">below</a>), as is the admission ladder of step 2a (Q443, <a href="#the-ladder-as-an-integer-scale-set-tier-q443">below</a>) and the abandoned-run force-cancel with its capacity-gated re-run (Q766, <a href="#on-the-scale-set-tier-q766">below</a>).
 All three were classic-only, which the <code>v2.0.0</code> removal of classic acquisition would have turned into a silent capability deletion.</p>
@@ -3322,7 +3424,7 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
    The probe's pod is the fresh evidence, in whichever direction it lands: one of its containers runs and the gate clears completely, or it sticks and the live verdict returns.
    Running rather than merely being scheduled is the release condition (Q714), because a probe binds within a second and only reveals that it cannot start seconds later, so releasing on the binding would restore the full advertisement inside that gap.
    A burst of <em>N</em> jobs that would each have been claimed and cancelled becomes roughly one wasted claim per deadline window — a bound on the rate, not an elimination.
-   The latch is what makes that rate hold on the scale-set tier too, where capacity is an integer per poll rather than a decision per job: clearing on the reap would restore the whole advertisement each window (measured as a no-op — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/capacity-aware-intake.md#9e-what-the-dogfood-run-measured-q469">plan §9e</a>).
+   The latch is what makes that rate hold on the scale-set tier too, where capacity is an integer per poll rather than a decision per job: clearing on the reap would restore the whole advertisement each window (measured as a no-op — <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/capacity-aware-intake.md#9e-what-the-dogfood-run-measured-q469">plan §9e</a>).
    Nothing here removes the need for <code>pendingPodDeadline</code> and the reaper.
 3. <strong>Lock:</strong> The AGC immediately calls <code>POST {run_service_url}/acquirejob</code> via the proxy — before creating any Kubernetes resources — to claim the job within the 2-minute delivery window.
 4. <strong>Payload:</strong> <code>acquirejob</code> returns the full job instructions and <code>planId</code>.
@@ -3335,10 +3437,10 @@ All three were classic-only, which the <code>v2.0.0</code> removal of classic ac
    The wrapper stays resident as PID 1 and relays SIGTERM/SIGINT down to the engine, so a pod termination (eviction, node drain) reaches the process that can actually abort the job and report it (Q385).
    Note the precondition: the relay carries a <em>pod</em> termination.
    A run <strong>cancelled at GitHub</strong> does not terminate the pod — the cancellation arrives on the AGC's broker session and nothing forwards it to the worker, so the runner executes its remaining steps while GitHub concludes the job at its own ~5-minute cancellation grace (measured 2026-07-29: a <code>sleep 600</code> job ran the full 600s after its run was cancelled).
-   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/queue/Q501.md">Q501</a> carries that gap; what it has closed so far is the <em>actuator</em> — when the AGC does give up on a job (step 5's lock loss), the worker pod is now deleted rather than left running to the <code>maxWorkerLifetime</code> cap.
+   <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/queue/Q501.md">Q501</a> carries that gap; what it has closed so far is the <em>actuator</em> — when the AGC does give up on a job (step 5's lock loss), the worker pod is now deleted rather than left running to the <code>maxWorkerLifetime</code> cap.
    <strong>The gap is specific to this tier.</strong> On <strong>ScaleSet</strong> the listener holds a message queue for the whole job, and a cancelled run puts a terminal <code>JobCompleted</code> on it — measured live at ~0.2 s for a job with no runner attached (Q468) — which stamps <code>actions-gateway.com/job-completed-at</code> on the worker and hands it to the reaper's five-minute <code>Running</code> grace (step 11, Q420).
    So the ScaleSet worst case is GitHub's cancellation grace plus the reap grace, against classic's <em>whole remaining job</em> bounded only by <code>maxWorkerLifetime</code>.
-   Detail: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q501-cancel-relay.md">q501-cancel-relay.md</a>.
+   Detail: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q501-cancel-relay.md">q501-cancel-relay.md</a>.
 8. <strong>Stream:</strong> The worker pod streams live execution logs to GitHub's Twirp Results Service via the proxy pool.
 9. <strong>Complete:</strong> The worker container exits with code <code>0</code> on success (non-zero on workflow failure).
    A single event handler on the AGC's shared Pod informer observes the terminal pod phase and wakes the waiting session goroutine — detection is event-driven, not polled, so completion is noticed near-immediately regardless of how many sessions are in flight.
@@ -3462,18 +3564,17 @@ A replacement listener goroutine is not spawned (no job was acquired to spawn it
     A-&gt;&gt;GH: 9. CreateSession
     GH--&gt;&gt;A: 10. New session, polling resumes</code></pre>
 <p>GitHub deletes a JIT runner record once it acquires a job, so a session can go stale outside the normal post-job recycle — most commonly when the AGC restarts between a job's acquisition and its recycle.
-The poll loop classifies the two live-observed stale signatures (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>): a <code>401/403</code> triggers a heal immediately (steps 3–4 also fix plain broker-token expiry, in which case the flow stops at step 4 with no recycle); three consecutive <code>200</code>-with-empty-body responses trigger the same ladder.
+The poll loop classifies the two live-observed stale signatures (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/archive/milestone-4.md#12-live-multi-tenant-validation-evidence-2026-06-1112">M4 §12</a>): a <code>401/403</code> triggers a heal immediately (steps 3–4 also fix plain broker-token expiry, in which case the flow stops at step 4 with no recycle); three consecutive <code>200</code>-with-empty-body responses trigger the same ladder.
 Only when <em>fresh</em> credentials are still rejected (step 5) is the agent re-registered (steps 6–8, <code>actions_gateway_agent_recycles_total{trigger="stale_session"}</code>).</p>
 <p>If the heal itself fails — e.g. GitHub is down — the goroutine exits with a retriable error and the multiplexer's restart backoff paces further attempts; an agent marked consumed is parked in the pool and repaired by the next reconcile rather than being handed to another listener.</p>
 <p>If instead the baseline exits <em>non-retriably</em> (version-too-old, or a credential GitHub treats as permanently dead), the multiplexer deliberately does not restart it — but the RunnerGroup reconciler requeues itself on a bounded interval while the live listener count is below the desired ceiling, so its zero-listener recovery revives the baseline within seconds rather than leaving <code>status.activeSessions</code>/<code>Ready</code> stale until the next watch event or the 10-hour resync (Q137).</p>
-<p><strong>What the tenant observes (pre-fix versions):</strong> runner list emptying after each job, <code>ActiveSessions</code> decaying, jobs queueing forever once ~<code>maxListeners</code> jobs have run.
-See <a href="../../operations/troubleshooting/#sessions-stuck-in-401eof-getmessage-loops-tenant-throughput-decays-to-zero">Troubleshooting — Sessions stuck in 401/EOF GetMessage loops</a>.</p>
+<p><strong>What the tenant observes (pre-fix versions):</strong> runner list emptying after each job, <code>ActiveSessions</code> decaying, jobs queueing forever once ~<code>maxListeners</code> jobs have run.</p>
 <hr />
 <h3 id="worker-pod-eviction-and-auto-retry">Worker Pod Eviction and Auto-Retry<a class="headerlink" href="#worker-pod-eviction-and-auto-retry" title="Permanent link">&para;</a></h3>
 <blockquote>
 <p><strong>Both acquisition tiers, by two different routes.</strong> The flow below is the classic <code>provision()</code> path, which blocks on the worker pod's terminal phase.
 <code>ProvisionScaleSetWorker</code> is fire-and-forget by design — the runner pulls and completes its own job — so it observes nothing, and until Q417 an evicted <code>ScaleSet</code> worker got no rerun at all.
-That mattered because <code>ScaleSet</code> is the default protocol (Q264 P5) and the only one <code>v2beta1</code> offers, so the capability covered only the <em>deprecated</em> tier.
+That mattered because <code>ScaleSet</code> is the default protocol (Q264 P5) and the only one <code>v2</code> offers, so the capability covered only the <em>deprecated</em> tier.
 The port relocates both of the classic path's inputs onto the worker pod; see <a href="#on-the-scale-set-tier-q417">On the scale-set tier</a> below.</p>
 </blockquote>
 <pre class="mermaid"><code>sequenceDiagram
@@ -3517,7 +3618,7 @@ What holds is that how long GitHub takes depends on whether the runner's report 
 Quote the ~10-minute figure for the case where nothing is reported; do not quote a scale-set-specific number.</p>
 <p>The AGC originally fired the re-run exactly once, 5 seconds after the eviction — squarely inside the window GitHub refuses — so the budget was spent, <code>actions_gateway_eviction_retries_total</code> incremented, and the job was never re-run (the Q503 defect).
 Treating the still-running refusal as "not yet" rather than a spent attempt is what closed it, and the retry loop is measured absorbing that window: <strong>20 paced calls before GitHub accepted</strong> on the classic tier and on the scale-set run whose report did not escape, and <strong>21</strong> on the Q657 re-measurement.
-See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29">eviction-oversubscription-validation.md § Result</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/eviction-oversubscription-validation.md#scale-set-result-measured-2026-08-03">§ Scale-set result</a>.</p>
+See <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29">eviction-oversubscription-validation.md § Result</a> and <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/eviction-oversubscription-validation.md#scale-set-result-measured-2026-08-03">§ Scale-set result</a>.</p>
 <p>Contrast the <em>graceful</em> removal path, where the worker gets the full 30-second grace period and the runner does report: GitHub concludes in 15–26 seconds, and <code>rerun-failed-jobs</code> is accepted (Q459).
 The two paths differ by whether the report escapes, and that is what sets both the latency and whether recovery is even possible.</p>
 <p><strong>A preemption is on the graceful side of that line, so the refusal window barely arises there.</strong> kube-scheduler deletes its victim rather than SIGKILLing it, the SIGTERM relay gets the runner its grace period, and the job concludes in seconds rather than waiting out the lock — so the first or second re-run call is already past the refusal that an eviction's recovery must out-wait for ~10 minutes.
@@ -3560,10 +3661,10 @@ It lives in the set's <code>scaleset-failures-&lt;set&gt;</code> ConfigMap as a 
 A reservation is taken once per disruption, after a run read that names the attempt the job failed in, and does one of four things: it <strong>resumes</strong> a reservation the same worker already holds, <strong>merges</strong> into a re-run already reserved for that attempt (rerun-failed-jobs re-runs every failed job of an attempt, so a second disruption of the same attempt is covered and spends nothing), <strong>refuses</strong> at <code>maxEvictionRetries</code>, or <strong>reserves</strong> a slot.
 Every outcome but a refusal then enters the re-run loop, which reads the run before each call and stands down once its attempt is past the one the job failed in.
 That is what stops two disruptions in one run from each landing a re-run (before it, the second retried against <code>403 This workflow is already running</code> until GAG's first re-run concluded, then re-ran the run again), and what keeps a merge safe: a merged disruption re-runs the attempt itself if the reservation it joined never lands, because that recovery failed or the AGC restarted before it.
-A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; Q1181's <code>already_rerun</code> check closes that.
+A disruption detected late (the vanished arm, or a scan after a restart) can read an attempt another re-run already started and reserve against it; the design's <code>already_rerun</code> check, not built, would close that.
 The cap covers every disruption cause, so the <code>cause</code> label splits the reporting but not the cap; it is per set, so a run whose jobs span two sets, or a set and a classic group, has a budget in each.
 A run that cannot be read, or a decision that cannot be written, withholds the re-run, counted as <code>eviction_rerun_failures_total{reason="conclusion_unknown"|"api_error"|"budget_unrecorded"}</code>.
-The ConfigMap's schema and its rules for being shared by two AGC versions are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q555-automatic-recovery-design.md#the-storage-shape">the Q555 recovery design</a>.</p>
+The ConfigMap's schema and its rules for being shared by two AGC versions are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q555-automatic-recovery-design.md#the-storage-shape">the Q555 recovery design</a>.</p>
 <h4 id="which-disruptions-are-recovered-and-which-are-not">Which disruptions are recovered, and which are not<a class="headerlink" href="#which-disruptions-are-recovered-and-which-are-not" title="Permanent link">&para;</a></h4>
 <p>Five causes reach the recovery above, and the boundary between them and everything else is the whole safety argument.
 Four of them re-run at once; the fifth, an abandoned never-started worker, re-runs only once capacity returns, because it was the absence of capacity that abandoned it (Q691):</p>
@@ -3599,7 +3700,7 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <td>Node shutdown: a Spot or preemptible reclamation the kubelet shuts down gracefully, a Node object deleted under the worker, or a dead node an admin taints <code>node.kubernetes.io/out-of-service</code></td>
 <td><code>PodFailed</code> with <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code> (the kubelet's graceful shutdown; <code>Status.Reason: Terminated</code>), <code>DisruptionTarget=True</code> / <code>DeletionByPodGC</code> (PodGC failing and force-deleting the orphan of a node already gone), or <code>DisruptionTarget=True</code> / <code>DeletionByTaintManager</code> with the runner container still recorded <code>Running</code> (PodGC failing and force-deleting a pod the taint manager could not finish deleting)</td>
 <td>✅ (Q1179, Q1207)</td>
-<td>All three reasons are written by cluster components, so like preemption the signal needs no conclusion check. No shape reached an older arm: the reason is not <code>Evicted</code>, the condition reason is not <code>PreemptionByScheduler</code>, nothing deletes a gracefully shut-down pod, PodGC writes the orphan's phase before its delete, the order the drain row reads as cleanup, and no kubelet records the out-of-service pod's exit for the drain row to order against. <code>DeletionByTaintManager</code> also follows a human's <code>NoExecute</code> taint on a live node, so the arm takes it only while the runner container is still <code>Running</code>: a live kubelet finishing the same delete records the exit first, and the drain row keeps that pod and its conclusion check. Only the runner counts, because a regular sidecar such as dind can outlive a runner whose job already ended. The AGC's own deletions are excluded here as on the drain row. The out-of-service taint is the admin's confirmation that the node is dead, so re-running carries no risk of a partitioned runner finishing the job twice. A node that goes <code>NotReady</code> and keeps its Node object with no such taint is <strong>not</strong> covered: the taint manager's graceful delete never completes without a kubelet, so the pod stays <code>Running</code> until an admin taints the node or deletes the Node object. The out-of-service shape is measured on kind v1.36.1; the other two are read from kubernetes v1.35.0 source, not yet from a reclaimed dogfood node</td>
+<td>All three reasons are written by cluster components, so like preemption the signal needs no conclusion check. No shape reached an older arm: the reason is not <code>Evicted</code>, the condition reason is not <code>PreemptionByScheduler</code>, nothing deletes a gracefully shut-down pod, PodGC writes the orphan's phase before its delete, the order the drain row reads as cleanup, and no kubelet records the out-of-service pod's exit for the drain row to order against. <code>DeletionByTaintManager</code> also follows a human's <code>NoExecute</code> taint on a live node, so the arm takes it only while the runner container is still <code>Running</code>: a live kubelet finishing the same delete records the exit first, and the drain row keeps that pod and its conclusion check. Only the runner counts, because a regular sidecar such as dind can outlive a runner whose job already ended. The AGC's own deletions are excluded here as on the drain row, and so is a worker none of whose containers ever started: the kubelet's shutdown fails a still-<code>Pending</code> worker too, and that job never ran, so it takes the never-started row below (Q1198). The out-of-service taint is the admin's confirmation that the node is dead, so re-running carries no risk of a partitioned runner finishing the job twice. A node that goes <code>NotReady</code> and keeps its Node object with no such taint is <strong>not</strong> covered: the taint manager's graceful delete never completes without a kubelet, so the pod stays <code>Running</code> until an admin taints the node or deletes the Node object. The out-of-service shape is measured on kind v1.36.1; the other two are read from kubernetes v1.35.0 source, not yet from a reclaimed dogfood node</td>
 </tr>
 <tr>
 <td><code>kubectl drain</code> / eviction API, <code>kubectl delete pod</code></td>
@@ -3614,10 +3715,16 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 <td>The AGC deletes pods it gave up on: the reaper's stuck-Pending and orphaned-Running workers, and (Q501) the worker of a job whose lock the renew loop lost, which GitHub has already redelivered to a sibling. Recovering either would turn cleanup into a re-run trigger. The stamp, written before every AGC-issued delete, is the exclusion. It is the pod's, so it dies with the pod: a reaped worker whose completion a previous process never read is re-run by the Q844 path instead, which is the narrow residual recorded below</td>
 </tr>
 <tr>
-<td>Deleted before its container ever ran</td>
-<td>Vanishes, or publishes a transient <code>Failed</code> + mark with <strong>no container exit record</strong> (a drained <em>Pending</em> worker)</td>
-<td>✅ (Q691, both tiers since Q766)</td>
+<td>Deleted before its container ever ran, or lost with its node before it did</td>
+<td>Vanishes, or publishes a transient <code>Failed</code> + mark with <strong>no container start record</strong> (a drained or reaped <em>Pending</em> worker, whose waiting container the kubelet rewrites as <code>Terminated</code>/<code>ContainerStatusUnknown</code> with no start, exit or container ID; measured on kind v1.36.1, Q1231), or <code>PodFailed</code> with one of the node-shutdown row's <code>DisruptionTarget</code> reasons and no container start record (Q1198)</td>
+<td>✅ (Q691, both tiers since Q766; the transient <code>Failed</code> since Q1231)</td>
 <td>The job never ran to a reportable end, so nothing is reported for the assignment; the run is force-cancelled instead, concluding run and job <code>cancelled</code> in ~1s (GitHub's ~15-minute unstarted-job timeout is the backstop). The cancelled run then <strong>does</strong> accept <code>rerun-failed-jobs</code>, so it is re-run automatically once the owner places a worker pod again, on the shared retry budget. This row is the one cause that does <strong>not</strong> enter <code>disruptionAwaitingRecovery</code>, on either tier: a job that never ran has no failed job for <code>rerun-failed-jobs</code> to act on, so the run has to be concluded first. See <a href="#stuck-pending-worker-pod">Stuck-Pending Worker Pod</a> (Q628/Q676/Q683/Q691/Q766)</td>
+</tr>
+<tr>
+<td>Runner killed at its own memory limit</td>
+<td><code>PodFailed</code>, the runner container terminated <code>OOMKilled</code></td>
+<td>Only under a right-sizing profile (Q1183)</td>
+<td>Not a disruption: the job outgrew its limit. A retry class re-runs it where the next attempt can get a strictly higher limit, and withholds it everywhere else; see <a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a></td>
 </tr>
 <tr>
 <td>Job failed on its own</td>
@@ -3631,9 +3738,9 @@ Four of them re-run at once; the fifth, an abandoned never-started worker, re-ru
 Preemption could close first because <code>PreemptionByScheduler</code> has exactly one writer — never a human, never a failing job — so it needs no further measurement to be safe.
 The drain row keys on <code>deletionTimestamp</code> instead, which a human cancelling a run might plausibly also have produced; that had to be measured before it could be trusted.
 It was (2026-07-29): a cancelled run's worker publishes the same phase and empty reason with <strong>no</strong> deletion mark — nothing in the gateway deletes a cancelled run's pod — so the mark does separate a disruption from a cancel.
-The residual ambiguity is deliberate: an operator's bare <code>kubectl delete pod</code> of a running worker re-runs the job it interrupted, which is the drain behaviour, not a defect (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/archive/q459-drained-worker-recovery.md">q459-drained-worker-recovery.md</a>).
+The residual ambiguity is deliberate: an operator's bare <code>kubectl delete pod</code> of a running worker re-runs the job it interrupted, which is the drain behaviour, not a defect (see <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/archive/q459-drained-worker-recovery.md">q459-drained-worker-recovery.md</a>).
 Its sharpest edge is a run the operator <em>cancelled</em>, because the cancel runbook's own remedy for a worker that will not stop is to delete the pod, which supplies by hand the mark the measurement above found absent.
-A <code>cancelled</code> conclusion then accepts <code>rerun-failed-jobs</code> rather than refusing it the way a <code>success</code> conclusion does (measured 2026-08-05, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>), so the job used to be re-queued and the cancel undone.</p>
+A <code>cancelled</code> conclusion then accepts <code>rerun-failed-jobs</code> rather than refusing it the way a <code>success</code> conclusion does (measured 2026-08-05, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>), so the job used to be re-queued and the cancel undone.</p>
 <p><strong>This arm therefore reads the run's conclusion before it re-runs</strong> (Q811).
 The check runs before every attempt of the re-run loop rather than once, because at detection the run has not concluded and its conclusion is null; GitHub concludes it minutes later, which is the wait that loop already exists to sit through.
 A run GitHub concluded <code>cancelled</code> stands the recovery down: no <code>rerun-failed-jobs</code> call is made, <code>actions_gateway_eviction_rerun_withheld_total{reason="run_cancelled"}</code> increments, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run.
@@ -3643,12 +3750,52 @@ A conclusion the AGC cannot read is <strong>not</strong> treated as "not cancell
 The failures are split the way the re-run call's already are: a request that never completed and a 5xx are retried inside the same 15-minute window, and a window that closes on one ends as <code>actions_gateway_eviction_rerun_failures_total{reason="conclusion_unknown"}</code> with an <code>EvictionRerunFailed</code> Warning Event.
 A 4xx, and a 2xx carrying something that will not decode as a run, are terminal at once and counted <code>api_error</code>, because neither becomes a verdict inside the window: a 2xx that is not a run means the configured endpoint is not the API, and re-asking it thirty times only delays the Event that says so.
 Either way no re-run is fired, so a job that lost its recovery is visible rather than silently re-queued against a cancel.
-And only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
-The residual is a cancelled run whose worker is <em>also</em> evicted or preempted before it stops, which is re-run as before.</p>
+On the classic tier only this arm takes the check: an eviction, a preemption, a node shutdown and a vanished worker are signals only the cluster writes, so no operator action produces them, and gating them would spend a GitHub call per attempt discriminating a case that cannot arise.
+The residual there is a cancelled run whose worker is <em>also</em> evicted or preempted before it stops, which is re-run as before.
+On the scale-set tier every arm takes it (Q1181), because that tier already reads the run on every pass, so the check costs no call, and the failure ledger's <code>selfCancelledAttempt</code> tells the abandoned arm's own force-cancel from anyone else's: a user's cancel, or a concurrency group's, is honoured whichever arm the worker was lost to, and GAG's own cancel is re-run with no exemption for any arm.</p>
+<h5 id="futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set">Futile re-runs are withheld before a slot is spent (scale-set)<a class="headerlink" href="#futile-re-runs-are-withheld-before-a-slot-is-spent-scale-set" title="Permanent link">&para;</a></h5>
+<p>Some re-runs cannot help, and before Q1181 each one spent a budget slot, a node and queue time, then ended in an Event asking for a manual re-run that would not help either.
+The scale-set tier now judges the run read it takes before reserving a slot (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/cmd/agc/internal/provisioner/rerun_futility.go"><code>rerun_futility.go</code></a>) and withholds a futile re-run there, so it spends nothing: <code>actions_gateway_eviction_rerun_withheld_total</code> counts the <code>reason</code>, and a <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event names the run, the reason and what would fix it.</p>
+<table>
+<thead>
+<tr>
+<th><code>reason</code></th>
+<th>Withheld when</th>
+<th>What the Event says to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_cancelled</code></td>
+<td>The run concluded <code>cancelled</code> and the ledger does not record GAG force-cancelling that attempt. Also checked on every pass of the re-run loop, since at detection the run has usually not concluded; a cancel seen there has already spent its slot. The abandoned arm takes the same check on its own run read, before force-cancelling: a run already cancelled that way is withheld with <code>cause="abandoned"</code>, neither cancelled again nor recorded as GAG's cancel (Q1232). The conclusion does not say who cancelled, so this includes GitHub's own ~15-minute unstarted-job timeout, which lands before the reap when <code>pendingPodDeadline</code> is set past it; that run needs a manual re-run</td>
+<td>Re-run by hand if the cancel was not intended</td>
+</tr>
+<tr>
+<td><code>attempt_limit</code></td>
+<td><code>run_attempt</code> is past 50, so the run has already been re-run 50 times, GitHub's cap on re-runs of a run, full or partial (<a href="https://github.blog/changelog/2026-04-10-actions-workflows-are-limited-to-50-reruns/">changelog, 2026-04-10</a>)</td>
+<td>Start a new run</td>
+</tr>
+<tr>
+<td><code>run_too_old</code></td>
+<td>The run was created more than 30 days ago, outside GitHub's re-run window</td>
+<td>Start a new run</td>
+</tr>
+<tr>
+<td><code>superseded</code></td>
+<td>A <code>push</code> or <code>pull_request</code> run, and the newest run of the same workflow, event and branch is from a newer commit in the same head repository</td>
+<td>Nothing: the newer commit is building</td>
+</tr>
+</tbody>
+</table>
+<p>A field GitHub did not send skips its check rather than withholding.
+The superseded check is the only one that costs a call (the workflow's runs, filtered to the branch and event, newest first), and a list it cannot read re-runs: that check only ever withholds, so an unreadable answer must not.
+Comparing the head repository keeps a fork's branch from matching upstream's of the same name; whether GitHub's <code>branch</code> filter matches a fork pull request's head branch is unmeasured (M5 in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q555-automatic-recovery-design.md#measure-before-building">the Q555 design</a>), and a miss there re-runs, the safe direction.
+A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees <code>attempt_limit</code> where GitHub would have accepted the re-run.
+The classic tier reserves from process memory with no run read first and takes none of these checks.</p>
 <h5 id="detecting-a-disruption-is-not-the-same-as-claiming-it">Detecting a disruption is not the same as claiming it<a class="headerlink" href="#detecting-a-disruption-is-not-the-same-as-claiming-it" title="Permanent link">&para;</a></h5>
 <p>The two deleted-pod rows above are readable only until the kubelet finishes tearing the object down, and recovery reads the pod off the informer (the watch event, or the scan's cached List) while it claims through the live API.
 So a pod can pass the discriminator and still be gone before a claim written <em>on that pod</em> could land.
-Measured on three <code>e2e-calico</code> runs on 2026-08-12, where a drained worker was removed within about two seconds of the delete request, well inside its 30-second grace period, because the container exits as soon as it is signalled (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q549-scaleset-rerun-flake.md#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Q809</a>).</p>
+Measured on three <code>e2e-calico</code> runs on 2026-08-12, where a drained worker was removed within about two seconds of the delete request, well inside its 30-second grace period, because the container exits as soon as it is signalled (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q549-scaleset-rerun-flake.md#mode-b-attributed-2026-08-12-the-claim-was-made-and-lost">Q809</a>).</p>
 <p><strong>The pod is doing two jobs, and only one of them has to survive the delete.</strong> It is the <em>evidence</em>, meaning the cause and the run identity, which recovery has already read off the informer before it claims.
 And it is the <em>substrate</em> the at-most-once claim is written on.
 Losing the evidence would be fatal; losing the substrate is not, because the substrate can live somewhere the delete does not reach.</p>
@@ -3670,6 +3817,8 @@ A separate object keeps the listener's single-writer invariant literally true, c
 <p>A finalizer on the worker pod was rejected rather than weighed: it closes the race by holding the object open, but <code>kubectl drain</code> would then block on the AGC being alive, which is exactly when a node is drained, and <a href="../appendix-h-v2-api-decomposition/">appendix-h</a> already records stuck-<code>Terminating</code> resources as a common cost of finalizers.</p>
 <p><strong>What the ledger costs.</strong> One uncached <code>Get</code> and one <code>Update</code> per disruption, on a path that previously took one pod patch; disruptions are rare by construction, and the budget that bounds them (<code>maxEvictionRetries</code>, default 2) says so.
 One AGC's own claims are serialised behind a mutex before that write, so the compare-and-swap arbitrates between replicas rather than between goroutines: a node drain disrupts every worker it holds at once, and both detection paths see each of them, which is enough concurrent claimants to exhaust a retry budget sized for replicas.
+The mutex also turns one replica's claims into a back-to-back burst, so a replica claiming during a rolling update can lose a round to each of the other's writes; the retry is therefore not counted (Q1197).
+Every conflict is another claim landing, so the loop runs only as long as the other replica keeps writing, and the watch path's 30-second recovery budget cuts it shorter; the reconcile scan's context carries no deadline.
 Entries are swept on write, past a TTL that has to outlive every possible rival claimant: a stale informer copy, the watch handler's own 30-second budget, and the once-per-process orphan scan a restart runs.
 The set is additionally capped, so the object cannot grow without bound on a <code>RunnerSet</code> under sustained preemption.
 Overflowing the cap can cost at-most-once for the oldest claim it drops, which is a strictly better failure than the manual re-run it replaces.</p>
@@ -3683,7 +3832,7 @@ So the disruption is observed from the worker-pod watch as well (Q1029): the pha
 The scan stays for what no event reaches, such as a pod already terminal when the process started, and the ledger arbitrates between the two, so a pod both see is recovered once.
 What the scan <em>can</em> still say is the other half.
 It logs the terminating workers it did judge and decline, at <code>Debug</code>, so an unrecovered drain that appears nowhere in the log is separable from one the discriminator rejected.</p>
-<p><strong>What is still reported as unrecoverable</strong>, under the same <code>actions_gateway_eviction_recovery_evidence_lost_total</code> counter and <code>EvictionRecoveryEvidenceLost</code> Warning Event the lost pod used to produce, is a claim the AGC could not durably record at all: the ConfigMap write failing past its retries.
+<p><strong>What is still reported as unrecoverable</strong>, under the same <code>actions_gateway_eviction_recovery_evidence_lost_total</code> counter and <code>EvictionRecoveryEvidenceLost</code> Warning Event the lost pod used to produce, is a claim the AGC could not durably record at all: the ConfigMap write failing for any reason but a conflict, or conflicting until the watch path's recovery budget runs out.
 The metric's meaning is unchanged where an operator acts on it ("this disruption was detected and its run will not be re-run automatically"); what narrowed is the set of ways to reach it.</p>
 <p>Note that the <code>DisruptionTarget</code> <strong>condition type</strong> alone is not the discriminator for either deleted-pod row: the eviction API stamps it too, with reason <code>EvictionByEvictionAPI</code>, and a bare <code>kubectl delete pod</code> stamps nothing.
 Preemption detection matches the full type/status/reason triple; drain detection keys on the deletion mark at terminal publish, ordered on both tiers against the container's recorded <code>finishedAt</code> — as the deletion <em>request</em> time, <code>deletionTimestamp</code> minus the grace period the apiserver folds into it.</p>
@@ -3699,7 +3848,7 @@ Preemption detection matches the full type/status/reason triple; drain detection
 <p>The kubelet writes <code>PodFailed</code> + <code>Evicted</code> for two causes, and only one is a disruption.
 Node pressure evicts whichever pod the kubelet ranks worst, so a fresh pod on a fresh node clears it.
 A pod that outgrows its own storage limit is evicted by the same code path for a cause its job and template own, and a re-run gets the same limit.
-That is the storage analogue of <code>OOMKilled</code>, which the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q555-automatic-recovery-design.md#the-futility-checks-r18-in-order">automatic-recovery design</a> withholds as <code>own_limit</code>.
+That is the storage analogue of <code>OOMKilled</code>, which is withheld as <code>own_limit</code> too unless a sizing profile can give the re-run more memory (<a href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">below</a>).
 Until Q1177 the eviction arm keyed on the reason alone and re-ran these up to <code>maxEvictionRetries</code> times.</p>
 <p>Two kubelet signals separate them, measured on kind v1.35.5 (2026-10-23) and matching the kubelet source at that version (<code>pkg/kubelet/eviction/eviction_manager.go</code>, <code>helpers.go</code>):</p>
 <table>
@@ -3740,6 +3889,129 @@ The withhold is decided at detection, before the budget is touched, so it spends
 They raise the kubelet's <code>memory.available</code> hard threshold on the worker's own node to just under what that node has free, read from its <code>stats/summary</code> at the moment of use, and make the worker hold 1GiB; a low memory request is what makes the kubelet's ranking pick it.
 The threshold has to be computed rather than fixed because a kind node's capacity is the Docker host's memory while its working set is only its own containers'.
 Prototyped on kind v1.35.5: evicted 17 seconds after the fill began, exit 137, <code>DisruptionTarget=True</code> / <code>TerminationByKubelet</code>.</p>
+<h4 id="out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183">Out of memory under right-sizing: the first retry class (scale-set, Q1183)<a class="headerlink" href="#out-of-memory-under-right-sizing-the-first-retry-class-scale-set-q1183" title="Permanent link">&para;</a></h4>
+<p>A retry class is a failure GAG recognises as platform-caused from objects it owns, and re-runs on the disruption arms' path: the same recovery claim, the futility checks above, and the run's <code>maxEvictionRetries</code> budget in the failure ledger, so a run cannot collect one budget per class.
+Each class declares how its cause clears (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2">R11</a>).
+This one clears by a value GAG computes: the next attempt's memory limit.</p>
+<p>A runner killed at its own memory limit is the tenant's job outgrowing its pod, which a re-run at the same limit repeats.
+Under the <code>Binpack</code> and <code>Throughput</code> <a href="../../operations/worker-rightsizing/">sizing profiles</a> GAG chose that limit from history, so it can choose a higher one.
+The history cannot be counted on to move by itself: the sampler records an out-of-memory job's peak at or below the limit that killed it.
+So the class raises the limit from the killed pod's own:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>next = min(roundUp64Mi(killed × headroom), ceiling)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>headroom = 1.4 (Binpack) | limitHeadroomPercent / 100 (Throughput, default 1.5)
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ceiling  = spec.sizing.maxRequests.memory, or 2 × killed where unset
+</code></pre></div>
+<p>It fires on a worker whose pod reached <code>PodFailed</code> with the <strong>runner</strong> container terminated <code>OOMKilled</code>, and which carries the <code>actions-gateway.com/sizing-profile</code> annotation, meaning the profile derived its limits when it was built.
+A sidecar killed for memory is not covered: the runner survives it to report the job's own result, so the pod's terminal transition says nothing about whether the job failed.</p>
+<table>
+<thead>
+<tr>
+<th>Shape</th>
+<th>What happens</th>
+<th><code>reason</code> on <code>eviction_rerun_withheld_total{cause="oom"}</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Profile-built worker, <code>next</code> above the killed limit</td>
+<td><code>next</code> is recorded for the job's later attempts and the run goes to the disruption arms' futility checks and budget. Once it holds a slot, a <strong>Normal</strong> <code>MemoryLimitRaisedForRetry</code> Event names both limits and the run is re-run as <code>eviction_retries_total{cause="oom"}</code>; a run with no budget left gets <code>EvictionRetriesExhausted</code> and no <code>MemoryLimitRaisedForRetry</code></td>
+<td>none: re-run</td>
+</tr>
+<tr>
+<td>No right-sizing profile now, or the pod was built before one applied (<code>Static</code>, <code>NodeShare</code>, <code>AwaitingSamples</code>)</td>
+<td>Withheld: a re-run gets the same limit</td>
+<td><code>own_limit</code></td>
+</tr>
+<tr>
+<td><code>next</code> not above the killed limit: at <code>maxRequests</code>, or <code>limitHeadroomPercent: 100</code></td>
+<td>Withheld</td>
+<td><code>own_limit</code></td>
+</tr>
+<tr>
+<td>The same job killed again after its limit was raised</td>
+<td>Withheld: one raise per job, so growth is bounded by the ceiling</td>
+<td><code>same_class_again</code></td>
+</tr>
+<tr>
+<td>More than 10 distinct runs held a slot in 10 minutes</td>
+<td>Withheld for 30 minutes, with one <strong>Warning</strong> <code>AutoRetryPaused</code> Event when it opens</td>
+<td><code>breaker_open</code></td>
+</tr>
+<tr>
+<td>The runner had no memory limit</td>
+<td>Not this class: the kernel killed it for the node's memory. No re-run, as before</td>
+<td>none: not recognised</td>
+</tr>
+</tbody>
+</table>
+<p>Every withhold spends no slot and emits the <strong>Normal</strong> <code>EvictionRerunWithheld</code> Event naming the fix.</p>
+<p><strong>The raised limit is a per-job floor in the failure ledger</strong>, under <code>memoryFloors["&lt;runID&gt;/&lt;job name&gt;"]</code> for 7 days.
+Provisioning a scale-set worker looks it up by the assignment's run ID and job display name and raises the runner's memory limit to it where the resolved limit is lower; under <code>Binpack</code> the memory request rises with it, since that profile sets the two equal.
+It applies to the job's next attempt whoever starts it, so a manual re-run after the budget is spent gets the memory too.
+The lookup reads the in-memory index of the ledger, so a job with no floor costs no API call once the process has read that set's ledger, and one read before that; a floor another replica wrote since that read is missed, and the attempt then runs at the resolved limit.
+That window is a rolling update in which the new process read the ledger before the old one wrote the floor: the re-run spends a slot at the killed limit, and its kill is then withheld as <code>same_class_again</code> though no raise ever applied.
+Closing it means an uncached ledger read for every worker a right-sized set builds, since the assignment carries no run attempt to confine the read to re-runs, so it stays open.
+Unlike failure records, floors are never evicted for size.</p>
+<p><strong>What it masks.</strong> A change that doubles a job's memory use gets the memory on its retry, once.
+The <code>MemoryLimitRaisedForRetry</code> Event and <code>cause="oom"</code> count make each raise visible, <code>eviction_rerun_outcomes_total{cause="oom"}</code> gives the class's success rate (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2">R14</a>), and <code>SizingDrift</code> still reports a template below observed peaks.</p>
+<p><strong>The breaker is in memory, one per set and class cause</strong>, so a restart closes it and the per-run budget still bounds what that costs.
+While it is open <code>actions_gateway_auto_retry_paused{cause="oom"}</code> reads 1, and the pending sweep's 30-second tick closes it when the cooldown ends, so the gauge drops then rather than at the next kill (Q1245).
+<strong>Misclassification is an alert</strong> (Q1245): <code>ActionsGatewayRetryCauseMisclassified</code> fires when more than half of a cause's re-runs on a set failed again over 7 days, counting at least 5, the cross-job reading the per-job <code>same_class_again</code> check cannot take.
+<strong>A re-run's worker pods carry <code>actions-gateway.com/rerun-cause</code></strong>, the cause of GAG's latest re-run of the run, read from the in-memory ledger index the floor lookup loads, so cost attribution can split re-run compute by cause; the ledger records re-runs by run and not by attempt, so a pod the original attempt builds after the reservation carries it too, which for an out-of-memory re-run spans the whole parked wait, including one that expires without a re-run.
+The disruption arms are outside it: a mass Spot preemption is exactly when their recovery is wanted.</p>
+<p><strong>The re-run waits for the run to conclude</strong> (Q1244), the design's <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q555-automatic-recovery-design.md#how-it-waits">deferred wait</a>.
+The disruption arms' 15-minute window covers GitHub concluding a runner it lost, about 10 minutes, and not a sibling job that runs longer, and a job that outgrows its memory is often one of a long matrix.
+So the class takes its slot when it fires, with the run read and the futility checks the arms take, and parks the re-run in the failure ledger under <code>pending["&lt;runID&gt;/&lt;job name&gt;"]</code> in the same write, recording the attempt the job failed in.
+A sweep on the abandoned-run sweeper's 30-second tick reads each parked run every 30 seconds for its first 5 minutes, every 2 minutes to its first hour, then every 10, about 175 reads in a day.
+A run already past the recorded attempt has been re-run by someone, and the entry is dropped.
+A read that fails retries at the next poll, whatever the failure, since over a day of polling a rate limit or a token that would not mint is expected; only a 404 or 410 ends the wait early, as <code>eviction_rerun_failures_total{reason="api_error"}</code>.
+A concluded run is released into the arms' path with no delay: it reads the run and takes the futility checks again, its reservation resumes the slot already held, and the entry leaves the ledger once the re-run has finished.
+At 24 hours the entry gets one last read, whatever the cadence, so a run that concluded while no process swept, or since the last due read, is still released, and one already re-run is still dropped.
+A run still in progress at that read ends the wait as <code>eviction_rerun_failures_total{reason="run_never_concluded"}</code> with an <code>EvictionRerunFailed</code> Event; a read that fails is retried at the 10-minute cadence for half an hour, about four reads, before ending the wait the same way, so one bad answer costs a poll rather than the re-run (Q1254); the entry is kept an hour past the 24 hours so a prune on another write does not drop it unreported.
+<strong>A restart loses no parked re-run.</strong> The entries are in the ledger; what a new process lacks is which sets to sweep, since the AGC runs no ConfigMap informer and a ledger does not hold the owner the release needs.
+The <code>RunnerSet</code> reconciler hands every scale-set set to the sweep once per process, ahead of resolving its references so a set whose template or proxy is missing is found too, which reads that set's ledger and adds the set where it holds entries; the reconciler's initial list reaches every set at startup.
+Two replicas can both release one entry: the second reservation resumes the same slot and its re-run loop stands down once the first re-run moves the run past the recorded attempt, as for any resumed disruption.
+The disruption arms keep their 15-minute window.</p>
+<p><strong>The shape is read from source, not reproduced on dogfood</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q555-flaky-job-retry.md#classified-platform-retry-phase-2">R12</a>).
+What it rests on, from recall of the kubelet rather than measured here: on cgroup v2 the kubelet has the kernel kill a container's whole process group on an out-of-memory kill, which ends the runner along with the step that used the memory; on cgroup v1, or with the kubelet's <code>singleProcessOOMKill</code>, only the largest process dies, the runner can survive to report the step's failure, and that pod is not recognised.</p>
+<h4 id="flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555">Flaky jobs: pairing a failure with its later attempt (scale-set, Q555)<a class="headerlink" href="#flaky-jobs-pairing-a-failure-with-its-later-attempt-scale-set-q555" title="Permanent link">&para;</a></h4>
+<p>Detection records what each recovery did, and changes nothing it does.
+The listener reports every terminal <code>JobCompleted</code> once per process, with its result, run identity, triggering event and workflow ref.
+A <code>failed</code> completion, or a <code>canceled</code> one a recovery claim names, is recorded in the set's failure ledger (<code>scaleset-failures-&lt;set&gt;</code>, the ConfigMap that holds the scale-set budget) under <code>failures["&lt;runID&gt;/&lt;job name&gt;"]</code>, for 7 days.
+The record carries the worker's state at its terminal transition, which the pod watch snapshots into a bounded in-memory map (1,024 workers) because the pod may be gone when the completion arrives; the completion falls back to reading the pod, and records no context when neither exists.
+The snapshot also carries the set's egress proxy pool as <code>proxy</code>, read from the AGC's cache: a colocated pool's <code>Ready</code> condition and <code>readyReplicas</code>, or <code>mode: shared</code> alone for a pool in another namespace, which that cache cannot see (Q1237).
+The cause a recovery claim names for the job is recorded with it, so a disrupted job is never read as flaky.</p>
+<p>A later completion of the same key with a new job ID is the job's next attempt, attributed from GAG's own re-runs of the run in the same ledger:</p>
+<table>
+<thead>
+<tr>
+<th>GAG re-ran the run and</th>
+<th>Trigger</th>
+<th>Flaky when it succeeds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>listed this job</td>
+<td><code>gag</code></td>
+<td>Never; the result counts in <code>eviction_rerun_outcomes_total{cause}</code></td>
+</tr>
+<tr>
+<td>re-ran failed jobs without listing it</td>
+<td><code>gag_collateral</code></td>
+<td>When its failure had no disruption cause</td>
+</tr>
+<tr>
+<td>did neither</td>
+<td><code>other</code></td>
+<td>As above</td>
+</tr>
+</tbody>
+</table>
+<p>A succeeded attempt deletes the record; a failed one updates it, keeping the first failure's time and context, and marks GAG's re-run it was attributed to as spent so a later attempt does not claim it again.
+<code>JobCompleted</code> carries no run attempt, so GAG's re-runs are matched by job name rather than by attempt: a job that first fails in an attempt after one GAG re-ran reads as <code>gag_collateral</code> rather than <code>other</code>.
+A succeeded completion with no record, the common case, reads an in-memory index of the ledger's keys and costs no API call; the index is refreshed on each read and write of the ledger, so a record another replica wrote since is missed and counts nothing.
+Failure records are evicted oldest first once the ledger passes half its 512 KiB cap, and budget records never are: <code>v1.10.0</code> writes the same object, keeps failure records it does not know, cannot evict them, and refuses a write past the cap, so records allowed to fill it would withhold that version's every reservation during a rollout or after a rollback.</p>
 <h4 id="why-preemption-deletes-rather-than-evicts-and-what-that-costs-us">Why preemption <em>deletes</em> rather than <em>evicts</em>, and what that costs us<a class="headerlink" href="#why-preemption-deletes-rather-than-evicts-and-what-that-costs-us" title="Permanent link">&para;</a></h4>
 <p>A recurring question, because the answer decides three things we measured and could not change: why the worker's disruption-safety annotations did not deflect the preemption, why adding a <code>PodDisruptionBudget</code> would not either, and why scale-set preemption recovery cannot be made restart-safe.</p>
 <p><strong>"Evict" and "delete" are not a gracefulness distinction.</strong> The Eviction API (<code>pods/&lt;name&gt;/eviction</code>) is essentially <em>a DELETE that checks PodDisruptionBudgets first</em> and returns <code>429</code> if the budget would be violated.
@@ -3774,9 +4046,9 @@ The run really is left failed, so the re-run is the repair rather than a duplica
 <p><strong>Q421 measured that exclusion on both tiers, 2026-07-27; Q459 then measured the two facts that let Q502 close it.</strong> The report does get out on the graceful path: a drained <em>running</em> worker's relayed report reaches GitHub, the job concludes <code>failure</code> well under a minute after the disruption (15–26s across five runs), and <code>rerun-failed-jobs</code> is accepted — so an automatic re-run is available.
 And the shape is discriminable: a disrupted worker lands in <code>PodFailed</code> with an <em>empty</em> reason — the same shape a genuinely failing job produces — but it lands there <strong>while carrying its <code>deletionTimestamp</code></strong>, which a run cancelled by a human (measured 2026-07-29: nothing in the gateway deletes a cancelled run's pod) and a genuine failure both lack.
 Recovery therefore keys on the deletion mark at terminal publish, ordered against the container's recorded exit — as the request time, the mark less its grace period (Q519) — on both tiers, with the reaper's own deletions excluded by the stamp it writes before deleting.
-What remains deliberately unrecovered is a worker deleted before its container ever ran — the drained <em>Pending</em> worker, which publishes at most a transient <code>Failed</code>-with-mark carrying no exit record — because a job that never ran to a reportable end leaves no failed job to re-run; the envtest pair (<code>TestAGC_Drain_ClassicWorkerEviction_DoesNotRerun</code>, <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code>) and the fake-GitHub <code>E2E_AGC_WorkerNodeDrain</code> pin that side, and <code>TestAGC_Drain_ClassicWorkerTerminalWithMark_Reruns</code> / <code>TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers</code> pin the recovered side, with <code>TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld</code> pinning that the scale-set half no longer waits on a reconcile (Q1029).
+What remains deliberately unrecovered is a worker deleted before its container ever ran — the drained <em>Pending</em> worker, which publishes at most a transient <code>Failed</code>-with-mark carrying no exit record — because a job that never ran to a reportable end leaves no failed job to re-run; <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> and the fake-GitHub <code>E2E_AGC_WorkerNodeDrain</code> pin that side, and <code>TestAGC_Drain_ScaleSetWorkerTerminalWithMark_Recovers</code> pins the recovered side, with <code>TestAGC_Drain_ScaleSetWorkerRecovers_WhileTheReconcileQueueIsHeld</code> pinning that the scale-set half no longer waits on a reconcile (Q1029).
 The worker pod's <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations still do not deflect a drain, being advisory to autoscalers and deschedulers only.
-The full reasoning and constraints are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/archive/q459-drained-worker-recovery.md">q459-drained-worker-recovery.md</a>; operator-facing guidance is in <a href="../../operations/troubleshooting/#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">troubleshooting.md</a>; the measured result is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-27">the experiment</a>.</p>
+The full reasoning and constraints are in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/archive/q459-drained-worker-recovery.md">q459-drained-worker-recovery.md</a>; operator-facing guidance is in <a href="../../operations/troubleshooting/#draining-a-worker-auto-re-runs-the-jobs-it-interrupts">troubleshooting.md</a>; the measured result is in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-27">the experiment</a>.</p>
 <p><strong>Q423 measured <code>PriorityClass</code> preemption on 2026-07-29 and found the same gap; Q497 closed it.</strong> Preemption is kube-scheduler's, not the kubelet's: the scheduler <strong>deletes</strong> the victim, so a preempted worker never carries <code>Evicted</code>, and before Q497 no re-run fired.
 The measurement, on a real cluster: the victim went <code>Running</code> → <code>Running</code> + <code>deletionTimestamp</code> → a terminal phase, carrying a <code>DisruptionTarget</code> condition with reason <code>PreemptionByScheduler</code> throughout; its <code>safe-to-evict: false</code> / <code>do-not-disrupt</code> annotations deflected nothing.</p>
 <p>Two findings came out of it, and both shape the fix.
@@ -3785,7 +4057,7 @@ Second, <code>PreemptionByScheduler</code> is written only by the scheduler, nev
 So <strong>detection keys on the condition, never the phase</strong>, and the preemption slice closed on its own — ahead of the drain slice, which needed the cancel-path measurement Q459 took the same day and closed once that measurement landed (Q502).</p>
 <p>The consequence for the published claim is that <code>priorityTiers</code> now buys both halves: the <em>packing</em> guarantee (a guaranteed tier preempts its way in, so reserved idle headroom is unnecessary) and the <em>recovery</em> guarantee for the work it displaces.
 Pinned at three tiers — unit (<code>TestProvisioner_PreemptionAutoRetry</code> on classic, the <code>preemption_internal_test.go</code> set on scale-set), envtest (<code>TestAGC_Preemption_ScaleSetWorker_IsRecovered</code>, whose deliberate twin <code>TestAGC_Drain_ScaleSetWorkerEviction_DoesNotRecover</code> differs only in the condition's <code>reason</code>), and fake-GitHub (<code>E2E_AGC_PreemptedWorkerIsRecovered</code>, plus <code>E2E_AGC_PreemptedRunningPodPhaseFollowsItsExitCode</code> for the phase finding).
-Full result: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
+Full result: <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/eviction-oversubscription-validation.md#result-measured-2026-07-29-preemption-is-not-eviction">the experiment</a>.</p>
 <p>The window this leaves, and how Q844 closed it: on the scale-set tier a preempted or drained pod is being deleted and is readable only until the kubelet finishes tearing it down: the whole termination grace period for a preemption victim (the condition is stamped before the delete), only the tail of it for a drain (the terminal phase publishes as the container exits, shortly before the object goes away).
 An AGC down for that window sees no pod at all, where an evicted one would still be sitting in <code>PodFailed</code> for a late scan to find.</p>
 <p><strong>What is lost is the discriminator, not the run.</strong> GitHub still holds the run, concluded <code>failure</code> by the Q385 relay within the measured 15–26s, and <code>rerun-failed-jobs</code> still accepts it.
@@ -3834,9 +4106,9 @@ Operators on clusters with slow legitimate scheduling (e.g. autoscaled GPU node 
 See the <a href="../../operations/troubleshooting/#worker-pod-reaped-while-pending-workerpodstuckpending">troubleshooting runbook</a> for diagnosis.</p>
 <p><strong>The job assignment is deliberately NOT completed (Q628 → Q676), and the run is force-cancelled instead (Q683).</strong> "Deletion is treated as completion" is a statement about the <em>pod</em>, and for a worker that never ran it used to be reported to the session as a <strong>succeeded job</strong>, indistinguishable from a clean run.
 A pod removed before any container started now resolves with <code>DeletedBeforeStart</code> and the session reports the job as <code>abandoned</code> internally, but the listener sends <strong>no</strong> <code>completejob</code> for its own delivery.
-Measured live (the Q645/Q676 probe runs, 2026-08-04, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q645-abandoned-completion.md">q645-abandoned-completion.md</a>): completing the winner's own sole delivery concludes the whole run immediately as <strong><code>success</code></strong>, a false green, for <code>abandoned</code> and <code>canceled</code> alike, while <code>failed</code> is refused with a 401.
+Measured live (the Q645/Q676 probe runs, 2026-08-04, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q645-abandoned-completion.md">q645-abandoned-completion.md</a>): completing the winner's own sole delivery concludes the whole run immediately as <strong><code>success</code></strong>, a false green, for <code>abandoned</code> and <code>canceled</code> alike, while <code>failed</code> is refused with a 401.
 Told nothing, GitHub concludes the run <em>and</em> job as <strong><code>cancelled</code></strong> at its ~15-minute unstarted-job timeout — honest but slow.
-The provisioner therefore issues a standalone REST <code>force-cancel</code> of the run (identity from the acquire payload's <code>github</code> context) before reporting <code>abandoned</code>: measured live (2026-08-05, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/docs/plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>), the call is accepted in the told-nothing state with no prior plain cancel, run <em>and</em> job conclude <strong><code>cancelled</code></strong> about one second later with no orphaned <code>in_progress</code> record, the cancelled conclusion unpins the consumed runner record for the recycle, and — unlike the false green, which <code>rerun-failed-jobs</code> refuses with a 403 — the cancelled run accepts a re-run.
+The provisioner therefore issues a standalone REST <code>force-cancel</code> of the run (identity from the acquire payload's <code>github</code> context) before reporting <code>abandoned</code>: measured live (2026-08-05, <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/q645-abandoned-completion.md#q683--the-fast-ending-measurement-2026-08-05">the Q683 measurement</a>), the call is accepted in the told-nothing state with no prior plain cancel, run <em>and</em> job conclude <strong><code>cancelled</code></strong> about one second later with no orphaned <code>in_progress</code> record, the cancelled conclusion unpins the consumed runner record for the recycle, and — unlike the false green, which <code>rerun-failed-jobs</code> refuses with a 403 — the cancelled run accepts a re-run.
 The unstarted-job timeout remains the backstop when the call cannot act (<code>actions_gateway_abandoned_run_force_cancels_total</code> counts outcomes).
 This is unlike the Q260 fan-out's sibling completions, which conclude nothing because the winner's own delivery stays open.</p>
 <p><strong>The cancelled run is then re-run automatically, but only once capacity returns (Q691).</strong> A cancelled conclusion accepts <code>rerun-failed-jobs</code>, so the recovery the false green made impossible is available; what makes it safe is <em>when</em> it fires.
@@ -3863,8 +4135,20 @@ So the scan that recovers a disrupted scale-set worker cannot recover this one, 
 <p>Three things make this the same capability rather than a lookalike.
 The <strong>identity</strong> is the <code>actions-gateway.com/run-id</code> / <code>actions-gateway.com/repository</code> pair <code>ProvisionScaleSetWorker</code> stamps, the same pair Q417's eviction recovery reads.
 A worker that never ran has no <code>JobStarted</code> to replace it, so it is the identity of the job the pod was created for, which another runner may be running.
-So the recovery first lists the set's workers, and where one carries that job as its <code>actions-gateway.com/started-job-id</code>, the job has a runner and nothing is cancelled (Q1169).
+So the recovery first lists the set's workers, and where one carries that job as its <code>actions-gateway.com/started-job-id</code>, the job has a runner and its run is spared (Q1169).
+The set is still one runner short, though, and the job left without one is a different job, which the recovery names and cancels instead (Q1195).
+It follows the runners: the worker that took the reaped worker's job was created for a job of its own, which another worker may have taken in turn, until a job no worker started.
+A force-cancel ends the whole run, so a job it names whose run has a job a live worker has started, such as another leg of one matrix, is not recovered: cancelling it would end that running job (Q1235).
+A worker's name is a hash of the job it was created for and the started stamp has replaced its run identity (Q1152), so that job and its run come from the listener's in-flight record (Q844).
+The recovery names no job while any worker is <code>Running</code> with no start recorded, because that runner may hold the job already with its <code>JobStarted</code> still in flight.
+It walks once more after that start lands instead, from the abandoned-run sweeper's 30-second tick: at most once per lost worker, and for at most ten minutes after the loss (Q1235).
+GitHub's ~15-minute unstarted-job timeout runs from the stranded job's queueing, which is earlier than the loss, so it can end the job inside that window: at the default <code>pendingPodDeadline</code> of ten minutes, a job queued alongside the reaped worker times out about five minutes after the reap.
+The window therefore bounds how long a walk waits, not whether the recovery beats GitHub's timeout.
+The waiting walks are in process memory like the sweeper's other set, so a restart drops them and the job then waits out that timeout.
 An idle worker beside it does not count here: it is most often waiting on the same capacity the reaped worker never got.
+A finished job leaves the record only in a later save, so its worker pod can be gone first, at once under <code>completedPodTTL: 0s</code>.
+The listener therefore marks a job's record started when its <code>JobStarted</code> arrives, and the walk names no job whose record is marked.
+Two windows stay open: a start not yet saved, either because the guard save keeps failing or because the job started and its pod went within one poll; and the marks a restart drops, since the next listener rebuilds the record from the jobs still assigned.
 The <strong>budget</strong> is the scale-set tier's ledger budget (Q1182), and the force-cancel is recorded in it: before cancelling, the AGC reads the run's attempt and stores it as <code>selfCancelledAttempt</code>, so the graceful-deletion arm's <code>cancelled</code> check reads a cancel of that attempt as GAG's own rather than a user's, and the abandoned run's later re-run merges into one another disruption of the same attempt already reserved.
 And the <strong>wait</strong> is the identical capacity test: a worker pod of the same owner binding after the abandonment.</p>
 <p>A second, narrower seam covers an <em>external</em> delete of a still-<code>Pending</code> worker, a drain catching one before it starts.
@@ -3876,32 +4160,35 @@ A gateway-teardown reap is dropped because the owner is being deleted: no later 
 And one residual is inherent, the same one preemption and drain recovery carry on this tier: a never-started worker that vanishes without publishing that transient <code>Failed</code> leaves no evidence, so its run needs a manual re-run.</p>
 <hr />
 <h3 id="orphaned-running-worker-pod-scaleset-tier">Orphaned Running Worker Pod (ScaleSet tier)<a class="headerlink" href="#orphaned-running-worker-pod-scaleset-tier" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>  GitHub                AGC (ScaleSet)            K8s API            Worker Pod
-<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    │                        │                       │                    │
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    ├─ JobAssigned ─────────&gt;│                       │                    │
-<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    │                        ├─ create pod ─────────&gt;├─ schedule ────────&gt;│
-<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    │                        │  (fire-and-forget)    │                    │ Running:
-<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    │                        │                       │                    │ registered,
-<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    │                        │                       │                    │ "Listening
-<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs"
-<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    │  cancelled / completed │                       │                    │
-<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    │  elsewhere             │                       │                    │
-<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    ├─ JobCompleted ────────&gt;│                       │                    │
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    │  (terminal)            ├─ stamp ──────────────&gt;│  job-completed-at  │
-<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    │                        │                       │                    │ still Running:
-<a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    │                        │  · 5m grace ·         │                    │ never gets
-<a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    │                        │                       │                    │ its job
-<a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    │                        ├─ delete pod ─────────&gt;├───────────────────&gt;✗
-<a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    │                        │
-<a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    │                        └─ Warning WorkerPodOrphanedRunning
-<a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    │                           worker_pods_reaped_total{reason="orphaned_running"}++
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>  GitHub                AGC (ScaleSet)            K8s API            Worker Pod
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    │                        │                       │                    │
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    ├─ JobAssigned ─────────&gt;│                       │                    │
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    │                        ├─ create pod ─────────&gt;├─ schedule ────────&gt;│
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    │                        │  (fire-and-forget)    │                    │ Running:
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    │                        │                       │                    │ registered,
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    │                        │                       │                    │ "Listening
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    │  assignment lapses /   │                       │                    │  for Jobs"
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    │  cancelled / completed │                       │                    │
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    │  elsewhere             │                       │                    │
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    ├─ JobCompleted ────────&gt;│                       │                    │
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    │  (terminal)            ├─ stamp ──────────────&gt;│  job-completed-at  │
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    │                        │                       │                    │ still Running:
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    │                        │  · 5m grace ·         │                    │ never gets
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    │                        │                       │                    │ its job
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    │                        ├─ delete pod ─────────&gt;├───────────────────&gt;✗
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    │                        │
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    │                        └─ Warning WorkerPodOrphanedRunning
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    │                           worker_pods_reaped_total{reason="orphaned_running"}++
 </code></pre></div>
 <p>The ScaleSet tier provisions fire-and-forget — the runner pulls its own job through its own broker session, so no AGC goroutine owns the pod the way the classic path's <code>provision()</code> does.
 A worker that registers but never receives its job therefore waits at <code>Listening for Jobs</code> indefinitely, and because the reaper counts <code>Running</code> as active with no deadline, it held a concurrency slot and a node until an operator deleted it by hand (Q420; observed on the dogfood cluster, where eight such pods occupied ten of twelve quota slots and all six worker nodes with zero jobs outstanding).</p>
 <p>The fix makes GitHub's own verdict the deadline.
 When the listener sees the terminal <code>JobCompleted</code> for a job, it stamps <code>actions-gateway.com/job-completed-at</code> on the worker pod whose runner held that job (the same reclaim point that deletes that worker's JIT-config Secret), and the reaper deletes any pod still <code>Running</code> five minutes later.
 The Secret does not depend on that completion arriving while the pod exists: the provisioner makes the pod the Secret's only owner once the pod is created, so the garbage collector deletes the Secret with the pod, however the pod goes (Q1154).
-A job replayed after its worker is deleted, but before the collector has deleted the Secret, gets a new Secret rather than that one: the old Secret holds the old runner's spent JIT config, and the collector can delete it before the new pod is handed it, leaving that pod <code>Pending</code> on a missing mount (Q1174).</p>
+A job replayed after its worker is deleted, but before the collector has deleted the Secret, gets a new Secret rather than that one: the old Secret holds the old runner's spent JIT config, and the collector can delete it before the new pod is handed it, leaving that pod <code>Pending</code> on a missing mount (Q1174).
+A job replayed while its previous worker is still terminating gets no worker until that pod is gone: the pod is named for the job, so the replay's create collides with a pod that will never start the runner the replay registered (Q1199).
+The listener re-offers such a job on the runner-name conflict's backoff (30s doubling to 5 minutes) rather than holding the queue cursor, because a graceful termination lasts seconds to minutes, a pod on a lost node stays terminating until the node is removed, and a held cursor redelivers immediately, registering a runner per pass.
+It checks the job's pod before minting the JIT config, as it checks the worker ceiling (Q576), so a re-offer that finds the pod still terminating registers no runner; checking only at the pod create cost each re-offer a registration the next one's name conflict deregistered (Q1233).</p>
 <p><strong>The worker that held a job is not necessarily the one created for it.</strong> GitHub gives a scale-set job to whichever of the set's runners asks first, so the runner the AGC registered for job A can run job B while A runs elsewhere.
 Measured on dogfood on 2026-09-30: the runner registered for one job ran <code>lint</code> until 17:35:15Z, while the job it was registered for completed at 17:30:11Z.
 An AGC that stamped the pod named for the completed job reaped it at 17:35:12Z with <code>lint</code> three seconds from done (Q1151).
@@ -3913,6 +4200,9 @@ The listener records each <code>JobStarted</code> on its runner's pod as <code>a
 The same start replaces the pod's <code>run-id</code> and <code>repository</code> with the started job's run, which is what eviction recovery re-runs (Q1152).
 A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job (Q1169).
 Where its container never ran, the same holds while another worker that can still be given a job has started nothing, since that worker may take it.
+Where no such idle worker exists, a worker whose container never ran and whose job another worker started still leaves the set one runner short, so recovery names the job left without one and force-cancels its run, as for a reaped worker (Q1195, Q1235).
+A <code>Running</code> worker with no start recorded counts as idle here, so this walk is never deferred for a re-check.
+That job never started, so it takes the abandoned arm's action rather than <code>rerun-failed-jobs</code>: it counts as <code>cause="abandoned"</code>, waits for capacity, and spends one slot of its run's re-run budget, keyed by the lost worker.
 A container that ran is not judged that way, because the <code>started-job-id</code> stamp lands asynchronously and is never written on a terminal pod, so a runner that took its own job and was disrupted before the stamp also reads as having started nothing.
 A pod marked as a disruption target never counts as able to take a job, so the victims of one preemption do not stand in for each other.
 A start also lifts a deadline set while that runner was idle, and moves it to another idle worker, since the runner that would have taken that job is now the one with nothing to run.
@@ -4072,10 +4362,10 @@ See the <code>SessionReacquisition</code> SLO in <a href="../appendix-a-capacity
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

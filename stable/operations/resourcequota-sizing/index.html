@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/resourcequota-sizing/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/resourcequota-sizing/">
       
       
         <link rel="prev" href="../tenant-onboarding/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -2007,6 +2009,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2177,10 +2207,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -2198,8 +2228,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2783,7 +2813,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3089,7 +3119,7 @@ A shape declaring no CPU limit is not charged <code>overhead.cpu</code> against 
 <tbody>
 <tr>
 <td>Container <code>requests</code>/<code>limits</code></td>
-<td><code>podTemplate.spec.containers[].resources</code> on the <code>RunnerTemplate</code> (v2) or <code>runnerGroups[].podTemplate</code> (v1)</td>
+<td><code>podTemplate.spec.containers[].resources</code> on the <code>RunnerTemplate</code></td>
 <td><code>500m</code> / <code>1Gi</code> as <strong>both</strong> requests and limits — the AGC gap-fills any container declaring neither, so a bare template still costs quota</td>
 </tr>
 <tr>
@@ -3130,17 +3160,17 @@ The control-plane terms:</p>
 <tr>
 <td><code>proxy.maxReplicas</code></td>
 <td><code>10</code></td>
-<td><code>spec.proxy.maxReplicas</code> (v1) / <code>EgressProxy.spec.maxReplicas</code> (v2)</td>
+<td><code>EgressProxy.spec.maxReplicas</code></td>
 </tr>
 <tr>
 <td><code>proxyReq.cpu</code> / <code>proxyReq.memory</code></td>
 <td><code>10m</code> / <code>32Mi</code></td>
-<td><code>spec.proxy.resources.requests</code></td>
+<td><code>EgressProxy.spec.resources.requests</code></td>
 </tr>
 <tr>
 <td><code>proxyLim.cpu</code> / <code>proxyLim.memory</code></td>
 <td><code>500m</code> / <code>64Mi</code></td>
-<td><code>spec.proxy.resources.limits</code></td>
+<td><code>EgressProxy.spec.resources.limits</code></td>
 </tr>
 <tr>
 <td><code>agcReq</code> / <code>agcLim</code> (<strong>v2</strong>)</td>
@@ -3237,13 +3267,12 @@ Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker 
 <p>Two ways to satisfy it:</p>
 <ul>
 <li><strong>Pair the quota with a <code>LimitRange</code></strong> that supplies namespace default requests (and limits, if you constrain them).
-  On <strong>v1</strong> this is required rather than optional: the GMC stamps no resources on the AGC pod, so a <code>requests.cpu</code>- constrained namespace rejects the AGC Deployment's pods with <code>must specify requests.cpu</code>.
-  The v2 AGC carries its own defaults and does not need this.</li>
+  The AGC carries its own defaults and does not need this.</li>
 <li><strong>Constrain only <code>pods</code></strong>, plus the storage keys if PVCs are in play.
   You lose the compute cap and keep a hard concurrency ceiling.</li>
 </ul>
 <h2 id="sizing-profiles-change-the-ask-at-pod-build">Sizing profiles change the ask at pod build<a class="headerlink" href="#sizing-profiles-change-the-ask-at-pod-build" title="Permanent link">&para;</a></h2>
-<p>An opt-in <a href="../worker-rightsizing/#sizing-profiles-opt-in-auto-apply">sizing profile</a> (<code>RunnerSet.spec.sizing.profile</code>, v2 only) rewrites the pod's CPU/memory values when the pod is built, so <strong>the template's static ask is not what the quota sees</strong>.</p>
+<p>An opt-in <a href="../worker-rightsizing/#sizing-profiles-opt-in-auto-apply">sizing profile</a> (<code>RunnerSet.spec.sizing.profile</code>) rewrites the pod's CPU/memory values when the pod is built, so <strong>the template's static ask is not what the quota sees</strong>.</p>
 <table>
 <thead>
 <tr>
@@ -3281,7 +3310,7 @@ Constraining <code>limits.cpu</code> on such a namespace rejects 100% of worker 
 </code></pre></div>
 <p><code>Active</code> means derived values are in effect; <code>AwaitingSamples</code> means the template's static values are.</p>
 <h2 id="worked-example--a-dind-tenant-at-12-concurrent-jobs">Worked example — a DinD tenant at 12 concurrent jobs<a class="headerlink" href="#worked-example--a-dind-tenant-at-12-concurrent-jobs" title="Permanent link">&para;</a></h2>
-<p><strong>Inputs.</strong> A tenant running Docker-in-Docker CI on the measured reference shape (the shipped <code>privileged-dind</code> entry, <code>deploy/templates/privileged-dind/template.yaml</code>; see <a href="../runner-template-library/">runner template library</a>), with the default egress proxy pool, on the v2 API, <code>sizing.profile: Static</code>.</p>
+<p><strong>Inputs.</strong> A tenant running Docker-in-Docker CI on the measured reference shape (the shipped <code>privileged-dind</code> entry, <code>deploy/templates/privileged-dind/template.yaml</code>; see <a href="../runner-template-library/">runner template library</a>), with the default egress proxy pool, <code>sizing.profile: Static</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3459,11 +3488,10 @@ Both controllers publish advisory conditions when the remaining headroom cannot 
 <p><code>False</code> on both means the quota admits scaling to <code>maxReplicas</code> and <code>maxWorkers</code>.</p>
 <h2 id="what-the-gateways-own-quota-conditions-count">What the gateway's own quota conditions count<a class="headerlink" href="#what-the-gateways-own-quota-conditions-count" title="Permanent link">&para;</a></h2>
 <p>The gateway computes a worker's footprint with the same arithmetic this page uses: the four-part compute sum (regular containers, native sidecars, the plain-init <code>max()</code> floor, and <code>RuntimeClass</code> overhead) <strong>plus</strong> the storage keys from <a href="#step-3--the-storage-keys">Step 3</a> — <code>ephemeral-storage</code> on both sides, and the PVC count and storage ask of every generic ephemeral volume, class-scoped keys included.
-One calculation feeds all three surfaces, so they cannot disagree:</p>
+One calculation feeds both surfaces, so they cannot disagree:</p>
 <ul>
 <li>the <code>WorkerQuotaPressure</code> / <code>WorkerQuotaExceeded</code> conditions;</li>
-<li>the pre-claim quota gate on the classic acquisition tier;</li>
-<li>the capacity integer a scale-set runner set advertises to GitHub, which folds in live quota headroom on the default tier.</li>
+<li>the capacity integer a runner set advertises to GitHub, which folds in live quota headroom.</li>
 </ul>
 <p>So a <code>False</code> <code>WorkerQuotaPressure</code> means the quota admits scaling to <code>maxWorkers</code> at the pod's <strong>full</strong> cost — sidecar, overhead, and per-worker PVCs included.</p>
 <p>A worker shape that declares no <code>ephemeral-storage</code> and no ephemeral volumes is charged nothing on the storage keys, so a namespace already at its <code>persistentvolumeclaims</code> ceiling for unrelated reasons does not hold such a set back.</p>
@@ -3535,7 +3563,7 @@ A declared <code>overhead</code> always wins over the read, and cannot drift —
 <li><a href="../tenant-onboarding/#step-1b-set-the-platform-owned-resourcequota">Tenant onboarding Step 1b</a> — where the quota is applied in the onboarding flow.</li>
 <li><a href="../worker-rightsizing/">Worker right-sizing</a> — derive the per-container <code>requests</code>/<code>limits</code> this page multiplies, from measured usage.</li>
 <li><a href="../kata-dind-workloads/">Kata DinD workloads</a> — the Kata worker shape, its <code>RuntimeClass</code>, and the nested-virtualization node prerequisites.</li>
-<li><a href="../../design/appendix-e-capacity-planning/">Appendix E — capacity planning</a> — runner group topology, <code>maxListeners</code>, and the rate-limit ceiling.</li>
+<li><a href="../../design/appendix-e-capacity-planning/">Appendix E — capacity planning</a> — runner group topology, <code>maxWorkers</code>, and the rate-limit ceiling.</li>
 <li><a href="../troubleshooting/#jobs-failing-due-to-namespace-resourcequota-exhaustion">Troubleshooting: quota exhaustion</a> — diagnosing a quota that is already too small.</li>
 </ul>
 
@@ -3660,10 +3688,10 @@ A declared <code>overhead</code> always wins over the read, and cannot drift —
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

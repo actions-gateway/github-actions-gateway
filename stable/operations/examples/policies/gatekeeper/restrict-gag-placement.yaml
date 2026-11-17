@@ -101,4 +101,4 @@ spec:
         kinds: ["Pod"]
     namespaceSelector:
       matchLabels:
-        actions-gateway.github.com/tenant: "true"
+        actions-gateway.com/tenant: managed

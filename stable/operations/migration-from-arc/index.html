@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/migration-from-arc/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/migration-from-arc/">
       
       
         <link rel="prev" href="../upgrade/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -2057,6 +2059,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2227,10 +2257,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -2248,8 +2278,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2833,7 +2863,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3117,7 +3147,7 @@ The worker pod template is the <strong>same Kubernetes type</strong> ARC uses, s
 <p><strong>Scope.</strong> This covers ARC's <strong>scale-set mode</strong> (the <code>AutoscalingRunnerSet</code> / <code>gha-runner-scale-set</code> chart — GitHub's current and recommended mode), and targets GAG's <strong>v2 API</strong> (<code>actions-gateway.com/v2</code>), which is where new tenants onboard.
 Legacy ARC (<code>RunnerDeployment</code> + <code>HorizontalRunnerAutoscaler</code>) maps similarly, including its multi-label routing; see <a href="#job-routing-a-11-map">Job routing</a>.</p>
 <blockquote>
-<p><strong>Do not migrate via GAG's v1 API.</strong> The older single-CR <code>actions-gateway.github.com/v1alpha1</code> shape is <strong><a href="../v1alpha1-deprecation/">deprecated</a></strong> and, more to the point here, it is <em>Classic-protocol only</em> — it would move you <strong>off</strong> the single-acquirer model your ARC scale sets already use.
+<p><strong>Do not migrate via GAG's v1 API.</strong> The older single-CR <code>actions-gateway.github.com/v1alpha1</code> shape was <strong><a href="../v1alpha1-deprecation/">removed at <code>v2.0.0</code></a></strong>, and it was <em>Classic-protocol only</em>, so it would have moved you <strong>off</strong> the single-acquirer model your ARC scale sets already use.
 Migrate straight to v2.</p>
 </blockquote>
 <hr />
@@ -3140,7 +3170,7 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>  (shared cluster egress)                 └─ one AGC pod multiplexes all three
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>                                          └─ per-tenant egress proxy pool
 </code></pre></div>
-<p>Unlike GAG's deprecated v1 shape, v2 puts <strong>no one-gateway-per-namespace limit</strong> on you: if your ARC namespace spans two GitHub orgs, that is two <code>ActionsGateway</code>s side by side, closer to how your scale sets are laid out today.</p>
+<p>Unlike GAG's removed v1 shape, v2 puts <strong>no one-gateway-per-namespace limit</strong> on you: if your ARC namespace spans two GitHub orgs, that is two <code>ActionsGateway</code>s side by side, closer to how your scale sets are laid out today.</p>
 <hr />
 <h2 id="concept-mapping-arc--gag">Concept mapping: ARC → GAG<a class="headerlink" href="#concept-mapping-arc--gag" title="Permanent link">&para;</a></h2>
 <table>
@@ -3200,7 +3230,7 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 <tr>
 <td><code>spec.template</code> (pod template, a <code>PodTemplateSpec</code>)</td>
 <td><code>RunnerTemplate.spec.podTemplate</code> (the same <code>PodTemplateSpec</code>)</td>
-<td><code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, init/sidecar containers transfer <strong>one-to-one</strong>. ARC inlines this per scale set; a <code>RunnerTemplate</code> is referenced by many <code>RunnerSet</code>s, so identical shapes are written once.</td>
+<td><code>resources</code>, <code>nodeSelector</code>, <code>tolerations</code>, <code>affinity</code>, <code>topologySpreadConstraints</code>, <code>runtimeClassName</code>, <code>securityContext</code>, <code>volumes</code>, init/sidecar containers transfer <strong>one-to-one</strong>, within what a tenant-authored template may carry: PSS <code>baseline</code>, the volume types <code>restricted</code> allows, and no ServiceAccount token (<a href="../troubleshooting/#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token">the rejections</a>). ARC inlines this per scale set; a <code>RunnerTemplate</code> is referenced by many <code>RunnerSet</code>s, so identical shapes are written once.</td>
 </tr>
 <tr>
 <td>runner container image (ARC default <code>ghcr.io/actions/actions-runner</code>)</td>
@@ -3246,9 +3276,9 @@ The platform installs the Gateway Manager Controller (GMC) <strong>once</strong>
 </table>
 <h3 id="your-runner-image-works-unchanged">Your runner image works unchanged<a class="headerlink" href="#your-runner-image-works-unchanged" title="Permanent link">&para;</a></h3>
 <p>Point <code>workerImage</code> at your <strong>existing ARC runner image</strong> — no rebuild — or leave it unset to use the upstream <code>ghcr.io/actions/actions-runner</code> default.
-GAG's AGC <strong>pre-acquires</strong> each job from the GitHub broker and hands it to the pod (rather than letting the pod's runner register and poll), so the worker needs GAG's small <strong>wrapper</strong> to feed the job payload into <code>Runner.Worker</code>.
+GAG's AGC creates one pod per assigned job and stages a single-use just-in-time (JIT) runner configuration for it, so the worker needs GAG's small <strong>wrapper</strong> to install the per-tenant egress-proxy CA and start the runner with <code>run.sh --jitconfig</code>.
 Rather than make you bake that wrapper into your image, the AGC <strong>injects</strong> it into every worker pod at runtime — a read-only OCI image volume on Kubernetes ≥ 1.33, an initContainer below that — and runs it in place of the image entrypoint.
-The only requirement is that the image be <code>actions/runner</code>-derived (it must contain <code>Runner.Worker</code>) — the same agent requirement ARC has, so <strong>any image that works on ARC qualifies</strong>, with its tools and userland intact.</p>
+The only requirement is that the image be <code>actions/runner</code>-derived (it must contain <code>run.sh</code>) — the same agent requirement ARC has, so <strong>any image that works on ARC qualifies</strong>, with its tools and userland intact.</p>
 <blockquote>
 <p><strong>Docker-in-Docker:</strong> because the injected wrapper runs in place of the image entrypoint, an <code>actions-runner-dind</code> image's bundled <code>dockerd</code> startup is <strong>skipped</strong>.
 Run DinD as a <strong>sidecar</strong> container in a privileged <code>ClusterRunnerTemplate</code> instead (see <a href="#security-profiles">Security profiles</a>) — GAG's DinD model regardless of the worker image.</p>
@@ -3379,7 +3409,7 @@ The pool is HPA-managed between <code>spec.minReplicas</code> and <code>maxRepli
 <td><strong>Gateways per namespace</strong></td>
 <td>many scale sets per namespace</td>
 <td>many <code>RunnerSet</code>s, and many gateways, per namespace</td>
-<td>No restructuring needed. (GAG's deprecated v1 API had a one-gateway limit; v2 does not.)</td>
+<td>No restructuring needed. (GAG's removed v1 API had a one-gateway limit; v2 does not.)</td>
 </tr>
 <tr>
 <td><strong>Quota / RBAC / NetworkPolicy</strong></td>
@@ -3402,8 +3432,8 @@ The pool is HPA-managed between <code>spec.minReplicas</code> and <code>maxRepli
 <tr>
 <td><strong>Cluster version</strong></td>
 <td>ARC supports older clusters</td>
-<td><strong>Kubernetes ≥ 1.31</strong> for v2</td>
-<td>The AGC selects its <code>RunnerSet</code>s with a server-side CRD field selector that is alpha-off on 1.30. Confirm before you start.</td>
+<td><strong>Kubernetes ≥ 1.35</strong> for v2</td>
+<td><code>helm install</code> and <code>helm upgrade</code> refuse anything older, and it is the version CI tests. Confirm before you start.</td>
 </tr>
 </tbody>
 </table>
@@ -3429,7 +3459,7 @@ Full rules: <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre
 <p>This migrates a single ARC scale set to a GAG runner set with <strong>zero downtime</strong> — ARC keeps serving until you cut workflows over, and rollback is one line.</p>
 <p>Worked example: an ARC scale set named <strong><code>gpu-large</code></strong> in namespace <strong><code>team-a</code></strong>, authenticated with a GitHub App, running GPU workflows.</p>
 <h3 id="0-confirm-prerequisites">0. Confirm prerequisites<a class="headerlink" href="#0-confirm-prerequisites" title="Permanent link">&para;</a></h3>
-<p>The GMC is installed <strong>with the v2 CRD chart</strong> (<a href="../install/#optional-the-v2-api-crds">Install</a>), the cluster is <strong>Kubernetes ≥ 1.31</strong>, and its CNI enforces egress NetworkPolicy (<a href="#egress-isolation-the-big-difference">Egress isolation</a>).
+<p>The GMC is installed <strong>with the v2 CRD chart</strong> (<a href="../install/#the-v2-api-crds">Install</a>), the cluster is <strong>Kubernetes ≥ 1.35</strong>, and its CNI enforces egress NetworkPolicy (<a href="#egress-isolation-the-big-difference">Egress isolation</a>).
 Confirm the namespace is marked a managed tenant, carries its security-profile label, and has a platform-owned <code>ResourceQuota</code> — see the <a href="../tenant-onboarding/#pre-conditions">tenant-onboarding Pre-Conditions</a>.
 <strong>Leave the ARC scale set running</strong> throughout.</p>
 <h3 id="1-create-the-github-app-secret">1. Create the GitHub App Secret<a class="headerlink" href="#1-create-the-github-app-secret" title="Permanent link">&para;</a></h3>
@@ -3518,8 +3548,8 @@ Because both register independently with GitHub, there is no split-brain to unta
 <li><a href="../../getting-started/">Getting Started</a> — the end-to-end first install.</li>
 <li><a href="../../design/network-architecture/">Network architecture</a> — egress proxy and NetworkPolicy detail, with isolation-validation probes.</li>
 <li><a href="../troubleshooting/">Troubleshooting</a> — common first-day failures.</li>
-<li><a href="../v1alpha1-deprecation/">Deprecation and removal notice</a>, covering what <code>v2.0.0</code> removes (<code>v1alpha1</code>, <code>v2alpha1</code>, Classic acquisition).
-  Relevant only if you are <em>already</em> on GAG's v1 API; new migrations should not start there.</li>
+<li><a href="../v1alpha1-deprecation/">Removal notice</a>, covering what <code>v2.0.0</code> removed (<code>v1alpha1</code>, <code>v2alpha1</code>, <code>v2beta1</code>, Classic acquisition).
+  Relevant only if you are <em>already</em> on GAG's v1 API.</li>
 </ul>
 
 
@@ -3643,10 +3673,10 @@ Because both register independently with GitHub, there is no split-brain to unta
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

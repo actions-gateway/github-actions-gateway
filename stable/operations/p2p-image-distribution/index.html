@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/1.10.0/operations/p2p-image-distribution/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/p2p-image-distribution/">
       
       
         <link rel="prev" href="../kata-dind-workloads/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -31,10 +31,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
       
       
 
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/1.10.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/1.10.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/1.10.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/1.10.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/1.10.0",
+    "url": "https://actions-gateway.com/2.0.0",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/1.10.0"
+      "url": "https://actions-gateway.com/2.0.0"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/1.10.0",
-    "logo": "https://actions-gateway.com/1.10.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.0",
+    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/1.10.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -1405,6 +1405,8 @@
       
         
       
+        
+      
     
     
     
@@ -1805,6 +1807,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../in-runner-image-builds/" class="md-nav__link">
         
   
@@ -2172,10 +2202,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_19" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
         
           
-          <label class="md-nav__link" for="__nav_9_19" id="__nav_9_19_label" tabindex="">
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="">
             
   
   
@@ -2193,8 +2223,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_19_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_19">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2778,7 +2808,7 @@
   <span class="md-ellipsis">
     
   
-    API reference (v2beta1)
+    API reference (v2)
   
 
     
@@ -3098,7 +3128,7 @@ GAG does not have to change anything about how it stamps the worker image — bu
   P2P still routes that check through the mirror so it does not melt the registry, but <code>Always</code> partially defeats local caching and adds latency to every cold start.
   Digest pinning (the secure default) keeps you on <code>IfNotPresent</code> — keep it there.</li>
 </ul>
-<p>Because P2P intercepts at the mirror, it works the same whether the worker image is the built-in default or a per-<code>RunnerGroup</code> <code>workerImage</code> override, and whether it is served by GHCR or a private registry.</p>
+<p>Because P2P intercepts at the mirror, it works the same whether the worker image is the built-in default or a per-<code>RunnerTemplate</code> <code>workerImage</code> override, and whether it is served by GHCR or a private registry.</p>
 <h3 id="digest-pinning-and-p2p-are-complementary">Digest pinning and P2P are complementary<a class="headerlink" href="#digest-pinning-and-p2p-are-complementary" title="Permanent link">&para;</a></h3>
 <p>GAG's worker images are digest-pinned by design (a bare tag is mutable; see <a href="../../design/05-security/">Security § Supply-Chain Compromise of Worker Image</a>).
 P2P distribution is <strong>content-addressed</strong>, so it reinforces this rather than fighting it:</p>
@@ -3121,8 +3151,8 @@ That:</p>
 </ul>
 <p>This composes with an <a href="../air-gapped-install/">air-gapped install</a>: the private mirror remains the back-to-source registry, and P2P keeps load off it the same way it keeps load off GHCR.</p>
 <h2 id="gags-dragonfly-node-client-recipe">GAG's Dragonfly node-client recipe<a class="headerlink" href="#gags-dragonfly-node-client-recipe" title="Permanent link">&para;</a></h2>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a> puts a Dragonfly <code>dfdaemon</code> on each Kata node, and containerd pulls worker images through it.
-It shares the scheduler in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dragonfly-core/README.md"><code>deploy/dragonfly-core/</code></a> with the registry mirrors' seed peer, so it needs that applied first.
+<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/dragonfly-node/README.md"><code>deploy/dragonfly-node/</code></a> puts a Dragonfly <code>dfdaemon</code> on each Kata node, and containerd pulls worker images through it.
+It shares the scheduler in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/dragonfly-core/README.md"><code>deploy/dragonfly-core/</code></a> with the registry mirrors' seed peer, so it needs that applied first.
 It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</code>, and the release gate's Dragonfly leg runs the e2e matrix with it installed.</p>
 <p><strong>What changes on the node:</strong></p>
 <ul>
@@ -3138,6 +3168,7 @@ It is validated on GKE with containerd 2.2.7 and Kata from <code>kata-deploy</co
   A worker under GAG's workload egress policy reached none of them; a pod with no egress policy of its own reached every TCP one, and so did a DinD worker whose tenant adds an allow-all egress policy (<a href="#on-privileged-dind">below</a>).
   So on a cluster that also runs untrusted pods outside GAG, give those pods an egress policy before applying this.</li>
 <li><strong>The proxy is bound to loopback</strong>, so only the node's own containerd can use it, and it never reaches a worker.</li>
+<li><strong>It runs on worker nodes, so a workflow that escapes its container onto the node reaches it.</strong> That makes it the exception to keeping GAG's pods off worker nodes; <a href="../security-operations/#the-exception-node-layer-image-clients">what such an escape reaches</a> includes a peer's seat, from which it can make another node's pull fail but cannot change what that node stores.</li>
 </ul>
 <p><strong>Set three values before applying it:</strong> the node selector and toleration in <code>client.yaml</code> (your worker nodes), the CIDR in <code>scheduler-from-nodes.yaml</code> (your node subnet), and the registries in the <code>dfinit</code> config.</p>
 <p><strong>Not yet measured:</strong> UDP 4006, and more than one fresh-node startup order, where <code>dfinit</code> and <code>kata-deploy</code> race to edit containerd's config on a new node.</p>
@@ -3180,7 +3211,7 @@ That fits the trusted-CI use DinD is already limited to, and it is one more reas
 <li><a href="../air-gapped-install/">Air-gapped install</a> — relocating images to a private registry with digests preserved; P2P sits in front of that registry.</li>
 <li><a href="../in-runner-image-builds/">In-runner image builds</a> — the sibling scale/PSA companion for build workloads inside workers.</li>
 <li><a href="../../design/05-security/">Security § Supply-Chain Compromise of Worker Image</a> — why worker images are digest-pinned and the <code>imagePullPolicy</code> rationale.</li>
-<li><a href="../tenant-onboarding/">Tenant onboarding</a> — setting a per-<code>RunnerGroup</code> <code>workerImage</code> and its pull Secret.</li>
+<li><a href="../tenant-onboarding/">Tenant onboarding</a> — setting a per-<code>RunnerTemplate</code> <code>workerImage</code> and its pull Secret.</li>
 <li>Upstream: <a href="https://github.com/spegel-org/spegel">Spegel</a> · <a href="https://d7y.io/">Dragonfly</a>.</li>
 </ul>
 
@@ -3305,10 +3336,10 @@ That fits the trusted-CI use DinD is already limited to, and it is one more reas
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       
