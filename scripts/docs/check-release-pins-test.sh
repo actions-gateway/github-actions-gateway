@@ -149,6 +149,24 @@ fail_case 'a bare 2.0.0 is still a pin' \
     "$(fixture "Pin \`--version 2.0.0\`.")" \
     'pins 2.0.0'
 
+# v1.10.0 is the release a 1.x operator upgrades from, which the upgrade pages
+# name in prose and in measurements taken on it.
+pass_case 'the upgrade-source release in prose is exempt' \
+    "$(fixture "A \`v1.10.0\` AGC keeps running. Pin \`--version 1.3.0\`.")"
+
+# ...but not where a reader fetches it, nor as a chart pin.
+fail_case 'the upgrade-source release in a release URL is a pin' \
+    "$(fixture "Pin \`--version 1.3.0\` ([notes](https://github.com/o/r/releases/tag/v1.10.0)).")" \
+    'pins v1.10.0'
+
+fail_case 'the upgrade-source release in a download URL is a pin' \
+    "$(fixture "Pin \`--version 1.3.0\`: https://github.com/o/r/releases/download/v1.10.0/crds.yaml")" \
+    'pins v1.10.0'
+
+fail_case 'a bare 1.10.0 is still a pin' \
+    "$(fixture "Pin \`--version 1.10.0\`.")" \
+    'pins 1.10.0'
+
 fail_case 'a stale patch-line hint' \
     "$(fixture "Pin \`--version 1.3.0\`; newer patch releases publish as \`1.2.z\`.")" \
     "the current line is \`1.3.z\`"
