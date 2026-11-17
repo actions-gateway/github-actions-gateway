@@ -77,7 +77,7 @@ const WorkerImageRepo = "ghcr.io/actions/actions-runner"
 //	docker buildx imagetools inspect ghcr.io/actions/actions-runner:<X.Y.Z>
 //
 // using the top-level "Digest:" (the OCI image index), not a per-platform one.
-const WorkerImageDigest = "sha256:759a1d94a15b05941aba5196974ff43fe15b4cbba29b694b35cbc32a1166b232"
+const WorkerImageDigest = "sha256:6d0b2d80d80f143f77dcb676e50920100bbb547e39e883454d57f45ab8c31300"
 
 // DefaultWorkerImage is the fully digest-pinned default worker image
 // ("<repo>:<version>@<digest>") the AGC pulls when neither the per-RunnerGroup
