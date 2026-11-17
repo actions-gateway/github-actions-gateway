@@ -1,6 +1,9 @@
 package controller
 
 import (
+	"net"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
@@ -68,16 +71,42 @@ func TestBuildNoProxy_ExemptsAPIServerOnNonKindServiceCIDR(t *testing.T) {
 	}
 }
 
-// TestBuildNoProxy_BracketsIPv6APIServer guards the IPv6 form: Go's NO_PROXY parser
-// reads a bare "fd00:10:96::1" as host "fd00:10:96:" with port "1", and the entry would
-// silently never match, putting the AGC right back on the proxy.
-func TestBuildNoProxy_BracketsIPv6APIServer(t *testing.T) {
-	t.Setenv(apiServerHostEnv, "fd00:10:96::1")
-	assert.Contains(t, strings.Split(buildNoProxy(nil), ","), "[fd00:10:96::1]")
+// netHTTPVerdict runs net/http in a fresh process with noProxy as NO_PROXY and an
+// HTTPS proxy set, and reports "direct" or "proxied" for rawURL.
+func netHTTPVerdict(t *testing.T, noProxy, rawURL string) string {
+	t.Helper()
+	cmd := exec.Command(os.Args[0]) //nolint:gosec // G204: re-runs this test binary, with no arguments.
+	cmd.Env = []string{
+		proxyProbeEnv + "=" + rawURL,
+		"HTTPS_PROXY=http://proxy.invalid:3128",
+		"NO_PROXY=" + noProxy,
+	}
+	out, err := cmd.Output()
+	require.NoErrorf(t, err, "probe NO_PROXY=%q: %s", noProxy, out)
+	return strings.TrimSpace(string(out))
+}
 
-	// An already-bracketed value is passed through, never double-bracketed.
-	t.Setenv(apiServerHostEnv, "[fd00:10:96::1]")
-	assert.Contains(t, strings.Split(buildNoProxy(nil), ","), "[fd00:10:96::1]")
+// TestBuildNoProxy_APIServerExemptForNetHTTP asks net/http itself whether the AGC's
+// API client would dial its API server directly under the NO_PROXY buildNoProxy
+// produces. The AGC's client-go uses http.ProxyFromEnvironment, which ignores a
+// bracketed IPv6 entry with no port (Q1336), so the string, not its shape, is tested.
+func TestBuildNoProxy_APIServerExemptForNetHTTP(t *testing.T) {
+	for name, tc := range map[string]struct{ env, ip string }{
+		"ipv4":              {env: "10.96.0.1", ip: "10.96.0.1"},
+		"ipv6":              {env: "fd00:10:96::1", ip: "fd00:10:96::1"},
+		"ipv6 bracketed":    {env: "[fd00:10:96::1]", ip: "fd00:10:96::1"},
+		"ipv6 uncompressed": {env: "2001:db8:0:0:0:0:0:1", ip: "2001:db8::1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(apiServerHostEnv, tc.env)
+			apiURL := "https://" + net.JoinHostPort(tc.ip, "443") + "/api"
+			// Control: without the API server entry the probe reports the proxy, so a
+			// "direct" below is the entry's doing.
+			require.Equal(t, "proxied", netHTTPVerdict(t, defaultNoProxy, apiURL))
+			assert.Equal(t, "direct", netHTTPVerdict(t, buildNoProxy(nil), apiURL),
+				"NO_PROXY %q must exempt the API server", buildNoProxy(nil))
+		})
+	}
 }
 
 // TestBuildNoProxy_FallsBackToKubeletExpansion covers the GMC running outside the
