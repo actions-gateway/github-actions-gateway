@@ -3932,7 +3932,7 @@ Two ways that happens:
 **Why the gateway still runs.** The condition is advisory: it does not gate `Ready` and does not stop the AGC.
 Refusing to provision would take down *both* tenants, including the one that was there first and did nothing wrong, over a state GAG cannot arbitrate.
 
-**Both gateways stay editable once the GMC has reconciled them.** While the pair stands, admission still refuses every update to a gateway that does not yet carry the GMC's finalizer, so a gateway that arrived on a held name is never provisioned; a gateway that already carries it accepts its tenant's edits.
+**Both gateways stay editable once the GMC has reconciled them.** While the pair stands, admission still refuses every update to a gateway that does not yet carry the GMC's finalizer, so a gateway that arrived on a held name is held unprovisioned unless it was created carrying the finalizer ([Q1358](../queue/Q1358.md)); a gateway that already carries it accepts its tenant's edits.
 
 **A `0` gauge on an unreadable cluster is not a clean bill.** If the GMC cannot list `ActionsGateway`s or `RunnerSet`s cluster-wide, it leaves the previous condition in place rather than writing `False`, so a gateway that has never reconciled successfully carries no condition at all.
 Check the GMC log for `could not read the cluster's ScaleSet claims` and confirm its RBAC still grants the cluster-wide `runnersets` read.
