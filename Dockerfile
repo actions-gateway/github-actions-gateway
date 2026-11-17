@@ -144,7 +144,7 @@ RUN go build -trimpath -o /bin/fakegithub ./test/fakegithub
 ########################  gmc  ################################################
 # gcr.io/distroless/static:nonroot — pinned to the multi-arch manifest digest.
 # Update with: docker buildx imagetools inspect gcr.io/distroless/static:nonroot
-FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS gmc
+FROM gcr.io/distroless/static:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS gmc
 # OpenContainers image labels carry provenance for SBOM scanners. REVISION and
 # VERSION arrive as build args (wired from GIT_SHA in docker-bake.hcl); the
 # defaults cover a bare `docker build` with no args. Declared in the final stage
@@ -172,7 +172,7 @@ USER 65532:65532
 ENTRYPOINT ["/manager"]
 
 ########################  agc  ################################################
-FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS agc
+FROM gcr.io/distroless/static:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS agc
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -187,7 +187,7 @@ USER 65532:65532
 ENTRYPOINT ["/agc"]
 
 ########################  proxy  ##############################################
-FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS proxy
+FROM gcr.io/distroless/static:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS proxy
 ARG REVISION="unknown"
 ARG VERSION="dev"
 LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github-actions-gateway" \
@@ -389,7 +389,7 @@ RUN perl -e ' \
 # published. It intentionally omits the OCI provenance labels and /licenses
 # bundle that the production stages above carry — do NOT copy this as a template
 # for a shipped image.
-FROM gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 AS fakegithub
+FROM gcr.io/distroless/static:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 AS fakegithub
 COPY --from=build-fakegithub /bin/fakegithub /fakegithub
 USER 65532:65532
 ENTRYPOINT ["/fakegithub"]
