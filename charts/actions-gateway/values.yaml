@@ -133,28 +133,6 @@ allowedPriorityClasses: []
 # e.g. allowedInfraPriorityClasses: ["gag-infra-critical"]
 allowedInfraPriorityClasses: []
 
-# priorityClassAllowlist.configMapName is REMOVED as of Q492 — setting it now fails
-# the render with a migration message. The watched allowlist is no longer a
-# ConfigMap: the chart always renders a cluster-scoped PriorityClassAllowlist CR
-# from allowedPriorityClasses above, and that one object is BOTH the GMC's watched
-# dynamic source (Q188, passed as --priority-class-allowlist-name) and the
-# priorityclass-allowlist-guard policy's paramKind. One object, two consumers, no
-# drift and no superset discipline to remember.
-#
-# Why it moved: a kube-apiserver defect (Q444) permanently kills param resolution
-# for any CORE-type paramKind once the set of bindings naming it goes empty for one
-# refresh tick — which `helm uninstall` does — leaving every runnersets /
-# runnertemplates write denied cluster-wide, recoverable only by an
-# apiserver restart (impossible on GKE/EKS/AKS). A CRD paramKind is structurally
-# immune. See docs/operations/upgrade.md, "PriorityClass allowlist: ConfigMap to CR".
-#
-# To add a class without a GMC rollout, edit the CR in place:
-#   kubectl edit priorityclassallowlist <release-prefix>-priorityclass-allowlist
-# `helm upgrade` reasserts allowedPriorityClasses over it, so persist additions
-# there. See docs/operations/security-operations.md § Priority classes.
-priorityClassAllowlist:
-  configMapName: ""
-
 # allowedEgressFQDNs / allowedEgressCIDRs are the platform allowlist of non-GitHub
 # destinations a tenant EgressProxy may request via spec.destinationFQDNs /
 # spec.destinationCIDRs (Q242 G.1). They are passed to the GMC as
@@ -167,16 +145,6 @@ priorityClassAllowlist:
 # e.g. allowedEgressFQDNs: ["proxy.golang.org", "sum.golang.org"]
 allowedEgressFQDNs: []
 allowedEgressCIDRs: []
-
-# egressDestinationAllowlist.configMapName is REMOVED in v2.0.0: setting it now
-# fails the render with a migration message. The egress destination allowlist
-# comes from allowedEgressFQDNs / allowedEgressCIDRs above alone, as the
-# PriorityClass allowlist comes from allowedPriorityClasses, so every allowlist is
-# set in Helm values and a change rolls the GMC. Move any entries from the
-# ConfigMap's data.fqdns / data.cidrs into those two lists. See
-# docs/operations/upgrade.md.
-egressDestinationAllowlist:
-  configMapName: ""
 
 # fqdnPolicyBackend is the operator's cluster-wide choice of how an FQDN
 # egressPolicyMode intent on a tenant EgressProxy is enforced (Q245), passed to the
@@ -283,7 +251,7 @@ certManager:
 # tenant namespaces, and priorityclass-allowlist-guard backstops the PriorityClass
 # allowlist on runnersets/runnertemplates writes that bypass the GMC webhooks (Q289 /
 # design Appendix G §G.7) — its allowlist parameter is the PriorityClassAllowlist
-# CR rendered from allowedPriorityClasses above (see priorityClassAllowlist). ON by
+# CR rendered from allowedPriorityClasses above. ON by
 # default (secure-by-default).
 admissionPolicy:
   enabled: true
