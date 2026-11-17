@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1218/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1354/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Reconcile the first cosign v3 release candidate's chart on Flux - GitHub Actions Gateway</title>
+        <title>Put the image digests in the copy-paste helm install commands - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#reconcile-the-first-cosign-v3-release-candidates-chart-on-flux" class="md-skip">
+        <a href="#put-the-image-digests-in-the-copy-paste-helm-install-commands" class="md-skip">
           Skip to content
         </a>
       
@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Reconcile the first cosign v3 release candidate's chart on Flux
+              Put the image digests in the copy-paste helm install commands
             
           </span>
         </div>
@@ -2657,23 +2657,22 @@
   
 
 
-<h1 id="reconcile-the-first-cosign-v3-release-candidates-chart-on-flux">Reconcile the first cosign v3 release candidate's chart on Flux<a class="headerlink" href="#reconcile-the-first-cosign-v3-release-candidates-chart-on-flux" title="Permanent link">&para;</a></h1>
-<p><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> signs with cosign v3.1.4 and passes <code>--new-bundle-format=false --use-signing-config=false</code> on every <code>sign</code>, <code>attest</code> and <code>sign-blob</code>, so v3 writes the format operators already verify (<a href="../../operations/release/">release.md</a>, the "signer writes the v2 signature format" bullet).
-What has not been measured is the keyless path and Flux.</p>
-<p>Measured 2026-10-27 against a local <code>registry:2</code> with a throwaway key pair and no transparency log:</p>
+<h1 id="put-the-image-digests-in-the-copy-paste-helm-install-commands">Put the image digests in the copy-paste helm install commands<a class="headerlink" href="#put-the-image-digests-in-the-copy-paste-helm-install-commands" title="Permanent link">&para;</a></h1>
+<p><strong>A reader cannot paste the install command as written.</strong> The five pages <code>release-pins-check</code> reads carry 40 <code>sha256:&lt;component&gt;</code> placeholders between them (README.md 4, <code>docs/index.md</code> 4, <code>install.md</code> 12, <code>upgrade.md</code> 12, <code>gitops.md</code> 8, counted 2026-11-17), and each page says to copy the four real digests from the release notes.
+The chart ships no digests on purpose: an empty one fails the render, so nothing installs by a mutable tag (<a href="../../operations/install/#pin-images-by-digest">install.md</a>).</p>
+<p><strong>The digests exist only after the tag.</strong> <code>publish.yml</code>'s <code>publish</code> job builds and pushes the images, and <code>chart-publish</code> runs after it (<code>needs: publish</code>).
+The site builds each version's docs from the tag's own tree, so that tree can only hold placeholders, and the release skill's step 5 republishes the docs from a <code>release-X.Y</code> branch that may carry the pin bump and nothing else.</p>
+<p>Two ways to close it, which this row decides between before any code:</p>
 <ul>
-<li>v3.1.4's <strong>default</strong> <code>sign --recursive</code> and <code>attest --type spdxjson</code> are invisible to cosign v2.5.2, which reports <code>no signatures found</code> on the index, the child, and the attestation, with or without <code>--new-bundle-format</code>.
-  Cosign v3 stored them under the OCI referrers fallback tag (<code>sha256-&lt;digest&gt;</code>) instead of <code>sha256-&lt;digest&gt;.sig</code>.</li>
-<li>With the two flags, v2.5.2 verifies all three, and the <code>.sig</code> and <code>.att</code> manifests match v2.5.2's own output in media type and annotation keys.</li>
-<li><code>sign-blob --bundle</code> with the flags writes the old bundle JSON, which v2.5.2 and v3.1.4 both verify.
-  The v0.3 bundle that v3 writes by default also verified under v2.5.2.</li>
-<li>Cosign v3.1.4 verifies the published, keyless, v2-signed v1.10.0 with <code>scripts/release/verify-release.sh</code> (all eight artifacts OK).</li>
+<li><strong>Option A, write the digests into the pages after publish.</strong> Step 5 already resolves the four index digests from the registry for the notes' Container images section.
+  The same step would write them into the five pages on <code>main</code> and on the <code>release-X.Y</code> branch, and <code>scripts/release/check-release-digests.sh</code> would reconcile the pages against the registry as it does the notes.
+  The chart's fail-closed default is unchanged.
+  The cost is a second transcribed set of four values per release, and the runbook's rule that the docs branch carries only the pin bump.</li>
+<li><strong>Option B, bake the digests into the published chart.</strong> <code>chart-publish</code> would set <code>gmc</code>, <code>agc</code>, <code>proxy</code> and <code>wrapper</code> <code>image.digest</code> in the chart before it packages and signs it, so <code>helm install --version X.Y.Z</code> needs no <code>--set</code>, and the pages have nothing to transcribe.
+  A local <code>charts/actions-gateway</code> render stays empty and fails closed.
+  This changes a documented security default, so it needs <a href="../../design/05-security/#first-party-digests-are-enforced-at-chart-render-time">the render-time enforcement's reasoning</a> revisited and a sign-off, and every published chart then differs from its source tree by those four values.</li>
 </ul>
-<p>Unmeasured: keyless signing adds a Fulcio certificate and a Rekor entry, which the key-pair runs never wrote, and no Flux version was run against a v3-signed artifact.
-<code>make verify-release-compat</code> now runs every cosign v2 check on each candidate: <code>verify-release.sh</code> with the cosign v2.5.2 that <code>COSIGN_COMPAT_VERSION</code> pins, covering image signatures, the per-arch SBOM attestations, both charts and the Release's blob bundles.
-It passed all 22 checks against the v2-signed v1.10.0 on 2026-10-27, and the release-candidate skill and release.md both call it.
-What it cannot reach is Flux.</p>
-<p>Done means: on the first release candidate signed by v3, before it is promoted, <code>make verify-release-compat</code> passes and the chart reconciles through an <code>OCIRepository</code> with <code>verify.provider: cosign</code> on a current Flux.</p>
+<p>Raised during the <code>v2.0.0</code> cut, on 2026-11-17, whose chart was already frozen at <code>v2.0.0-rc.3</code>'s bytes, so neither option can reach <code>2.0.0</code>.</p>
 
 
 

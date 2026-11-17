@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -5717,7 +5717,9 @@ Then apply the five CRDs in <code>actions-gateway-crds-v2.yaml</code>, upgrade t
 <p>So keep the gap short, and do not restart an AGC or a GMC pod inside it.
 A <code>v1.10.0</code> GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.</p>
 <p>Whichever way the gap went, closing it recovered the gateway: the new AGC had a session within a minute, took any job that had waited, and left every existing worker pod in place.
-Measured on kind with Kubernetes 1.36.1 against <code>test/fakegithub</code>, from the <code>v1.10.0</code> images to a <code>v2.0.0</code> candidate built from <code>main</code>, with workers held <code>Pending</code>; a job running through the gap and github.com itself were not measured.</p>
+Measured on kind with Kubernetes 1.36.1 against <code>test/fakegithub</code>, from the <code>v1.10.0</code> images to a <code>v2.0.0</code> candidate built from <code>main</code>, with workers held <code>Pending</code>.
+Against github.com, the <code>v2.0.0-rc.3</code> validation on GKE 1.35 applied the CRDs and then the chart over a gateway running <code>v1.10.0-rc.2</code>, on 2026-11-17, and two CI runs then passed on the upgraded gateway.
+No job was in flight during that gap, so a job running through it is still not measured.</p>
 <p>A rollback crosses the same gap in reverse, so it <a href="#gmc-rollback">puts the CRDs back first</a>.</p>
 <p><strong>The chart-root CRD goes last at this release only.</strong> Helm builds the current release's manifest before it applies anything, that manifest names the <code>PriorityClassAllowlist</code> at <code>v2beta1</code>, and the <code>v2.0.0</code> CRD serves <code>v2</code> alone.
 Applied first, as other upgrades do it, it stops the upgrade with the revision unchanged:</p>
@@ -7265,12 +7267,12 @@ Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, 
 The chart is the <strong>sole</strong> install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of the local chart with floating image tags.</p>
 <blockquote>
-<p><strong>Current release — <code>v1.10.0</code></strong> (chart version = release tag without the leading <code>v</code>).
-Pin <code>--version 1.10.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
+<p><strong>Current release — <code>v2.0.0</code></strong> (chart version = release tag without the leading <code>v</code>).
+Pin <code>--version 2.0.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
 <a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">1</span>.10.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">2</span>.0.0<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-68-6" name="__codelineno-68-6" href="#__codelineno-68-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>

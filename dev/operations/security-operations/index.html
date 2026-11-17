@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -5792,7 +5792,8 @@ Each one is:</p>
 <li><strong>Signed keyless with <a href="https://docs.sigstore.dev/">cosign</a>.</strong> There is no signing key to distribute or rotate — the signature is bound to a short-lived <a href="https://docs.sigstore.dev/certificate_authority/overview/">Fulcio</a> certificate issued against the GitHub Actions OIDC identity of the publish workflow and recorded in the public <a href="https://docs.sigstore.dev/logging/overview/">Rekor</a> transparency log.
   You verify <em>who signed it</em> (the workflow identity), not a key you have to trust out-of-band.
   Signing is <strong>recursive</strong>: the index <em>and</em> each per-arch manifest carry a signature, so verification succeeds against the pinned index digest and also against a per-arch manifest digest (e.g. an image mirrored or referenced by platform-specific manifest).
-  The release is signed with cosign v3 but writes signatures, attestations and blob bundles in the format earlier releases used, so cosign v2 verifies them as it verifies an earlier release (measured with a test key; the keyless path is checked on the first v3-signed release candidate, Q1218).</li>
+  The release is signed with cosign v3 but writes signatures, attestations and blob bundles in the format earlier releases used, so cosign v2 verifies them as it verifies an earlier release.
+  Measured on <code>v2.0.0-rc.3</code>, the first keyless release signed by cosign v3: cosign v2.5.2 verified every image signature, SBOM attestation, chart and blob bundle, and Flux v2.10.0 verified the chart through an <code>OCIRepository</code> with <code>verify.provider: cosign</code>.</li>
 <li><strong>Carrying a signed SLSA build-provenance attestation</strong> (from <a href="https://github.com/actions/attest-build-provenance"><code>actions/attest-build-provenance</code></a>), attached to the index digest as an OCI referrer through the same keyless Fulcio/Rekor path.
   It records <em>how</em> the image was built — the workflow, repo, commit, and trigger — and is authenticated, so a pusher can't forge it.
   This meets <strong>SLSA Build L2</strong>; buildx's unsigned default provenance is disabled in favour of it (full SLSA Build L3 would need an isolated reusable-workflow builder, not yet adopted).</li>

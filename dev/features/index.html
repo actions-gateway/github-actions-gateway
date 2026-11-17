@@ -133,7 +133,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2944,12 +2944,13 @@ A capability listed under <code>dev</code> but not under a numbered release has 
 <li><strong><a href="../operations/release/">Signed images, SBOM, and SLSA provenance</a></strong>: every published image is keyless-signed and carries both a Software Bill of Materials (SBOM) attestation and a Supply-chain Levels for Software Artifacts (SLSA) build-provenance attestation.</li>
 <li><strong><a href="../operations/admission-policies/">Admission policy compatibility</a></strong>: a Kyverno/Gatekeeper matrix covering whether GAG pods comply with common cluster policies, plus sample enforce and exception policies.</li>
 <li><strong><a href="../operations/security-operations/#fork-pull-requests-choose-their-own-runner-label">Fork pull requests refused by default</a></strong> <span class="gag-v2-badge">v2</span> <span class="gag-new-badge">new in 2.0</span>: a fork that edits <code>runs-on</code> to name a runner set gets no runner, unless that set sets <code>spec.forkPullRequests: Accept</code>.</li>
+<li><strong><a href="../operations/security-operations/#keep-gags-control-plane-off-worker-nodes">Controllers kept off worker nodes</a></strong> <span class="gag-new-badge">new in 2.0</span>: the GMC, AGC and egress proxy refuse to share a node with a worker pod and outrank every worker PriorityClass, so a worker that escapes its container finds no controller credentials beside it.</li>
 <li><strong><a href="../operations/security-operations/">Optional CONNECT destination allow-listing</a></strong>: defense in depth, off by default.
   An opted-in proxy refuses a CONNECT outside the permitted set and counts each refusal as an alertable Server-Side Request Forgery (SSRF) signal.
   The mandatory default-deny NetworkPolicy stays the primary gate.</li>
 <li><strong><a href="../design/05-security/#gmc-privilege-escalation-blast-radius-and-compensating-controls">Self-confining controller privileges</a></strong>: shipped <code>ValidatingAdmissionPolicy</code> guards deny the GMC's own cluster-wide writes outside admin-marked tenant namespaces, so a compromised manager cannot touch <code>kube-system</code> or any unmarked namespace.
   It <a href="../operations/upgrade/#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces">reads Secrets only in those namespaces</a> too, through a binding per tenant rather than a cluster-wide grant.</li>
-<li><strong><a href="../operations/security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Restart-free platform allowlists</a></strong>: grow the worker and infra PriorityClass allowlists and the egress-destination allowlist by editing a watched <code>PriorityClassAllowlist</code> custom resource (CR) or ConfigMap, no GMC restart; a missing, invalid, or overlapping object fails safe back to the flag baseline.</li>
+<li><strong><a href="../operations/security-operations/#self-service-additions-via-the-priorityclassallowlist-cr-q188-q298">Restart-free PriorityClass allowlists</a></strong>: grow the worker and infra PriorityClass allowlists by editing the watched <code>PriorityClassAllowlist</code> custom resource (CR), with no GMC restart; a missing, invalid, or overlapping object fails safe back to the flag baseline.</li>
 <li><strong><a href="../operations/observability-logging/#what-never-appears-in-logs">Credential redaction in logs</a></strong>: every GitHub response body passes one sanitizer that strips tokens, JWTs, and JIT configs before it can reach a log line, at every log level.</li>
 <li><strong><a href="../operations/security-operations/">Abuse detection and response</a></strong>: the threat model's abuse heuristics mapped to operator alerts, with compromise-response playbooks.</li>
 <li><strong><a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">Workload-identity credentials</a></strong> <span class="gag-v2-badge">v2</span>: mint short-lived GitHub credentials through an external signer so the GitHub App private key never enters the cluster.</li>

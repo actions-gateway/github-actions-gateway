@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -3050,6 +3050,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>Every FQDN-mode egress backend admits <code>*.blob.core.windows.net</code>, which is every Azure storage account, and the proxy's opt-in CONNECT …</td>
 </tr>
 <tr>
+<td><a href="Q1354/">Q1354</a></td>
+<td><a href="../operations/install/">Put the image digests in the copy-paste helm install commands</a></td>
+<td><code>docs</code> <code>feature</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>A reader cannot paste the install command as written.</strong> The five pages <code>release-pins-check</code> reads carry 40 <code>sha256:&lt;component&gt;</code> …</td>
+</tr>
+<tr>
 <td><a href="Q1264/">Q1264</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_controller.go">EgressProxy applies its Deployment before its NetworkPolicy</a></td>
 <td><code>security</code> <code>bug</code></td>
@@ -4336,14 +4344,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>An <code>EgressProxy</code>'s attribution server bundle (<code>&lt;ep&gt;-attribution-tls</code>) is rewritten in place when its namespace set changes, so a pod …</td>
-</tr>
-<tr>
-<td><a href="Q1218/">Q1218</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml">Reconcile the first cosign v3 release candidate's chart on Flux</a></td>
-<td><code>security</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/publish.yml"><code>publish.yml</code></a> signs with cosign v3.1.4 and passes `--new-bundle-format=false …</td>
 </tr>
 <tr>
 <td><a href="Q1219/">Q1219</a></td>

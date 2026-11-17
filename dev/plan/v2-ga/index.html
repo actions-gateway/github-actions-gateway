@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v1.10.0 is here.</strong>
-      Every kind now stores <code>v2</code>, and <code>gag-migrate storage-version</code> rewrites what is already stored, so <code>v2.0.0</code> can be removals only; a job whose worker's node shuts down is re-run.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2815,6 +2815,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Phase 4 — docs and the cut">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#candidate-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Candidate validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -3413,6 +3430,34 @@ Q774 now gates scope statements mechanically as <code>make design-scope-check</c
 <li><a href="../../operations/upgrade/">upgrade.md</a> — the upgrade-past-removal path.</li>
 <li><a href="../../roadmap/">roadmap.md</a> — the graduation line stops being forward-looking.</li>
 </ul>
+<h3 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Candidate</th>
+<th>Commit</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>v2.0.0-rc.1</code></td>
+<td><code>0c0048d5a</code>, 2026-11-16</td>
+<td>Superseded before approval: the chart README did not document every values key, and the allowlist inputs changed under Q1353</td>
+</tr>
+<tr>
+<td><code>v2.0.0-rc.2</code></td>
+<td><code>f3ef28e5c</code>, 2026-11-17</td>
+<td>Superseded before approval: eight dependency updates landed first</td>
+</tr>
+<tr>
+<td><code>v2.0.0-rc.3</code></td>
+<td><code>5bd927a61</code>, 2026-11-17</td>
+<td>✅ Green: all six gate legs (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/44043297649">run 44043297649</a>), 25 of 25 signatures under cosign v2.5.2 and v3.1.4, provenance digest equal to the tag commit, and Flux v2.10.0 verifying the chart</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>v2.0.0-rc.3</code> run upgraded the dogfood gateway from <code>v1.10.0-rc.2</code> to the candidate against github.com, CRDs first, and two CI runs passed on it afterwards; <a href="../../operations/upgrade/#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them">upgrade.md</a> records what that does and does not measure.</p>
 <h2 id="guardrails">Guardrails<a class="headerlink" href="#guardrails" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>A soak reset is not a failure.</strong> If Phase 1 surfaces a shape problem, fixing it in beta with a migration path is the system working.
