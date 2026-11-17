@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q976/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1357/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>Repoint the dependabot docker ecosystem at the real Dockerfile - GitHub Actions Gateway</title>
+        <title>Gate build-runner's own Docker binaries in a blocking trivy leg - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#repoint-the-dependabot-docker-ecosystem-at-the-real-dockerfile" class="md-skip">
+        <a href="#gate-build-runners-own-docker-binaries-in-a-blocking-trivy-leg" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Repoint the dependabot docker ecosystem at the real Dockerfile
+              Gate build-runner's own Docker binaries in a blocking trivy leg
             
           </span>
         </div>
@@ -2657,9 +2657,13 @@
   
 
 
-<h1 id="repoint-the-dependabot-docker-ecosystem-at-the-real-dockerfile">Repoint the dependabot docker ecosystem at the real Dockerfile<a class="headerlink" href="#repoint-the-dependabot-docker-ecosystem-at-the-real-dockerfile" title="Permanent link">&para;</a></h1>
-<p>The <code>docker</code> ecosystem lists five directories holding no Dockerfile; #870 consolidated the only one to <code>/</code>, and the last bump was #643 on 2026-07-17.
-Nothing bumps a base digest, Q740's <code>docker:&lt;N&gt;-cli</code> included.</p>
+<h1 id="gate-build-runners-own-docker-binaries-in-a-blocking-trivy-leg">Gate build-runner's own Docker binaries in a blocking trivy leg<a class="headerlink" href="#gate-build-runners-own-docker-binaries-in-a-blocking-trivy-leg" title="Permanent link">&para;</a></h1>
+<p>The release vulnerability policy (<a href="../../operations/release/#the-vulnerability-policy">release.md</a>) blocks on fixable HIGH/CRITICAL findings in every component this project chooses, and <code>build-runner</code>'s Docker CLI, buildx and compose are chosen here: they are COPY'd from the digest-pinned <code>docker:&lt;N&gt;-cli</code> stage of the root <code>Dockerfile</code>.
+Its trivy leg is report-only because the image is <code>FROM worker</code> and inherits the upstream runner base's findings, so findings in the three binaries this project chooses are reported but block nothing, and <code>check-vuln-policy.sh</code> cannot see them either.</p>
+<p>Measured 2026-11-17 in scheduled run 44106603383: <code>docker-compose</code> carried 1 fixable HIGH (<code>golang.org/x/net</code> CVE-2026-78661) and <code>docker-buildx</code> 3, all in the <code>build-runner</code> leg and so all in <code>cache-runner</code>.
+The <code>worker</code> leg reports a <code>docker-buildx</code> too, the base's own at the same path, which is why the split has to be by layer rather than by path.</p>
+<p>Done when the binaries COPY'd from <code>docker-cli</code> are scanned in a leg that blocks (for example a trivy <code>rootfs</code> scan of that stage's <code>/usr/local/bin/docker</code> and <code>cli-plugins/</code>), with a test that it goes red on a known-bad pin.
+Separate from Q70, which flips the whole <code>worker</code> leg once the upstream base scans clean; this one blocks on the binaries the project pins, whatever the base carries.</p>
 
 
 
