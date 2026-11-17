@@ -3058,6 +3058,22 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>A reader cannot paste the install command as written.</strong> The five pages <code>release-pins-check</code> reads carry 40 <code>sha256:&lt;component&gt;</code> …</td>
 </tr>
 <tr>
+<td><a href="Q1355/">Q1355</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/pages.yml">Every stable tag's Pages deploy is accepted and never served</a></td>
+<td><code>bug</code> <code>ci</code> <code>retro</code></td>
+<td>🔲</td>
+<td>M</td>
+<td><strong>No stable tag since <code>v1.6.0</code> has published its own docs site.</strong> Each time, the tag's Pages run deployed successfully, the live site kept …</td>
+</tr>
+<tr>
+<td><a href="Q1356/">Q1356</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/release/check-release-notes.sh">Check that every commit SHA a release note or plan doc cites resolves</a></td>
+<td><code>ci</code> <code>docs</code> <code>retro</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>A commit hash in a release record can be invented, and nothing catches it.</strong> On 2026-11-17, during the <code>v2.0.0</code> cut, the draft …</td>
+</tr>
+<tr>
 <td><a href="Q1264/">Q1264</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_controller.go">EgressProxy applies its Deployment before its NetworkPolicy</a></td>
 <td><code>security</code> <code>bug</code></td>
