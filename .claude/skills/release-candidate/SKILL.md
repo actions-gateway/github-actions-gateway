@@ -54,7 +54,7 @@ scripts/release/check-vuln-policy.sh origin/main
 
 **Green gates are not this check.** They hold the scan that ran when the commit merged, and an advisory published since then does not reach them; this one wants a scan of the SHA from the last 24 hours.
 A tip whose last code merge was days ago reads `fresh scan FAIL`: re-ask it with `gh workflow run security-scan.yml --ref main` and re-run once it completes.
-Keep the inherited totals it prints for the notes' Security section.
+Keep the inherited totals and excused CVEs it prints for the notes' Security section.
 
 Then confirm no gating row remains, and run the local gate **from a tree that matches the target**, a branch cut from `origin/main`, since a worktree cannot check out `main`:
 

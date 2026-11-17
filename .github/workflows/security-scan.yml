@@ -128,7 +128,7 @@ jobs:
 
   # Build each image, scan it, and generate its SBOM. One matrix leg per image
   # (a named stage of the root Dockerfile) so a finding points straight at the
-  # offending image and the seven builds run in parallel. The SBOM is generated
+  # offending image and the builds run in parallel. The SBOM is generated
   # from the same build, a PR-time check so SBOM generation can't silently break
   # before a release. It is uploaded as a build artifact only; SIGNING and
   # attaching the SBOM as a cosign attestation to a PUBLISHED image happen in
@@ -191,26 +191,32 @@ jobs:
             #
             # That reasoning covers the BASE and not the Docker CLI, buildx and
             # compose binaries this image adds, which are ours to bump and are
-            # currently scanned report-only along with everything else. Splitting
-            # them into a blocking leg is Q1357.
+            # scanned again on their own, blocking, by the docker-tools leg.
             exit-code: '0'
           - name: cache-runner
             # report-only: it is FROM `build-runner` with one patched string in
             # Runner.Worker.dll, so it adds no packages and inherits that leg's
             # findings.
             exit-code: '0'
+          - name: docker-tools
+            # blocking: exactly the Docker CLI, buildx and compose binaries that
+            # build-runner ships, which this project pins. A fix no Docker
+            # release ships yet is excused per CVE, with an expiry, in the
+            # leg's ignore file; the other legs set none.
+            exit-code: '1'
+            ignore-file: scripts/security/trivyignore-docker-tools.yaml
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Load tool pins (scripts/ci/pins.env)
         id: pins
         run: scripts/ci/load-pins.sh
       - name: Cache buildkit builder image
-        # All seven shards of this matrix pre-pull the same ~200 MB builder image,
-        # so without a cache one run means seven concurrent anonymous Docker Hub
-        # pulls — the rate-limit pressure that burned a shard's whole retry
+        # Every shard of this matrix pre-pulls the same ~200 MB builder image, so
+        # without a cache one run means one concurrent anonymous Docker Hub pull
+        # per shard — the rate-limit pressure that burned a shard's whole retry
         # budget on #895 (Q460). Keyed on the digest-pinned ref so an updatecli
-        # bump invalidates it; on a cold key the seven shards all miss and race to
-        # save it, and the six losers log a benign "unable to reserve cache"
+        # bump invalidates it; on a cold key every shard misses and races to
+        # save it, and the losers log a benign "unable to reserve cache"
         # warning.
         id: buildkit-image-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -357,6 +363,7 @@ jobs:
           # exit-code is per-leg (1 = block, 0 = report-only); see the job note.
           # Mirrors `make trivy-scan` so local and CI verdicts match.
           exit-code: ${{ matrix.exit-code }}
+          trivyignores: ${{ matrix.ignore-file }}
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           vuln-type: os,library

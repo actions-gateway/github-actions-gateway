@@ -318,8 +318,8 @@ Kyverno, OPA Gatekeeper) — the GMC does not enforce this itself because regist
 
 #### CI scans every image on every PR
 
-The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of all eight built images (the seven published plus the `fakegithub` test fixture) — see [testing.md § Security scanning](../development/testing.md#security-scanning).
-The five images built from a minimal/distroless or scratch base block on fixable HIGH/CRITICAL findings.
+The gateway's own CI runs two supply-chain gates on every PR (`security-scan.yml`): `govulncheck` across all Go modules and `trivy` image scans of the seven published images, the `fakegithub` test fixture, and `docker-tools`, which holds only the Docker binaries `build-runner` adds — see [testing.md § Security scanning](../development/testing.md#security-scanning).
+The five images built from a minimal/distroless or scratch base, and `docker-tools`, block on fixable HIGH/CRITICAL findings; a `docker-tools` finding that no Docker release has fixed yet is excused per CVE, with an expiry date.
 The three built `FROM` the upstream actions-runner (the default worker image, `build-runner` and `cache-runner`) are scanned report-only, because their CVEs live in upstream components that cannot be fixed without forking the runner.
 That report-only posture assumes the base is kept current: the dependabot `docker` ecosystem bumps every base digest in the root `Dockerfile` weekly, and the release [vulnerability policy](../operations/release.md#the-vulnerability-policy) refuses a tag whose runner base is not the newest stable release.
 Tenants supplying their own `WorkerImage` are still expected to scan it themselves.

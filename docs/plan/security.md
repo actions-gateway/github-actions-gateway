@@ -86,7 +86,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 ### Out of scope, flagged separately
 
 - ~~Image-digest pinning for `AGC_IMAGE` / `PROXY_IMAGE`.~~ **Done 2026-06-04** — GMC rejects non-`@sha256:` references at startup (Q24); `--allow-floating-image-tags` opt-out for dev/test.
-- ~~CI supply-chain scanning (govulncheck + trivy).~~ **Done (Q23)** — `security-scan.yml` runs `govulncheck` across all modules and `trivy` over all eight images; five block on fixable HIGH/CRITICAL, and the three built on the upstream actions-runner (`worker`, `build-runner`, `cache-runner`) are report-only.
+- ~~CI supply-chain scanning (govulncheck + trivy).~~ **Done (Q23)** — `security-scan.yml` runs `govulncheck` across all modules and `trivy` over every built image; six legs block on fixable HIGH/CRITICAL (the sixth, `docker-tools`, scans the Docker binaries `build-runner` adds), and the three built on the upstream actions-runner (`worker`, `build-runner`, `cache-runner`) are report-only.
   The dependabot `docker` ecosystem keeps those bases current from the root `Dockerfile` (Q70).
   See [testing.md § Security scanning](../development/testing.md#security-scanning).
 - ~~SBOM + image signing of published images.~~ **Done (Q28)** — addresses OWASP A08:2025 (Software & Data Integrity / supply chain).

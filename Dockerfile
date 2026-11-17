@@ -314,7 +314,15 @@ ENTRYPOINT ["/wrapper"]
 ##   docker buildx imagetools inspect docker:29-cli
 ## Re-check the source plugin paths when bumping the major: they are set by
 ## docker-library/docker's own Dockerfile, not by the CLI.
-FROM docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d AS docker-cli
+FROM docker:29-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d AS docker-cli
+
+## Exactly the Docker binaries build-runner ships, at the paths it ships them, in
+## an image of their own so security-scan.yml can block on their findings: the
+## build-runner leg is report-only for the runner base it inherits, and cannot
+## tell these apart from it. Never published.
+FROM scratch AS docker-tools
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/lib/docker/cli-plugins/
 
 ## Everything else — ENTRYPOINT, PATH, USER runner, the pinned runner version and
 ## the lockstep test over it — is inherited from `worker`, so this image runs
@@ -330,8 +338,7 @@ LABEL org.opencontainers.image.source="https://github.com/actions-gateway/github
       org.opencontainers.image.title="build-runner" \
       org.opencontainers.image.description="GitHub Actions runner with a pinned Docker CLI, buildx and compose" \
       org.opencontainers.image.licenses="Apache-2.0"
-COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=docker-cli /usr/local/libexec/docker/cli-plugins/ /usr/local/lib/docker/cli-plugins/
+COPY --from=docker-tools /usr/local/ /usr/local/
 ## Attribution for those three binaries. A `COPY --from` takes only the paths it
 ## names, so whatever docker:<N>-cli carried does not travel with them and this
 ## image is the redistributor. Hand-maintained: THIRD-PARTY-NOTICES is generated

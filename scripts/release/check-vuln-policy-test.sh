@@ -68,6 +68,59 @@ expect runner-pin-from-dockerfile "2.338.2" "$(dockerfile_runner_pin "$WORK/Dock
 printf 'FROM scratch AS wrapper\n' >"$WORK/Dockerfile"
 expect no-runner-pin-is-empty "" "$(dockerfile_runner_pin "$WORK/Dockerfile")"
 
+# Ignore entries: bounded ones pass, and each way of being unbounded is named.
+cat >"$WORK/ok.yaml" <<'YAML'
+vulnerabilities:
+  - id: CVE-2026-1
+    paths:
+      - usr/local/bin/docker
+    statement: waits on docker 29.8
+    expired_at: 2026-12-17
+YAML
+expect bounded-entry-is-read "CVE-2026-1	2026-12-17	waits on docker 29.8" "$(ignore_entries "$WORK/ok.yaml")"
+expect bounded-entry-has-no-gaps "" "$(ignore_gaps "$WORK/ok.yaml" "$NOW")"
+sed 's/2026-12-17/2027-03-01/' "$WORK/ok.yaml" >"$WORK/far.yaml"
+expect far-expiry-is-a-gap "CVE-2026-1: expires 2027-03-01, more than 60 days out" "$(ignore_gaps "$WORK/far.yaml" "$NOW")"
+grep -v expired_at "$WORK/ok.yaml" >"$WORK/noexp.yaml"
+expect missing-expiry-is-a-gap "CVE-2026-1: no expired_at" "$(ignore_gaps "$WORK/noexp.yaml" "$NOW")"
+grep -v statement "$WORK/ok.yaml" >"$WORK/nost.yaml"
+expect missing-statement-is-a-gap "CVE-2026-1: no statement" "$(ignore_gaps "$WORK/nost.yaml" "$NOW")"
+printf 'vulnerabilities:\n' >"$WORK/empty.yaml"
+expect empty-list-is-a-gap "no entries read from empty.yaml" "$(ignore_gaps "$WORK/empty.yaml" "$NOW")"
+printf 'vulnerabilities: []\n' >"$WORK/inline.yaml"
+expect inline-empty-list-fails-closed "unsupported layout, line 1: vulnerabilities: []" "$(ignore_gaps "$WORK/inline.yaml" "$NOW")"
+
+# Layouts trivy reads and this parser does not must fail closed, never drop out:
+# an entry that cannot be read cannot be bounded.
+cat >"$WORK/swapped.yaml" <<'YAML'
+vulnerabilities:
+  - id: CVE-A
+    statement: a
+    expired_at: 2026-12-01
+  - statement: b
+    id: CVE-B
+    expired_at: 2030-01-01
+YAML
+expect swapped-key-order-fails-closed "unsupported layout, line 5:   - statement: b" "$(ignore_gaps "$WORK/swapped.yaml" "$NOW" | head -1)"
+expect swapped-entry-keeps-neighbour-intact "" "$(ignore_gaps "$WORK/swapped.yaml" "$NOW" | grep CVE-A || true)"
+printf 'vulnerabilities:\n  - {id: CVE-C, expired_at: 2030-01-01}\n' >"$WORK/flow.yaml"
+expect flow-style-fails-closed "unsupported layout, line 2:   - {id: CVE-C, expired_at: 2030-01-01}" "$(ignore_gaps "$WORK/flow.yaml" "$NOW")"
+sed 's/statement: waits on docker 29.8/statement: >-/' "$WORK/ok.yaml" >"$WORK/block.yaml"
+expect block-scalar-statement-fails-closed "unsupported layout, line 5:     statement: >-" "$(ignore_gaps "$WORK/block.yaml" "$NOW" | head -1)"
+sed 's/expired_at: 2026-12-17/expired_at: "2026-12-17"  # re-check then/' "$WORK/ok.yaml" >"$WORK/quoted.yaml"
+expect quoted-commented-expiry-reads "" "$(ignore_gaps "$WORK/quoted.yaml" "$NOW")"
+{ cat "$WORK/ok.yaml"; printf '    purls:\n      - pkg:golang/x\n'; } >"$WORK/unknown.yaml"
+expect unknown-key-fails-closed "unsupported layout, line 7:     purls:" "$(ignore_gaps "$WORK/unknown.yaml" "$NOW" | head -1)"
+
+# Every committed ignore file must parse whole: at least one entry, each with a
+# statement, and no line outside the layout ignore_entries reads.
+for f in "$SCRIPT_DIR"/../security/trivyignore-*.yaml; do
+	[[ -f "$f" ]] || continue
+	n="$(ignore_entries "$f" | awk -F'\t' '$1 != "!" && $3 != "-"' | wc -l | tr -d ' ')"
+	expect "committed-$(basename "$f")-parses" 1 "$((n > 0))"
+	expect "committed-$(basename "$f")-has-no-unread-lines" "" "$(ignore_entries "$f" | grep '^!' || true)"
+done
+
 # The real Dockerfile must still carry a pin the helper can read, or check 3 is
 # UNMEASURED on every release.
 expect real-dockerfile-has-a-pin 1 "$(dockerfile_runner_pin "$SCRIPT_DIR/../../Dockerfile" | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+$' || true)"

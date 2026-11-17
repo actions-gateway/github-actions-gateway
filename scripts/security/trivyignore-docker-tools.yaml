@@ -1,0 +1,18 @@
+# Findings the docker-tools trivy leg excuses, and only that leg
+# (security-scan.yml, scripts/security/trivy-scan.sh). Each one has a fix in a
+# dependency that no Docker release ships yet, so bumping docker:<N>-cli cannot
+# clear it. Every entry names the release it waits on and expires within 60
+# days, after which the leg goes red and the entry is re-checked or removed;
+# scripts/release/check-vuln-policy.sh refuses a release over an entry with no
+# expiry or a later one. Release notes list what is excused here.
+vulnerabilities:
+  - id: CVE-2026-17106
+    paths:
+      - usr/local/lib/docker/cli-plugins/docker-buildx
+    statement: moby/go-archive 0.2.0 in buildx v0.39.0, the newest buildx release on 2026-11-17; waits on a buildx release linking go-archive 0.3.0.
+    expired_at: 2026-12-17
+  - id: CVE-2026-78661
+    paths:
+      - usr/local/lib/docker/cli-plugins/docker-compose
+    statement: golang.org/x/net 0.60.0 in compose v5.7.1; compose v5.8.0 shipped 2026-11-17 and is not in docker:29-cli yet.
+    expired_at: 2026-12-17
