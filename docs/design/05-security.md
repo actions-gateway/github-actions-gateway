@@ -842,17 +842,20 @@ The reconciler's read is cached, unlike admission's: it reports a persisted stat
 Both are then admitted onto a first label another tenant holds in the same scope, in 25 of 50 attempts in the envtest suite (measured 2026-11-11).
 Admission cannot reserve a name across two objects, so the bound comes from what follows the admission:
 
-- **The raced gateway is held unprovisioned.** The GMC's first write to a new gateway adds its finalizer, provisioning starts only after that, and the gateway webhook refuses that update while the pair collides.
+- **The raced gateway is held unprovisioned.** Before the GMC provisions a gateway it has never written status for, it passes one update through the gateway webhook: the one that adds its finalizer, or an unchanged update when the gateway arrived carrying it.
+  The webhook refuses that update while the pair collides.
   None of the 25 raced gateways in the same run received the finalizer, so none had an AGC to open a session with, and the test requires the refusal for every raced gateway.
   It is not guaranteed: a GMC reconcile landing between the two creates would add the finalizer before the second object is stored, which no run has caught.
-  Nor does it hold against a gateway created with the finalizer already set: the GMC then makes no update to refuse; of 15 such raced gateways in the same suite, all carried the finalizer by construction and 10 had reconciled through to `ReconcileSucceeded` within 10 seconds (measured 2026-11-17, [Q1358](../queue/Q1358.md)).
+  A gateway created with the finalizer already set, or restored by a tool that keeps finalizers (Velero does), gets the same update, since status cannot be set on create (Velero's opt-in status restore is a separate write through the status subresource, made by the restoring operator).
+  Before Q1358 the GMC skipped it for such a gateway: of 15 raced gateways created that way, 10 had reconciled through to `ReconcileSucceeded` within 10 seconds (measured 2026-11-17).
+  `TestV2_ScaleSetNameGuard_PresetFinalizerIsHeld` pins it.
 - **The established tenant's gateway reports it.** Its status is written through the status subresource, which the webhook does not intercept, so the next reconcile sets `ScaleSetNameCollision` (`TestV2_ScaleSetNameGuard_ConcurrentPairIsReported`).
 - **Taking jobs needs credentials for the scope.** The raced gateway's AGC has to authenticate to the shared scope to open a session.
   Whether such credentials can open a session on any of that scope's scale sets at GitHub directly, with no admission in the way, is unmeasured; if they can, this residual adds nothing for the credential holder.
 
-The refusal is keyed on that finalizer, so it does not also freeze the established tenant (Q1342).
-An update that keeps `githubURL` and whose stored gateway already carries the GMC finalizer skips the scope check: it binds no new scope, and refusing it cannot undo a provisioned pair.
-The finalizer write has a stored object without the finalizer, so it is still judged, which keeps the raced side refused; `TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable` pins the held side's edit.
+The refusal is keyed on that status, so it does not also freeze the established tenant (Q1342).
+An update that keeps `githubURL` and whose stored gateway has GMC-written status (`status.observedGeneration` set) skips the scope check: it binds no new scope, and refusing it cannot undo a provisioned pair.
+The GMC's handshake update has a stored object with no status, so it is still judged, which keeps the raced side refused; `TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable` pins the held side's edit.
 Owner check, not run here: on two gateways bound to one org, create a second tenant's `RunnerSet` and gateway together, then read whether the second gateway gets an AGC and which namespace a job sent to the shared label lands in; and whether the second tenant's App installation token, used directly, can open a session on the first tenant's scale set.
 
 **A renamed set leaves its old scale set (Q1325).** Admission releases the old first label's claim as soon as an edit renaming it is stored.

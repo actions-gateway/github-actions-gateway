@@ -11,6 +11,7 @@ import (
 
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -180,4 +181,84 @@ func TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable(t *testing.T) {
 		return k8sClient.Update(ctx, &got)
 	})
 	require.NoError(t, err, "the held tenant's edit to its own gateway must be admitted")
+}
+
+// TestV2_ScaleSetNameGuard_PresetFinalizerIsHeld covers Q1358: a raced gateway that
+// arrives already carrying the GMC finalizer, created that way or restored by a backup
+// tool that keeps finalizers, is still held unprovisioned. The pair is stored with
+// admission bypassed, then the bypass is lifted before the reconciler starts, so the
+// GMC's first update to the raced gateway goes through the webhook as a raced pair's
+// would.
+func TestV2_ScaleSetNameGuard_PresetFinalizerIsHeld(t *testing.T) {
+	const (
+		nsA    = "v2-ssname-preset-a"
+		nsB    = "v2-ssname-preset-b"
+		acme   = "https://github.com/acme-preset"
+		shared = "shared-preset"
+	)
+	bypassV2Admission(t)
+	createNamespace(t, nsA)
+	createNamespaceWithLabels(t, nsB, map[string]string{admissionBypassLabel: "true"})
+	createGitHubAppSecret(t, nsA, "github-app")
+	createGitHubAppSecret(t, nsB, "github-app")
+	cleanup := func(obj client.Object) {
+		t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), obj)) })
+	}
+	held := ghesAdmissionGateway("gw", nsA, acme, "")
+	for _, obj := range []client.Object{held, newScaleSetRunnerSet("held", nsA, "gw", shared)} {
+		require.NoError(t, k8sClient.Create(ctx, obj))
+		cleanup(obj)
+	}
+	// The held tenant is established before the pair exists: the finalizer is added while
+	// nothing collides, and the status the GMC would have written marks it reconciled.
+	controllerutil.AddFinalizer(held, v2.ActionsGatewayFinalizer)
+	require.NoError(t, k8sClient.Update(ctx, held))
+	held.Status.ObservedGeneration = held.Generation
+	require.NoError(t, k8sClient.Status().Update(ctx, held))
+
+	raced := ghesAdmissionGateway("gw", nsB, acme, "")
+	controllerutil.AddFinalizer(raced, v2.ActionsGatewayFinalizer)
+	for _, obj := range []client.Object{raced, newScaleSetRunnerSet("racer", nsB, "gw", shared)} {
+		requireCreateEventually(t, obj)
+		cleanup(obj)
+	}
+
+	// Lift the bypass and wait until the webhook judges nsB again: a second set on the
+	// held name is refused only once it does.
+	require.NoError(t, retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var ns corev1.Namespace
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: nsB}, &ns); err != nil {
+			return err
+		}
+		delete(ns.Labels, admissionBypassLabel)
+		return k8sClient.Update(ctx, &ns)
+	}))
+	require.Eventually(t, func() bool {
+		probe := newScaleSetRunnerSet("probe", nsB, "gw", shared)
+		if err := k8sClient.Create(ctx, probe); err == nil {
+			_ = k8sClient.Delete(ctx, probe)
+			return false
+		}
+		return true
+	}, 30*time.Second, 200*time.Millisecond, "the webhook must judge %s again before the reconciler starts", nsB)
+
+	startActionsGatewayV2Reconciler(t)
+	heldKey := types.NamespacedName{Namespace: nsA, Name: "gw"}
+	require.Eventually(t, func() bool {
+		var got v2.ActionsGateway
+		if err := k8sClient.Get(ctx, heldKey, &got); err != nil {
+			return false
+		}
+		c := findCondition(got.Status.Conditions, v2.ConditionScaleSetNameCollision)
+		return c != nil && c.Status == metav1.ConditionTrue
+	}, 30*time.Second, 100*time.Millisecond, "the held gateway must report the stored pair")
+
+	// Once past its handshake update, the GMC writes this fixture's status within the
+	// same reconcile (the held gateway's report above), so a raced gateway it never
+	// writes status for is one it never provisioned.
+	racedKey := client.ObjectKeyFromObject(raced)
+	require.Never(t, func() bool {
+		var got v2.ActionsGateway
+		return k8sClient.Get(ctx, racedKey, &got) == nil && got.Status.ObservedGeneration > 0
+	}, 5*time.Second, 100*time.Millisecond, "the GMC must not reconcile past the handshake a raced gateway with a preset finalizer")
 }

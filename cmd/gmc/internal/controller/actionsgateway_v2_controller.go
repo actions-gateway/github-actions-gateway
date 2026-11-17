@@ -223,19 +223,23 @@ func (r *ActionsGatewayV2Reconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return r.reconcileDelete(ctx, &ag)
 	}
 
-	if !controllerutil.ContainsFinalizer(&ag, gmcv2.ActionsGatewayFinalizer) {
-		controllerutil.AddFinalizer(&ag, gmcv2.ActionsGatewayFinalizer)
+	// A gateway this GMC has never written status for passes one update through the
+	// gateway webhook before anything is provisioned: the one that adds the finalizer,
+	// or an unchanged one when the gateway arrived carrying it (created that way, or
+	// restored by a backup tool that keeps finalizers). That update is what the webhook
+	// refuses while a raced scale-set name pair collides (Q1358, 05-security.md), and
+	// this reconcile carries on to provisioning so the status it writes follows from it.
+	if added := controllerutil.AddFinalizer(&ag, gmcv2.ActionsGatewayFinalizer); added || ag.Status.ObservedGeneration == 0 {
 		if err := r.Update(ctx, &ag); err != nil {
 			return ctrl.Result{}, err
 		}
-		// Provisioning-start signal, emitted once per object lifecycle (the finalizer
-		// is added exactly once) so `kubectl describe` shows when the AGC control plane
-		// began provisioning.
-		r.recordEvent(&ag, corev1.EventTypeNormal, "Provisioning", "Reconcile",
-			"started provisioning the AGC control plane")
-		// The Update fires the primary watch, which carries no predicate, so the
-		// next reconcile is already queued.
-		return ctrl.Result{}, nil
+		if added {
+			// Provisioning-start signal, emitted once per object lifecycle (the
+			// finalizer is added exactly once) so `kubectl describe` shows when the AGC
+			// control plane began provisioning.
+			r.recordEvent(&ag, corev1.EventTypeNormal, "Provisioning", "Reconcile",
+				"started provisioning the AGC control plane")
+		}
 	}
 
 	// Credential check, by union member (Q196/Q197):
