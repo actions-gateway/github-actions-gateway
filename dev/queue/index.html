@@ -2762,6 +2762,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 </thead>
 <tbody>
 <tr>
+<td><a href="Q1314/">Q1314</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-tidy-check.sh">tidy-check fails on a proxy.golang.org stream error downloading a module</a></td>
+<td><code>flake</code> <code>ci</code></td>
+<td>💤</td>
+<td>S</td>
+<td><strong>Event:</strong> <code>tidy-check</code> fails on <code>main</code> with a <code>proxy.golang.org</code> download error after the retry, or either gate exhausts its three …</td>
+</tr>
+<tr>
 <td><a href="Q1119/">Q1119</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/test/e2e/v2_multigateway_test.go">Both ProxyConnectWorks specs 502 the CONNECT tunnel, in both CNI lanes</a></td>
 <td><code>flake</code> <code>ci</code></td>
@@ -3880,14 +3888,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>💤</td>
 <td>S</td>
 <td><strong>Event:</strong> a <code>changes</code> job is abandoned on <code>main</code> outside a GitHub incident window.</td>
-</tr>
-<tr>
-<td><a href="Q1314/">Q1314</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/go/go-tidy-check.sh">tidy-check fails on a proxy.golang.org stream error downloading a module</a></td>
-<td><code>flake</code> <code>ci</code></td>
-<td>💤</td>
-<td>S</td>
-<td><strong>Event:</strong> <code>tidy-check</code> fails a second time on a module download from <code>proxy.golang.org</code> rather than on drift, on any branch.</td>
 </tr>
 <tr>
 <td><a href="Q1241/">Q1241</a></td>

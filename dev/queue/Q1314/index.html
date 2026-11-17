@@ -2658,24 +2658,22 @@
 
 
 <h1 id="tidy-check-fails-on-a-proxygolangorg-stream-error-downloading-a-module">tidy-check fails on a proxy.golang.org stream error downloading a module<a class="headerlink" href="#tidy-check-fails-on-a-proxygolangorg-stream-error-downloading-a-module" title="Permanent link">&para;</a></h1>
-<p><strong>Event:</strong> <code>tidy-check</code> fails a second time on a module download from <code>proxy.golang.org</code> rather than on drift, on any branch.
-Filed without a bump under the outside-service exception in <a href="../../development/maintaining-backlog/#flake-fixes-go-first">flake fixes go first</a>: one sighting, rooted in the module proxy, not yet recurred.</p>
-<p>The sighting, 2026-11-09: PR #2286's first <code>unit-test.yml</code> run (42722656004), job <code>tidy-check</code> (129520311058), failed at <code>make tidy-check</code> (Makefile:961) with:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>github.com/MirrexOne/unqueryvet@v1.5.4: read "https://proxy.golang.org/github.com/%21mirrex%21one/unqueryvet/@v/v1.5.4.zip": stream error: stream ID 1; INTERNAL_ERROR; received from peer
-</code></pre></div>
-<p>It was reached through <code>tools</code> → golangci-lint → <code>unqueryvet</code>, during <code>go mod tidy</code> in <code>scripts/go/go-work-tidy.sh</code>.
-The same log shows <code>go: downloading</code> lines for golangci-lint's dependencies, so the setup-go module cache did not hold them on that run.
-The PR touched no <code>go.mod</code> or <code>go.sum</code>, and <code>tidy-check</code> passed on its next head (fb9391a), so the failure was a download, not untidiness.</p>
-<p>Measured 2026-11-09 over the 40 most recent failed <code>unit-test.yml</code> runs (back to 2026-10-05): 13 had a failed <code>tidy-check</code>, and the other 12 each failed on a <code>diff --git</code> of module files; their only <code>proxy.golang.org</code> text is the <code>GOPROXY</code> line in the job's env dump.
-So this is the only proxy-error failure in that window.</p>
-<p><strong>The cause is unverified past that one log.</strong> Whether the HTTP/2 <code>INTERNAL_ERROR</code> came from the proxy, the runner's network, or something between is not known.</p>
-<p>Candidate fixes, all unmeasured:</p>
+<p><strong>Event:</strong> <code>tidy-check</code> fails on <code>main</code> with a <code>proxy.golang.org</code> download error after the retry, or either gate exhausts its three attempts and prints <code>not untidy or out-of-sync module files</code>.
+On recurrence the row returns to the top of the Queue, escalated.</p>
+<p><code>tidy-check</code> fails on a module download from <code>proxy.golang.org</code> rather than on drift, on branches that changed no module file.
+Both sightings carry the same stderr shape, an HTTP/2 stream reset while <code>go mod tidy</code> reads a module zip in <code>scripts/go/go-work-tidy.sh</code>:</p>
 <ul>
-<li>Retry the module download (for example a <code>go mod download</code> pass with a retry before the tidy flow), so one dropped stream does not fail the job.</li>
-<li>Warm the module cache so golangci-lint's dependency tree is not fetched on every cache miss.</li>
-<li>Use <code>GOFLAGS=-mod=mod</code> with the vendored <code>tools/vendor</code>.
-  Go documents that <code>go mod tidy</code> does not read <code>vendor/</code>, so this one may not reach the failing call at all; check that before building it.</li>
+<li>2026-11-09, PR #2286's first <code>unit-test.yml</code> run (42722656004), job <code>tidy-check</code> (129520311058), at <code>make tidy-check</code> (Makefile:961), reached through <code>tools</code> → golangci-lint → <code>unqueryvet</code>: <code>github.com/MirrexOne/unqueryvet@v1.5.4: read "https://proxy.golang.org/github.com/%21mirrex%21one/unqueryvet/@v/v1.5.4.zip": stream error: stream ID 1; INTERNAL_ERROR; received from peer</code>.
+  <code>tidy-check</code> passed on the PR's next head (fb9391a).</li>
+<li>2026-11-17, the merge_group <code>unit-test.yml</code> run 44003152766 for PR #2331, job <code>tidy-check</code> (133772013892), at Makefile:971, reached through the <code>agc/internal/provisioner</code> test → <code>google.golang.org/grpc</code> → <code>internal/testutils/roundrobin</code> → <code>gonum/stat/distuv</code>: <code>gonum.org/v1/gonum@v0.17.0: read "https://proxy.golang.org/gonum.org/v1/gonum/@v/v0.17.0.zip": stream error: stream ID 241; INTERNAL_ERROR; received from peer</code>. #2331 changed no module file and passed <code>tidy-check</code> on its PR run; the failure evicted it from the merge queue.</li>
 </ul>
+<p>Measured 2026-11-09 over the 40 most recent failed <code>unit-test.yml</code> runs (back to 2026-10-05): 13 had a failed <code>tidy-check</code>, and the other 12 each failed on a <code>diff --git</code> of module files, so the first sighting was the only proxy error in that window.</p>
+<p>The second log shows the module cache cold: it prints 102 <code>go: downloading</code> lines, and setup-go warns <code>Restore cache failed: Dependencies file is not found ... Supported file pattern: go.mod</code>, because the repo root has <code>go.work</code> and no <code>go.mod</code>.
+<strong>The cause of the reset is unverified</strong>: whether it came from the proxy, the runner's network, or something between is not known.</p>
+<p>Mitigation, in flake watch since it shipped: <code>go_retry_transient</code> in <code>scripts/lib/common.sh</code>, a bounded retry of the tidy flow keyed on the measured <code>: read "&lt;url&gt;": stream error:</code> text, failing with a message that names the network rather than untidiness when retries run out.
+<code>scripts/go/go-tidy-check-test.sh</code> pins it with the second sighting's stderr.
+<code>vendor-check</code> fetches module zips on the same cold cache, so its <code>go work vendor</code> and <code>go mod vendor</code> calls take the same retry; it has no sighting of its own.
+A retry that keeps failing would point at the cold cache instead, which <code>cache-dependency-path</code> on setup-go could warm.</p>
 
 
 
