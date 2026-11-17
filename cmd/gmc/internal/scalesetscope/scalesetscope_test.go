@@ -131,8 +131,7 @@ func TestGitHubScope_AliasesMatchDeriveAPIBaseURL(t *testing.T) {
 			"%s folds to %s, so the AGC must address it as public GitHub", host, publicGitHubHost)
 	}
 	// The guard may be coarser than the AGC, never finer: a host the AGC addresses as
-	// public GitHub must share public GitHub's scope. github.com. is the coarser case,
-	// folded here while DeriveAPIBaseURL reads it as an appliance.
+	// public GitHub must share public GitHub's scope.
 	for _, host := range []string{"www.github.com", "api.github.com", "uploads.github.com", "github.com.", "gist.github.com"} {
 		addressedAsPublic := githubapp.DeriveAPIBaseURL("https://"+host+"/acme") == public
 		folded := GitHubScope("https://"+host+"/acme") == GitHubScope("https://"+publicGitHubHost+"/acme")
