@@ -7,7 +7,7 @@ The first audit (2026-05) is [security.md](security.md) and the second (2026-06)
 > The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1342](../queue/Q1342.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
+> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
 
 ## Method and limits
 
@@ -695,7 +695,7 @@ A never-red result within the bound does not refute the race, so also record how
 The plan's envtest admitted both objects of a concurrently created pair onto the held name in 25 of 50 iterations on 2026-11-11.
 Admission cannot reserve a name across two objects, so the residual and its bound are in `05-security.md`.
 The bound turned out to be mostly the guard itself: the GMC's first write to the raced gateway, its finalizer, is an update the gateway webhook refuses while the pair collides, so none of the 25 raced gateways was provisioned, while the held tenant's gateway reported `ScaleSetNameCollision`; `TestV2_ScaleSetNameGuard_ConcurrentPairIsReported` asserts both, and goes red with the gateway webhook's update-path scope check removed.
-The same refusal blocks every update to the held tenant's gateway while the pair stands, filed as Q1342.
+The same refusal blocked every update to the held tenant's gateway while the pair stood, filed as Q1342 and fixed by exempting an update to a gateway that already carries the GMC finalizer.
 The sentence in `05-security.md` saying both halves were complete in every apply order now says one object after the other.
 
 **Evidence.** `cmd/gmc/internal/scalesetscope/scalesetscope.go:88`, `cmd/gmc/internal/webhook/v2/actionsgateway_webhook.go:129`, `cmd/gmc/internal/controller/actionsgateway_scaleset_collision.go:29`, `docs/design/05-security.md:672`, `docs/design/05-security.md:210`, `charts/actions-gateway/templates/webhook.yaml:31`.

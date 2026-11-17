@@ -13,6 +13,7 @@ import (
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -252,10 +253,23 @@ func (v *ActionsGatewayCustomValidator) ValidateUpdate(ctx context.Context, oldO
 	if err := v.validateGitHubHostVsProxies(ctx, oldObj, newObj); err != nil {
 		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
 	}
-	if err := v.validateScaleSetLabelsVsScope(ctx, newObj, claimUnchanged); err != nil {
-		return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
+	if !scaleSetScopeSettled(oldObj, claimUnchanged) {
+		if err := v.validateScaleSetLabelsVsScope(ctx, newObj, claimUnchanged); err != nil {
+			return nil, logRejection(ctx, "ActionsGateway", "update", newObj.Namespace, newObj.Name, err)
+		}
 	}
 	return nil, nil
+}
+
+// scaleSetScopeSettled reports whether an update is exempt from the scale-set scope
+// guard (Q1342): it keeps gitHubURL, so it binds no new scope, and the stored gateway
+// already carries the GMC finalizer, so it is past the write that starts provisioning.
+// Refusing such a write cannot undo a stored collision, and would let whoever created
+// the other side freeze this gateway against its own edits. The finalizer write itself
+// has a stored object without the finalizer, so it stays judged: that refusal is what
+// holds a raced gateway unprovisioned, unless it was created with the finalizer (Q1358).
+func scaleSetScopeSettled(oldObj *agcv2.ActionsGateway, claimUnchanged bool) bool {
+	return claimUnchanged && controllerutil.ContainsFinalizer(oldObj, agcv2.ActionsGatewayFinalizer)
 }
 
 // ValidateDelete is a no-op.

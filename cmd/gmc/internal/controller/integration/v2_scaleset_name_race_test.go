@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -116,4 +117,67 @@ func TestV2_ScaleSetNameGuard_ConcurrentPairIsReported(t *testing.T) {
 			"%s: the finalizer write that starts provisioning must be refused while the pair collides", key)
 	}
 	t.Logf("%d of %d raced gateways carry the GMC finalizer, so may have been provisioned", provisioned, len(raced))
+}
+
+// TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable covers Q1342: a stored collision
+// must not freeze the established tenant's gateway against its own edits. The second
+// tenant's pair is stored with admission bypassed, the state a raced pair, an upgrade
+// from before Q791, or a webhook-uninstalled window leaves; the held gateway stays in
+// a validated namespace, so its edit goes through the webhook.
+func TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable(t *testing.T) {
+	const (
+		nsA    = "v2-ssname-held-a"
+		nsB    = "v2-ssname-held-b"
+		acme   = "https://github.com/acme-held"
+		shared = "shared-held"
+	)
+	bypassV2Admission(t)
+	createNamespace(t, nsA)
+	createNamespaceWithLabels(t, nsB, map[string]string{admissionBypassLabel: "true"})
+	createGitHubAppSecret(t, nsA, "github-app")
+	createGitHubAppSecret(t, nsB, "github-app")
+	cleanup := func(obj client.Object) {
+		t.Cleanup(func() { _ = client.IgnoreNotFound(k8sClient.Delete(context.Background(), obj)) })
+	}
+	startActionsGatewayV2Reconciler(t)
+	for _, obj := range []client.Object{
+		ghesAdmissionGateway("gw", nsA, acme, ""),
+		newScaleSetRunnerSet("held", nsA, "gw", shared),
+	} {
+		require.NoError(t, k8sClient.Create(ctx, obj))
+		cleanup(obj)
+	}
+	heldKey := types.NamespacedName{Namespace: nsA, Name: "gw"}
+	require.Eventually(t, func() bool {
+		var got v2.ActionsGateway
+		return k8sClient.Get(ctx, heldKey, &got) == nil &&
+			controllerutil.ContainsFinalizer(&got, v2.ActionsGatewayFinalizer)
+	}, 30*time.Second, 100*time.Millisecond, "the held gateway must be reconciled first")
+
+	for _, obj := range []client.Object{
+		ghesAdmissionGateway("gw", nsB, acme, ""),
+		newScaleSetRunnerSet("racer", nsB, "gw", shared),
+	} {
+		requireCreateEventually(t, obj)
+		cleanup(obj)
+	}
+	require.Eventually(t, func() bool {
+		var got v2.ActionsGateway
+		if err := k8sClient.Get(ctx, heldKey, &got); err != nil {
+			return false
+		}
+		c := findCondition(got.Status.Conditions, v2.ConditionScaleSetNameCollision)
+		return c != nil && c.Status == metav1.ConditionTrue && c.Reason == v2.ReasonScaleSetNameShared
+	}, 30*time.Second, 100*time.Millisecond, "the held gateway must report the stored pair")
+
+	// Retried only for an update conflict with the reconciler's own writes.
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var got v2.ActionsGateway
+		if err := k8sClient.Get(ctx, heldKey, &got); err != nil {
+			return err
+		}
+		got.Labels = map[string]string{"team": "a"}
+		return k8sClient.Update(ctx, &got)
+	})
+	require.NoError(t, err, "the held tenant's edit to its own gateway must be admitted")
 }
