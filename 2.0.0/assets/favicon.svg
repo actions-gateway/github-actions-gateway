@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="GitHub Actions Gateway">
+  <defs>
+    <linearGradient id="g" x1="16" y1="3" x2="16" y2="29" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b8bff"/>
+      <stop offset="1" stop-color="#2DD4BF"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0B1220"/>
+  <path d="M16.00 3.00 L19.09 6.49 L23.64 5.48 L24.09 10.12 L28.36 11.98 L26.00 16.00 L28.36 20.02 L24.09 21.88 L23.64 26.52 L19.09 25.51 L16.00 29.00 L12.91 25.51 L8.36 26.52 L7.91 21.88 L3.64 20.02 L6.00 16.00 L3.64 11.98 L7.91 10.12 L8.36 5.48 L12.91 6.49 Z M16.00 8.00 L17.45 11.53 L20.70 9.53 L19.80 13.24 L23.61 13.53 L20.70 16.00 L23.61 18.47 L19.80 18.76 L20.70 22.47 L17.45 20.47 L16.00 24.00 L14.55 20.47 L11.30 22.47 L12.20 18.76 L8.39 18.47 L11.30 16.00 L8.39 13.53 L12.20 13.24 L11.30 9.53 L14.55 11.53 Z" fill="url(#g)" fill-rule="evenodd"/>
+</svg>
