@@ -469,7 +469,9 @@ So keep the gap short, and do not restart an AGC or a GMC pod inside it.
 A `v1.10.0` GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.
 
 Whichever way the gap went, closing it recovered the gateway: the new AGC had a session within a minute, took any job that had waited, and left every existing worker pod in place.
-Measured on kind with Kubernetes 1.36.1 against `test/fakegithub`, from the `v1.10.0` images to a `v2.0.0` candidate built from `main`, with workers held `Pending`; a job running through the gap and github.com itself were not measured.
+Measured on kind with Kubernetes 1.36.1 against `test/fakegithub`, from the `v1.10.0` images to a `v2.0.0` candidate built from `main`, with workers held `Pending`.
+Against github.com, the `v2.0.0-rc.3` validation on GKE 1.35 applied the CRDs and then the chart over a gateway running `v1.10.0-rc.2`, on 2026-11-17, and two CI runs then passed on the upgraded gateway.
+No job was in flight during that gap, so a job running through it is still not measured.
 
 A rollback crosses the same gap in reverse, so it [puts the CRDs back first](#gmc-rollback).
 
