@@ -162,7 +162,7 @@ jobs:
       # get.helm.sh — job-time egress the managed GitHub rule does not admit.
       # The Kata untrusted-PR posture keeps the self-hosted lane's non-registry
       # fetches GitHub-only (Q408).
-      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         if: runner.environment == 'github-hosted'
 
       - name: Install kind ${{ steps.pins.outputs.KIND_VERSION }}
