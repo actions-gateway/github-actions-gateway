@@ -881,7 +881,7 @@ gh release edit vX.Y.Z --notes-file <(scripts/release/render-release-body.sh doc
 ```
 
 Publish through the renderer, never the file directly: the file is sentence-per-line by gate, and comment-flavour GFM turns each of those newlines into a `<br>`.
-`make release-notes-check` covers the rest of what a machine can settle here (a duplicate `# ` heading, an in-page anchor that renders dead, a `helm` command carrying an image-style chart version) and reports collapsed height for the fold decision.
+`make release-notes-check` covers the rest of what a machine can settle here (a duplicate `# ` heading, an in-page anchor that renders dead, a `helm` command carrying an image-style chart version, a commit count that no longer matches its range, and a drafting banner still in a note whose release is tagged) and reports collapsed height for the fold decision.
 
 `v1.3.0`'s notes were drafted under `tmp/` and edited straight on the Release.
 By the time they were right they had been through a wrong count, a dead anchor, 46 forced line breaks, two mismatched PR numbers, and a caveat that never said "GHES" — every one caught by hand, none by review, and none of it reviewable because the text was not in a diff.
