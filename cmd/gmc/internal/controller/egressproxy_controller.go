@@ -33,7 +33,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"time"
 
 	gmcv2 "github.com/actions-gateway/github-actions-gateway/api/v2"
@@ -56,19 +55,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
-
-// allowlistPendingRequeue is how soon a pool holding for the egress allowlist's
-// ConfigMap to load looks again. The load itself requeues every pool; this covers a
-// GMC wired without the AllowlistChanged channel, and a wait that ends at its
-// deadline with no load.
-const allowlistPendingRequeue = 2 * time.Second
 
 // EgressProxyReconciler reconciles a v2 EgressProxy into a standalone proxy
 // pool, owning the proxy Deployment/Service/HPA/PDB/NetworkPolicy and the
@@ -126,10 +116,6 @@ type EgressProxyReconciler struct {
 	// on to reach the emitted FQDN policy or the CONNECT allowlist (Q1322). nil covers
 	// nothing, so only the built-in public GitHub hosts are emitted.
 	EgressAllowlist *allowlist.EgressDestinationAllowlist
-	// AllowlistChanged requeues every EgressProxy when the allowlist's ConfigMap half
-	// is replaced, so an added entry reaches a pool's policy and a removed one leaves
-	// it without waiting for the egress re-check. nil when no ConfigMap is configured.
-	AllowlistChanged <-chan event.TypedGenericEvent[struct{}]
 	// Now supplies the current time for failure-attribution port holds. nil is
 	// time.Now.
 	Now func() time.Time
@@ -165,17 +151,9 @@ func (r *EgressProxyReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// The GitHub host a referrer binds to this proxy lives on the referrer, not here,
 	// so the hostname allowlists must be assembled from the referrer graph (Q506 #2).
 	// A read failure degrades rather than emitting a policy missing a tenant's host.
-	// Read before the hosts are judged, so a load landing in between is not missed.
-	allowlistPending := r.EgressAllowlist.DynamicPending()
 	gitHubHosts, err := resolveReferrerGitHubHosts(ctx, r.Client, &ep, r.EgressAllowlist)
 	if err != nil {
 		return r.setDegraded(ctx, &ep, &provisioningError{step: "resolve referrer GitHub hosts", err: err})
-	}
-	// The allowlist's ConfigMap has not been read since this process started, so a
-	// refusal may be of a host it is about to cover. Hold rather than narrow a live
-	// policy on a restart.
-	if allowlistPending && slices.ContainsFunc(gitHubHosts.refused, isGitHubHostname) {
-		return ctrl.Result{RequeueAfter: allowlistPendingRequeue}, nil
 	}
 
 	if err := r.reconcileResources(ctx, &ep, githubCIDRs, gitHubHosts.allowed); err != nil {
@@ -794,26 +772,5 @@ func (r *EgressProxyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}),
 		).
 		Named("egressproxy")
-	if r.AllowlistChanged != nil {
-		b = b.WatchesRawSource(source.Channel(r.AllowlistChanged,
-			handler.TypedEnqueueRequestsFromMapFunc(r.allEgressProxies)))
-	}
 	return b.Complete(r)
-}
-
-// allEgressProxies maps an egress-allowlist change to every EgressProxy: any pool may
-// have a referrer whose GitHub host the change covers or uncovers.
-func (r *EgressProxyReconciler) allEgressProxies(ctx context.Context, _ struct{}) []reconcile.Request {
-	var list gmcv2.EgressProxyList
-	if err := r.List(ctx, &list); err != nil {
-		return nil
-	}
-	reqs := make([]reconcile.Request, 0, len(list.Items))
-	for i := range list.Items {
-		reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{
-			Namespace: list.Items[i].Namespace,
-			Name:      list.Items[i].Name,
-		}})
-	}
-	return reqs
 }

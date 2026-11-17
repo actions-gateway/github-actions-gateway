@@ -1016,8 +1016,9 @@ To keep the controllers unprioritized instead, set `controlPlanePriorityClass.cr
 **Who is affected:** anyone whose values set `egressDestinationAllowlist.configMapName`, so the GMC watched a ConfigMap of extra egress destinations.
 An install that leaves it empty, the default, needs nothing.
 
-**What changed.** The egress destination allowlist now comes from `allowedEgressFQDNs` and `allowedEgressCIDRs` alone, as the PriorityClass allowlist comes from `allowedPriorityClasses`.
-The chart no longer passes `--egress-destination-allowlist-configmap` or renders the Role that let the GMC read that ConfigMap ([why](security-operations.md#changing-the-allowlist)).
+**What changed.** The egress destination allowlist now comes from `allowedEgressFQDNs` and `allowedEgressCIDRs` alone, so both platform allowlists take their entries from Helm values, and adding a destination takes a `helm upgrade` ([why, and what it costs](security-operations.md#changing-the-allowlist)).
+The GMC no longer has the `--egress-destination-allowlist-configmap` flag, and the chart no longer renders the Role that let the GMC read that ConfigMap.
+A GMC run from your own manifests that still passes the flag fails to start with `flag provided but not defined: -egress-destination-allowlist-configmap`, so drop it there too.
 
 **What you will see.** `helm upgrade` fails at render with a message naming the key, and the release stays where it was.
 

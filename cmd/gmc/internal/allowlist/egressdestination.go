@@ -4,68 +4,36 @@ import (
 	"net"
 	"sort"
 	"strings"
-	"sync"
-	"time"
 )
 
 // EgressDestinationAllowlist is the platform-owned gate (Q242 G.1) on which
 // non-GitHub destinations a tenant-authored EgressProxy may request via
-// spec.destinationFQDNs / spec.destinationCIDRs. It holds two allowlists — FQDN
-// host suffixes and IP CIDRs — each the union of an immutable static base (the GMC
-// --allowed-egress-fqdns / --allowed-egress-cidrs flags) and a dynamic set sourced
-// from a single watched ConfigMap (mirroring the PriorityClass allowlist, Q188).
+// spec.destinationFQDNs / spec.destinationCIDRs. It holds two allowlists, FQDN
+// host suffixes and IP CIDRs, fixed at construction from the GMC
+// --allowed-egress-fqdns / --allowed-egress-cidrs flags, so it is read without a
+// lock and a change takes a GMC restart.
 //
-// Both halves live in one type because they are governed by one ConfigMap with two
-// keys and one reconciler, so a watch event updates both atomically.
-//
-// The dynamic set is strictly ADDITIVE: it only ever widens the allowlist beyond
-// the static base, never narrows or replaces it. This is the fail-safe design — a
-// missing, deleted, or malformed ConfigMap leaves the static flag allowlist in
-// force (the reconciler clears the dynamic set via SetDynamic(nil, nil) in those
-// cases), so a bad ConfigMap can never silently widen the guardrail nor strip an
-// entry the platform pinned via a flag.
-//
-// Empty everywhere (no flags, no ConfigMap) ⇒ CoversFQDN/CoversCIDR always return
-// false ⇒ deny-all-non-GitHub, the secure default: out of the box no tenant can
-// open egress beyond the implicit GitHub set.
-//
-// All methods are safe for concurrent use. The admission webhook reads the
-// effective set on every ValidateCreate/ValidateUpdate while the ConfigMap
-// reconciler replaces the dynamic set on watch events.
+// Empty (no flags) ⇒ CoversFQDN/CoversCIDR always return false ⇒
+// deny-all-non-GitHub, the secure default: out of the box no tenant can open
+// egress beyond the implicit GitHub set.
 type EgressDestinationAllowlist struct {
-	// staticFQDNs / staticCIDRs are fixed at construction from the flags and never
-	// mutated, so they are read without the lock.
-	staticFQDNs []string
-	staticCIDRs []*net.IPNet
-
-	mu sync.RWMutex
-	// dynamicFQDNs / dynamicCIDRs are the ConfigMap-sourced augmentation, replaced
-	// wholesale by SetDynamic. nil until the reconciler first applies a ConfigMap.
-	dynamicFQDNs []string
-	dynamicCIDRs []*net.IPNet
-	// dynamicPending is true from AwaitDynamic until the first SetDynamic, and is
-	// read as false once pendingDeadline passes.
-	dynamicPending  bool
-	pendingDeadline time.Time
+	fqdns []string
+	cidrs []*net.IPNet
 }
 
-// NewEgressDestination returns an allowlist whose static base is the
-// --allowed-egress-fqdns suffixes and --allowed-egress-cidrs ranges. The dynamic
-// set starts empty, so the effective allowlist equals the static base until a
-// ConfigMap is applied. nil/empty inputs yield an allowlist that permits nothing
-// until the dynamic set is populated — the secure default (unset flags forbid every
-// non-GitHub destination).
+// NewEgressDestination returns the allowlist of the --allowed-egress-fqdns
+// suffixes and --allowed-egress-cidrs ranges.
 func NewEgressDestination(fqdns []string, cidrs []*net.IPNet) *EgressDestinationAllowlist {
 	return &EgressDestinationAllowlist{
-		staticFQDNs: normalizeFQDNSuffixes(fqdns),
-		staticCIDRs: cidrs,
+		fqdns: normalizeFQDNSuffixes(fqdns),
+		cidrs: cidrs,
 	}
 }
 
-// CoversFQDN reports whether host is permitted by the effective FQDN allowlist: it
-// is equal to, or a subdomain of, some allowlisted suffix (so an allowlisted
-// "golang.org" covers a requested "proxy.golang.org"). A leading "*." wildcard on
-// the requested host is treated as the bare parent domain.
+// CoversFQDN reports whether host is permitted by the FQDN allowlist: it is equal
+// to, or a subdomain of, some allowlisted suffix (so an allowlisted "golang.org"
+// covers a requested "proxy.golang.org"). A leading "*." wildcard on the requested
+// host is treated as the bare parent domain.
 func (a *EgressDestinationAllowlist) CoversFQDN(host string) bool {
 	if a == nil {
 		return false
@@ -74,12 +42,7 @@ func (a *EgressDestinationAllowlist) CoversFQDN(host string) bool {
 	if host == "" {
 		return false
 	}
-	if matchesAnySuffix(host, a.staticFQDNs) {
-		return true
-	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return matchesAnySuffix(host, a.dynamicFQDNs)
+	return matchesAnySuffix(host, a.fqdns)
 }
 
 // CoversCIDR reports whether the requested network is fully contained within some
@@ -89,64 +52,17 @@ func (a *EgressDestinationAllowlist) CoversCIDR(req *net.IPNet) bool {
 	if a == nil || req == nil {
 		return false
 	}
-	if cidrContainedInAny(req, a.staticCIDRs) {
-		return true
-	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return cidrContainedInAny(req, a.dynamicCIDRs)
+	return cidrContainedInAny(req, a.cidrs)
 }
 
-// SetDynamic replaces the dynamic (ConfigMap-sourced) sets, augmenting the static
-// base. Passing nil/empty clears the dynamic sets, leaving only the static base in
-// force — the fail-safe the reconciler invokes when the ConfigMap is absent or
-// fails validation.
-func (a *EgressDestinationAllowlist) SetDynamic(fqdns []string, cidrs []*net.IPNet) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.dynamicFQDNs = normalizeFQDNSuffixes(fqdns)
-	a.dynamicCIDRs = cidrs
-	a.dynamicPending = false
-}
-
-// AwaitDynamic records that a ConfigMap source is configured and has not been read
-// yet. Until the first SetDynamic, a host the static base does not cover may be one
-// the ConfigMap is about to: DynamicPending lets a reader that would act on the
-// refusal wait for the load. The wait ends at deadline whether or not a load came,
-// so a source that is never read cannot hold a reader forever. Call it before the
-// manager starts.
-func (a *EgressDestinationAllowlist) AwaitDynamic(deadline time.Time) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.dynamicPending = true
-	a.pendingDeadline = deadline
-}
-
-// DynamicPending reports whether a configured ConfigMap source is still unread and
-// its AwaitDynamic deadline has not passed. It is false when no ConfigMap is
-// configured.
-func (a *EgressDestinationAllowlist) DynamicPending() bool {
-	if a == nil {
-		return false
-	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	return a.dynamicPending && time.Now().Before(a.pendingDeadline)
-}
-
-// FQDNSuffixes returns the effective FQDN allowlist (static ∪ dynamic) as a sorted,
-// de-duplicated slice for deterministic admission-rejection messages.
+// FQDNSuffixes returns the FQDN allowlist as a sorted, de-duplicated slice for
+// deterministic admission-rejection messages.
 func (a *EgressDestinationAllowlist) FQDNSuffixes() []string {
 	if a == nil {
 		return nil
 	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	set := make(map[string]bool, len(a.staticFQDNs)+len(a.dynamicFQDNs))
-	for _, s := range a.staticFQDNs {
-		set[s] = true
-	}
-	for _, s := range a.dynamicFQDNs {
+	set := make(map[string]bool, len(a.fqdns))
+	for _, s := range a.fqdns {
 		set[s] = true
 	}
 	out := make([]string, 0, len(set))
@@ -157,19 +73,14 @@ func (a *EgressDestinationAllowlist) FQDNSuffixes() []string {
 	return out
 }
 
-// CIDRStrings returns the effective CIDR allowlist (static ∪ dynamic) as a sorted,
-// de-duplicated slice of CIDR strings for deterministic admission-rejection messages.
+// CIDRStrings returns the CIDR allowlist as a sorted, de-duplicated slice of CIDR
+// strings for deterministic admission-rejection messages.
 func (a *EgressDestinationAllowlist) CIDRStrings() []string {
 	if a == nil {
 		return nil
 	}
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-	set := make(map[string]bool, len(a.staticCIDRs)+len(a.dynamicCIDRs))
-	for _, c := range a.staticCIDRs {
-		set[c.String()] = true
-	}
-	for _, c := range a.dynamicCIDRs {
+	set := make(map[string]bool, len(a.cidrs))
+	for _, c := range a.cidrs {
 		set[c.String()] = true
 	}
 	out := make([]string, 0, len(set))

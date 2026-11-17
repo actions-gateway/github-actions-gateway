@@ -1057,7 +1057,9 @@ The two Helm values are the allowlist's only input, as `allowedPriorityClasses` 
 A change takes a `helm upgrade`, which rolls the GMC Deployment: two replicas behind a disruption budget, so admission keeps answering while it rolls.
 
 `v2.0.0` removed `egressDestinationAllowlist.configMapName`, the operator-owned ConfigMap the GMC used to watch for additions, and setting it now fails the render ([migration](upgrade.md#action-required-if-you-set-egressdestinationallowlistconfigmapname-the-key-is-removed)).
-With one input per allowlist, nothing set outside Helm can be lost on the next upgrade, and the static lists stay a floor that a failed read of another object cannot strip.
+Before `v2.0.0` the two platform allowlists followed different rules: an egress destination in that ConfigMap was kept across upgrades, while a priority class added by editing the `PriorityClassAllowlist` object is overwritten by the next `helm upgrade`.
+Now both take their entries from Helm values alone, so every entry lives in the values file your Helm or GitOps tooling already manages.
+The cost is the ConfigMap's one advantage, adding a destination without touching Helm values or restarting the GMC: a destination now takes a `helm upgrade` and the GMC rollout above.
 
 A change reaches a gateway's `githubURL` host differently from a `destinationFQDNs` entry.
 A `destinationFQDNs` entry is checked once, when the `EgressProxy` is written, and stays after the allowlist entry behind it is removed.

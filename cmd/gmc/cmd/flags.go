@@ -41,9 +41,8 @@ type gmcFlags struct {
 	allowedInfraPriorityClasses string
 	priorityClassAllowlistName  string
 
-	allowedEgressFQDNs                  string
-	allowedEgressCIDRs                  string
-	egressDestinationAllowlistConfigMap string
+	allowedEgressFQDNs string
+	allowedEgressCIDRs string
 
 	fqdnPolicyBackend string
 	apiServerCIDRs    string
@@ -162,15 +161,6 @@ func addFlags(fs *flag.FlagSet) *gmcFlags {
 			"rejects any destinationCIDRs entry not contained here. Each entry must be a "+
 			"valid CIDR; a malformed value fails startup. Empty (default) forbids all "+
 			"non-GitHub CIDR destinations.")
-	fs.StringVar(&f.egressDestinationAllowlistConfigMap, "egress-destination-allowlist-configmap", "",
-		"Name of a ConfigMap in the GMC's own namespace whose entries AUGMENT the "+
-			"--allowed-egress-fqdns/--allowed-egress-cidrs flag allowlists, watched so "+
-			"additions take effect without a GMC restart (Q242 G.1). The ConfigMap's "+
-			"data."+controller.EgressDestinationFQDNsConfigMapKey+" and data."+
-			controller.EgressDestinationCIDRsConfigMapKey+" values list FQDN suffixes and "+
-			"CIDRs (comma/newline-separated). Additive and fail-safe: a missing or "+
-			"malformed ConfigMap leaves the static flag allowlists in force. Empty "+
-			"(default) disables the watch — flag-only behavior.")
 	fs.StringVar(&f.fqdnPolicyBackend, "fqdn-policy-backend", string(controller.FQDNBackendNone),
 		"CNI/platform mechanism the GMC uses to enforce an FQDN egressPolicyMode intent "+
 			"(Q245): none|cilium|calico|gke. This is the operator's install-wide choice — a "+
