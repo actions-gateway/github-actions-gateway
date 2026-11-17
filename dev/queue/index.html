@@ -3074,14 +3074,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>A commit hash in a release record can be invented, and nothing catches it.</strong> On 2026-11-17, during the <code>v2.0.0</code> cut, the draft …</td>
 </tr>
 <tr>
-<td><a href="Q1264/">Q1264</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/egressproxy_controller.go">EgressProxy applies its Deployment before its NetworkPolicy</a></td>
-<td><code>security</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><code>EgressProxyReconciler.reconcileResources</code> applies the proxy Deployment, Service, HPA and PDB, and only then the proxy NetworkPolicy …</td>
-</tr>
-<tr>
 <td><a href="Q1323/">Q1323</a></td>
 <td><a href="../plan/security-audit-2026-11/#confirmed-low-findings">Five low-severity confirmed findings from the November security audit</a></td>
 <td><code>security</code> <code>bug</code></td>
