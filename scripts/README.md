@@ -94,7 +94,8 @@ The module is deliberately outside `go.work`; the reasoning and the wiring a new
 | [check-no-license-headers.sh](go/check-no-license-headers.sh) | Forbid the scaffolded per-file Apache license header in first-party Go source (Q331); the root LICENSE is the canonical grant. Backs `make license-header-check`. |
 | [vendor-check.sh](go/vendor-check.sh) | Fail if the committed vendor trees drift from `go.sum` — `go build -mod=vendor` only checks `vendor/modules.txt`, never the vendored source against its hashes. Backs `make vendor-check`. |
 | [vendor-sync.sh](go/vendor-sync.sh) | Re-sync the workspace module files, vendor trees, and notices in dependency order — the vendoring half of the "Changing dependencies" remedy. Backs `make vendor-sync`; `make deps-sync` runs it and then regenerates everything derived from a dependency. |
-| [go-tidy-check.sh](go/go-tidy-check.sh) | Fail if any module's `go.mod`/`go.sum` differs from its tidy-canonical shape. Backs `make tidy-check`. |
+| [go-tidy-check.sh](go/go-tidy-check.sh) | Fail if any module's `go.mod`/`go.sum` differs from its tidy-canonical shape. Backs `make tidy-check`. A module-proxy stream error is retried, not reported as drift (Q1314). |
+| [go-tidy-check-test.sh](go/go-tidy-check-test.sh) | Unit tests for `go-tidy-check.sh`'s retry on a module-proxy stream error, against a `go` shim replaying a CI sighting (Q1314). Runs under `make scripts-test`. |
 | [go-work-tidy.sh](go/go-work-tidy.sh) | Run `go mod tidy` across every module the repo tracks: the workspace members in `go.work` order, then the modules outside `go.work` with `GOWORK=off` (Q667 — deriving the list from `go.work` alone left `tidy-check` diffing files nothing rewrote; coverage asserted by `go-work-tidy-test.sh` under `make scripts-test`). See [docs/development/go-workspaces.md](../docs/development/go-workspaces.md). |
 
 ## `e2e/` — live-cluster tiers
