@@ -224,10 +224,16 @@ func (r *EgressProxyReconciler) reconcileResources(ctx context.Context, ep *gmcv
 	}
 	// Last: the projection publishes trust material a consumer acts on, so it runs
 	// only once the cert, Service and NetworkPolicy it describes are in place.
+	var errs []error
 	if err := r.reconcileProxyShares(ctx, ep); err != nil {
-		return &provisioningError{step: "reconcile cross-namespace proxy shares", err: err}
+		errs = append(errs, &provisioningError{step: "reconcile cross-namespace proxy shares", err: err})
 	}
-	return nil
+	// A consumer's failed attribution projection is reported once every child and
+	// every other consumer is reconciled, so it degrades the pool without stalling it.
+	if len(attribution.failed) > 0 {
+		errs = append(errs, &provisioningError{step: "project failure attribution", err: errors.Join(attribution.failed...)})
+	}
+	return errors.Join(errs...)
 }
 
 // reconcileFQDNPolicy emits or removes the CNI-native FQDN egress policy (Q208/Q245) to

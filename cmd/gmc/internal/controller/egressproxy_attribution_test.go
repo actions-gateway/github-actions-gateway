@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -708,6 +709,51 @@ func TestEgressProxyReconcile_ForeignProjectionsDoNotStallThePool(t *testing.T) 
 		"the projection-named ConfigMap is withdrawn even though its Secret could not be blanked")
 	require.NoError(t, c.Get(ctx, client.ObjectKeyFromObject(renamed), &corev1.ConfigMap{}),
 		"a ConfigMap under another name is not the pool's to withdraw")
+}
+
+// A consumer's projected Secret the apiserver will not update fails that
+// consumer's projection only: the pool's children and every other consumer's
+// projection still reconcile, and the pool is Degraded naming the namespace (Q1335).
+func TestEgressProxyReconcile_UnwritableConsumerSecretDoesNotStallThePool(t *testing.T) {
+	ep := attributingPool("team-a", "team-b")
+	name := proxyAttributionName("provider", "shared")
+	planted := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "team-a", Name: name},
+		Data:       map[string][]byte{corev1.TLSPrivateKeyKey: []byte("x")},
+	}
+	c := interceptor.NewClient(withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).
+		WithObjects(ep, gatewayUsing("team-a", true), gatewayUsing("team-b", true), planted).
+		WithStatusSubresource(ep, &appsv1.Deployment{}).Build()), interceptor.Funcs{
+		Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			if s, ok := obj.(*corev1.Secret); ok && s.Namespace == "team-a" {
+				return apierrors.NewInvalid(corev1.SchemeGroupVersion.WithKind("Secret").GroupKind(), s.Name, nil)
+			}
+			return cl.Update(ctx, obj, opts...)
+		},
+	})
+	ctx := context.Background()
+	reconcilePool(t, c)
+	markRolledOut(t, c)
+	// Removed so the reconcile below must reach a child after the projection.
+	svcKey := types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}
+	require.NoError(t, c.Delete(ctx, &corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: svcKey.Namespace, Name: svcKey.Name}}))
+
+	r := &EgressProxyReconciler{Client: c, Scheme: c.Scheme(), IPCache: &IPRangeCache{}, ProxyImage: "proxy:test"}
+	_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Namespace: "provider", Name: "shared"}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `project failure attribution: project client certificate into "team-a"`)
+
+	require.NoError(t, c.Get(ctx, svcKey, &corev1.Service{}), "the pool's children after the projection still apply")
+	var sec corev1.Secret
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "team-b", Name: name}, &sec), "the other consumer is still projected")
+	assert.NotEmpty(t, sec.Data[corev1.TLSPrivateKeyKey])
+
+	var got gmcv2.EgressProxy
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared"}, &got))
+	degraded := meta.FindStatusCondition(got.Status.Conditions, gmcv2.ConditionDegraded)
+	require.NotNil(t, degraded)
+	assert.Equal(t, metav1.ConditionTrue, degraded.Status)
+	assert.Contains(t, degraded.Message, `"team-a"`, "the condition names the consumer whose projection failed")
 }
 
 func TestApplyAttributionEgress_AdmitsThePortRangeAndTheReadPort(t *testing.T) {

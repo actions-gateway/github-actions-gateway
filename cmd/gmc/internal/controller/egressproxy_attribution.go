@@ -580,6 +580,10 @@ type attributionPlan struct {
 	held  map[string]int
 	until map[string]time.Time
 	caPEM []byte
+	// failed holds each consumer namespace whose projection could not be written.
+	// It fails only that consumer, so reconcileResources applies every child first
+	// and surfaces it last.
+	failed []error
 }
 
 // listening is every port the pool must serve: the attributed and the held.
@@ -617,7 +621,7 @@ func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gm
 	// Deployment forgets its ports, and a projection left behind would move new
 	// jobs onto a port nothing serves.
 	if len(plan.ports) == 0 && len(current) == 0 {
-		if err := r.reconcileAttributionProjections(ctx, ep, nil, nil, false, nil); err != nil {
+		if plan.failed, err = r.reconcileAttributionProjections(ctx, ep, nil, nil, false, nil); err != nil {
 			return nil, fmt.Errorf("withdraw attribution: %w", err)
 		}
 		return plan, nil
@@ -633,7 +637,7 @@ func (r *EgressProxyReconciler) reconcileAttribution(ctx context.Context, ep *gm
 	if err := r.reconcileAttributionService(ctx, ep, listening); err != nil {
 		return nil, err
 	}
-	if err := r.reconcileAttributionProjections(ctx, ep, plan.ports, current, deploymentRolledOut(&live), clients); err != nil {
+	if plan.failed, err = r.reconcileAttributionProjections(ctx, ep, plan.ports, current, deploymentRolledOut(&live), clients); err != nil {
 		return nil, fmt.Errorf("project attribution: %w", err)
 	}
 	return plan, nil
@@ -783,11 +787,15 @@ func buildProxyAttributionSecret(ep *gmcv2.EgressProxy, consumerNS string, clien
 // Projections carry no owner reference, as share ConfigMaps do not, and are found
 // by the ConfigMap's label for pruning; each withdrawn ConfigMap's Secret is
 // blanked by name (blankProjectedSecret).
-func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Context, ep *gmcv2.EgressProxy, ports, live map[string]int, rolledOut bool, clients map[string][]byte) error {
+//
+// A write into one namespace that fails is returned in failed and the rest carry
+// on, since a consumer can make its own projection unwritable and must not stall
+// the pool every other consumer shares (Q1335). err is a failure of the pool's own.
+func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Context, ep *gmcv2.EgressProxy, ports, live map[string]int, rolledOut bool, clients map[string][]byte) (failed []error, err error) {
 	labels := client.MatchingLabels{labelAttributionManaged: "true", labelShareProxyNS: ep.Namespace, labelShareProxyNam: ep.Name}
 	var existing corev1.ConfigMapList
 	if err := r.shareReader().List(ctx, &existing, labels); err != nil {
-		return fmt.Errorf("list attribution projections: %w", err)
+		return nil, fmt.Errorf("list attribution projections: %w", err)
 	}
 	projected := map[string]bool{}
 	for i := range existing.Items {
@@ -795,7 +803,8 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 	}
 
 	keep := map[string]bool{}
-	for ns, port := range ports {
+	for _, ns := range slices.Sorted(maps.Keys(ports)) {
+		port := ports[ns]
 		if live[ns] != port || len(clients[ns+attributionClientCertSuffix]) == 0 {
 			continue
 		}
@@ -804,10 +813,11 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 		}
 		keep[ns] = true
 		if err := r.applyProxyShare(ctx, buildProxyAttributionConfigMap(ep, ns, port)); err != nil {
-			return fmt.Errorf("project into %q: %w", ns, err)
+			failed = append(failed, fmt.Errorf("project into %q: %w", ns, err))
+			continue
 		}
 		if err := r.applyProjectedSecret(ctx, buildProxyAttributionSecret(ep, ns, clients)); err != nil {
-			return fmt.Errorf("project client certificate into %q: %w", ns, err)
+			failed = append(failed, fmt.Errorf("project client certificate into %q: %w", ns, err))
 		}
 	}
 
@@ -821,13 +831,14 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 		// Blank first: the ConfigMap is what finds this namespace again, so a
 		// failed blank is retried on the next reconcile.
 		if err := r.blankProjectedSecret(ctx, client.ObjectKeyFromObject(cm)); err != nil {
-			return fmt.Errorf("blank the client certificate in %q: %w", cm.Namespace, err)
+			failed = append(failed, fmt.Errorf("blank the client certificate in %q: %w", cm.Namespace, err))
+			continue
 		}
 		if err := r.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("withdraw from %q: %w", cm.Namespace, err)
+			failed = append(failed, fmt.Errorf("withdraw from %q: %w", cm.Namespace, err))
 		}
 	}
-	return nil
+	return failed, nil
 }
 
 // blankProjectedSecret empties the client certificate projected under key. The
