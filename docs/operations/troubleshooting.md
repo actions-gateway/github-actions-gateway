@@ -3932,7 +3932,7 @@ Two ways that happens:
 **Why the gateway still runs.** The condition is advisory: it does not gate `Ready` and does not stop the AGC.
 Refusing to provision would take down *both* tenants, including the one that was there first and did nothing wrong, over a state GAG cannot arbitrate.
 
-**Both gateways stay editable once the GMC has reconciled them.** While the pair stands, admission refuses every update to a gateway the GMC has not yet written status for, so a gateway that arrived on a held name is never provisioned; a gateway it has reconciled accepts its tenant's edits.
+**Both gateways stay editable once the GMC has reconciled them.** While the pair stands, admission refuses every update to a gateway the GMC has not yet written status for, so a gateway that arrived on a held name is held unprovisioned ([the security design](../design/05-security.md#cross-tenant-job-acquisition-via-a-shared-scale-set-name) lists the one timing window this does not cover); a gateway it has reconciled accepts its tenant's edits.
 That includes a gateway restored from a backup into a scope where its name is now held by someone else: it stays unprovisioned, carrying no status or conditions at all, until the collision is resolved.
 
 **A `0` gauge on an unreadable cluster is not a clean bill.** If the GMC cannot list `ActionsGateway`s or `RunnerSet`s cluster-wide, it leaves the previous condition in place rather than writing `False`, so a gateway that has never reconciled successfully carries no condition at all.
