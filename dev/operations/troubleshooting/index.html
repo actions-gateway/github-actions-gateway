@@ -5959,9 +5959,9 @@ A host that is not a DNS hostname, such as the wildcard <code>*.corp.example</co
   The GMC adds a referring gateway's <code>githubURL</code> host to the policy and the proxy CONNECT allowlist once the platform egress allowlist covers it.</li>
 </ul>
 <p>For <code>GitHubHostNotAllowlisted</code>, a platform admin adds the host to the egress allowlist; a tenant cannot self-serve.
-Add it to the chart's <code>allowedEgressFQDNs</code> (the GMC <code>--allowed-egress-fqdns</code> flag), which takes a GMC rollout, or to the <a href="../security-operations/#self-service-additions-via-a-watched-configmap">watched ConfigMap</a>, which the pool picks up without one.
+Add it to the chart's <code>allowedEgressFQDNs</code> (the GMC <code>--allowed-egress-fqdns</code> flag) and <code>helm upgrade</code>, which rolls the GMC (<a href="../security-operations/#changing-the-allowlist">changing the allowlist</a>).
 An entry covers its subdomains.
-Removing an entry takes the host back out of every pool that relied on it, and so does deleting the ConfigMap or leaving an invalid entry in it, because an invalid ConfigMap is ignored whole.
+Removing an entry takes the host back out of every pool that relied on it.
 Where the message says the host is not a DNS hostname, no entry helps: create the gateway again with a <code>githubURL</code> that names the appliance by hostname, or give the pool the appliance's address in <code>destinationCIDRs</code>.</p>
 <p>The condition is advisory and does not gate <code>Ready</code>: the pool is serving exactly the policy it was asked for.
 <code>ApplianceRangesRequired</code> clears once <code>destinationCIDRs</code> is non-empty — the GMC takes your declaration at face value and does not verify the ranges actually cover the appliance, so if traffic still fails, check the ranges themselves.

@@ -3189,7 +3189,7 @@ An item appearing here means "we know about it, we chose not to build it for v1,
 It is retained here as a stub so existing cross-references resolve; the live design and operator docs are authoritative.</p>
 </blockquote>
 <p>A platform admin can allow a v2 <code>EgressProxy</code> to forward worker traffic to a small, explicit set of <strong>non-GitHub</strong> destinations — by DNS host suffix (<code>spec.destinationFQDNs</code>) and by CIDR (<code>spec.destinationCIDRs</code>) — while keeping per-tenant egress-IP attribution and the DNS-exfil containment.
-The destinations are gated by a <strong>platform-owned</strong> allowlist (GMC <code>--allowed-egress-fqdns</code> / <code>--allowed-egress-cidrs</code> + an optional watched ConfigMap) enforced by a validating webhook; <strong>both empty = deny-all-non-GitHub</strong> (the secure default).
+The destinations are gated by a <strong>platform-owned</strong> allowlist (GMC <code>--allowed-egress-fqdns</code> / <code>--allowed-egress-cidrs</code>, set from Helm values) enforced by a validating webhook; <strong>both empty = deny-all-non-GitHub</strong> (the secure default).
 They widen one source into two enforcement surfaces — <code>ipBlock</code> / <code>toFQDNs</code> on the pod-egress policy (the hard gate) and the proxy CONNECT allowlist as defense-in-depth (with DNS-rebinding revalidation on the CIDR path).
 The docs <strong>lead with an in-cluster caching mirror</strong> as the recommended path and reserve the allowlist for what a mirror can't proxy.</p>
 <ul>

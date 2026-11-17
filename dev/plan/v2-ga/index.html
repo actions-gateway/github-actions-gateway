@@ -3057,6 +3057,12 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: gated 2026-11-16, because kind measured a preempting worker class evicting another namespace's AGC, and both enforcement steps are stricter rules, which after the tag wait for <code>v3</code>; every AGC and proxy naming no class gets a chart-created non-preempting class at <code>1000000000</code>, and the GMC refuses to start, or to apply an allowlist edit, while a worker-reachable class is not below every control-plane class</td>
 </tr>
 <tr>
+<td>Q1353</td>
+<td>Make Helm values the only input to every chart allowlist, and document all values</td>
+<td><code>2.0-gate</code></td>
+<td>✅ landed: gated 2026-11-16 at the <code>v2.0.0-rc.1</code> cut, because a values-key removal needs a major and the chart README ships in the chart; <code>egressDestinationAllowlist.configMapName</code> fails the render with a migration message, the GMC flags stay the fail-safe floor, and <code>chart-values-docs-check</code> holds the README's Values table to <code>values.yaml</code></td>
+</tr>
+<tr>
 <td><a href="../../queue/Q1107/">Q1107</a></td>
 <td>Operator docs, migration guide, and the cut (Phase 4)</td>
 <td><code>2.0-gate</code></td>

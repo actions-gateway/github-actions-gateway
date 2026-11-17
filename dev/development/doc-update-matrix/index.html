@@ -2734,6 +2734,10 @@ Use this after making changes, before committing — update docs proactively rat
 <td><a href="../../operations/release/#the-legs-the-gate-runs">operations/release.md § The legs the gate runs</a>, <strong>and the "Gated every release" table in <a href="../../operations/reference-architectures/#gated-every-release">operations/reference-architectures.md</a></strong>, whose profiles each name the leg that gates them. A leg change takes effect at the next candidate's gate, not at merge, so a profile it adds or widens says which candidate first ran it.</td>
 </tr>
 <tr>
+<td>New, renamed, or removed <strong>chart values key</strong> (<code>charts/*/values.yaml</code>)</td>
+<td>A new key gets a row in that chart's README <code>## Values</code> table; <code>make chart-values-docs-check</code> fails without one, because the README ships inside the chart and a fix after a release candidate costs a new candidate. A removed key leaves both <code>values.yaml</code> and the table, so <code>helm show values</code> and the table list only what can be set. Keep a render-time <code>fail</code> that names the key and links its <a href="../../operations/upgrade/">upgrade.md</a> entry, which is the migration; the root schema allows undeclared keys, so the guard still sees an operator's value. Then the operator half per the operator-visible row above.</td>
+</tr>
+<tr>
 <td>Anything general</td>
 <td><code>README.md</code>, <code>CONTRIBUTING.md</code>, and any other <code>docs/</code> file that describes the changed behaviour. Also <code>.github/workflows/</code> if the change affects how tests are run, what modules exist, or what build inputs CI depends on (e.g. <code>go-version-file</code>, test commands, module paths).</td>
 </tr>

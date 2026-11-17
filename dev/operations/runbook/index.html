@@ -3898,7 +3898,7 @@ See <a href="../troubleshooting/#actionsgateway-reports-egressrulesstale">Action
 <p><strong>Ticket.</strong> A referring gateway names a GitHub Enterprise Server host the <code>EgressProxy</code> pool's egress allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
 The condition's reason says which fix it needs, and neither self-heals.
 <code>ApplianceRangesRequired</code> is a <code>CIDR</code>-mode pool: the appliance's ranges are knowable only to you, so supply them in <code>spec.destinationCIDRs</code> (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
-<code>GitHubHostNotAllowlisted</code> is a host the platform egress allowlist does not cover: a platform admin adds it to <code>--allowed-egress-fqdns</code> or the watched ConfigMap.
+<code>GitHubHostNotAllowlisted</code> is a host the platform egress allowlist does not cover: a platform admin adds it to the chart's <code>allowedEgressFQDNs</code> (<code>--allowed-egress-fqdns</code>) and runs <code>helm upgrade</code>.
 See <a href="../troubleshooting/#a-ghes-tenants-traffic-never-reaches-the-appliance">A GHES Tenant's Traffic Never Reaches the Appliance</a>.</p>
 <h3 id="actionsgatewayscalesetnamecollision">ActionsGatewayScaleSetNameCollision<a class="headerlink" href="#actionsgatewayscalesetnamecollision" title="Permanent link">&para;</a></h3>
 <p><strong>Page.</strong> Two tenants are driving one scale set at GitHub right now, and each is acquiring the other's jobs: another organization's workflow content runs in the wrong namespace, against the wrong quota, egressing from the wrong attributed IPs.
