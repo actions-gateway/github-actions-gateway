@@ -73,6 +73,9 @@ Before the cut, the ones whose findings change an artifact:
 
 - **`main` green and the version chosen**: every tag.
 - **API surface review**: a rename decided after publication costs a new candidate.
+- **Both chart READMEs against the tree being tagged** (`charts/actions-gateway/README.md`, `charts/actions-gateway-crds-v2/README.md`): they ship inside the tarballs, so a fix after the cut costs a candidate.
+  Every `values.yaml` key has a table row, and the install and upgrade commands, the Kubernetes floor, and links into `docs/operations/` still hold.
+  No gate checks the table yet, and none can check the prose; at `v2.0.0-rc.1`'s target six top-level keys had no row.
 - **The notes draft, interrogated** through `verify-claims`: the discovery step, not a formatting pass.
   Ask what each claim rests on; re-derive every number rather than copying it forward.
   Every wrong figure in the 1.5 notes was a *derived* value gone stale, not a typo.

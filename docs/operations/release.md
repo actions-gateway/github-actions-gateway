@@ -131,7 +131,7 @@ Neither knew its scope had moved.
 
 **Which of these bind when the tag is a release candidate.** The first two bind at every tag: an RC cut from a red `main` validates nothing, and the version you pick fixes the stable tag's.
 **The rest run at the first RC.** A prerelease deploys no docs, so the stable tag is their deadline, not their best time: anything decided after the validated candidate is published costs a new RC and another hour-long dogfood run.
-The API surface review and the notes' interrogation come before the cut, because their findings change artifacts.
+The API surface review, the chart READMEs, and the notes' interrogation come before the cut, because their findings change artifacts.
 The docs-only rest fill the approval wait and ~80-minute validation: the marketing reconciliation's first two questions, the operator caveats, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the other three [prose passes](#the-prose-passes).
 
 **At the stable tag each becomes a delta re-read from its recorded commit**, which is what the 1.5 story argues for: a delta is what would have asked the marketing pass's first question of the eight reopened rows.
@@ -198,6 +198,10 @@ In 1.5 the answers arrived after `rc.1` had been cut, published and validated, a
   **"Ship as-is, deliberately" is a valid and common outcome** — the point is that the shape is chosen rather than frozen by default.
 
   This step exists because it nearly did not happen: Q476 renamed `capacityGate.mode: On` days before 1.3.0 would have published it, and only because the question came up in an unrelated conversation.
+
+- **Read both chart READMEs against the tree you are about to tag.** `charts/actions-gateway/README.md` and `charts/actions-gateway-crds-v2/README.md` ship inside the chart tarballs, so a fix after the cut costs a new candidate and a full dogfood run.
+  Check that every `values.yaml` key has a row in the values table, and that the install and upgrade commands, the Kubernetes floor, and the links into `docs/operations/` still hold.
+  No gate checks the table yet, and none can check the prose: at `v2.0.0-rc.1`'s target six top-level keys had no row, and none of the six appeared in `v1.10.0`'s README either.
 
 - **Reconcile the marketing surfaces against what this tag actually ships.** `docs/index.md`, `docs/why-gag.md`, `README.md`, and `docs/features.md` make claims about GAG *and* about alternatives, and both halves rot: GAG gains capabilities the pages never learn about, and a competitor closes a gap the pages still assert.
   Neither is caught by any gate, because both are prose.
