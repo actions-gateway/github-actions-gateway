@@ -1248,7 +1248,7 @@ The AGC mints GitHub App installation access tokens by POSTing a signed App-JWT 
 Both the JWT (signed with the tenant's private key) and the returned token are credential material, so this exchange must never traverse a plaintext channel.
 
 The endpoint host is taken from the **`GITHUB_API_BASE_URL`** environment variable, defaulting to `https://api.github.com` when unset.
-On a GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's `spec.githubURL` and injects it on the AGC `Deployment` — `https://api.github.com` for a `github.com` gateway, `https://<host>/api/v3` for GitHub Enterprise Server.
+On a GMC-provisioned AGC you do not set it: the GMC derives it from the gateway's `spec.githubURL` and injects it on the AGC `Deployment` — `https://api.github.com` for a `github.com`, `www.github.com` or `api.github.com` gateway, in any case and with or without a trailing dot, and `https://<host>/api/v3` for GitHub Enterprise Server.
 The token provider **rejects a non-HTTPS `GITHUB_API_BASE_URL` at startup** — the AGC (and the `probe`) will refuse to start with a clear error rather than leak credentials on the first token mint:
 
 ```
