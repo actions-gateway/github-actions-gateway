@@ -83,20 +83,35 @@ dockerfile_runner_pin() {
 
 # ignore_entries FILE — "id<TAB>expired_at<TAB>statement" per entry of a trivy
 # .trivyignore.yaml, with `-` where the entry has none: `read` collapses a run of
-# tabs, so an empty field would shift the next one into its place. Reads the
-# block layout the repo's ignore files use, one `- id:` per entry.
+# tabs, so an empty field would shift the next one into its place.
+#
+# It reads one block layout, the one the repo's ignore files use: `- id:` opens
+# each entry, followed by indented `paths:` items, `statement:` and
+# `expired_at:`. trivy reads far more YAML than that, so every other non-blank,
+# non-comment line prints as "!<TAB>line N: <text>" rather than being skipped:
+# an entry this cannot read is one check 4 cannot bound, and must fail, not pass.
 ignore_entries() {
 	awk '
-		function flush() { if (id != "") printf "%s\t%s\t%s\n", id, (until == "" ? "-" : until), (st == "" ? "-" : st); id = ""; until = ""; st = "" }
-		/^[[:space:]]*- id:/ { flush(); id = $0; sub(/.*- id:[[:space:]]*/, "", id) }
-		/^[[:space:]]+expired_at:/ { until = $0; sub(/.*expired_at:[[:space:]]*/, "", until) }
-		/^[[:space:]]+statement:/ { st = $0; sub(/.*statement:[[:space:]]*/, "", st) }
+		function flush() { if (id != "") printf "%s\t%s\t%s\n", id, (until == "" ? "-" : until), (st == "" ? "-" : st); id = ""; until = ""; st = ""; in_paths = 0 }
+		function bad() { printf "!\tline %d: %s\n", NR, $0; if ($0 ~ /^[[:space:]]*- /) flush() }
+		function value(s, key) { sub("^[[:space:]]+" key ":[[:space:]]*", "", s); sub(/[[:space:]]+#.*$/, "", s); gsub(/^["\047]|["\047]$/, "", s); return s }
+		/^[[:space:]]*(#.*)?$/ { next }
+		/^vulnerabilities:[[:space:]]*$/ && NR_list == 0 { NR_list = NR; next }
+		match($0, /^[[:space:]]*- id:[[:space:]]*[^[:space:]{]/) {
+			flush(); item = index($0, "-"); id = value($0, "- id"); next
+		}
+		id != "" && /^[[:space:]]+paths:[[:space:]]*$/ { in_paths = 1; next }
+		id != "" && in_paths && /^[[:space:]]+- [^[:space:]]/ && index($0, "-") > item { next }
+		id != "" && /^[[:space:]]+statement:[[:space:]]*[^[:space:]>|]/ { in_paths = 0; st = value($0, "statement"); next }
+		id != "" && /^[[:space:]]+expired_at:[[:space:]]*[^[:space:]]/ { in_paths = 0; until = value($0, "expired_at"); next }
+		{ bad() }
 		END { flush() }' "$1"
 }
 
 # ignore_gaps FILE NOW — one line per entry missing a statement or an expiry, or
-# expiring more than 60 days after NOW, and one when no entry could be read at
-# all. Empty when every entry is bounded.
+# expiring more than 60 days after NOW; one per line outside the layout
+# ignore_entries reads; and one when no entry could be read at all. Empty when
+# every entry is bounded.
 ignore_gaps() {
 	local file="$1" now="$2" entries id exp st exp_epoch
 	entries="$(ignore_entries "$file")"
@@ -105,7 +120,9 @@ ignore_gaps() {
 		return 0
 	fi
 	while IFS=$'\t' read -r id exp st; do
-		if [[ "$st" == "-" ]]; then
+		if [[ "$id" == "!" ]]; then
+			echo "unsupported layout, ${exp}"
+		elif [[ "$st" == "-" ]]; then
 			echo "${id}: no statement"
 		elif [[ ! "$exp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
 			echo "${id}: no expired_at"
