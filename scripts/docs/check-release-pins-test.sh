@@ -35,12 +35,19 @@ fixture() {
     printf '%s\n' "$path"
 }
 
+# The gate reads its prepared release from the tags of the repo it runs in, so
+# `run` runs it from a repo with none: in this checkout, a candidate tag such as
+# v2.0.0-rc.1 makes 2.0.0 legitimately pinnable and flips the cases below.
+NOTAGS="$WORKDIR/notags"
+readonly NOTAGS
+git init -q "$NOTAGS"
+
 # run FIXTURE -> exit status in $status, combined output in $output
 status=0
 output=''
 run() {
     status=0
-    output="$(GAG_RELEASE_TAG=v1.3.0 "$GATE" "$1" 2>&1)" || status=$?
+    output="$(cd "$NOTAGS" && GAG_RELEASE_TAG=v1.3.0 "$GATE" "$1" 2>&1)" || status=$?
 }
 
 pass_case() {
