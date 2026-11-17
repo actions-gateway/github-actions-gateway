@@ -435,6 +435,29 @@ func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
 		require.Error(t, err)
 	})
 
+	t.Run("a reconciled gateway stays editable through a stored collision", func(t *testing.T) {
+		// Q1342: a second tenant's raced pair, or any other route into a stored
+		// collision, must not freeze an established gateway against its own edits.
+		held := v2Gateway("tenant-a", "gw-a", "https://github.com/acme", "")
+		held.Finalizers = []string{agcv2.ActionsGatewayFinalizer}
+		raced := v2Gateway("tenant-b", "gw-b", "https://github.com/acme", "")
+		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, held, raced,
+			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
+			scaleSetRS("racer", "tenant-b", "gw-b", "linux"))}
+
+		edited := held.DeepCopy()
+		edited.Labels = map[string]string{"team": "a"}
+		_, err := v.ValidateUpdate(ctx, held, edited)
+		require.NoError(t, err)
+
+		// The raced gateway's finalizer write starts provisioning, so it stays refused.
+		finalized := raced.DeepCopy()
+		finalized.Finalizers = []string{agcv2.ActionsGatewayFinalizer}
+		_, err = v.ValidateUpdate(ctx, raced, finalized)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "racer")
+	})
+
 	t.Run("read error fails closed", func(t *testing.T) {
 		v := &ActionsGatewayCustomValidator{reader: failingReader{}}
 		_, err := v.ValidateCreate(ctx, v2Gateway("tenant-b", "gw-b", "https://github.com/acme", ""))

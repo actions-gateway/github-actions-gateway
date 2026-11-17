@@ -844,11 +844,14 @@ Admission cannot reserve a name across two objects, so the bound comes from what
 - **The raced gateway is held unprovisioned.** The GMC's first write to a new gateway adds its finalizer, provisioning starts only after that, and the gateway webhook refuses that update while the pair collides.
   None of the 25 raced gateways in the same run received the finalizer, so none had an AGC to open a session with, and the test requires the refusal for every raced gateway.
   It is not guaranteed: a GMC reconcile landing between the two creates would add the finalizer before the second object is stored, which no run has caught.
+  Nor does it hold against a gateway created with the finalizer already set: the GMC then makes no update to refuse, and 15 of 15 such raced gateways were provisioned in the same suite (measured 2026-11-17, [Q1358](../queue/Q1358.md)).
 - **The established tenant's gateway reports it.** Its status is written through the status subresource, which the webhook does not intercept, so the next reconcile sets `ScaleSetNameCollision` (`TestV2_ScaleSetNameGuard_ConcurrentPairIsReported`).
 - **Taking jobs needs credentials for the scope.** The raced gateway's AGC has to authenticate to the shared scope to open a session.
   Whether such credentials can open a session on any of that scope's scale sets at GitHub directly, with no admission in the way, is unmeasured; if they can, this residual adds nothing for the credential holder.
 
-The cost the bound does not cover: while the pair stands, the webhook refuses every update to the established tenant's gateway too, its own edits included ([Q1342](../queue/Q1342.md)).
+The refusal is keyed on that finalizer, so it does not also freeze the established tenant (Q1342).
+An update that keeps `githubURL` and whose stored gateway already carries the GMC finalizer skips the scope check: it binds no new scope, and refusing it cannot undo a provisioned pair.
+The finalizer write has a stored object without the finalizer, so it is still judged, which keeps the raced side refused; `TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable` pins the held side's edit.
 Owner check, not run here: on two gateways bound to one org, create a second tenant's `RunnerSet` and gateway together, then read whether the second gateway gets an AGC and which namespace a job sent to the shared label lands in; and whether the second tenant's App installation token, used directly, can open a session on the first tenant's scale set.
 
 **A renamed set leaves its old scale set (Q1325).** Admission releases the old first label's claim as soon as an edit renaming it is stored.
