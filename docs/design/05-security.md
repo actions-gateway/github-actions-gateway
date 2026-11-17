@@ -582,6 +582,7 @@ The switch is per gateway and the port is per namespace, so a namespace is opted
 When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and, once every pool replica listens on it, projects that port into the namespace; the AGC then sets it in the `HTTPS_PROXY` of every new worker of every gateway there that uses the pool.
 It withdraws the projection when either side turns off, and new workers go back to the shared port.
 A tenant can set the projection's labels on objects of its own, so a withdrawal acts only on a ConfigMap at the projection's own name, and a Secret the apiserver refuses to blank (an immutable one, say) is left as it is rather than retried: neither can stall another tenant's pool (Q1324).
+A projection the GMC cannot write, such as an immutable Secret the consumer created at the projection's name, fails that namespace alone: the pool's own resources and every other namespace's projection still apply, and the pool reports `Degraded` naming the namespace until a reconcile writes it (Q1335).
 That is the only consumer-side change: it restarts nothing in the consumer's namespace, and the AGC's own traffic stays on the shared port, since its failures are not a job's.
 So a pool edit can move workers in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
 A namespace where no gateway has opted in is never moved by a pool edit.

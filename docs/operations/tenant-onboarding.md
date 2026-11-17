@@ -1172,6 +1172,9 @@ The per-port isolation is a NetworkPolicy, so it holds only on a CNI that enforc
 
 **Checking it took effect.** `kubectl get configmap -n <tenant-namespace> proxy-attribution-<pool-namespace>-<pool> -o jsonpath='{.data.proxy-port}'` prints the namespace's port once its workers are moved.
 A worker pod's `HTTPS_PROXY` ends in that port.
+If the pool reports `Degraded` at step `project failure attribution` naming a namespace, the GMC could not write that namespace's projection, usually because a Secret already at that name is immutable or holds a different type.
+The pool also reports `Ready=False` with the same message, and its other status conditions and `readyReplicas` stop refreshing, though its proxy pods keep serving.
+The GMC cannot delete Secrets, so delete it in the tenant namespace; the next reconcile writes the GMC's own, and the pool's other namespaces are unaffected meanwhile.
 
 What the pool keeps, for how long, and who can read it are in the [security design](../design/05-security.md#proxy-failure-attribution).
 
