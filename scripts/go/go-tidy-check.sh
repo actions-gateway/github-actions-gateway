@@ -25,58 +25,25 @@
 # Single source of truth for `make tidy-check` and the CI tidy-check job.
 #
 # Usage: scripts/go/go-tidy-check.sh
-#   GO_TIDY_CHECK_ATTEMPTS (default 3) and GO_TIDY_CHECK_RETRY_DELAY seconds
-#   (default 5) bound the retry on a module-proxy transport error.
+#   GO_FETCH_ATTEMPTS and GO_FETCH_RETRY_DELAY bound the retry on a
+#   module-proxy transport error (see go_retry_transient in scripts/lib/common.sh).
 set -euo pipefail
 shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-# A dropped HTTP/2 stream while fetching a module from the proxy, the text both
-# CI sightings carried (Q1314):
-#   gonum.org/v1/gonum@v0.17.0: read "https://proxy.golang.org/...zip": stream error: stream ID 241; INTERNAL_ERROR; received from peer
-# A failed tidy rewrites nothing and a re-run is idempotent, so retrying is safe;
-# any other failure is deterministic and is not retried.
-transient_re=': read "https?://[^"]+": stream error: '
-attempts="${GO_TIDY_CHECK_ATTEMPTS:-3}"
-retry_delay="${GO_TIDY_CHECK_RETRY_DELAY:-5}"
-err_log="$(mktemp)"
-trap 'rm -f "$err_log"' EXIT
-
-# run_retrying_transient CMD... — run CMD, re-running it up to $attempts times
-# while its stderr matches $transient_re. Exhausted retries exit non-zero naming
-# a download failure, so it never reads as drift.
-run_retrying_transient() {
-	local attempt=1 rc
-	while true; do
-		rc=0
-		"$@" 2>"$err_log" || rc=$?
-		cat "$err_log" >&2
-		(( rc == 0 )) && return 0
-		if ! grep -Eq "$transient_re" "$err_log"; then
-			return "$rc"
-		fi
-		if (( attempt >= attempts )); then
-			echo "" >&2
-			echo "ERROR: '$*' failed downloading a module from the proxy $attempts times." >&2
-			echo "This is a network failure, not untidy module files; re-run the job." >&2
-			return "$rc"
-		fi
-		echo "module proxy transport error (attempt $attempt/$attempts); retrying in ${retry_delay}s..." >&2
-		sleep "$retry_delay"
-		attempt=$((attempt + 1))
-	done
-}
+# shellcheck source=scripts/lib/common.sh
+source "$repo_root/scripts/lib/common.sh"
 
 # Re-run the documented tidy flow (go-work-tidy.sh tidies every module, the
 # workspace members in go.work order; `go work sync` pushes the resolved build
 # list back into each module).
 # Both touch only go.mod/go.sum/go.work.sum — never the vendored source.
 echo "tidying workspace modules (scripts/go/go-work-tidy.sh)..."
-run_retrying_transient scripts/go/go-work-tidy.sh
+go_retry_transient scripts/go/go-work-tidy.sh
 echo "syncing workspace build list (go work sync)..."
-run_retrying_transient go work sync
+go_retry_transient go work sync
 
 # Any drift means the committed module files are not in tidy-canonical form.
 if ! git diff --exit-code -- '**/go.mod' '**/go.sum' go.work go.work.sum; then

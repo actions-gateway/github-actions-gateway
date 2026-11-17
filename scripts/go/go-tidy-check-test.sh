@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# Unit tests for scripts/go/go-tidy-check.sh (Q1314). One property: a dropped
+# Unit tests for scripts/go/go-tidy-check.sh and the go_retry_transient helper
+# it shares with vendor-check.sh (Q1314). One property: a dropped
 # module-proxy stream during the tidy flow is retried, and never reads as
 # untidy module files.
 #
@@ -56,7 +57,7 @@ check() {
 	local rc=0 out calls
 	echo 0 >"$CALLS"
 	out="$(PATH="$WORK/bin:$PATH" SHIM_FAILS="$shim_fails" SHIM_ERR="$shim_err" \
-		GO_TIDY_CHECK_ATTEMPTS=3 GO_TIDY_CHECK_RETRY_DELAY=0 \
+		GO_FETCH_ATTEMPTS=3 GO_FETCH_RETRY_DELAY=0 \
 		scripts/go/go-tidy-check.sh 2>&1)" || rc=$?
 	calls="$(cat "$CALLS")"
 	local got_rc=0
@@ -89,7 +90,7 @@ check 'clean run' 0 "$STREAM_ERR" 0 "$modules" 'are tidy'
 check 'one stream error is retried' 1 "$STREAM_ERR" 0 "$((modules + 1))" 'retrying'
 
 # The proxy stays down: three attempts, then a failure naming the network.
-check 'persistent stream error is bounded' 99 "$STREAM_ERR" nonzero 3 'not untidy module files'
+check 'persistent stream error is bounded' 99 "$STREAM_ERR" nonzero 3 'not untidy or out-of-sync module files'
 
 # Any other tidy failure is deterministic: one attempt, no retry message.
 check 'other errors are not retried' 1 "$OTHER_ERR" nonzero 1 '404 Not Found'
