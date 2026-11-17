@@ -469,7 +469,9 @@ So keep the gap short, and do not restart an AGC or a GMC pod inside it.
 A `v1.10.0` GMC pod that starts during the gap crash-loops on these CRDs, and a running pod is not safe either: pods left alone stayed Ready for the six minutes measured, but when the leader was deleted the standby was crash-looping within about 2.5 minutes.
 
 Whichever way the gap went, closing it recovered the gateway: the new AGC had a session within a minute, took any job that had waited, and left every existing worker pod in place.
-Measured on kind with Kubernetes 1.36.1 against `test/fakegithub`, from the `v1.10.0` images to a `v2.0.0` candidate built from `main`, with workers held `Pending`; a job running through the gap and github.com itself were not measured.
+Measured on kind with Kubernetes 1.36.1 against `test/fakegithub`, from the `v1.10.0` images to a `v2.0.0` candidate built from `main`, with workers held `Pending`.
+Against github.com, the `v2.0.0-rc.3` validation on GKE 1.35 applied the CRDs and then the chart over a gateway running `v1.10.0-rc.2`, on 2026-11-17, and two CI runs then passed on the upgraded gateway.
+No job was in flight during that gap, so a job running through it is still not measured.
 
 A rollback crosses the same gap in reverse, so it [puts the CRDs back first](#gmc-rollback).
 
@@ -2275,13 +2277,13 @@ The shipped install artifact is the **`actions-gateway` Helm chart**, published 
 The chart is the **sole** install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration `make deploy` wraps `helm install` of the local chart with floating image tags.
 
-> **Current release — `v1.10.0`** (chart version = release tag without the leading `v`).
-> Pin `--version 1.10.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
+> **Current release — `v2.0.0`** (chart version = release tag without the leading `v`).
+> Pin `--version 2.0.0`; copy the image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.0) and verify the chart/image signatures before installing (see [release.md § Verify the publish](release.md#3-verify-the-publish)).
 
 ```sh
 # First install (from the published, signed OCI chart)
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 1.10.0 \
+  --version 2.0.0 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \

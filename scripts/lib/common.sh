@@ -461,6 +461,16 @@ release_thirdparty_projects_regexp() {
 	printf '%s' 'ARC|actions-runner-controller'
 }
 
+# release_upgrade_source_regexp — print the pattern matching the last release of
+# the previous major, which the upgrade pages name in prose for the life of the
+# next one as the release an operator upgrades from, and the release several of
+# their measurements were taken on. It is skipped only v-prefixed and outside a
+# release URL: a chart pin never carries the `v`, and a `releases/tag/` or
+# `releases/download/` link names what a reader fetches, so both stay checked.
+release_upgrade_source_regexp() {
+	printf '%s' 'v1\.10\.0'
+}
+
 # release_version_literals FILE — emit one `<line>\t<literal>\t<kind>` record per
 # release-version literal in FILE.
 #
@@ -480,7 +490,7 @@ release_thirdparty_projects_regexp() {
 # one extractor, so a pin shape the source gate sees cannot be invisible to the
 # published-site gate.
 release_version_literals() {
-	awk -v projects="$(release_thirdparty_projects_regexp)" '
+	awk -v projects="$(release_thirdparty_projects_regexp)" -v upgrade_source="$(release_upgrade_source_regexp)" '
 		function flanked(before, after, after2) {
 			if (before ~ /[0-9]/) return 1
 			if (before == "." ) return 1
@@ -510,6 +520,7 @@ release_version_literals() {
 				rest = substr(rest, end)
 				if (flanked(before, after, after2)) continue
 				if (attributed(substr($0, 1, start - 1))) continue
+				if (tok ~ ("^(" upgrade_source ")$") && substr($0, 1, start - 1) !~ /releases\/(tag|download)\/$/) continue
 				printf "%d\t%s\t%s\n", NR, tok, (tok ~ /z$/ ? "patchline" : "semver")
 			}
 		}

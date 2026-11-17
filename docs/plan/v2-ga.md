@@ -311,6 +311,16 @@ Operator-facing surface that must be current before the tag:
 - [upgrade.md](../operations/upgrade.md) — the upgrade-past-removal path.
 - [roadmap.md](../roadmap.md) — the graduation line stops being forward-looking.
 
+### Candidate validation
+
+| Candidate | Commit | Verdict |
+|---|---|---|
+| `v2.0.0-rc.1` | `0c0048d5a`, 2026-11-16 | Superseded before approval: the chart README did not document every values key, and the allowlist inputs changed under Q1353 |
+| `v2.0.0-rc.2` | `f3ef28e5c`, 2026-11-17 | Superseded before approval: eight dependency updates landed first |
+| `v2.0.0-rc.3` | `5bd927a61`, 2026-11-17 | ✅ Green: all six gate legs ([run 44043297649](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44043297649)), 25 of 25 signatures under cosign v2.5.2 and v3.1.4, provenance digest equal to the tag commit, and Flux v2.10.0 verifying the chart |
+
+The `v2.0.0-rc.3` run upgraded the dogfood gateway from `v1.10.0-rc.2` to the candidate against github.com, CRDs first, and two CI runs passed on it afterwards; [upgrade.md](../operations/upgrade.md#action-required-at-v200-apply-the-crds-with-the-upgrade-because-the-agcs-watch-depends-on-them) records what that does and does not measure.
+
 ## Guardrails
 
 - **A soak reset is not a failure.** If Phase 1 surfaces a shape problem, fixing it in beta with a migration path is the system working.

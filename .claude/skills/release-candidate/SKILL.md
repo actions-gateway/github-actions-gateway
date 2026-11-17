@@ -123,7 +123,6 @@ make verify-release-compat VERSION=vX.Y.Z-rc.N > tmp/verify-compat.log 2>&1; ech
 The second line verifies with cosign v2, which operators run; the first uses the signer's own cosign and passes a candidate only v3 can read.
 A compat failure blocks the promote.
 Both check the image signatures, every per-arch SBOM attestation, both charts, and the Release's blob bundles.
-On the first candidate signed by cosign v3, also run [Q1218](../../../docs/queue/Q1218.md)'s Flux check.
 
 **The check that discriminates is the provenance digest**, not the signatures.
 Signatures prove who built it; only the digest proves *what* was built, and it is the one check that would have caught the stale-commit candidate while all seven signatures passed:

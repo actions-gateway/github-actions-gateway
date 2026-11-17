@@ -13,10 +13,11 @@
 # The pin-bearing set below is the whole answer to "which pages tell a reader
 # which version to install". It is deliberately small: this gate asserts that
 # *every* release-version literal in those files names the current release, which
-# is only tractable because their noise floor is two literals (both exempted
-# below). Do not widen it to docs/ at large — troubleshooting.md and release.md
-# are full of legitimate "before v1.3.0" history, and an exemption list that size
-# would hide the drift it exists to catch.
+# is only tractable because their noise floor is three literals (all exempted
+# below, the upgrade-source release in prose only). Do not widen it to docs/ at
+# large — troubleshooting.md and release.md are full of legitimate "before
+# v1.3.0" history, and an exemption list that size would hide the drift it
+# exists to catch.
 #
 # The current release is the highest stable vX.Y.Z tag, resolved from local tags,
 # then from the origin remote (a shallow CI checkout has no tags), then from
