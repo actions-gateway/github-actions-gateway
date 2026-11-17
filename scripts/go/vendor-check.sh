@@ -24,17 +24,19 @@ shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
+# shellcheck source=scripts/lib/common.sh
+source "$repo_root/scripts/lib/common.sh"
 
 # Regenerate both vendor trees from go.mod/go.sum. `go work vendor` re-fetches
 # every workspace module (hash-verified against each module's go.sum) into the
 # shared vendor/. The tools module has its own vendor/ outside the workspace,
 # regenerated the same way the build consumes it (GOWORK=off).
 echo "re-vendoring workspace (go work vendor)..."
-go work vendor
+go_retry_transient go work vendor
 echo "re-vendoring tools module (cd tools && go mod vendor)..."
-(cd tools && GOWORK=off go mod vendor)
+(cd tools && GOWORK=off go_retry_transient go mod vendor)
 echo "re-vendoring devtools module (cd devtools && go mod vendor)..."
-(cd devtools && GOWORK=off go mod vendor)
+(cd devtools && GOWORK=off go_retry_transient go mod vendor)
 
 # Any drift means the committed tree does not match what go.mod+go.sum produce.
 if ! git diff --exit-code -- vendor/ tools/vendor/ devtools/vendor/; then

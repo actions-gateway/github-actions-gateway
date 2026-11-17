@@ -165,6 +165,7 @@ If a committed `go.sum` is not in that canonical shape, step 1 above re-adds tho
 The `tidy-check` CI job (`make tidy-check` → `scripts/go/go-tidy-check.sh`) re-runs steps 1–2 and fails on any drift in `go.mod`/`go.sum`/`go.work.sum`, so the committed module files stay tidy-canonical.
 Run `make tidy-check` locally to reproduce the gate; like `vendor-check` it can need network on a cold cache, so it is intentionally **not** part of the fast `make check` gate.
 The remedy for a failure is steps 1–2 + commit, never an exemption.
+The exception is a module download the proxy cut off (`stream error:` on a module zip): `tidy-check` and `vendor-check` retry that up to three times, and a failure that outlasts the retries says it is a network failure, so re-run the job instead (Q1314).
 
 **The gate's reach is step 1's module list, not its diff.** It diffs `**/go.mod` across the whole repo, so `devtools/` and `tools/` were always inside the pathspec — but step 1 enumerated `go.work` alone, so nothing rewrote them and a tidy defect committed in both passed the gate clean (Q667).
 `go-work-tidy.sh` now tidies the non-workspace modules too, discovered rather than named; [`go-work-tidy-test.sh`](../../scripts/go/go-work-tidy-test.sh) asserts every tracked module gets a `go mod tidy`, so the next module is covered without widening a list.

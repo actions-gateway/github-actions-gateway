@@ -25,20 +25,25 @@
 # Single source of truth for `make tidy-check` and the CI tidy-check job.
 #
 # Usage: scripts/go/go-tidy-check.sh
+#   GO_FETCH_ATTEMPTS and GO_FETCH_RETRY_DELAY bound the retry on a
+#   module-proxy transport error (see go_retry_transient in scripts/lib/common.sh).
 set -euo pipefail
 shopt -s inherit_errexit
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
+# shellcheck source=scripts/lib/common.sh
+source "$repo_root/scripts/lib/common.sh"
+
 # Re-run the documented tidy flow (go-work-tidy.sh tidies every module, the
 # workspace members in go.work order; `go work sync` pushes the resolved build
 # list back into each module).
 # Both touch only go.mod/go.sum/go.work.sum — never the vendored source.
 echo "tidying workspace modules (scripts/go/go-work-tidy.sh)..."
-scripts/go/go-work-tidy.sh
+go_retry_transient scripts/go/go-work-tidy.sh
 echo "syncing workspace build list (go work sync)..."
-go work sync
+go_retry_transient go work sync
 
 # Any drift means the committed module files are not in tidy-canonical form.
 if ! git diff --exit-code -- '**/go.mod' '**/go.sum' go.work go.work.sum; then

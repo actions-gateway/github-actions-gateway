@@ -537,3 +537,38 @@ RENDER_DIGEST_ARGS=(
 	--set-string "proxy.image.digest=$POLARIS_RENDER_DIGEST"
 	--set-string "wrapper.image.digest=$POLARIS_RENDER_DIGEST"
 )
+
+# go_retry_transient CMD... — run a go command that fetches modules, re-running
+# it up to GO_FETCH_ATTEMPTS (default 3) times, GO_FETCH_RETRY_DELAY seconds
+# (default 5) apart, while its stderr carries a dropped HTTP/2 stream from the
+# module proxy. Both tidy-check sightings carried that text (Q1314):
+#   gonum.org/v1/gonum@v0.17.0: read "https://proxy.golang.org/...zip": stream error: stream ID 241; INTERNAL_ERROR; received from peer
+# A failed fetch rewrites nothing and the commands it wraps are idempotent, so a
+# retry is safe; any other failure is deterministic and returns at once.
+# Exhausted retries name a network failure, so a gate never reports it as drift.
+# Asserted by scripts/go/go-tidy-check-test.sh.
+go_retry_transient() {
+	local transient_re=': read "https?://[^"]+": stream error: '
+	local attempts="${GO_FETCH_ATTEMPTS:-3}" delay="${GO_FETCH_RETRY_DELAY:-5}"
+	local attempt=1 rc err_log
+	err_log="$(mktemp)"
+	while true; do
+		rc=0
+		"$@" 2>"$err_log" || rc=$?
+		cat "$err_log" >&2
+		if (( rc == 0 )) || ! grep -Eq "$transient_re" "$err_log"; then
+			rm -f "$err_log"
+			return "$rc"
+		fi
+		if (( attempt >= attempts )); then
+			rm -f "$err_log"
+			echo "" >&2
+			echo "ERROR: '$*' failed downloading a module from the proxy $attempts times." >&2
+			echo "This is a network failure, not untidy or out-of-sync module files; re-run the job." >&2
+			return "$rc"
+		fi
+		echo "module proxy transport error (attempt $attempt/$attempts); retrying in ${delay}s..." >&2
+		sleep "$delay"
+		attempt=$((attempt + 1))
+	done
+}
