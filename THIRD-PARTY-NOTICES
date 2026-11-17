@@ -13,7 +13,7 @@ Regenerate with `make third-party-notices` (scripts/release/gen-third-party-noti
 which reads only the committed, version-pinned vendor/ tree.
 
 ================================================================================
-Module: cel.dev/expr (v0.25.2)
+Module: cel.dev/expr (v0.25.3)
 License file: cel.dev/expr/LICENSE
 ================================================================================
 
@@ -10857,7 +10857,7 @@ License file: google.golang.org/genproto/googleapis/rpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.84.0)
+Module: google.golang.org/grpc (v1.85.0)
 License file: google.golang.org/grpc/LICENSE
 ================================================================================
 
@@ -11065,7 +11065,7 @@ License file: google.golang.org/grpc/LICENSE
    limitations under the License.
 
 ================================================================================
-Module: google.golang.org/grpc (v1.84.0)
+Module: google.golang.org/grpc (v1.85.0)
 License file: google.golang.org/grpc/NOTICE.txt
 ================================================================================
 
