@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"net"
 	"os"
 	"strings"
 
@@ -86,20 +85,16 @@ const (
 // is emitted instead and the kubelet expands it from the AGC pod's own service env,
 // which yields the same value at pod start.
 //
-// An IPv6 ClusterIP is bracketed: Go's NO_PROXY parser reads a bare "fd00::1" as
-// host "fd00:" port "1" and the entry would never match.
+// An IPv6 ClusterIP is emitted bare, with any brackets stripped. Measured on
+// go1.27.4 with http.ProxyFromEnvironment against https://[fd00::1]:443/api: a
+// NO_PROXY entry "fd00::1" or "[fd00::1]:443" is dialled directly, while "[fd00::1]"
+// is proxied (TestBuildNoProxy_APIServerExemptForNetHTTP).
 func apiServerNoProxyEntry() string {
 	host := strings.TrimSpace(os.Getenv(apiServerHostEnv))
 	if host == "" {
 		return "$(" + apiServerHostEnv + ")"
 	}
-	if strings.HasPrefix(host, "[") {
-		return host
-	}
-	if ip := net.ParseIP(host); ip != nil && ip.To4() == nil {
-		return "[" + host + "]"
-	}
-	return host
+	return strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
 }
 
 // buildNoProxy merges user-provided CIDRs with the mandatory cluster-internal
