@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -2780,7 +2780,7 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <tr>
 <td><a href="v2-ga/">v2-ga.md</a></td>
 <td>The last graduation rung (<code>v2beta1</code> → <code>v2</code>) and the <code>v2.0.0</code> release that executes the four coupled removals: soak criteria, the graduation hop, removal sequencing, docs</td>
-<td>⚠️ Phase 1's two soak readings were taken in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive, closing Q1059 (every kind on dogfood traffic) and Q1060 (round-trips on real objects); <a href="v2-ga/#soak-readings">the readings</a>. The Phase 2 alias decision closed 2026-09-08 (Q452): <code>v2</code> <strong>omits</strong> both deprecated FQDN aliases, since <code>v2beta1</code> is no longer served past <code>v2.0.0</code> (<a href="v2beta1-retirement/">v2beta1-retirement.md</a>). Phase 2 shipped for 1.9 in Q413 (<a href="archive/release-1.9/">archive/release-1.9.md</a>) with the storage marker held back to Phase 3 and the conversion hub kept at <code>v2beta1</code>; Scoped 2026-10-09: Phase 3's storage advance landed for <a href="archive/release-1.10/">archive/release-1.10.md</a> in Q1086, and the removals follow in <code>v2.0.0</code>: Q273's <code>v1alpha1</code> removal, Q264's classic removal and Q1167's drop of <code>v2alpha1</code>, <code>v2beta1</code> and the hub are on <code>main</code>; Phase 4's docs and tag are <a href="../queue/Q1107/">Q1107</a>, after Q1312's two stricter admission rules, Q1321's confinement fix and Q1322's eight stricter admission rules and Q1330's default refusal of fork pull request jobs landed</td>
+<td>✅ Shipped as <code>v2.0.0</code> on 2026-11-17, from the tree <code>v2.0.0-rc.3</code> validated (<a href="v2-ga/#candidate-validation">the candidates</a>): the soak readings closed Q1059 and Q1060 in the <code>v1.8.0-rc.1</code> window, Phase 2 shipped for 1.9 (Q413, <a href="archive/release-1.9/">archive/release-1.9.md</a>), the storage advance for 1.10 (Q1086, <a href="archive/release-1.10/">archive/release-1.10.md</a>), and the removals (Q273, Q264, Q1167) with the cut (Q1107) in <code>v2.0.0</code>; the plan stays active for <a href="../queue/Q1223/">Q1223</a>, which renders its soak-readings table</td>
 </tr>
 <tr>
 <td><a href="release-2.1/">release-2.1.md</a></td>

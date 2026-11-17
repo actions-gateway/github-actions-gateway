@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v1.10.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v1.10.0">Read the release notes.</a>
+            <strong>v2.0.0 is here.</strong>
+      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
           </div>
           
         </aside>
@@ -2870,10 +2870,10 @@
 <p>This plan starts <strong>after <code>v1.3.0</code> ships</strong>.
 It is deliberately unhurried: General Availability (GA) signs a permanent backward-compatibility contract on a five-kind API surface, and the contract cannot be walked back.</p>
 <blockquote>
-<p><strong>Status: Phases 1 and 2 are done.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), and Q413 then shipped Phase 2 for 1.9: <code>v2</code> served beside <code>v2beta1</code> on every kind, storage unmoved.
+<p><strong>Status: shipped as <code>v2.0.0</code> on 2026-11-17, and every phase is done.</strong> The soak's measurable criteria were read in the <code>v1.8.0-rc.1</code> window on 2026-09-14 and both came back positive (<a href="#soak-readings">the readings</a>), and Q413 then shipped Phase 2 for 1.9: <code>v2</code> served beside <code>v2beta1</code> on every kind, storage unmoved.
 <strong>Scoped 2026-10-09</strong>, after <code>v1.9.0</code> tagged on 2026-10-05: the <a href="#scope-ledger">scope ledger</a> is the release's record.
 Phase 3's storage advance ships first, in its own release: Q1086 landed it for <a href="../archive/release-1.10/">1.10</a>, <code>v2</code> storing on every kind and <code>gag-migrate storage-version</code> rewriting what is stored, decided by the maintainer on 2026-10-09 (<a href="#the-storage-advance-needs-a-state-between-two-applies">why it cannot share an apply with the removals</a>).
-The removals follow in <code>v2.0.0</code>: Q273 removed <code>v1alpha1</code> and Q264 removed classic on <code>main</code>, and Q1167 removed <code>v2alpha1</code>, <code>v2beta1</code> and the hub; Phase 4's docs landed, Q1284 set one Kubernetes floor at 1.35, Q1312 added two stricter admission rules, the 2026-11-09 security audit gated Q1321, which extended the GMC's confinement policy, and Q1322, which added eight stricter admission rules, Q1220's decision gated Q1330, which refuses fork pull request jobs by default, Q1347 refused worker templates that bypass the worker separation, Q1351 put the controllers above every worker priority, and the tag is <a href="../../queue/Q1107/">Q1107</a>.
+The removals follow in <code>v2.0.0</code>: Q273 removed <code>v1alpha1</code> and Q264 removed classic on <code>main</code>, and Q1167 removed <code>v2alpha1</code>, <code>v2beta1</code> and the hub; Phase 4's docs landed, Q1284 set one Kubernetes floor at 1.35, Q1312 added two stricter admission rules, the 2026-11-09 security audit gated Q1321, which extended the GMC's confinement policy, and Q1322, which added eight stricter admission rules, Q1220's decision gated Q1330, which refuses fork pull request jobs by default, Q1347 refused worker templates that bypass the worker separation, Q1351 put the controllers above every worker priority, and <code>v2.0.0</code> tagged on 2026-11-17 from the tree <code>v2.0.0-rc.3</code> validated (Q1107, <a href="#candidate-validation">the candidates</a>).
 The Phase 2 alias decision is <a href="#decided-v2-omits-ciliumfqdncalicofqdn">taken</a> (Q452, 2026-09-08).
 The phase table below is the real state.</p>
 </blockquote>
@@ -2910,13 +2910,13 @@ The phase table below is the real state.</p>
 <td>3</td>
 <td>Mark <code>v2</code> storage, migrate stored objects, then drop <code>v2beta1</code>, <code>v2alpha1</code>, <code>v1alpha1</code>, and classic</td>
 <td>M</td>
-<td>❌ Open: the storage advance landed for 1.10 in Q1086, and the release gate's <code>storage</code> leg takes its dogfood reading (Q1171); Q273's <code>v1alpha1</code> removal and Q264's classic removal are on <code>main</code>, and so is Q1167's drop of the older versions; capability parity <strong>cleared</strong>: Q417/Q443/Q446 cleared the audit's three rows (2026-07-26), Q766 closed the abandoned-run asymmetry inside 1.4, and Q713 put the duration and latency series on both tiers (2026-08-11). See the <a href="#capability-parity-is-a-precondition-of-the-removal">parity table</a></td>
+<td>✅ Done: the storage advance shipped in 1.10 (Q1086), and the removals in <code>v2.0.0</code> (Q273, Q264, Q1167), after capability parity cleared (<a href="#capability-parity-is-a-precondition-of-the-removal">the parity table</a>)</td>
 </tr>
 <tr>
 <td>4</td>
 <td>Operator docs, migration guide, and the <code>v2.0.0</code> cut</td>
 <td>S</td>
-<td>❌ Open: the operator docs and the migration guide landed, and the cut remains (<a href="../../queue/Q1107/">Q1107</a>)</td>
+<td>✅ Done: the operator docs and the migration guide landed, and <code>v2.0.0</code> tagged on 2026-11-17 (Q1107)</td>
 </tr>
 </tbody>
 </table>
@@ -3080,10 +3080,10 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>✅ landed: gated 2026-11-16 at the <code>v2.0.0-rc.1</code> cut, because a values-key removal needs a major and the chart README ships in the chart; <code>egressDestinationAllowlist.configMapName</code> fails the render with a migration message, the GMC flags stay the fail-safe floor, and <code>chart-values-docs-check</code> holds the README's Values table to <code>values.yaml</code></td>
 </tr>
 <tr>
-<td><a href="../../queue/Q1107/">Q1107</a></td>
+<td>Q1107</td>
 <td>Operator docs, migration guide, and the cut (Phase 4)</td>
 <td><code>2.0-gate</code></td>
-<td>🔲 open: the docs landed, with the upgrade and rollback order measured against a running AGC, and the cut remains</td>
+<td>✅ shipped: the docs landed, with the upgrade and rollback order measured against a running AGC, and <code>v2.0.0</code> tagged on 2026-11-17 at <code>2bb723aa9</code></td>
 </tr>
 <tr>
 <td>Q555</td>
@@ -3119,7 +3119,7 @@ Nor is the storage advance: Q1086 gated 1.10, and <a href="../archive/release-1.
 <td>-</td>
 <td>RC validated on dogfood</td>
 <td>gates</td>
-<td>🔲 no candidate cut</td>
+<td>✅ <code>v2.0.0-rc.3</code> in CI, gate run 44043297649; <code>rc.1</code> and <code>rc.2</code> superseded before approval (<a href="#candidate-validation">the candidates</a>)</td>
 </tr>
 <tr>
 <td><a href="../../queue/Q275/">Q275</a></td>
