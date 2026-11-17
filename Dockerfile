@@ -310,7 +310,7 @@ ENTRYPOINT ["/wrapper"]
 ## on this Ubuntu-based base despite being built against Alpine, and the arm64 leg
 ## needs no QEMU. A `RUN apt-get install docker-ce-cli` would emulate instead, and
 ## would unpin the version. Pinned to the multi-arch index digest like every other
-## base here; nothing bumps it automatically (see Q976), so re-pin by hand with:
+## base here; Dependabot's docker-base group bumps the digest, and a by-hand re-pin is:
 ##   docker buildx imagetools inspect docker:29-cli
 ## Re-check the source plugin paths when bumping the major: they are set by
 ## docker-library/docker's own Dockerfile, not by the CLI.

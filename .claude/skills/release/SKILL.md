@@ -26,6 +26,8 @@ Record the re-read in the release plan doc.
   Work that shipped since needs a `features.md` line; `publish.yml` fails the release if the rendered banner does not name this version.
 - **In full, because neither reduces to a diff here**: competitor claims (`scripts/docs/check-comparison-stamps.sh --report`), which age with upstream releases, and `make roadmap-check`, since the queue moves on its own.
 - **The notes' Validation section names the candidate that actually passed**, not an earlier one.
+- **The vulnerability policy, again, on the commit being tagged**: `scripts/release/check-vuln-policy.sh origin/main`.
+  The candidate's pass covered a scan from its own day, and an hour-long validation plus the wait for approval is time for an advisory to land; refresh the Security section's inherited totals from this run.
 
 ## 2. Check the freeze before tagging
 

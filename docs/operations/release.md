@@ -129,7 +129,7 @@ The marketing reconciliation, recorded the same day, was **not** re-run, and the
 Both reviews were correct when written.
 Neither knew its scope had moved.
 
-**Which of these bind when the tag is a release candidate.** The first two bind at every tag: an RC cut from a red `main` validates nothing, and the version you pick fixes the stable tag's.
+**Which of these bind when the tag is a release candidate.** The first three bind at every tag: an RC cut from a red `main` validates nothing, one carrying a fixable vulnerability is a candidate nobody may promote, and the version you pick fixes the stable tag's.
 **The rest run at the first RC.** A prerelease deploys no docs, so the stable tag is their deadline, not their best time: anything decided after the validated candidate is published costs a new RC and another hour-long dogfood run.
 The API surface review, the chart READMEs, and the notes' interrogation come before the cut, because their findings change artifacts.
 The docs-only rest fill the approval wait and ~80-minute validation: the marketing reconciliation's first two questions, the operator caveats, the roadmap and `features.md` reconciliation, the announce-bar highlight, and the other three [prose passes](#the-prose-passes).
@@ -184,6 +184,13 @@ In 1.5 the answers arrived after `rc.1` had been cut, published and validated, a
   A `NOT GREEN` line is the different answer: a lane failed, or none reported at all.
   That one blocks the tag.
   Run `make check` locally as a final gate, from a branch cut from `origin/main` so the tree matches the target.
+- **No fixable HIGH or CRITICAL vulnerability ships**: [the vulnerability policy](#the-vulnerability-policy), checked against the commit you are about to tag.
+
+  ```bash
+  scripts/release/check-vuln-policy.sh origin/main
+  ```
+
+  It binds at every tag, like the gate check above, and a `FAIL` blocks the tag.
 - Choose the version `vX.Y.Z` (semver).
   The tag **must** match `v*` or `publish.yml` will refuse to publish.
 - **Review the API surface this tag publishes for the first time.** A field, enum value, or default costs a rename to change before it ships and a conversion shim plus a deprecation window afterwards, so the tag is the moment the cheap window closes.
@@ -937,6 +944,7 @@ It is ordered by what a reader needs first, not by what took the most work:
 **Say something about security even when there is nothing to report.** Silence reads as an omission to the one reader scanning specifically for it.
 State plainly that no advisory accompanies the release, then list what it does carry — dependency security bumps, and any fix that hardens credential or trust handling without patching a reported vulnerability.
 Name the scanning gates and when they run.
+List what the runner-based images inherit from the upstream base: the runner version and the totals `check-vuln-policy.sh` printed, so an operator choosing `worker`, `build-runner` or `cache-runner` knows what comes with it.
 `v1.3.0` had no CVE and still warranted the section.
 
 **Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`, `> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body (verified; the render check below counts them).
@@ -1406,6 +1414,34 @@ No docs-specific branch is ever required beyond what the release itself needs.
 A release is just a tag and a set of immutable, digest-addressed images — nothing is destructive.
 To roll an *installed* release back, re-pin the previous digests and `helm rollback`/`helm upgrade`; the procedure and post-rollback validation are in [upgrade.md](upgrade.md).
 A bad tag can be superseded by a higher patch release; do not retag an existing `vX.Y.Z` (it would break the digest↔tag binding consumers rely on).
+
+## The vulnerability policy
+
+**No release ships a fixable HIGH or CRITICAL vulnerability in a component this project chooses.** That covers the Go code in every image and binary, and every base image and pinned tool picked here.
+"Fixable" is trivy's meaning, a published fixed version, and the severity floor is the same one the PR gate blocks on, so a release is never refused for something no PR could have seen.
+
+**The one exception is what the upstream `ghcr.io/actions/actions-runner` base carries.** `worker`, `build-runner` and `cache-runner` are built `FROM` it and inherit its bundled Node.js, dockerd, containerd and runc, which this project cannot rebuild without forking the runner.
+Those findings are accepted only while the pinned runner is the newest stable release, because only then is there nothing left to bump.
+On 2026-11-17, at `2.338.2`, that was 44 fixable HIGH/CRITICAL findings in `worker` and 45 in `build-runner` and `cache-runner` (trivy's per-target totals, summed).
+
+**`build-runner`'s own Docker CLI, buildx and compose are not covered by the exception, and not gated yet either.** They come from the `docker:<N>-cli` pin this project chooses, but the image's trivy leg is report-only, so their findings cannot be told apart from the base's; on 2026-11-17 compose and buildx carried 4 fixable HIGH findings.
+Splitting them into a blocking leg is [Q1357](../queue/Q1357.md).
+
+`scripts/release/check-vuln-policy.sh` enforces the rest at every tag, release candidates included, because a candidate is what a stable tag promotes:
+
+```bash
+scripts/release/check-vuln-policy.sh origin/main
+```
+
+It fails on an open `security-scan` issue, on a commit with no successful, complete `security-scan.yml` run in the last 24 hours, and on a runner base older than the newest stable release.
+**The 24 hours is the point.** `check-gates-green.sh` accepts the scan that ran when the commit merged, and an advisory published since then ships unless something asks again.
+When the scan is stale, re-ask it on `main`'s head and re-run the check once it completes:
+
+```bash
+gh workflow run security-scan.yml --ref main
+```
+
+The check also prints each report-only leg's inherited total from the run it used, for the notes' [Security section](#the-section-skeleton).
 
 ## The worker images: `wrapper`, `worker`, `build-runner` and `cache-runner`
 

@@ -46,6 +46,16 @@ Say which commit you are relying on.
 A `NOT GREEN` line is the different answer: a lane failed, or none reported at all.
 That one blocks the tag.
 
+Then the [vulnerability policy](../../../docs/operations/release.md#the-vulnerability-policy), against the same SHA:
+
+```bash
+scripts/release/check-vuln-policy.sh origin/main
+```
+
+**Green gates are not this check.** They hold the scan that ran when the commit merged, and an advisory published since then does not reach them; this one wants a scan of the SHA from the last 24 hours.
+A tip whose last code merge was days ago reads `fresh scan FAIL`: re-ask it with `gh workflow run security-scan.yml --ref main` and re-run once it completes.
+Keep the inherited totals it prints for the notes' Security section.
+
 Then confirm no gating row remains, and run the local gate **from a tree that matches the target**, a branch cut from `origin/main`, since a worktree cannot check out `main`:
 
 ```bash
@@ -71,7 +81,7 @@ The marketing reconciliation from the same day was *not* re-checked, and a shipp
 
 Before the cut, the ones whose findings change an artifact:
 
-- **`main` green and the version chosen**: every tag.
+- **`main` green, the vulnerability policy met, and the version chosen**: every tag.
 - **API surface review**: a rename decided after publication costs a new candidate.
 - **Both chart READMEs against the tree being tagged** (`charts/actions-gateway/README.md`, `charts/actions-gateway-crds-v2/README.md`): they ship inside the tarballs, so a fix after the cut costs a candidate.
   Every `values.yaml` key has a table row, and the install and upgrade commands, the Kubernetes floor, and links into `docs/operations/` still hold.

@@ -192,10 +192,7 @@ jobs:
             # That reasoning covers the BASE and not the Docker CLI, buildx and
             # compose binaries this image adds, which are ours to bump and are
             # currently scanned report-only along with everything else. Splitting
-            # them into a blocking leg is Q976, which also carries the reason a
-            # bump would not arrive on its own: the dependabot 'docker' ecosystem
-            # the comment above cites is scoped to five directories that hold no
-            # Dockerfile, so nothing bumps this image's bases today.
+            # them into a blocking leg is Q1357.
             exit-code: '0'
           - name: cache-runner
             # report-only: it is FROM `build-runner` with one patched string in
