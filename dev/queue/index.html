@@ -3082,12 +3082,12 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Five boundary slips confirmed from source on 2026-11-09, each narrow and none needing a major to fix.</strong> Nothing was run, so each result …</td>
 </tr>
 <tr>
-<td><a href="Q1342/">Q1342</a></td>
-<td>A stored scale-set name collision refuses every update to either gateway</td>
+<td><a href="Q1358/">Q1358</a></td>
+<td>A gateway created with the GMC finalizer skips the raced-pair refusal</td>
 <td><code>security</code> <code>bug</code></td>
 <td>🔲</td>
 <td>S</td>
-<td>While two stored RunnerSets in one GitHub scope share a first label, the ActionsGateway webhook refuses every update to either side's …</td>
+<td>A second tenant that creates its ActionsGateway with the GMC's finalizer already in <code>metadata.finalizers</code> defeats the bound …</td>
 </tr>
 <tr>
 <td><a href="Q1344/">Q1344</a></td>
@@ -3096,14 +3096,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>M</td>
 <td>When a set's first label is renamed, or a <code>RunnerSet</code> is deleted, the old scale set stays registered at GitHub, and the next tenant …</td>
-</tr>
-<tr>
-<td><a href="Q1335/">Q1335</a></td>
-<td>A consumer's unwritable projected Secret stalls a provider's EgressProxy</td>
-<td><code>security</code> <code>bug</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>A granted, opted-in consumer namespace can pre-create a Secret at <code>proxyAttributionName(&lt;provider-ns&gt;, &lt;proxy&gt;)</code> that the apiserver will …</td>
 </tr>
 <tr>
 <td><a href="Q822/">Q822</a></td>

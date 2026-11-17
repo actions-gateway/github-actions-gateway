@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1342/">
+        <link rel="canonical" href="https://actions-gateway.com/dev/queue/Q1358/">
       
       
       
@@ -23,7 +23,7 @@
     
     
       
-        <title>A stored scale-set name collision refuses every update to either gateway - GitHub Actions Gateway</title>
+        <title>A gateway created with the GMC finalizer skips the raced-pair refusal - GitHub Actions Gateway</title>
       
     
     
@@ -118,7 +118,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#a-stored-scale-set-name-collision-refuses-every-update-to-either-gateway" class="md-skip">
+        <a href="#a-gateway-created-with-the-gmc-finalizer-skips-the-raced-pair-refusal" class="md-skip">
           Skip to content
         </a>
       
@@ -174,7 +174,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              A stored scale-set name collision refuses every update to either gateway
+              A gateway created with the GMC finalizer skips the raced-pair refusal
             
           </span>
         </div>
@@ -2657,17 +2657,17 @@
   
 
 
-<h1 id="a-stored-scale-set-name-collision-refuses-every-update-to-either-gateway">A stored scale-set name collision refuses every update to either gateway<a class="headerlink" href="#a-stored-scale-set-name-collision-refuses-every-update-to-either-gateway" title="Permanent link">&para;</a></h1>
-<p>While two stored RunnerSets in one GitHub scope share a first label, the ActionsGateway webhook refuses every update to either side's gateway, including the GMC's own finalizer write and the established tenant's edits to its own gateway.</p>
-<p><strong>Measured 2026-11-11 in the GMC envtest suite</strong>, while closing Q1325: a RunnerSet and an ActionsGateway created concurrently in a second namespace were both admitted onto a first label a first namespace already held (25 of 50 attempts).
-From then on, Q1325's reviewer edited the established gateway's labels and the webhook refused the edit with <code>RunnerSet "held" in this namespace would claim scale-set name "shared-race"</code>, though it changed only metadata (2026-11-11, at #2306 head <code>4b373bc</code>).
-An earlier run with the established gateway not yet reconciled showed its GMC finalizer update denied the same way on every reconcile.
-The raced gateway's finalizer write is denied the same way, which is what keeps it from being provisioned, so that half is wanted.</p>
-<p><strong>Mechanism, read from source.</strong> <code>validateScaleSetLabelsVsScope</code> runs on every update, and an update that leaves <code>githubURL</code> alone is judged with <code>CollidesAsWritten</code>, which only drops the public-GitHub alias fold: a genuinely colliding stored pair still fails it.
-So the second tenant, by racing a pair (or by any route into a stored collision: an upgrade from before Q791, a window with the webhook uninstalled), freezes the first tenant's gateway against its own edits until the second tenant's set is gone.
-The gateway's status subresource is not intercepted, so the <code>ScaleSetNameCollision</code> report still lands.</p>
-<p><strong>Fix direction, not decided.</strong> Exempt an update whose own namespace's claims are unchanged from the scope check, the way <code>scaleSetClaimUnchanged</code> exempts a RunnerSet edit, while keeping the refusal for a gateway that has never been reconciled (no GMC finalizer), since that refusal is what holds a raced gateway unprovisioned.
-<code>TestV2_ScaleSetNameGuard_ConcurrentPairIsReported</code> builds the state and requires that refusal for every raced gateway, so a fix that drops it reddens there; a case editing the held gateway's labels should go green with the fix.</p>
+<h1 id="a-gateway-created-with-the-gmc-finalizer-skips-the-raced-pair-refusal">A gateway created with the GMC finalizer skips the raced-pair refusal<a class="headerlink" href="#a-gateway-created-with-the-gmc-finalizer-skips-the-raced-pair-refusal" title="Permanent link">&para;</a></h1>
+<p>A second tenant that creates its ActionsGateway with the GMC's finalizer already in <code>metadata.finalizers</code> defeats the bound <code>05-security.md</code> gives Q1325's raced pair: the gateway is provisioned onto a scale-set name another tenant holds.</p>
+<p><strong>Measured 2026-11-17 in the GMC envtest suite</strong>, while working Q1342, with a temporary probe that repeats <code>TestV2_ScaleSetNameGuard_ConcurrentPairIsReported</code>'s race but adds <code>actions-gateway.com/gmc-cleanup</code> (<code>ActionsGatewayFinalizer</code>) to the second tenant's gateway before creating it.
+With Q1342's exemption disabled, so the webhook behaved as on <code>main</code> at e25db67fb, 15 of 30 pairs were both admitted, all 15 raced gateways carried the finalizer, and 10 of them had reconciled through to <code>ReconcileSucceeded</code> with <code>ScaleSetNameCollision=True</code> 10 seconds later.
+The unmodified race test, in the same run, had 0 of 28 raced gateways finalized.</p>
+<p><strong>Mechanism, read from source.</strong> The bound is the gateway webhook refusing the GMC's finalizer update while the pair collides, and provisioning starts only after that update (<code>cmd/gmc/internal/controller/actionsgateway_v2_controller.go:226:if !controllerutil.ContainsFinalizer(&amp;ag, gmcv2.ActionsGatewayFinalizer) {</code>).
+A gateway that already carries the finalizer skips that branch, so no update happens to refuse; <code>ValidateCreate</code> does not look at finalizers, and Kubernetes lets whoever may create the object set them.
+The chart ships no role for tenant users, so who holds that create is the operator's RBAC: the same premise Q1325's residual already makes about a second tenant.</p>
+<p><strong>Fix direction, not decided.</strong> Either refuse a create carrying <code>ActionsGatewayFinalizer</code> (only the GMC adds it), or have the reconciler refuse to provision a gateway whose own RunnerSets collide, which reverses the advisory-only choice <code>05-security.md</code> §5.2 argues for.
+The first is admission-only and matches the existing bound; check whether any install path (GitOps restore, <code>kubectl apply</code> of an exported object) legitimately writes the finalizer on create before choosing it.
+The probe test and both runs' output are in the v2.0.1 run's notes folder under <code>q1342/</code>, outside the repo.</p>
 
 
 

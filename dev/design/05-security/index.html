@@ -4412,6 +4412,7 @@ The switch is per gateway and the port is per namespace, so a namespace is opted
 When the pool has attribution on and a namespace is opted in, the GMC gives the namespace a port of its own and, once every pool replica listens on it, projects that port into the namespace; the AGC then sets it in the <code>HTTPS_PROXY</code> of every new worker of every gateway there that uses the pool.
 It withdraws the projection when either side turns off, and new workers go back to the shared port.
 A tenant can set the projection's labels on objects of its own, so a withdrawal acts only on a ConfigMap at the projection's own name, and a Secret the apiserver refuses to blank (an immutable one, say) is left as it is rather than retried: neither can stall another tenant's pool (Q1324).
+A projection the GMC cannot write, such as an immutable Secret the consumer created at the projection's name, fails that namespace alone: the pool's own resources and every other namespace's projection still apply, and the pool reports <code>Degraded</code> naming the namespace until a reconcile writes it (Q1335).
 That is the only consumer-side change: it restarts nothing in the consumer's namespace, and the AGC's own traffic stays on the shared port, since its failures are not a job's.
 So a pool edit can move workers in another namespace, but only in a namespace that opted in: one that opted in before the pool did moves when the pool enables attribution, and moves back when the pool disables it.
 A namespace where no gateway has opted in is never moved by a pool edit.
@@ -4666,12 +4667,15 @@ Admission cannot reserve a name across two objects, so the bound comes from what
 <ul>
 <li><strong>The raced gateway is held unprovisioned.</strong> The GMC's first write to a new gateway adds its finalizer, provisioning starts only after that, and the gateway webhook refuses that update while the pair collides.
   None of the 25 raced gateways in the same run received the finalizer, so none had an AGC to open a session with, and the test requires the refusal for every raced gateway.
-  It is not guaranteed: a GMC reconcile landing between the two creates would add the finalizer before the second object is stored, which no run has caught.</li>
+  It is not guaranteed: a GMC reconcile landing between the two creates would add the finalizer before the second object is stored, which no run has caught.
+  Nor does it hold against a gateway created with the finalizer already set: the GMC then makes no update to refuse; of 15 such raced gateways in the same suite, all carried the finalizer by construction and 10 had reconciled through to <code>ReconcileSucceeded</code> within 10 seconds (measured 2026-11-17, <a href="../../queue/Q1358/">Q1358</a>).</li>
 <li><strong>The established tenant's gateway reports it.</strong> Its status is written through the status subresource, which the webhook does not intercept, so the next reconcile sets <code>ScaleSetNameCollision</code> (<code>TestV2_ScaleSetNameGuard_ConcurrentPairIsReported</code>).</li>
 <li><strong>Taking jobs needs credentials for the scope.</strong> The raced gateway's AGC has to authenticate to the shared scope to open a session.
   Whether such credentials can open a session on any of that scope's scale sets at GitHub directly, with no admission in the way, is unmeasured; if they can, this residual adds nothing for the credential holder.</li>
 </ul>
-<p>The cost the bound does not cover: while the pair stands, the webhook refuses every update to the established tenant's gateway too, its own edits included (<a href="../../queue/Q1342/">Q1342</a>).
+<p>The refusal is keyed on that finalizer, so it does not also freeze the established tenant (Q1342).
+An update that keeps <code>githubURL</code> and whose stored gateway already carries the GMC finalizer skips the scope check: it binds no new scope, and refusing it cannot undo a provisioned pair.
+The finalizer write has a stored object without the finalizer, so it is still judged, which keeps the raced side refused; <code>TestV2_ScaleSetNameGuard_HeldGatewayStaysEditable</code> pins the held side's edit.
 Owner check, not run here: on two gateways bound to one org, create a second tenant's <code>RunnerSet</code> and gateway together, then read whether the second gateway gets an AGC and which namespace a job sent to the shared label lands in; and whether the second tenant's App installation token, used directly, can open a session on the first tenant's scale set.</p>
 <p><strong>A renamed set leaves its old scale set (Q1325).</strong> Admission releases the old first label's claim as soon as an edit renaming it is stored.
 The AGC compares the name its listener registered with the spec on every reconcile and restarts the listener on a change, the way it does for the runner group (Q712), so the old scale set's session is deleted and the new name registered on the next reconcile.
