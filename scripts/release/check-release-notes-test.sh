@@ -244,6 +244,56 @@ else
 	printf '[check-release-notes-test] SKIP commit-count cases — no v1.7.0 tag here\n' >&2
 fi
 
+# --- a drafting banner, once the note's release is tagged ---------------------
+
+# draft_case_ DESC WANT_EXIT FILE BODY: asserts the reason as well as the
+# status, since a tagged fixture with no count heading must fail on the banner
+# and on nothing else.
+draft_case_() {
+	local desc="$1" want="$2" file="$3" body="$4" rc=0 out
+	printf '%s' "$body" >"$WORK/$file"
+	out="$("$SUBJECT" "$WORK/$file" 2>&1)" || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
+	if [[ "$rc" == "$want" && ("$want" == 0 || "$out" == *"drafting banner"*) ]]; then
+		ok "$desc"
+	else
+		bad "$desc (want exit $want, got $rc)"
+		printf '       %s\n' "$out" >&2
+	fi
+}
+
+DRAFT='## Highlights
+
+> [!NOTE]
+> **Draft, re-read against `main` on 2026-11-06.** Still pending: **Validation**.
+> Delete this note before publishing.
+
+A claim that holds.
+'
+
+if git rev-parse -q --verify refs/tags/v1.7.0 >/dev/null 2>&1; then
+	draft_case_ "a tagged note carrying the draft banner fails" 1 v1.7.0.md "$DRAFT"
+	draft_case_ "a tagged note saying only 'before publishing' fails" 1 v1.7.0.md \
+		'## Highlights
+
+> Delete this note before publishing.
+'
+	draft_case_ "a draft word in prose or a fenced sample is not a banner" 0 v1.7.0.md \
+		'## Highlights
+
+Draft PRs no longer start the heavy gates.
+
+```markdown
+> **Draft, re-read against `main`.**
+```
+'
+else
+	printf '[check-release-notes-test] SKIP tagged drafting-banner cases — no v1.7.0 tag here\n' >&2
+fi
+# A note whose release is not tagged yet is still being written, so its banner
+# is the convention rather than a defect. Needs no tag in the tree.
+draft_case_ "an untagged note may carry the draft banner" 0 v9.9.9.md "$DRAFT"
+
 # --- and none fires where it should not --------------------------------------
 #
 # The exclusions matter as much as the rules: a gate that flagged these would be

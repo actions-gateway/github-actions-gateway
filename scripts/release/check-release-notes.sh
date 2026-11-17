@@ -19,6 +19,8 @@
 #     renders as a link that goes nowhere.
 #   - Images are tagged `vX.Y.Z` and charts `X.Y.Z`, so a copy-pasteable helm
 #     command carrying the `v` fails for the reader who trusts it.
+#   - A drafting banner outlives its release's tag: a `> **Draft` line, or one
+#     saying "before publishing", in a note whose filename is a tag here.
 #
 # Index truncation is reported, never failed, and what it reports is deliberately
 # NOT collapsed height.
@@ -125,6 +127,27 @@ for note in "${notes[@]}"; do
 		findings=$((findings + 1))
 	fi
 
+	to_tag="$(basename "$note" .md)"
+
+	# A drafting banner, once the note's release is tagged. While it is being
+	# written a note may carry one, and v2.0.0's did for eleven days with this
+	# gate running on every PR, so the rule binds only from the tag, which is
+	# the moment the note is about to become the Release body. v2.0.0's still
+	# said "Delete this note before publishing" after its tag, and only a prose
+	# pass caught it.
+	if git -C "$REPO_ROOT" rev-parse -q --verify "refs/tags/$to_tag" >/dev/null; then
+		draft="$(awk '
+			/^[ \t]*(```|~~~)/ { infence = !infence; next }
+			infence { next }
+			/^>/ && ($0 ~ /^> *\*\*Draft[ ,.:]/ || tolower($0) ~ /before publishing/) { print FNR ": " substr($0, 1, 100) }
+		' "$note")"
+		if [[ -n "$draft" ]]; then
+			printf '%s: %s is tagged, and the note still carries a drafting banner\n' "$name" "$to_tag" >&2
+			printf '  %s\n' "$draft" >&2
+			findings=$((findings + 1))
+		fi
+	fi
+
 	# The "Everything since" commit count, against the range the note names.
 	#
 	# The number is the opening line of the most-read paragraph in the notes and
@@ -151,7 +174,6 @@ for note in "${notes[@]}"; do
 	# land after the freeze.` sitting further down, which is the same deletion this
 	# rule exists to fail.
 	from_tag="$(awk '/^## Everything since v/ { print $4; exit }' "$note")"
-	to_tag="$(basename "$note" .md)"
 	claimed="$(awk '
 		/^## Everything since v/ { inrange = 1; next }
 		/^## / { inrange = 0 }
