@@ -40,6 +40,7 @@ The three independently versioned components — GMC, AGC, and worker image — 
   - [Action required if a template projects a ServiceAccount token: the source is now rejected, and removed from worker pods](#action-required-if-a-template-projects-a-serviceaccount-token-the-source-is-now-rejected-and-removed-from-worker-pods)
   - [Action required if a namespaced `RunnerTemplate` sets `nodeName` or `schedulerName`: both are now rejected, and cleared from worker pods](#action-required-if-a-namespaced-runnertemplate-sets-nodename-or-schedulername-both-are-now-rejected-and-cleared-from-worker-pods)
   - [Action required if a worker PriorityClass is not below the controllers': the GMC now refuses to start](#action-required-if-a-worker-priorityclass-is-not-below-the-controllers-the-gmc-now-refuses-to-start)
+  - [Action required if you set egressDestinationAllowlist.configMapName: the key is removed](#action-required-if-you-set-egressdestinationallowlistconfigmapname-the-key-is-removed)
   - [Action required if you overlay a library template: deploy/templates/ is written at v2](#action-required-if-you-overlay-a-library-template-deploytemplates-is-written-at-v2)
   - [Action required: the GMC reads Secrets only in marked tenant namespaces](#action-required-the-gmc-reads-secrets-only-in-marked-tenant-namespaces)
   - [Non-breaking: the GMC's ConfigMap, CNI policy and ServiceMonitor writes are confined to tenant namespaces](#non-breaking-the-gmcs-configmap-cni-policy-and-servicemonitor-writes-are-confined-to-tenant-namespaces)
@@ -811,8 +812,7 @@ allowedEgressFQDNs:
 ```
 
 An entry covers its subdomains, so `corp.example` also covers `ghes.corp.example`.
-Prefer the chart value to the [watched ConfigMap](security-operations.md#self-service-additions-via-a-watched-configmap) for an appliance host.
-A ConfigMap that is deleted or fails validation is ignored whole, and every pool that reached its appliance through a ConfigMap entry then loses it until the ConfigMap is fixed.
+`v2.0.0` also [removes the watched ConfigMap](#action-required-if-you-set-egressdestinationallowlistconfigmapname-the-key-is-removed), so an appliance host listed only there has to move into `allowedEgressFQDNs` in the same upgrade.
 A host the command prints that is not a DNS hostname, such as the wildcard `*.corp.example` or a bracketed IPv6 literal, is never added, whatever the allowlist holds.
 The proxy admits a CONNECT to that appliance only at an address in the pool's `destinationCIDRs`.
 
@@ -1010,6 +1010,25 @@ kubectl get priorityclasses -o custom-columns=NAME:.metadata.name,VALUE:.value,G
 
 Lower a worker class that is too high by creating a replacement at a lower value and moving its `RunnerSet`s and templates onto it; a PriorityClass value cannot be edited.
 To keep the controllers unprioritized instead, set `controlPlanePriorityClass.create: false`; a worker class above 0 can then preempt them.
+
+### Action required if you set `egressDestinationAllowlist.configMapName`: the key is removed
+
+**Who is affected:** anyone whose values set `egressDestinationAllowlist.configMapName`, so the GMC watched a ConfigMap of extra egress destinations.
+An install that leaves it empty, the default, needs nothing.
+
+**What changed.** The egress destination allowlist now comes from `allowedEgressFQDNs` and `allowedEgressCIDRs` alone, as the PriorityClass allowlist comes from `allowedPriorityClasses`.
+The chart no longer passes `--egress-destination-allowlist-configmap` or renders the Role that let the GMC read that ConfigMap ([why](security-operations.md#changing-the-allowlist)).
+
+**What you will see.** `helm upgrade` fails at render with a message naming the key, and the release stays where it was.
+
+**What to do.** Read the ConfigMap's two keys, add every entry to the matching list in the same `helm upgrade` that installs `v2.0.0`, and unset `egressDestinationAllowlist.configMapName`:
+
+```bash
+kubectl -n <gmc-namespace> get configmap <name> -o jsonpath='{.data.fqdns}{"\n---\n"}{.data.cidrs}{"\n"}'
+```
+
+An entry left out stops being allowed when the new GMC starts: a `githubURL` host it covered leaves its pools, and an `EgressProxy` naming it as a destination is refused on its next write.
+Delete the ConfigMap once the upgrade is done; nothing reads it.
 
 ### Action required if you overlay a library template: `deploy/templates/` is written at `v2`
 

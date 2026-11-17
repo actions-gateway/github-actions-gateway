@@ -99,12 +99,6 @@ spec:
         # non-GitHub CIDR destinations.
         - --allowed-egress-cidrs={{ join "," . }}
         {{- end }}
-        {{- with .Values.egressDestinationAllowlist.configMapName }}
-        # Q242 G.1: also source the egress destination allowlist from this ConfigMap
-        # in the GMC namespace, watched so additions take effect without a restart.
-        # Additive to the flags above; fail-safe on a missing/bad CM.
-        - --egress-destination-allowlist-configmap={{ . }}
-        {{- end }}
         {{- with .Values.fqdnPolicyBackend }}
         # Q245: CNI/platform mechanism enforcing an FQDN egressPolicyMode intent
         # (none|cilium|calico|gke). Operator's install-wide choice; unset defaults to

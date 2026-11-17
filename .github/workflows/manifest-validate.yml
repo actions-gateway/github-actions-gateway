@@ -260,6 +260,11 @@ jobs:
       # and it needs only python3.
       - name: webhook rules name a served version (make webhook-versions-check)
         run: make webhook-versions-check
+      # Every chart values key has a row in its README's Values table. A step
+      # here because charts/** is already this job's input and it needs only
+      # python3.
+      - name: chart README documents every values key (make chart-values-docs-check)
+        run: make chart-values-docs-check
       # The same tree's third question, and the one only a render can answer
       # (Q1024): nothing rendered the four `kubectl apply -k` targets, so a
       # kustomization.yaml that does not build reached the operator's cluster

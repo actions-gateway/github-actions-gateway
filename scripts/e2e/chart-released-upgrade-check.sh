@@ -25,7 +25,8 @@
 #
 #   1. A release whose values set a key HEAD removed must fail AT RENDER with
 #      the chart's migration message (today: priorityClassAllowlist.configMapName,
-#      removed by Q492), never midway through applying.
+#      removed by Q492, and egressDestinationAllowlist.configMapName, removed at
+#      v2.0.0), never midway through applying.
 #   2. A plain `helm upgrade` to HEAD either succeeds outright, or fails at
 #      render with a message that names the documented pre-upgrade step and
 #      points at docs/operations/upgrade.md. Any other failure — above all
@@ -459,22 +460,28 @@ echo "OK: the released chart is installed and its manager is ready (revision ${r
 # Anchored on the guard still existing in HEAD's chart: when the removed key's
 # render-time guard is eventually retired after its deprecation window, this
 # probe retires with it instead of failing the gate.
-if grep -rq "priorityClassAllowlist.configMapName" "${CHART_DIR}/templates"; then
-	step "a release still setting the removed priorityClassAllowlist.configMapName must fail at render"
-	probe_rc=0
+# probe_removed_key KEY WHY — when HEAD's chart still guards KEY, an upgrade that
+# sets it must fail at render with the migration message and leave the release
+# revision where it was. WHY is what accepting the key would cost.
+probe_removed_key() {
+	local key="$1" why="$2" probe_rc=0 probe_out
+	if ! grep -rq "${key}" "${CHART_DIR}/templates"; then
+		echo "     (skipping the removed-values probe: HEAD's chart no longer guards ${key})"
+		return 0
+	fi
+	step "a release still setting the removed ${key} must fail at render"
 	probe_out="$(helm upgrade "${HELM_RELEASE}" "${CHART_DIR}" \
 		--kube-context "${KUBE_CONTEXT}" --namespace "${RELEASE_NS}" \
 		-f "${work_dir}/values.yaml" \
-		--set priorityClassAllowlist.configMapName=released-upgrade-probe \
+		--set "${key}=released-upgrade-probe" \
 		--wait --timeout 5m 2>&1)" || probe_rc=$?
 	if ((probe_rc == 0)); then
-		echo "FAIL: an upgrade carrying the removed priorityClassAllowlist.configMapName key was" >&2
-		echo "  ACCEPTED. The render-time guard for it is gone, so an operator's existing value" >&2
-		echo "  would silently narrow the PriorityClass security allowlist on upgrade (Q492)." >&2
+		echo "FAIL: an upgrade carrying the removed ${key} key was ACCEPTED." >&2
+		echo "  The render-time guard for it is gone, so ${why}." >&2
 		exit 1
 	fi
-	if [[ "${probe_out}" != *"configMapName"* || "${probe_out}" != *"docs/operations/upgrade.md"* ]]; then
-		echo "FAIL: the upgrade with the removed configMapName key failed, but not with the" >&2
+	if [[ "${probe_out}" != *"${key}"* || "${probe_out}" != *"docs/operations/upgrade.md"* ]]; then
+		echo "FAIL: the upgrade with the removed ${key} key failed, but not with the" >&2
 		echo "  migration message (it must name the key and point at docs/operations/upgrade.md):" >&2
 		echo "  ${probe_out}" >&2
 		exit 1
@@ -484,10 +491,13 @@ if grep -rq "priorityClassAllowlist.configMapName" "${CHART_DIR}/templates"; the
 		echo "  happened while applying, not at render, leaving the release half-upgraded." >&2
 		exit 1
 	fi
-	echo "OK: the removed key failed at render with the migration message; the release is untouched"
-else
-	echo "     (skipping the removed-values probe: HEAD's chart no longer guards configMapName)"
-fi
+	echo "OK: the removed ${key} failed at render with the migration message; the release is untouched"
+}
+
+probe_removed_key priorityClassAllowlist.configMapName \
+	"an operator's existing value would silently narrow the PriorityClass security allowlist on upgrade (Q492)"
+probe_removed_key egressDestinationAllowlist.configMapName \
+	"the entries in an operator's ConfigMap would silently stop being allowed on upgrade"
 
 # --- The out-of-band CRDs go to HEAD's by the documented path, ahead of the chart ---
 # upgrade.md, "remove the CRDs' conversion webhook before applying them". The refusal is

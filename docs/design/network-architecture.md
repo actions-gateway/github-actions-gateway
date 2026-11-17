@@ -310,8 +310,8 @@ The GitHub hostname set is the same across backends: `api.github.com`, `github.c
 That addition is what makes an FQDN mode work for GitHub Enterprise Server: the appliance's hostname lives on the referring `ActionsGateway`, not on the `EgressProxy`, so the reconciler resolves the referrer graph (gateways whose `defaultProxyRef` names the proxy, `RunnerSet`s whose `proxyRef` does, contributing their gateway's host) and feeds both the CNI policy and the CONNECT suffix list.
 A referrer applied after the proxy requeues it through a watch on both kinds.
 Hosts the public set already covers are dropped and the result is sorted, so a public-GitHub-only pool emits exactly the policy it did before.
-`gitHubURL` is tenant-authored, so its host is held to the allowlist that gates `destinationFQDNs`: one `--allowed-egress-fqdns` or its ConfigMap does not cover, or one that is not a DNS name, reaches neither surface and is named on `GitHubEgressIncomplete` with reason `GitHubHostNotAllowlisted`.
-The ConfigMap half of that allowlist loads after the GMC starts and changes under it, so a pool holds its reconcile until the first read rather than drop a host on a restart, and each replacement of the set requeues every pool.
+`gitHubURL` is tenant-authored, so its host is held to the allowlist that gates `destinationFQDNs`: one `--allowed-egress-fqdns` does not cover, or one that is not a DNS name, reaches neither surface and is named on `GitHubEgressIncomplete` with reason `GitHubHostNotAllowlisted`.
+A GMC also given `--egress-destination-allowlist-configmap`, which the chart no longer sets, adds that ConfigMap's entries, and that half loads after the GMC starts and changes under it, so a pool holds its reconcile until the first read rather than drop a host on a restart, and each replacement of the set requeues every pool.
 The ConfigMap reconciler reads once at start whether or not the object exists, and the hold ends 30 seconds after the GMC starts regardless, so a named ConfigMap that was never created cannot keep a pool from reconciling.
 In any FQDN mode the standard NetworkPolicy keeps its DNS + ingress rules but **drops the GitHub-CIDR egress rule**, and the IP-range reconcile skips the proxy.
 
@@ -351,7 +351,7 @@ The destinations widen two surfaces, derived from the one CR:
   The proxy matches a CONNECT host against the allowed suffixes, and for the CIDR path resolves the host and dials the **validated IP** (closing the DNS-rebinding window).
   A denied CONNECT returns `403` and increments `actions_gateway_proxy_connect_denied_total`.
 
-Because the `EgressProxy` is tenant-authorable, **what** may be requested is gated by a platform-owned allowlist (`--allowed-egress-fqdns` suffix match / `--allowed-egress-cidrs` subnet containment, optionally augmented by a watched ConfigMap), enforced by an admission webhook — **both empty ⇒ deny-all-non-GitHub** (the secure default).
+Because the `EgressProxy` is tenant-authorable, **what** may be requested is gated by a platform-owned allowlist (`--allowed-egress-fqdns` suffix match / `--allowed-egress-cidrs` subnet containment, set from Helm values), enforced by an admission webhook — **both empty ⇒ deny-all-non-GitHub** (the secure default).
 Operators should prefer an **in-cluster caching mirror** for remote third-party dependencies and reserve the allowlist for what a mirror can't proxy; see [security-operations.md § Worker egress destinations](../operations/security-operations.md#worker-egress-destinations-the-egress-allowlist) and the threat row in [§5.2](05-security.md#52-agc--proxy-level-threats-namespace-scoped).
 For untrusted pull requests the mirror is not merely preferred but load-bearing: it is what lets a tenant carry no additive egress policy at all, leaving a worker cluster DNS, GitHub, and the mirror Services ([the tight-egress posture](../operations/kata-dind-workloads.md#untrusted-pull-requests--the-tight-egress-posture)).
 

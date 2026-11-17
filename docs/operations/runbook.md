@@ -209,7 +209,7 @@ See [ActionsGateway Reports EgressRulesStale](troubleshooting.md#actionsgateway-
 **Ticket.** A referring gateway names a GitHub Enterprise Server host the `EgressProxy` pool's egress allowlist cannot reach, so that tenant's GitHub traffic is denied and it acquires no jobs.
 The condition's reason says which fix it needs, and neither self-heals.
 `ApplianceRangesRequired` is a `CIDR`-mode pool: the appliance's ranges are knowable only to you, so supply them in `spec.destinationCIDRs` (a platform admin must allowlist them first) or switch the pool to an FQDN egress mode.
-`GitHubHostNotAllowlisted` is a host the platform egress allowlist does not cover: a platform admin adds it to `--allowed-egress-fqdns` or the watched ConfigMap.
+`GitHubHostNotAllowlisted` is a host the platform egress allowlist does not cover: a platform admin adds it to the chart's `allowedEgressFQDNs` (`--allowed-egress-fqdns`) and runs `helm upgrade`.
 See [A GHES Tenant's Traffic Never Reaches the Appliance](troubleshooting.md#a-ghes-tenants-traffic-never-reaches-the-appliance).
 
 ### ActionsGatewayScaleSetNameCollision
