@@ -6,9 +6,6 @@ import (
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-
 	v2 "github.com/actions-gateway/github-actions-gateway/api/v2"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 )
@@ -217,18 +214,8 @@ func TestResolveConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("ConfigMap watch without POD_NAMESPACE fails closed", func(t *testing.T) {
-		cfg := &gmcFlags{
-			egressDestinationAllowlistConfigMap: "egress-allowlist",
-			fqdnPolicyBackend:                   string(controller.FQDNBackendNone),
-		}
-		if _, err := resolveConfig(cfg, fakeGetenv(nil)); err == nil {
-			t.Error("a ConfigMap watch with no POD_NAMESPACE must fail startup")
-		}
-	})
-
-	// The PriorityClassAllowlist watch reads a CLUSTER-scoped CR (Q492), so unlike
-	// the ConfigMap watch above it needs no POD_NAMESPACE to locate its object.
+	// The PriorityClassAllowlist watch reads a CLUSTER-scoped CR (Q492), so it needs
+	// no POD_NAMESPACE to locate its object.
 	t.Run("PriorityClassAllowlist watch without POD_NAMESPACE starts", func(t *testing.T) {
 		cfg := &gmcFlags{
 			priorityClassAllowlistName: "gag-priorityclass-allowlist",
@@ -240,11 +227,10 @@ func TestResolveConfig(t *testing.T) {
 	})
 }
 
-// TestBuildCacheOptions verifies that each watched-allowlist feature narrows its
-// informer to the single object it reads, and that neither feature grants a broad
-// read: no watch → no ByObject; the egress ConfigMap watch is scoped to
-// POD_NAMESPACE and pinned by name; the cluster-scoped PriorityClassAllowlist
-// watch is pinned by name with no namespace (Q492).
+// TestBuildCacheOptions verifies that the watched PriorityClass allowlist narrows
+// its informer to the single object it reads: no watch → no ByObject, and the
+// cluster-scoped PriorityClassAllowlist watch is pinned by name with no namespace
+// (Q492).
 func TestBuildCacheOptions(t *testing.T) {
 	t.Run("no watch yields empty options", func(t *testing.T) {
 		opts, err := buildCacheOptions(&gmcFlags{}, "gmc-system")
@@ -253,32 +239,6 @@ func TestBuildCacheOptions(t *testing.T) {
 		}
 		if opts.ByObject != nil {
 			t.Error("no watch configured, ByObject must be nil")
-		}
-	})
-
-	t.Run("egress ConfigMap watch is namespace-scoped and name-pinned", func(t *testing.T) {
-		opts, err := buildCacheOptions(&gmcFlags{egressDestinationAllowlistConfigMap: "egress"}, "gmc-system")
-		if err != nil {
-			t.Fatalf("buildCacheOptions: %v", err)
-		}
-		// ByObject is keyed by a freshly allocated pointer, so it can only be
-		// looked up by type, never by an equal key.
-		var byObj cache.ByObject
-		var ok bool
-		for k, v := range opts.ByObject {
-			if _, isCM := k.(*corev1.ConfigMap); isCM {
-				byObj, ok = v, true
-			}
-		}
-		if !ok {
-			t.Fatal("the egress watch must scope the ConfigMap informer")
-		}
-		nsCfg, inNS := byObj.Namespaces["gmc-system"]
-		if !inNS {
-			t.Fatal("informer must be scoped to POD_NAMESPACE")
-		}
-		if nsCfg.FieldSelector == nil {
-			t.Error("the watch must pin the informer to the ConfigMap by name")
 		}
 	})
 
@@ -302,19 +262,6 @@ func TestBuildCacheOptions(t *testing.T) {
 		}
 		if !found {
 			t.Fatal("the watch must scope the PriorityClassAllowlist informer")
-		}
-	})
-
-	t.Run("both watches scope independently", func(t *testing.T) {
-		opts, err := buildCacheOptions(&gmcFlags{
-			priorityClassAllowlistName:          "pc",
-			egressDestinationAllowlistConfigMap: "egress",
-		}, "gmc-system")
-		if err != nil {
-			t.Fatalf("buildCacheOptions: %v", err)
-		}
-		if len(opts.ByObject) != 2 {
-			t.Errorf("both watches must scope their own informer; got %d entries", len(opts.ByObject))
 		}
 	})
 }

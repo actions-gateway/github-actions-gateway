@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/yaml"
@@ -396,15 +395,12 @@ func startEgressProxyReconcilerOpts(t *testing.T, ipCache *controller.IPRangeCac
 // toggles the per-EgressProxy ServiceMonitor provisioning (Q324).
 func startEgressProxyReconcilerFull(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration, enableServiceMonitor bool) *reconcileCounter {
 	t.Helper()
-	return startEgressProxyReconcilerAllowlisted(t, ipCache, backend, syncPeriod, enableServiceMonitor, egressTestAllowlist, nil)
+	return startEgressProxyReconcilerAllowlisted(t, ipCache, backend, syncPeriod, enableServiceMonitor, egressTestAllowlist)
 }
 
-// startEgressProxyReconcilerAllowlisted takes the platform egress allowlist and the
-// channel announcing a change to it, for a test that moves the allowlist under a
-// running reconciler (Q1322). Every other constructor passes the suite's static list
-// and no channel. Each alongside registers one more controller on the same manager
-// before it starts.
-func startEgressProxyReconcilerAllowlisted(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration, enableServiceMonitor bool, egressAllowlist *allowlist.EgressDestinationAllowlist, allowlistChanged <-chan event.TypedGenericEvent[struct{}], alongside ...func(ctrl.Manager) error) *reconcileCounter {
+// startEgressProxyReconcilerAllowlisted takes the platform egress allowlist (Q1322);
+// every other constructor passes the suite's static list.
+func startEgressProxyReconcilerAllowlisted(t *testing.T, ipCache *controller.IPRangeCache, backend controller.FQDNBackend, syncPeriod *time.Duration, enableServiceMonitor bool, egressAllowlist *allowlist.EgressDestinationAllowlist) *reconcileCounter {
 	t.Helper()
 	mgrCtx, mgrCancel := context.WithCancel(ctx)
 	t.Cleanup(mgrCancel)
@@ -434,13 +430,9 @@ func startEgressProxyReconcilerAllowlisted(t *testing.T, ipCache *controller.IPR
 		FQDNBackend:          backend,
 		EnableServiceMonitor: enableServiceMonitor,
 		EgressAllowlist:      egressAllowlist,
-		AllowlistChanged:     allowlistChanged,
 		Recorder:             mgr.GetEventRecorder("egressproxy-controller"),
 	}).SetupWithManager(mgr)
 	require.NoError(t, err)
-	for _, setup := range alongside {
-		require.NoError(t, setup(mgr))
-	}
 
 	go func() { _ = mgr.Start(mgrCtx) }()
 	return counter

@@ -138,40 +138,15 @@ func resolveConfig(cfg *gmcFlags, getenv func(string) string) (*resolvedConfig, 
 	}, nil
 }
 
-// buildCacheOptions narrows the informers the two watched-allowlist features need
-// (Q188, Q242 G.1) to the single object each reads, so the GMC needs no broad read
-// grant for either.
-//
-//   - The egress destination allowlist is a ConfigMap in the GMC's own namespace:
-//     the ConfigMap informer is scoped to that namespace and pinned to that one
-//     name, so the GMC needs only namespaced get/list/watch, not cluster-wide
-//     ConfigMap read. A watch with no POD_NAMESPACE to locate it is a hard startup
-//     failure.
-//   - The PriorityClass allowlist is a cluster-scoped PriorityClassAllowlist CR
-//     (Q492, replacing the ConfigMap that Q444's apiserver defect made unusable as
-//     a VAP paramKind). Being cluster-scoped it needs no namespace, only a
-//     name-pinned field selector.
-//
-// With neither feature enabled no extra informer is ever started, so this returns
-// empty options (a no-op).
+// buildCacheOptions narrows the informer the watched PriorityClass allowlist needs
+// (Q188) to the single object it reads, so the GMC needs no broad read grant for
+// it. The allowlist is a cluster-scoped PriorityClassAllowlist CR (Q492, replacing
+// the ConfigMap that Q444's apiserver defect made unusable as a VAP paramKind), so
+// it needs no namespace, only a name-pinned field selector. With no allowlist name
+// configured this returns empty options (a no-op).
 func buildCacheOptions(cfg *gmcFlags, podNamespace string) (cache.Options, error) {
 	cacheOptions := cache.Options{}
 	byObject := map[client.Object]cache.ByObject{}
-
-	if cfg.egressDestinationAllowlistConfigMap != "" {
-		if podNamespace == "" {
-			return cacheOptions, fmt.Errorf("--egress-destination-allowlist-configmap requires " +
-				"POD_NAMESPACE (the GMC install namespace) to locate the ConfigMap")
-		}
-		byObject[&corev1.ConfigMap{}] = cache.ByObject{
-			Namespaces: map[string]cache.Config{
-				podNamespace: {
-					FieldSelector: fields.OneTermEqualSelector("metadata.name",
-						cfg.egressDestinationAllowlistConfigMap),
-				},
-			},
-		}
-	}
 
 	if cfg.priorityClassAllowlistName != "" {
 		byObject[&v2.PriorityClassAllowlist{}] = cache.ByObject{

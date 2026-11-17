@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -20,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
-	"github.com/actions-gateway/github-actions-gateway/gmc/internal/allowlist"
 	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	webhookv2 "github.com/actions-gateway/github-actions-gateway/gmc/internal/webhook/v2"
 )
@@ -67,29 +65,6 @@ func newManager(cfg *gmcFlags, rc *resolvedConfig, metricsOpts metricsserver.Opt
 	})
 }
 
-// egressAllowlistConfigMapWait bounds how long after GMC start a pool holds for the
-// egress allowlist ConfigMap's first read.
-const egressAllowlistConfigMapWait = 30 * time.Second
-
-// awaitEgressAllowlistConfigMap prepares the egress allowlist for a ConfigMap half
-// that loads after the manager starts and changes under a running GMC, while the
-// EgressProxy reconciler gates referrer GitHub hosts on it (Q1322). It marks the
-// allowlist pending, so a pool holds instead of dropping a host before the first
-// load, and returns the channel that carries each replacement from the ConfigMap
-// reconciler to the EgressProxy one. With no ConfigMap configured it does neither
-// and returns nil.
-//
-// The hold is bounded by egressAllowlistConfigMapWait. The ConfigMap reconciler reads
-// once at start whether or not the object exists, so the bound is reached only if
-// that read never completes; a pool then reconciles on the static list alone.
-func awaitEgressAllowlistConfigMap(cfg *gmcFlags, al *allowlist.EgressDestinationAllowlist) chan event.TypedGenericEvent[struct{}] {
-	if cfg.egressDestinationAllowlistConfigMap == "" {
-		return nil
-	}
-	al.AwaitDynamic(time.Now().Add(egressAllowlistConfigMapWait))
-	return make(chan event.TypedGenericEvent[struct{}], 1)
-}
-
 // registerControllers wires every GMC controller onto the manager. It detects the
 // opt-in v2 CRDs once (V2Installed), fails closed when an installed CRD's
 // schema is behind this binary on a field that bounds tenant access
@@ -111,8 +86,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 	// periodic IPRangeReconciler (write path), keeping per-CR reconciles off the
 	// network.
 	ipCache := &controller.IPRangeCache{}
-
-	egressAllowlistChanged := awaitEgressAllowlistConfigMap(cfg, rc.egressDestinationAllowlist)
 
 	// The v2 controllers and the IPRange reconciler's v2 refresh paths depend on
 	// the actions-gateway.com/v2 CRDs, which ship in the SEPARATE, opt-in
@@ -247,7 +220,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 		// egress allowlist that gates which referrer GitHub hosts it emits (Q1322).
 		if err := (&controller.EgressProxyReconciler{
 			EgressAllowlist:           rc.egressDestinationAllowlist,
-			AllowlistChanged:          egressAllowlistChanged,
 			Client:                    mgr.GetClient(),
 			APIReader:                 mgr.GetAPIReader(),
 			Scheme:                    mgr.GetScheme(),
@@ -304,20 +276,6 @@ func registerControllers(mgr ctrl.Manager, cfg *gmcFlags, rc *resolvedConfig, im
 			InfraAllowlist: rc.infraPriorityClassAllowlist,
 		}).SetupWithManager(mgr); err != nil {
 			return fmt.Errorf("create priorityclass-allowlist controller: %w", err)
-		}
-	}
-	// Egress destination allowlist ConfigMap watch (Q242 G.1): same shape as the
-	// PriorityClass watch — reconcile the designated ConfigMap into the dynamic half
-	// of the shared egress allowlist. Disabled by default (empty flag).
-	if cfg.egressDestinationAllowlistConfigMap != "" {
-		if err := (&controller.EgressDestinationAllowlistReconciler{
-			Client:        mgr.GetClient(),
-			ConfigMapName: cfg.egressDestinationAllowlistConfigMap,
-			Namespace:     rc.podNamespace,
-			Allowlist:     rc.egressDestinationAllowlist,
-			Changed:       egressAllowlistChanged,
-		}).SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("create egress-destination-allowlist controller: %w", err)
 		}
 	}
 	return nil
