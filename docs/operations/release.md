@@ -944,7 +944,7 @@ It is ordered by what a reader needs first, not by what took the most work:
 **Say something about security even when there is nothing to report.** Silence reads as an omission to the one reader scanning specifically for it.
 State plainly that no advisory accompanies the release, then list what it does carry — dependency security bumps, and any fix that hardens credential or trust handling without patching a reported vulnerability.
 Name the scanning gates and when they run.
-List what the runner-based images inherit from the upstream base: the runner version and the totals `check-vuln-policy.sh` printed, so an operator choosing `worker`, `build-runner` or `cache-runner` knows what comes with it.
+List what the runner-based images inherit from the upstream base and what is excused: the runner version, the totals and the excused CVEs `check-vuln-policy.sh` printed, so an operator choosing `worker`, `build-runner` or `cache-runner` knows what comes with it.
 `v1.3.0` had no CVE and still warranted the section.
 
 **Lead with a danger banner, and make it an alert.** GFM alerts — `> [!WARNING]`, `> [!CAUTION]`, `> [!NOTE]` — render as real coloured callouts in a release body (verified; the render check below counts them).
@@ -1424,8 +1424,10 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
 Those findings are accepted only while the pinned runner is the newest stable release, because only then is there nothing left to bump.
 On 2026-11-17, at `2.338.2`, that was 44 fixable HIGH/CRITICAL findings in `worker` and 45 in `build-runner` and `cache-runner` (trivy's per-target totals, summed).
 
-**`build-runner`'s own Docker CLI, buildx and compose are not covered by the exception, and not gated yet either.** They come from the `docker:<N>-cli` pin this project chooses, but the image's trivy leg is report-only, so their findings cannot be told apart from the base's; on 2026-11-17 compose and buildx carried 4 fixable HIGH findings.
-Splitting them into a blocking leg is [Q1357](../queue/Q1357.md).
+**`build-runner`'s own Docker CLI, buildx and compose are not covered by that exception.** They come from the `docker:<N>-cli` pin this project chooses, so `security-scan.yml` scans exactly those binaries in a `docker-tools` leg that blocks.
+Some of their findings have a fix only in a dependency that no Docker release ships yet, so bumping the pin cannot clear them.
+Each of those is excused CVE by CVE in [`trivyignore-docker-tools.yaml`](https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/security/trivyignore-docker-tools.yaml), with the release it waits on and an expiry date at most 60 days out, after which the leg goes red again.
+On 2026-11-17 that file held two entries: one for buildx v0.39.0, the newest buildx release, and one for compose v5.7.1.
 
 `scripts/release/check-vuln-policy.sh` enforces the rest at every tag, release candidates included, because a candidate is what a stable tag promotes:
 
@@ -1433,7 +1435,7 @@ Splitting them into a blocking leg is [Q1357](../queue/Q1357.md).
 scripts/release/check-vuln-policy.sh origin/main
 ```
 
-It fails on an open `security-scan` issue, on a commit with no successful, complete `security-scan.yml` run in the last 24 hours, and on a runner base older than the newest stable release.
+It fails on an open `security-scan` issue, on a commit with no successful, complete `security-scan.yml` run in the last 24 hours, on a runner base older than the newest stable release, and on an excused entry with no statement or an expiry more than 60 days out.
 **The 24 hours is the point.** `check-gates-green.sh` accepts the scan that ran when the commit merged, and an advisory published since then ships unless something asks again.
 When the scan is stale, re-ask it on `main`'s head and re-run the check once it completes:
 
@@ -1441,7 +1443,7 @@ When the scan is stale, re-ask it on `main`'s head and re-run the check once it 
 gh workflow run security-scan.yml --ref main
 ```
 
-The check also prints each report-only leg's inherited total from the run it used, for the notes' [Security section](#the-section-skeleton).
+The check also prints the excused CVEs and each report-only leg's inherited total from the run it used, for the notes' [Security section](#the-section-skeleton).
 
 ## The worker images: `wrapper`, `worker`, `build-runner` and `cache-runner`
 

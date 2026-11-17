@@ -3817,7 +3817,7 @@ Jitter is what de-correlates concurrent callers; the cap and the finite attempt 
 [`scripts/fetch/pull-image-with-retry-test.sh`](../../scripts/fetch/pull-image-with-retry-test.sh) (under `make scripts-test`) asserts the schedule: the doubling, the cap, that the jitter actually varies, and that the total budget stays inside 300s.
 
 **Prefer removing the pull outright where a cache can.** [`prepull-image-cached.sh`](../../scripts/fetch/prepull-image-cached.sh) (`<image-ref> <cache-dir> <local-tag>`) is the single-image sibling of `prepull-manifest-images.sh`: restore the image from an `actions/cache` tarball, or pull it once (retried) and save it.
-The `trivy` job uses it because its seven shards otherwise pull the same ~200 MB builder image concurrently on every run; the single-pull sites (e2e, publish) keep the plain retried pull.
+The `trivy` job uses it because its shards, one per image, otherwise pull the same ~200 MB builder image concurrently on every run; the single-pull sites (e2e, publish) keep the plain retried pull.
 
 One constraint drives its shape, and it is easy to get wrong: **`docker load` cannot restore a manifest digest.** A saved-and-reloaded image comes back with its `RepoTags` but no `RepoDigests`, so a digest-pinned `name:tag@sha256:…` ref never resolves from the cache and the consumer silently pulls from the registry anyway — a cache that looks like it works and does nothing.
 The cached image is therefore re-exposed under a local-only tag (`BUILDKIT_LOCAL_IMAGE`) and the consumer points at that.
@@ -4178,7 +4178,7 @@ make vulncheck
 
 A finding usually means bumping the Go toolchain (`go` directive in `go.work` + every `go.mod`, kept in lockstep) for a stdlib CVE, or `go get`-ing the fixed dependency version for a module CVE.
 
-**trivy** — builds each of the eight images (the seven published plus `fakegithub`) and scans it for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
+**trivy** — builds each of the seven published images, plus the `fakegithub` test fixture and a `docker-tools` image holding only `build-runner`'s Docker binaries, and scans each one for fixable HIGH/CRITICAL CVEs in OS packages and bundled libraries.
 Run it locally (requires `trivy` and `docker` on `PATH`) with:
 
 ```
@@ -4187,6 +4187,8 @@ make trivy-scan
 
 The five images we build from a minimal/distroless or scratch base (`gmc`, `agc`, `proxy`, `fakegithub`, and the `FROM scratch` `wrapper`) **block** the gate — every package in them is one we chose, so a finding is actionable by bumping a dependency or the base digest.
 The `worker` image is built `FROM` the upstream `ghcr.io/actions/actions-runner` and inherits CVEs in the bundled node20 runtime and the runner's own Go binaries that we cannot fix without forking the runner, so its leg is **report-only** (findings printed, never blocks), as are those of `build-runner` and `cache-runner`, which are built `FROM` it.
+The Docker CLI, buildx and compose that `build-runner` adds are pinned here, so the `docker-tools` leg scans exactly those binaries and **blocks**.
+A fix that no Docker release ships yet is excused CVE by CVE in [`trivyignore-docker-tools.yaml`](../../scripts/security/trivyignore-docker-tools.yaml), each entry with an expiry date at most 60 days out, after which the leg goes red again.
 Runner-base CVEs are reduced by bumping the pinned tag — automated via the `docker` ecosystem in `dependabot.yml` and tracked in [the backlog](../queue/README.md) as Q70.
 
 The same `trivy` job also generates an **SBOM** (Software Bill of Materials, SPDX-JSON, via [`syft`](https://github.com/anchore/syft)) for each image it builds and uploads it as a `sbom-<image>.spdx.json` build artifact.

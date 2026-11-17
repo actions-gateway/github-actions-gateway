@@ -68,6 +68,34 @@ expect runner-pin-from-dockerfile "2.338.2" "$(dockerfile_runner_pin "$WORK/Dock
 printf 'FROM scratch AS wrapper\n' >"$WORK/Dockerfile"
 expect no-runner-pin-is-empty "" "$(dockerfile_runner_pin "$WORK/Dockerfile")"
 
+# Ignore entries: bounded ones pass, and each way of being unbounded is named.
+cat >"$WORK/ok.yaml" <<'YAML'
+vulnerabilities:
+  - id: CVE-2026-1
+    paths:
+      - usr/local/bin/docker
+    statement: waits on docker 29.8
+    expired_at: 2026-12-17
+YAML
+expect bounded-entry-is-read "CVE-2026-1	2026-12-17	waits on docker 29.8" "$(ignore_entries "$WORK/ok.yaml")"
+expect bounded-entry-has-no-gaps "" "$(ignore_gaps "$WORK/ok.yaml" "$NOW")"
+sed 's/2026-12-17/2027-03-01/' "$WORK/ok.yaml" >"$WORK/far.yaml"
+expect far-expiry-is-a-gap "CVE-2026-1: expires 2027-03-01, more than 60 days out" "$(ignore_gaps "$WORK/far.yaml" "$NOW")"
+grep -v expired_at "$WORK/ok.yaml" >"$WORK/noexp.yaml"
+expect missing-expiry-is-a-gap "CVE-2026-1: no expired_at" "$(ignore_gaps "$WORK/noexp.yaml" "$NOW")"
+grep -v statement "$WORK/ok.yaml" >"$WORK/nost.yaml"
+expect missing-statement-is-a-gap "CVE-2026-1: no statement" "$(ignore_gaps "$WORK/nost.yaml" "$NOW")"
+printf 'vulnerabilities: []\n' >"$WORK/empty.yaml"
+expect unreadable-file-is-a-gap "no entries read from empty.yaml" "$(ignore_gaps "$WORK/empty.yaml" "$NOW")"
+
+# Every committed ignore file must parse to at least one entry, or check 4 reads it
+# as a gap on every release.
+for f in "$SCRIPT_DIR"/../security/trivyignore-*.yaml; do
+	[[ -f "$f" ]] || continue
+	n="$(ignore_entries "$f" | awk -F'\t' '$1 != "" && $3 != "-"' | wc -l | tr -d ' ')"
+	expect "committed-$(basename "$f")-parses" 1 "$((n > 0))"
+done
+
 # The real Dockerfile must still carry a pin the helper can read, or check 3 is
 # UNMEASURED on every release.
 expect real-dockerfile-has-a-pin 1 "$(dockerfile_runner_pin "$SCRIPT_DIR/../../Dockerfile" | grep -cE '^[0-9]+\.[0-9]+\.[0-9]+$' || true)"

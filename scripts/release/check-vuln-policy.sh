@@ -18,9 +18,12 @@
 #   3. The Dockerfile's actions-runner base is the newest stable release, which is
 #      the condition that makes the report-only legs' findings inherited rather
 #      than ours (check-runner-window.sh --warn-days 0).
+#   4. Every entry in a leg's scripts/security/trivyignore-<leg>.yaml carries a
+#      statement and expires within 60 days, so an excused finding is re-asked
+#      rather than excused for good.
 #
-# It then prints the report-only legs' fixable HIGH/CRITICAL totals from that run,
-# for the release notes' Security section. They are trivy's per-target totals
+# It then prints the excused CVEs and the report-only legs' fixable HIGH/CRITICAL
+# totals from that run, for the release notes' Security section. They are trivy's per-target totals
 # summed, so a CVE present in two binaries counts twice.
 #
 # Exit 0 when the commit may be tagged, 1 when a check fails, 2 when one could not
@@ -76,6 +79,41 @@ fixable_total() {
 dockerfile_runner_pin() {
 	awk 'match($0, /^FROM ghcr\.io\/actions\/actions-runner:[0-9]+\.[0-9]+\.[0-9]+/) {
 		v = substr($0, RSTART, RLENGTH); sub(/.*:/, "", v); print v; exit }' "$1"
+}
+
+# ignore_entries FILE — "id<TAB>expired_at<TAB>statement" per entry of a trivy
+# .trivyignore.yaml, with `-` where the entry has none: `read` collapses a run of
+# tabs, so an empty field would shift the next one into its place. Reads the
+# block layout the repo's ignore files use, one `- id:` per entry.
+ignore_entries() {
+	awk '
+		function flush() { if (id != "") printf "%s\t%s\t%s\n", id, (until == "" ? "-" : until), (st == "" ? "-" : st); id = ""; until = ""; st = "" }
+		/^[[:space:]]*- id:/ { flush(); id = $0; sub(/.*- id:[[:space:]]*/, "", id) }
+		/^[[:space:]]+expired_at:/ { until = $0; sub(/.*expired_at:[[:space:]]*/, "", until) }
+		/^[[:space:]]+statement:/ { st = $0; sub(/.*statement:[[:space:]]*/, "", st) }
+		END { flush() }' "$1"
+}
+
+# ignore_gaps FILE NOW — one line per entry missing a statement or an expiry, or
+# expiring more than 60 days after NOW, and one when no entry could be read at
+# all. Empty when every entry is bounded.
+ignore_gaps() {
+	local file="$1" now="$2" entries id exp st exp_epoch
+	entries="$(ignore_entries "$file")"
+	if [[ -z "$entries" ]]; then
+		echo "no entries read from $(basename "$file")"
+		return 0
+	fi
+	while IFS=$'\t' read -r id exp st; do
+		if [[ "$st" == "-" ]]; then
+			echo "${id}: no statement"
+		elif [[ ! "$exp" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+			echo "${id}: no expired_at"
+		else
+			exp_epoch="$(jq -n --arg d "$exp" '$d + "T00:00:00Z" | fromdateiso8601')"
+			((exp_epoch - now <= 60 * 86400)) || echo "${id}: expires ${exp}, more than 60 days out"
+		fi
+	done <<<"$entries"
 }
 
 # Stop here when sourced for its helpers, so the test drives them offline.
@@ -161,6 +199,23 @@ else
 	*) printf '  runner base           UNMEASURED — %s\n' "$verdict"; unmeasured=$((unmeasured + 1)) ;;
 	esac
 fi
+
+# 4. Excused findings stay bounded.
+for f in "${REPO_ROOT}"/scripts/security/trivyignore-*.yaml; do
+	[[ -f "$f" ]] || continue
+	leg="$(basename "$f" .yaml)"
+	leg="${leg#trivyignore-}"
+	gaps="$(ignore_gaps "$f" "$now")"
+	if [[ -n "$gaps" ]]; then
+		printf '  %-21s FAIL — %s\n' "excused (${leg})" "$(paste -sd ';' - <<<"$gaps")"
+		failed=$((failed + 1))
+		continue
+	fi
+	printf '  %-21s ok, for the notes:\n' "excused (${leg})"
+	while IFS=$'\t' read -r id exp st; do
+		printf '    %s until %s: %s\n' "$id" "$exp" "$st"
+	done < <(ignore_entries "$f")
+done
 
 # Inherited findings, for the notes. Informational: never changes the verdict.
 if [[ -n "$jobs" ]]; then
