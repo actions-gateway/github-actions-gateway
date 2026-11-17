@@ -3574,8 +3574,7 @@ That addition is what makes an FQDN mode work for GitHub Enterprise Server: the 
 A referrer applied after the proxy requeues it through a watch on both kinds.
 Hosts the public set already covers are dropped and the result is sorted, so a public-GitHub-only pool emits exactly the policy it did before.
 <code>gitHubURL</code> is tenant-authored, so its host is held to the allowlist that gates <code>destinationFQDNs</code>: one <code>--allowed-egress-fqdns</code> does not cover, or one that is not a DNS name, reaches neither surface and is named on <code>GitHubEgressIncomplete</code> with reason <code>GitHubHostNotAllowlisted</code>.
-A GMC also given <code>--egress-destination-allowlist-configmap</code>, which the chart no longer sets, adds that ConfigMap's entries, and that half loads after the GMC starts and changes under it, so a pool holds its reconcile until the first read rather than drop a host on a restart, and each replacement of the set requeues every pool.
-The ConfigMap reconciler reads once at start whether or not the object exists, and the hold ends 30 seconds after the GMC starts regardless, so a named ConfigMap that was never created cannot keep a pool from reconciling.
+The allowlist is fixed when the GMC starts, so a change reaches every pool through the rolled-out GMC reconciling it.
 In any FQDN mode the standard NetworkPolicy keeps its DNS + ingress rules but <strong>drops the GitHub-CIDR egress rule</strong>, and the IP-range reconcile skips the proxy.</p>
 <blockquote>
 <p><strong>CIDR mode cannot do the same, and says so.</strong> The default mode programs the ranges <code>api.github.com/meta</code> publishes, and a GHES appliance on the customer's own address space appears in none of them — so the NetworkPolicy denies the proxy's traffic to the one host it exists to reach.

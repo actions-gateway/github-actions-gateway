@@ -5256,7 +5256,9 @@ The Private-Google-Access VIPs in particular require subnet-level Private Google
 <p>The two Helm values are the allowlist's only input, as <code>allowedPriorityClasses</code> is for priority classes.
 A change takes a <code>helm upgrade</code>, which rolls the GMC Deployment: two replicas behind a disruption budget, so admission keeps answering while it rolls.</p>
 <p><code>v2.0.0</code> removed <code>egressDestinationAllowlist.configMapName</code>, the operator-owned ConfigMap the GMC used to watch for additions, and setting it now fails the render (<a href="../upgrade/#action-required-if-you-set-egressdestinationallowlistconfigmapname-the-key-is-removed">migration</a>).
-With one input per allowlist, nothing set outside Helm can be lost on the next upgrade, and the static lists stay a floor that a failed read of another object cannot strip.</p>
+Before <code>v2.0.0</code> the two platform allowlists followed different rules: an egress destination in that ConfigMap was kept across upgrades, while a priority class added by editing the <code>PriorityClassAllowlist</code> object is overwritten by the next <code>helm upgrade</code>.
+Now both take their entries from Helm values alone, so every entry lives in the values file your Helm or GitOps tooling already manages.
+The cost is the ConfigMap's one advantage, adding a destination without touching Helm values or restarting the GMC: a destination now takes a <code>helm upgrade</code> and the GMC rollout above.</p>
 <p>A change reaches a gateway's <code>githubURL</code> host differently from a <code>destinationFQDNs</code> entry.
 A <code>destinationFQDNs</code> entry is checked once, when the <code>EgressProxy</code> is written, and stays after the allowlist entry behind it is removed.
 A <code>githubURL</code> host is re-checked when the rolled-out GMC reconciles each pool: an added entry puts the host into every pool whose gateways name it, and a removed one takes it out.</p>
