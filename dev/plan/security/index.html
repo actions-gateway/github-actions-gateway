@@ -3739,7 +3739,7 @@ Status legend: ✅ done, ⚠️ partial (residual accepted), ❌ open, ⓘ infor
 <h3 id="out-of-scope-flagged-separately">Out of scope, flagged separately<a class="headerlink" href="#out-of-scope-flagged-separately" title="Permanent link">&para;</a></h3>
 <ul>
 <li>~~Image-digest pinning for <code>AGC_IMAGE</code> / <code>PROXY_IMAGE</code>.~~ <strong>Done 2026-06-04</strong> — GMC rejects non-<code>@sha256:</code> references at startup (Q24); <code>--allow-floating-image-tags</code> opt-out for dev/test.</li>
-<li>~~CI supply-chain scanning (govulncheck + trivy).~~ <strong>Done (Q23)</strong> — <code>security-scan.yml</code> runs <code>govulncheck</code> across all modules and <code>trivy</code> over all eight images; five block on fixable HIGH/CRITICAL, and the three built on the upstream actions-runner (<code>worker</code>, <code>build-runner</code>, <code>cache-runner</code>) are report-only.
+<li>~~CI supply-chain scanning (govulncheck + trivy).~~ <strong>Done (Q23)</strong> — <code>security-scan.yml</code> runs <code>govulncheck</code> across all modules and <code>trivy</code> over every built image; six legs block on fixable HIGH/CRITICAL (the sixth, <code>docker-tools</code>, scans the Docker binaries <code>build-runner</code> adds), and the three built on the upstream actions-runner (<code>worker</code>, <code>build-runner</code>, <code>cache-runner</code>) are report-only.
   The dependabot <code>docker</code> ecosystem keeps those bases current from the root <code>Dockerfile</code> (Q70).
   See <a href="../../development/testing/#security-scanning">testing.md § Security scanning</a>.</li>
 <li>~~SBOM + image signing of published images.~~ <strong>Done (Q28)</strong> — addresses OWASP A08:2025 (Software &amp; Data Integrity / supply chain).

@@ -4541,7 +4541,7 @@ It is ordered by what a reader needs first, not by what took the most work:</p>
 <p><strong>Say something about security even when there is nothing to report.</strong> Silence reads as an omission to the one reader scanning specifically for it.
 State plainly that no advisory accompanies the release, then list what it does carry — dependency security bumps, and any fix that hardens credential or trust handling without patching a reported vulnerability.
 Name the scanning gates and when they run.
-List what the runner-based images inherit from the upstream base: the runner version and the totals <code>check-vuln-policy.sh</code> printed, so an operator choosing <code>worker</code>, <code>build-runner</code> or <code>cache-runner</code> knows what comes with it.
+List what the runner-based images inherit from the upstream base and what is excused: the runner version, the totals and the excused CVEs <code>check-vuln-policy.sh</code> printed, so an operator choosing <code>worker</code>, <code>build-runner</code> or <code>cache-runner</code> knows what comes with it.
 <code>v1.3.0</code> had no CVE and still warranted the section.</p>
 <p><strong>Lead with a danger banner, and make it an alert.</strong> GFM alerts — <code>&gt; [!WARNING]</code>, <code>&gt; [!CAUTION]</code>, <code>&gt; [!NOTE]</code> — render as real coloured callouts in a release body (verified; the render check below counts them).
 <code>v1.3.0</code> opens with a <code>[!WARNING]</code> naming the two required upgrade steps and the asymmetric rollback, because those are the only things that can hurt an operator who reads no further.
@@ -4942,17 +4942,19 @@ A bad tag can be superseded by a higher patch release; do not retag an existing 
 <p><strong>The one exception is what the upstream <code>ghcr.io/actions/actions-runner</code> base carries.</strong> <code>worker</code>, <code>build-runner</code> and <code>cache-runner</code> are built <code>FROM</code> it and inherit its bundled Node.js, dockerd, containerd and runc, which this project cannot rebuild without forking the runner.
 Those findings are accepted only while the pinned runner is the newest stable release, because only then is there nothing left to bump.
 On 2026-11-17, at <code>2.338.2</code>, that was 44 fixable HIGH/CRITICAL findings in <code>worker</code> and 45 in <code>build-runner</code> and <code>cache-runner</code> (trivy's per-target totals, summed).</p>
-<p><strong><code>build-runner</code>'s own Docker CLI, buildx and compose are not covered by the exception, and not gated yet either.</strong> They come from the <code>docker:&lt;N&gt;-cli</code> pin this project chooses, but the image's trivy leg is report-only, so their findings cannot be told apart from the base's; on 2026-11-17 compose and buildx carried 4 fixable HIGH findings.
-Splitting them into a blocking leg is <a href="../../queue/Q1357/">Q1357</a>.</p>
+<p><strong><code>build-runner</code>'s own Docker CLI, buildx and compose are not covered by that exception.</strong> They come from the <code>docker:&lt;N&gt;-cli</code> pin this project chooses, so <code>security-scan.yml</code> scans exactly those binaries in a <code>docker-tools</code> leg that blocks.
+Some of their findings have a fix only in a dependency that no Docker release ships yet, so bumping the pin cannot clear them.
+Each of those is excused CVE by CVE in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/security/trivyignore-docker-tools.yaml"><code>trivyignore-docker-tools.yaml</code></a>, with the release it waits on and an expiry date at most 60 days out, after which the leg goes red again.
+On 2026-11-17 that file held two entries: one for buildx v0.39.0, the newest buildx release, and one for compose v5.7.1.</p>
 <p><code>scripts/release/check-vuln-policy.sh</code> enforces the rest at every tag, release candidates included, because a candidate is what a stable tag promotes:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-57-1" name="__codelineno-57-1" href="#__codelineno-57-1"></a>scripts/release/check-vuln-policy.sh<span class="w"> </span>origin/main
 </code></pre></div>
-<p>It fails on an open <code>security-scan</code> issue, on a commit with no successful, complete <code>security-scan.yml</code> run in the last 24 hours, and on a runner base older than the newest stable release.
+<p>It fails on an open <code>security-scan</code> issue, on a commit with no successful, complete <code>security-scan.yml</code> run in the last 24 hours, on a runner base older than the newest stable release, and on an excused entry with no statement or an expiry more than 60 days out.
 <strong>The 24 hours is the point.</strong> <code>check-gates-green.sh</code> accepts the scan that ran when the commit merged, and an advisory published since then ships unless something asks again.
 When the scan is stale, re-ask it on <code>main</code>'s head and re-run the check once it completes:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-58-1" name="__codelineno-58-1" href="#__codelineno-58-1"></a>gh<span class="w"> </span>workflow<span class="w"> </span>run<span class="w"> </span>security-scan.yml<span class="w"> </span>--ref<span class="w"> </span>main
 </code></pre></div>
-<p>The check also prints each report-only leg's inherited total from the run it used, for the notes' <a href="#the-section-skeleton">Security section</a>.</p>
+<p>The check also prints the excused CVEs and each report-only leg's inherited total from the run it used, for the notes' <a href="#the-section-skeleton">Security section</a>.</p>
 <h2 id="the-worker-images-wrapper-worker-build-runner-and-cache-runner">The worker images: <code>wrapper</code>, <code>worker</code>, <code>build-runner</code> and <code>cache-runner</code><a class="headerlink" href="#the-worker-images-wrapper-worker-build-runner-and-cache-runner" title="Permanent link">&para;</a></h2>
 <p><code>publish.yml</code> builds and signs <strong>four</strong> worker-related images, all holding the same <code>cmd/worker</code> wrapper that installs the per-tenant CA trust and starts the runner with <code>run.sh --jitconfig</code>:</p>
 <ul>

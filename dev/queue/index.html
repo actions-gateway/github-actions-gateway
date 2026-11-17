@@ -4042,14 +4042,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>throttle_active</code> returns 1 on any non-empty <code>CI</code> before it reaches the OS or GUI check ([``scripts/agent/local-throttle.sh:178:[[ -n …</td>
 </tr>
 <tr>
-<td><a href="Q1357/">Q1357</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/.github/workflows/security-scan.yml">Gate build-runner's own Docker binaries in a blocking trivy leg</a></td>
-<td><code>security</code> <code>ci</code></td>
-<td>🔲</td>
-<td>S</td>
-<td>The release vulnerability policy (<a href="../operations/release/#the-vulnerability-policy">release.md</a>) blocks on fixable HIGH/CRITICAL findings …</td>
-</tr>
-<tr>
 <td><a href="Q980/">Q980</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/dogfood-e2e/overlays/kata/kustomization.yaml">Assert the dogfood e2e overlays supply their own workerImage</a></td>
 <td><code>tests</code></td>
