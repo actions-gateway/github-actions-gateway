@@ -47,7 +47,7 @@ Two detection substrates are used:
 - [Worker egress destinations: the egress allowlist](#worker-egress-destinations-the-egress-allowlist)
   - [Prefer an in-cluster caching mirror first](#prefer-an-in-cluster-caching-mirror-first)
   - [How the allowlist works](#how-the-allowlist-works)
-  - [Self-service additions via a watched ConfigMap](#self-service-additions-via-a-watched-configmap)
+  - [Changing the allowlist](#changing-the-allowlist)
 - [Sharing an egress proxy across namespaces](#sharing-an-egress-proxy-across-namespaces)
   - [Consent lives on the provider](#consent-lives-on-the-provider)
   - [What you must not assume](#what-you-must-not-assume)
@@ -1051,38 +1051,17 @@ A denied CONNECT increments `actions_gateway_proxy_connect_denied_total`.
 > **Allowlisting opens the *policy*, not the *route*.** A `destinationCIDRs` entry lifts the egress-policy block; it does not make the destination reachable.
 > The Private-Google-Access VIPs in particular require subnet-level Private Google Access plus Cloud DNS and a route — cluster networking G.1 does not configure.
 
-### Self-service additions via a watched ConfigMap
+### Changing the allowlist
 
-To add a permitted destination without editing the flags and rolling out the GMC, point the GMC at a ConfigMap in its own namespace whose `fqdns`/`cidrs` keys **augment** the static flags (additive and fail-safe — a missing or malformed ConfigMap leaves the flag allowlists in force):
+The two Helm values are the allowlist's only input, as `allowedPriorityClasses` is for priority classes.
+A change takes a `helm upgrade`, which rolls the GMC Deployment: two replicas behind a disruption budget, so admission keeps answering while it rolls.
 
-```yaml
-# values.yaml
-egressDestinationAllowlist:
-  configMapName: gmc-egress-destination-allowlist   # renders --egress-destination-allowlist-configmap
-```
+`v2.0.0` removed `egressDestinationAllowlist.configMapName`, the operator-owned ConfigMap the GMC used to watch for additions, and setting it now fails the render ([migration](upgrade.md#action-required-if-you-set-egressdestinationallowlistconfigmapname-the-key-is-removed)).
+With one input per allowlist, nothing set outside Helm can be lost on the next upgrade, and the static lists stay a floor that a failed read of another object cannot strip.
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: gmc-egress-destination-allowlist
-  namespace: <gmc-namespace>
-data:
-  fqdns: |
-    proxy.golang.org
-    sum.golang.org
-  cidrs: |
-    199.36.153.8/30
-```
-
-Setting `configMapName` also renders a namespaced Role/RoleBinding granting the GMC get/list/watch on that one ConfigMap (no cluster-wide ConfigMap read).
-The effective allowlist is the union of the flags and the ConfigMap, enforced by the EgressProxy validating webhook on every create/update — a destination outside it is rejected with a message naming the effective allowlist.
-
-A ConfigMap change reaches a gateway's `githubURL` host differently from a `destinationFQDNs` entry.
+A change reaches a gateway's `githubURL` host differently from a `destinationFQDNs` entry.
 A `destinationFQDNs` entry is checked once, when the `EgressProxy` is written, and stays after the allowlist entry behind it is removed.
-A `githubURL` host is re-checked whenever the ConfigMap changes: an added entry puts the host into every pool whose gateways name it, and a removed one takes it out.
-A deleted ConfigMap, or one with an invalid entry, is ignored whole, so every appliance host it covered leaves its pools until the ConfigMap is fixed.
-Put a GitHub Enterprise Server host in `allowedEgressFQDNs` instead when that is not what you want.
+A `githubURL` host is re-checked when the rolled-out GMC reconciles each pool: an added entry puts the host into every pool whose gateways name it, and a removed one takes it out.
 
 ---
 

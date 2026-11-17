@@ -71,44 +71,8 @@ subjects:
 - kind: ServiceAccount
   name: {{ $sa }}
   namespace: {{ .Release.Namespace }}
-{{- if .Values.egressDestinationAllowlist.configMapName }}
----
-# egress-destination-allowlist (Q242 G.1) — namespaced read of the single watched
-# ConfigMap that augments the static --allowed-egress-fqdns/--allowed-egress-cidrs
-# flags. Scoped to the GMC's own namespace and to get/list/watch only, so enabling
-# the watch never grants cluster-wide ConfigMap read. Rendered only when configured.
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: {{ $prefix }}-egress-destination-allowlist-role
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "actions-gateway.labels" . | nindent 4 }}
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: {{ $prefix }}-egress-destination-allowlist-rolebinding
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "actions-gateway.labels" . | nindent 4 }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: {{ $prefix }}-egress-destination-allowlist-role
-subjects:
-- kind: ServiceAccount
-  name: {{ $sa }}
-  namespace: {{ .Release.Namespace }}
+{{- if and .Values.egressDestinationAllowlist .Values.egressDestinationAllowlist.configMapName }}
+{{- fail (printf "egressDestinationAllowlist.configMapName (%q) is removed in v2.0.0. The egress destination allowlist now comes from Helm values alone, so the GMC no longer watches an operator-owned ConfigMap. Move every entry from that ConfigMap's data.fqdns and data.cidrs into allowedEgressFQDNs and allowedEgressCIDRs, and unset egressDestinationAllowlist.configMapName. See docs/operations/upgrade.md." .Values.egressDestinationAllowlist.configMapName) }}
 {{- end }}
 {{- if .Values.metrics.enabled }}
 ---

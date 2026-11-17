@@ -869,9 +869,9 @@ actions_gateway_github_egress_incomplete == 1
   The GMC adds a referring gateway's `githubURL` host to the policy and the proxy CONNECT allowlist once the platform egress allowlist covers it.
 
 For `GitHubHostNotAllowlisted`, a platform admin adds the host to the egress allowlist; a tenant cannot self-serve.
-Add it to the chart's `allowedEgressFQDNs` (the GMC `--allowed-egress-fqdns` flag), which takes a GMC rollout, or to the [watched ConfigMap](security-operations.md#self-service-additions-via-a-watched-configmap), which the pool picks up without one.
+Add it to the chart's `allowedEgressFQDNs` (the GMC `--allowed-egress-fqdns` flag) and `helm upgrade`, which rolls the GMC ([changing the allowlist](security-operations.md#changing-the-allowlist)).
 An entry covers its subdomains.
-Removing an entry takes the host back out of every pool that relied on it, and so does deleting the ConfigMap or leaving an invalid entry in it, because an invalid ConfigMap is ignored whole.
+Removing an entry takes the host back out of every pool that relied on it.
 Where the message says the host is not a DNS hostname, no entry helps: create the gateway again with a `githubURL` that names the appliance by hostname, or give the pool the appliance's address in `destinationCIDRs`.
 
 The condition is advisory and does not gate `Ready`: the pool is serving exactly the policy it was asked for.
