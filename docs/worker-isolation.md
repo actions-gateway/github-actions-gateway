@@ -22,20 +22,23 @@ flowchart TD
     priv["privileged-dind<br>on a pool you can lose"]
     q1(["Does the job need<br>a Docker daemon?"])
     q2(["Is the daemon only<br>for building images?"])
-    q3(["Can your nodes run Kata?<br>nested virtualization or bare metal,<br>no GPU in the job"])
+    q3(["Can the job run in a VM?<br>no host kernel modules or devices,<br>GPUs passed through whole"])
+    q4(["Can your nodes boot one?<br>nested virtualization or bare metal"])
     q1 -- no --> plain
     q1 -- yes --> q2
     q2 -- yes --> rootless
     q2 -- "no: kind, compose,<br>container: or services:" --> q3
-    q3 -- yes --> kata
+    q3 -- yes --> q4
     q3 -- no --> priv
+    q4 -- yes --> kata
+    q4 -- no --> priv
     style kata stroke-width:3px
 ```
 
 | Shape | An escape reaches | What it costs you | What it cannot run |
 |---|---|---|---|
 | `plain` | the node's kernel, through a container with no added capabilities and the security defaults of GAG's per-tenant controller stamped on | nothing beyond a normal pod | anything that needs a Docker daemon: `kind`, `docker compose`, and a job's `container:` or `services:` |
-| `kata-dind` | a throwaway guest kernel inside a KVM micro-VM, not the node | nested-virtualization nodes, a Kata install, a block volume per worker, and a larger pod ([below](#what-kata-costs)) | GKE Autopilot, most AMD and Arm machine families, most of EC2, GPU jobs ([below](#where-kata-cannot-run)) |
+| `kata-dind` | a throwaway guest kernel inside a KVM micro-VM, not the node | nested-virtualization nodes, a Kata install, a block volume per worker, and a larger pod ([below](#what-kata-costs)) | anything on GKE Autopilot, most AMD and Arm machine families, or most of EC2, and GPU jobs on managed cloud nodes ([below](#where-kata-cannot-run)) |
 | `privileged-dind` | the node, as root: every pod on it, the kubelet's credential, and the node's cloud identity | a node pool sized and locked down on the assumption it will be lost ([below](#what-privileged-dind-costs)) | nothing, which is the reason it exists |
 
 The highlighted path is the one GAG's own end-to-end CI takes: it builds a `kind` cluster inside a `kata-dind` worker on every release candidate, with no `privileged: true` container anywhere in the pod.
@@ -61,7 +64,15 @@ The larger costs are in capacity and setup:
 
 ## Where Kata cannot run
 
-Kata needs the `/dev/kvm` device, which on a cloud means nested virtualization or bare metal.
+Two things have to hold: the job has to work inside a VM, and the nodes have to be able to boot one.
+
+Most jobs work inside a VM unchanged, because the guest is a full Linux kernel.
+The exceptions are jobs that load host kernel modules or need a specific host device, which need extra Kata configuration if they work at all, and GPU jobs.
+Kata does support GPUs: NVIDIA's GPU Operator passes whole NVIDIA GPUs through to Kata VMs.
+It needs Access Control Services (ACS) and IOMMU enabled in the BIOS, no NVIDIA driver on the host, and every GPU on the node given over to Kata, and it does not support vGPU or a fraction of a GPU ([NVIDIA's guide](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/deploy-kata-containers.html), read 2026-08-08).
+A managed cloud node pool exposes none of those settings, so in practice that means hardware you control, and it means NVIDIA: neither Kata nor gVisor has an upstream path for AMD GPUs ([detail](plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal)).
+
+On the node side, Kata needs the `/dev/kvm` device, which on a cloud means nested virtualization or bare metal.
 That rules out more clusters than it sounds like:
 
 - **GKE Autopilot** does not allow nested virtualization at all.
@@ -69,10 +80,8 @@ That rules out more clusters than it sounds like:
   Google's written rules disagree with the API at the margins, so check the family you plan to use with the API before you buy capacity for it.
 - **On EC2 it is Intel only.** AWS listed sixteen families on 2026-08-12, every one of them an Intel family from the 7th and 8th instance generations, with no AMD, Graviton, P or G family among them.
   Anything else means a `.metal` instance.
-- **GPU jobs are effectively bare-metal only.** NVIDIA's Kata path needs IOMMU support exposed to the guest, no NVIDIA driver bound on the host, and a whole GPU per VM, which a cloud GPU instance does not give you ([detail](plan/gpu-and-accelerated-ci.md#the-collision-with-the-security-goal)).
-- **Jobs that load host kernel modules or need specific host devices** need extra Kata configuration, if they work at all.
 
-If any of these describes your cluster, the honest choice is between `privileged-dind` and dropping the daemon, not between `privileged-dind` and Kata.
+If your nodes or your jobs fall outside these limits, the honest choice is between `privileged-dind` and dropping the daemon, not between `privileged-dind` and Kata.
 
 ## What privileged DinD costs
 
