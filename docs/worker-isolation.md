@@ -60,7 +60,7 @@ The larger costs are in capacity and setup:
 - **Nested virtualization costs CPU.** Google [documents](https://docs.cloud.google.com/compute/docs/instances/nested-virtualization/overview) a penalty of 10% or more for CPU-bound work, and potentially more for I/O-bound work.
   GAG has not measured what the micro-VM adds to a full job on its own suite against the same job under `privileged-dind`, so treat the 10% as the vendor's figure, not ours.
 - **The namespace still needs the `privileged` Pod Security level.** The daemon needs capabilities that only act on the guest kernel, but Pod Security Admission cannot see the VM, so it rejects the pod at `baseline`.
-  What keeps the pod unprivileged is that only the platform team can author the template, not the admission level.
+  Tenants can write their own worker templates, but GAG's admission check holds a tenant's template to `baseline` whatever the namespace allows, so this shape can only come from a cluster-wide template the platform team owns.
 
 ## Where Kata cannot run
 
