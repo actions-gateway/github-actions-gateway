@@ -16,11 +16,11 @@
       With no version available (a build with no git history), the banner drops the
       version claim entirely rather than guessing. -#}
   {%- set release = config.extra.release | default({}, true) -%}
-  {%- set highlight_for = "v2.0.0" -%}
+  {%- set highlight_for = "v2.0.1" -%}
   {%- if release.version -%}
     <strong>{{ release.version }} is here.</strong>
     {%- if release.version == highlight_for %}
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
     {%- else %}
       <a href="{{ config.repo_url }}/releases/tag/{{ release.version }}">Read the release notes.</a>
     {%- endif %}

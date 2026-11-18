@@ -1,6 +1,6 @@
 # Release 2.0.1
 
-> **Status: scoped 2026-11-17, every fix landed, no candidate cut yet.** A patch release from `main`: six bug and security fixes since `v2.0.0`, and the dependency bumps that merged beside them.
+> **Status: `v2.0.1-rc.2` validated 2026-11-18; the stable tag waits on Karl.** `rc.1` passed every gate leg and its teardown found an idle scale-set worker, so the release was held for Q1360; `rc.2`, tagged at `74531a223` with that fix (#2357), passed every leg in CI ([gate run 44322796149](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44322796149)) and tore down clean.
 
 ## Scope ledger
 
@@ -36,4 +36,29 @@ The `gmc`, `agc` and `proxy` images carried nothing, and GitHub's advisory datab
 
 ## Candidate validation
 
-No candidate has been cut.
+**`v2.0.1-rc.1`, tagged at `f156d4c53`, passed every gate leg in CI.** Gate run 44236535751's evidence names that commit and records `kata`, `crd-smoke`, `soak`, `storage`, `dind` and `dragonfly`, every leg in `scripts/dogfood/lib/gate-legs.sh`, and each soak reading in its `soak-readings` artifact is a pass.
+
+The publish checked out by content before the gate ran: the Release is immutable with all 9 assets, `make verify-release` and `make verify-release-compat` (cosign v2.5.2) each report 25 OK and no failure, all seven images' provenance names `publish.yml@refs/tags/v2.0.1-rc.1` at `f156d4c53`, and a `cosign verify` against a wrong signer identity fails.
+
+**The run is red because teardown could not drain, not because a leg failed.** The gate's log ends "The gate PASSED; it exits 1 because the cluster is not at rest", and the workflow's own reclaim step failed on the same drain.
+The e2e leg's one CI job (run 44247655794, `e2e / e2e`, green) had two runner pods in the `ci-e2e` `RunnerSet`: one ran it and was reaped at 06:30Z, and the other registered at 06:05Z, logged `Listening for Jobs`, and received nothing.
+The AGC reaps a `Running` worker only once it carries a job-completed stamp, so that pod had no deadline and pinned an `n2-standard-8` node until it was deleted by hand just before 09:00Z, after which `validate-release.sh --reclaim` scaled the system pool to 0 and released the lease.
+The reaper and provisioner are unchanged between `v2.0.0` and `f156d4c53`, so this is not a regression the candidate introduced.
+The cause, measured from the cluster's audit log in #2357: GitHub withdrew the job from a worker slow to start on a cold node and re-issued it, the slow worker took the re-issue, and the reclaim skipped the re-issue's worker because it was still `Pending`.
+
+**`v2.0.1-rc.2`, tagged at `74531a223` with that fix, passed every gate leg in CI and tore down clean.** Gate run 44322796149's evidence names that commit and records all six legs; the three e2e runs (44326035978, 44334553779, 44341469221) each report 92 cases, 74 passed, 18 skipped and 0 failed; and `ops.sh at-rest` found no Compute Engine instances afterwards.
+The publish checked out by content: the Release is immutable with all 9 assets, `make verify-release` and `make verify-release-compat` pass, all seven images' provenance names `publish.yml@refs/tags/v2.0.1-rc.2` at `74531a223`, and a `cosign verify` against a wrong signer identity fails.
+The gate's side dispatch of `unit-test.yml` onto GAG runners (run 44325908424) failed in `scripts-test` on `gate-list-test`'s `queue-scope-underivable` case, rc 2 for a wanted 1 beside a `sort` broken-pipe error, while the push and merge-queue runs of the same commit passed; it is a test script, not a released artifact, and the leg set does not include it.
+
+## Stable-tag pre-flight
+
+Read 2026-11-18 against `origin/main` at `8b6727a6f`, after Karl approved promoting `rc.1`, and re-read for `rc.2` against `74531a223`: the freeze check passes over 0 changed files, `operator-caveats-since.sh v2.0.0` still reports no section, `make roadmap-check` passes, and #2357 adds no capability a marketing surface names.
+
+- **Freeze**: `check-artifact-unchanged.sh f156d4c53 origin/main` passes; the 7 files changed since the candidate are none of them on the released surface.
+- **Operator caveats**: `operator-caveats-since.sh v2.0.0` reports no new section, so the notes carry none.
+- **Marketing**: no surface needs a change.
+  The fixes make the cross-tenant scale-set name guard in `features.md` and `why-gag.md` hold for a gateway created with the finalizer, and add no capability.
+- **Roadmap and `features.md`**: `make roadmap-check` passes, and nothing this release ships is a new capability.
+- **Announce bar**: `highlight_for` names `v2.0.1`.
+- **Pins**: the install and upgrade pages name `2.0.1`, and `make release-pins-check` reports 19 pins at `v2.0.1` and the exempt `v2.0.0`.
+- **Notes**: the Validation section names `rc.2` and gate run 44322796149, and the commit count (22) assumes this plan's PR is the only merge before the tag.
