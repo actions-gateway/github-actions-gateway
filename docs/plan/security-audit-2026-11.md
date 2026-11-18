@@ -7,7 +7,7 @@ The first audit (2026-05) is [security.md](security.md) and the second (2026-06)
 > The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1333](../queue/Q1333.md), [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
+> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
 
 ## Method and limits
 
@@ -321,7 +321,7 @@ Any new or changed claim is compared folded, and the reconciler reports a stored
 
 Both Blocked-on items stay open.
 Whether GitHub's runner registration accepts the alias spellings, and so whether a stored pair ever shared a scale set, was not measured, and the Owner check above is still the way to find out.
-A related defect in the same host comparison is tracked separately: `DeriveAPIBaseURL` matches the three hosts by exact case and with no trailing dot ([Q1333](../queue/Q1333.md)).
+A related defect in the same host comparison, `DeriveAPIBaseURL` matching the three hosts by exact case and with no trailing dot, is fixed by Q1333, which now compares them as `GitHubScope` does.
 
 ### Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy
 

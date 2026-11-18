@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/actions-gateway/github-actions-gateway/githubapp/httpx"
@@ -212,9 +213,11 @@ func ResolveAPIBaseURL(allowInsecure bool) (string, error) {
 
 // DeriveAPIBaseURL returns the REST API base a gateway's GitHub URL implies:
 // https://api.github.com for public GitHub, or https://<host>/api/v3 for a GitHub
-// Enterprise Server appliance. A URL that does not parse or names no host yields the
-// public default rather than a base assembled from garbage; the CRD's ^https://
-// pattern keeps admitted gateways out of that branch.
+// Enterprise Server appliance. The public hosts match without regard to case or one
+// trailing dot, as scalesetscope.GitHubScope and the EgressProxy referrer filter
+// compare them; a GHES base keeps the host as written. A URL that does not parse or
+// names no host yields the public default rather than a base assembled from garbage;
+// the CRD's ^https:// pattern keeps admitted gateways out of that branch.
 //
 // This is the single answer to "which GitHub API does this gateway address?". The GMC
 // injects it as GITHUB_API_BASE_URL so the AGC's token exchange resolves the same host
@@ -226,7 +229,7 @@ func DeriveAPIBaseURL(githubURL string) string {
 	if err != nil || u.Host == "" {
 		return defaultAPIBaseURL
 	}
-	switch u.Hostname() {
+	switch strings.ToLower(strings.TrimSuffix(u.Hostname(), ".")) {
 	case "github.com", "www.github.com", "api.github.com":
 		return defaultAPIBaseURL
 	}
