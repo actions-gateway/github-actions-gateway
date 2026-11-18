@@ -219,6 +219,7 @@ nav:
   - Home: index.md
   - Why GAG: why-gag.md
   - Alternatives: alternatives.md
+  - Worker isolation: worker-isolation.md
   - Features: features.md
   - Demo: demo.md
   - Get started: getting-started.md
