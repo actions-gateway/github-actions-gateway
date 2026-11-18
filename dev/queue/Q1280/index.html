@@ -2726,6 +2726,39 @@ What caused the windows is unverified.</p>
 Candidate fixes, none measured yet: fetch less, with <code>filter: blob:none</code> on the full-history checkouts, provided every gate still reads what it needs (several <code>git show</code> other refs, which fetch blobs on demand); give the checkout its own step timeout and a retry, so a stalled fetch restarts instead of using up the job; or raise the job budget for the full-history jobs alone.
 The fix should state which of these it measured against a slow window, not just against a quiet day, since a quiet day passes all three.
 Sweep the idiom: <code>publish.yml</code>, <code>validate-candidate.yml</code>, <code>status-lint.yml</code>, <code>manifest-validate.yml</code>, <code>release-freeze-watch.yml</code> and <code>dependabot-rebase-stale.yml</code> also take <code>fetch-depth: 0</code>, and any of their jobs with a tight <code>timeout-minutes</code> has the same exposure.</p>
+<p><strong>Three more on 2026-11-17, and one was shallow.</strong> Each job's <code>Run actions/checkout</code> step ran until the 5-minute job timeout cancelled it:</p>
+<table>
+<thead>
+<tr>
+<th>Run</th>
+<th>Job</th>
+<th>Depth</th>
+<th>Checkout</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/44168970558">44168970558</a></td>
+<td><code>em-dash</code></td>
+<td>full history</td>
+<td>20:24:55Z to 20:29:54Z</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/44169518457">44169518457</a></td>
+<td><code>card-bullets</code></td>
+<td>shallow</td>
+<td>20:30:37Z to 20:35:35Z</td>
+</tr>
+<tr>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/44192442984">44192442984</a> attempt 1</td>
+<td><code>release-notes</code></td>
+<td>full history</td>
+<td>22:45:45Z to 22:50:44Z</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>card-bullets</code> stall breaks the 2026-11-03 finding that shallow checkouts top out near a minute: a slow window can stall a shallow fetch past the budget too.
+So <code>filter: blob:none</code> alone cannot close this row, and a step timeout with a retry, which covers both depths, is the stronger candidate.</p>
 
 
 
