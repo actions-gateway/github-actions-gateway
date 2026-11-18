@@ -30,8 +30,9 @@ The review deliberately tests that hypothesis rather than assuming it.
     The graduation guardrail is *technical* (clean-green + a short stability soak), not user-migration.
   - **Commit v1 removal to a stated schedule gated on v2 *stability* (the v2beta1 graduation), not on adopters.** The discipline — announced, scheduled, with a working `gag-migrate` — *is* the "safe bet, won't strand you" signal a prospective **v2** adopter is actually reading.
   - **The real lever is v2 *maturation* (Q74 / v2beta1), not v1 removal** — "v2 is the front door" only pays off once v2 is beta-stable.
-- **Building classic first was a defensible bet, not a mistake.** The scale-set protocol was undocumented-internal-to-ARC at design time; the official standalone client only reached Public Preview in 2026.
-  The world changed — that is what makes Option E cheap *now*, not that it was obviously right *then*.
+- **Building classic first was a defensible bet, not a mistake.** Scale sets were available at design time: ARC's scale-set mode went GA in July 2023, and the official standalone `actions/scaleset` client was public from October 2025, in Public Preview since February 2026.
+  What GAG's design did not do was account for them; the protocol still has no wire spec and the client is still Preview.
+  What makes Option E cheap *now* is what GAG learned and built since, not that it was obviously right *then*.
 - **No security or secure-by-default regression** in the migration; the positioning story (the "virtual runners" identity) does shift and must be rewritten in lockstep with the default flip.
 
 ---
@@ -138,9 +139,10 @@ That is the strongest possible evidence both that classic's ceiling is real (the
 
 **No — building classic first was a defensible bet given what was knowable then.** Resisting hindsight bias:
 
-- **The protocol was not available as a supported surface at design time.** The runner-scale-set protocol was undocumented-internal-to-ARC (no wire spec; the ARC Go client had to be read at a pinned tag).
-  GitHub only published the **official standalone `actions/scaleset` client** (Public Preview, MIT) in 2026 — four releases v0.1.0–v0.4.0, Feb–May 2026 ([Q264 §4, §5a-U6](archive/q264-scale-set-protocol-phases.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)).
-  Building on it *then* would have meant reverse-engineering a **second** undocumented GitHub-internal protocol and betting the product on a moving, pre-1.0-adjacent target.
+- **The protocol was available at design time, but only as a Preview surface with no spec.** ARC's runner scale-set mode went GA on 2023-07-25 ([ARC discussion #2775](https://github.com/actions/actions-runner-controller/discussions/2775)).
+  The **official standalone `actions/scaleset` client** (MIT) was created on 2025-10-29 and announced as Public Preview on 2026-02-05 ([GitHub changelog](https://github.blog/changelog/2026-02-05-github-actions-early-february-2026-updates/)); v0.1.0–v0.4.0 all shipped Feb–May 2026, before GAG's first commit on 2026-05-16 ([Q264 §4, §5a-U6](archive/q264-scale-set-protocol-phases.md#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation)).
+  GAG's design did not account for it — the same gap behind the README's claim that ARC cannot scale to zero (corrected 2026-05-26 in `3eaff16ff`), and the retired ~256 MiB .NET listener figure ([PR #786](https://github.com/actions-gateway/github-actions-gateway/pull/786)).
+  Building on it *then* would still have meant betting the product on a pre-1.0 Preview client with no wire spec, which is where it remains.
 - **The classic virtual-runner bet bought real, still-valid merits:** the goroutines-in-one-shared-pod at-rest density advantage over ARC's pod-per-scale-set listeners, per-tenant egress isolation, multi-tenant self-service, and zero idle compute (appendix-d §D.3–D.4).
   None of that was free elsewhere.
 - **The specific failure was not cleanly foreseeable from source.** The topology consequence (concurrency = acquirers) was arguably visible in principle, but the precise *distinct-delivery starvation* behaviour only emerged under live high-burst dogfood — source-reading alone would not have surfaced it (indeed the whole Q260→Q224 saga is a sequence of live re-routes correcting source-level assumptions).
