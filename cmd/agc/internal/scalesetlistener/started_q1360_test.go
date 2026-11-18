@@ -11,48 +11,32 @@ import (
 )
 
 // Q1360: GitHub withdraws an assignment no runner took in five minutes and re-issues the
-// job under a new job ID, which the set's first idle runner can take within seconds. When
-// the re-issue and its start arrive in one batch, a worker built for the re-issue would
-// have nothing to run and nothing to give it a deadline.
+// job under a new job ID, which an idle runner of the set can take within seconds. The
+// re-issue's start can then arrive in the same batch as its assignment.
 
-// TestListener_DoesNotProvisionAJobARunnerAlreadyStarted pins that the start, handled
-// ahead of the batch's assignments, keeps the assignment from building a worker.
-func TestListener_DoesNotProvisionAJobARunnerAlreadyStarted(t *testing.T) {
+// TestListener_ProvisionsAJobWhoseStartArrivedInTheSameBatch pins that the assignment
+// still gets a worker. The start is handled first, and the surplus it moves may already
+// have been put on another job's still-Pending worker, on the reasoning that the re-issue's
+// own worker will serve that job. Skipping the re-issue's worker leaves that job with
+// none.
+func TestListener_ProvisionsAJobWhoseStartArrivedInTheSameBatch(t *testing.T) {
 	srv := newQuickPollServer(t)
 	srv.SeedMessage([]scaleset.JobMessage{
-		{MessageType: scaleset.MessageTypeJobAssigned, JobID: "job-y", OwnerName: "myorg", RepositoryName: "repo", WorkflowRunID: 44},
+		{MessageType: scaleset.MessageTypeJobAssigned, JobID: "job-y"},
 		{MessageType: scaleset.MessageTypeJobStarted, JobID: "job-y", RunnerName: "linux-job-x"},
-	})
-	// A later assignment, so the test waits on something that must happen rather than on
-	// the absence of a call.
-	srv.SeedMessage([]scaleset.JobMessage{
-		{MessageType: scaleset.MessageTypeJobAssigned, JobID: "job-z"},
 	})
 
 	prov := &recordingProvisioner{srv: srv, completeErr: true}
 	log := &lifecycleLog{}
-	store := &fakeGuardStore{}
-	startListener(t, srv, fixedCapacity(5), prov, nil, withLifecycle(log), withGuards(store))
+	startListener(t, srv, fixedCapacity(5), prov, nil, withLifecycle(log))
 
-	provisioned := func() []string {
+	require.Eventually(t, func() bool {
 		prov.mu.Lock()
 		defer prov.mu.Unlock()
-		var ids []string
-		for _, j := range prov.provisioned {
-			ids = append(ids, j.JobID)
-		}
-		return ids
-	}
-	require.Eventually(t, func() bool { return len(provisioned()) >= 1 }, 5*time.Second, 10*time.Millisecond)
-	assert.Equal(t, []string{"job-z"}, provisioned(), "a job a runner already holds needs no worker of its own")
+		return len(prov.provisioned) == 1
+	}, 5*time.Second, 10*time.Millisecond, "the re-issue must get a worker even though a runner already started it")
+	prov.mu.Lock()
+	defer prov.mu.Unlock()
+	assert.Equal(t, "job-y", prov.provisioned[0].JobID)
 	assert.Equal(t, []string{"started job-y on linux-job-x"}, log.seen())
-	// The job still has a worker, the one running it, so it stays owed recovery (Q844).
-	require.Eventually(t, func() bool {
-		for _, j := range store.saved().InFlight {
-			if j.JobID == "job-y" {
-				return j.RunID == "44" && j.Started
-			}
-		}
-		return false
-	}, 5*time.Second, 10*time.Millisecond, "the skipped job must keep its in-flight record")
 }

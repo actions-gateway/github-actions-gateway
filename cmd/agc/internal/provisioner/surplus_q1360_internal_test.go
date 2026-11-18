@@ -39,3 +39,25 @@ func TestMarkScaleSetJobStarted_MovesTheSurplusToAStillPendingWorker(t *testing.
 	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-y", "gpu-job-x"))
 	assert.ElementsMatch(t, []string{"job-x", "job-y"}, stamped(ctx, t, fc, keys))
 }
+
+// TestMarkScaleSetJobStarted_PendingPickLeavesARunnerForEveryOutstandingJob is the
+// same-batch composition: job-z is still assigned and its worker Pending when job-x's
+// re-issue job-y is started on job-x's runner before job-y has a worker. The moved surplus
+// lands on job-z's worker, which is correct only because job-y's worker is still built and
+// can take job-z.
+func TestMarkScaleSetJobStarted_PendingPickLeavesARunnerForEveryOutstandingJob(t *testing.T) {
+	ctx := context.Background()
+	p, target, fc, keys := surplusFixture(ctx, t, "job-x", "job-z")
+	setPhase(ctx, t, fc, keys["job-z"], corev1.PodPending)
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-y", RunnerName: "gpu-job-x"}))
+	require.Equal(t, []string{"job-z"}, stamped(ctx, t, fc, keys), "the surplus moves onto the only idle worker")
+
+	keys["job-y"] = provisionHolder(ctx, t, p, target, "job-y")
+
+	ann := podAnnotations(ctx, t, fc, keys["job-y"])
+	assert.NotContains(t, ann, AnnotationJobCompletedAt, "job-y's worker is the runner left for job-z")
+	assert.Empty(t, ann[AnnotationStartedJobID])
+	assert.True(t, secretExists(ctx, t, fc, "team-a", "job-y"))
+}
