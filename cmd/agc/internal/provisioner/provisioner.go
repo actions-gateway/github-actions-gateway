@@ -990,12 +990,17 @@ func (p *Provisioner) CleanupScaleSetJob(ctx context.Context, target Target, job
 // concurrency slot and a node until spec.maxWorkerLifetime.
 //
 // Every runner of the set can take any of its jobs, so which idle one goes does not
-// change how many jobs still have a runner to take them. A candidate is a Running worker
-// whose runner has started no job and that carries no stamp; the oldest is taken. A busy
-// worker is never one, and a pick that turns out to be needed costs a stamp rather than
-// a job: its JobStarted lifts the stamp and moves it on (MarkScaleSetJobStarted).
-// Pending workers are left out, since the reaper collects a stamped Pending pod in
-// seconds and one still starting is the likeliest to be taken next.
+// change how many jobs still have a runner to take them. A candidate is a Running or
+// Pending worker whose runner has started no job and that carries no stamp. A Running
+// one is taken ahead of a Pending one, the oldest first: a pick that turns out to be
+// needed costs a stamp rather than a job, since its JobStarted lifts the stamp and moves
+// it on (MarkScaleSetJobStarted), while a stamped Pending pod is reaped in seconds. A
+// busy worker is never one.
+//
+// A Pending worker is still a candidate because the surplus one is often still starting:
+// when GitHub withdraws an assignment no runner took and re-issues the job under a new
+// job ID, the worker created for the re-issue is Pending when the first runner takes the
+// job, and skipping it left that worker idle with no deadline (Q1360).
 //
 // It is idempotent per jobID: a worker already carrying AnnotationSurplusForJob for it
 // means a replayed completion has nothing left to reclaim. except names a pod never to
@@ -1016,13 +1021,12 @@ func (p *Provisioner) reclaimSurplusWorker(ctx context.Context, target Target, j
 		if pod.Name == except || !surplusCandidate(pod) {
 			continue
 		}
-		if pick == nil || pod.CreationTimestamp.Before(&pick.CreationTimestamp) ||
-			(pod.CreationTimestamp.Equal(&pick.CreationTimestamp) && pod.Name < pick.Name) {
+		if pick == nil || surplusBefore(pod, pick) {
 			pick = pod
 		}
 	}
 	if pick == nil {
-		p.logForKey(key).Debug("no idle scale-set worker to reclaim for a job no runner started", "jobID", jobID)
+		p.logForKey(key).Info("no idle scale-set worker to reclaim for a job no runner started", "jobID", jobID)
 		return nil
 	}
 	if secretName := scaleSetPodSecretName(pick); secretName != "" {
@@ -1030,19 +1034,37 @@ func (p *Provisioner) reclaimSurplusWorker(ctx context.Context, target Target, j
 			return fmt.Errorf("provisioner: delete scale-set Secret %s: %w", secretName, err)
 		}
 	}
-	p.logForKey(key).Debug("reclaiming an idle scale-set worker for a job no runner started",
-		"pod", pick.Name, "jobID", jobID)
+	p.logForKey(key).Info("reclaiming an idle scale-set worker for a job no runner started",
+		"pod", pick.Name, "phase", pick.Status.Phase, "jobID", jobID)
 	return p.markJobCompleted(ctx, pick, jobID, jobID)
 }
 
 // surplusCandidate reports whether pod is an idle worker reclaimSurplusWorker may stamp:
-// Running, not being deleted, its runner seen starting no job, and not already stamped.
+// Running or Pending, not being deleted, its runner seen starting no job, and not already
+// stamped.
 func surplusCandidate(pod *corev1.Pod) bool {
-	if pod.Status.Phase != corev1.PodRunning || !pod.DeletionTimestamp.IsZero() {
+	switch pod.Status.Phase {
+	case corev1.PodRunning, corev1.PodPending:
+	default:
+		return false
+	}
+	if !pod.DeletionTimestamp.IsZero() {
 		return false
 	}
 	_, stamped := pod.Annotations[AnnotationJobCompletedAt]
 	return pod.Annotations[AnnotationStartedJobID] == "" && !stamped
+}
+
+// surplusBefore orders reclaim candidates: Running ahead of Pending, then oldest, then by
+// name.
+func surplusBefore(a, b *corev1.Pod) bool {
+	if ar, br := a.Status.Phase == corev1.PodRunning, b.Status.Phase == corev1.PodRunning; ar != br {
+		return ar
+	}
+	if !a.CreationTimestamp.Equal(&b.CreationTimestamp) {
+		return a.CreationTimestamp.Before(&b.CreationTimestamp)
+	}
+	return a.Name < b.Name
 }
 
 // MarkScaleSetJobStarted records on the worker whose runner is job.RunnerName that its

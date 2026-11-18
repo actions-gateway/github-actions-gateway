@@ -1666,6 +1666,8 @@ Before the reap fires, the shape is a set that looks busy and is not: `status.ac
 
 **What happened.** The pod was still `Running` five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
 For a job that ended before any runner started it, the set is left with one runner more than it has jobs, and one idle worker goes on the clock: the pod the AGC created for that job, or, when that pod's runner has started a different job, the oldest `Running` worker whose runner has started nothing (Q1153).
+When no idle worker is `Running`, a `Pending` one whose runner has started nothing goes instead, and is reaped under [`completed_pending`](#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending) rather than here (Q1360).
+That is the common shape after GitHub re-issues a job: an assignment no runner takes within five minutes is withdrawn by a `JobCompleted` naming no runner and assigned again under a new job ID, so the set briefly holds a worker for each, and the first runner up takes the re-issue.
 Such a pod carries `actions-gateway.com/surplus-for-job` naming the job that freed it.
 If its runner is given a job after all, the stamp comes off it and moves to another idle worker when the AGC records that job's start.
 A start the AGC fails to record is redelivered until it is recorded.
@@ -1703,6 +1705,11 @@ kubectl get pods -n <namespace> -l actions-gateway.com/runner-set=<set> \
 
 # Rate of orphan reaps per set
 # PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])
+
+# Each job message the AGC handled, with its job ID and runner: "job assigned",
+# "worker provisioned", "job started", "job completed", and the surplus reclaim
+# ("reclaiming an idle scale-set worker" / "no idle scale-set worker to reclaim")
+kubectl logs -n <namespace> deploy/<agc-deployment> | grep -E 'scaleset: (job |worker provisioned|not provisioning)|scale-set worker to reclaim|reclaiming an idle'
 ```
 
 **Resolution.** The reap itself needs no action — it returns the slot and the node.

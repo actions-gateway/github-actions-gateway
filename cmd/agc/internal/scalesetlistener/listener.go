@@ -689,6 +689,11 @@ type Listener struct {
 	// check acted on, and a jobID is a job's UUID — one GitHub has stopped holding is not
 	// coming back under the same id.
 	abandoned map[string]bool
+	// started holds the jobIDs a JobStarted has named a runner for. A runner already holds
+	// such a job, so its JobAssigned needs no worker: one provisioned then has nothing to
+	// run, which is how a batch carrying a job's start beside its assignment would build an
+	// idle worker (Q1360). Retired with the guards above.
+	started map[string]bool
 	// inFlight holds the run identity of every job whose worker this listener built and
 	// has not seen conclude, persisted with the guards so a later process can tell that
 	// a vanished worker owed its run a re-run (Q844). Unlike the guards above it is not
@@ -751,6 +756,7 @@ func New(cfg Config) (*Listener, error) {
 		provisioned:        make(map[string]bool),
 		completed:          make(map[string]bool),
 		abandoned:          make(map[string]bool),
+		started:            make(map[string]bool),
 		inFlight:           make(map[string]InFlightJob),
 		pending:            make(map[int64]*pendingMessage),
 		deferred:           make(map[string]*deferredJob),
@@ -1476,6 +1482,9 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 
 	for _, aj := range scaleset.AssignedJobs(jobs) {
 		l.metricsIncAssigned()
+		_, _, runID, _ := aj.RunIdentity()
+		l.log.Info("scaleset: job assigned", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID,
+			"runID", runID, "jobName", aj.JobDisplayName, "messageID", msg.MessageID)
 		outcome := l.provisionAssigned(ctx, ssID, aj)
 		switch {
 		case outcome == provisionRetry:
@@ -1877,8 +1886,14 @@ func (o provisionOutcome) deferReason() string {
 func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.JobMessage) provisionOutcome {
 	l.mu.Lock()
 	already, gone, over := l.provisioned[aj.JobID], l.abandoned[aj.JobID], l.completed[aj.JobID]
+	held := l.started[aj.JobID]
 	l.mu.Unlock()
 	if already {
+		return provisionAcked
+	}
+	if held {
+		l.log.Info("scaleset: not provisioning a worker for a job a runner has already started",
+			"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID)
 		return provisionAcked
 	}
 	if gone {
@@ -1974,6 +1989,7 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	}
 	l.mu.Unlock()
 	l.metricsIncProvisioned()
+	l.log.Info("scaleset: worker provisioned", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "runner", runnerName)
 	return provisionAcked
 }
 
@@ -2135,6 +2151,7 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	l.mu.Lock()
 	first := !l.completed[cj.JobID]
 	l.completed[cj.JobID] = true
+	delete(l.started, cj.JobID)
 	// The job reached a reportable end, so nothing is owed for it (Q844). Dropped here
 	// rather than on the worker pod's terminal phase, which this goroutine never sees;
 	// the removal is persisted ahead of the message delete that follows, so the record
@@ -2150,6 +2167,10 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	// the only one — reconcileDeferred covers the losses that arrive as no message at all
 	// (Q553).
 	l.resolveDeferred(cj.JobID)
+	if first {
+		l.log.Info("scaleset: job completed", "scaleSet", l.cfg.ScaleSetName, "jobID", cj.JobID,
+			"runner", cj.RunnerName, "result", cj.Result)
+	}
 	if first && l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
 	}
@@ -2260,6 +2281,7 @@ func (l *Listener) retireGuards(p *pendingMessage) {
 			continue
 		}
 		delete(l.provisioned, jobID)
+		delete(l.started, jobID)
 		// A retirement is a store change too; the next cycle's save garbage-collects
 		// the entry (Q606). provisioned is not persisted, so it dirties nothing.
 		if l.completed[jobID] || l.abandoned[jobID] {
@@ -2453,6 +2475,11 @@ func (l *Listener) sweepStaleGuards() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.sweepStaleInFlightLocked()
+	for jobID := range l.started {
+		if !l.assignmentPending(jobID) && !l.retained[jobID] {
+			delete(l.started, jobID)
+		}
+	}
 	for _, guards := range []map[string]bool{l.completed, l.abandoned} {
 		for jobID := range guards {
 			if l.assignmentPending(jobID) || l.retained[jobID] {
@@ -2716,16 +2743,24 @@ func (l *Listener) metricsIncPollError(reason string) {
 // not one. A start for a job already seen complete is a replay, and recording it would
 // mark a finished worker busy.
 func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) bool {
-	if l.cfg.Started == nil || sj.RunnerName == "" {
+	if sj.RunnerName == "" {
 		return true
 	}
 	l.mu.Lock()
 	done := l.completed[sj.JobID]
+	first := !done && !l.started[sj.JobID]
+	if !done {
+		l.started[sj.JobID] = true
+	}
 	l.mu.Unlock()
-	if done {
+	owner, repo, runID, _ := sj.RunIdentity()
+	if first {
+		l.log.Info("scaleset: job started", "scaleSet", l.cfg.ScaleSetName, "jobID", sj.JobID,
+			"runner", sj.RunnerName, "runID", runID)
+	}
+	if done || l.cfg.Started == nil {
 		return true
 	}
-	owner, repo, runID, _ := sj.RunIdentity()
 	if err := l.cfg.Started(ctx, Job{
 		JobID:      sj.JobID,
 		RunnerName: sj.RunnerName,

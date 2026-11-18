@@ -63,21 +63,33 @@ func TestCleanupScaleSetJob_ReclaimsAnIdleWorkerWhenTheMintedOneIsBusy(t *testin
 	assert.False(t, secretExists(ctx, t, fc, "team-a", "job-y"), "the reclaimed worker's Secret goes with it")
 }
 
-// TestCleanupScaleSetJob_NeverReclaimsABusyOrStartingWorker pins the candidate set: a
-// worker whose runner started a job is never stamped, and neither is one still Pending.
-func TestCleanupScaleSetJob_NeverReclaimsABusyOrStartingWorker(t *testing.T) {
+// TestCleanupScaleSetJob_NeverReclaimsABusyWorker pins the candidate set: a worker whose
+// runner started a job is never stamped, even when nothing else is left to reclaim.
+func TestCleanupScaleSetJob_NeverReclaimsABusyWorker(t *testing.T) {
 	ctx := context.Background()
-	p, target, fc, keys := surplusFixture(ctx, t, "job-x", "job-y", "job-z")
+	p, target, fc, keys := surplusFixture(ctx, t, "job-x", "job-y")
 	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-job-x"}))
 	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-e", RunnerName: "gpu-job-y"}))
-	setPhase(ctx, t, fc, keys["job-z"], corev1.PodPending)
 
 	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
 
-	assert.Empty(t, stamped(ctx, t, fc, keys), "with no idle Running worker, nothing may be reclaimed")
-	for _, id := range []string{"job-x", "job-y", "job-z"} {
+	assert.Empty(t, stamped(ctx, t, fc, keys), "with no idle worker, nothing may be reclaimed")
+	for _, id := range []string{"job-x", "job-y"} {
 		assert.True(t, secretExists(ctx, t, fc, "team-a", id), "%s's Secret must survive", id)
 	}
+}
+
+// TestCleanupScaleSetJob_PrefersARunningIdleWorkerToAPendingOne pins the order: a
+// Pending worker is reclaimed only when no idle Running one is left (Q1360).
+func TestCleanupScaleSetJob_PrefersARunningIdleWorkerToAPendingOne(t *testing.T) {
+	ctx := context.Background()
+	p, target, fc, keys := surplusFixture(ctx, t, "job-x", "job-y", "job-z")
+	require.NoError(t, p.MarkScaleSetJobStarted(ctx, target, ScaleSetJob{JobID: "job-d", RunnerName: "gpu-job-x"}))
+	setPhase(ctx, t, fc, keys["job-y"], corev1.PodPending)
+
+	require.NoError(t, p.CleanupScaleSetJob(ctx, target, "job-x", ""))
+
+	assert.Equal(t, []string{"job-z"}, stamped(ctx, t, fc, keys), "the idle Running worker goes first")
 }
 
 // TestCleanupScaleSetJob_ReplayedCompletionReclaimsOnce pins idempotency: a re-created
