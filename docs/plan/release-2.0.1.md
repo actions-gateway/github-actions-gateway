@@ -1,6 +1,6 @@
 # Release 2.0.1
 
-> **Status: scoped 2026-11-17, every fix landed, no candidate cut yet.** A patch release from `main`: six bug and security fixes since `v2.0.0`, and the dependency bumps that merged beside them.
+> **Status: `v2.0.1-rc.1` validated in CI at `f156d4c53` on 2026-11-18 ([gate run 44236535751](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44236535751)); awaiting the promote decision.** A patch release from `main`: six bug and security fixes since `v2.0.0`, and the dependency bumps that merged beside them.
 
 ## Scope ledger
 
@@ -36,4 +36,12 @@ The `gmc`, `agc` and `proxy` images carried nothing, and GitHub's advisory datab
 
 ## Candidate validation
 
-No candidate has been cut.
+**`v2.0.1-rc.1`, tagged at `f156d4c53`, passed every gate leg in CI.** Gate run 44236535751's evidence names that commit and records `kata`, `crd-smoke`, `soak`, `storage`, `dind` and `dragonfly`, every leg in `scripts/dogfood/lib/gate-legs.sh`, and each soak reading in its `soak-readings` artifact is a pass.
+
+The publish checked out by content before the gate ran: the Release is immutable with all 9 assets, `make verify-release` and `make verify-release-compat` (cosign v2.5.2) each report 25 OK and no failure, all seven images' provenance names `publish.yml@refs/tags/v2.0.1-rc.1` at `f156d4c53`, and a `cosign verify` against a wrong signer identity fails.
+
+**The run is red because teardown could not drain, not because a leg failed.** The gate's log ends "The gate PASSED; it exits 1 because the cluster is not at rest", and the workflow's own reclaim step failed on the same drain.
+The e2e leg's one CI job (run 44247655794, `e2e / e2e`, green) had two runner pods in the `ci-e2e` `RunnerSet`: one ran it and was reaped at 06:30Z, and the other registered at 06:05Z, logged `Listening for Jobs`, and received nothing.
+The AGC reaps a `Running` worker only once it carries a job-completed stamp, so that pod had no deadline and pinned an `n2-standard-8` node until it was deleted by hand just before 09:00Z, after which `validate-release.sh --reclaim` scaled the system pool to 0 and released the lease.
+The reaper and provisioner are unchanged between `v2.0.0` and `f156d4c53`, so this is not a regression the candidate introduced; why the AGC started a second pod for one job is not measured.
+
