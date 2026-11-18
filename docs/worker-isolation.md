@@ -17,7 +17,7 @@ Start from what the jobs do, then from what the nodes can do.
 %%{init: {"flowchart": {"rankSpacing": 26, "nodeSpacing": 24, "wrappingWidth": 280}}}%%
 flowchart TD
     plain["plain<br>no daemon"]
-    rootless["plain + rootless<br>BuildKit or Kaniko"]
+    rootless["rootless BuildKit<br>no daemon"]
     kata["kata-dind<br>Docker in a micro-VM"]
     priv["privileged-dind<br>on a pool you can lose"]
     q1(["Does the job need<br>a Docker daemon?"])
@@ -93,8 +93,9 @@ GAG refuses fork jobs on every runner set by default, and that default should ne
 It costs nothing to run.
 
 The cost is in what the jobs give up.
-Rootless BuildKit and Kaniko build images without a daemon ([in-runner image builds](operations/in-runner-image-builds.md)), but nothing under `plain` can start a container.
+Nothing under `plain` can start a container.
 That excludes `kind`, `docker compose`, and every job that uses `container:` or `services:`, because GAG runs one pod per job and those steps need a daemon inside it.
+Rootless BuildKit can still build images without a daemon, though it is not a library entry yet and on many kernels it needs a looser seccomp profile than `plain` allows ([in-runner image builds](operations/in-runner-image-builds.md)).
 If most of your jobs are tests, lint and deploys, that trade is free, and the daemon shapes only need to exist for the jobs that build or test containers.
 
 ## What none of them cover
