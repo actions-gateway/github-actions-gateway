@@ -2,16 +2,6 @@
 
 > **Status: scoped 2026-11-17, every fix landed, no candidate cut yet.** A patch release from `main`: six bug and security fixes since `v2.0.0`, and the dependency bumps that merged beside them.
 
-## Why this release exists
-
-The maintainer asked on 2026-11-17 for a `v2.0.1` carrying the dependency bumps merged since `v2.0.0`, with any security or bug fixes on the backlog that could land first.
-Five rows were picked from the backlog that day, and a sixth, Q1358, was filed while one of them was under review and added.
-
-The bumps turned out to close one known vulnerability, in `build-runner`'s Docker binaries (see [Security](#security)), so the fixes are most of the reason to ship.
-Three of them change who can reach what: Q1358 closes a way round the raced scale-set name guard, Q1336 stops an IPv6 cluster's AGC sending its Kubernetes API traffic through the tenant's egress proxy, and Q1333 stops a mixed-case `githubURL` sending the AGC's GitHub App token exchange to a GitHub Enterprise Server path on `github.com`.
-
-`main` carried nothing else that ships, so the patch is cut from `main` rather than from a release branch.
-
 ## Scope ledger
 
 What the `v2.0.1` tag carries, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
