@@ -82,15 +82,15 @@ Set `VALIDATE_METRICS_TIMEOUT=0 VALIDATE_METRICS_GRACE=0` to restore the previou
 
 ## Install
 
-> **Current release — `v2.0.0`.** The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
-> Pin `--version 2.0.0` (the chart version is the release tag without the leading `v`).
+> **Current release — `v2.0.1`.** The chart is published, cosign-signed, and installable straight from the GHCR OCI registry.
+> Pin `--version 2.0.1` (the chart version is the release tag without the leading `v`).
 > Newer patch releases publish as `2.0.z`; pin the version you have verified.
 
 Install the published, signed chart straight from the registry — no source checkout needed:
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 2.0.0 \
+  --version 2.0.1 \
   --namespace gmc-system --create-namespace \
   --set gmc.image.digest=sha256:<gmc> \
   --set agc.image.digest=sha256:<agc> \
@@ -98,7 +98,7 @@ helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
   --set wrapper.image.digest=sha256:<wrapper>
 ```
 
-Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.0) (the chart ships **no** baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
+Copy the four image digests from the [release notes](https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.1) (the chart ships **no** baked-in digests — empty digests are the fail-closed secure default, so an unconfigured render is rejected).
 Verify the chart and image signatures before installing — see [release.md § Verify the publish](release.md#3-verify-the-publish) and [security-operations.md § Image provenance](security-operations.md#image-provenance-signature--sbom-verification).
 
 > **Installing from a source checkout** (dev/CI, or to install an unreleased chart) still works — substitute the local `charts/actions-gateway` path for the `oci://…` ref in any command on this page:
@@ -149,7 +149,7 @@ Digest pinning is preserved throughout (relocation is content-addressed).
 
 ```sh
 helm install gag oci://ghcr.io/actions-gateway/charts/actions-gateway \
-  --version 2.0.0 \
+  --version 2.0.1 \
   --namespace gmc-system --create-namespace \
   --set certManager.enabled=false \
   --set gmc.image.digest=sha256:<gmc> \
