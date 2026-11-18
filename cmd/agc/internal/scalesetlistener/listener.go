@@ -1476,6 +1476,9 @@ func (l *Listener) handleMessage(ctx context.Context, ssID int, sess *scaleset.R
 
 	for _, aj := range scaleset.AssignedJobs(jobs) {
 		l.metricsIncAssigned()
+		_, _, runID, _ := aj.RunIdentity()
+		l.log.Info("scaleset: job assigned", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID,
+			"runID", runID, "jobName", aj.JobDisplayName, "messageID", msg.MessageID)
 		outcome := l.provisionAssigned(ctx, ssID, aj)
 		switch {
 		case outcome == provisionRetry:
@@ -1974,6 +1977,7 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	}
 	l.mu.Unlock()
 	l.metricsIncProvisioned()
+	l.log.Info("scaleset: worker provisioned", "scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID, "runner", runnerName)
 	return provisionAcked
 }
 
@@ -2150,6 +2154,10 @@ func (l *Listener) completeJob(ctx context.Context, cj scaleset.JobMessage) bool
 	// the only one — reconcileDeferred covers the losses that arrive as no message at all
 	// (Q553).
 	l.resolveDeferred(cj.JobID)
+	if first {
+		l.log.Info("scaleset: job completed", "scaleSet", l.cfg.ScaleSetName, "jobID", cj.JobID,
+			"runner", cj.RunnerName, "result", cj.Result)
+	}
 	if first && l.cfg.Metrics != nil {
 		l.cfg.Metrics.IncJobCompleted(cj.Result)
 	}
@@ -2716,7 +2724,7 @@ func (l *Listener) metricsIncPollError(reason string) {
 // not one. A start for a job already seen complete is a replay, and recording it would
 // mark a finished worker busy.
 func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) bool {
-	if l.cfg.Started == nil || sj.RunnerName == "" {
+	if sj.RunnerName == "" {
 		return true
 	}
 	l.mu.Lock()
@@ -2726,6 +2734,11 @@ func (l *Listener) startJob(ctx context.Context, sj scaleset.JobMessage) bool {
 		return true
 	}
 	owner, repo, runID, _ := sj.RunIdentity()
+	l.log.Info("scaleset: job started", "scaleSet", l.cfg.ScaleSetName, "jobID", sj.JobID,
+		"runner", sj.RunnerName, "runID", runID)
+	if l.cfg.Started == nil {
+		return true
+	}
 	if err := l.cfg.Started(ctx, Job{
 		JobID:      sj.JobID,
 		RunnerName: sj.RunnerName,

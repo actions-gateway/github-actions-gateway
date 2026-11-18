@@ -892,7 +892,14 @@ An AGC that stamped the pod named for the completed job reaped it at 17:35:12Z w
 So the stamp follows the `runnerName` the `JobCompleted` carries, matched against each pod's `actions-gateway.com/runner-name`.
 A job that ended before any runner started it carries no runner; its completion stamps the pod created for it, unless that pod's runner has since started another job.
 The set still holds one runner more than it has jobs then, so the completion stamps the oldest `Running` worker whose runner has started nothing in its place (Q1153), recording the job on it as `actions-gateway.com/surplus-for-job` so a replayed completion stamps no second worker.
-Any idle runner can take any of the set's jobs, so which one goes does not change how many jobs keep a runner; a busy or `Pending` worker is never picked.
+Any idle runner can take any of the set's jobs, so which one goes does not change how many jobs keep a runner; a busy worker is never picked, and a `Pending` one only when no idle `Running` one is left.
+
+**GitHub re-issues a job no runner took, under a new job ID.** Measured on dogfood on 2026-11-18 from the cluster's audit log: one workflow job was assigned at 05:56:12Z, and its worker waited on a node scale-up.
+At 06:01:12Z, five minutes later, a `JobCompleted` naming no runner withdrew that assignment, and the same workflow job was assigned again under a second job ID, whose worker the AGC created at 06:01:13Z.
+The first worker's runner came up and took the re-issue at 06:01:17Z, so the second worker had nothing to run.
+Its surplus stamp, moved off the first worker by that start, found the second worker still `Pending` and was dropped while `Pending` workers were never picked, leaving it idle until it was deleted by hand (Q1360).
+A re-issue whose start arrives in the same batch as its assignment still gets a worker, because the start is handled first and the surplus it moves may already sit on another job's `Pending` worker, which the re-issue's worker then replaces.
+Where no worker takes that surplus, the re-issue's worker is idle with no stamp, the gap Q1360 still carries.
 The listener records each `JobStarted` on its runner's pod as `actions-gateway.com/started-job-id`, handling a batch's starts before its completions.
 The same start replaces the pod's `run-id` and `repository` with the started job's run, which is what eviction recovery re-runs (Q1152).
 A worker disrupted before its runner started anything still carries the identity of the job it was created for, so eviction recovery re-runs nothing for it while another worker has started that job (Q1169).
