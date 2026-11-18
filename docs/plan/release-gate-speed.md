@@ -113,7 +113,7 @@ The gate runs on `ubuntu-latest` in a public repository, so its minutes are not 
 | 4 | [Q1364](../queue/Q1364.md) | Bring the e2e node up during deploy instead of on the Kata dispatch | About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner) | Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early |
 | 5 | [Q1366](../queue/Q1366.md) | Take the Dragonfly readings concurrently | About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s) | Falls by the same minutes and system node time |
 | 6 | [Q1367](../queue/Q1367.md) | Schedule Kata workers only once a node's `kata-qemu` runtime is ready | Up to 37–74s per cold node (measured failure window), so about 1–2 min | Falls slightly |
-| 7 | [Q1368](../queue/Q1368.md) | Scope running the Kata and DinD legs at the same time on dogfood | About 20 min (estimate: the DinD leg's length once rank 2 lands) | Unpriced: peak e2e nodes rise from 1 to 2, node-hours are expected to fall, quota headroom is unknown |
+| 7 | [Q1368](../queue/Q1368.md) | Scope running the Kata and DinD legs at the same time on dogfood | About 20 min (estimate: the DinD leg's length once rank 2 lands) | Unpriced: peak e2e nodes rise from 1 to 2 inside the quota the gate already reserves, node-hours are expected to fall |
 
 Ranks 1 to 6 together bring a gate like rc.1's from 115.5 minutes to roughly 85 (estimate), plus up to 5.8 minutes off tag-to-gate.
 Rank 7 is a scoping row because its proof risks and quota are unmeasured.
@@ -195,14 +195,15 @@ This helps every Kata job on a cold node, not only the gate.
 ### 7. Kata and DinD at the same time (Q1368)
 
 After ranks 1 to 6 the suite's execution is the constraint, and running two legs at once is the only change left that removes a whole leg from the wall clock.
-Kata and DinD need different overlays of one RunnerSet in one namespace, so each needs its own tenant.
+It stays on the one dogfood cluster: the legs are serial so the gate runs on a single cluster inside GKE's free tier, and both legs already share that cluster's `e2e` pool.
+Kata and DinD are two overlays of one namespace, ActionsGateway and RunnerSet, and their namespace security profiles differ (baseline and privileged), so each needs its own tenant with its own runner label.
 The e2e pool already allows two nodes (the autoscaler's `max: 2`), and e2e node-hours should stay about the same while system-pool hours fall.
+Quota does not block it: the gate already reserves the e2e pool's full ceiling, 2 × 8 vCPU, out of `CPUS_ALL_REGIONS` before capping `workers` (Q631).
+`e2e-test.yml`'s concurrency group keys on workflow and ref, so two dispatches on `main` would run one after the other; the group needs the `runner` input in its key.
 Dragonfly stays serial: its mirror back end and node client are cluster-wide.
 
 What is not known decides whether it is worth doing.
-The project CPU quota headroom for two e2e workers alongside the routed CI traffic is unmeasured.
-`e2e-test.yml`'s per-ref concurrency group holds one run and one pending slot, so two dispatches on `main` need different refs or a group change.
-Whether the Kata leg's mirror census stays complete with a second tenant's clients on the same mirrors is unknown.
+Whether the Kata leg's mirror census stays complete with a second tenant's clients on the same mirrors is unknown, and so is whether the sizing and capacity readings, taken from the Kata tenant, are disturbed by a concurrent DinD tenant.
 Q1161, deferred, is the cross-project form of the same idea and expects to cost more.
 
 ## Considered and not worth pursuing
