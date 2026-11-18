@@ -129,7 +129,7 @@
           <div class="md-banner__inner md-grid md-typeset">
             
             <strong>v2.0.0 is here.</strong>
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.0">Read the release notes.</a>
           </div>
           
         </aside>
@@ -2689,6 +2689,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#stable-tag-pre-flight" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stable-tag pre-flight
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2711,7 +2722,7 @@
 
 <h1 id="release-201">Release 2.0.1<a class="headerlink" href="#release-201" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status: scoped 2026-11-17, every fix landed, no candidate cut yet.</strong> A patch release from <code>main</code>: six bug and security fixes since <code>v2.0.0</code>, and the dependency bumps that merged beside them.</p>
+<p><strong>Status: <code>v2.0.1-rc.2</code> validated 2026-11-18; the stable tag waits on Karl.</strong> <code>rc.1</code> passed every gate leg and its teardown found an idle scale-set worker, so the release was held for Q1360; <code>rc.2</code>, tagged at <code>74531a223</code> with that fix (#2357), passed every leg in CI (<a href="https://github.com/actions-gateway/github-actions-gateway/actions/runs/44322796149">gate run 44322796149</a>) and tore down clean.</p>
 </blockquote>
 <h2 id="scope-ledger">Scope ledger<a class="headerlink" href="#scope-ledger" title="Permanent link">&para;</a></h2>
 <p>What the <code>v2.0.1</code> tag carries, per the <a href="../../development/maintaining-backlog/#cutting-a-release-the-scope-ledger">scope-ledger convention</a>.
@@ -2798,7 +2809,28 @@ No row carries a <code>2.0.1-gate</code> label: each was dispatched and merged i
 The <code>gmc</code>, <code>agc</code> and <code>proxy</code> images carried nothing, and GitHub's advisory database lists no advisory affecting <code>google.golang.org/grpc</code> 1.84.0 or <code>cel.dev/expr</code> 0.25.2, so those bumps close nothing known.
 <code>scripts/release/check-vuln-policy.sh</code> passes at <code>f156d4c53</code>.</p>
 <h2 id="candidate-validation">Candidate validation<a class="headerlink" href="#candidate-validation" title="Permanent link">&para;</a></h2>
-<p>No candidate has been cut.</p>
+<p><strong><code>v2.0.1-rc.1</code>, tagged at <code>f156d4c53</code>, passed every gate leg in CI.</strong> Gate run 44236535751's evidence names that commit and records <code>kata</code>, <code>crd-smoke</code>, <code>soak</code>, <code>storage</code>, <code>dind</code> and <code>dragonfly</code>, every leg in <code>scripts/dogfood/lib/gate-legs.sh</code>, and each soak reading in its <code>soak-readings</code> artifact is a pass.</p>
+<p>The publish checked out by content before the gate ran: the Release is immutable with all 9 assets, <code>make verify-release</code> and <code>make verify-release-compat</code> (cosign v2.5.2) each report 25 OK and no failure, all seven images' provenance names <code>publish.yml@refs/tags/v2.0.1-rc.1</code> at <code>f156d4c53</code>, and a <code>cosign verify</code> against a wrong signer identity fails.</p>
+<p><strong>The run is red because teardown could not drain, not because a leg failed.</strong> The gate's log ends "The gate PASSED; it exits 1 because the cluster is not at rest", and the workflow's own reclaim step failed on the same drain.
+The e2e leg's one CI job (run 44247655794, <code>e2e / e2e</code>, green) had two runner pods in the <code>ci-e2e</code> <code>RunnerSet</code>: one ran it and was reaped at 06:30Z, and the other registered at 06:05Z, logged <code>Listening for Jobs</code>, and received nothing.
+The AGC reaps a <code>Running</code> worker only once it carries a job-completed stamp, so that pod had no deadline and pinned an <code>n2-standard-8</code> node until it was deleted by hand just before 09:00Z, after which <code>validate-release.sh --reclaim</code> scaled the system pool to 0 and released the lease.
+The reaper and provisioner are unchanged between <code>v2.0.0</code> and <code>f156d4c53</code>, so this is not a regression the candidate introduced.
+The cause, measured from the cluster's audit log in #2357: GitHub withdrew the job from a worker slow to start on a cold node and re-issued it, the slow worker took the re-issue, and the reclaim skipped the re-issue's worker because it was still <code>Pending</code>.</p>
+<p><strong><code>v2.0.1-rc.2</code>, tagged at <code>74531a223</code> with that fix, passed every gate leg in CI and tore down clean.</strong> Gate run 44322796149's evidence names that commit and records all six legs; the three e2e runs (44326035978, 44334553779, 44341469221) each report 92 cases, 74 passed, 18 skipped and 0 failed; and <code>ops.sh at-rest</code> found no Compute Engine instances afterwards.
+The publish checked out by content: the Release is immutable with all 9 assets, <code>make verify-release</code> and <code>make verify-release-compat</code> pass, all seven images' provenance names <code>publish.yml@refs/tags/v2.0.1-rc.2</code> at <code>74531a223</code>, and a <code>cosign verify</code> against a wrong signer identity fails.
+The gate's side dispatch of <code>unit-test.yml</code> onto GAG runners (run 44325908424) failed in <code>scripts-test</code> on <code>gate-list-test</code>'s <code>queue-scope-underivable</code> case, rc 2 for a wanted 1 beside a <code>sort</code> broken-pipe error, while the push and merge-queue runs of the same commit passed; it is a test script, not a released artifact, and the leg set does not include it.</p>
+<h2 id="stable-tag-pre-flight">Stable-tag pre-flight<a class="headerlink" href="#stable-tag-pre-flight" title="Permanent link">&para;</a></h2>
+<p>Read 2026-11-18 against <code>origin/main</code> at <code>8b6727a6f</code>, after Karl approved promoting <code>rc.1</code>, and re-read for <code>rc.2</code> against <code>74531a223</code>: the freeze check passes over 0 changed files, <code>operator-caveats-since.sh v2.0.0</code> still reports no section, <code>make roadmap-check</code> passes, and #2357 adds no capability a marketing surface names.</p>
+<ul>
+<li><strong>Freeze</strong>: <code>check-artifact-unchanged.sh f156d4c53 origin/main</code> passes; the 7 files changed since the candidate are none of them on the released surface.</li>
+<li><strong>Operator caveats</strong>: <code>operator-caveats-since.sh v2.0.0</code> reports no new section, so the notes carry none.</li>
+<li><strong>Marketing</strong>: no surface needs a change.
+  The fixes make the cross-tenant scale-set name guard in <code>features.md</code> and <code>why-gag.md</code> hold for a gateway created with the finalizer, and add no capability.</li>
+<li><strong>Roadmap and <code>features.md</code></strong>: <code>make roadmap-check</code> passes, and nothing this release ships is a new capability.</li>
+<li><strong>Announce bar</strong>: <code>highlight_for</code> names <code>v2.0.1</code>.</li>
+<li><strong>Pins</strong>: the install and upgrade pages name <code>2.0.1</code>, and <code>make release-pins-check</code> reports 19 pins at <code>v2.0.1</code> and the exempt <code>v2.0.0</code>.</li>
+<li><strong>Notes</strong>: the Validation section names <code>rc.2</code> and gate run 44322796149, and the commit count (22) assumes this plan's PR is the only merge before the tag.</li>
+</ul>
 
 
 
