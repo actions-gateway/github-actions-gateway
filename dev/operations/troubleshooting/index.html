@@ -6572,6 +6572,9 @@ Treat a <em>sustained</em> or <em>bursty</em> rate as the signal:</p>
 Before the reap fires, the shape is a set that looks busy and is not: <code>status.activeJobs</code> sits at some non-zero number, worker pods are <code>Running</code>, but no job is executing — <code>kubectl logs</code> on the pod ends at <code>Listening for Jobs</code>, and GitHub shows nothing in progress for the set.</p>
 <p><strong>What happened.</strong> The pod was still <code>Running</code> five minutes after GitHub reported the job its runner held terminal, so the AGC deleted it.
 For a job that ended before any runner started it, the set is left with one runner more than it has jobs, and one idle worker goes on the clock: the pod the AGC created for that job, or, when that pod's runner has started a different job, the oldest <code>Running</code> worker whose runner has started nothing (Q1153).
+When no idle worker is <code>Running</code>, a <code>Pending</code> one whose runner has started nothing goes instead (Q1360).
+It is reaped under <a href="#worker-pod-reaped-while-pending-after-its-job-completed-workerpodcompletedpending"><code>completed_pending</code></a> if still <code>Pending</code> 30 seconds later, and here if it has reached <code>Running</code> by then.
+That is the common shape after GitHub re-issues a job: an assignment no runner takes within five minutes is withdrawn by a <code>JobCompleted</code> naming no runner and assigned again under a new job ID, so the set briefly holds a worker for each, and the first runner up takes the re-issue.
 Such a pod carries <code>actions-gateway.com/surplus-for-job</code> naming the job that freed it.
 If its runner is given a job after all, the stamp comes off it and moves to another idle worker when the AGC records that job's start.
 A start the AGC fails to record is redelivered until it is recorded.
@@ -6606,6 +6609,11 @@ Upgrade; nothing on those releases prevents it.</p>
 <a id="__codelineno-73-8" name="__codelineno-73-8" href="#__codelineno-73-8"></a>
 <a id="__codelineno-73-9" name="__codelineno-73-9" href="#__codelineno-73-9"></a><span class="c1"># Rate of orphan reaps per set</span>
 <a id="__codelineno-73-10" name="__codelineno-73-10" href="#__codelineno-73-10"></a><span class="c1"># PromQL: rate(actions_gateway_worker_pods_reaped_total{reason="orphaned_running"}[1h])</span>
+<a id="__codelineno-73-11" name="__codelineno-73-11" href="#__codelineno-73-11"></a>
+<a id="__codelineno-73-12" name="__codelineno-73-12" href="#__codelineno-73-12"></a><span class="c1"># Each job message the AGC handled, with its job ID and runner: "job assigned",</span>
+<a id="__codelineno-73-13" name="__codelineno-73-13" href="#__codelineno-73-13"></a><span class="c1"># "worker provisioned", "job started", "job completed", and the surplus reclaim</span>
+<a id="__codelineno-73-14" name="__codelineno-73-14" href="#__codelineno-73-14"></a><span class="c1"># ("reclaiming an idle scale-set worker" / "no idle scale-set worker to reclaim")</span>
+<a id="__codelineno-73-15" name="__codelineno-73-15" href="#__codelineno-73-15"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>deploy/&lt;agc-deployment&gt;<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">'scaleset: (job |worker provisioned|not provisioning)|scale-set worker to reclaim|reclaiming an idle'</span>
 </code></pre></div>
 <p><strong>Resolution.</strong> The reap itself needs no action — it returns the slot and the node.
 Treat a <em>sustained</em> rate as the signal:</p>
