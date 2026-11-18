@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/2.0.0/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.1/">
       
       
       
@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -61,15 +61,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.1assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.1assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.1assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -77,14 +77,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/2.0.0",
+    "url": "https://actions-gateway.com/2.0.1",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/2.0.0"
+      "url": "https://actions-gateway.com/2.0.1"
     }
   }
   </script>
@@ -93,8 +93,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/2.0.0",
-    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.1",
+    "logo": "https://actions-gateway.com/2.0.1assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -130,8 +130,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v2.0.0 is here.</strong>
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
           </div>
           
         </aside>
@@ -143,7 +143,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.1"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2825,7 +2825,7 @@
 <div class="gag-install">
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">2</span>.0.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">2</span>.0.1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
@@ -2834,7 +2834,7 @@
 <a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
 <a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="c1"># Apply the signed, pre-rendered v2 CRDs</span>
 <a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>kubectl<span class="w"> </span>apply<span class="w"> </span>--server-side<span class="w"> </span>-f<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/v2.0.0/actions-gateway-crds-v2.yaml
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>https://github.com/actions-gateway/github-actions-gateway/releases/download/v2.0.1/actions-gateway-crds-v2.yaml
 </code></pre></div>
 </div>
 <div class="gag-section-intro">
@@ -3274,7 +3274,7 @@ The <a href="operations/migration-from-arc/">Migrating from ARC guide</a> maps e
       <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="javascripts/extra.js"></script>
       

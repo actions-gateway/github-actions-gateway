@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/upgrade/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.1/operations/upgrade/">
       
       
         <link rel="prev" href="../gitops/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.1assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.1assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.1assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/2.0.0",
+    "url": "https://actions-gateway.com/2.0.1",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/2.0.0"
+      "url": "https://actions-gateway.com/2.0.1"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/2.0.0",
-    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.1",
+    "logo": "https://actions-gateway.com/2.0.1assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v2.0.0 is here.</strong>
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.1"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -5755,7 +5755,7 @@ Rewriting its reference did not help within three minutes: measured the same way
 A ConfigMap left in place also matters if you recreate a set of the same name, because the AGC finds these ConfigMaps by name (read from the code, not measured).
 An object whose owner still exists needs nothing, except the agent Secrets of a set <a href="#action-required-before-v200-a-classic-runnerset-now-runs-on-the-scale-set-protocol">kept from <code>Classic</code></a>, which nothing cleans up.</p>
 <h3 id="action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported">Action required if you alert on or chart the classic acquisition series: they are no longer exported<a class="headerlink" href="#action-required-if-you-alert-on-or-chart-the-classic-acquisition-series-they-are-no-longer-exported" title="Permanent link">&para;</a></h3>
-<p><strong>Who is affected:</strong> anyone whose alerts, recording rules or dashboards read a series only the classic tier wrote, including copies of the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> and Grafana dashboards taken before <code>v2.0.0</code>.</p>
+<p><strong>Who is affected:</strong> anyone whose alerts, recording rules or dashboards read a series only the classic tier wrote, including copies of the reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> and Grafana dashboards taken before <code>v2.0.0</code>.</p>
 <p><strong>What changed.</strong> With the classic tier gone (Q264), the AGC no longer exports <code>actions_gateway_active_sessions</code>, <code>jobs_acquired_total</code>, <code>job_acquisition_errors_total</code>, <code>jobs_admission_rejected_total</code>, <code>jobs_duplicate_delivery_total</code>, <code>abandoned_delivery_completions_total</code>, <code>fanout_loser_recycle_deferred_total</code>, <code>renew_job_errors_total</code>, <code>renew_job_teardowns_total</code>, <code>agent_recycles_total</code>, <code>agent_recycle_errors_total</code>, <code>broker_token_propagation_retries_total</code> or <code>broker_session_leaks_total</code>.
 A rule reading one of them never fires again, and a panel reading one shows <code>No data</code>, without any error to say why.</p>
 <p>The <code>RunnerGroup</code> removal (Q273) took four more the same way, each with a twin to read instead: <code>actions_gateway_worker_quota_exceeded</code>, <code>worker_quota_pressure</code> and <code>workers_unschedulable</code> have <code>actions_gateway_runnerset_worker_quota_exceeded</code>, <code>runnerset_worker_quota_pressure</code> and <code>runnerset_workers_unschedulable</code>, and <code>actions_gateway_runnergroups_degraded</code> has <code>actions_gateway_runnersets_degraded</code>.</p>
@@ -5852,7 +5852,7 @@ A change to the list that leaves it out of order is rejected, and so is a delete
 To keep today's behaviour, delete every tier whose threshold is not above all the thresholds before it, then set <code>maxWorkers</code> to the new last threshold, or unset it.</p>
 <h3 id="action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone">Action required if a query reads <code>tier</code> on a disruption series: the label is gone<a class="headerlink" href="#action-required-if-a-query-reads-tier-on-a-disruption-series-the-label-is-gone" title="Permanent link">&para;</a></h3>
 <p><strong>Who is affected:</strong> anyone whose own alerts, recording rules or dashboards filter or group on <code>tier</code> on a disruption series, including copies of the tenant Grafana dashboard taken before <code>v2.0.0</code>.
-The reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> never read it.</p>
+The reference <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/deploy/monitoring/prometheusrule.yaml"><code>PrometheusRule</code></a> never read it.</p>
 <p><strong>What changed.</strong> <a href="../observability-metrics/#breaking-observability-changes-q1291">Six series</a> no longer carry <code>tier</code>, whose values were <code>classic</code> and <code>scaleset</code>, because the classic tier is gone.
 A query filtering on either value, such as <code>{tier="scaleset"}</code>, returns nothing and raises no error, so a rule reading it never fires again and a panel reading it shows <code>No data</code>.
 <code>by (tier)</code> keeps working, with one group and an empty <code>tier</code> value.
@@ -7262,16 +7262,16 @@ Schedule a GMC upgrade in the low-traffic window you would give an AGC upgrade, 
 <p><strong>Do not hand-edit a GMC-managed AGC <code>Deployment</code>.</strong> The reconciler watches the Deployments it owns and replaces the whole spec from its own render, so a <code>kubectl set image</code> — or any other direct edit — is reverted within seconds.
 <code>kubectl rollout restart</code> is the one exception, and its history is a trap of its own: see <a href="../troubleshooting/#kubectl-rollout-restart-of-a-managed-deployment-reports-success-but-nothing-restarts"><code>kubectl rollout restart</code> of a Managed Deployment Reports Success but Nothing Restarts</a>.</p>
 <h3 id="gmc-install-and-upgrade-via-helm-recommended">GMC install and upgrade via Helm (recommended)<a class="headerlink" href="#gmc-install-and-upgrade-via-helm-recommended" title="Permanent link">&para;</a></h3>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong>, published and cosign-signed to the GHCR OCI registry (<code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>); the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/charts/actions-gateway/README.md"><code>charts/actions-gateway/</code></a> source path is the dev/CI copy of the same chart.
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong>, published and cosign-signed to the GHCR OCI registry (<code>oci://ghcr.io/actions-gateway/charts/actions-gateway</code>); the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/charts/actions-gateway/README.md"><code>charts/actions-gateway/</code></a> source path is the dev/CI copy of the same chart.
 The chart is the <strong>sole</strong> install/upgrade vehicle — there is no kustomize path.
 For dev/CI iteration <code>make deploy</code> wraps <code>helm install</code> of the local chart with floating image tags.</p>
 <blockquote>
-<p><strong>Current release — <code>v2.0.0</code></strong> (chart version = release tag without the leading <code>v</code>).
-Pin <code>--version 2.0.0</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.0">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
+<p><strong>Current release — <code>v2.0.1</code></strong> (chart version = release tag without the leading <code>v</code>).
+Pin <code>--version 2.0.1</code>; copy the image digests from the <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.1">release notes</a> and verify the chart/image signatures before installing (see <a href="../release/#3-verify-the-publish">release.md § Verify the publish</a>).</p>
 </blockquote>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a><span class="c1"># First install (from the published, signed OCI chart)</span>
 <a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>helm<span class="w"> </span>install<span class="w"> </span>gag<span class="w"> </span>oci://ghcr.io/actions-gateway/charts/actions-gateway<span class="w"> </span><span class="se">\</span>
-<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">2</span>.0.0<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-68-3" name="__codelineno-68-3" href="#__codelineno-68-3"></a><span class="w">  </span>--version<span class="w"> </span><span class="m">2</span>.0.1<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-68-4" name="__codelineno-68-4" href="#__codelineno-68-4"></a><span class="w">  </span>--namespace<span class="w"> </span>gmc-system<span class="w"> </span>--create-namespace<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-68-5" name="__codelineno-68-5" href="#__codelineno-68-5"></a><span class="w">  </span>--set<span class="w"> </span>gmc.image.digest<span class="o">=</span>sha256:&lt;gmc&gt;<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-68-6" name="__codelineno-68-6" href="#__codelineno-68-6"></a><span class="w">  </span>--set<span class="w"> </span>agc.image.digest<span class="o">=</span>sha256:&lt;agc&gt;<span class="w"> </span><span class="se">\</span>
@@ -7808,7 +7808,7 @@ To minimize its impact:</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

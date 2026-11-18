@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/2.0.0/roadmap/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.1/roadmap/">
       
       
         <link rel="prev" href="../getting-started/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.1assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.1assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.1assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/2.0.0",
+    "url": "https://actions-gateway.com/2.0.1",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/2.0.0"
+      "url": "https://actions-gateway.com/2.0.1"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/2.0.0",
-    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.1",
+    "logo": "https://actions-gateway.com/2.0.1assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v2.0.0 is here.</strong>
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.1"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2814,7 +2814,7 @@ These are intentionally unscheduled.
 Each waits on a real operator need, a measured limit, or a gating release before it becomes scheduled work.</p>
 <ul>
 <li>
-<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/arc-parity.md#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 --> Both GitHub Enterprise Server (GHES) capabilities ship marked untested against real hardware: the appliance-addressing path and the private-CA bundle.
+<p><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/docs/plan/arc-parity.md#where-arc-is-actually-ahead">Validate GHES against a real appliance</a></strong> <!-- q:Q765 --> Both GitHub Enterprise Server (GHES) capabilities ship marked untested against real hardware: the appliance-addressing path and the private-CA bundle.
   They are believed correct and unproven, which is not the same thing.
   Waits on access to an appliance.</p>
 </li>
@@ -2827,15 +2827,15 @@ Each waits on a real operator need, a measured limit, or a gating release before
 <p><strong>Controller horizontal scaling / high availability.</strong> <!-- q:Q169 --> The per-tenant controller runs <a href="../design/02-architecture/">one replica by design</a>: the session registry is in-memory, and HA comes from GitHub redelivering an unacquired job.
   Distributed session state would enable multi-replica HA if a single controller becomes a measured bottleneck.</p>
 </li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/v2-api.md#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 --> Supply the proxy's certificate from your managed PKI or Vault instead of the self-signed default the Gateway Manager Controller (GMC) issues.
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/docs/plan/v2-api.md#deferred-out-of-the-critical-path">Bring-your-own proxy TLS certificate</a></strong> <!-- q:Q174 --> Supply the proxy's certificate from your managed PKI or Vault instead of the self-signed default the Gateway Manager Controller (GMC) issues.
   (The autoscaler half has shipped: <code>managedAutoscaling: false</code> hands the pool to KEDA, VPA, or a custom HorizontalPodAutoscaler.)</li>
 <li><strong><a href="../design/appendix-e-capacity-planning/">First-class GPU runner support</a></strong> <!-- q:Q216 --> Priority tiers and the <a href="../operations/worker-rightsizing/"><code>NodeShare</code> sizing profile</a> already carry the GPU cases, but GPU Operator / Node Feature Discovery awareness, and <code>nodeSelector</code> / toleration / <code>RuntimeClass</code> conventions that make a GPU runner set feel native, wait on a concrete GPU workload to design against.</li>
 <li><strong><a href="../design/appendix-e-capacity-planning/">Multi-node GPU jobs</a></strong> <!-- q:Q718 --> One job needing several co-scheduled workers in one NVLink or InfiniBand domain is a different problem from one job needing one GPU: capacity is a single integer to GitHub, and a gang requirement is a placement predicate rather than a count.
   Waits on a real multi-node workload, and would interact with Kueue or Volcano.</li>
 <li><strong><a href="../design/appendix-g-future-enhancements/#g12-warm-worker-pool-minidleworkers">A warm worker pool</a></strong> <!-- q:Q268 --> An opt-in pool of idle pods per runner set, for teams that still hit pod-schedule latency after image pre-pull and caching.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/milestone-5.md">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is <a href="../operations/kata-dind-workloads/">validated end-to-end with Kata</a>; gVisor is documented but unproven on a real cluster.
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/docs/plan/milestone-5.md">gVisor validation</a></strong> <!-- q:Q15 --> The <code>runtimeClassName</code> path is <a href="../operations/kata-dind-workloads/">validated end-to-end with Kata</a>; gVisor is documented but unproven on a real cluster.
   It waits on an operator who wants lightweight syscall filtering for compute-only, non-Docker-in-Docker jobs, since Kata already covers the DinD case.</li>
-<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/plan/v2beta1.md#workload-identity-a-different-config-vault-first">SPIFFE / SPIRE workload identity</a></strong> <!-- q:Q214 --> A keyless, SPIRE-backed signer slots behind the <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">existing signer interface</a> alongside the deferred cloud-KMS providers, for operators who want no GitHub App private key anywhere.</li>
+<li><strong><a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/docs/plan/v2beta1.md#workload-identity-a-different-config-vault-first">SPIFFE / SPIRE workload identity</a></strong> <!-- q:Q214 --> A keyless, SPIRE-backed signer slots behind the <a href="../design/05-security/#57-workload-identity-the-no-pem-delegation-model">existing signer interface</a> alongside the deferred cloud-KMS providers, for operators who want no GitHub App private key anywhere.</li>
 <li><strong>An Operator Lifecycle Manager bundle.</strong> <!-- q:Q217 --> <a href="../operations/install/">Helm-only</a> is the deliberate install stance; an OperatorHub catalog entry waits on OpenShift demand.</li>
 <li><strong>A published benchmark and case study.</strong> <!-- q:Q198 --> Real GitHub-at-scale numbers behind the <a href="../design/appendix-f-cost-model/">cost model</a>, which needs a funded scale run rather than a local cluster.</li>
 </ul>
@@ -2984,7 +2984,7 @@ It tracks the unreleased <code>main</code> branch, so it is published only on th
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../javascripts/extra.js"></script>
       

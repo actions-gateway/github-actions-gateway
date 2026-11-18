@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/2.0.0/operations/tenant-onboarding/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.1/operations/tenant-onboarding/">
       
       
         <link rel="prev" href="../v1alpha1-deprecation/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.1assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.1assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.1assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/2.0.0",
+    "url": "https://actions-gateway.com/2.0.1",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/2.0.0"
+      "url": "https://actions-gateway.com/2.0.1"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/2.0.0",
-    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.1",
+    "logo": "https://actions-gateway.com/2.0.1assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v2.0.0 is here.</strong>
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.1"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -3407,7 +3407,7 @@ For day-2 operations after onboarding, see the <a href="../runbook/">Runbook</a>
   The supported posture is to opt the GAG tenant namespace out of the mesh; if mesh membership is mandatory, use native sidecars or an ambient/sidecar-less data plane plus egress exclusions.
   Decide this before provisioning — see <a href="../service-mesh-coexistence/">Running GAG Alongside a Service Mesh</a>.</li>
 <li>[ ] <strong>GMC is running.</strong> The Gateway Manager Controller (GMC) is deployed and healthy: <code>kubectl get deploy -n gmc-system gmc-controller-manager</code>.
-  Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
+  Install it with the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/charts/actions-gateway/README.md"><code>actions-gateway</code> Helm chart</a> (<code>helm install gag charts/actions-gateway -n gmc-system --create-namespace …</code>).</li>
 <li>[ ] <strong>CRDs are installed.</strong> <code>kubectl get crd actionsgateways.actions-gateway.com runnersets.actions-gateway.com runnertemplates.actions-gateway.com</code>.</li>
 <li>[ ] <strong>GitHub App is registered.</strong> The GitHub App is registered in the target GitHub organization with the permissions in <a href="#0a-create-the-app-web-ui">Step 0a</a>: <code>Actions: Read and write</code>, plus <code>Self-hosted runners: Read and write</code> (organization <code>githubURL</code>) or <code>Administration: Read and write</code> (repository <code>githubURL</code>).
   The platform team has the <code>appId</code>, <code>installationId</code>, and private key <code>.pem</code> file.
@@ -3522,7 +3522,7 @@ The web-UI URL above is the reliable path; the <code>gh api /app/installations</
 <h3 id="0d-generate-and-download-the-private-key-pem">0d. Generate and download the private key (<code>.pem</code>)<a class="headerlink" href="#0d-generate-and-download-the-private-key-pem" title="Permanent link">&para;</a></h3>
 <p>On the App's <strong>General</strong> page → <strong>Private keys</strong> → <strong>Generate a private key</strong>.
 The browser downloads a <code>.pem</code> file <strong>once</strong> — GitHub never shows it again, so store it safely and treat it as a high-value secret.</p>
-<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
+<p><strong>The exact PEM format the controller expects.</strong> The AGC parses the key with Go's standard library and accepts exactly two PEM block types (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/githubapp/auth.go"><code>githubapp/auth.go</code></a>):</p>
 <table>
 <thead>
 <tr>
@@ -3903,7 +3903,7 @@ Because the AGC injects the wrapper on top of <strong>any</strong> base, your im
 <a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="o">&amp;&amp;</span><span class="w"> </span>rm<span class="w"> </span>-rf<span class="w"> </span>/var/lib/apt/lists/*
 <a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="k">USER</span><span class="w"> </span><span class="s">runner   # keep the non-root UID 1001 the AGC expects</span>
 </code></pre></div>
-<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
+<p>A working reference you can copy and extend lives at <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/scripts/dogfood/runner/Dockerfile"><code>scripts/dogfood/runner/Dockerfile</code></a> (built by <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/scripts/dogfood/runner-build.sh"><code>scripts/dogfood/runner-build.sh</code></a>); it adds just enough to run a <code>make</code>-based Go CI.
 <strong>It is a reference example, not an officially supported image</strong> — GAG signs and CVE-scans only its seven first-party images, so a runner image you ship (or copy from the example) is yours to pin by digest and scan.
 Keep the runner version in step with the default the AGC would otherwise inject.
 GitHub refuses to register a runner below its enforced minimum, currently <code>2.329.0</code>, and separately requires each new runner release be installed within 30 days of publication to keep executing jobs.</p>
@@ -3936,7 +3936,7 @@ GitHub refuses to register a runner below its enforced minimum, currently <code>
 </table>
 <p>A digest-only or custom tag is no longer unchecked: the registry read reaches it.
 The pinned-digest advice above still stands, and <code>myrepo/runner:2.335.1@sha256:…</code> gives a verdict from the tag while the read runs and from the image once it lands.
-A private registry needs its <code>kubernetes.io/dockerconfigjson</code> Secret named in the pod template's <code>imagePullSecrets</code>, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; the AGC reads those Secrets to log in for this check and never stores or copies them; a registry kubelet reaches through the node's identity is not one the AGC can log in to (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/docs/queue/Q1066.md">Q1066</a>).</p>
+A private registry needs its <code>kubernetes.io/dockerconfigjson</code> Secret named in the pod template's <code>imagePullSecrets</code>, or on the worker ServiceAccount when the template names none, which are the same Secrets kubelet pulls with; the AGC reads those Secrets to log in for this check and never stores or copies them; a registry kubelet reaches through the node's identity is not one the AGC can log in to (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/docs/queue/Q1066.md">Q1066</a>).</p>
 <p><strong>Reading the version a running worker actually shipped.</strong> Whatever the tag says, the wrapper logs the runner version it found inside the image once per worker pod:</p>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>&lt;namespace&gt;<span class="w"> </span>&lt;worker-pod&gt;<span class="w"> </span>-c<span class="w"> </span>runner<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">"runner version"</span>
 </code></pre></div>
@@ -4517,7 +4517,10 @@ A job outliving its <code>maxWorkerLifetime</code> (one whose template sets a lo
 A held port counts against the pool's 33 ports, so a namespace opting in while every port is taken waits for a hold to end.
 The per-port isolation is a NetworkPolicy, so it holds only on a CNI that enforces one; kindnet does not.</p>
 <p><strong>Checking it took effect.</strong> <code>kubectl get configmap -n &lt;tenant-namespace&gt; proxy-attribution-&lt;pool-namespace&gt;-&lt;pool&gt; -o jsonpath='{.data.proxy-port}'</code> prints the namespace's port once its workers are moved.
-A worker pod's <code>HTTPS_PROXY</code> ends in that port.</p>
+A worker pod's <code>HTTPS_PROXY</code> ends in that port.
+If the pool reports <code>Degraded</code> at step <code>project failure attribution</code> naming a namespace, the GMC could not write that namespace's projection, usually because a Secret already at that name is immutable or holds a different type.
+The pool also reports <code>Ready=False</code> with the same message, and its other status conditions and <code>readyReplicas</code> stop refreshing, though its proxy pods keep serving.
+The GMC cannot delete Secrets, so delete it in the tenant namespace; the next reconcile writes the GMC's own, and the pool's other namespaces are unaffected meanwhile.</p>
 <p>What the pool keeps, for how long, and who can read it are in the <a href="../../design/05-security/#proxy-failure-attribution">security design</a>.</p>
 <h3 id="workload-identity-credentials-external-signer">Workload-identity credentials (external signer)<a class="headerlink" href="#workload-identity-credentials-external-signer" title="Permanent link">&para;</a></h3>
 <p><code>spec.credentials</code> is a discriminated union (keyed by <code>credentials.type</code>) with two members.
@@ -4715,7 +4718,7 @@ A <code>WorkloadIdentity</code> gateway reaches <code>Ready=True</code> once its
       <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../../javascripts/extra.js"></script>
       

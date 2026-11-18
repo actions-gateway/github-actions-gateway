@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://actions-gateway.com/2.0.0/getting-started/">
+        <link rel="canonical" href="https://actions-gateway.com/2.0.1/getting-started/">
       
       
         <link rel="prev" href="../demo/">
@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -63,15 +63,15 @@
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/IBMPlexSans-Bold.woff2">
   <link rel="preload" as="font" type="font/woff2" crossorigin href="../assets/fonts/MonaspaceNeon-Medium.woff2">
   
-  <meta property="og:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta property="og:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://actions-gateway.com/2.0.0assets/social-preview.png">
+  <meta name="twitter:image" content="https://actions-gateway.com/2.0.1assets/social-preview.png">
   
-  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.0assets/apple-touch-icon.png">
-  <link rel="alternate icon" href="https://actions-gateway.com/2.0.0assets/favicon.ico">
-  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.0assets/icon-512.png">
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/2.0.1assets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/2.0.1assets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/2.0.1assets/icon-512.png">
   
   <script type="application/ld+json">
   {
@@ -79,14 +79,14 @@
     "@type": "SoftwareSourceCode",
     "name": "GitHub Actions Gateway",
     "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
-    "url": "https://actions-gateway.com/2.0.0",
+    "url": "https://actions-gateway.com/2.0.1",
     "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
     "programmingLanguage": "Go",
     "license": "https://www.apache.org/licenses/LICENSE-2.0",
     "author": {
       "@type": "Organization",
       "name": "GitHub Actions Gateway",
-      "url": "https://actions-gateway.com/2.0.0"
+      "url": "https://actions-gateway.com/2.0.1"
     }
   }
   </script>
@@ -95,8 +95,8 @@
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "GitHub Actions Gateway",
-    "url": "https://actions-gateway.com/2.0.0",
-    "logo": "https://actions-gateway.com/2.0.0assets/icon-512.png",
+    "url": "https://actions-gateway.com/2.0.1",
+    "logo": "https://actions-gateway.com/2.0.1assets/icon-512.png",
     "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
   }
   </script>
@@ -132,8 +132,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v2.0.0 is here.</strong>
-      <code>v2</code> is GA and the only API, and every <code>RunnerSet</code> refuses fork pull request jobs unless it accepts them.
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
           </div>
           
         </aside>
@@ -145,7 +145,7 @@
           <aside class="md-banner md-banner--warning">
             <div class="md-banner__inner md-grid md-typeset">
               You're not viewing the latest release.
-  <a href="https://actions-gateway.com/2.0.0"><strong>Go to the current docs.</strong></a>
+  <a href="https://actions-gateway.com/2.0.1"><strong>Go to the current docs.</strong></a>
 
             </div>
             <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL(".."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
@@ -2871,7 +2871,7 @@ Migrate with a 1.x <a href="../operations/migration-v1-to-v2/"><code>gag-migrate
 <li>Go 1.27+ only if you build the images yourself</li>
 </ul>
 <h2 id="1-deploy-the-gmc">1. Deploy the GMC<a class="headerlink" href="#1-deploy-the-gmc" title="Permanent link">&para;</a></h2>
-<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/charts/actions-gateway/README.md">reference</a>).
+<p>The shipped install artifact is the <strong><code>actions-gateway</code> Helm chart</strong> (<a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/charts/actions-gateway/README.md">reference</a>).
 It installs the Gateway Manager Controller (GMC), its CustomResourceDefinitions (CRDs), RBAC, validating webhook, and admission policy.
 The GMC then provisions per-tenant Actions Gateway Controller (AGC) instances and proxy pools at runtime.
 They are not installed by the chart.</p>
@@ -2886,7 +2886,7 @@ They are not installed by the chart.</p>
 <p>All four images must be <strong>pinned by digest</strong>.
 The chart refuses to render while any of the four digests (<code>gmc</code>/<code>agc</code>/<code>proxy</code>/<code>wrapper</code>) is empty, naming the one to set (the worker-wrapper image is on by default, so it is required too).
 Pin them as above, or pass <code>--set allowFloatingImageTags=true</code> for dev/test only.
-See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/charts/actions-gateway/README.md">chart README</a> for the full values reference and the cert-manager toggle.</p>
 <blockquote>
 <p><strong>Dev/CI.</strong> The Helm chart is the single install path.
 There is no kustomize alternative.
@@ -2909,7 +2909,7 @@ Apply the pre-rendered, cosign-signed manifest attached to the release, no helm 
 The GMC <strong>detects the v2 CRDs at startup</strong>: with them present it starts the v2 controllers; without them it comes up clean with no gateway controllers running (logging <code>actions-gateway.com/v2 CRDs not installed; v2 controllers disabled</code>).
 It does not error-loop.
 Because detection is once-at-startup, installing the v2 CRDs into an already-running GMC needs a restart (<code>kubectl rollout restart deploy -n gmc-system gmc-controller-manager</code>).
-See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.0/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
+See the <a href="https://github.com/actions-gateway/github-actions-gateway/blob/v2.0.1/charts/actions-gateway-crds-v2/README.md">chart README</a>.</p>
 <h2 id="2-create-and-mark-the-tenant-namespace-and-set-its-quota">2. Create and mark the tenant namespace, and set its quota<a class="headerlink" href="#2-create-and-mark-the-tenant-namespace-and-set-its-quota" title="Permanent link">&para;</a></h2>
 <p>Create the tenant namespace and mark it as managed by the GMC.
 The marker label authorizes the GMC to stamp Pod Security Admission labels on it; the <code>namespace-psa-guard</code> admission policy denies the GMC any namespace that lacks it.</p>
@@ -3254,7 +3254,7 @@ To inspect the condition:</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
         <script src="../javascripts/extra.js"></script>
       
