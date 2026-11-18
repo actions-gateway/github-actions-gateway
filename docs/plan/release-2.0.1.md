@@ -1,6 +1,6 @@
 # Release 2.0.1
 
-> **Status: `v2.0.1-rc.1` validated in CI at `f156d4c53` on 2026-11-18 ([gate run 44236535751](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44236535751)); awaiting the promote decision.** A patch release from `main`: six bug and security fixes since `v2.0.0`, and the dependency bumps that merged beside them.
+> **Status: held 2026-11-18 for Q1360.** `v2.0.1-rc.1` passed every gate leg in CI at `f156d4c53` ([gate run 44236535751](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44236535751)), and its teardown found a scale-set runner pod created for a job it never received, which runs against the zero-idle-runner design, so the release waits for Q1360 and a candidate that carries its fix.
 
 ## Scope ledger
 
