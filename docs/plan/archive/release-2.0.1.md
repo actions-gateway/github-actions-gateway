@@ -1,10 +1,11 @@
 # Release 2.0.1
 
-> **Status: `v2.0.1-rc.2` validated 2026-11-18; the stable tag waits on Karl.** `rc.1` passed every gate leg and its teardown found an idle scale-set worker, so the release was held for Q1360; `rc.2`, tagged at `74531a223` with that fix (#2357), passed every leg in CI ([gate run 44322796149](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44322796149)) and tore down clean.
+> **Status: shipped as `v2.0.1` on 2026-11-18**, tagged at `879e20c62` from the tree `v2.0.1-rc.2` validated at `74531a223` ([gate run 44322796149](https://github.com/actions-gateway/github-actions-gateway/actions/runs/44322796149)); `check-artifact-unchanged.sh` found none of the 8 files changed between them on the released surface.
+> `rc.1` passed every leg too, and its teardown found the idle scale-set worker #2357 fixes.
 
 ## Scope ledger
 
-What the `v2.0.1` tag carries, per the [scope-ledger convention](../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
+What the `v2.0.1` tag carries, per the [scope-ledger convention](../../development/maintaining-backlog.md#cutting-a-release-the-scope-ledger).
 No row carries a `2.0.1-gate` label: each was dispatched and merged in the same day, so the ledger records what landed rather than what the tag waits for.
 
 | Q-ID | Item | PR | Status |
