@@ -20,7 +20,7 @@ import (
 func TestListener_DoesNotProvisionAJobARunnerAlreadyStarted(t *testing.T) {
 	srv := newQuickPollServer(t)
 	srv.SeedMessage([]scaleset.JobMessage{
-		{MessageType: scaleset.MessageTypeJobAssigned, JobID: "job-y"},
+		{MessageType: scaleset.MessageTypeJobAssigned, JobID: "job-y", OwnerName: "myorg", RepositoryName: "repo", WorkflowRunID: 44},
 		{MessageType: scaleset.MessageTypeJobStarted, JobID: "job-y", RunnerName: "linux-job-x"},
 	})
 	// A later assignment, so the test waits on something that must happen rather than on
@@ -31,7 +31,8 @@ func TestListener_DoesNotProvisionAJobARunnerAlreadyStarted(t *testing.T) {
 
 	prov := &recordingProvisioner{srv: srv, completeErr: true}
 	log := &lifecycleLog{}
-	startListener(t, srv, fixedCapacity(5), prov, nil, withLifecycle(log))
+	store := &fakeGuardStore{}
+	startListener(t, srv, fixedCapacity(5), prov, nil, withLifecycle(log), withGuards(store))
 
 	provisioned := func() []string {
 		prov.mu.Lock()
@@ -45,4 +46,13 @@ func TestListener_DoesNotProvisionAJobARunnerAlreadyStarted(t *testing.T) {
 	require.Eventually(t, func() bool { return len(provisioned()) >= 1 }, 5*time.Second, 10*time.Millisecond)
 	assert.Equal(t, []string{"job-z"}, provisioned(), "a job a runner already holds needs no worker of its own")
 	assert.Equal(t, []string{"started job-y on linux-job-x"}, log.seen())
+	// The job still has a worker, the one running it, so it stays owed recovery (Q844).
+	require.Eventually(t, func() bool {
+		for _, j := range store.saved().InFlight {
+			if j.JobID == "job-y" {
+				return j.RunID == "44" && j.Started
+			}
+		}
+		return false
+	}, 5*time.Second, 10*time.Millisecond, "the skipped job must keep its in-flight record")
 }

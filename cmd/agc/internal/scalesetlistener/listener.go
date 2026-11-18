@@ -1894,6 +1894,19 @@ func (l *Listener) provisionAssigned(ctx context.Context, ssID int, aj scaleset.
 	if held {
 		l.log.Info("scaleset: not provisioning a worker for a job a runner has already started",
 			"scaleSet", l.cfg.ScaleSetName, "jobID", aj.JobID)
+		// The job is still owed recovery if the worker running it goes away unobserved, so
+		// it is recorded in flight as a provisioned one would be (Q844).
+		if owner, repo, runID, ok := aj.RunIdentity(); ok {
+			l.mu.Lock()
+			if _, recorded := l.inFlight[aj.JobID]; !recorded {
+				l.inFlight[aj.JobID] = InFlightJob{
+					JobID: aj.JobID, Owner: owner, Repository: repo, RunID: runID,
+					ProvisionedAt: time.Now().UTC(), Started: true,
+				}
+				l.guardsDirty = true
+			}
+			l.mu.Unlock()
+		}
 		return provisionAcked
 	}
 	if gone {
