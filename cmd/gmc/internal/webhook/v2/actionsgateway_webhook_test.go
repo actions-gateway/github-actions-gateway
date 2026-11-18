@@ -440,6 +440,7 @@ func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
 		// collision, must not freeze an established gateway against its own edits.
 		held := v2Gateway("tenant-a", "gw-a", "https://github.com/acme", "")
 		held.Finalizers = []string{agcv2.ActionsGatewayFinalizer}
+		held.Status.ObservedGeneration = 1
 		raced := v2Gateway("tenant-b", "gw-b", "https://github.com/acme", "")
 		v := &ActionsGatewayCustomValidator{reader: fakeReader(t, held, raced,
 			scaleSetRS("held", "tenant-a", "gw-a", "linux"),
@@ -454,6 +455,12 @@ func TestV2ActionsGatewayWebhook_ScaleSetLabelScope(t *testing.T) {
 		finalized := raced.DeepCopy()
 		finalized.Finalizers = []string{agcv2.ActionsGatewayFinalizer}
 		_, err = v.ValidateUpdate(ctx, raced, finalized)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "racer")
+
+		// Q1358: a finalizer set at create, or kept by a restore, is not the GMC's
+		// handshake, so the GMC's first update to such a gateway is still judged.
+		_, err = v.ValidateUpdate(ctx, finalized, finalized)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "racer")
 	})
