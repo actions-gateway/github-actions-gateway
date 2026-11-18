@@ -19,7 +19,7 @@ flowchart TD
     plain["plain<br>no daemon"]
     rootless["rootless BuildKit<br>no daemon"]
     kata["kata-dind<br>Docker in a micro-VM"]
-    priv["privileged-dind<br>on a pool you can lose"]
+    priv["privileged-dind<br>on an isolated node pool"]
     q1(["Does the job need<br>a Docker daemon?"])
     q2(["Is the daemon only<br>for building images?"])
     q3(["Can the job run in a VM?<br>no host kernel modules or devices,<br>GPUs passed through whole"])
