@@ -2883,8 +2883,9 @@ Q224/Q264 stay open until the clean-green re-run.</p>
     The graduation guardrail is <em>technical</em> (clean-green + a short stability soak), not user-migration.</li>
 <li><strong>Commit v1 removal to a stated schedule gated on v2 <em>stability</em> (the v2beta1 graduation), not on adopters.</strong> The discipline — announced, scheduled, with a working <code>gag-migrate</code> — <em>is</em> the "safe bet, won't strand you" signal a prospective <strong>v2</strong> adopter is actually reading.</li>
 <li><strong>The real lever is v2 <em>maturation</em> (Q74 / v2beta1), not v1 removal</strong> — "v2 is the front door" only pays off once v2 is beta-stable.</li>
-<li><strong>Building classic first was a defensible bet, not a mistake.</strong> The scale-set protocol was undocumented-internal-to-ARC at design time; the official standalone client only reached Public Preview in 2026.
-  The world changed — that is what makes Option E cheap <em>now</em>, not that it was obviously right <em>then</em>.</li>
+<li><strong>Building classic first was a defensible bet, not a mistake.</strong> Scale sets were available at design time: ARC's scale-set mode went GA in July 2023, and the official standalone <code>actions/scaleset</code> client was public from October 2025, in Public Preview since February 2026.
+  What GAG's design did not do was account for them; the protocol still has no wire spec and the client is still Preview.
+  What makes Option E cheap <em>now</em> is what GAG learned and built since, not that it was obviously right <em>then</em>.</li>
 <li><strong>No security or secure-by-default regression</strong> in the migration; the positioning story (the "virtual runners" identity) does shift and must be rewritten in lockstep with the default flip.</li>
 </ul>
 <hr />
@@ -3021,9 +3022,10 @@ That is the strongest possible evidence both that classic's ceiling is real (the
 <h2 id="5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly">5. Was scale-set "what we should have built from the start"? (hindsight, fairly)<a class="headerlink" href="#5-was-scale-set-what-we-should-have-built-from-the-start-hindsight-fairly" title="Permanent link">&para;</a></h2>
 <p><strong>No — building classic first was a defensible bet given what was knowable then.</strong> Resisting hindsight bias:</p>
 <ul>
-<li><strong>The protocol was not available as a supported surface at design time.</strong> The runner-scale-set protocol was undocumented-internal-to-ARC (no wire spec; the ARC Go client had to be read at a pinned tag).
-  GitHub only published the <strong>official standalone <code>actions/scaleset</code> client</strong> (Public Preview, MIT) in 2026 — four releases v0.1.0–v0.4.0, Feb–May 2026 (<a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §4, §5a-U6</a>).
-  Building on it <em>then</em> would have meant reverse-engineering a <strong>second</strong> undocumented GitHub-internal protocol and betting the product on a moving, pre-1.0-adjacent target.</li>
+<li><strong>The protocol was available at design time, but only as a Preview surface with no spec.</strong> ARC's runner scale-set mode went GA on 2023-07-25 (<a href="https://github.com/actions/actions-runner-controller/discussions/2775">ARC discussion #2775</a>).
+  The <strong>official standalone <code>actions/scaleset</code> client</strong> (MIT) was created on 2025-10-29 and announced as Public Preview on 2026-02-05 (<a href="https://github.blog/changelog/2026-02-05-github-actions-early-february-2026-updates/">GitHub changelog</a>); v0.1.0–v0.4.0 all shipped Feb–May 2026, before GAG's first commit on 2026-05-16 (<a href="../archive/q264-scale-set-protocol-phases/#u6--wire-client-vendor-actionsscaleset-vs-gag-owned-implementation">Q264 §4, §5a-U6</a>).
+  GAG's design did not account for it — the same gap behind the README's claim that ARC cannot scale to zero (corrected 2026-05-26 in <code>3eaff16ff</code>), and the retired ~256 MiB .NET listener figure (<a href="https://github.com/actions-gateway/github-actions-gateway/pull/786">PR #786</a>).
+  Building on it <em>then</em> would still have meant betting the product on a pre-1.0 Preview client with no wire spec, which is where it remains.</li>
 <li><strong>The classic virtual-runner bet bought real, still-valid merits:</strong> the goroutines-in-one-shared-pod at-rest density advantage over ARC's pod-per-scale-set listeners, per-tenant egress isolation, multi-tenant self-service, and zero idle compute (appendix-d §D.3–D.4).
   None of that was free elsewhere.</li>
 <li><strong>The specific failure was not cleanly foreseeable from source.</strong> The topology consequence (concurrency = acquirers) was arguably visible in principle, but the precise <em>distinct-delivery starvation</em> behaviour only emerged under live high-burst dogfood — source-reading alone would not have surfaced it (indeed the whole Q260→Q224 saga is a sequence of live re-routes correcting source-level assumptions).</li>
