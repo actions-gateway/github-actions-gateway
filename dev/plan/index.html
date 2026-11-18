@@ -128,8 +128,8 @@
         <aside class="md-banner">
           <div class="md-banner__inner md-grid md-typeset">
             
-            <strong>v2.0.0 is here.</strong>
-      <a href="https://github.com/actions-gateway/github-actions-gateway/releases/tag/v2.0.0">Read the release notes.</a>
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
           </div>
           
         </aside>
@@ -2783,11 +2783,6 @@ A plan with only deferred residuals is ✅, not ⚠️ — see <a href="../devel
 <td>✅ Shipped as <code>v2.0.0</code> on 2026-11-17, from the tree <code>v2.0.0-rc.3</code> validated (<a href="v2-ga/#candidate-validation">the candidates</a>): the soak readings closed Q1059 and Q1060 in the <code>v1.8.0-rc.1</code> window, Phase 2 shipped for 1.9 (Q413, <a href="archive/release-1.9/">archive/release-1.9.md</a>), the storage advance for 1.10 (Q1086, <a href="archive/release-1.10/">archive/release-1.10.md</a>), and the removals (Q273, Q264, Q1167) with the cut (Q1107) in <code>v2.0.0</code>; the plan stays active for <a href="../queue/Q1223/">Q1223</a>, which renders its soak-readings table</td>
 </tr>
 <tr>
-<td><a href="release-2.0.1/">release-2.0.1.md</a></td>
-<td>The <code>v2.0.1</code> patch release: six bug and security fixes since <code>v2.0.0</code> and the dependency bumps beside them, cut from <code>main</code></td>
-<td>ⓘ Release record: scoped 2026-11-17 and every fix landed (Q1358, Q1342, Q1336, Q1335, Q1333, Q1264); it records the pre-flight verdicts and each candidate's validation until the tag</td>
-</tr>
-<tr>
 <td><a href="release-2.1/">release-2.1.md</a></td>
 <td>The <code>v2.1.0</code> release: automatic recovery finished, from the dogfood readings detection and the out-of-memory class rest on to two more retry classes and job-granular re-run</td>
 <td>❌ Scoped 2026-11-09, nothing landed: seven rows gate the tag, <a href="../queue/Q1236/">Q1236</a> and <a href="../queue/Q1315/">Q1315</a> to <a href="../queue/Q1320/">Q1320</a></td>
@@ -3330,6 +3325,11 @@ The doc remains available — the rationale is often more valuable than the diff
 <td><a href="archive/q436-session-recycle-strands-job/">archive/q436-session-recycle-strands-job.md</a></td>
 <td>A single-use session recycle whose <code>DeleteSession</code> times out leaks the session rather than closing it, stranding the job queued on it — surfaces as the slow <code>E2E_AGC_MultipleJobsQueued</code> e2e failure</td>
 <td>2026-08-01 — Q436. Closed by the soak the row was waiting on: ≥136 green <code>unit-test</code> runs on <code>main</code> since the fix merged (#837, 2026-07-26), against the ≥50-run bar this spec earns as a correctness-guarding test. The investigation's durable finding stands — the strand was fakegithub-only, the real broker redelivers pool-wide — and the fix ages undelivered jobs into the owner pool while counting leaked sessions. Retired to the <a href="../development/flake-watch-retired/">retired-flake ledger</a></td>
+</tr>
+<tr>
+<td><a href="archive/release-2.0.1/">archive/release-2.0.1.md</a></td>
+<td>The <code>v2.0.1</code> patch release: six bug and security fixes since <code>v2.0.0</code> and the dependency bumps beside them, cut from <code>main</code></td>
+<td>Archived 2026-11-18, at the tag. Shipped as <code>v2.0.1</code> on 2026-11-18, validated on <code>rc.2</code> in CI (gate run 44322796149): the six fixes (Q1358, Q1342, Q1336, Q1335, Q1333, Q1264) plus the idle-worker reclaim from #2357. <code>rc.1</code> passed every leg and was superseded when its teardown found that idle worker; the backstop deadline rides on as <a href="../queue/Q1360/">Q1360</a></td>
 </tr>
 <tr>
 <td><a href="archive/release-decision-support/">archive/release-decision-support.md</a></td>
