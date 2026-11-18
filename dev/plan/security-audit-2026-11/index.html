@@ -3282,7 +3282,7 @@ The first audit (2026-05) is <a href="../security/">security.md</a> and the seco
 The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 Nothing reached high or critical.
 Two rows gated <code>v2.0.0</code>, Q1321 and Q1322, and both have landed.
-Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1333/">Q1333</a>, <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1343/">Q1343</a> and <a href="../../queue/Q1344/">Q1344</a> are open; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
+Of the rows filed from it, <a href="../../queue/Q1323/">Q1323</a> and the follow-ups <a href="../../queue/Q1334/">Q1334</a>, <a href="../../queue/Q1341/">Q1341</a>, <a href="../../queue/Q1343/">Q1343</a> and <a href="../../queue/Q1344/">Q1344</a> are open; the Azure range lead closed with Q1253 as a <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">recorded residual</a>, and its narrowing is <a href="../../queue/Q1350/">Q1350</a>.</p>
 </blockquote>
 <h2 id="method-and-limits">Method and limits<a class="headerlink" href="#method-and-limits" title="Permanent link">&para;</a></h2>
 <p>The audit read source and ran nothing.
@@ -3699,7 +3699,7 @@ So an update that leaves the claim as stored is compared by the scope as written
 Any new or changed claim is compared folded, and the reconciler reports a stored alias pair on both gateways as <code>ScaleSetNameCollision</code>.</p>
 <p>Both Blocked-on items stay open.
 Whether GitHub's runner registration accepts the alias spellings, and so whether a stored pair ever shared a scale set, was not measured, and the Owner check above is still the way to find out.
-A related defect in the same host comparison is tracked separately: <code>DeriveAPIBaseURL</code> matches the three hosts by exact case and with no trailing dot (<a href="../../queue/Q1333/">Q1333</a>).</p>
+A related defect in the same host comparison, <code>DeriveAPIBaseURL</code> matching the three hosts by exact case and with no trailing dot, is fixed by Q1333, which now compares them as <code>GitHubScope</code> does.</p>
 <h3 id="tenant-runnertemplate-volume-sources-are-unfiltered-so-a-node-mounted-network-volume-nfs-iscsi-may-give-workers-a-data-path-outside-the-worker-networkpolicy-and-egress-proxy">Tenant RunnerTemplate volume sources are unfiltered, so a node-mounted network volume (nfs, iscsi) may give workers a data path outside the worker NetworkPolicy and egress proxy<a class="headerlink" href="#tenant-runnertemplate-volume-sources-are-unfiltered-so-a-node-mounted-network-volume-nfs-iscsi-may-give-workers-a-data-path-outside-the-worker-networkpolicy-and-egress-proxy" title="Permanent link">&para;</a></h3>
 <p><code>worker-pod-node-mounted-network-volume</code>: needs validation.
 Starts at <code>api/v2/runnertemplate_types.go:38</code>.</p>
