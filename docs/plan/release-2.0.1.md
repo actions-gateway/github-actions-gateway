@@ -45,3 +45,15 @@ The e2e leg's one CI job (run 44247655794, `e2e / e2e`, green) had two runner po
 The AGC reaps a `Running` worker only once it carries a job-completed stamp, so that pod had no deadline and pinned an `n2-standard-8` node until it was deleted by hand just before 09:00Z, after which `validate-release.sh --reclaim` scaled the system pool to 0 and released the lease.
 The reaper and provisioner are unchanged between `v2.0.0` and `f156d4c53`, so this is not a regression the candidate introduced; why the AGC started a second pod for one job is not measured.
 
+## Stable-tag pre-flight
+
+Read 2026-11-18 against `origin/main` at `8b6727a6f`, after Karl approved promoting `rc.1`.
+
+- **Freeze**: `check-artifact-unchanged.sh f156d4c53 origin/main` passes; the 7 files changed since the candidate are none of them on the released surface.
+- **Operator caveats**: `operator-caveats-since.sh v2.0.0` reports no new section, so the notes carry none.
+- **Marketing**: no surface needs a change.
+  The fixes make the cross-tenant scale-set name guard in `features.md` and `why-gag.md` hold for a gateway created with the finalizer, and add no capability.
+- **Roadmap and `features.md`**: `make roadmap-check` passes, and nothing this release ships is a new capability.
+- **Announce bar**: `highlight_for` names `v2.0.1`.
+- **Pins**: the install and upgrade pages name `2.0.1`, and `make release-pins-check` reports 19 pins at `v2.0.1` and the exempt `v2.0.0`.
+- **Notes**: the Validation section names `rc.1` and gate run 44236535751.
