@@ -903,7 +903,7 @@ The prt-scan campaign (March to April 2026) worked this way: a fork's pull reque
 No network rule closes this, because the destination is the one the runner exists to reach.
 What bounds it is what the job can read:
 
-- Keep untrusted code away from secrets: a `RunnerSet` refuses fork pull requests unless it sets `spec.forkPullRequests: Accept` ([fork pull requests](#fork-pull-requests-choose-their-own-runner-label)), and a `pull_request_target` workflow must never check out and run the pull request's code.
+- Never let a `pull_request_target` workflow check out and run the pull request's code: that trigger runs with the base repository's secrets, and no cluster setting refuses it, `spec.forkPullRequests` included ([fork pull requests](#fork-pull-requests-choose-their-own-runner-label)).
 - Grant `GITHUB_TOKEN` the least `permissions:` each workflow needs, so a leaked token cannot push.
 - The Kata tight-egress posture lists the same limit ([what it does not cover](kata-dind-workloads.md#what-this-posture-does-not-cover)).
 
@@ -911,7 +911,7 @@ What bounds it is what the job can read:
 The [FQDN opt-in](#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in) narrows the allowlist to GitHub's hostnames, but one of them is `*.blob.core.windows.net`, because Actions keeps its results, caches and artifacts in Azure Blob Storage.
 That wildcard matches every storage account, and anyone can create one.
 Neither mode can drop these destinations without breaking the runner.
-Use FQDN mode where your CNI can enforce it, since it admits storage accounts by name rather than all of Azure's address space by address.
+Use FQDN mode where your CNI can enforce it, since it admits storage accounts by name rather than every address in GitHub's Azure ranges.
 The measured bound, what is and is not probed, and the planned narrowing to GitHub's own storage accounts ([Q1350](../queue/Q1350.md)) are in [the threat model](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges).
 
 **A public registry on the allowlist is open in both directions.** A job that pulls from a public registry such as Docker Hub needs a platform admin to [allowlist](#how-the-allowlist-works) it, and that is not recommended.
@@ -924,14 +924,16 @@ It ships as manifests you apply in [`deploy/registry-mirror/`](../../deploy/regi
 GAG does not ship a publishing recipe.
 These steps keep that egress off the jobs most likely to misuse it:
 
-1. **Publish from a namespace of its own.** Put the publishing `RunnerSet` under its own `ActionsGateway` and `EgressProxy` in a dedicated namespace, and request the registry in that `EgressProxy`'s `destinationFQDNs` only.
+1. **Publish from a namespace of its own.** Put the publishing `RunnerSet` under its own `ActionsGateway` and `EgressProxy` in a dedicated namespace, and request the registry in that `EgressProxy`'s `destinationFQDNs` only, which requires `egressPolicyMode: FQDN` on it.
+   Leave that pool's `spec.sharing.allowedNamespaces` empty: each namespace it lists can reach the pool too.
    A second `RunnerSet` with its own `proxyRef` in a shared namespace is not enough: the managed policies let every worker in a namespace reach every proxy pool in it, so a pull request job there could send its traffic through the publishing pool.
    The platform allowlist (`--allowed-egress-fqdns`) is cluster-wide, and `EgressProxy` is tenant-authorable, so once the registry is allowlisted any tenant can request it; restrict who may write `EgressProxy` objects if that matters to you.
 2. **Run only trusted triggers there.** Bind the set to a [runner group](#job-intake-bind-every-tenant-to-a-github-runner-group) that admits only the repositories that publish, and leave `spec.forkPullRequests` at its refusing default.
-   A same-repository pull request can still name the set's label in `runs-on`, so GitHub's selected-workflows restriction on the runner group (Enterprise Cloud and Server only) is what limits it to the publishing workflow on the default branch or a tag.
+   A same-repository pull request can still name the set's label in `runs-on`, so GitHub's selected-workflows restriction on the runner group (documented for Enterprise Cloud and Server only) is what limits it to the publishing workflow on the default branch or a tag.
 3. **Split the build from the push.** The build job runs the repository's own scripts and dependencies on a set with no registry egress, pulling base images through the mirror, and uploads the image as an artifact.
    A second job on the publishing set downloads it and runs only a pinned push step, so no build dependency ever runs where the registry is reachable.
-4. **Use short-lived credentials scoped to one repository.** For GHCR, `GITHUB_TOKEN` with `permissions: packages: write` in the push job alone; for a cloud registry, OpenID Connect (OIDC) federation to a role that can push to one repository.
+4. **Use short-lived credentials scoped to one repository.** For GHCR, `GITHUB_TOKEN` with `permissions: packages: write` in the push job alone; a package that already exists must grant the repository write access in its Actions access settings.
+   For a cloud registry, OpenID Connect (OIDC) federation to a role that can push to one repository; the cloud's token-exchange endpoint then needs allowlisting on the publishing pool too.
 5. **Optionally, hold the credential in a push proxy.** An in-cluster proxy that holds the registry credential and forwards only to your repository path keeps both the credential and the other accounts' repositories out of the job's reach.
    GAG does not ship one.
 
