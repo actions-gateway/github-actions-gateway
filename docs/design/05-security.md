@@ -972,7 +972,7 @@ This is the project-wide convention for new operator-set labels and annotations 
 The gate is **fail-closed**: an absent label, any value other than `allowed`, or a namespace the webhook cannot read all leave privileged **ineligible** and the request is rejected.
 Non-privileged profiles (`baseline`, `restricted`, and the empty default) never consult the label and are unaffected.
 
-The two privileged gates are independent and both must pass: the namespace must be labelled eligible (this check), *and* on an update the rank-downgrade guard still requires the `actions-gateway.github.com/allow-profile-downgrade` annotation (anything → `privileged` is a downgrade in rank).
+The two privileged gates are independent and both must pass: the namespace must be labelled eligible (this check), *and* on an update the rank-downgrade guard still requires the `actions-gateway.com/allow-profile-downgrade: allowed` annotation (anything → `privileged` is a downgrade in rank).
 The label is the platform's eligibility decision; the annotation is the tenant's deliberate, auditable act of relaxing their own profile.
 
 This is a webhook check rather than a CRD CEL `XValidation` rule because the decision depends on a label of a *different* object (the namespace), which a spec-scoped CEL rule cannot read.
@@ -998,22 +998,26 @@ It admits `privileged` only where the namespace's own labels already select it a
 
 ### No silent profile downgrades
 
-Separately from the GMC's stamping privilege, the GMC validating webhook (`ValidateUpdate`) prevents a tenant's profile from being *silently* weakened.
-The profiles are ranked `privileged(0) < baseline(1) < restricted(2)`; on update the webhook compares the old and new rank:
+Separately from the GMC's stamping privilege, the `namespace-security-profile-guard` ValidatingAdmissionPolicy prevents a tenant namespace's profile from being *silently* weakened.
+It acts on the namespace's `actions-gateway.com/security-profile` label, on namespaces labelled `actions-gateway.com/tenant: managed`, and it constrains whoever edits that label rather than only the GMC.
+The profiles are ranked `privileged(0) < baseline(1) < restricted(2)`; on update the policy compares the old and new rank:
 
 - An **upgrade** (`baseline → restricted`) — hardening — is always allowed.
   So is a no-op change.
-- A **downgrade** (`restricted → baseline`, or anything → `privileged`) is **rejected** unless the object carries the annotation `actions-gateway.github.com/allow-profile-downgrade: "true"`.
+- A **downgrade** (`restricted → baseline`, or anything → `privileged`) is **rejected** unless the namespace carries the annotation `actions-gateway.com/allow-profile-downgrade: allowed`.
+  The value is matched exactly, so the v1 spelling `"true"` permits nothing.
+- Setting the label when the namespace is **created** is not a downgrade and is not checked by this rule, because there is no old rank to compare against.
 
 This closes the accidental path without trapping operators.
-A stray `kubectl apply` of an older manifest — or one that *drops* the field and lets it re-default to `baseline` — does not carry the annotation, so it is refused rather than quietly relaxing isolation (an empty value is treated as its `baseline` default for the comparison, so dropping the field cannot sneak a downgrade through).
-But a *deliberate* relaxation — for example rolling back a `baseline → restricted` hardening attempt that turned out to break the tenant's pods at admission — needs only a two-field edit (set the annotation, set the profile), not a destructive recreate of the whole `ActionsGateway`.
+A stray `kubectl apply` of an older namespace manifest — or one that *drops* the label — does not carry the annotation, so it is refused rather than quietly relaxing isolation (an absent label ranks as its `baseline` default, so dropping it from `restricted` is a downgrade too).
+But a *deliberate* relaxation — for example rolling back a `baseline → restricted` hardening attempt that turned out to break the tenant's pods at admission — needs only a two-field edit on the namespace (set the annotation, set the label), not a recreate.
 Requiring the explicit annotation keeps the relaxation auditable while keeping the safe direction (hardening) cheap and the unsafe direction (relaxing) intentional.
 
-The check is a webhook rather than a CRD CEL `XValidation` rule because the decision depends on `metadata.annotations`, which a spec-scoped CEL rule cannot read.
+The check is a ValidatingAdmissionPolicy because the label and the annotation it reads both live on the namespace being admitted, so `object` and `oldObject` hold everything it needs.
+It ships in the Helm chart (`charts/actions-gateway/templates/namespace-security-profile-guard.yaml`, gated on `admissionPolicy.enabled`).
 (`gitHubAppRef.name` is deliberately left mutable: changing it is the supported credential-rotation mechanism — see §3.2.)
 
-This is a guard against *accidental/silent* downgrade, not an absolute boundary: an operator who holds the `allow-profile-downgrade` annotation write (i.e. edit access to the CR) is trusted to relax the profile on purpose, and one with direct namespace `patch` rights could edit the PSA labels regardless.
+This is a guard against *accidental/silent* downgrade, not an absolute boundary: anyone who can write the namespace's labels and annotations is trusted to relax the profile on purpose, and one with direct namespace `patch` rights could edit the PSA labels regardless.
 A *compromised GMC* relabelling namespaces is a separate threat, constrained by the `namespace-psa-guard` ValidatingAdmissionPolicy above, not by this rule.
 
 ### Mixing privileged and non-privileged workloads
