@@ -4807,7 +4807,7 @@ The value is matched exactly.
 This is the project-wide convention for new operator-set labels and annotations — see <a href="../../development/kubernetes-conventions/#label--annotation-value-conventions">Kubernetes API conventions</a>.</p>
 <p>The gate is <strong>fail-closed</strong>: an absent label, any value other than <code>allowed</code>, or a namespace the webhook cannot read all leave privileged <strong>ineligible</strong> and the request is rejected.
 Non-privileged profiles (<code>baseline</code>, <code>restricted</code>, and the empty default) never consult the label and are unaffected.</p>
-<p>The two privileged gates are independent and both must pass: the namespace must be labelled eligible (this check), <em>and</em> on an update the rank-downgrade guard still requires the <code>actions-gateway.github.com/allow-profile-downgrade</code> annotation (anything → <code>privileged</code> is a downgrade in rank).
+<p>The two privileged gates are independent and both must pass: the namespace must be labelled eligible (this check), <em>and</em> on an update the rank-downgrade guard still requires the <code>actions-gateway.com/allow-profile-downgrade: allowed</code> annotation (anything → <code>privileged</code> is a downgrade in rank).
 The label is the platform's eligibility decision; the annotation is the tenant's deliberate, auditable act of relaxing their own profile.</p>
 <p>This is a webhook check rather than a CRD CEL <code>XValidation</code> rule because the decision depends on a label of a <em>different</em> object (the namespace), which a spec-scoped CEL rule cannot read.
 The webhook reads the namespace's current label through the uncached API reader, so a tenant cannot smuggle eligibility in through the CR.
@@ -4828,20 +4828,24 @@ Two controls confine the grant:</p>
 <p>The policy does <strong>not</strong> ban writing <code>privileged</code> outright, because <code>securityProfile: privileged</code> is a supported per-tenant opt-in and the GMC legitimately stamps it on those tenants' namespaces.
 It admits <code>privileged</code> only where the namespace's own labels already select it and the platform has made it eligible, so the GMC's grant adds no route to it beyond the platform's.</p>
 <h3 id="no-silent-profile-downgrades">No silent profile downgrades<a class="headerlink" href="#no-silent-profile-downgrades" title="Permanent link">&para;</a></h3>
-<p>Separately from the GMC's stamping privilege, the GMC validating webhook (<code>ValidateUpdate</code>) prevents a tenant's profile from being <em>silently</em> weakened.
-The profiles are ranked <code>privileged(0) &lt; baseline(1) &lt; restricted(2)</code>; on update the webhook compares the old and new rank:</p>
+<p>Separately from the GMC's stamping privilege, the <code>namespace-security-profile-guard</code> ValidatingAdmissionPolicy prevents a tenant namespace's profile from being <em>silently</em> weakened.
+It acts on the namespace's <code>actions-gateway.com/security-profile</code> label, on namespaces labelled <code>actions-gateway.com/tenant: managed</code>, and it constrains whoever edits that label rather than only the GMC.
+The profiles are ranked <code>privileged(0) &lt; baseline(1) &lt; restricted(2)</code>; on update the policy compares the old and new rank:</p>
 <ul>
 <li>An <strong>upgrade</strong> (<code>baseline → restricted</code>) — hardening — is always allowed.
   So is a no-op change.</li>
-<li>A <strong>downgrade</strong> (<code>restricted → baseline</code>, or anything → <code>privileged</code>) is <strong>rejected</strong> unless the object carries the annotation <code>actions-gateway.github.com/allow-profile-downgrade: "true"</code>.</li>
+<li>A <strong>downgrade</strong> (<code>restricted → baseline</code>, or anything → <code>privileged</code>) is <strong>rejected</strong> unless the namespace carries the annotation <code>actions-gateway.com/allow-profile-downgrade: allowed</code>.
+  The value is matched exactly, so the v1 spelling <code>"true"</code> permits nothing.</li>
+<li>Setting the label when the namespace is <strong>created</strong> is not a downgrade and is not checked by this rule, because there is no old rank to compare against.</li>
 </ul>
 <p>This closes the accidental path without trapping operators.
-A stray <code>kubectl apply</code> of an older manifest — or one that <em>drops</em> the field and lets it re-default to <code>baseline</code> — does not carry the annotation, so it is refused rather than quietly relaxing isolation (an empty value is treated as its <code>baseline</code> default for the comparison, so dropping the field cannot sneak a downgrade through).
-But a <em>deliberate</em> relaxation — for example rolling back a <code>baseline → restricted</code> hardening attempt that turned out to break the tenant's pods at admission — needs only a two-field edit (set the annotation, set the profile), not a destructive recreate of the whole <code>ActionsGateway</code>.
+A stray <code>kubectl apply</code> of an older namespace manifest — or one that <em>drops</em> the label — does not carry the annotation, so it is refused rather than quietly relaxing isolation (an absent label ranks as its <code>baseline</code> default, so dropping it from <code>restricted</code> is a downgrade too).
+But a <em>deliberate</em> relaxation — for example rolling back a <code>baseline → restricted</code> hardening attempt that turned out to break the tenant's pods at admission — needs only a two-field edit on the namespace (set the annotation, set the label), not a recreate.
 Requiring the explicit annotation keeps the relaxation auditable while keeping the safe direction (hardening) cheap and the unsafe direction (relaxing) intentional.</p>
-<p>The check is a webhook rather than a CRD CEL <code>XValidation</code> rule because the decision depends on <code>metadata.annotations</code>, which a spec-scoped CEL rule cannot read.
+<p>The check is a ValidatingAdmissionPolicy because the label and the annotation it reads both live on the namespace being admitted, so <code>object</code> and <code>oldObject</code> hold everything it needs.
+It ships in the Helm chart (<code>charts/actions-gateway/templates/namespace-security-profile-guard.yaml</code>, gated on <code>admissionPolicy.enabled</code>).
 (<code>gitHubAppRef.name</code> is deliberately left mutable: changing it is the supported credential-rotation mechanism — see §3.2.)</p>
-<p>This is a guard against <em>accidental/silent</em> downgrade, not an absolute boundary: an operator who holds the <code>allow-profile-downgrade</code> annotation write (i.e. edit access to the CR) is trusted to relax the profile on purpose, and one with direct namespace <code>patch</code> rights could edit the PSA labels regardless.
+<p>This is a guard against <em>accidental/silent</em> downgrade, not an absolute boundary: anyone who can write the namespace's labels and annotations is trusted to relax the profile on purpose, and one with direct namespace <code>patch</code> rights could edit the PSA labels regardless.
 A <em>compromised GMC</em> relabelling namespaces is a separate threat, constrained by the <code>namespace-psa-guard</code> ValidatingAdmissionPolicy above, not by this rule.</p>
 <h3 id="mixing-privileged-and-non-privileged-workloads">Mixing privileged and non-privileged workloads<a class="headerlink" href="#mixing-privileged-and-non-privileged-workloads" title="Permanent link">&para;</a></h3>
 <p>PSA enforcement is namespace-scoped: every pod in a namespace is evaluated against the same profile.

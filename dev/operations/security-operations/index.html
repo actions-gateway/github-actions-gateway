@@ -2811,6 +2811,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#what-default-deny-egress-does-not-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What default-deny egress does not stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3752,6 +3763,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#what-default-deny-egress-does-not-stop" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What default-deny egress does not stop
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4190,6 +4212,7 @@ Each row of <a href="../../design/05-security/#51-gmc-level-threats-cluster-scop
 <li><a href="#tenant-egress-posture--deliberate-widening">Tenant egress posture &amp; deliberate widening</a></li>
 <li><a href="#managing-egress-at-scale">Managing egress at scale</a></li>
 <li><a href="#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">Expressing GitHub egress by FQDN: the <code>egressPolicyMode</code> opt-in</a></li>
+<li><a href="#what-default-deny-egress-does-not-stop">What default-deny egress does not stop</a></li>
 <li><a href="#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling">Pinning a tenant's proxy pool to its egress IP: spec.scheduling</a></li>
 <li><a href="#worker-egress-destinations-the-egress-allowlist">Worker egress destinations: the egress allowlist</a></li>
 <li><a href="#prefer-an-in-cluster-caching-mirror-first">Prefer an in-cluster caching mirror first</a></li>
@@ -5105,6 +5128,47 @@ Confirm your CNI actually enforces DNS-based egress before relying on it (see th
 <p>FQDN mode is currently a v2 <code>EgressProxy</code> feature (the shared-egress surface).
 Direct-egress (proxy-less) gateways stay on the CIDR path; if you need FQDN egress there, use the <code>managedNetworkPolicy: false</code> hand-off above.</p>
 </blockquote>
+<h3 id="what-default-deny-egress-does-not-stop">What default-deny egress does not stop<a class="headerlink" href="#what-default-deny-egress-does-not-stop" title="Permanent link">&para;</a></h3>
+<p>Default-deny keeps a worker off the public internet and the cloud metadata server.
+It does not stop a job sending data to places GitHub itself has to reach, or to any destination you allowlist that other people can also write to.
+Each limit below says what closes it, or how far it can be narrowed.</p>
+<p><strong>GitHub is an exfiltration channel.</strong> A runner has to reach GitHub, so data a job can read can leave in its workflow log, in a pull request comment, or in a push to any repository its token can write.
+The prt-scan campaign (March to April 2026) worked this way: a fork's pull request ran under <code>pull_request_target</code> with the base repository's secrets, and printed them to workflow logs and posted them as pull request comments (<a href="https://www.wiz.io/blog/six-accounts-one-actor-inside-the-prt-scan-supply-chain-campaign">Wiz's write-up</a>).
+No network rule closes this, because the destination is the one the runner exists to reach.
+What bounds it is what the job can read:</p>
+<ul>
+<li>Never let a <code>pull_request_target</code> workflow check out and run the pull request's code: that trigger runs with the base repository's secrets, and no cluster setting refuses it, <code>spec.forkPullRequests</code> included (<a href="#fork-pull-requests-choose-their-own-runner-label">fork pull requests</a>).</li>
+<li>Grant <code>GITHUB_TOKEN</code> the least <code>permissions:</code> each workflow needs, so a leaked token cannot push.</li>
+<li>The Kata tight-egress posture lists the same limit (<a href="../kata-dind-workloads/#what-this-posture-does-not-cover">what it does not cover</a>).</li>
+</ul>
+<p><strong>GitHub's published ranges include Azure addresses anyone can rent.</strong> In the default CIDR mode, the ranges GitHub publishes for Actions cover most of Azure's public address space in 14 regions, so a worker can reach an endpoint an attacker rents there.
+The <a href="#expressing-github-egress-by-fqdn-the-egresspolicymode-opt-in">FQDN opt-in</a> narrows the allowlist to GitHub's hostnames, but one of them is <code>*.blob.core.windows.net</code>, because Actions keeps its results, caches and artifacts in Azure Blob Storage.
+That wildcard matches every storage account, and anyone can create one.
+Neither mode can drop these destinations without breaking the runner.
+Use FQDN mode where your CNI can enforce it, since it admits storage accounts by name rather than every address in GitHub's Azure ranges.
+The measured bound, what is and is not probed, and the planned narrowing to GitHub's own storage accounts (<a href="../../queue/Q1350/">Q1350</a>) are in <a href="../../design/05-security/#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges">the threat model</a>.</p>
+<p><strong>A public registry on the allowlist is open in both directions.</strong> A job that pulls from a public registry such as Docker Hub needs a platform admin to <a href="#how-the-allowlist-works">allowlist</a> it, and that is not recommended.
+Every account on a public registry shares one hostname, and a network rule that cannot see inside TLS cannot tell one account's repository from another's.
+Allowlisting <code>docker.io</code> admits an attacker's own repository there, to pull a payload from or push stolen data to.
+The tighter answer is the pull-through mirror: one instance per upstream, pinned to that upstream in its pod spec, refusing uploads (<a href="#prefer-an-in-cluster-caching-mirror-first">Prefer an in-cluster caching mirror first</a>).
+It ships as manifests you apply in <a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/registry-mirror/README.md"><code>deploy/registry-mirror/</code></a>, not as the default; the <a href="../kata-dind-workloads/#untrusted-pull-requests--the-tight-egress-posture">tight-egress posture</a> is the measured recipe.</p>
+<p><strong>Publishing an image from CI needs registry egress, which the mirror cannot give.</strong> A mirror refuses uploads, so a push needs the registry on the allowlist, and the paragraph above applies: allowlisting <code>ghcr.io</code> admits every account's packages, not just yours.
+GAG does not ship a publishing recipe.
+These steps keep that egress off the jobs most likely to misuse it:</p>
+<ol>
+<li><strong>Publish from a namespace of its own.</strong> Put the publishing <code>RunnerSet</code> under its own <code>ActionsGateway</code> and <code>EgressProxy</code> in a dedicated namespace, and request the registry in that <code>EgressProxy</code>'s <code>destinationFQDNs</code> only, which requires <code>egressPolicyMode: FQDN</code> on it.
+   Leave that pool's <code>spec.sharing.allowedNamespaces</code> empty: each namespace it lists can reach the pool too.
+   A second <code>RunnerSet</code> with its own <code>proxyRef</code> in a shared namespace is not enough: the managed policies let every worker in a namespace reach every proxy pool in it, so a pull request job there could send its traffic through the publishing pool.
+   The platform allowlist (<code>--allowed-egress-fqdns</code>) is cluster-wide, and <code>EgressProxy</code> is tenant-authorable, so once the registry is allowlisted any tenant can request it; restrict who may write <code>EgressProxy</code> objects if that matters to you.</li>
+<li><strong>Run only trusted triggers there.</strong> Bind the set to a <a href="#job-intake-bind-every-tenant-to-a-github-runner-group">runner group</a> that admits only the repositories that publish, and leave <code>spec.forkPullRequests</code> at its refusing default.
+   A same-repository pull request can still name the set's label in <code>runs-on</code>, so GitHub's selected-workflows restriction on the runner group (documented for Enterprise Cloud and Server only) is what limits it to the publishing workflow on the default branch or a tag.</li>
+<li><strong>Split the build from the push.</strong> The build job runs the repository's own scripts and dependencies on a set with no registry egress, pulling base images through the mirror, and uploads the image as an artifact.
+   A second job on the publishing set downloads it and runs only a pinned push step, so no build dependency ever runs where the registry is reachable.</li>
+<li><strong>Use short-lived credentials scoped to one repository.</strong> For GHCR, <code>GITHUB_TOKEN</code> with <code>permissions: packages: write</code> in the push job alone; a package that already exists must grant the repository write access in its Actions access settings.
+   For a cloud registry, OpenID Connect (OIDC) federation to a role that can push to one repository; the cloud's token-exchange endpoint then needs allowlisting on the publishing pool too.</li>
+<li><strong>Optionally, hold the credential in a push proxy.</strong> An in-cluster proxy that holds the registry credential and forwards only to your repository path keeps both the credential and the other accounts' repositories out of the job's reach.
+   GAG does not ship one.</li>
+</ol>
 <h3 id="pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling">Pinning a tenant's proxy pool to its egress IP: <code>spec.scheduling</code><a class="headerlink" href="#pinning-a-tenants-proxy-pool-to-its-egress-ip-specscheduling" title="Permanent link">&para;</a></h3>
 <p>A per-tenant egress IP is realized <em>below</em> Kubernetes: a node pool whose egress path (a per-range cloud NAT gateway, a dedicated subnet, a SNAT-ing gateway node) owns that IP.
 So the pod's <strong>node</strong> decides which IP its traffic leaves by, and pinning the tenant's proxy pool to the tenant's node pool is what binds the two.
