@@ -2826,6 +2826,54 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>The self-hosted e2e image still runs <code>actions/runner</code> 2.338.1, so a release candidate's e2e jobs on <code>gag-ci-e2e</code> should stop being queued …</td>
 </tr>
 <tr>
+<td><a href="Q1363/">Q1363</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Start the Dragonfly gate leg on a fresh e2e node, not a warm one</a></td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**The Dragonfly leg's <code>node-p2p</code> reading needs the worker image pulled through the node client, and today it gets a fresh node only because …</td>
+</tr>
+<tr>
+<td><a href="Q1362/">Q1362</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Gateway teardown waits on a finished worker pod until its node is gone</a></td>
+<td><code>bug</code> <code>dogfood</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>**Deleting an ActionsGateway within <code>completedPodTTL</code> of its last job holds the finalizer for a worker pod that already finished, until …</td>
+</tr>
+<tr>
+<td><a href="Q1365/">Q1365</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/wait-for-publish.sh">Start the gate deploy once the images publish, not the whole publish run</a></td>
+<td><code>dogfood</code> <code>ci</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**The release gate waits for all of <code>publish.yml</code> before it deploys, but deploy needs only the image jobs, which finish 5.5 to 5.8 minutes …</td>
+</tr>
+<tr>
+<td><a href="Q1364/">Q1364</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Bring the e2e node up during the gate deploy, not on the Kata dispatch</a></td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td><strong>The Kata leg's worker is what scales the e2e pool up from zero, so the leg's start pays the whole cold path after deploy has finished.</strong> …</td>
+</tr>
+<tr>
+<td><a href="Q1366/">Q1366</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Take the Dragonfly gate readings concurrently, not one probe at a time</a></td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**After the Dragonfly e2e job the gate takes its readings in series, 4m25s on <code>v2.0.1-rc.1</code> and 5m03s on <code>v2.0.0-rc.3</code>, and two of the …</td>
+</tr>
+<tr>
+<td><a href="Q1367/">Q1367</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/tree/main/deploy/dogfood-e2e">Schedule Kata workers only onto nodes whose kata-qemu runtime is ready</a></td>
+<td><code>dogfood</code></td>
+<td>🔲</td>
+<td>S</td>
+<td>**Every cold e2e node on the measured gates failed its first sandbox with <code>no runtime for "kata-qemu" is configured</code>, because the worker is …</td>
+</tr>
+<tr>
 <td><a href="Q1252/">Q1252</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/lib/lease-fake.sh">Flake: lease-test's another-holder renewer loses its lock and survives</a></td>
 <td><code>flake</code> <code>tests</code></td>
@@ -4304,6 +4352,14 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>🔲</td>
 <td>S</td>
 <td>Five workflows scope both legs with identical <code>paths:</code> lists written twice: <code>dockerfile-lint.yml</code>, <code>endpoint-parity.yml</code> …</td>
+</tr>
+<tr>
+<td><a href="Q1368/">Q1368</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Scope running the Kata and DinD gate legs concurrently on dogfood</a></td>
+<td><code>dogfood</code> <code>open-question</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>**Once the tenant-swap hold (<a href="Q1362/">Q1362</a>) is gone, the e2e jobs themselves pace the release gate, and running two legs at once is the …</td>
 </tr>
 <tr>
 <td><a href="Q1161/">Q1161</a></td>

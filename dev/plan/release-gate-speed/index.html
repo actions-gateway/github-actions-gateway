@@ -1,0 +1,3235 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes — oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant's GitHub egress.">
+      
+      
+      
+        <link rel="canonical" href="https://actions-gateway.com/dev/plan/release-gate-speed/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/favicon.svg">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Release gate speed - GitHub Actions Gateway</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+  
+
+
+    
+    
+  
+  
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Regular.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/IBMPlexSans-Bold.woff2">
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../assets/fonts/MonaspaceNeon-Medium.woff2">
+  
+  <meta property="og:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="640">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://actions-gateway.com/devassets/social-preview.png">
+  
+  <link rel="apple-touch-icon" href="https://actions-gateway.com/devassets/apple-touch-icon.png">
+  <link rel="alternate icon" href="https://actions-gateway.com/devassets/favicon.ico">
+  <link rel="icon" type="image/png" sizes="512x512" href="https://actions-gateway.com/devassets/icon-512.png">
+  
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "GitHub Actions Gateway",
+    "description": "An Actions Runner Controller (ARC) alternative for self-hosted GitHub Actions runners on multi-tenant Kubernetes \u2014 oversubscribe a shared quota, recover evicted jobs automatically, and isolate every tenant\u0027s GitHub egress.",
+    "url": "https://actions-gateway.com/dev",
+    "codeRepository": "https://github.com/actions-gateway/github-actions-gateway",
+    "programmingLanguage": "Go",
+    "license": "https://www.apache.org/licenses/LICENSE-2.0",
+    "author": {
+      "@type": "Organization",
+      "name": "GitHub Actions Gateway",
+      "url": "https://actions-gateway.com/dev"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GitHub Actions Gateway",
+    "url": "https://actions-gateway.com/dev",
+    "logo": "https://actions-gateway.com/devassets/icon-512.png",
+    "sameAs": ["https://github.com/actions-gateway/github-actions-gateway"]
+  }
+  </script>
+  
+  
+
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#release-gate-speed" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+            <strong>v2.0.1 is here.</strong>
+      A gateway created with the GMC finalizer can no longer take another tenant's scale-set name, and an IPv6 cluster's AGC reaches the API server directly.
+          </div>
+          
+        </aside>
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+          <aside class="md-banner md-banner--warning">
+            <div class="md-banner__inner md-grid md-typeset">
+              You're not viewing the latest release.
+  <a href="https://actions-gateway.com/dev"><strong>Go to the current docs.</strong></a>
+    <a href="../../queue/">See the working backlog.</a>
+
+            </div>
+            <script>var el=document.querySelector("[data-md-component=outdated]"),base=new URL("../.."),outdated=__md_get("__outdated",sessionStorage,base);!0===outdated&&el&&(el.hidden=!1)</script>
+          </aside>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="GitHub Actions Gateway" class="md-header__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            GitHub Actions Gateway
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Release gate speed
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../why-gag/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Why GAG
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../alternatives/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Alternatives
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../features/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Features
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../demo/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Demo
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Get started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../roadmap/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Roadmap
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../design/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../operations/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Operations
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+    
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="GitHub Actions Gateway" class="md-nav__button md-logo" aria-label="GitHub Actions Gateway" data-md-component="logo">
+      
+  <img src="../../assets/logo.svg" alt="logo">
+
+    </a>
+    GitHub Actions Gateway
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/actions-gateway/github-actions-gateway" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    actions-gateway/github-actions-gateway
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-gag/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why GAG
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../alternatives/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alternatives
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Get started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../design/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/01-executive-summary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Executive summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/02-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/network-architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Network architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/03-api-contracts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API & data contracts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/04-operational-flows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operational flows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/05-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/06-implementation-phases/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Implementation phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/07-test-plan/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/08-glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-a-capacity-slos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix A — Capacity & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-b-worker-isolation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix B — Worker isolation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-c-ai-implementation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix C — AI-assisted implementation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-d-alternatives-considered/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix D — Alternatives considered
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-e-capacity-planning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix E — Capacity planning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-f-cost-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix F — Cost model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-g-future-enhancements/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix G — Future enhancements
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/appendix-h-v2-api-decomposition/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Appendix H — v2 API decomposition
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/github-protocol-dependencies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub protocol dependencies
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../operations/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9" id="__nav_9_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/personas/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Personas: who owns what
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/air-gapped-install/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/gitops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitOps install (Argo CD / Flux)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrade/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrade
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-from-arc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from ARC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/migration-v1-to-v2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate v1 → v2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/v1alpha1-deprecation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deprecations & the v2.0.0 removal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tenant-onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tenant onboarding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/resourcequota-sizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ResourceQuota sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runner-template-library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runner template library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-shared-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Shared worker storage (RWX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-cluster-cache/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-cluster actions/cache server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/in-runner-image-builds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    In-runner image builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-dind-workloads/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata DinD / image-build workloads
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/p2p-image-distribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    P2P image distribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/reference-architectures/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference architectures
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/service-mesh-coexistence/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Service mesh coexistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_20" >
+        
+          
+          <label class="md-nav__link" for="__nav_9_20" id="__nav_9_20_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_20_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_20">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metrics reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-metrics-access/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Accessing metrics (scraping)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-alerting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Alerting & SLOs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-dashboards/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Grafana dashboards
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability-logging/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Logging & tracing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/cost-attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cost attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/worker-rightsizing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Worker right-sizing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-shutdown-budgets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node shutdown budgets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/velero-backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Velero backup & restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/security-operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security operations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/admission-policies/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Admission policies (Kyverno / Gatekeeper)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/kata-ci-spike-runbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kata-on-GKE spike runbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_10" id="__nav_10_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference (v2)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-was-measured" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it was measured
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-time-goes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the time goes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-pacing-stage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pacing stage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The pacing stage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-swap-waits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the swap waits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ranked-opportunities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ranked opportunities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ranked opportunities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-a-fresh-node-for-the-dragonfly-leg-q1363" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. A fresh node for the Dragonfly leg (Q1363)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-the-swap-hold-q1362" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The swap hold (Q1362)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-deploy-on-the-images-not-the-whole-publish-run-q1365" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Deploy on the images, not the whole publish run (Q1365)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-bring-the-e2e-node-up-during-deploy-q1364" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Bring the e2e node up during deploy (Q1364)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-concurrent-dragonfly-readings-q1366" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Concurrent Dragonfly readings (Q1366)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-schedule-kata-workers-onto-ready-nodes-q1367" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Schedule Kata workers onto ready nodes (Q1367)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-kata-and-dind-at-the-same-time-q1368" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Kata and DinD at the same time (Q1368)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#considered-and-not-worth-pursuing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Considered and not worth pursuing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-measurement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next measurement
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="release-gate-speed">Release gate speed<a class="headerlink" href="#release-gate-speed" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Status:</strong> ❌ Investigation done 2026-11-18, nothing implemented.
+Seven rows are open, ranked in the order below: <a href="../../queue/Q1363/">Q1363</a>, <a href="../../queue/Q1362/">Q1362</a>, <a href="../../queue/Q1365/">Q1365</a>, <a href="../../queue/Q1364/">Q1364</a>, <a href="../../queue/Q1366/">Q1366</a>, <a href="../../queue/Q1367/">Q1367</a> and <a href="../../queue/Q1368/">Q1368</a>.</p>
+</blockquote>
+<p>The release-candidate gate (<code>.github/workflows/validate-candidate.yml</code> running <code>scripts/dogfood/validate-release.sh</code>) took 115.5 minutes for <code>v2.0.1-rc.1</code> and 133.1 minutes for <code>v2.0.0-rc.3</code>, counted from the start of its gate step to its verdict.
+About a fifth of that, 21.7 and 25.3 minutes, is the gate waiting on a worker pod that finished long before.
+That wait is a GMC teardown defect, not a cost of the proof, and removing it is the first change worth making.
+Six smaller changes follow, ranked by saving, and none of them raises GKE node-hours or GitHub Actions minutes.</p>
+<p>The goal is a shorter gate with no rise in either cost.
+The gate's proof is out of scope for cuts: every proposal below keeps each leg running the same suite on the same template and back end.</p>
+<h2 id="how-it-was-measured">How it was measured<a class="headerlink" href="#how-it-was-measured" title="Permanent link">&para;</a></h2>
+<p>Two gate runs were read, nothing was run, and the dogfood cluster was not touched.</p>
+<ul>
+<li><code>v2.0.1-rc.1</code>: gate run 44236535751, publish run 44236526788, and e2e runs 44238725228 (Kata), 44243477731 (DinD) and 44247655794 (Dragonfly).</li>
+<li><code>v2.0.0-rc.3</code>: gate run 44043297649, publish run 44043285692, and e2e runs 44047403171, 44054950768 and 44061304044.</li>
+</ul>
+<p>Stage times come from the gate's step log (<code>gh run view --log</code>) and from each run's jobs API (<code>created_at</code>, <code>started_at</code>, <code>completed_at</code>).
+The causes come from the dogfood project's Cloud Logging, read on 2026-11-18: Kubernetes events for the <code>dogfood-e2e</code> ActionsGateway, its worker pods and their nodes, and the Admin Activity audit log for the pods.
+Those are reads of the GCP project's log store, not of the cluster, and they took no lease.</p>
+<h2 id="where-the-time-goes">Where the time goes<a class="headerlink" href="#where-the-time-goes" title="Permanent link">&para;</a></h2>
+<p>Each "matrix" is one job, <code>e2e / e2e</code>, on one GAG runner: the whole e2e suite runs inside a single worker pod.
+So the three legs are three jobs in series on one tenant, separated by tenant swaps.</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th><code>v2.0.1-rc.1</code></th>
+<th><code>v2.0.0-rc.3</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Environment approval (the job's <code>created_at</code> to <code>started_at</code>)</td>
+<td>2m30s</td>
+<td>24m18s</td>
+</tr>
+<tr>
+<td>Waiting for <code>publish.yml</code></td>
+<td>11m13s</td>
+<td>1s</td>
+</tr>
+<tr>
+<td>Checkout and tool setup</td>
+<td>53s</td>
+<td>54s</td>
+</tr>
+<tr>
+<td>Preflight and deploy, to the first dispatch</td>
+<td>4m16s</td>
+<td>3m51s</td>
+</tr>
+<tr>
+<td>Kata: dispatch to a runner picking the job up</td>
+<td>3m59s</td>
+<td>9m56s</td>
+</tr>
+<tr>
+<td>Kata: job</td>
+<td>24m22s</td>
+<td>27m52s</td>
+</tr>
+<tr>
+<td>Kata: watch end and mirror census</td>
+<td>31s</td>
+<td>37s</td>
+</tr>
+<tr>
+<td>Sizing, capacity, CRD smoke, soak, storage</td>
+<td>2m37s</td>
+<td>2m36s</td>
+</tr>
+<tr>
+<td><strong>Swap to DinD</strong> (of which the gateway delete hold)</td>
+<td><strong>9m45s (8m39s)</strong></td>
+<td><strong>10m11s (8m59s)</strong></td>
+</tr>
+<tr>
+<td>DinD: dispatch to runner</td>
+<td>3m47s</td>
+<td>3m48s</td>
+</tr>
+<tr>
+<td>DinD: job</td>
+<td>17m23s</td>
+<td>19m31s</td>
+</tr>
+<tr>
+<td><strong>Swap to Dragonfly</strong> (of which the hold)</td>
+<td><strong>14m47s (13m02s)</strong></td>
+<td><strong>18m03s (16m19s)</strong></td>
+</tr>
+<tr>
+<td>Dragonfly: dispatch to runner</td>
+<td>5m16s</td>
+<td>5m03s</td>
+</tr>
+<tr>
+<td>Dragonfly: job</td>
+<td>24m01s</td>
+<td>26m22s</td>
+</tr>
+<tr>
+<td>Dragonfly: census and readings</td>
+<td>4m25s</td>
+<td>5m03s</td>
+</tr>
+<tr>
+<td><strong>Gate step, start to verdict</strong></td>
+<td><strong>115.5 min</strong></td>
+<td><strong>133.1 min</strong></td>
+</tr>
+<tr>
+<td>Teardown after the verdict</td>
+<td>hung, then reclaimed (Q1360, fixed in #2357)</td>
+<td>5m03s</td>
+</tr>
+</tbody>
+</table>
+<p>The three e2e jobs are 65.8 and 73.8 minutes, 57% and 55% of the gate step.
+That is the work the gate exists to do.
+The two swap holds are 21.7 and 25.3 minutes, 19% in both runs, and they prove nothing.
+Waiting for a runner is 13.0 and 18.8 minutes, of which the cold-node components are measured below.</p>
+<p>Tag push to the gate step starting was 14.6 minutes for rc.1 and 25.3 for rc.3.
+The environment approval is a human click and runs concurrently with <code>publish.yml</code>, so the gate waits for whichever finishes last.</p>
+<h2 id="the-pacing-stage">The pacing stage<a class="headerlink" href="#the-pacing-stage" title="Permanent link">&para;</a></h2>
+<p>The gate is one serial lane: one e2e tenant namespace, one RunnerSet, one e2e node pool capped at two nodes, used by three legs in turn.
+Whatever sits idle on that lane delays the verdict minute for minute.
+The suite's own execution is the lane doing its job.
+The largest idle block on it is the gateway delete inside each tenant swap, which is 19% of the gate in both samples.</p>
+<h3 id="why-the-swap-waits">Why the swap waits<a class="headerlink" href="#why-the-swap-waits" title="Permanent link">&para;</a></h3>
+<p>All four holds have the same cause, read from the ActionsGateway's <code>TeardownIncomplete</code> events:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>still present: NetworkPolicy dogfood-e2e-workload (held for worker pods runner-ci-e2e-67d39d7-0ebebbcb-…-c41e273)
+</code></pre></div>
+<p>The held pod is the previous leg's own worker, the one whose job had already finished.
+In the first swap of rc.1:</p>
+<ol>
+<li>05:06:47Z: the Kata job's runner finished.
+   The AGC patched the pod at 05:06:49Z, and no container event follows.</li>
+<li>05:10:15Z: <code>e2e-stop.sh</code> deleted the ActionsGateway.
+   Its drain checks passed, because the RunnerSet counts no active or pending job.</li>
+<li>The GMC's <code>reconcileDelete</code> (<code>cmd/gmc/internal/controller/actionsgateway_v2_controller.go</code>) passed its Q547 drain gate for the same reason and deleted the AGC Deployment, RoleBinding and ServiceAccount in that pass.
+   The design (<a href="../../design/04-operational-flows/">04-operational-flows.md</a>) relies on the AGC deleting every worker pod when it sees the gateway's deletion timestamp.
+   With zero jobs counted there is nothing to wait for, so the AGC is gone before it acts.
+   The audit log shows no delete of the pod by the AGC.</li>
+<li>The AGC's reaper would have deleted the finished pod at <code>completedPodTTL</code>, 5 minutes by default (<code>DefaultCompletedPodTTL</code>), at about 05:11:49Z.
+   The swap came 3.5 minutes after the job, so the reaper was deleted first.</li>
+<li>The Q1328 hold keeps the workload NetworkPolicy, and the finalizer with it, while any bound worker pod exists.
+   <code>boundWorkerPods</code> lists pod metadata only, so a finished pod counts the same as a running one.</li>
+<li>05:17:04Z: the cluster autoscaler marked the now-idle e2e node for scale-down, 10m15s after the job ended.
+   The node was deleted at 05:17:59Z, <code>pod-garbage-collector</code> deleted the orphaned pod at 05:18:52Z, and the delete returned at 05:18:54Z.</li>
+</ol>
+<p>rc.3's final teardown shows the converse: it ran 5.4 minutes after the last job, past the TTL, and its delete returned in 2 seconds.</p>
+<p>The pod's phase at the hold was not read directly: the audit-log query for the pod returned no kubelet status writes, and the cluster itself was off limits.
+That no container event follows the job's end, and that pod GC rather than a kubelet deleted the pod, both point to a finished pod.</p>
+<p>Outside the gate this is an operator-facing defect.
+Deleting a gateway within <code>completedPodTTL</code> of its last job holds the finalizer until something else deletes the finished pod.
+On a node that never scales down, pod GC leaves terminated pods alone until the cluster passes its terminated-pod threshold, so the hold could last indefinitely.
+That case is inferred from pod GC's rules and was not measured.</p>
+<h2 id="ranked-opportunities">Ranked opportunities<a class="headerlink" href="#ranked-opportunities" title="Permanent link">&para;</a></h2>
+<p>Savings are per gate.
+"Measured" means the number is a duration read from the two runs; "estimate" means it was derived from those durations and has not been observed.
+Cost effects are on the dogfood cluster's node-hours and the gate's Actions minutes.
+The gate runs on <code>ubuntu-latest</code> in a public repository, so its minutes are not billed, but every saved minute is counted here anyway.</p>
+<table>
+<thead>
+<tr>
+<th>Rank</th>
+<th>Row</th>
+<th>Change</th>
+<th>Saving</th>
+<th>Cost effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><a href="../../queue/Q1363/">Q1363</a></td>
+<td>Put the Dragonfly leg on a fresh e2e node explicitly</td>
+<td>None: it keeps rank 2 from weakening a reading</td>
+<td>Neutral (estimate): that leg cold-starts today too</td>
+</tr>
+<tr>
+<td>2</td>
+<td><a href="../../queue/Q1362/">Q1362</a></td>
+<td>Release the gateway delete once the finished worker pod is reaped, not when its node goes</td>
+<td>20–24 min (estimate, from measured holds of 21.7 and 25.3 min)</td>
+<td>Falls (estimate): 2 system nodes × 20–24 min ≈ 0.7–0.8 node-h, the same Actions minutes, and the e2e node's 10-min idle before scale-down</td>
+</tr>
+<tr>
+<td>3</td>
+<td><a href="../../queue/Q1365/">Q1365</a></td>
+<td>Deploy once the image jobs succeed; require the whole publish run only before the CRD smoke</td>
+<td>Up to 5.8 min (measured: <code>chart-publish</code> took 5m47s and 5m30s), and only when the approval beats the images</td>
+<td>Falls by the same Actions minutes; node-hours unchanged</td>
+</tr>
+<tr>
+<td>4</td>
+<td><a href="../../queue/Q1364/">Q1364</a></td>
+<td>Bring the e2e node up during deploy instead of on the Kata dispatch</td>
+<td>About 3 min (estimate, from rc.1's measured 3m59s dispatch-to-runner)</td>
+<td>Falls slightly (estimate): the e2e node starts ~1–2 min early, while 2 system nodes stop ~3 min early</td>
+</tr>
+<tr>
+<td>5</td>
+<td><a href="../../queue/Q1366/">Q1366</a></td>
+<td>Take the Dragonfly readings concurrently</td>
+<td>About 2.5 min (estimate: 3m42s of probes measured in series, the slowest 74s)</td>
+<td>Falls by the same minutes and system node time</td>
+</tr>
+<tr>
+<td>6</td>
+<td><a href="../../queue/Q1367/">Q1367</a></td>
+<td>Schedule Kata workers only once a node's <code>kata-qemu</code> runtime is ready</td>
+<td>Up to 37–74s per cold node (measured failure window), so about 1–2 min</td>
+<td>Falls slightly</td>
+</tr>
+<tr>
+<td>7</td>
+<td><a href="../../queue/Q1368/">Q1368</a></td>
+<td>Scope running the Kata and DinD legs at the same time on dogfood</td>
+<td>About 20 min (estimate: the DinD leg's length once rank 2 lands)</td>
+<td>Unpriced: peak e2e nodes rise from 1 to 2 inside the quota the gate already reserves, node-hours are expected to fall</td>
+</tr>
+</tbody>
+</table>
+<p>Ranks 1 to 6 together bring a gate like rc.1's from 115.5 minutes to roughly 85 (estimate), plus up to 5.8 minutes off tag-to-gate.
+Rank 7 is a scoping row because its proof risks and quota are unmeasured.</p>
+<h3 id="1-a-fresh-node-for-the-dragonfly-leg-q1363">1. A fresh node for the Dragonfly leg (Q1363)<a class="headerlink" href="#1-a-fresh-node-for-the-dragonfly-leg-q1363" title="Permanent link">&para;</a></h3>
+<p>Not a saving, and it must land before rank 2.
+The Dragonfly leg installs Dragonfly's node client so the kubelet pulls worker images through it, and its <code>node-p2p</code> reading records whether containerd did.
+Today that leg always starts on a new node, because the swap hold outlasts the autoscaler's scale-down.
+Once rank 2 lands, the DinD node is still up when the Dragonfly worker is scheduled, the 722 MB runner image is already cached there, and <code>node-p2p</code> would report "no request by rule", the reading's <code>finding</code> shape, for a reason that has nothing to do with Dragonfly.
+So the gate should resize the e2e pool to zero before the Dragonfly dispatch.
+That reproduces today's cold start on purpose, and costs a pool resize (estimated at about a minute) on top of the cold start the leg already pays.</p>
+<p>The risk to the proof is the point of the row: without it, rank 2 silently changes what a reading means.</p>
+<h3 id="2-the-swap-hold-q1362">2. The swap hold (Q1362)<a class="headerlink" href="#2-the-swap-hold-q1362" title="Permanent link">&para;</a></h3>
+<p>The fix belongs in the GMC, because the hold is wrong for every operator, not only the gate.
+Two shapes fit the design, and which is smaller depends on the held pod's phase, which needs reading on kind first:</p>
+<ul>
+<li><strong>Hold the AGC, not only the policy.</strong> Extend the Q547 drain gate from "no active or pending job" to "every bound worker pod carries a deletion timestamp", so the AGC gets to issue its <code>gateway_deleted</code> deletes before the GMC removes it.
+  This follows the design as written, and works whatever phase the pod is in.</li>
+<li><strong>Skip terminal pods in the policy hold.</strong> A pod in <code>Succeeded</code> or <code>Failed</code> runs no container, so the workload policy no longer protects anything.
+  This changes Q1328's rule, and leaves the pod for the next AGC or pod GC to delete.</li>
+</ul>
+<p>The saving is the measured hold less whatever the reap takes, which should be seconds for a finished pod.
+That residual is an estimate.
+A second effect is unmeasured: the DinD leg's worker would land on the Kata leg's still-warm node, skipping most of its measured 3m47s wait.
+That bonus is not counted in the saving above.</p>
+<p>Risk to the proof is low.
+The NetworkPolicy still outlives every pod that can run code, and the gate's own drain checks in <code>e2e-stop.sh</code> are unchanged.
+The risk is to the product: this is teardown code, which Q125, Q547 and Q1328 each hardened, so the change needs envtest cases for a finished pod, a running pod, and the no-AGC deadline.</p>
+<h3 id="3-deploy-on-the-images-not-the-whole-publish-run-q1365">3. Deploy on the images, not the whole publish run (Q1365)<a class="headerlink" href="#3-deploy-on-the-images-not-the-whole-publish-run-q1365" title="Permanent link">&para;</a></h3>
+<p><code>wait-for-publish.sh</code> waits for <code>publish.yml</code> to conclude.
+The deploy needs only the seven <code>publish (…)</code> image jobs, which finished 5m47s (rc.1) and 5m30s (rc.3) before the run did.
+The rest of the run is <code>chart-publish</code>, which creates the GitHub Release and attaches the signed v2 CRD manifest and the <code>gag-migrate</code> binaries.
+The gate reads those only in the CRD-smoke and storage legs, about 35 minutes after deploy.</p>
+<p>So the gate can start deploying once the image jobs succeed, and check that the whole run succeeded before the CRD smoke.
+The saving applies only when the environment approval comes before the images, as in rc.1; in rc.3 the approval took 24 minutes and the wait was 1 second.</p>
+<p>The risk is spending: a red <code>chart-publish</code> would now be found after the Kata leg rather than before deploy, costing about 35 minutes of node time on a candidate that cannot ship.
+How often <code>chart-publish</code> fails was not counted.</p>
+<h3 id="4-bring-the-e2e-node-up-during-deploy-q1364">4. Bring the e2e node up during deploy (Q1364)<a class="headerlink" href="#4-bring-the-e2e-node-up-during-deploy-q1364" title="Permanent link">&para;</a></h3>
+<p>The Kata leg's worker triggers the e2e pool's scale-up from zero, so its start pays the whole cold path.
+For rc.1: 1m42s from scale-up to node Ready, 33s until the CSI driver and scheduler placed the pod, a 37s <code>kata-qemu</code> sandbox failure, and 36s of image pulls.
+Deploy and <code>e2e-start.sh</code> take about 4 minutes before the dispatch, longer than that path, so scaling the e2e pool to one node as deploy starts would hide it.</p>
+<p>rc.3's Kata wait was 9m56s, but its worker pod's first event came 5 minutes after the job was created.
+What happened in those 5 minutes was not read; the cold path after them took the same shape as rc.1's.</p>
+<p>The risk is to the CPU budget.
+<code>reserve_cpu_budget</code> (Q631) reserves the e2e pool's ceiling after setup, and a node raised before it draws on the same project quota.
+The change has to keep that reservation ahead of the scale-up, or reserve first.
+The node must not be the one the Dragonfly leg uses, which rank 1 already guarantees.</p>
+<h3 id="5-concurrent-dragonfly-readings-q1366">5. Concurrent Dragonfly readings (Q1366)<a class="headerlink" href="#5-concurrent-dragonfly-readings-q1366" title="Permanent link">&para;</a></h3>
+<p>After the Dragonfly job, the gate takes its readings one probe at a time.
+In rc.1: the mirror battery probe pod took 68s, <code>worker to seed proxy</code> 74s, the <code>CONNECT</code> probe 5s, <code>node P2P</code> 1s, and <code>worker to node client</code> 74s.
+Both 74-second probes are waiting out a timeout that is the expected answer.
+They read different pods and different targets, so running them together bounds the step by its slowest probe.</p>
+<p>The risk is to the readings, not the verdict, since none of them gates: two probe pods in one namespace must not share a name, and each must keep its own control.</p>
+<h3 id="6-schedule-kata-workers-onto-ready-nodes-q1367">6. Schedule Kata workers onto ready nodes (Q1367)<a class="headerlink" href="#6-schedule-kata-workers-onto-ready-nodes-q1367" title="Permanent link">&para;</a></h3>
+<p>Every cold e2e node failed its first sandbox with <code>no runtime for "kata-qemu" is configured</code>: 37s in rc.1's Kata leg, 74s in rc.3's, and 52s in rc.1's Dragonfly leg (from Q1360).
+The pod is scheduled before the node's Kata runtime is installed, and the kubelet's retry backoff decides when it tries again.
+Gating placement on a node label or taint that the runtime installer clears would remove the backoff part.
+How much of each window is the install itself, which no change removes, was not measured.
+This helps every Kata job on a cold node, not only the gate.</p>
+<h3 id="7-kata-and-dind-at-the-same-time-q1368">7. Kata and DinD at the same time (Q1368)<a class="headerlink" href="#7-kata-and-dind-at-the-same-time-q1368" title="Permanent link">&para;</a></h3>
+<p>After ranks 1 to 6 the suite's execution is the constraint, and running two legs at once is the only change left that removes a whole leg from the wall clock.
+It stays on the one dogfood cluster: the legs are serial so the gate runs on a single cluster inside GKE's free tier, and both legs already share that cluster's <code>e2e</code> pool.
+Kata and DinD are two overlays of one namespace, ActionsGateway and RunnerSet, and their namespace security profiles differ (baseline and privileged), so each needs its own tenant with its own runner label.
+The e2e pool already allows two nodes (the autoscaler's <code>max: 2</code>), and e2e node-hours should stay about the same while system-pool hours fall.
+Quota does not block it: the gate already reserves the e2e pool's full ceiling, 2 × 8 vCPU, out of <code>CPUS_ALL_REGIONS</code> before capping <code>workers</code> (Q631).
+<code>e2e-test.yml</code>'s concurrency group keys on workflow and ref, so two dispatches on <code>main</code> would run one after the other; the group needs the <code>runner</code> input in its key.
+Dragonfly stays serial: its mirror back end and node client are cluster-wide.</p>
+<p>What is not known decides whether it is worth doing.
+Whether the Kata leg's mirror census stays complete with a second tenant's clients on the same mirrors is unknown, and so is whether the sizing and capacity readings, taken from the Kata tenant, are disturbed by a concurrent DinD tenant.
+Q1161, deferred, is the cross-project form of the same idea and expects to cost more.</p>
+<h2 id="considered-and-not-worth-pursuing">Considered and not worth pursuing<a class="headerlink" href="#considered-and-not-worth-pursuing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Running a subset of the suite on the DinD or Dragonfly leg.</strong> The DinD leg exists so the shipped privileged-dind template runs a real job before release (Q1159), and the Dragonfly leg is the one full e2e run the node client gets (<code>docs/operations/release.md</code>).
+  The suite is the workload in both, so cutting it weakens the proof the leg was added for.</li>
+<li><strong>Pre-pulling the 722 MB runner image.</strong> It would save at most 22–70s per cold node, and on the Dragonfly leg it would defeat the <code>node-p2p</code> reading, which needs that pull to go through the node client.</li>
+<li><strong>Keeping the registry mirrors scaled up across swaps.</strong> About 30–40s per swap (estimate), and each leg's mirror census relies on the mirrors' access logs starting empty.</li>
+<li><strong>Scaling the system pool during the publish wait.</strong> The pool's 83s scale-up would overlap the wait, but two nodes would sit idle for up to 11 minutes, which raises node-hours.</li>
+<li><strong>Removing the environment approval.</strong> It took 2.5 and 24 minutes, but the required reviewer is the human check on the gate's cloud credentials, and nothing else stands in for it.</li>
+<li><strong>Polling.</strong> No step on the critical path sleeps for long: the e2e watch prints a 30s heartbeat, and the worker-drain settle costs about 15s per swap.</li>
+<li><strong>Teardown.</strong> rc.3's took 5 minutes, after the verdict; it costs node time but does not delay the verdict, and its rc.1 hang is fixed (Q1360).</li>
+</ul>
+<h2 id="next-measurement">Next measurement<a class="headerlink" href="#next-measurement" title="Permanent link">&para;</a></h2>
+<p>The first gate run after rank 2 lands should be read the same way: the two swaps from <code>Taking the … tenant down</code> to the next <code>dispatched run is</code>, and the DinD leg's dispatch-to-runner time.
+If the swaps are under two minutes, the remaining constraint is the e2e jobs themselves, which is where rank 7 starts.</p>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Licensed under the Apache License 2.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway" target="_blank" rel="noopener" title="GAG on GitHub" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+    <a href="https://github.com/actions-gateway/github-actions-gateway/issues" target="_blank" rel="noopener" title="Questions &amp; issues" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2m0 14H5.2L4 17.2V4h16zM12.2 5.5c-.9 0-1.6.2-2.1.5-.6.4-.9 1-.8 1.7h2q0-.45.3-.6c.2-.1.4-.2.7-.2s.6.1.8.3.3.4.3.7-.1.5-.2.7c-.2.2-.4.4-.6.5-.5.3-.9.6-1.1.8-.4.3-.5.6-.5 1.1h2c0-.3.1-.5.1-.7.1-.2.3-.3.5-.5.5-.2.8-.5 1.1-.9s.4-.8.4-1.2c0-.7-.3-1.3-.8-1.7-.4-.3-1.2-.5-2.1-.5M11 12v2h2v-2z"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy", "content.code.annotate", "content.tooltips"], "search": "../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+        <script src="../../javascripts/extra.js"></script>
+      
+    
+  </body>
+</html>
