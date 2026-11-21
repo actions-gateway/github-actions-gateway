@@ -3554,6 +3554,30 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Demand:</strong> an operator wants lightweight (non-VM) syscall-filtering for compute-only, non-DinD CI jobs — likeliest on GKE, where gVisor is …</td>
 </tr>
 <tr>
+<td><a href="Q1369/">Q1369</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md">Ship a CI-validated kata-plain template: Kata isolation without DinD</a></td>
+<td><code>feature</code> <code>security</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The template library has no entry that puts a job in a Kata micro-VM without also giving it a Docker daemon, so an operator who wants "Kata …</td>
+</tr>
+<tr>
+<td><a href="Q1370/">Q1370</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/deploy/templates/README.md">Ship a CI-validated rootless BuildKit template for daemonless builds</a></td>
+<td><code>feature</code> <code>security</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>The template library has no shape for a job that builds container images without a Docker daemon, so the only shipped way to run `docker …</td>
+</tr>
+<tr>
+<td><a href="Q1371/">Q1371</a></td>
+<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/webhook/v2/runnertemplate_webhook.go">Per-namespace exemption from RunnerTemplate pod-shape rules</a></td>
+<td><code>feature</code> <code>security</code></td>
+<td>🔲</td>
+<td>M</td>
+<td>A platform admin can approve one tenant to run privileged worker shapes, but cannot approve one tenant to write them.</td>
+</tr>
+<tr>
 <td><a href="Q11/">Q11</a></td>
 <td><a href="../plan/security/">Ed25519 live probe — M-11b</a></td>
 <td><code>security</code> <code>tests</code></td>

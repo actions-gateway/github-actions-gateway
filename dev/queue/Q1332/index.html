@@ -2665,8 +2665,11 @@ Not run against an apiserver; the neighbouring <code>TestUpstream_PodSecurity_Ba
 Running as root is permitted at <code>baseline</code>, so that half of the table cell is right.</p>
 <p>The page now also disagrees with the tree: the <code>RunnerTemplate</code> webhook holds a namespaced template to <code>baseline</code> (Q1322), and <a href="../../operations/troubleshooting/#runnertemplate-rejected-pod-shape-past-baseline-volume-type-or-serviceaccount-token">its runbook</a> lists an <code>Unconfined</code> profile among the refusals.</p>
 <p>What is unmeasured is the consequence: whether rootless BuildKit works on the nodes GAG is tested on under <code>RuntimeDefault</code> seccomp, which decides whether Approach 1 keeps <code>baseline</code> as its recommended profile, moves to a <code>Localhost</code> profile, or needs a <code>ClusterRunnerTemplate</code> on the <code>privileged</code> profile.
-Correcting the two sentences without that answer would leave the recommendation unsupported.</p>
-<p><strong>Done when</strong> the profile table and Approach 1 state what <code>baseline</code> forbids, and the BuildKit recommendation names a profile it was run under.</p>
+Correcting the two sentences without that answer would leave the recommendation unsupported.
+Q1370 takes that measurement as the first step of shipping a rootless BuildKit template, so its result is this row's input.</p>
+<p>The same page presents Kaniko as Approach 2 and as two rows of its decision table, and <code>GoogleContainerTools/kaniko</code> is archived (<code>archived: true</code>, last push 2025-06-03, read 2026-11-18 from the GitHub API).
+The page should say so and stop recommending it.</p>
+<p><strong>Done when</strong> the profile table and Approach 1 state what <code>baseline</code> forbids, the BuildKit recommendation names a profile it was run under, and Kaniko is marked archived.</p>
 
 
 
