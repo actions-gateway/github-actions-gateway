@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/actions-gateway/github-actions-gateway/gmc/internal/controller"
 	"github.com/actions-gateway/github-actions-gateway/gmc/test/utils"
 )
 
@@ -220,6 +221,10 @@ func setupGMC() {
 	_, err := utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "deploy GMC")
 
+	// Before the patches below, each of which rolls the GMC pod: the pod that
+	// outlives them is the one that reads the seed.
+	seedGitHubIPRanges()
+
 	By("enabling AGC_EXTRA_* forwarding and injecting fakegithub env vars")
 	// --allow-agc-extra-env=true tells GMC to forward AGC_EXTRA_* env vars from its
 	// own pod to the AGC Deployments it creates. This is required for e2e tests so
@@ -271,6 +276,46 @@ func setupGMC() {
 		_, err := utils.Run(cmd)
 		g.Expect(err).NotTo(HaveOccurred())
 	}, 5*time.Minute, 5*time.Second).Should(Succeed())
+}
+
+// seedGitHubIPRanges seeds the GMC's persisted IP-range ConfigMap from the GitHub
+// /meta response in $E2E_GITHUB_META_FILE, so the proxy NetworkPolicy has its 443
+// rule even when the GMC's own unauthenticated /meta fetch is refused (Q1119).
+// That fetch spends the runner address's API quota, which other tenants of the
+// address spend too; once it is gone the fetch answers 403 for the length of the
+// reset window and both [real-github-egress] specs see `CONNECT tunnel failed,
+// response 502`. CI writes the file with the job's own token
+// (scripts/e2e/fetch-github-meta.sh); a run with no file keeps the GMC fetching
+// for itself, as a local `make e2e` does. A file that is named and unusable
+// fails the suite rather than quietly running unseeded.
+func seedGitHubIPRanges() {
+	path := os.Getenv("E2E_GITHUB_META_FILE")
+	if path == "" {
+		By("E2E_GITHUB_META_FILE is unset; the GMC fetches its own GitHub IP ranges")
+		return
+	}
+	By("seeding the GMC's GitHub IP-range ConfigMap from " + path)
+	f, err := os.Open(path)
+	Expect(err).NotTo(HaveOccurred(), "open E2E_GITHUB_META_FILE")
+	defer func() { _ = f.Close() }()
+	cidrs, err := controller.ParseGitHubMeta(f)
+	Expect(err).NotTo(HaveOccurred(), "parse E2E_GITHUB_META_FILE")
+	Expect(cidrs).NotTo(BeEmpty(), "E2E_GITHUB_META_FILE holds no CIDRs")
+
+	cm, err := json.Marshal(map[string]any{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata": map[string]any{
+			"name":      controller.IPRangeStoreName,
+			"namespace": gmcNamespace,
+		},
+		"data": controller.IPRangeStoreData(cidrs, time.Now()),
+	})
+	Expect(err).NotTo(HaveOccurred())
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(string(cm))
+	_, err = utils.Run(cmd)
+	Expect(err).NotTo(HaveOccurred(), "apply the GitHub IP-range ConfigMap")
 }
 
 // setupV2CRDs installs the five v2 (actions-gateway.com) CRDs so the GMC's v2

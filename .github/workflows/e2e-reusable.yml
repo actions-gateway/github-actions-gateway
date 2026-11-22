@@ -723,6 +723,24 @@ jobs:
             scripts/e2e/kind-load-image.sh actions-gateway-e2e "$img"
           done < /tmp/metrics-server-images/images.txt
 
+      - name: Fetch GitHub IP ranges with the job's token (Q1119)
+        # The GMC fetches api.github.com/meta unauthenticated, which spends the
+        # runner address's quota of 60 an hour, shared with every other tenant of
+        # the address. Spent, the fetch answers 403 for the reset window, the proxy
+        # NetworkPolicy keeps no 443 rule, and both [real-github-egress] specs fail
+        # with `CONNECT tunnel failed, response 502`. The suite seeds the GMC's
+        # persisted ranges from this file instead. A failed fetch leaves the
+        # variable unset and the suite runs as it did before, so the step cannot
+        # fail the job. The token lives in this step's environment only and is
+        # handed to curl through a config file descriptor, never printed.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          scripts/e2e/fetch-github-meta.sh "${GITHUB_WORKSPACE}/.build/github-meta.json"
+          echo "E2E_GITHUB_META_FILE=${GITHUB_WORKSPACE}/.build/github-meta.json" >> "${GITHUB_ENV}"
+
       - name: Run e2e tests
         # E2E_SKIP_TEARDOWN leaves the GMC, fakegithub, and cert-manager alive
         # after the suite finishes so the diagnostic step can dump real cluster
