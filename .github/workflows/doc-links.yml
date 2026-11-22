@@ -62,8 +62,11 @@ permissions:
 # (runs 44168970558, 44169518457, 44192442984 on 2026-11-17: each checkout step
 # ran to the 5-minute job limit; reruns finished in about 20 s), so a step
 # timeout turns a hang into a restart instead of a lost job. The step budget is
-# 3 minutes for fetch-depth: 0 (p95 171 s in the slow windows of 2026-11-03) and
-# 2 for shallow (p95 28 s); the job budgets are sized to hold both attempts. A
+# 6 minutes for fetch-depth: 0 and 2 for shallow; the job budgets are sized to
+# hold both attempts. On 2026-11-03, 10 of the 12 full-history checkouts that ran
+# past 180 s completed (185 to 319 s) and 2 hung to the cancel, so the full-history
+# budget sits above the completed tail rather than at the p95 (171 s); the 523
+# shallow checkouts that day peaked at 64 s. A
 # composite action cannot do this once: a local action needs the checkout it
 # would perform.
 jobs:
@@ -170,18 +173,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: fetch the ratchet base
@@ -359,18 +362,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: fetch the diff base
@@ -395,18 +398,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: fetch the diff base
@@ -546,18 +549,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - name: release pins are current (make release-pins-check)
@@ -578,11 +581,11 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
@@ -590,7 +593,7 @@ jobs:
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -611,18 +614,18 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.docs == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -665,14 +668,14 @@ jobs:
     steps:
       - id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         continue-on-error: true
         with:
           fetch-depth: 0
       - name: retry checkout after a stall
         if: steps.checkout.outcome != 'success'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 3
+        timeout-minutes: 6
         with:
           fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
