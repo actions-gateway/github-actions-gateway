@@ -53,7 +53,7 @@ const (
 
 	// "<ep>-attribution-tls" is the server bundle mounted into the pool;
 	// "<ep>-attribution-clients" holds one client cert per attributed namespace
-	// under "<ns>.crt"/"<ns>.key", and is never mounted into the pool.
+	// under "client.<ns>.crt"/"client.<ns>.key", and is never mounted into the pool.
 	egressProxyAttributionTLSSuffix     = "-attribution-tls"
 	egressProxyAttributionClientsSuffix = "-attribution-clients"
 	// "<ep>-proxy-attr" is the headless Service whose DNS records name each replica.
@@ -64,6 +64,9 @@ const (
 	// CA only at start.
 	annAttributionCA = "actions-gateway.com/attribution-ca-sha256"
 
+	// A namespace name is a DNS label and carries no '.', so no namespace's key
+	// under this prefix can be the clients Secret's own ca.crt (Q1323).
+	attributionClientKeyPrefix  = "client."
 	attributionClientCertSuffix = ".crt"
 	attributionClientKeySuffix  = ".key"
 
@@ -454,8 +457,8 @@ func buildEgressProxyAttributionTLSSecret(ep *gmcv2.EgressProxy, b *attributionC
 func buildEgressProxyAttributionClientsSecret(ep *gmcv2.EgressProxy, b *attributionCertBundle) *corev1.Secret {
 	data := map[string][]byte{metricsCACertKey: b.caPEM}
 	for ns, pair := range b.clients {
-		data[ns+attributionClientCertSuffix] = pair[0]
-		data[ns+attributionClientKeySuffix] = pair[1]
+		data[attributionClientCertKey(ns)] = pair[0]
+		data[attributionClientKeyKey(ns)] = pair[1]
 	}
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: egressProxyAttributionClientsSecretName(ep), Namespace: ep.Namespace, Labels: egressProxyLabels(ep)},
@@ -464,12 +467,22 @@ func buildEgressProxyAttributionClientsSecret(ep *gmcv2.EgressProxy, b *attribut
 	}
 }
 
+func attributionClientCertKey(ns string) string {
+	return attributionClientKeyPrefix + ns + attributionClientCertSuffix
+}
+
+func attributionClientKeyKey(ns string) string {
+	return attributionClientKeyPrefix + ns + attributionClientKeySuffix
+}
+
 // attributionClientNamespaces lists the namespaces a clients Secret holds certs for.
 func attributionClientNamespaces(s *corev1.Secret) []string {
 	var namespaces []string
 	for k := range s.Data {
-		if ns, ok := strings.CutSuffix(k, attributionClientCertSuffix); ok && k != metricsCACertKey {
-			namespaces = append(namespaces, ns)
+		if rest, ok := strings.CutPrefix(k, attributionClientKeyPrefix); ok {
+			if ns, ok := strings.CutSuffix(rest, attributionClientCertSuffix); ok {
+				namespaces = append(namespaces, ns)
+			}
 		}
 	}
 	slices.Sort(namespaces)
@@ -770,8 +783,8 @@ func buildProxyAttributionSecret(ep *gmcv2.EgressProxy, consumerNS string, clien
 		},
 		Type: corev1.SecretTypeTLS,
 		Data: map[string][]byte{
-			corev1.TLSCertKey:       clients[consumerNS+attributionClientCertSuffix],
-			corev1.TLSPrivateKeyKey: clients[consumerNS+attributionClientKeySuffix],
+			corev1.TLSCertKey:       clients[attributionClientCertKey(consumerNS)],
+			corev1.TLSPrivateKeyKey: clients[attributionClientKeyKey(consumerNS)],
 			metricsCACertKey:        clients[metricsCACertKey],
 		},
 	}
@@ -805,7 +818,7 @@ func (r *EgressProxyReconciler) reconcileAttributionProjections(ctx context.Cont
 	keep := map[string]bool{}
 	for _, ns := range slices.Sorted(maps.Keys(ports)) {
 		port := ports[ns]
-		if live[ns] != port || len(clients[ns+attributionClientCertSuffix]) == 0 {
+		if live[ns] != port || len(clients[attributionClientCertKey(ns)]) == 0 {
 			continue
 		}
 		if !rolledOut && !projected[ns] {

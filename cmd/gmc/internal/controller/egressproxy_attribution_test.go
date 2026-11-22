@@ -228,7 +228,7 @@ func TestEgressProxyReconcile_GivesEachOptedInNamespaceItsOwnPort(t *testing.T) 
 	roots := x509.NewCertPool()
 	require.True(t, roots.AppendCertsFromPEM(server.Data[metricsCACertKey]))
 	for _, ns := range []string{"provider", "team-a"} {
-		cert, err := parseCertPEM(clients.Data[ns+".crt"])
+		cert, err := parseCertPEM(clients.Data[attributionClientCertKey(ns)])
 		require.NoError(t, err)
 		assert.Equal(t, ns, cert.Subject.CommonName)
 		_, err = cert.Verify(x509.VerifyOptions{Roots: roots, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}})
@@ -276,6 +276,39 @@ func TestEgressProxyReconcile_PortsAndBundleAreStableAcrossGrantChanges(t *testi
 	reconcilePool(t, c)
 	assert.Equal(t, "team-a=8101,team-b=8100", poolEnv(t, c)["PROXY_ATTRIBUTION_PORTS"], "the freed port is reused")
 	assert.NotEqual(t, second, caHash())
+}
+
+// A consumer namespace named "ca" must not land on the clients Secret's own CA key:
+// the CA stays the pool's, the namespace set reads back whole, and an unchanged set
+// keeps the bundle rather than reissuing it every reconcile (Q1323).
+func TestEgressProxyReconcile_NamespaceNamedCAKeepsTheBundle(t *testing.T) {
+	ep := attributingPool("ca", "team-b")
+	c := withGMCSecretVerbs(fake.NewClientBuilder().WithScheme(egressProxyTestScheme(t)).WithObjects(
+		ep, gatewayUsing("ca", true), gatewayUsing("team-b", true),
+	).WithStatusSubresource(ep).Build())
+	ctx := context.Background()
+	caHash := func() string {
+		var dep appsv1.Deployment
+		require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-proxy"}, &dep))
+		return dep.Spec.Template.Annotations[annAttributionCA]
+	}
+
+	reconcilePool(t, c)
+	first := caHash()
+	require.NotEmpty(t, first)
+
+	var server, clients corev1.Secret
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-attribution-tls"}, &server))
+	require.NoError(t, c.Get(ctx, types.NamespacedName{Namespace: "provider", Name: "shared-attribution-clients"}, &clients))
+	assert.Equal(t, string(server.Data[metricsCACertKey]), string(clients.Data[metricsCACertKey]),
+		"the clients Secret's CA must be the pool's CA, not the ca namespace's client cert")
+	assert.Equal(t, []string{"ca", "team-b"}, attributionClientNamespaces(&clients))
+	cert, err := parseCertPEM(clients.Data[attributionClientCertKey("ca")])
+	require.NoError(t, err)
+	assert.Equal(t, "ca", cert.Subject.CommonName)
+
+	reconcilePool(t, c)
+	assert.Equal(t, first, caHash(), "an unchanged namespace set keeps the bundle")
 }
 
 // The GMC's role grants no delete on Secrets, so a reconcile that deletes one is
