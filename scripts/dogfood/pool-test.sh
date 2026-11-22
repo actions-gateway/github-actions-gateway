@@ -90,6 +90,51 @@ FAKE_KUBECTL_FAIL=1
 check "an unreadable cluster is unknown, never 0" unknown "$(pool_node_count e2e)"
 unset FAKE_KUBECTL_FAIL
 
+# --- empty_node_pool: resize to 0, then wait for the cluster to list none (Q1363) ---
+
+# empty_case NODE_COUNTS RESIZE_RC — the pool lists NODE_COUNTS' nodes on successive
+# reads (the last repeats; "fail" is an unreadable cluster), and the resize
+# returns RESIZE_RC. Prints the calls made, then the return code. The read
+# counter lives in a file because pool_node_count runs in a command substitution.
+empty_case() (
+	local counts="$1" resize_rc="$2" dir rc=0
+	dir="$(mktemp -d)"
+	echo 0 >"${dir}/n"
+	: >"${dir}/calls"
+	# shellcheck disable=SC2034 # read by empty_node_pool
+	PROJECT=p ZONE=z CLUSTER=c POOL_EMPTY_TIMEOUT=30 POOL_EMPTY_INTERVAL=10
+	gcloud() { echo "gcloud $*" >>"${dir}/calls"; return "${resize_rc}"; }
+	sleep() { echo "sleep $1" >>"${dir}/calls"; }
+	kubectl() {
+		local -a seq=(${counts})
+		local n v i
+		n="$(cat "${dir}/n")"
+		v="${seq[$((n < ${#seq[@]} ? n : ${#seq[@]} - 1))]}"
+		echo $((n + 1)) >"${dir}/n"
+		[[ "${v}" == fail ]] && return 1
+		for ((i = 0; i < v; i++)); do echo "node/n${i}"; done
+	}
+	empty_node_pool e2e >/dev/null 2>&1 || rc=$?
+	cat "${dir}/calls"
+	echo "rc=${rc}"
+	rm -rf "${dir}"
+)
+check "an already-empty pool returns after the resize" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|rc=0" \
+	"$(empty_case "0" 0 | paste -sd'|' -)"
+check "a draining pool is waited for" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|sleep 10|sleep 10|rc=0" \
+	"$(empty_case "1 1 0" 0 | paste -sd'|' -)"
+check "a pool that never empties fails after the timeout" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|sleep 10|sleep 10|sleep 10|rc=1" \
+	"$(empty_case "1" 0 | paste -sd'|' -)"
+check "an unreadable cluster is not an empty pool" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|sleep 10|sleep 10|sleep 10|rc=1" \
+	"$(empty_case "fail" 0 | paste -sd'|' -)"
+check "a refused resize fails without waiting" \
+	"gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=0 --zone=z --quiet|rc=1" \
+	"$(empty_case "0" 1 | paste -sd'|' -)"
+
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2
 	exit 1

@@ -735,6 +735,17 @@ dind_leg() {
 dragonfly_leg() {
 	echo "Taking the DinD e2e tenant down for the Kata + Dragonfly one (e2e-stop.sh)..."
 	bash "${SCRIPT_DIR}/e2e-stop.sh"
+	# The node-p2p reading needs the worker image pulled through the node client,
+	# so the worker must land on a node that has not cached it (Q1363). A node left
+	# over from the DinD leg holds the runner image, and the reading would then
+	# report no request by rule for a reason unrelated to Dragonfly. Today the swap
+	# above is slow enough that the autoscaler has already removed it; this keeps
+	# that true once the swap is not. Not fatal: the reading is evidence rather
+	# than a gate, and the warning names what it can no longer say.
+	empty_node_pool "${E2E_POOL}" || {
+		echo "warning: the e2e pool could not be emptied, so the Dragonfly worker may land on a warm node." >&2
+		echo "  Read the node-p2p reading with that in mind: no request by rule may not be Dragonfly's doing." >&2
+	}
 	E2E_VARIANT=kata
 	E2E_MIRROR_BACKEND=dragonfly
 	E2E_DRAGONFLY_NODES="${E2E_DRAGONFLY_NODES:-1}"
