@@ -631,6 +631,20 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.x'
+      # Provisioning is its own step so a slow window names its stage in the
+      # step list, and so a stalled install is cancelled and restarted rather
+      # than using up the job (Q1286: run 42047586935 lost its whole 10 minutes
+      # here; the rerun passed in 61 s). The stamp is written only on success,
+      # so the retry re-provisions from scratch.
+      - id: venv
+        name: provision the docs venv
+        run: scripts/docs/docs-preview.sh venv
+        timeout-minutes: 4
+        continue-on-error: true
+      - name: retry provisioning the docs venv after a stall
+        if: steps.venv.outcome != 'success'
+        run: scripts/docs/docs-preview.sh venv
+        timeout-minutes: 4
       - name: release-note site links resolve (make release-links-check)
         run: make release-links-check
 
