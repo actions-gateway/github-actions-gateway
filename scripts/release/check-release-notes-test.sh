@@ -390,38 +390,68 @@ esac
 
 # --- cited commit hashes (Q1356) ---------------------------------------------
 
-# Known answers, both directions: a hash taken from this tree's own HEAD must
-# resolve, and 00b4f4e is the invented one the v2.0.0 plan doc carried (the real
-# commit was 0c0048d5a), which exists nowhere. The invented case is asserted
-# absent first, so a repository that someday gains it fails here rather than
-# letting the failing case pass for a different reason.
-real_sha="$(git rev-parse --short=9 HEAD)"
+# These cases run the script inside a throwaway repository with a history this
+# suite built, never against the checkout the suite runs in. The CI job that runs
+# this suite checks out one commit, where the rule correctly reports a skip, so
+# cases that asserted against the host's history passed locally and went red
+# there. The fixture has two commits so a depth-1 clone of it is genuinely
+# shallow, which the skip case below needs.
+fx="$WORK/fx"
+git init -q -b main "$fx"
+git -C "$fx" config maintenance.auto false
+git -C "$fx" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m one
+git -C "$fx" -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m two
+mkdir -p "$fx/scripts/release" "$fx/docs/releases"
+cp "$SUBJECT" "$REPO_ROOT/scripts/release/cited-commits-baseline.txt" "$fx/scripts/release/"
+cp "$REPO_ROOT/docs/releases/v2.0.1.md" "$fx/docs/releases/"
+FX_SUBJECT="$fx/scripts/release/check-release-notes.sh"
+
+# Known answers, both directions: the fixture's own HEAD must resolve, and
+# 00b4f4e is the invented hash the v2.0.0 plan doc carried (the real commit was
+# 0c0048d5a), which the fixture does not hold. That is asserted first, so a
+# fixture that someday gains it fails here instead of passing the failing case
+# for a different reason.
+real_sha="$(git -C "$fx" rev-parse --short=9 HEAD)"
 invented_sha=00b4f4e
 rc=0
-git cat-file -e "${invented_sha}^{commit}" >/dev/null 2>&1 || rc=$?
+git -C "$fx" cat-file -e "${invented_sha}^{commit}" >/dev/null 2>&1 || rc=$?
 if [[ "$rc" == 0 ]]; then
-	bad "the invented hash ${invented_sha} is absent from this repository"
+	bad "the invented hash ${invented_sha} is absent from the fixture"
 else
-	ok "the invented hash ${invented_sha} is absent from this repository"
+	ok "the invented hash ${invented_sha} is absent from the fixture"
 fi
 
-case_ "a cited hash that resolves passes" 0 "## Validation
+# fx_case DESC WANT_EXIT BODY — the cited-hash rule over a note in the fixture.
+fx_case() {
+	local desc="$1" want="$2" body="$3" rc=0 out
+	printf '%s' "$body" >"$WORK/note.md"
+	out="$("$FX_SUBJECT" "$WORK/note.md" 2>&1)" || rc=$?
+	die_if_killed "$desc" "$rc" "$want"
+	if [[ "$rc" == "$want" ]]; then
+		ok "$desc"
+	else
+		bad "$desc (want exit $want, got $rc)"
+		printf '       %s\n' "$out" >&2
+	fi
+}
+
+fx_case "a cited hash that resolves passes" 0 "## Validation
 
 \`v2.0.0-rc.1\` is commit \`${real_sha}\`.
 "
-case_ "a cited hash that resolves nowhere fails" 1 "## Validation
+fx_case "a cited hash that resolves nowhere fails" 1 "## Validation
 
 \`v2.0.0-rc.1\` is commit \`${invented_sha}\`.
 "
-case_ "a 40-character invented hash fails" 1 "## Validation
+fx_case "a 40-character invented hash fails" 1 "## Validation
 
 Built from \`0123456789abcdef0123456789abcdef01234567\`.
 "
-case_ "one bad hash beside a good one still fails" 1 "## Validation
+fx_case "one bad hash beside a good one still fails" 1 "## Validation
 
 \`${real_sha}\` then \`${invented_sha}\`.
 "
-cite_out="$(printf '## Validation\n\n`%s` and `%s`.\n' "$real_sha" "$invented_sha" >"$WORK/note.md"; "$SUBJECT" "$WORK/note.md" 2>&1 || true)"
+cite_out="$(printf '## Validation\n\n`%s` and `%s`.\n' "$real_sha" "$invented_sha" >"$WORK/note.md"; "$FX_SUBJECT" "$WORK/note.md" 2>&1 || true)"
 case "$cite_out" in
 *"note.md:3: \`${invented_sha}\` is not a commit"*) ok "the finding names the line and the hash" ;;
 *) bad "the finding names the line and the hash"; printf '       %s\n' "$cite_out" >&2 ;;
@@ -429,37 +459,37 @@ esac
 
 # Each of these must NOT fire, so their assertions invert: a rule that fired on
 # them would fail every note that quotes a number or a digest.
-case_ "an unbackticked hash is not a citation" 0 "## Validation
+fx_case "an unbackticked hash is not a citation" 0 "## Validation
 
 Commit ${invented_sha} is mentioned in passing.
 "
-case_ "a hash inside a fenced block is an example" 0 "## Validation
+fx_case "a hash inside a fenced block is an example" 0 "## Validation
 
 \`\`\`bash
 # the hash is backticked here, so only the fence keeps it out: \`${invented_sha}\`
 \`\`\`
 "
-case_ "an all-digit token is a number, not a hash" 0 "## Validation
+fx_case "an all-digit token is a number, not a hash" 0 "## Validation
 
 Port \`1234567\`.
 "
-case_ "an image digest with its prefix is not a bare token" 0 "## Validation
+fx_case "an image digest with its prefix is not a bare token" 0 "## Validation
 
 Pinned to \`sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\`.
 "
-case_ "a token over 40 characters is not a commit hash" 0 "## Validation
+fx_case "a token over 40 characters is not a commit hash" 0 "## Validation
 
 Digest \`0123456789abcdef0123456789abcdef0123456789abcdef\`.
 "
 
 # The baseline exempts a token in one named doc only. v2.0.1's note carries
-# abbreviated image digests, so it passes on the baseline, and the same token in
-# any other doc still fails.
+# abbreviated image digests, so it passes on the baseline (the fixture holds a
+# copy at the same path), and the same token in any other doc still fails.
 rc=0
-"$SUBJECT" "$REPO_ROOT/docs/releases/v2.0.1.md" >/dev/null 2>&1 || rc=$?
+"$FX_SUBJECT" "$fx/docs/releases/v2.0.1.md" >/dev/null 2>&1 || rc=$?
 die_if_killed "a baselined token passes in its own doc" "$rc" 0
 expect "a baselined token passes in its own doc" 0 "$rc"
-case_ "a baselined token fails in any other doc" 1 "## Validation
+fx_case "a baselined token fails in any other doc" 1 "## Validation
 
 \`25ac8f0\` is pinned.
 "
@@ -467,7 +497,7 @@ case_ "a baselined token fails in any other doc" 1 "## Validation
 # A shallow checkout cannot resolve anything, so it must say it skipped rather
 # than pass or fail on hashes it cannot see.
 shallow="$WORK/shallow"
-if git clone -q --depth 1 --no-local "$REPO_ROOT" "$shallow" >/dev/null 2>&1; then
+if git clone -q --depth 1 --no-local "$fx" "$shallow" >/dev/null 2>&1; then
 	mkdir -p "$shallow/scripts/release"
 	cp "$SUBJECT" "$REPO_ROOT/scripts/release/cited-commits-baseline.txt" "$shallow/scripts/release/"
 	printf '## Validation\n\n`%s` is a commit.\n' "$invented_sha" >"$WORK/shallow-note.md"
