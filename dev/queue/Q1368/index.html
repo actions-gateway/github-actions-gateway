@@ -2704,7 +2704,7 @@
 
 
 <h1 id="scope-running-the-kata-and-dind-gate-legs-concurrently-on-dogfood">Scope running the Kata and DinD gate legs concurrently on dogfood<a class="headerlink" href="#scope-running-the-kata-and-dind-gate-legs-concurrently-on-dogfood" title="Permanent link">&para;</a></h1>
-<p><strong>Once the tenant-swap hold (<a href="../Q1362/">Q1362</a>) is gone, the e2e jobs themselves pace the release gate, and running two legs at once is the only change left that takes a whole leg off its wall clock.</strong> The DinD leg would take about 20 minutes once Q1362 lands (estimate, from its measured 17m23s and 19m31s jobs plus a fast swap).</p>
+<p><strong>Once the tenant-swap hold (Q1362) is gone, the e2e jobs themselves pace the release gate, and running two legs at once is the only change left that takes a whole leg off its wall clock.</strong> The DinD leg would take about 20 minutes once Q1362 lands (estimate, from its measured 17m23s and 19m31s jobs plus a fast swap).</p>
 <p>On the one dogfood cluster, not a second one: the legs are serial so the gate stays on a single cluster inside GKE's free tier, and both legs already share the cluster's one <code>e2e</code> pool.
 The cross-project form is <a href="../Q1161/">Q1161</a>, deferred, which expects to cost more.
 Kata and DinD would each need their own tenant: today they are two overlays of one namespace (<code>gag-dogfood-e2e</code>), one ActionsGateway and one RunnerSet registered as scale set <code>gag-ci-e2e</code>, and the namespace security profile differs between them (baseline for Kata, privileged for DinD), so a second namespace with its own runner label is required, not optional.

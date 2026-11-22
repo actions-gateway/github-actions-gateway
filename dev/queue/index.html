@@ -2864,14 +2864,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><strong>Event:</strong> a test in <code>cmd/gmc/internal/controller/integration/v2_egressproxy_test.go</code> fails on <code>main</code> with a <code>not found</code> read of a proxy …</td>
 </tr>
 <tr>
-<td><a href="Q1362/">Q1362</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/cmd/gmc/internal/controller/actionsgateway_v2_controller.go">Gateway teardown waits on a finished worker pod until its node is gone</a></td>
-<td><code>bug</code> <code>dogfood</code></td>
-<td>🔲</td>
-<td>M</td>
-<td>**Deleting an ActionsGateway within <code>completedPodTTL</code> of its last job holds the finalizer for a worker pod that already finished, until …</td>
-</tr>
-<tr>
 <td><a href="Q1366/">Q1366</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Take the Dragonfly gate readings concurrently, not one probe at a time</a></td>
 <td><code>dogfood</code></td>
@@ -4357,7 +4349,7 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td><code>dogfood</code> <code>open-question</code></td>
 <td>🔲</td>
 <td>M</td>
-<td>**Once the tenant-swap hold (<a href="Q1362/">Q1362</a>) is gone, the e2e jobs themselves pace the release gate, and running two legs at once is the …</td>
+<td>**Once the tenant-swap hold (Q1362) is gone, the e2e jobs themselves pace the release gate, and running two legs at once is the only change …</td>
 </tr>
 <tr>
 <td><a href="Q1161/">Q1161</a></td>
