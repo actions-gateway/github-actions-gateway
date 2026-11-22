@@ -18,6 +18,10 @@
 # Secret reads, and a ClusterRoleBinding to one of them would grant those reads in
 # every namespace (Q1188).
 #
+# Inside a tenant namespace it refuses a Secret of type
+# kubernetes.io/service-account-token, which the token controller would fill with a
+# long-lived token for a tenant ServiceAccount that the GMC could read (Q1343).
+#
 # Three writes outside a tenant namespace are admitted:
 #   - The GMC deleting its own gmc-tenant-secret-reader RoleBinding, so a namespace
 #     that stops being a tenant also stops granting the GMC Secret reads (Q1271).
@@ -199,7 +203,20 @@ spec:
         oldObject.metadata.labels['actions-gateway/proxy-share'] == 'true') ||
         ('actions-gateway.com/proxy-attribution' in oldObject.metadata.labels &&
         oldObject.metadata.labels['actions-gateway.com/proxy-attribution'] == 'true'))
+    # Kubernetes' token controller fills a Secret of this type with a non-expiring
+    # token for the ServiceAccount its kubernetes.io/service-account.name annotation
+    # names, which the GMC could read back through its tenant reader binding and keep
+    # after the namespace is unmarked. The GMC writes only TLS and Opaque Secrets
+    # (Q1343).
+    - name: isServiceAccountTokenSecretWrite
+      expression: >-
+        request.resource.group == '' && request.resource.resource == 'secrets' &&
+        request.operation != 'DELETE' && has(object.type) &&
+        object.type == 'kubernetes.io/service-account-token'
   validations:
+    - expression: "!variables.isServiceAccountTokenSecretWrite"
+      messageExpression: "'the GMC service account may not write a Secret of type kubernetes.io/service-account-token; namespace ' + request.namespace"
+      reason: Forbidden
     - expression: "!variables.isClusterRoleBinding || variables.bindingRoleRef == 'agc-clusterrunnertemplate-reader'"
       messageExpression: "'the GMC service account may only write ClusterRoleBindings to agc-clusterrunnertemplate-reader; this one references ' + variables.bindingRoleRef"
       reason: Forbidden

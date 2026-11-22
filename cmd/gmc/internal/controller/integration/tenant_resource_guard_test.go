@@ -464,3 +464,60 @@ func TestGMC_TenantResourceGuard_AdmitsOnlyOwnReaderBindingDelete(t *testing.T) 
 		require.ErrorContains(t, err, "agc-clusterrunnertemplate-reader", "denied by the guard's ClusterRoleBinding rule")
 	})
 }
+
+// newServiceAccountTokenSecret is the Secret shape Kubernetes' token controller fills
+// with a non-expiring token for the named ServiceAccount.
+func newServiceAccountTokenSecret(ns, name, serviceAccount string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:   ns,
+			Name:        name,
+			Annotations: map[string]string{corev1.ServiceAccountNameKey: serviceAccount},
+		},
+		Type: corev1.SecretTypeServiceAccountToken,
+	}
+}
+
+// TestGMC_TenantResourceGuard_DeniesServiceAccountTokenSecrets verifies Q1343: inside a
+// marked tenant namespace, where the GMC may otherwise write Secrets and read them
+// back, it may neither create nor update a ServiceAccount token Secret, so it cannot
+// have the token controller mint a long-lived token for a tenant's ServiceAccount.
+// envtest runs no token controller, so the Secret is never filled here; the test
+// pins the admission decision only.
+func TestGMC_TenantResourceGuard_DeniesServiceAccountTokenSecrets(t *testing.T) {
+	installTenantResourceGuard(t)
+
+	const ns = "resguard-satoken"
+	marked := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{
+		Name:   ns,
+		Labels: map[string]string{gmcv2.TenantNamespaceMarkerLabel: gmcv2.TenantNamespaceMarkerValue},
+	}}
+	require.NoError(t, k8sClient.Create(ctx, marked))
+	t.Cleanup(func() { _ = k8sClient.Delete(context.Background(), marked) })
+
+	gmc := newImpersonatedClient(t, gmcSANamespace, gmcSAName)
+	g := gomega.NewWithT(t)
+	g.Eventually(func() bool {
+		return apierrors.IsForbidden(gmc.Create(ctx, newSecret("default", "probe")))
+	}, 30*time.Second, 100*time.Millisecond).Should(gomega.BeTrue(),
+		"GMC SA must be denied creating a Secret in an unmarked namespace")
+
+	t.Run("create denied", func(t *testing.T) {
+		err := gmc.Create(ctx, newServiceAccountTokenSecret(ns, "minted", "default"))
+		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+		require.Contains(t, err.Error(), "kubernetes.io/service-account-token")
+	})
+
+	t.Run("update denied", func(t *testing.T) {
+		existing := newServiceAccountTokenSecret(ns, "tenant-token", "default")
+		require.NoError(t, k8sClient.Create(ctx, existing))
+		existing.Labels = map[string]string{"touched": "true"}
+		err := gmc.Update(ctx, existing)
+		require.True(t, apierrors.IsForbidden(err), "want Forbidden, got: %v", err)
+	})
+
+	t.Run("opaque Secret still allowed", func(t *testing.T) {
+		require.NoError(t, gmc.Create(ctx, newSecret(ns, "tenant-secret")),
+			"the rule must not refuse the Secret types the GMC does write")
+	})
+}

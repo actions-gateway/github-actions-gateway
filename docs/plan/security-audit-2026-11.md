@@ -7,7 +7,7 @@ The first audit (2026-05) is [security.md](security.md) and the second (2026-06)
 > The fork pull request lead is closed by Q1330's default refusal once the dogfood cluster runs it.
 > Nothing reached high or critical.
 > Two rows gated `v2.0.0`, Q1321 and Q1322, and both have landed.
-> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1343](../queue/Q1343.md) and [Q1344](../queue/Q1344.md) are open; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
+> Of the rows filed from it, [Q1323](../queue/Q1323.md) and the follow-ups [Q1334](../queue/Q1334.md), [Q1341](../queue/Q1341.md), [Q1344](../queue/Q1344.md) and [Q1373](../queue/Q1373.md) are open, Q1343 having closed its token route; the Azure range lead closed with Q1253 as a [recorded residual](../design/05-security.md#worker-exfiltration-to-azure-hosted-endpoints-inside-githubs-published-ranges), and its narrowing is [Q1350](../queue/Q1350.md).
 
 ## Method and limits
 
@@ -75,7 +75,7 @@ The recurring theme matches the second audit's: a documented isolation property 
 | [Tenant-chosen workerImage host (and registry redirects) steer AGC GETs to in-cluster 443/6443 endpoints off the egress proxy, with the outcome reported in RunnerSet status](#agc-run-and-recovery-leads) | bound measured by a local test, accepted residual | Q1327 |
 | [AGC run-status, re-run and force-cancel errors carry the raw upstream body into logs, and run-status and re-run errors into a tenant-namespace Event, bypassing SanitizeBody](#agc-run-and-recovery-leads) | confirmed by a local test, fixed | Q1327 |
 | [Gateway teardown deletes the workload NetworkPolicy while worker pods running job code can still be alive](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328 |
-| [Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328; token route [Q1343](../queue/Q1343.md) |
+| [Unmarking a tenant namespace revokes only the one canonical reader RoleBinding, so other GMC-written bindings keep granting Secret access there](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328; token route Q1343, fixed |
 | [namespace-psa-guard admits the GMC ServiceAccount setting Pod Security enforce=privileged on a marked tenant namespace that lacks the platform eligibility label](#worker-pod-and-networkpolicy-leads) | confirmed by a local test, fixed | Q1328 |
 | [DNS egress rule confines which resolver a pod may contact, not which names it resolves; the design states the DNS exfiltration channel is closed](#worker-pod-and-networkpolicy-leads) | claim corrected, accepted residual | Q1328, in [05-security.md](../design/05-security.md#dns-exfiltration-side-channel-containment) |
 | [GitHub CIDR allowlist admits /meta `actions` ranges that serve Azure blob storage, so direct-mode worker 443 egress may not be GitHub-only](#worker-pod-and-networkpolicy-leads) | needs validation | Q1253, closed as a residual; [Q1350](../queue/Q1350.md) |
@@ -1177,7 +1177,7 @@ Stop at that one Get.
 `TestGMC_TenantSecretAccess_UnmarkRevokesEveryGMCBinding`, run as the plan describes against `main`'s guard, admitted both `extra-reader` and `extra-agc`, and after the unmark the GMC's Get of the Secret still succeeded.
 `gmc-tenant-resource-guard` now admits a GMC RoleBinding write only in the two shapes the GMC provisions: its own reader binding naming itself, or an `agc-tenant-role` binding whose subjects are ServiceAccounts of that namespace; both creates are denied by the guard and the Secret read is Forbidden after the unmark.
 What unmarking cannot do, recall what a GMC compromised while the namespace was marked already read, is recorded in [05-security.md §5.1 Residuals](../design/05-security.md#51-gmc-level-threats-cluster-scoped).
-Bounding it found one more route, a ServiceAccount token Secret the GMC creates and reads back, unmeasured and filed as [Q1343](../queue/Q1343.md).
+Bounding it found one more route, a ServiceAccount token Secret the GMC creates and reads back, unmeasured and filed as Q1343, which the guard now refuses; a Deployment running as a tenant ServiceAccount is the remaining route, [Q1373](../queue/Q1373.md).
 
 **Evidence.** `charts/actions-gateway/templates/tenant-resource-guard.yaml:10`, `docs/design/05-security.md:54`, `docs/operations/upgrade.md:595`, `charts/actions-gateway/templates/tenant-resource-guard.yaml:98`, `charts/actions-gateway/files/agc-tenant-role-rules.yaml:61`, `cmd/gmc/internal/controller/integration/tenant_secret_access_test.go:217`, `docs/operations/tenant-onboarding.md:25`.
 
