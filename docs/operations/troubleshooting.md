@@ -2991,8 +2991,9 @@ A quota-blocked job is deliberately absent from this table: it is **never claime
 > Detection reads `JobCompleted` messages, is on for every `RunnerSet` with no field, and changes no behaviour.
 
 When a scale-set job completes `failed`, the AGC records it in the set's failure ledger, ConfigMap `scaleset-failures-<runnerset>`, key `failures.json`, under `failures["<runID>/<job name>"]`.
-The record holds the worker's state at its terminal transition (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
-A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing.
+The record holds the worker's state (`context`): pod phase, reason and a truncated message, its conditions, the node and pod IP, and each container's termination reason, exit code and restart count.
+For a job that ends on a step's result, GitHub's completion arrives before the worker's pod finishes, so the context is the pod while still `Running`, often before any container has terminated; a worker killed out from under its job, such as by an out-of-memory kill, is recorded as it finished (measured 2026-11-22, Q1376).
+A `canceled` completion is recorded only when a disruption recovery claimed the job, so a user's cancel records nothing, and neither does a job that reached its `timeout-minutes`, which GitHub also reports `canceled` (Q1374).
 
 When a later attempt of the same job (same run, same job name) completes, it is paired with that record and counted in `actions_gateway_scaleset_job_reruns_total{trigger}`:
 
@@ -3026,6 +3027,7 @@ Read the pool with `kubectl get egressproxy -n <namespace> <name>`.
 A proxy pool shared from another namespace is recorded as `proxy.mode: shared` with no readiness, since the AGC's cache does not reach that namespace.
 A snapshot is held in memory, so a failure recorded after an AGC restart, or after more than 1,024 workers finished with no completion yet, has no `context`.
 A re-run more than 7 days after the failure, or one that lands on another `RunnerSet`, pairs with nothing and counts nothing.
+Two jobs of one run that share a `name:` share one record, so one's success pairs with the other's failure and counts as a flake nobody re-ran (Q1375).
 
 ---
 
