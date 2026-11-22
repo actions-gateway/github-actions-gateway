@@ -2120,8 +2120,11 @@ check_contains "  ...server-side" "kubectl apply --server-side -f ${STORAGE_DIR}
 # produces waits for the whole run itself, and a red run stops it before any read.
 AWAIT_DIR="${STORAGE_DIR}/await"
 mkdir -p "${AWAIT_DIR}"
-printf '#!/usr/bin/env bash\necho "wait-for-publish $*" >>"%s/calls"\nexit "${FAKE_AWAIT_RC:-0}"\n' "${AWAIT_DIR}" \
-	>"${AWAIT_DIR}/wait-for-publish.sh"
+cat >"${AWAIT_DIR}/wait-for-publish.sh" <<STUB_BODY
+#!/usr/bin/env bash
+echo "wait-for-publish \$*" >>"${AWAIT_DIR}/calls"
+exit "\${FAKE_AWAIT_RC:-0}"
+STUB_BODY
 for leg in crd_smoke storage; do
 	storage_fixture match 0
 	: >"${AWAIT_DIR}/calls"
