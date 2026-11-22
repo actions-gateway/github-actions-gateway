@@ -16,24 +16,24 @@ Retry classes then fire off that context through the re-run path the disruption 
 ## Measure before building
 
 Each of these decides a component's shape.
-M1, M2 and M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)); the rest have not been observed:
+M1 to M4 were measured on dogfood on 2026-11-22 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)); the rest have not been observed:
 
 | # | Unknown | Decides | How to settle |
 |---|---|---|---|
 | M1 | The `result` vocabulary for a red step, a cancelled run and a timed-out job | Which completions the ledger records | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M2 | Whether a re-run job's `JobAssigned` carries a new job UUID and the same `jobDisplayName`, and whether two jobs in one run can share a display name | Pairing's key | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
-| M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | A dogfood job that allocates past its limit under `Binpack` |
+| M3 | Whether a container killed at its memory limit takes the runner with it (the pod fails, and GitHub concludes the job only when the job lock lapses, about 10 minutes later) or only a step's process (the runner survives and reports a failed step) | Whether the out-of-memory class fires from the pod watch, like the disruption arms, or from `JobCompleted` | Measured under `Throughput`: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M4 | Whether a finished worker's pod object still exists when its `JobCompleted` arrives | Where platform context is read | Measured: [the readings](#readings-from-the-dogfood-turn-up-2026-11-22) |
 | M5 | The `superseded` check's answer for a pull request from a fork whose branch is `main` | Whether the check needs more than the filters below | A fork PR on a test repository |
 | M6 | Whether `jobDisplayName` matches the jobs API's `name` exactly, for matrix jobs and reusable workflows, and what a single-job re-run does to the jobs it depends on and that depend on it | Whether a classified retry can re-run only its own job ([granularity](#run--or-job-granular-re-run-open-question-2)) | A test workflow with a matrix, a reusable workflow and a `needs:` chain, re-run one job at a time |
 
-M3 rests on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event.
+M3 rested on recall that kubelets on cgroup v2 kill a container's whole process group on an out-of-memory event; the reading below confirms it on dogfood's nodes.
 The breaker thresholds, the 7-day ledger expiry and the deferred path's 24-hour expiry are proposals, not measurements; R14's metrics are what will move them.
 
 ### Readings from the dogfood turn-up, 2026-11-22
 
 Taken on the `ci` set in `gag-dogfood`, whose AGC ran `v2.0.1-rc.2`; its detection and retry code is unchanged on `main` at `f414275fa`.
-The jobs came from the [`q1236-detection-probe`](../../.github/workflows/q1236-detection-probe.yml) fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and the out-of-memory job from run 45052020040 (the Q1317 probe).
+The jobs came from the [`q1236-detection-probe`](../../.github/workflows/q1236-detection-probe.yml) fixture, runs 45052015868 (attempts 1 and 2) and 45053166409, and for M3 the [`q1317-oom-probe`](../../.github/workflows/q1317-oom-probe.yml) fixture, run 45052020040 (attempts 1 and 2).
 The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set job failed` and `reaped worker pod` log lines, the failure line carrying the record's `context`, and the `scaleset-failures-ci` ledger, read last at 18:04:25 UTC.
 `scaleset_jobs_completed_total` itself was not queried: the listener increments it with the same `result` it logs, in the same once-per-job block.
 
@@ -46,6 +46,11 @@ The readings are the AGC's `scaleset: job assigned`, `job completed`, `scale-set
   So `Completed` reads the running pod every time, and the snapshot the terminal transition takes moments later is never taken by any completion; it waits in the 1,024-entry map until evicted ([Q1376](../queue/Q1376.md)).
   The runner exits 0 when its job fails: both red jobs' pods, and the timed-out job's, were reaped `Succeeded`, so a red test on its own never reads as a fault.
   A kill that ends the runner inverts the order: run 45052020040's out-of-memory worker failed at 17:58:21 UTC, was reaped at 18:03:23, and its completion at 18:08:09 took the terminal snapshot, so that record shows the fault and raised `PlatformFaultOnFailedJob`.
+- **M3.** The worker's cgroup is v2 (`cgroup2fs`) and its `memory.oom.group` reads 1, both read from inside the job; the kubelet's `singleProcessOOMKill` is unset on the system pool's node (`configz`, kubelet `v1.35.8-gke.1796000`), and the worker pool's kubelet was not read.
+  A step allocating 9216Mi past the runner's 8268Mi limit took the whole container: the pod reached `Failed` with the runner `OOMKilled`, exit 137, at 17:58:21 UTC, and GitHub concluded the job `failure` at 18:08:09 with "The self-hosted runner lost communication with the server" and no step log.
+  So the class fires from the pod watch, as built: 2 s after the kill it recorded the floor 8268Mi to 12416Mi, emitted `MemoryLimitRaisedForRetry` and parked the re-run, which it released at 18:09:28, 79 s after the run concluded.
+  The re-run's pod carried a runner limit of 12416Mi, its request unchanged at 5568Mi since `Throughput` raises only the limit, and `actions-gateway.com/rerun-cause: oom`; its step read `memory.max` as 13019119616 bytes (12416Mi), survived the same allocation, and paired as `trigger=gag`, `cause=oom`, not flaky.
+  `Binpack`, which raises the request with the limit, was not measured: the live set runs `Throughput` ([Q1382](../queue/Q1382.md)).
 - **`JobCompleted` carries `eventName` and `jobWorkflowRef`.** Every record holds `event: push` and the fixture's workflow ref, and the listener reads both from the completion message.
 
 ## Component 1: the failure ledger (Q555, R1 to R8)
@@ -287,6 +292,7 @@ type recoveryClass struct {
 ```
 
 It runs where M3 says the evidence is first complete: on the worker's terminal transition, beside the disruption arms, if the class's failure kills the runner; on `Completed` if the runner survives to report.
+An out-of-memory kill takes the runner with it (M3, [measured](#readings-from-the-dogfood-turn-up-2026-11-22)), so the first class fires from the terminal transition, as built.
 Either way it reads the same snapshot detection records, which is why Q1183 waits on Q555.
 
 ### How it waits
@@ -585,7 +591,7 @@ M6 settles it; until then, detection's `gag_collateral` count measures what run-
 
 ## Order of work
 
-1. The dogfood turn-up settles M1, M2 and M4; M3 waits for the out-of-memory reproduction, and M6 needs its own test workflow.
+1. The dogfood turn-up of 2026-11-22 settled M1 to M4 ([the readings](#readings-from-the-dogfood-turn-up-2026-11-22)); M6 needs its own test workflow.
 2. Q1182 (built) created the ledger store, with its version rules, `reruns` map and reservation, moved the scale-set budget onto it, and records the abandoned arm's force-cancel as `selfCancelledAttempt`.
 3. Q1181 (built): `run_cancelled`, `attempt_limit`, `run_too_old` and `superseded` on the widened run read, honouring `selfCancelledAttempt`, between the run read and the reservation in `handleScaleSetEviction`; `already_rerun`, `run_succeeded` and `worker_unstartable` are not built, and the classic tier takes none.
 4. Q555 (built) added the `failures` map, the snapshot, the pairing and the metrics on that store.

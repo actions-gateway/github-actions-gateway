@@ -1,0 +1,48 @@
+# Q1317 probe fixture — dispatch-only, never runs in normal CI.
+#
+# Reproduces the out-of-memory retry class (Q1183) on the dogfood `ci` scale set,
+# the q555 design's M3: one job that allocates past its runner container's memory
+# limit, so the readings say whether the kill takes the runner with it (the pod
+# fails) or only the step's process (the runner reports a failed step), and, where
+# the class fires, whether the re-run's pod carries the raised limit.
+#
+# ALLOC_MIB sits between the set's derived runner limit and the limit the class
+# raises it to (8268Mi and 12416Mi on 2026-11-22, Throughput at ×1.5), so the
+# first attempt is killed and a re-run at the raised limit completes. Re-derive it
+# from the RunnerSet's status.sizingRecommendation before re-running this probe.
+name: q1317-oom-probe
+on:
+  workflow_dispatch: {}
+  # workflow_dispatch only works once the file reaches the default branch; the
+  # push trigger (scoped to this file on claude/ branches) lets the probe session
+  # queue the job from its own feature branch.
+  push:
+    branches: ["claude/**"]
+    paths: [".github/workflows/q1317-oom-probe.yml"]
+
+# The job never touches the repo, so it gets no token scopes at all.
+permissions: {}
+
+# The job runs only on explicit opt-in: a workflow_dispatch, or a push whose head
+# commit message contains "[q1317-probe]". A plain push touching this file skips
+# it, so the run concludes green.
+jobs:
+  oom:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[q1317-probe]')
+    runs-on: gag-ci-scaleset
+    timeout-minutes: 20
+    env:
+      ALLOC_MIB: "9216"
+    steps:
+      - name: Read the runner container's memory limit
+        run: |
+          echo "run attempt ${GITHUB_RUN_ATTEMPT}"
+          echo "cgroup fs: $(stat -fc %T /sys/fs/cgroup)"
+          echo "memory.max: $(cat /sys/fs/cgroup/memory.max)"
+          echo "memory.oom.group: $(cat /sys/fs/cgroup/memory.oom.group 2>/dev/null || echo absent)"
+      # tail holds a stream with no newline in memory until EOF, so this pins
+      # ALLOC_MIB of anonymous memory in the step's own process.
+      - name: Allocate past the limit
+        run: head -c "${ALLOC_MIB}M" /dev/zero | tail > /dev/null
+      - name: Survived the allocation
+        run: echo "allocated ${ALLOC_MIB}Mi and survived"
