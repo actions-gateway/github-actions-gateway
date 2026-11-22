@@ -2148,6 +2148,40 @@ for leg in crd_smoke storage; do
 	check "  ...and never calls the wait" "" "$(cat "${AWAIT_DIR}/calls")"
 done
 
+# Q1364: the e2e node is started during deploy, after the CPU reservation and
+# before CI is routed, and only when the Kata leg will use it.
+DEPLOY_DIR="${SCRATCH}/deploy"
+mkdir -p "${DEPLOY_DIR}"
+for script in setup start; do
+	cat >"${DEPLOY_DIR}/${script}.sh" <<STUB_BODY
+#!/usr/bin/env bash
+echo "${script}.sh" >>"${DEPLOY_DIR}/order"
+STUB_BODY
+done
+deploy_order() (
+	SCRIPT_DIR="${DEPLOY_DIR}" GATE_LEGS=("$@") PROJECT=p ZONE=z CLUSTER=c GAG_IMAGE_TAG=v1.10.0-rc.1
+	scale_system_pool() { echo "scale_system_pool $1" >>"${DEPLOY_DIR}/order"; }
+	reserve_cpu_budget() { echo "reserve_cpu_budget" >>"${DEPLOY_DIR}/order"; }
+	gcloud() { echo "gcloud $*" >>"${DEPLOY_DIR}/order"; }
+	: >"${DEPLOY_DIR}/order"
+	deploy_leg >/dev/null 2>&1
+	paste -sd'|' "${DEPLOY_DIR}/order"
+)
+check "e2e node: started after the CPU reservation and before CI is routed" \
+	"scale_system_pool 2|setup.sh|reserve_cpu_budget|gcloud container clusters resize c --project=p --node-pool=e2e --num-nodes=1 --zone=z --quiet --async|start.sh" \
+	"$(deploy_order kata crd-smoke)"
+check "e2e node: not started when the kata leg is not selected" \
+	"scale_system_pool 2|setup.sh|reserve_cpu_budget|start.sh" \
+	"$(deploy_order crd-smoke)"
+prewarm_rc=0
+(
+	GATE_LEGS=(kata) PROJECT=p ZONE=z CLUSTER=c
+	gcloud() { return 1; }
+	prewarm_e2e_node
+) >"${SCRATCH}/prewarm.out" 2>&1 || prewarm_rc=$?
+check "e2e node: a refused resize does not fail the gate" 0 "${prewarm_rc}"
+check_contains "  ...and says what it costs" "e2e-prewarm: warning:" "$(cat "${SCRATCH}/prewarm.out")"
+
 if ((fails > 0)); then
 	echo "validate-release-test: ${fails} assertion(s) failed" >&2
 	exit 1

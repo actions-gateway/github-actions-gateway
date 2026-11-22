@@ -75,6 +75,21 @@ FAKE_KUBECTL_FAIL=1
 check "unanswerable cluster derives the floor" 2 "$(required_system_nodes)"
 unset FAKE_KUBECTL_FAIL
 
+# --- pool_node_count: nodes listed by pool label, unknown when unreadable (Q1364) ---
+
+kubectl() {
+	[[ -z "${FAKE_KUBECTL_FAIL:-}" ]] || return 1
+	[[ "$*" == *"cloud.google.com/gke-nodepool=e2e"* ]] || return 0
+	printf '%s' "${FAKE_NODES:-}"
+}
+FAKE_NODES=$'node/a\nnode/b\n'
+check "counts the pool's nodes" 2 "$(pool_node_count e2e)"
+FAKE_NODES=""
+check "an empty pool counts 0" 0 "$(pool_node_count e2e)"
+FAKE_KUBECTL_FAIL=1
+check "an unreadable cluster is unknown, never 0" unknown "$(pool_node_count e2e)"
+unset FAKE_KUBECTL_FAIL
+
 if ((fails > 0)); then
 	echo "${fails} failure(s)" >&2
 	exit 1

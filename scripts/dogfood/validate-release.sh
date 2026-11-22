@@ -462,6 +462,26 @@ restore_cpu_budget() {
 	WORKERS_MAX_RESTORE=""
 }
 
+# prewarm_e2e_node — start the e2e pool's first node without waiting for it, so the
+# Kata leg's cold path (node boot, CSI and scheduler placement, image pulls: 3m59s
+# from dispatch to runner on v2.0.1-rc.1) overlaps start.sh and e2e-start.sh
+# instead of following them (Q1364). Called only after reserve_cpu_budget: the
+# node's vCPUs are inside the ceiling quota_preflight reserved, but `workers` is
+# capped only once reserve_cpu_budget has run, so raising it earlier would let the
+# two draw on the project quota unaccounted. --async returns once the resize is
+# submitted. Best-effort: a refused resize costs the saving, never the gate, and
+# e2e-start.sh and the autoscaler still bring the node up on demand. Skipped when
+# the kata leg is not selected, so a run that never uses the node never starts it.
+prewarm_e2e_node() {
+	leg_selected kata || return 0
+	echo "Starting the e2e pool's first node ahead of the Kata leg..."
+	gcloud container clusters resize "${CLUSTER}" \
+		--project="${PROJECT}" \
+		--node-pool="${E2E_POOL}" --num-nodes=1 --zone="${ZONE}" --quiet --async ||
+		echo "e2e-prewarm: warning: could not start the e2e node early; the Kata leg will pay its cold start." >&2
+	return 0
+}
+
 # deploy_leg — bring the system pool up, deploy the RC + tenant, route CI to GAG.
 deploy_leg() {
 	# Pre-scale BEFORE setup: the cluster is at 0 nodes at rest and setup.sh's
@@ -479,6 +499,7 @@ deploy_leg() {
 	# Between setup and routing: setup.sh creates `workers` at its full ceiling,
 	# and start.sh below is what lets CI start consuming it.
 	reserve_cpu_budget
+	prewarm_e2e_node
 
 	echo "Routing CI to GAG + completing GMC/AGC rollout (start.sh)..."
 	bash "${SCRIPT_DIR}/start.sh"
@@ -627,6 +648,9 @@ e2e_leg() {
 	echo "Spinning up the on-demand e2e tenant (e2e-start.sh)..."
 	bash "${SCRIPT_DIR}/e2e-start.sh"
 
+	# Whether the early node (Q1364) survived to the moment the job needs it: the
+	# autoscaler may remove an idle node it did not add. Grep "e2e-pool-nodes".
+	echo "e2e-pool-nodes: $(pool_node_count "${E2E_POOL}") node(s) in ${E2E_POOL} at dispatch"
 	dispatch_e2e_run
 	local run_id="${E2E_RESOLVED_RUN_ID}"
 

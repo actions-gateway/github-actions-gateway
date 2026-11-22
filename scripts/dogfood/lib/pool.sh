@@ -66,3 +66,19 @@ count_always_on_gateways() {
 required_system_nodes() {
 	system_nodes_for "$(count_always_on_gateways)"
 }
+
+# The node-pool label GKE sets on every node, which is how a pool's nodes are
+# found without trusting a count the node-pools API may report empty.
+NODEPOOL_LABEL="cloud.google.com/gke-nodepool"
+
+# pool_node_count POOL — print how many Kubernetes nodes the pool has, or
+# "unknown" when the read fails: an unreadable cluster is never a pool at zero,
+# for the reason lib/nodes.sh gives. Reads the active kubectl context.
+pool_node_count() {
+	local out
+	out="$(kubectl get nodes -l "${NODEPOOL_LABEL}=$1" -o name 2>/dev/null)" || {
+		echo "unknown"
+		return 0
+	}
+	awk 'NF { c++ } END { print c + 0 }' <<<"${out}"
+}
