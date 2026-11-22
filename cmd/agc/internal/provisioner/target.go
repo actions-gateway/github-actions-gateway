@@ -73,6 +73,17 @@ const AnnotationStartedJobID = "actions-gateway.com/started-job-id"
 // enforcement.
 const AnnotationSurplusForJob = "actions-gateway.com/surplus-for-job"
 
+// AnnotationRunnerBusyAt is stamped on a scale-set worker pod, with an RFC 3339 UTC
+// timestamp as its value, when the reaper's idle-runner check found the pod's runner
+// running a job at GitHub although the AGC has recorded no start for it — the state an
+// AGC outage across the job's start leaves (Q1360). An ephemeral runner takes one job,
+// so the stamp exempts the pod from that check for good, and the job's own completion
+// or the pod's exit ends it.
+//
+// Controller-set and informational: never set it by hand and never use it for
+// security enforcement.
+const AnnotationRunnerBusyAt = "actions-gateway.com/runner-busy-at"
+
 // AnnotationSizingProfile is stamped on a worker pod, with the profile name as its
 // value, when an opt-in sizing profile actually derived that pod's cpu/memory ask
 // (Q489). A pod built from the template's static values — Static, or a history-based

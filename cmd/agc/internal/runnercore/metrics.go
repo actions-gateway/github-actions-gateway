@@ -232,7 +232,7 @@ func NewMetrics() *Metrics {
 
 		WorkerPodsReaped: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "actions_gateway_worker_pods_reaped_total",
-			Help: "Worker pods the AGC deleted, by reason (completed_ttl, pending_deadline, completed_pending, orphaned_running, lifetime_exceeded, gateway_deleted), all from the reconciler's reaper. runner_group and runner_set both carry the owning RunnerSet's name, so the series join the runner_set-labelled scaleset_* gauges (Q514).",
+			Help: "Worker pods the AGC deleted, by reason (completed_ttl, pending_deadline, completed_pending, orphaned_running, idle_runner, lifetime_exceeded, gateway_deleted), all from the reconciler's reaper. runner_group and runner_set both carry the owning RunnerSet's name, so the series join the runner_set-labelled scaleset_* gauges (Q514).",
 		}, []string{"namespace", "runner_group", "runner_set", "reason"}),
 
 		ReapBlockingSidecarTemplates: prometheus.NewGaugeVec(prometheus.GaugeOpts{

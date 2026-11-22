@@ -272,6 +272,31 @@ const completedJobRunningGrace = 5 * time.Minute
 // reach Running, so the Running arm and its own grace own it instead of this one.
 const completedJobPendingGrace = 30 * time.Second
 
+// idleRunnerGrace is how long a scale-set worker's runner container may be up without
+// the AGC recording a job start before the reaper asks GitHub whether the runner is
+// idle (Q1360). A runner takes a queued job within seconds of listening, so a runner
+// still idle this long has no job waiting for it, and a later job gets a worker of its
+// own. The AGC's record of a start can lag the start itself, by the listener's poll or
+// by a whole outage, which is why the grace only opens the check and GitHub's answer
+// decides the reap.
+const idleRunnerGrace = 10 * time.Minute
+
+// idleRunnerRetry is how soon the reaper re-asks about an idle-runner candidate whose
+// check could not be answered, such as a GitHub error.
+const idleRunnerRetry = time.Minute
+
+// idleRunnerVerdict is GitHub's answer to the reaper's idle-runner check.
+type idleRunnerVerdict int
+
+const (
+	// idleRunnerUnknown leaves the pod for another try after idleRunnerRetry.
+	idleRunnerUnknown idleRunnerVerdict = iota
+	// idleRunnerReleased means the runner record is gone and the pod may be reaped.
+	idleRunnerReleased
+	// idleRunnerBusy means the runner is running a job, so the pod is kept.
+	idleRunnerBusy
+)
+
 // reapHooks are the owner-bound side effects the shared reaper calls out to. Every
 // field is optional; a nil hook is skipped. They are grouped rather than passed
 // positionally because both reconcilers wire several and the list only grows.
@@ -291,6 +316,15 @@ type reapHooks struct {
 	// annotation reaches it. Best-effort: it owns its own logging and its outcome never
 	// changes whether the pod is reaped.
 	deregisterRunner func(ctx context.Context, runnerName string)
+	// releaseIdleRunner is the idle-runner check: it deregisters the runner record of
+	// a Running scale-set worker whose runner has started nothing for idleRunnerGrace,
+	// and GitHub refusing the delete of a runner running a job is what reports it busy
+	// (Q1360). The refusal is GitHub's own test at the moment of the delete, so no read
+	// of the record can go stale between the check and the reap. Only the scale-set
+	// tier wires it; nil leaves such pods to the completion stamp and the lifetime cap.
+	releaseIdleRunner func(ctx context.Context, runnerName string) idleRunnerVerdict
+	// emitIdleRunner records the Event for an idle_runner reap.
+	emitIdleRunner func(podName string, grace time.Duration)
 	// recoverAbandoned force-cancels the run behind a worker pod the deadline reap just
 	// removed while it was still Pending, and queues it for automatic re-run once
 	// capacity returns (Q766). Called with the deleted pod, and only for a
@@ -417,7 +451,8 @@ func reapAllWorkerPodsByLabel(
 // namespace) that the owning CR no longer needs: terminal pods older than ttl,
 // Pending pods older than deadline, and pods still Pending or Running more than
 // completedJobPendingGrace / completedJobRunningGrace after their job completed at
-// GitHub. It returns the time until the earliest retained pod becomes due (0 = none),
+// GitHub, and scale-set workers whose runner GitHub reports idle idleRunnerGrace after
+// it came up. It returns the time until the earliest retained pod becomes due (0 = none),
 // pod counts by phase (for status), and any error. metrics may be nil. Shared by both
 // reconcilers' reapers so the reap logic is defined once.
 func reapWorkerPodsByLabel(
@@ -450,16 +485,19 @@ func reapWorkerPodsByLabel(
 		case corev1.PodRunning:
 			// Running is normally a job executing, and counts as active either way —
 			// the pod holds its concurrency slot until it is actually gone. It gets a
-			// deadline only once its job is over at GitHub: an unstamped pod (every
-			// classic pod, and every scale-set pod whose job is still assigned) is
-			// retained with no deadline, exactly as before (Q420).
+			// deadline once its job is over at GitHub (Q420), or, on the scale-set tier,
+			// once its runner has been up idleRunnerGrace with no start recorded (Q1360).
+			// Every other Running pod is retained with no deadline.
 			counts.active++
-			completedAt, ok := jobCompletedAt(pod)
-			if !ok {
+			if completedAt, ok := jobCompletedAt(pod); ok {
+				due = completedAt.Add(completedJobRunningGrace)
+				reason = reapReasonOrphanedRunning
+			} else if upAt, ok := idleRunnerCandidate(pod, hooks); ok {
+				due = upAt.Add(idleRunnerGrace)
+				reason = reapReasonIdleRunner
+			} else {
 				continue
 			}
-			due = completedAt.Add(completedJobRunningGrace)
-			reason = reapReasonOrphanedRunning
 		case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 			if target.hooks.observeWorkerReport != nil {
 				target.hooks.observeWorkerReport(pod)
@@ -499,6 +537,22 @@ func reapWorkerPodsByLabel(
 			continue
 		}
 
+		if reason == reapReasonIdleRunner {
+			switch hooks.releaseIdleRunner(ctx, pod.Annotations[provisioner.AnnotationRunnerName]) {
+			case idleRunnerReleased:
+			case idleRunnerBusy:
+				if err := target.stampRunnerBusy(ctx, pod, now); err != nil {
+					return next, counts, err
+				}
+				continue
+			default:
+				if next == 0 || idleRunnerRetry < next {
+					next = idleRunnerRetry
+				}
+				continue
+			}
+		}
+
 		deleted, err := target.delete(ctx, pod, reason)
 		if err != nil {
 			return next, counts, err
@@ -527,8 +581,47 @@ func reapWorkerPodsByLabel(
 		if reason == reapReasonCompletedPending && hooks.emitCompletedPending != nil {
 			hooks.emitCompletedPending(pod.Name, completedJobPendingGrace)
 		}
+		if reason == reapReasonIdleRunner && hooks.emitIdleRunner != nil {
+			hooks.emitIdleRunner(pod.Name, idleRunnerGrace)
+		}
 	}
 	return next, counts, nil
+}
+
+// idleRunnerCandidate reports when pod's runner container came up, for a Running
+// scale-set worker the idle-runner check may examine: one with a runner record, no
+// recorded job start, and no earlier busy verdict. A pod whose runner container is not
+// reported running has no measurable idle time and is never a candidate.
+func idleRunnerCandidate(pod *corev1.Pod, hooks reapHooks) (time.Time, bool) {
+	if hooks.releaseIdleRunner == nil ||
+		pod.Annotations[provisioner.AnnotationRunnerName] == "" ||
+		pod.Annotations[provisioner.AnnotationStartedJobID] != "" ||
+		pod.Annotations[provisioner.AnnotationRunnerBusyAt] != "" {
+		return time.Time{}, false
+	}
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name == provisioner.WorkerContainerName && cs.State.Running != nil {
+			return cs.State.Running.StartedAt.Time, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// stampRunnerBusy records the idle-runner check's busy verdict on pod, so later passes
+// stop asking GitHub about a runner that is running a job. A pod gone under it needs no
+// stamp.
+func (t reapTarget) stampRunnerBusy(ctx context.Context, pod *corev1.Pod, now time.Time) error {
+	patch := client.MergeFrom(pod.DeepCopy())
+	if pod.Annotations == nil {
+		pod.Annotations = map[string]string{}
+	}
+	pod.Annotations[provisioner.AnnotationRunnerBusyAt] = now.UTC().Format(time.RFC3339)
+	if err := t.c.Patch(ctx, pod, patch); client.IgnoreNotFound(err) != nil {
+		return fmt.Errorf("reaper: stamp worker pod %s runner busy: %w", pod.Name, err)
+	}
+	t.log.Info("worker runner is running a job the AGC has not recorded; keeping the pod",
+		"pod", pod.Name, "runner", pod.Annotations[provisioner.AnnotationRunnerName])
+	return nil
 }
 
 // jobCompletedAt reads the completion timestamp the provisioner stamps on a worker
