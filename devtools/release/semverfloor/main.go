@@ -20,6 +20,10 @@
 // the rest of every cycle. What that gate would catch is not an accident worth
 // catching: the first shipping feature after a tag is the expected event.
 //
+// The Dockerfile compiles no package, so it joins the surface by what changed
+// in it: a commit that edits a stage a published image is built from ships,
+// whatever its subject says — see dockerfile.go.
+//
 // The one thing here that can silently rot is gated instead — see CheckSources.
 //
 // # Two readings of one classification
@@ -252,7 +256,10 @@ func readCommits(root, window string) ([]Commit, error) {
 // deriveSurface expands every reachable `go build` into the package directories
 // it compiles, and adds the chart trees the pipeline packages wholesale.
 func deriveSurface(root string, s Sources) (Surface, error) {
-	surface := Surface{PkgDirs: map[string]bool{}, Trees: append([]string(nil), s.Charts...)}
+	surface := Surface{
+		PkgDirs: map[string]bool{}, Trees: append([]string(nil), s.Charts...),
+		DockerfileChanged: func(sha string) bool { return dockerfileChanged(root, sha, s.Images) },
+	}
 	sort.Strings(surface.Trees)
 	for _, b := range s.Builds {
 		//nolint:gosec // G204: fixed go verbs plus a package pattern read from the repo's own Dockerfile.
