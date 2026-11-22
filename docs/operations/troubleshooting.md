@@ -3073,6 +3073,7 @@ See [Cancelling a Run Does Not Stop Its Worker Pod](#cancelling-a-run-does-not-s
 
 **Fires and is withheld as futile**, before any budget slot is spent (Q1181): `reason="attempt_limit"` (the run is past GitHub's 50 re-runs), `reason="run_too_old"` (created more than 30 days ago), or `reason="superseded"` (a newer commit's run of the same workflow, event and branch has started).
 The `EvictionRerunWithheld` Event names the reason; for the first two, start a new run, and for the third nothing is needed.
+A merge-queue run has no `superseded` check, and GitHub leaves a group displaced from the queue running rather than cancelling it, so a disrupted job in one is re-run and spends a budget slot on a result nothing reads (measured 2026-11-22, Q1381).
 
 A quota-blocked job is deliberately absent from this table: it is **never claimed** in the first place, so it stays queued at GitHub with no re-run needed — see [Jobs Failing Due to Namespace ResourceQuota Exhaustion](#jobs-failing-due-to-namespace-resourcequota-exhaustion).
 

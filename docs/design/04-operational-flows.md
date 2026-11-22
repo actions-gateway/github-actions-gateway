@@ -488,7 +488,8 @@ The scale-set tier now judges the run read it takes before reserving a slot ([`r
 
 A field GitHub did not send skips its check rather than withholding.
 The superseded check is the only one that costs a call (the workflow's runs, filtered to the branch and event, newest first), and a list it cannot read re-runs: that check only ever withholds, so an unreadable answer must not.
-Comparing the head repository keeps a fork's branch from matching upstream's of the same name; whether GitHub's `branch` filter matches a fork pull request's head branch is unmeasured (M5 in [the Q555 design](../plan/q555-automatic-recovery-design.md#measure-before-building)), and a miss there re-runs, the safe direction.
+Comparing the head repository keeps a fork's branch from matching upstream's of the same name; GitHub's `branch` filter does match a fork pull request's head branch, but the newest run it returns can be another fork's, which hides this fork's own newer commit (M5, [measured from the API](../plan/q555-automatic-recovery-design.md#readings-from-githubs-api-2026-11-22)), and a miss there re-runs, the safe direction.
+A `merge_group` run has no superseded check, and a group displaced from the queue is not cancelled by GitHub, so a disrupted job in one is re-run although no queue entry waits for it ([Q1381](../queue/Q1381.md)).
 A support ticket can raise GitHub's re-run cap for an organisation, and the check does not know that; such an organisation sees `attempt_limit` where GitHub would have accepted the re-run.
 The classic tier reserves from process memory with no run read first and takes none of these checks.
 
