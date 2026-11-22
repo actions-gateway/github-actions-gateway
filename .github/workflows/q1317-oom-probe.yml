@@ -7,7 +7,7 @@
 # the class fires, whether the re-run's pod carries the raised limit.
 #
 # ALLOC_MIB sits between the set's derived runner limit and the limit the class
-# raises it to (7744Mi and 11648Mi on 2026-11-22, Throughput at ×1.5), so the
+# raises it to (8268Mi and 12416Mi on 2026-11-22, Throughput at ×1.5), so the
 # first attempt is killed and a re-run at the raised limit completes. Re-derive it
 # from the RunnerSet's status.sizingRecommendation before re-running this probe.
 name: q1317-oom-probe
