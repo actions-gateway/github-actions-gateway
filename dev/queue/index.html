@@ -2888,14 +2888,6 @@ Each waits on an explicit trigger, tagged by source: <strong>Demand:</strong> an
 <td>**Deleting an ActionsGateway within <code>completedPodTTL</code> of its last job holds the finalizer for a worker pod that already finished, until …</td>
 </tr>
 <tr>
-<td><a href="Q1364/">Q1364</a></td>
-<td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Bring the e2e node up during the gate deploy, not on the Kata dispatch</a></td>
-<td><code>dogfood</code></td>
-<td>🔲</td>
-<td>S</td>
-<td><strong>The Kata leg's worker is what scales the e2e pool up from zero, so the leg's start pays the whole cold path after deploy has finished.</strong> …</td>
-</tr>
-<tr>
 <td><a href="Q1366/">Q1366</a></td>
 <td><a href="https://github.com/actions-gateway/github-actions-gateway/blob/main/scripts/dogfood/validate-release.sh">Take the Dragonfly gate readings concurrently, not one probe at a time</a></td>
 <td><code>dogfood</code></td>
